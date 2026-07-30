@@ -222,7 +222,7 @@ func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Cont
 
 // GetSubmodelByIDAndDate returns the Submodel version valid at the requested instant.
 func (s *SubmodelDatabase) GetSubmodelByIDAndDate(ctx context.Context, submodelIdentifier string, at time.Time) (types.ISubmodel, error) {
-	snapshot, err := history.SnapshotByDate(ctx, s.db, history.TableSubmodel, submodelIdentifier, at)
+	snapshot, err := history.SnapshotByDate(ctx, s.readDB(ctx), history.TableSubmodel, submodelIdentifier, at)
 	if err != nil {
 		return nil, err
 	}
@@ -256,6 +256,7 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
 func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
+	readDB := s.readDB(ctx)
 	var limitFilter *int32
 
 	if limit == 0 {
@@ -341,7 +342,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 	var identifier, rawIDShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
 	var kind sql.NullInt64
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := readDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -428,7 +429,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 	if filterSupplementalSemanticIDs {
 		filteredReferences, readErr := descriptors.ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 			ctx,
-			s.db,
+			readDB,
 			supplementalOwnerIDs,
 		)
 		if readErr != nil {
@@ -462,7 +463,7 @@ func (s *SubmodelDatabase) submodelCursorExists(ctx context.Context, cursor stri
 	}
 
 	var one int
-	if queryErr := s.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+	if queryErr := s.readDB(ctx).QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
 		if errors.Is(queryErr, sql.ErrNoRows) {
 			return false, nil
 		}

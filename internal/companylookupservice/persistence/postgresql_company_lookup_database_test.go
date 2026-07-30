@@ -23,52 +23,26 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package smregistrypostgresql
+package companylookuppostgresql
 
 import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/stretchr/testify/require"
 )
 
-func TestBuildSubmodelDescriptorUpsertLockSQLUsesPostgresPlaceholders(t *testing.T) {
-	t.Parallel()
-
-	query, args, err := buildSubmodelDescriptorUpsertLockSQL("submodel-1")
-
-	if err != nil {
-		t.Fatalf("buildSubmodelDescriptorUpsertLockSQL returned error: %v", err)
-	}
-	if query != "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))" {
-		t.Fatalf("unexpected query: %s", query)
-	}
-	if len(args) != 2 || args[0] != "submodel_descriptor:submodel-1" || args[1] != int64(0) {
-		t.Fatalf("unexpected args: %#v", args)
-	}
-}
-
-func TestSubmodelRegistryReadPoolSelection(t *testing.T) {
+func TestCompanyLookupReadPoolSelection(t *testing.T) {
 	writer, _, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("writer sqlmock.New() failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = writer.Close() }()
 	reader, _, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("reader sqlmock.New() failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = reader.Close() }()
 
-	backend, err := NewPostgreSQLSMBackendFromPools(writer, reader)
-	if err != nil {
-		t.Fatalf("create backend: %v", err)
-	}
-	if got := backend.readDB(t.Context()); got != reader {
-		t.Fatal("eligible registry read did not select the reader")
-	}
-	writerCtx := common.WithWriterPostgresReads(t.Context())
-	if got := backend.readDB(writerCtx); got != writer {
-		t.Fatal("consistency-sensitive registry read did not select the writer")
-	}
+	backend, err := NewPostgreSQLCompanyLookupBackendFromPools(writer, reader, false)
+	require.NoError(t, err)
+	require.Same(t, reader, backend.readDB(t.Context()))
+	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
 }

@@ -1,0 +1,11 @@
+infrastructures:
+  default: read-replica
+
+  read-replica:
+    name: BaSyx PostgreSQL Read Replica
+    template: mono-all
+    components:
+      aasEnvironment:
+        baseUrl: "http://localhost:8084"
+    security:
+      type: none

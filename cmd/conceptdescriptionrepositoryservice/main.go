@@ -96,15 +96,21 @@ func runServer(ctx context.Context, configPath string) error {
 	// Instantiate generated services & controllers
 	// ==== Concept Description Repository Service ====
 
-	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "conceptdescriptionrepositoryservice", common.CURRENT_DATABASE_VERSION)
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "conceptdescriptionrepositoryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "CDREPOSITORY-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
 	}
 
-	cdDatabase, err := persistence.NewConceptDescriptionBackendFromDB(sharedDB)
+	cdDatabase, err := persistence.NewConceptDescriptionBackendFromPools(pools.Writer, pools.Reader)
 	if err != nil {
 		return err
 	}

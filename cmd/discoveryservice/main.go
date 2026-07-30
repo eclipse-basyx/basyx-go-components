@@ -84,12 +84,18 @@ func runServer(ctx context.Context, configPath string) error {
 	// === Database ===
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "discoveryservice", common.CURRENT_DATABASE_VERSION)
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "discoveryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "DISCOVERY-DB-CONNECT", "error", err)
 		return err
 	}
-	smDatabase, err := persistencepostgresql.NewPostgreSQLDiscoveryBackendFromDB(sharedDB)
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "DISCOVERY-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
+	smDatabase, err := persistencepostgresql.NewPostgreSQLDiscoveryBackendFromPools(pools.Writer, pools.Reader)
 	if err != nil {
 		slog.ErrorContext(ctx, "discovery persistence initialization failed", "error.code", "DISCOVERY-DB-INIT", "error", err)
 		return err

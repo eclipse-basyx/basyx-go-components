@@ -359,26 +359,27 @@ type ServerConfig struct {
 // PostgresConfig contains PostgreSQL database connection parameters.
 // It includes connection pooling settings for optimal performance.
 type PostgresConfig struct {
-	DSN                     string `mapstructure:"dsn" yaml:"dsn"`                                         // Complete PostgreSQL DSN; mutually exclusive with connection fields
-	Host                    string `mapstructure:"host" yaml:"host"`                                       // Database host address
-	Port                    int    `mapstructure:"port" yaml:"port"`                                       // Database port (default: 5432)
-	User                    string `mapstructure:"user" yaml:"user"`                                       // Database username
-	Password                string `mapstructure:"password" yaml:"password"`                               // Database password
-	DBName                  string `mapstructure:"dbname" yaml:"dbname"`                                   // Database name
-	SSLMode                 string `mapstructure:"sslmode" yaml:"sslmode"`                                 // SSL mode: disable|allow|prefer|require|verify-ca|verify-full
-	SSLCert                 string `mapstructure:"sslcert" yaml:"sslcert"`                                 // Client certificate path
-	SSLKey                  string `mapstructure:"sslkey" yaml:"sslkey"`                                   // Client private key path
-	SSLRootCert             string `mapstructure:"sslrootcert" yaml:"sslrootcert"`                         // Root certificate path
-	ConnectTimeoutSeconds   int    `mapstructure:"connectTimeoutSeconds" yaml:"connectTimeoutSeconds"`     // Connection timeout in seconds
-	ApplicationName         string `mapstructure:"applicationName" yaml:"applicationName"`                 // PostgreSQL application_name
-	FallbackApplicationName string `mapstructure:"fallbackApplicationName" yaml:"fallbackApplicationName"` // PostgreSQL fallback_application_name
-	SearchPath              string `mapstructure:"searchPath" yaml:"searchPath"`                           // PostgreSQL search_path
-	Options                 string `mapstructure:"options" yaml:"options"`                                 // PostgreSQL startup options
-	TimeZone                string `mapstructure:"timezone" yaml:"timezone"`                               // PostgreSQL session timezone
-	MaxOpenConnections      int    `mapstructure:"maxOpenConnections" yaml:"maxOpenConnections"`           // Maximum open connections; 0 uses the common default
-	MaxIdleConnections      int    `mapstructure:"maxIdleConnections" yaml:"maxIdleConnections"`           // Maximum idle connections; 0 uses the common default
-	ConnMaxLifetimeMinutes  int    `mapstructure:"connMaxLifetimeMinutes" yaml:"connMaxLifetimeMinutes"`   // Connection lifetime in minutes; 0 uses the common default
-	ConnMaxIdleTimeMinutes  int    `mapstructure:"connMaxIdleTimeMinutes" yaml:"connMaxIdleTimeMinutes"`   // Connection idle time in minutes; 0 disables idle-time recycling
+	DSN                     string          `mapstructure:"dsn" yaml:"dsn"`                                         // Complete PostgreSQL DSN; mutually exclusive with connection fields
+	Host                    string          `mapstructure:"host" yaml:"host"`                                       // Database host address
+	Port                    int             `mapstructure:"port" yaml:"port"`                                       // Database port (default: 5432)
+	User                    string          `mapstructure:"user" yaml:"user"`                                       // Database username
+	Password                string          `mapstructure:"password" yaml:"password"`                               // Database password
+	DBName                  string          `mapstructure:"dbname" yaml:"dbname"`                                   // Database name
+	SSLMode                 string          `mapstructure:"sslmode" yaml:"sslmode"`                                 // SSL mode: disable|allow|prefer|require|verify-ca|verify-full
+	SSLCert                 string          `mapstructure:"sslcert" yaml:"sslcert"`                                 // Client certificate path
+	SSLKey                  string          `mapstructure:"sslkey" yaml:"sslkey"`                                   // Client private key path
+	SSLRootCert             string          `mapstructure:"sslrootcert" yaml:"sslrootcert"`                         // Root certificate path
+	ConnectTimeoutSeconds   int             `mapstructure:"connectTimeoutSeconds" yaml:"connectTimeoutSeconds"`     // Connection timeout in seconds
+	ApplicationName         string          `mapstructure:"applicationName" yaml:"applicationName"`                 // PostgreSQL application_name
+	FallbackApplicationName string          `mapstructure:"fallbackApplicationName" yaml:"fallbackApplicationName"` // PostgreSQL fallback_application_name
+	SearchPath              string          `mapstructure:"searchPath" yaml:"searchPath"`                           // PostgreSQL search_path
+	Options                 string          `mapstructure:"options" yaml:"options"`                                 // PostgreSQL startup options
+	TimeZone                string          `mapstructure:"timezone" yaml:"timezone"`                               // PostgreSQL session timezone
+	MaxOpenConnections      int             `mapstructure:"maxOpenConnections" yaml:"maxOpenConnections"`           // Maximum open connections; 0 uses the common default
+	MaxIdleConnections      int             `mapstructure:"maxIdleConnections" yaml:"maxIdleConnections"`           // Maximum idle connections; 0 uses the common default
+	ConnMaxLifetimeMinutes  int             `mapstructure:"connMaxLifetimeMinutes" yaml:"connMaxLifetimeMinutes"`   // Connection lifetime in minutes; 0 uses the common default
+	ConnMaxIdleTimeMinutes  int             `mapstructure:"connMaxIdleTimeMinutes" yaml:"connMaxIdleTimeMinutes"`   // Connection idle time in minutes; 0 disables idle-time recycling
+	Reader                  *PostgresConfig `mapstructure:"reader" yaml:"reader"`                                   // Optional read-only PostgreSQL connection and pool
 }
 
 // CorsConfig contains Cross-Origin Resource Sharing (CORS) policy settings.
@@ -475,6 +476,9 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// Set default values
 	setDefaults(v)
+	if err := bindPostgresReaderEnvironment(v); err != nil {
+		return nil, err
+	}
 
 	if configPath != "" {
 		v.SetConfigFile(configPath)
@@ -624,13 +628,44 @@ func validateServerConfig(cfg ServerConfig) error {
 }
 
 func validatePostgresConfig(v *viper.Viper, cfg PostgresConfig) error {
+	if err := validatePostgresConnectionConfig(v, cfg, "postgres"); err != nil {
+		return err
+	}
+	if cfg.Reader == nil {
+		return nil
+	}
+	if cfg.Reader.Reader != nil {
+		return fmt.Errorf("CONFIG-POSTGRES-READER-NESTED postgres.reader.reader is not supported")
+	}
+	if cfg.Reader.Port == 0 {
+		cfg.Reader.Port = DefaultConfig.PgPort
+	}
+	if strings.TrimSpace(cfg.Reader.DSN) == "" {
+		missing := make([]string, 0, 2)
+		if strings.TrimSpace(cfg.Reader.Host) == "" {
+			missing = append(missing, "postgres.reader.host")
+		}
+		if strings.TrimSpace(cfg.Reader.DBName) == "" {
+			missing = append(missing, "postgres.reader.dbname")
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("CONFIG-POSTGRES-READER-INCOMPLETE reader connection requires a DSN or individual connection fields; missing: %s", strings.Join(missing, ", "))
+		}
+	}
+	return validatePostgresConnectionConfig(v, *cfg.Reader, "postgres.reader")
+}
+
+func validatePostgresConnectionConfig(v *viper.Viper, cfg PostgresConfig, configPrefix string) error {
 	if _, err := ResolvePostgresPoolSettings(cfg); err != nil {
+		if configPrefix == "postgres.reader" {
+			return fmt.Errorf("CONFIG-POSTGRES-READER-POOL invalid reader pool configuration: %w", err)
+		}
 		return err
 	}
 	if strings.TrimSpace(cfg.DSN) != "" {
-		conflictingKeys := explicitlyConfiguredPostgresConnectionKeys(v)
+		conflictingKeys := explicitlyConfiguredPostgresConnectionKeys(v, configPrefix)
 		if len(conflictingKeys) > 0 {
-			return fmt.Errorf("CONFIG-POSTGRES-DSN-CONFLICT postgres.dsn is mutually exclusive with individual postgres connection fields; remove postgres.dsn or remove these fields: %s", strings.Join(conflictingKeys, ", "))
+			return fmt.Errorf("CONFIG-POSTGRES-DSN-CONFLICT %s.dsn is mutually exclusive with individual PostgreSQL connection fields; remove %s.dsn or remove these fields: %s", configPrefix, configPrefix, strings.Join(conflictingKeys, ", "))
 		}
 		return nil
 	}
@@ -638,10 +673,10 @@ func validatePostgresConfig(v *viper.Viper, cfg PostgresConfig) error {
 	switch strings.ToLower(strings.TrimSpace(cfg.SSLMode)) {
 	case "", "disable", "allow", "prefer", "require", "verify-ca", "verify-full":
 	default:
-		return fmt.Errorf("CONFIG-POSTGRES-SSLMODE unsupported postgres.sslmode %q", cfg.SSLMode)
+		return fmt.Errorf("CONFIG-POSTGRES-SSLMODE unsupported %s.sslmode %q", configPrefix, cfg.SSLMode)
 	}
 	if cfg.ConnectTimeoutSeconds < 0 {
-		return fmt.Errorf("CONFIG-POSTGRES-CONNECTTIMEOUT postgres.connectTimeoutSeconds must not be negative")
+		return fmt.Errorf("CONFIG-POSTGRES-CONNECTTIMEOUT %s.connectTimeoutSeconds must not be negative", configPrefix)
 	}
 	return nil
 }
@@ -663,7 +698,7 @@ func postgresPoolSettingConfigured(v *viper.Viper, configKey string) bool {
 	return v.InConfig(configKey) || postgresEnvConfigured(configKey)
 }
 
-func explicitlyConfiguredPostgresConnectionKeys(v *viper.Viper) []string {
+func explicitlyConfiguredPostgresConnectionKeys(v *viper.Viper, configPrefix string) []string {
 	keys := []string{
 		"host",
 		"port",
@@ -684,12 +719,44 @@ func explicitlyConfiguredPostgresConnectionKeys(v *viper.Viper) []string {
 
 	conflictingKeys := make([]string, 0, len(keys))
 	for _, key := range keys {
-		configKey := "postgres." + key
+		configKey := configPrefix + "." + key
 		if v.InConfig(configKey) || postgresEnvConfigured(configKey) {
 			conflictingKeys = append(conflictingKeys, configKey)
 		}
 	}
 	return conflictingKeys
+}
+
+func bindPostgresReaderEnvironment(v *viper.Viper) error {
+	keys := []string{
+		"dsn",
+		"host",
+		"port",
+		"user",
+		"password",
+		"dbname",
+		"sslmode",
+		"sslcert",
+		"sslkey",
+		"sslrootcert",
+		"connectTimeoutSeconds",
+		"applicationName",
+		"fallbackApplicationName",
+		"searchPath",
+		"options",
+		"timezone",
+		"maxOpenConnections",
+		"maxIdleConnections",
+		"connMaxLifetimeMinutes",
+		"connMaxIdleTimeMinutes",
+	}
+	for _, key := range keys {
+		configKey := "postgres.reader." + key
+		if err := v.BindEnv(configKey, strings.ToUpper(strings.ReplaceAll(configKey, ".", "_"))); err != nil {
+			return fmt.Errorf("CONFIG-POSTGRES-READER-BINDENV failed to bind %s: %w", configKey, err)
+		}
+	}
+	return nil
 }
 
 func postgresEnvConfigured(configKey string) bool {

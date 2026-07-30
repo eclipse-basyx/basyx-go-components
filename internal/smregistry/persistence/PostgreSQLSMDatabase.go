@@ -42,7 +42,8 @@ import (
 
 // PostgreSQLSMDatabase provides PostgreSQL-based persistence for the Submodel Registry Service.
 type PostgreSQLSMDatabase struct {
-	db *sql.DB
+	writerDB *sql.DB
+	readerDB *sql.DB
 }
 
 // NewPostgreSQLSMBackend creates and initializes a new PostgreSQL Submodel Registry database backend.
@@ -70,8 +71,24 @@ func NewPostgreSQLSMBackendFromDB(db *sql.DB) (*PostgreSQLSMDatabase, error) {
 	if db == nil {
 		return nil, common.NewErrBadRequest("SMREG-NEWFROMDB-NILDB database handle must not be nil")
 	}
+	return NewPostgreSQLSMBackendFromPools(db, db)
+}
 
-	return &PostgreSQLSMDatabase{db: db}, nil
+// NewPostgreSQLSMBackendFromPools creates a backend with separate writer and
+// reader pools.
+func NewPostgreSQLSMBackendFromPools(writer *sql.DB, reader *sql.DB) (*PostgreSQLSMDatabase, error) {
+	if writer == nil {
+		return nil, common.NewErrBadRequest("SMREG-NEWFROMPOOLS-NILWRITER writer database handle must not be nil")
+	}
+	if reader == nil {
+		return nil, common.NewErrBadRequest("SMREG-NEWFROMPOOLS-NILREADER reader database handle must not be nil")
+	}
+
+	return &PostgreSQLSMDatabase{writerDB: writer, readerDB: reader}, nil
+}
+
+func (p *PostgreSQLSMDatabase) readDB(ctx context.Context) *sql.DB {
+	return common.PostgresReadPool(ctx, p.writerDB, p.readerDB)
 }
 
 // ExecuteInTransaction executes fn within a single database transaction.
@@ -80,7 +97,7 @@ func (p *PostgreSQLSMDatabase) ExecuteInTransaction(
 	commitErrorCode string,
 	fn func(tx *sql.Tx) error,
 ) error {
-	return common.ExecuteInTransaction(p.db, startErrorCode, commitErrorCode, fn)
+	return common.ExecuteInTransaction(p.writerDB, startErrorCode, commitErrorCode, fn)
 }
 
 // ListSubmodelDescriptors lists global Submodel Descriptors (no AAS association).
@@ -91,7 +108,7 @@ func (p *PostgreSQLSMDatabase) ListSubmodelDescriptors(
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) ([]model.SubmodelDescriptor, string, error) {
-	return descriptors.ListSubmodelDescriptors(ctx, p.db, limit, cursor, createdFrom, updatedFrom)
+	return descriptors.ListSubmodelDescriptors(ctx, p.readDB(ctx), limit, cursor, createdFrom, updatedFrom)
 }
 
 func appendSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.SubmodelDescriptor, previousSnapshot map[string]any, changeType string, deleted bool) error {
@@ -140,7 +157,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptor(
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
-	err := common.ExecuteInTransaction(p.db, "SMREG-INSERTSMDESC-STARTTX", "SMREG-INSERTSMDESC-COMMITTX", func(tx *sql.Tx) error {
+	err := common.ExecuteInTransaction(p.writerDB, "SMREG-INSERTSMDESC-STARTTX", "SMREG-INSERTSMDESC-COMMITTX", func(tx *sql.Tx) error {
 		if lockErr := history.LockMutationTx(ctx, tx, history.TableSubmodelDescriptor, submodel.Id); lockErr != nil {
 			return lockErr
 		}
@@ -277,7 +294,7 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
-	err := common.ExecuteInTransaction(p.db, "SMREG-REPLACESMDESC-STARTTX", "SMREG-REPLACESMDESC-COMMITTX", func(tx *sql.Tx) error {
+	err := common.ExecuteInTransaction(p.writerDB, "SMREG-REPLACESMDESC-STARTTX", "SMREG-REPLACESMDESC-COMMITTX", func(tx *sql.Tx) error {
 		previousSnapshot, snapshotErr := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodel.Id)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -374,7 +391,7 @@ func (p *PostgreSQLSMDatabase) GetSubmodelDescriptorByID(
 	ctx context.Context,
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.GetSubmodelDescriptorByID(ctx, p.db, submodelID)
+	return descriptors.GetSubmodelDescriptorByID(ctx, p.readDB(ctx), submodelID)
 }
 
 // GetSubmodelDescriptorByIDInTransaction returns a global submodel descriptor
@@ -395,7 +412,7 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByID(
 	ctx context.Context,
 	submodelID string,
 ) error {
-	return common.ExecuteInTransaction(p.db, "SMREG-DELSMDESC-STARTTX", "SMREG-DELSMDESC-COMMITTX", func(tx *sql.Tx) error {
+	return common.ExecuteInTransaction(p.writerDB, "SMREG-DELSMDESC-STARTTX", "SMREG-DELSMDESC-COMMITTX", func(tx *sql.Tx) error {
 		previousSnapshot, err := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
 		if err != nil {
 			return err
@@ -494,7 +511,7 @@ func (p *PostgreSQLSMDatabase) ExistsSubmodelByID(
 	ctx context.Context,
 	submodelID string,
 ) (bool, error) {
-	return descriptors.ExistsSubmodelByID(ctx, p.db, submodelID)
+	return descriptors.ExistsSubmodelByID(ctx, p.writerDB, submodelID)
 }
 
 // ExistingSubmodelDescriptorIDsInTransaction returns existing global submodel descriptor ids.

@@ -103,22 +103,28 @@ func runServer(ctx context.Context, configPath string) error {
 	// === Database ===
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "digitaltwinregistryservice", common.CURRENT_DATABASE_VERSION)
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "digitaltwinregistryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "DTR-DB-CONNECT", "error", err)
 		return err
 	}
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "DTR-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
 	}
 
-	registryDatabase, err := registrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
+	registryDatabase, err := registrydb.NewPostgreSQLAASRegistryDatabaseFromPools(pools.Writer, pools.Reader, cfg.Server.CacheEnabled)
 	if err != nil {
 		slog.ErrorContext(ctx, "registry persistence initialization failed", "error.code", "DTR-REGISTRY-INIT", "error", err)
 		return err
 	}
 
-	discoveryDatabase, err := discoverydb.NewPostgreSQLDiscoveryBackendFromDB(sharedDB)
+	discoveryDatabase, err := discoverydb.NewPostgreSQLDiscoveryBackendFromPools(pools.Writer, pools.Reader)
 	if err != nil {
 		slog.ErrorContext(ctx, "discovery persistence initialization failed", "error.code", "DTR-DISCOVERY-INIT", "error", err)
 		return err

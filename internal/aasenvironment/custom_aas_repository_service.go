@@ -93,6 +93,7 @@ func (s *CustomAASRepositoryService) validateSyncDependencies(requireAASRegistry
 
 // PostAssetAdministrationShell creates a new AAS and synchronizes descriptor writes in the same transaction.
 func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Context, aas types.IAssetAdministrationShell) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PostAssetAdministrationShell"
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PostAssetAdministrationShell(ctx, aas)
@@ -137,6 +138,7 @@ func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Co
 
 // PutAssetAdministrationShellById upserts an AAS and synchronizes descriptor writes in the same transaction.
 func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, assetAdministrationShell types.IAssetAdministrationShell) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PutAssetAdministrationShellById"
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PutAssetAdministrationShellById(ctx, aasIdentifier, assetAdministrationShell)
@@ -192,6 +194,7 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 
 // DeleteAssetAdministrationShellById deletes an AAS and synchronizes descriptor deletion in the same transaction.
 func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "DeleteAssetAdministrationShellById"
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteAssetAdministrationShellById(ctx, aasIdentifier)
@@ -228,6 +231,7 @@ func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx cont
 
 // PutAssetInformationAasRepository updates AAS asset information and synchronizes descriptor writes in the same transaction.
 func (s *CustomAASRepositoryService) PutAssetInformationAasRepository(ctx context.Context, aasIdentifier string, assetInformation types.IAssetInformation) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PutAssetInformationAasRepository"
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PutAssetInformationAasRepository(ctx, aasIdentifier, assetInformation)
@@ -286,6 +290,7 @@ func (s *CustomAASRepositoryService) PutAssetInformationAasRepository(ctx contex
 
 // PostSubmodelReferenceAasRepository creates a submodel reference and synchronizes embedded descriptors.
 func (s *CustomAASRepositoryService) PostSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, reference types.IReference) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PostSubmodelReferenceAasRepository"
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PostSubmodelReferenceAasRepository(ctx, aasIdentifier, reference)
@@ -349,6 +354,7 @@ func (s *CustomAASRepositoryService) PostSubmodelReferenceAasRepository(ctx cont
 
 // DeleteSubmodelReferenceAasRepository deletes a submodel reference and synchronizes embedded descriptors.
 func (s *CustomAASRepositoryService) DeleteSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "DeleteSubmodelReferenceAasRepository"
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelReferenceAasRepository(ctx, aasIdentifier, submodelIdentifier)
@@ -400,6 +406,7 @@ func (s *CustomAASRepositoryService) DeleteSubmodelReferenceAasRepository(ctx co
 
 // PutSubmodelByIdAasRepository creates or updates a submodel through the superpath and synchronizes descriptors.
 func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PutSubmodelByIdAasRepository"
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PutSubmodelByIdAasRepository(ctx, aasIdentifier, submodelIdentifier, submodel)
@@ -509,6 +516,7 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 
 // DeleteSubmodelByIdAasRepository deletes a submodel through the superpath and synchronizes descriptors.
 func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "DeleteSubmodelByIdAasRepository"
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelByIdAasRepository(ctx, aasIdentifier, submodelIdentifier)
@@ -593,6 +601,7 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 
 // PatchSubmodelAasRepository updates a submodel through the superpath and synchronizes descriptors.
 func (s *CustomAASRepositoryService) PatchSubmodelAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel, level string) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	_ = level
 	const operation = "PatchSubmodelAasRepository"
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
@@ -648,6 +657,7 @@ func (s *CustomAASRepositoryService) PatchSubmodelAasRepository(ctx context.Cont
 
 // PatchSubmodelByIdMetadataAasRepository updates submodel metadata through the superpath and synchronizes descriptors.
 func (s *CustomAASRepositoryService) PatchSubmodelByIdMetadataAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodelMetadata commonmodel.SubmodelMetadata) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PatchSubmodelByIdMetadataAasRepository"
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PatchSubmodelByIdMetadataAasRepository(ctx, aasIdentifier, submodelIdentifier, submodelMetadata)
@@ -727,7 +737,7 @@ func (s *CustomAASRepositoryService) decodeAndEnsureAASSubmodelReference(ctx con
 		return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), false
 	}
 
-	if referenceCheckErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier); referenceCheckErr != nil {
+	if referenceCheckErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(ctx, decodedAASIdentifier, decodedSubmodelIdentifier); referenceCheckErr != nil {
 		if common.IsErrNotFound(referenceCheckErr) {
 			return "", "", newAASRepoErrorResponse(referenceCheckErr, http.StatusNotFound, operation, "SubmodelNotFound"), false
 		}

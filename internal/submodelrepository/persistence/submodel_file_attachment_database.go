@@ -194,7 +194,11 @@ func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *s
 
 // DownloadFileAttachment downloads attachment content for a File submodel element.
 func (s *SubmodelDatabase) DownloadFileAttachment(submodelID string, idShortPath string) ([]byte, string, string, error) {
-	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	readDB := s.readerDB
+	if readDB == nil {
+		readDB = s.db
+	}
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(readDB)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -204,7 +208,7 @@ func (s *SubmodelDatabase) DownloadFileAttachment(submodelID string, idShortPath
 
 // DownloadFileAttachmentWithContext resolves canonical content through the owning File SME.
 func (s *SubmodelDatabase) DownloadFileAttachmentWithContext(ctx context.Context, submodelID string, idShortPath string) ([]byte, string, string, error) {
-	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.readDB(ctx))
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -222,11 +226,12 @@ func (s *SubmodelDatabase) DownloadFileAttachmentWithContext(ctx context.Context
 // Returns:
 //   - error: Handler construction, lookup, consumer, stream, or transaction error.
 func (s *SubmodelDatabase) StreamFileAttachmentWithContext(ctx context.Context, submodelID string, idShortPath string, consume func(string, string, int64, io.Reader) error) error {
-	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	readDB := s.readDB(ctx)
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(readDB)
 	if err != nil {
 		return err
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	tx, err := readDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-STARTTX " + err.Error())
 	}

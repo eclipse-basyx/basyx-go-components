@@ -29,7 +29,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"embed"
 	"flag"
 	"log/slog"
@@ -67,17 +66,22 @@ func runServer(ctx context.Context, configPath string) error {
 
 	addr := common.ServerAddress(cfg.Server)
 
-	sharedDB, err := openSharedDatabase(ctx, cfg)
+	pools, err := openSharedDatabase(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "DPP-DB-CLOSE", "error", closeErr)
+		}
+	}()
+
+	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromPools(pools.Writer, pools.Reader, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
 
-	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(sharedDB, cfg.Server.StrictVerification)
-	if err != nil {
-		return err
-	}
-
-	submodelRepositoryPersistence, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, nil, cfg.Server.StrictVerification)
+	submodelRepositoryPersistence, err := submodelrepositorydb.NewSubmodelDatabaseFromPools(pools.Writer, pools.Reader, nil, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
@@ -91,15 +95,17 @@ func runServer(ctx context.Context, configPath string) error {
 	return common.RunHTTPServer(ctx, "DPP", cfg.Server, router)
 }
 
-func openSharedDatabase(ctx context.Context, cfg *common.Config) (*sql.DB, error) {
-	db, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "dppapiservice", common.CURRENT_DATABASE_VERSION)
+func openSharedDatabase(ctx context.Context, cfg *common.Config) (*common.PostgresPools, error) {
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "dppapiservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		return nil, err
 	}
+	db := pools.Writer
 	if err = history.ApplyPostgresGuardConfig(ctx, db); err != nil {
+		_ = pools.Close()
 		return nil, err
 	}
-	return db, nil
+	return pools, nil
 }
 
 func main() {

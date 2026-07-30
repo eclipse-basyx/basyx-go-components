@@ -447,6 +447,7 @@ func submodelElementMetadataToJSONPatch(metadata gen.SubmodelElementMetadata) (m
 }
 
 func loadOperationElement(ctx context.Context, backend persistencepostgresql.SubmodelDatabase, decodedSubmodelIdentifier string, idShortPath string, operation string) (types.ISubmodelElement, gen.ImplResponse, bool) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	element, err := backend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, true, "")
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
@@ -1408,7 +1409,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel, level string) (gen.ImplResponse, error) {
-	_ = ctx
+	ctx = common.WithWriterPostgresReads(ctx)
 	_ = level
 	const operation = "PatchSubmodelByID"
 
@@ -1519,6 +1520,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDMetadata(ctx context.Co
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.Context, submodelIdentifier string, submodelMetadata gen.SubmodelMetadata) (gen.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PatchSubmodelByIDMetadata"
 
 	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -2184,6 +2186,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRep
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement, level string) (gen.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PatchSubmodelElementByPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -2276,6 +2279,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathMetadataSubmod
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElementMetadata gen.SubmodelElementMetadata) (gen.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PatchSubmodelElementByPathMetadataSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -2570,6 +2574,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(
 	contentType string,
 	file io.Reader,
 ) (gen.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PutFileByPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)

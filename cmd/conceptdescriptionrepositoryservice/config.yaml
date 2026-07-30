@@ -38,6 +38,18 @@ postgres:
   maxIdleConnections: 25
   connMaxLifetimeMinutes: 5
   connMaxIdleTimeMinutes: 0
+  # Optional eventually consistent reader. Omit to reuse the writer pool.
+  # reader:
+  #   host: postgres-reader
+  #   port: 5432
+  #   user: postgres
+  #   password: postgres
+  #   dbname: basyx
+  #   sslmode: require
+  #   maxOpenConnections: 50
+  #   maxIdleConnections: 25
+  #   connMaxLifetimeMinutes: 5
+  #   connMaxIdleTimeMinutes: 0
 
 oidc:
   trustlistPath: "config/trustlist.json"

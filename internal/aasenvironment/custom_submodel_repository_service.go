@@ -110,6 +110,7 @@ func (s *CustomSubmodelRepositoryService) validateSyncDependencies(requireAASRep
 
 // PostSubmodel creates a new submodel and synchronizes descriptor writes in the same transaction.
 func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, submodel types.ISubmodel) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PostSubmodel"
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PostSubmodel(ctx, submodel)
@@ -158,6 +159,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 
 // PutSubmodelByID upserts a submodel and synchronizes descriptor writes in the same transaction.
 func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PutSubmodelByID"
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PutSubmodelByID(ctx, submodelIdentifier, submodel)
@@ -223,6 +225,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 
 // DeleteSubmodelByID deletes a submodel and synchronizes descriptor deletion in the same transaction.
 func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context, id string) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "DeleteSubmodelByID"
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.DeleteSubmodelByID(ctx, id)
@@ -266,6 +269,7 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 
 // PatchSubmodelByID updates a submodel and synchronizes descriptor writes in the same transaction.
 func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel, level string) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	_ = level
 	const operation = "PatchSubmodelByID"
 	if !s.syncConfig.SubmodelRegistryIntegration {
@@ -359,6 +363,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 
 // PatchSubmodelByIDMetadata updates submodel metadata and synchronizes descriptor writes in the same transaction.
 func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.Context, submodelIdentifier string, submodelMetadata commonmodel.SubmodelMetadata) (commonmodel.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PatchSubmodelByIDMetadata"
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PatchSubmodelByIDMetadata(ctx, submodelIdentifier, submodelMetadata)

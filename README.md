@@ -86,6 +86,9 @@ The project is composed of DB-backed microservices for AAS and Submodel registri
      ```sh
      docker compose -f examples/BaSyxMinimalExample/docker-compose.yml up
      ```
+   To run BaSyx with distinct PostgreSQL writer and streaming-standby reader
+   endpoints, see the [PostgreSQL read replica
+   example](examples/BaSyxReadReplicaExample/README.md).
 
 ## 4. Environment Variables & Configuration
 
@@ -152,6 +155,20 @@ postgres:
     maxIdleConnections: 25
     connMaxLifetimeMinutes: 5
     connMaxIdleTimeMinutes: 0
+
+    # Optional read-only endpoint for eligible reads in PostgreSQL-backed HTTP services.
+    # Omit this block to reuse the writer pool.
+    # reader:
+    #     host: postgres-reader
+    #     port: 5432
+    #     user: postgres
+    #     password: postgres
+    #     dbname: basyx
+    #     sslmode: require
+    #     maxOpenConnections: 50
+    #     maxIdleConnections: 25
+    #     connMaxLifetimeMinutes: 5
+    #     connMaxIdleTimeMinutes: 0
 ```
 
 Or via `.env`:
@@ -184,11 +201,36 @@ POSTGRES_MAXOPENCONNECTIONS=50
 POSTGRES_MAXIDLECONNECTIONS=25
 POSTGRES_CONNMAXLIFETIMEMINUTES=5
 POSTGRES_CONNMAXIDLETIMEMINUTES=0
+
+# Optional reader connection. Set either POSTGRES_READER_DSN or the individual
+# reader connection variables. Omit all reader variables to reuse the writer.
+# POSTGRES_READER_DSN=postgres://user:password@postgres-reader:5432/basyx?sslmode=require
+# POSTGRES_READER_HOST=postgres-reader
+# POSTGRES_READER_PORT=5432
+# POSTGRES_READER_USER=postgres
+# POSTGRES_READER_PASSWORD=postgres
+# POSTGRES_READER_DBNAME=basyx
+# POSTGRES_READER_SSLMODE=require
+# POSTGRES_READER_SSLCERT=
+# POSTGRES_READER_SSLKEY=
+# POSTGRES_READER_SSLROOTCERT=
+# POSTGRES_READER_CONNECTTIMEOUTSECONDS=10
+# POSTGRES_READER_APPLICATIONNAME=
+# POSTGRES_READER_FALLBACKAPPLICATIONNAME=
+# POSTGRES_READER_SEARCHPATH=
+# POSTGRES_READER_OPTIONS=
+# POSTGRES_READER_TIMEZONE=
+# POSTGRES_READER_MAXOPENCONNECTIONS=50
+# POSTGRES_READER_MAXIDLECONNECTIONS=25
+# POSTGRES_READER_CONNMAXLIFETIMEMINUTES=5
+# POSTGRES_READER_CONNMAXIDLETIMEMINUTES=0
 ```
 
 All HTTP timeout values are in seconds and must be greater than zero. The legacy Viper-derived names such as `SERVER_READTIMEOUTSECONDS` still work; readable aliases with underscores and `BASYX_` prefixes, such as `BASYX_SERVER_READ_TIMEOUT_SECONDS`, are also supported.
 
 PostgreSQL pool limits apply to every service process or Kubernetes pod. Size the deployment so that the sum of `maxOpenConnections` across all replicas and database-backed services stays below PostgreSQL's usable connection budget, with capacity reserved for administration and migrations. The defaults are 50 open connections, 25 idle connections, and a five-minute connection lifetime. Zero uses the common default for these three values; when the default idle limit would exceed an explicitly smaller open limit, it is capped at the open limit. `connMaxIdleTimeMinutes: 0` disables idle-time recycling. An explicitly configured idle limit greater than the open limit is rejected during startup.
+
+All PostgreSQL-backed HTTP services support an optional `postgres.reader` connection with independent pool limits. Eligible repository, registry, discovery, company lookup, DPP, and AASX file reads use this endpoint, including the corresponding APIs hosted by the AAS Environment. Mutations, transaction work, schema checks, asynchronous jobs, authorization policy storage, upload staging, and reads that guard mutations remain on the writer. The Configuration Service and the history evidence command-line tooling are writer-only because they perform schema or mixed administrative work. Reader results are eventually consistent and can lag behind a successful write. Replica lag also applies to deletions and authorization-relevant attribute changes, so a reader may briefly return the preceding resource state; deployments requiring immediate revocation must keep affected reads on the writer or use replication guarantees that meet the required revocation window. Configuring a reader is an explicit acceptance of that behavior: startup fails when the configured reader is unavailable, and requests are not silently rerouted to the writer. Account for the writer and reader limits separately when calculating the total PostgreSQL connection budget.
 
 Binary uploads and AASX package expansion are bounded independently:
 

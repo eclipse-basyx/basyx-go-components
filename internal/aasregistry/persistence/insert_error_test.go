@@ -26,9 +26,11 @@
 package aasregistrydatabase
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -45,5 +47,100 @@ func TestMapInsertAASDescriptorErrorPreservesNonUniqueViolation(t *testing.T) {
 	err := mapInsertAASDescriptorError(originalErr)
 	if err != originalErr {
 		t.Fatalf("expected original error, got %v", err)
+	}
+}
+
+func TestAASRegistryReadPoolSelection(t *testing.T) {
+	writer, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("writer sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = writer.Close() }()
+	reader, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("reader sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	backend, err := NewPostgreSQLAASRegistryDatabaseFromPools(writer, reader, false)
+	if err != nil {
+		t.Fatalf("create backend: %v", err)
+	}
+	if got := backend.readDB(t.Context()); got != reader {
+		t.Fatal("eligible registry read did not select the reader")
+	}
+	writerCtx := common.WithWriterPostgresReads(t.Context())
+	if got := backend.readDB(writerCtx); got != writer {
+		t.Fatal("consistency-sensitive registry read did not select the writer")
+	}
+}
+
+func TestAASRegistryExistenceChecksSelectPoolFromContext(t *testing.T) {
+	checks := []struct {
+		name string
+		run  func(*PostgreSQLAASRegistryDatabase, context.Context) (bool, error)
+	}{
+		{
+			name: "aas",
+			run: func(backend *PostgreSQLAASRegistryDatabase, ctx context.Context) (bool, error) {
+				return backend.ExistsAASByID(ctx, "aas-1")
+			},
+		},
+		{
+			name: "submodel",
+			run: func(backend *PostgreSQLAASRegistryDatabase, ctx context.Context) (bool, error) {
+				return backend.ExistsSubmodelForAAS(ctx, "aas-1", "sm-1")
+			},
+		},
+	}
+	contexts := []struct {
+		name        string
+		writerReads bool
+	}{
+		{name: "reader"},
+		{name: "writer", writerReads: true},
+	}
+
+	for _, check := range checks {
+		for _, contextCase := range contexts {
+			t.Run(check.name+"/"+contextCase.name, func(t *testing.T) {
+				writer, writerMock, err := sqlmock.New()
+				if err != nil {
+					t.Fatalf("writer sqlmock.New() failed: %v", err)
+				}
+				defer func() { _ = writer.Close() }()
+				reader, readerMock, err := sqlmock.New()
+				if err != nil {
+					t.Fatalf("reader sqlmock.New() failed: %v", err)
+				}
+				defer func() { _ = reader.Close() }()
+
+				backend, err := NewPostgreSQLAASRegistryDatabaseFromPools(writer, reader, false)
+				if err != nil {
+					t.Fatalf("create backend: %v", err)
+				}
+				selectedMock := readerMock
+				ctx := t.Context()
+				if contextCase.writerReads {
+					selectedMock = writerMock
+					ctx = common.WithWriterPostgresReads(ctx)
+				}
+				selectedMock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"one"}).AddRow(1))
+
+				exists, existsErr := check.run(backend, ctx)
+				if existsErr != nil {
+					t.Fatalf("existence check failed: %v", existsErr)
+				}
+				if !exists {
+					t.Fatal("expected descriptor to exist")
+				}
+				if err = writerMock.ExpectationsWereMet(); err != nil {
+					t.Fatalf("writer expectations: %v", err)
+				}
+				if err = readerMock.ExpectationsWereMet(); err != nil {
+					t.Fatalf("reader expectations: %v", err)
+				}
+			})
+		}
 	}
 }

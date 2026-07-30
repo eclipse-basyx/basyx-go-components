@@ -94,15 +94,21 @@ func runServer(ctx context.Context, configPath string) error {
 
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "submodelregistryservice", common.CURRENT_DATABASE_VERSION)
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "submodelregistryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "SMREGISTRY-DB-CONNECT", "error", err)
 		return err
 	}
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "SMREGISTRY-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
 	}
-	smDatabase, err := smregistrypostgresql.NewPostgreSQLSMBackendFromDB(sharedDB)
+	smDatabase, err := smregistrypostgresql.NewPostgreSQLSMBackendFromPools(pools.Writer, pools.Reader)
 	if err != nil {
 		slog.ErrorContext(ctx, "submodel registry persistence initialization failed", "error.code", "SMREGISTRY-DB-INIT", "error", err)
 		return err

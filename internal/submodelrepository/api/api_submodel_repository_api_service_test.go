@@ -28,12 +28,14 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -152,6 +154,59 @@ func TestInvokeOperationAsyncRequiresClientTimeoutDuration(t *testing.T) {
 	response, err := sut.InvokeOperationAsync(contextWithABACDisabled(t), "", "", gen.OperationRequest{})
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, response.Code)
+}
+
+func TestOperationInvocationReadsDefinitionFromWriter(t *testing.T) {
+	tests := []struct {
+		name   string
+		invoke func(*SubmodelRepositoryAPIAPIService, context.Context) (gen.ImplResponse, error)
+	}{
+		{
+			name: "synchronous",
+			invoke: func(service *SubmodelRepositoryAPIAPIService, ctx context.Context) (gen.ImplResponse, error) {
+				return service.InvokeOperationSubmodelRepo(
+					ctx,
+					common.EncodeString("sm-1"),
+					"operation",
+					gen.OperationRequest{ClientTimeoutDuration: "PT1S"},
+					false,
+				)
+			},
+		},
+		{
+			name: "asynchronous",
+			invoke: func(service *SubmodelRepositoryAPIAPIService, ctx context.Context) (gen.ImplResponse, error) {
+				return service.InvokeOperationAsync(
+					ctx,
+					common.EncodeString("sm-1"),
+					"operation",
+					gen.OperationRequest{ClientTimeoutDuration: "PT1S"},
+				)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			writer, writerMock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = writer.Close() }()
+			reader, readerMock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = reader.Close() }()
+
+			backend, err := persistencepostgresql.NewSubmodelDatabaseFromPools(writer, reader, nil, "off")
+			require.NoError(t, err)
+			writerMock.ExpectQuery("SELECT").WillReturnError(errors.New("writer lookup failed"))
+
+			service := NewSubmodelRepositoryAPIAPIService(t.Context(), *backend)
+			response, invokeErr := test.invoke(service, contextWithABACDisabled(t))
+			require.NoError(t, invokeErr)
+			require.Equal(t, http.StatusInternalServerError, response.Code)
+			require.NoError(t, writerMock.ExpectationsWereMet())
+			require.NoError(t, readerMock.ExpectationsWereMet())
+		})
+	}
 }
 
 func TestAsyncDelegationCapacityIsBounded(t *testing.T) {

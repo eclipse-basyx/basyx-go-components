@@ -45,6 +45,7 @@ import (
 // the Company Lookup Service. The database pool remains owned by the caller.
 type PostgreSQLCompanyLookupDatabase struct {
 	db           *sql.DB
+	readerDB     *sql.DB
 	cacheEnabled bool
 }
 
@@ -92,7 +93,23 @@ func NewPostgreSQLCompanyLookupBackendFromDB(db *sql.DB, cacheEnabled bool) (*Po
 	if db == nil {
 		return nil, common.NewErrBadRequest("COMPANYLOOKUP-NEWFROMDB-NILDB database handle must not be nil")
 	}
-	return &PostgreSQLCompanyLookupDatabase{db: db, cacheEnabled: cacheEnabled}, nil
+	return NewPostgreSQLCompanyLookupBackendFromPools(db, db, cacheEnabled)
+}
+
+// NewPostgreSQLCompanyLookupBackendFromPools creates a backend using
+// caller-owned writer and reader pools.
+func NewPostgreSQLCompanyLookupBackendFromPools(writer *sql.DB, reader *sql.DB, cacheEnabled bool) (*PostgreSQLCompanyLookupDatabase, error) {
+	if writer == nil {
+		return nil, common.NewErrBadRequest("COMPANYLOOKUP-NEWFROMPOOLS-NILWRITER writer database handle must not be nil")
+	}
+	if reader == nil {
+		return nil, common.NewErrBadRequest("COMPANYLOOKUP-NEWFROMPOOLS-NILREADER reader database handle must not be nil")
+	}
+	return &PostgreSQLCompanyLookupDatabase{db: writer, readerDB: reader, cacheEnabled: cacheEnabled}, nil
+}
+
+func (p *PostgreSQLCompanyLookupDatabase) readDB(ctx context.Context) *sql.DB {
+	return common.PostgresReadPool(ctx, p.db, p.readerDB)
 }
 
 // InsertCompanyDescriptor inserts the provided company descriptor
@@ -110,7 +127,7 @@ func (p *PostgreSQLCompanyLookupDatabase) GetCompanyDescriptorByID(
 	ctx context.Context,
 	companyIdentifier string,
 ) (model.CompanyDescriptor, error) {
-	return descriptors.GetCompanyDescriptorByID(ctx, p.db, companyIdentifier)
+	return descriptors.GetCompanyDescriptorByID(ctx, p.readDB(ctx), companyIdentifier)
 }
 
 // DeleteCompanyDescriptorByID deletes the company descriptor
@@ -140,7 +157,7 @@ func (p *PostgreSQLCompanyLookupDatabase) ListCompanyDescriptors(
 	name string,
 	assetID string,
 ) ([]model.CompanyDescriptor, string, error) {
-	return descriptors.ListCompanyDescriptors(ctx, p.db, limit, cursor, name, assetID)
+	return descriptors.ListCompanyDescriptors(ctx, p.readDB(ctx), limit, cursor, name, assetID)
 }
 
 // ExistsCompanyDescriptorByID reports whether a company descriptor with the given ID exists.

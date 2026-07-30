@@ -28,6 +28,7 @@
 package persistence
 
 import (
+	"context"
 	"crypto/rsa"
 	"database/sql"
 
@@ -39,6 +40,7 @@ import (
 // SubmodelDatabase is the implementation of the SubmodelRepositoryDatabase interface using PostgreSQL as the underlying database.
 type SubmodelDatabase struct {
 	db               *sql.DB
+	readerDB         *sql.DB
 	privateKey       *rsa.PrivateKey
 	signingOptions   jws.SigningOptions
 	verificationMode gen.VerificationMode
@@ -82,6 +84,18 @@ func NewSubmodelDatabaseFromDB(db *sql.DB, privateKey *rsa.PrivateKey, strictVer
 	if db == nil {
 		return nil, common.NewErrBadRequest("SMREPO-NEWFROMDB-NILDB database handle must not be nil")
 	}
+	return NewSubmodelDatabaseFromPools(db, db, privateKey, strictVerification)
+}
+
+// NewSubmodelDatabaseFromPools creates a repository backend from caller-owned
+// writer and reader pools.
+func NewSubmodelDatabaseFromPools(writer *sql.DB, reader *sql.DB, privateKey *rsa.PrivateKey, strictVerification string) (*SubmodelDatabase, error) {
+	if writer == nil {
+		return nil, common.NewErrBadRequest("SMREPO-NEWFROMPOOLS-NILWRITER writer database handle must not be nil")
+	}
+	if reader == nil {
+		return nil, common.NewErrBadRequest("SMREPO-NEWFROMPOOLS-NILREADER reader database handle must not be nil")
+	}
 
 	verificationMode, err := gen.ParseVerificationMode(strictVerification)
 	if err != nil {
@@ -89,8 +103,13 @@ func NewSubmodelDatabaseFromDB(db *sql.DB, privateKey *rsa.PrivateKey, strictVer
 	}
 
 	return &SubmodelDatabase{
-		db:               db,
+		db:               writer,
+		readerDB:         reader,
 		privateKey:       privateKey,
 		verificationMode: verificationMode,
 	}, nil
+}
+
+func (s *SubmodelDatabase) readDB(ctx context.Context) *sql.DB {
+	return common.PostgresReadPool(ctx, s.db, s.readerDB)
 }
