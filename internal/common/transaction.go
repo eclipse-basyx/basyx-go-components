@@ -25,7 +25,21 @@
 
 package common
 
-import "database/sql"
+import (
+	"context"
+	"database/sql"
+)
+
+// BeginReadTransaction starts a read-only transaction with a stable PostgreSQL snapshot.
+func BeginReadTransaction(ctx context.Context, db *sql.DB) (*sql.Tx, error) {
+	if db == nil {
+		return nil, NewErrBadRequest("COMMON-BEGINREADTX-NILDB database handle must not be nil")
+	}
+	return db.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+}
 
 // ExecuteInTransaction starts a transaction, executes fn, and commits on success.
 func ExecuteInTransaction(db *sql.DB, startErrorCode string, commitErrorCode string, fn func(tx *sql.Tx) error) (err error) {
@@ -54,6 +68,47 @@ func ExecuteInTransaction(db *sql.DB, startErrorCode string, commitErrorCode str
 	if err != nil {
 		if commitErrorCode == "" {
 			return NewInternalServerError("COMMON-EXECINTX-COMMIT " + err.Error())
+		}
+		return NewInternalServerError(commitErrorCode + " " + err.Error())
+	}
+
+	return nil
+}
+
+// ExecuteInReadTransaction runs fn in a read-only transaction with one stable
+// PostgreSQL snapshot for all statements.
+func ExecuteInReadTransaction(
+	ctx context.Context,
+	db *sql.DB,
+	startErrorCode string,
+	commitErrorCode string,
+	fn func(tx *sql.Tx) error,
+) (err error) {
+	if db == nil {
+		return NewErrBadRequest("COMMON-EXECINREADTX-NILDB database handle must not be nil")
+	}
+	if fn == nil {
+		return NewErrBadRequest("COMMON-EXECINREADTX-NILFN transaction callback must not be nil")
+	}
+
+	tx, err := BeginReadTransaction(ctx, db)
+	if err != nil {
+		if startErrorCode == "" {
+			return NewInternalServerError("COMMON-EXECINREADTX-STARTTX " + err.Error())
+		}
+		return NewInternalServerError(startErrorCode + " " + err.Error())
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if err = fn(tx); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		if commitErrorCode == "" {
+			return NewInternalServerError("COMMON-EXECINREADTX-COMMIT " + err.Error())
 		}
 		return NewInternalServerError(commitErrorCode + " " + err.Error())
 	}
