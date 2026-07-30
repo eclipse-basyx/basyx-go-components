@@ -33,6 +33,12 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
+// SubmodelIDQueryer supports resolving a Submodel database ID through either a
+// database pool or a transaction.
+type SubmodelIDQueryer interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
 // GetSubmodelDatabaseID resolves the internal database ID of a Submodel by its identifier.
 //
 // Description:
@@ -62,7 +68,7 @@ func GetSubmodelDatabaseIDForUpdate(tx *sql.Tx, submodelID string) (int, error) 
 	return getSubmodelDatabaseID(tx, submodelID, true)
 }
 
-func getSubmodelDatabaseID(tx *sql.Tx, submodelID string, forUpdate bool) (int, error) {
+func getSubmodelDatabaseID(db SubmodelIDQueryer, submodelID string, forUpdate bool) (int, error) {
 	var databaseID int
 	query := goqu.Select("id").
 		From("submodel").
@@ -75,7 +81,7 @@ func getSubmodelDatabaseID(tx *sql.Tx, submodelID string, forUpdate bool) (int, 
 	if err != nil {
 		return 0, err
 	}
-	err = tx.QueryRow(sqlQuery, args...).Scan(&databaseID)
+	err = db.QueryRow(sqlQuery, args...).Scan(&databaseID)
 	if err != nil {
 		return 0, err
 	}
@@ -103,14 +109,11 @@ func getSubmodelDatabaseID(tx *sql.Tx, submodelID string, forUpdate bool) (int, 
 //		return err
 //	}
 func GetSubmodelDatabaseIDFromDB(db *sql.DB, submodelID string) (int, error) {
-	var databaseID int
-	sqlQuery, args, err := goqu.Select("id").From("submodel").Where(goqu.I("submodel_identifier").Eq(submodelID)).ToSQL()
-	if err != nil {
-		return 0, err
-	}
-	err = db.QueryRow(sqlQuery, args...).Scan(&databaseID)
-	if err != nil {
-		return 0, err
-	}
-	return databaseID, nil
+	return getSubmodelDatabaseID(db, submodelID, false)
+}
+
+// GetSubmodelDatabaseIDFromQueryer resolves the internal database ID through
+// either a database pool or an existing transaction.
+func GetSubmodelDatabaseIDFromQueryer(db SubmodelIDQueryer, submodelID string) (int, error) {
+	return getSubmodelDatabaseID(db, submodelID, false)
 }

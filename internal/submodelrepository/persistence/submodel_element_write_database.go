@@ -123,32 +123,89 @@ func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submod
 
 // GetSubmodelElement retrieves a submodel element by path and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, includeBlobValue bool, level string) (types.ISubmodelElement, error) {
-	return submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.readDB(ctx), submodelID, idShortOrPath, includeBlobValue, level)
+	if submodelID == "" || idShortOrPath == "" || (level != "" && level != "core" && level != "deep") {
+		return submodelelements.GetSubmodelElementByIDShortOrPath(ctx, nil, submodelID, idShortOrPath, includeBlobValue, level)
+	}
+	var result types.ISubmodelElement
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSME-STARTTX", "SMREPO-GETSME-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, idShortOrPath, includeBlobValue, level)
+		return txErr
+	})
+	return result, err
 }
 
 // GetSubmodelElements retrieves submodel elements and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelElements(ctx context.Context, submodelID string, limit *int, cursor string, includeBlobValue bool, level string) ([]types.ISubmodelElement, string, error) {
-	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.readDB(ctx), submodelID, limit, cursor, includeBlobValue, level)
+	if submodelID == "" || (limit != nil && *limit < -1) {
+		return submodelelements.GetSubmodelElementsBySubmodelID(ctx, nil, submodelID, limit, cursor, includeBlobValue, level)
+	}
+	var result []types.ISubmodelElement
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMES-STARTTX", "SMREPO-GETSMES-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, nextCursor, txErr = submodelelements.GetSubmodelElementsBySubmodelIDTx(ctx, tx, submodelID, limit, cursor, includeBlobValue, level)
+		return txErr
+	})
+	return result, nextCursor, err
 }
 
 // GetSubmodelElementPaths retrieves submodel element paths directly from persisted idshort_path values.
 func (s *SubmodelDatabase) GetSubmodelElementPaths(ctx context.Context, submodelID string, level string) ([]string, error) {
-	return submodelelements.GetSubmodelElementPathsBySubmodelID(ctx, s.readDB(ctx), submodelID, level)
+	if submodelID == "" || (level != "" && level != "core" && level != "deep") {
+		return submodelelements.GetSubmodelElementPathsBySubmodelID(ctx, nil, submodelID, level)
+	}
+	var result []string
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMEPATHS-STARTTX", "SMREPO-GETSMEPATHS-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = submodelelements.GetSubmodelElementPathsBySubmodelID(ctx, tx, submodelID, level)
+		return txErr
+	})
+	return result, err
 }
 
 // GetSubmodelElementPathPage retrieves paged submodel element paths directly from persisted idshort_path values.
 func (s *SubmodelDatabase) GetSubmodelElementPathPage(ctx context.Context, submodelID string, limit *int, cursor string, level string) ([]string, string, error) {
-	return submodelelements.GetSubmodelElementPathsPageBySubmodelID(ctx, s.readDB(ctx), submodelID, limit, cursor, level)
+	if submodelID == "" || (level != "" && level != "core" && level != "deep") || (limit != nil && *limit < 0) {
+		return submodelelements.GetSubmodelElementPathsPageBySubmodelID(ctx, nil, submodelID, limit, cursor, level)
+	}
+	var result []string
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMEPATHSPAGE-STARTTX", "SMREPO-GETSMEPATHSPAGE-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, nextCursor, txErr = submodelelements.GetSubmodelElementPathsPageBySubmodelID(ctx, tx, submodelID, limit, cursor, level)
+		return txErr
+	})
+	return result, nextCursor, err
 }
 
 // GetSubmodelElementPathsByPath retrieves path notation for a specific submodel element path.
 func (s *SubmodelDatabase) GetSubmodelElementPathsByPath(ctx context.Context, submodelID string, idShortPath string, level string) ([]string, error) {
-	return submodelelements.GetSubmodelElementPathsByPath(ctx, s.readDB(ctx), submodelID, idShortPath, level)
+	if submodelID == "" || idShortPath == "" || (level != "" && level != "core" && level != "deep") {
+		return submodelelements.GetSubmodelElementPathsByPath(ctx, nil, submodelID, idShortPath, level)
+	}
+	var result []string
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMEPATHSBYPATH-STARTTX", "SMREPO-GETSMEPATHSBYPATH-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = submodelelements.GetSubmodelElementPathsByPath(ctx, tx, submodelID, idShortPath, level)
+		return txErr
+	})
+	return result, err
 }
 
 // GetSubmodelElementReferences retrieves SME references and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelElementReferences(ctx context.Context, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
-	return submodelelements.GetSubmodelElementReferencesBySubmodelID(ctx, s.readDB(ctx), submodelID, limit, cursor)
+	if submodelID == "" || (limit != nil && *limit < -1) {
+		return submodelelements.GetSubmodelElementReferencesBySubmodelID(ctx, nil, submodelID, limit, cursor)
+	}
+	var result []types.IReference
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMEREFS-STARTTX", "SMREPO-GETSMEREFS-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, nextCursor, txErr = submodelelements.GetSubmodelElementReferencesBySubmodelID(ctx, tx, submodelID, limit, cursor)
+		return txErr
+	})
+	return result, nextCursor, err
 }
 
 // AddSubmodelElement adds a top-level submodel element and performs an ABAC re-check before commit when ABAC is enabled.

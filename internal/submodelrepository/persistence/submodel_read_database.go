@@ -29,8 +29,6 @@ package persistence
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -44,54 +42,29 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
-	"golang.org/x/sync/errgroup"
 )
 
 // GetSubmodelByID retrieves a submodel by identifier and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifier string, level string, metadataOnly bool, includeBlobValue bool) (types.ISubmodel, error) {
-	eg := errgroup.Group{}
-	var submodels []types.ISubmodel
-	eg.Go(func() error {
-		var err error
-		submodels, _, err = s.GetSubmodels(ctx, 0, "", submodelIdentifier, "", time.Time{}, time.Time{})
-		if err != nil {
-			return err
-		}
-		if len(submodels) == 0 {
-			return common.NewErrNotFound(submodelIdentifier)
-		}
-		if len(submodels) > 1 {
-			return fmt.Errorf("multiple submodels found with identifier '%s'", submodelIdentifier)
-		}
-		return nil
-	})
-	submodelElements := make([]types.ISubmodelElement, 0)
-	if !metadataOnly {
-		eg.Go(func() error {
-			unlimited := -1
-			smes, _, err := s.GetSubmodelElements(ctx, submodelIdentifier, &unlimited, "", includeBlobValue, level)
-			if err != nil {
-				return err
-			}
-			submodelElements = smes
-			return nil
-		})
-	}
-
-	err := eg.Wait()
+	var submodel types.ISubmodel
+	err := common.ExecuteInReadTransaction(
+		ctx,
+		s.readDB(ctx),
+		"SMREPO-GETSMBYID-STARTTX",
+		"SMREPO-GETSMBYID-COMMIT",
+		func(tx *sql.Tx) error {
+			var txErr error
+			submodel, txErr = s.getSubmodelByIDInTransaction(ctx, tx, submodelIdentifier, level, metadataOnly, includeBlobValue)
+			return txErr
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
-	if len(submodels) == 0 {
-		return nil, common.NewErrNotFound(submodelIdentifier)
-	}
-	if submodels[0] == nil {
+	if submodel == nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMBYID-NILSUBMODEL Loaded submodel is nil")
 	}
-
-	submodels[0].SetSubmodelElements(submodelElements)
-
-	return submodels[0], nil
+	return submodel, nil
 }
 
 // GetSubmodels retrieves submodels and applies optional ABAC formula filters from ctx.
@@ -151,7 +124,7 @@ func (s *SubmodelDatabase) GetSubmodelReference(ctx context.Context, submodelIde
 	return buildSubmodelModelReference(submodels[0].ID())
 }
 
-func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string, level string, metadataOnly bool) (types.ISubmodel, error) {
+func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string, level string, metadataOnly bool, includeBlobValue bool) (types.ISubmodel, error) {
 	if tx == nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-NILTX transaction must not be nil")
 	}
@@ -166,7 +139,7 @@ func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx 
 	}
 
 	unlimited := -1
-	submodelElements, _, err := submodelelements.GetSubmodelElementsBySubmodelIDTx(ctx, tx, submodelIdentifier, &unlimited, "", true, level)
+	submodelElements, _, err := submodelelements.GetSubmodelElementsBySubmodelIDTx(ctx, tx, submodelIdentifier, &unlimited, "", includeBlobValue, level)
 	if err != nil {
 		return nil, err
 	}
@@ -217,6 +190,9 @@ func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Cont
 	if scanErr != nil {
 		return nil, scanErr
 	}
+	if closeErr := rows.Close(); closeErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-CLOSEROWS " + closeErr.Error())
+	}
 	return submodel, nil
 }
 
@@ -256,7 +232,22 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
 func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
-	readDB := s.readDB(ctx)
+	if !hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds") {
+		return s.getSubmodelsWithOptionalFiltersWithQueryer(ctx, s.readDB(ctx), limit, cursor, submodelIdentifier, idShort, semanticID, createdFrom, updatedFrom)
+	}
+
+	var result []types.ISubmodel
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMS-STARTTX", "SMREPO-GETSMS-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, nextCursor, txErr = s.getSubmodelsWithOptionalFiltersWithQueryer(ctx, tx, limit, cursor, submodelIdentifier, idShort, semanticID, createdFrom, updatedFrom)
+		return txErr
+	})
+	return result, nextCursor, err
+}
+
+//nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
+func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx context.Context, db descriptors.DBQueryer, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
 	var limitFilter *int32
 
 	if limit == 0 {
@@ -269,13 +260,6 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 
 	var cursorFilter *string
 	if cursor != "" {
-		cursorExists, cursorErr := s.submodelCursorExists(ctx, cursor)
-		if cursorErr != nil {
-			return nil, "", cursorErr
-		}
-		if !cursorExists {
-			return []types.ISubmodel{}, "", nil
-		}
 		cursorFilter = &cursor
 	}
 
@@ -342,7 +326,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 	var identifier, rawIDShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
 	var kind sql.NullInt64
 
-	rows, err := readDB.QueryContext(ctx, query, args...)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -429,7 +413,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 	if filterSupplementalSemanticIDs {
 		filteredReferences, readErr := descriptors.ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 			ctx,
-			readDB,
+			db,
 			supplementalOwnerIDs,
 		)
 		if readErr != nil {
@@ -454,22 +438,6 @@ func hasFragmentFilterPrefix(ctx context.Context, prefix string) bool {
 		}
 	}
 	return false
-}
-
-func (s *SubmodelDatabase) submodelCursorExists(ctx context.Context, cursor string) (bool, error) {
-	query, args, buildErr := submodelqueries.BuildSubmodelCursorExistsSQL(cursor)
-	if buildErr != nil {
-		return false, common.NewInternalServerError("SMREPO-CHECKSMCURSOR-BUILDSQL " + buildErr.Error())
-	}
-
-	var one int
-	if queryErr := s.readDB(ctx).QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
-		if errors.Is(queryErr, sql.ErrNoRows) {
-			return false, nil
-		}
-		return false, common.NewInternalServerError("SMREPO-CHECKSMCURSOR-EXECSQL " + queryErr.Error())
-	}
-	return true, nil
 }
 
 func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, error) {

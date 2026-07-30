@@ -83,6 +83,7 @@ func TestGetSignedAssetAdministrationShellSignsCanonicalRepresentation(t *testin
 }
 
 func setupSignedAASHappyPathExpectations(mock sqlmock.Sqlmock, aasIdentifier string) {
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*"id".*FROM "aas"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
 
@@ -124,6 +125,7 @@ func setupSignedAASHappyPathExpectations(mock sqlmock.Sqlmock, aasIdentifier str
 
 	mock.ExpectQuery(`SELECT .*FROM "aas_submodel_reference" AS "aas_submodel_reference"`).
 		WillReturnRows(sqlmock.NewRows([]string{"aas_id", "parent_reference_payload"}))
+	mock.ExpectCommit()
 }
 
 func aasSigningTestContext(t *testing.T) context.Context {

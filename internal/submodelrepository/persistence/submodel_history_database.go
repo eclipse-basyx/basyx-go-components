@@ -60,7 +60,7 @@ func (s *SubmodelDatabase) appendCurrentSubmodelHistoryTx(ctx context.Context, t
 	if history.ActiveConfig().EvidenceEnabled {
 		stateReadCtx = auth.ContextWithoutQueryFilter(ctx)
 	}
-	submodel, err := s.getSubmodelByIDInTransaction(stateReadCtx, tx, submodelIdentifier, "deep", false)
+	submodel, err := s.getSubmodelByIDInTransaction(stateReadCtx, tx, submodelIdentifier, "deep", false, true)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func (s *SubmodelDatabase) loadSubmodelHistorySnapshotBeforeMutationTx(ctx conte
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelIdentifier); err != nil {
 		return nil, err
 	}
-	submodel, err := s.getSubmodelByIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, submodelIdentifier, "deep", false)
+	submodel, err := s.getSubmodelByIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, submodelIdentifier, "deep", false, true)
 	if err != nil {
 		return nil, err
 	}

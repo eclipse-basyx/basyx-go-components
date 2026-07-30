@@ -83,14 +83,13 @@ func TestGetSignedSubmodelPropagatesSubmodelLookupError(t *testing.T) {
 		_ = db.Close()
 	}()
 
-	mock.MatchExpectationsInOrder(false)
-
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
-	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
+	mock.ExpectRollback()
 
 	jws, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm")
 	require.Error(t, err)
@@ -227,6 +226,7 @@ func requireCanonicalJSONPayload(t *testing.T, payload []byte) {
 }
 
 func setupSignedSubmodelHappyPathExpectations(mock sqlmock.Sqlmock, submodelIdentifier string) {
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM "submodel" INNER JOIN "submodel_payload"`).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"submodel_identifier",
@@ -241,6 +241,7 @@ func setupSignedSubmodelHappyPathExpectations(mock sqlmock.Sqlmock, submodelIden
 			"extensions",
 			"qualifiers",
 			"semantic_id",
+			"sort_submodel_identifier",
 		}).AddRow(
 			submodelIdentifier,
 			"idShort",
@@ -254,6 +255,7 @@ func setupSignedSubmodelHappyPathExpectations(mock sqlmock.Sqlmock, submodelIden
 			nil,
 			nil,
 			nil,
+			submodelIdentifier,
 		))
 
 	mock.ExpectQuery(`SELECT .*"id".*FROM "submodel"`).
@@ -261,4 +263,5 @@ func setupSignedSubmodelHappyPathExpectations(mock sqlmock.Sqlmock, submodelIden
 
 	mock.ExpectQuery(`SELECT .*"sme"\."idshort_path".*FROM "submodel_element" AS "sme"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "path"}))
+	mock.ExpectCommit()
 }
