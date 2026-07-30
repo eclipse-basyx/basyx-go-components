@@ -1,0 +1,137 @@
+services:
+  postgres-primary:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxReadReplica
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      REPLICATION_USER: basyx_replication
+      REPLICATION_PASSWORD: replication123
+    command:
+      - postgres
+      - -c
+      - listen_addresses=*
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql
+      - ./postgres-primary/init-replication.sh:/docker-entrypoint-initdb.d/init-replication.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxReadReplica"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  postgres-reader:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxReadReplica
+      PRIMARY_HOST: postgres-primary
+      PRIMARY_PORT: "5432"
+      REPLICATION_USER: basyx_replication
+      REPLICATION_PASSWORD: replication123
+    entrypoint: ["/usr/local/bin/replica-entrypoint.sh"]
+    volumes:
+      - postgres-reader-data:/var/lib/postgresql
+      - ./postgres-reader/replica-entrypoint.sh:/usr/local/bin/replica-entrypoint.sh:ro
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U admin -d basyxReadReplica && PGPASSWORD=$$POSTGRES_PASSWORD psql -U admin -d basyxReadReplica -tAc 'SELECT pg_is_in_recovery()' | grep -qx t",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  basyx-configuration:
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
+    environment:
+      POSTGRES_HOST: postgres-primary
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxReadReplica
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+
+  aas-environment:
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "127.0.0.1:8084:8084"
+    environment:
+      SERVER_PORT: "8084"
+      CORS_ALLOWEDORIGINS: "*"
+      CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWEDCREDENTIALS: "true"
+      CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      POSTGRES_HOST: postgres-primary
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxReadReplica
+      POSTGRES_APPLICATIONNAME: aasenvironmentservice-writer
+      POSTGRES_MAXOPENCONNECTIONS: "20"
+      POSTGRES_MAXIDLECONNECTIONS: "10"
+      POSTGRES_READER_HOST: postgres-reader
+      POSTGRES_READER_PORT: "5432"
+      POSTGRES_READER_USER: admin
+      POSTGRES_READER_PASSWORD: admin123
+      POSTGRES_READER_DBNAME: basyxReadReplica
+      POSTGRES_READER_APPLICATIONNAME: aasenvironmentservice-reader
+      POSTGRES_READER_OPTIONS: -c default_transaction_read_only=on
+      POSTGRES_READER_MAXOPENCONNECTIONS: "40"
+      POSTGRES_READER_MAXIDLECONNECTIONS: "20"
+      ABAC_ENABLED: "false"
+      GENERAL_AASREGISTRYINTEGRATION: "true"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
+      GENERAL_DISCOVERYINTEGRATION: "true"
+      GENERAL_EXTERNALURL: http://localhost:8084
+      GENERAL_AAS_PRECONFIG_PATHS: /app/preconfiguration
+    volumes:
+      - ../BaSyxMinimalExample/aas/IESEDriveMotorDM3000.aasx:/app/preconfiguration/IESEDriveMotorDM3000.aasx:ro
+    depends_on:
+      basyx-configuration:
+        condition: service_completed_successfully
+      postgres-reader:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:8084/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  aas-ui:
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    environment:
+      ENDPOINT_CONFIG_AVAILABLE: "false"
+    depends_on:
+      aas-environment:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-primary-data:
+  postgres-reader-data:

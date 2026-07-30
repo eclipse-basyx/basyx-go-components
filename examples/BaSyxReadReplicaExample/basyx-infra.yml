@@ -1,0 +1,23 @@
+infrastructures:
+  default: read-replica
+
+  read-replica:
+    name: BaSyx PostgreSQL Read Replica
+    components:
+      aasDiscovery:
+        baseUrl: "http://localhost:8084/lookup/shells"
+      aasRegistry:
+        baseUrl: "http://localhost:8084/shell-descriptors"
+        hasDiscoveryIntegration: true
+      submodelRegistry:
+        baseUrl: "http://localhost:8084/submodel-descriptors"
+      aasRepository:
+        baseUrl: "http://localhost:8084/shells"
+        hasRegistryIntegration: true
+      submodelRepository:
+        baseUrl: "http://localhost:8084/submodels"
+        hasRegistryIntegration: true
+      conceptDescriptionRepository:
+        baseUrl: "http://localhost:8084/concept-descriptions"
+    security:
+      type: none
