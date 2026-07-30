@@ -230,7 +230,7 @@ func (s *CustomDiscoveryService) PostAllAssetLinksByID(
 	}
 
 	aasID := string(decoded)
-	exists, existsErr := s.aasChecker.ExistsAASByID(ctx, aasID)
+	exists, existsErr := s.aasChecker.ExistsAASByID(common.WithWriterPostgresReads(ctx), aasID)
 	if existsErr != nil {
 		slog.ErrorContext(ctx, "Error PostAllAssetLinksById: existence check failed", "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-CHECKEXISTS", "error", existsErr, "custom_discovery_component_name", customDiscoveryComponentName, "aas_id", aasID)
 		return common.NewErrorResponse(

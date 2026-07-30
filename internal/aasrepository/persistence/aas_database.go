@@ -752,8 +752,9 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 }
 
 // CheckIfSubmodelReferenceExistsInAssetAdministrationShell checks whether a submodel reference exists in the specified AAS.
-func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAssetAdministrationShell(aasIdentifier string, submodelIdentifier string) error {
-	return s.ExecuteInTransaction(
+func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAssetAdministrationShell(ctx context.Context, aasIdentifier string, submodelIdentifier string) error {
+	return common.ExecuteInTransaction(
+		s.readDB(ctx),
 		"AASREPO-CHECKSMREFINAAS-STARTTX",
 		"AASREPO-CHECKSMREFINAAS-COMMIT",
 		func(tx *sql.Tx) error {

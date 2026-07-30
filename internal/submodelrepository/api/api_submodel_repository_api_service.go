@@ -447,6 +447,7 @@ func submodelElementMetadataToJSONPatch(metadata gen.SubmodelElementMetadata) (m
 }
 
 func loadOperationElement(ctx context.Context, backend persistencepostgresql.SubmodelDatabase, decodedSubmodelIdentifier string, idShortPath string, operation string) (types.ISubmodelElement, gen.ImplResponse, bool) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	element, err := backend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, true, "")
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {

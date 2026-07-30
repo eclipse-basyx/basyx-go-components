@@ -746,7 +746,7 @@ func (p *PostgreSQLAASRegistryDatabase) ExistsAASByID(
 	ctx context.Context,
 	aasID string,
 ) (bool, error) {
-	return descriptors.ExistsAASByID(ctx, p.writerDB, aasID)
+	return descriptors.ExistsAASByID(ctx, p.readDB(ctx), aasID)
 }
 
 // ExistsSubmodelForAAS reports whether the given submodel ID exists for the
@@ -756,5 +756,5 @@ func (p *PostgreSQLAASRegistryDatabase) ExistsSubmodelForAAS(
 	aasID,
 	submodelID string,
 ) (bool, error) {
-	return descriptors.ExistsSubmodelForAAS(ctx, p.writerDB, aasID, submodelID)
+	return descriptors.ExistsSubmodelForAAS(ctx, p.readDB(ctx), aasID, submodelID)
 }

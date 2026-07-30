@@ -288,7 +288,8 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		), enforceErr
 	}
 
-	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(auth.WithoutQueryFilter(ctx), assetAdministrationShellDescriptor.Id); chkErr != nil {
+	writerReadCtx := common.WithWriterPostgresReads(auth.WithoutQueryFilter(ctx))
+	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(writerReadCtx, assetAdministrationShellDescriptor.Id); chkErr != nil {
 		slog.ErrorContext(ctx, "Error in PutAssetAdministrationShellDescriptorById: existence check failed", "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-CHECKEXISTS", "error", chkErr, "component", componentName)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Precheck",
@@ -604,7 +605,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		), enforceErr
 	}
 
-	technicalCtx := auth.WithoutQueryFilter(ctx)
+	technicalCtx := common.WithWriterPostgresReads(auth.WithoutQueryFilter(ctx))
 	aasExists, chkErr := s.aasRegistryBackend.ExistsAASByID(technicalCtx, decodedAAS)
 	if chkErr != nil {
 		slog.ErrorContext(ctx, "Error in PutSubmodelDescriptorByIdThroughSuperpath: AAS existence check failed", "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-CHECKEXISTS", "error", chkErr, "component", componentName, "decoded_aas", decodedAAS)

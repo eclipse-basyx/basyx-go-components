@@ -26,6 +26,7 @@
 package persistence
 
 import (
+	"errors"
 	"regexp"
 	"testing"
 
@@ -46,6 +47,44 @@ func TestAASRepositoryReadPoolSelection(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, reader, backend.readDB(t.Context()))
 	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
+}
+
+func TestSubmodelReferenceCheckSelectsPoolFromContext(t *testing.T) {
+	tests := []struct {
+		name        string
+		writerReads bool
+	}{
+		{name: "reader"},
+		{name: "writer", writerReads: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			writer, writerMock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = writer.Close() }()
+			reader, readerMock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = reader.Close() }()
+
+			backend, err := NewAssetAdministrationShellDatabaseFromPools(writer, reader, "off")
+			require.NoError(t, err)
+
+			selectedMock := readerMock
+			ctx := t.Context()
+			if test.writerReads {
+				selectedMock = writerMock
+				ctx = common.WithWriterPostgresReads(ctx)
+			}
+			selectedMock.ExpectBegin()
+			selectedMock.ExpectQuery("SELECT").WillReturnError(errors.New("lookup failed"))
+			selectedMock.ExpectRollback()
+
+			require.Error(t, backend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(ctx, "aas-1", "sm-1"))
+			require.NoError(t, writerMock.ExpectationsWereMet())
+			require.NoError(t, readerMock.ExpectationsWereMet())
+		})
+	}
 }
 
 func TestGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsUsesJoinedQuery(t *testing.T) {

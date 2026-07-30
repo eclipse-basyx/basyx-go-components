@@ -737,7 +737,7 @@ func (s *CustomAASRepositoryService) decodeAndEnsureAASSubmodelReference(ctx con
 		return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), false
 	}
 
-	if referenceCheckErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier); referenceCheckErr != nil {
+	if referenceCheckErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(ctx, decodedAASIdentifier, decodedSubmodelIdentifier); referenceCheckErr != nil {
 		if common.IsErrNotFound(referenceCheckErr) {
 			return "", "", newAASRepoErrorResponse(referenceCheckErr, http.StatusNotFound, operation, "SubmodelNotFound"), false
 		}

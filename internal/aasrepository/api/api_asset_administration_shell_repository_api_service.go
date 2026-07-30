@@ -1052,7 +1052,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureAASSubmodelRefer
 		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil, false
 	}
 
-	referenceCheckErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier)
+	referenceCheckErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(ctx, decodedAASIdentifier, decodedSubmodelIdentifier)
 	if referenceCheckErr != nil {
 		if common.IsErrNotFound(referenceCheckErr) {
 			return newAPIErrorResponse(referenceCheckErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil, false
