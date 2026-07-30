@@ -65,7 +65,7 @@ The relevant application settings are visible in `docker-compose.yml`:
 
 ## Consistency behavior
 
-Reader-routed requests are eventually consistent. A successful write can take a short time to appear through a later GET request while PostgreSQL replays the corresponding WAL records. BaSyx keeps mutation guards, transactional work, read-after-write-sensitive paths, schema management, asynchronous jobs, authorization storage, and upload staging on the writer.
+Reader-routed requests are eventually consistent. A successful write can take a short time to appear through a later GET request while PostgreSQL replays the corresponding WAL records. Replica lag also applies to deletions and authorization-relevant attribute changes, so a reader may briefly return the preceding resource state; deployments requiring immediate revocation must keep affected reads on the writer or use replication guarantees that meet the required revocation window. BaSyx keeps mutation guards, transactional work, read-after-write-sensitive paths, schema management, asynchronous jobs, authorization storage, and upload staging on the writer.
 
 Both configured endpoints are required during startup. BaSyx does not silently send reader traffic to the writer if the reader is unavailable.
 
