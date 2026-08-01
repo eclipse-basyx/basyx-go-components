@@ -133,6 +133,7 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 
 	require.False(t, databaseTableExists(t, "submodel_supplemental_semantic_id_reference"))
 	require.False(t, databaseTableExists(t, "submodel_element_supplemental_semantic_id_reference"))
+	require.False(t, databaseIndexExists(t, "ix_submodel_semantic_id_refpayload_refid"))
 
 	for _, fixture := range fixtures {
 		postFixture(t, fixture)
@@ -162,6 +163,7 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 
 	assertCollectionsContainFixtures(t, fixtures)
 	assertSchemaVersion(t, common.CURRENT_DATABASE_VERSION)
+	require.True(t, databaseIndexExists(t, "ix_submodel_semantic_id_refpayload_refid"))
 	assertLongIdentifierEvidenceCatalogAccepts(t, longIdentifier)
 	assertLegacyBinaryStateUnchanged(t, legacyFile, readLegacyFileState(t, "LegacyFile"))
 	assertLegacyBinaryStateUnchanged(t, legacyUntouched, readLegacyFileState(t, "LegacyFileUntouched"))
@@ -692,6 +694,31 @@ func databaseTableExists(t *testing.T, tableName string) bool {
 			goqu.Ex{
 				"table_schema": "public",
 				"table_name":   tableName,
+			},
+		).
+		ToSQL()
+	require.NoError(t, err)
+
+	var count int64
+	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&count))
+	return count > 0
+}
+
+func databaseIndexExists(t *testing.T, indexName string) bool {
+	t.Helper()
+
+	db := openMigrationDatabase(t)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	query, args, err := goqu.Dialect("postgres").
+		From(goqu.T("pg_indexes").Schema("pg_catalog")).
+		Select(goqu.COUNT("*")).
+		Where(
+			goqu.Ex{
+				"schemaname": "public",
+				"indexname":  indexName,
 			},
 		).
 		ToSQL()
