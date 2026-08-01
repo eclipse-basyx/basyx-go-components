@@ -40,6 +40,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
 )
@@ -193,7 +194,7 @@ func TestDeniedAttachmentUploadsRejectBeforeMultipartValidationAndSizeEnforcemen
 
 	oversizedPayload, oversizedContentType := buildAttachmentMultipart(
 		t,
-		bytes.Repeat([]byte("x"), securityUploadMaxSizeBytes+1),
+		bytes.Repeat([]byte("x"), int(common.MultipartRequestSizeLimit(securityUploadMaxSizeBytes))+1),
 	)
 
 	for _, attachmentPath := range attachmentPaths {
