@@ -135,7 +135,11 @@ func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]
 func AddVerificationEndpoint(r chi.Router, config *Config, stagers ...UploadStager) {
 	r.Post("/verify", func(w http.ResponseWriter, r *http.Request) {
 		maxPayloadBytes := verificationMaxPayloadBytes(config)
-		r.Body = http.MaxBytesReader(w, r.Body, maxPayloadBytes)
+		maxRequestBytes := maxPayloadBytes
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))), "multipart/form-data") {
+			maxRequestBytes = MultipartRequestSizeLimit(maxPayloadBytes)
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBytes)
 		r = r.WithContext(ContextWithConfig(r.Context(), config))
 
 		var verificationResult map[string]interface{}
@@ -376,7 +380,7 @@ func readVerificationPayload(r *http.Request) ([]byte, string, string, error) {
 				return nil, "", "", fmt.Errorf("failed to read multipart file payload: %w", err)
 			}
 			if int64(len(payload)) > maxPayloadBytes {
-				return nil, "", "", fmt.Errorf("payload exceeds max size of %d bytes", maxPayloadBytes)
+				return nil, "", "", NewErrPayloadTooLarge(fmt.Sprintf("COMMON-VERIFYPAYLOAD-MULTIPARTTOOLARGE payload exceeds max size of %d bytes", maxPayloadBytes))
 			}
 			if len(bytes.TrimSpace(payload)) == 0 {
 				return nil, "", "", fmt.Errorf("payload is empty")
@@ -394,7 +398,7 @@ func readVerificationPayload(r *http.Request) ([]byte, string, string, error) {
 		payloadText := r.FormValue(verifyMultipartPayloadField)
 		payload := []byte(payloadText)
 		if int64(len(payload)) > maxPayloadBytes {
-			return nil, "", "", fmt.Errorf("payload exceeds max size of %d bytes", maxPayloadBytes)
+			return nil, "", "", NewErrPayloadTooLarge(fmt.Sprintf("COMMON-VERIFYPAYLOAD-FIELDTOOLARGE payload exceeds max size of %d bytes", maxPayloadBytes))
 		}
 		if len(bytes.TrimSpace(payload)) == 0 {
 			return nil, "", "", fmt.Errorf(
@@ -420,7 +424,7 @@ func readVerificationPayload(r *http.Request) ([]byte, string, string, error) {
 		return nil, "", "", fmt.Errorf("failed to read request body: %w", err)
 	}
 	if int64(len(payload)) > maxPayloadBytes {
-		return nil, "", "", fmt.Errorf("payload exceeds max size of %d bytes", maxPayloadBytes)
+		return nil, "", "", NewErrPayloadTooLarge(fmt.Sprintf("COMMON-VERIFYPAYLOAD-RAWTOOLARGE payload exceeds max size of %d bytes", maxPayloadBytes))
 	}
 	if len(bytes.TrimSpace(payload)) == 0 {
 		return nil, "", "", fmt.Errorf("payload is empty")

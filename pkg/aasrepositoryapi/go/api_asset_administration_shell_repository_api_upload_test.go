@@ -91,10 +91,45 @@ func TestPutFileByPathAasRepositoryDoesNotRequireTempDirectory(t *testing.T) {
 	}
 }
 
+func TestPutThumbnailAasRepositoryAcceptsFileAtConfiguredLimit(t *testing.T) {
+	const uploadLimit int64 = 1024
+	payload := bytes.Repeat([]byte("x"), int(uploadLimit))
+	request := newMultipartUploadRequest(t, "/shells/aas/asset-information/thumbnail", "maximum.bin", payload)
+	applyUploadLimit(request, uploadLimit)
+	addRouteParam(request, "aasIdentifier", "aas")
+
+	service := &captureAASUploadService{}
+	controller := NewAssetAdministrationShellRepositoryAPIAPIController(service, "", "")
+	response := httptest.NewRecorder()
+
+	controller.PutThumbnailAasRepository(response, request)
+
+	assertCapturedUpload(t, response, service, "maximum.bin", payload)
+}
+
+func TestPutFileByPathAasRepositoryAcceptsFileAtConfiguredLimit(t *testing.T) {
+	const uploadLimit int64 = 1024
+	payload := bytes.Repeat([]byte("x"), int(uploadLimit))
+	request := newMultipartUploadRequest(t, "/shells/aas/submodels/sm/submodel-elements/file/attachment", "maximum.txt", payload)
+	applyUploadLimit(request, uploadLimit)
+	addRouteParam(request, "aasIdentifier", "aas")
+	addRouteParam(request, "submodelIdentifier", "sm")
+	addRouteParam(request, "idShortPath", "file")
+
+	service := &captureAASUploadService{}
+	controller := NewAssetAdministrationShellRepositoryAPIAPIController(service, "", "")
+	response := httptest.NewRecorder()
+
+	controller.PutFileByPathAasRepository(response, request)
+
+	assertCapturedUpload(t, response, service, "maximum.txt", payload)
+}
+
 func TestPutThumbnailAasRepositoryReturnsPayloadTooLargeForOversizedStream(t *testing.T) {
-	payload := bytes.Repeat([]byte("x"), 1024)
+	const uploadLimit int64 = 1024
+	payload := bytes.Repeat([]byte("x"), int(common.MultipartRequestSizeLimit(uploadLimit)))
 	request := newMultipartUploadRequest(t, "/shells/aas/asset-information/thumbnail", "oversized-thumbnail.bin", payload)
-	applyUploadLimit(request, request.ContentLength-int64(len(payload)/2))
+	applyUploadLimit(request, uploadLimit)
 	addRouteParam(request, "aasIdentifier", "aas")
 
 	service := &captureAASUploadService{}
@@ -112,9 +147,10 @@ func TestPutThumbnailAasRepositoryReturnsPayloadTooLargeForOversizedStream(t *te
 }
 
 func TestPutFileByPathAasRepositoryReturnsPayloadTooLargeForOversizedStream(t *testing.T) {
-	payload := bytes.Repeat([]byte("x"), 1024)
+	const uploadLimit int64 = 1024
+	payload := bytes.Repeat([]byte("x"), int(common.MultipartRequestSizeLimit(uploadLimit)))
 	request := newMultipartUploadRequest(t, "/shells/aas/submodels/sm/submodel-elements/file/attachment", "oversized-attachment.txt", payload)
-	applyUploadLimit(request, request.ContentLength-int64(len(payload)/2))
+	applyUploadLimit(request, uploadLimit)
 	addRouteParam(request, "aasIdentifier", "aas")
 	addRouteParam(request, "submodelIdentifier", "sm")
 	addRouteParam(request, "idShortPath", "file")

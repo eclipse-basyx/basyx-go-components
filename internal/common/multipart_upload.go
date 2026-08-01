@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime"
 	"net/http"
 	"strings"
@@ -38,6 +39,7 @@ import (
 const (
 	maxMultipartMetadataBytes      int64 = 1 << 20
 	maxMultipartTotalMetadataBytes int64 = 2 << 20
+	maxMultipartFramingBytes       int64 = 1 << 20
 	maxMultipartPartCount                = 256
 )
 
@@ -53,6 +55,19 @@ type MultipartUpload struct {
 	FileContentType string
 	// Fields contains all non-file form values in encounter order.
 	Fields map[string][]string
+}
+
+// MultipartRequestSizeLimit adds bounded multipart metadata and framing space
+// to a configured file-content limit.
+func MultipartRequestSizeLimit(maxFileBytes int64) int64 {
+	if maxFileBytes <= 0 {
+		maxFileBytes = DefaultConfig.GeneralUploadMaxSizeBytes
+	}
+	overheadBytes := maxMultipartTotalMetadataBytes + maxMultipartFramingBytes
+	if maxFileBytes > math.MaxInt64-overheadBytes {
+		return math.MaxInt64
+	}
+	return maxFileBytes + overheadBytes
 }
 
 // Close discards the staged file unless it has already been promoted.
@@ -89,7 +104,7 @@ func (upload *MultipartUpload) FirstField(name string) string {
 // Parameters:
 //   - w: Response writer used by http.MaxBytesReader.
 //   - r: Multipart HTTP request.
-//   - maxRequestBytes: Maximum complete request size, including multipart framing.
+//   - maxFileBytes: Maximum uploaded file size, excluding multipart framing.
 //   - fileField: Accepted file-part field name.
 //   - stager: External seekable-storage provider.
 //
@@ -99,11 +114,11 @@ func (upload *MultipartUpload) FirstField(name string) string {
 func ReadMultipartUpload(
 	w http.ResponseWriter,
 	r *http.Request,
-	maxRequestBytes int64,
+	maxFileBytes int64,
 	fileField string,
 	stager UploadStager,
 ) (*MultipartUpload, error) {
-	return ReadMultipartUploadFields(w, r, maxRequestBytes, stager, fileField)
+	return ReadMultipartUploadFields(w, r, maxFileBytes, stager, fileField)
 }
 
 // ReadMultipartUploadFields stages exactly one part matching any supplied field name.
@@ -111,7 +126,7 @@ func ReadMultipartUpload(
 // Parameters:
 //   - w: Response writer used by http.MaxBytesReader.
 //   - r: Multipart HTTP request.
-//   - maxRequestBytes: Maximum complete request size, including multipart framing.
+//   - maxFileBytes: Maximum uploaded file size, excluding multipart framing.
 //   - stager: External seekable-storage provider.
 //   - fileFields: Accepted file-part field names.
 //
@@ -121,14 +136,14 @@ func ReadMultipartUpload(
 func ReadMultipartUploadFields(
 	w http.ResponseWriter,
 	r *http.Request,
-	maxRequestBytes int64,
+	maxFileBytes int64,
 	stager UploadStager,
 	fileFields ...string,
 ) (*MultipartUpload, error) {
 	if stager == nil {
 		return nil, NewInternalServerError("COMMON-MULTIPART-NILSTAGER upload stager is required")
 	}
-	return readMultipartUploadFields(w, r, maxRequestBytes, func(ctx context.Context, _ string, _ string, input io.Reader, maximum int64) (StagedUpload, error) {
+	return readMultipartUploadFields(w, r, maxFileBytes, func(ctx context.Context, _ string, _ string, input io.Reader, maximum int64) (StagedUpload, error) {
 		return stager(ctx, input, maximum)
 	}, fileFields...)
 }
@@ -136,20 +151,21 @@ func ReadMultipartUploadFields(
 func readMultipartUploadFields(
 	w http.ResponseWriter,
 	r *http.Request,
-	maxRequestBytes int64,
+	maxFileBytes int64,
 	stager multipartFileStager,
 	fileFields ...string,
 ) (*MultipartUpload, error) {
 	if r == nil || stager == nil {
 		return nil, NewInternalServerError("COMMON-MULTIPART-INVALID request and upload stager are required")
 	}
-	if maxRequestBytes <= 0 {
-		maxRequestBytes = DefaultConfig.GeneralUploadMaxSizeBytes
+	if maxFileBytes <= 0 {
+		maxFileBytes = DefaultConfig.GeneralUploadMaxSizeBytes
 	}
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || !strings.EqualFold(mediaType, "multipart/form-data") {
 		return nil, NewErrBadRequest("COMMON-MULTIPART-CONTENTTYPE multipart/form-data is required")
 	}
+	maxRequestBytes := MultipartRequestSizeLimit(maxFileBytes)
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBytes)
 	reader, err := r.MultipartReader()
 	if err != nil {
@@ -192,13 +208,13 @@ func readMultipartUploadFields(
 			}
 			result.MultipartFileName = strings.TrimSpace(part.FileName())
 			result.FileContentType = strings.TrimSpace(part.Header.Get("Content-Type"))
-			result.File, err = stager(r.Context(), result.MultipartFileName, result.FileContentType, part, maxRequestBytes)
+			result.File, err = stager(r.Context(), result.MultipartFileName, result.FileContentType, part, maxFileBytes)
 			closeErr := part.Close()
 			if err != nil {
-				return nil, normalizeMultipartReadError(err, maxRequestBytes)
+				return nil, normalizeMultipartReadError(err, maxFileBytes)
 			}
 			if closeErr != nil {
-				return nil, normalizeMultipartReadError(closeErr, maxRequestBytes)
+				return nil, normalizeMultipartReadError(closeErr, maxFileBytes)
 			}
 			continue
 		}

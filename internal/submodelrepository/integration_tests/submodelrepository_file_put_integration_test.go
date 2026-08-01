@@ -32,6 +32,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
@@ -125,6 +126,62 @@ func TestPutFileSubmodelElementWithoutValue(t *testing.T) {
 		require.NoError(t, json.Unmarshal(responseBody, &element), "response=%s", string(responseBody))
 		require.Equal(t, "/aasx/files/readme.txt", element["value"], "response=%s", string(responseBody))
 	})
+}
+
+func TestUploadFileAttachmentInIndexedSubmodelElementLists(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:indexed-list-file-%d", time.Now().UnixNano())
+	encodedID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + encodedID
+	status, body, err := requestJSON(http.MethodPost, submodelRepositoryBaseURL+"/submodels", indexedListFileSubmodelPayload(submodelID))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _, _ = requestJSON(http.MethodDelete, endpoint, nil) })
+
+	idShortPath := "Model3D[105].File.FileVersion[0].DigitalFile"
+	attachmentEndpoint := endpoint + "/submodel-elements/" + url.PathEscape(idShortPath) + "/attachment"
+	payload := []byte("indexed list attachment")
+	filePath := createTemporaryBinaryTestFile(t, "model.step", payload)
+	status, err = uploadFileAttachment(attachmentEndpoint, filePath, "model.step")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status)
+
+	content, _, status, err := downloadFileAttachment(attachmentEndpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	require.Equal(t, payload, content)
+}
+
+func indexedListFileSubmodelPayload(submodelID string) map[string]any {
+	modelEntries := make([]any, 106)
+	for index := range modelEntries {
+		modelEntries[index] = indexedListFileEntry()
+	}
+	return map[string]any{
+		"id": submodelID, "idShort": "IndexedListFiles", "kind": "Instance", "modelType": "Submodel",
+		"submodelElements": []any{map[string]any{
+			"idShort": "Model3D", "modelType": "SubmodelElementList", "orderRelevant": true,
+			"typeValueListElement": "SubmodelElementCollection", "value": modelEntries,
+		}},
+	}
+}
+
+func indexedListFileEntry() map[string]any {
+	return map[string]any{
+		"modelType": "SubmodelElementCollection",
+		"value": []any{map[string]any{
+			"idShort": "File", "modelType": "SubmodelElementCollection",
+			"value": []any{map[string]any{
+				"idShort": "FileVersion", "modelType": "SubmodelElementList", "orderRelevant": true,
+				"typeValueListElement": "SubmodelElementCollection",
+				"value": []any{map[string]any{
+					"modelType": "SubmodelElementCollection",
+					"value": []any{map[string]any{
+						"idShort": "DigitalFile", "modelType": "File", "contentType": "model/step",
+					}},
+				}},
+			}},
+		}},
+	}
 }
 
 func TestFullSubmodelPutPreservesOwnedManagedAttachment(t *testing.T) {

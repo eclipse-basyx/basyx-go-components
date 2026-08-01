@@ -697,7 +697,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetThumbnailAasRepo
 // PutThumbnailAasRepository -
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepository(w http.ResponseWriter, r *http.Request) {
 	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, common.MultipartRequestSizeLimit(maxUploadSizeBytes))
 
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
@@ -2180,7 +2180,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetFileByPathAasRep
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
 	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, common.MultipartRequestSizeLimit(maxUploadSizeBytes))
 
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {

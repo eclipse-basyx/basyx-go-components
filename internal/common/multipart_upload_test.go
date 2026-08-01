@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -122,6 +123,47 @@ func TestReadMultipartUploadAcceptsMetadataBeforeFile(t *testing.T) {
 	defer func() { _ = upload.Close() }()
 	if upload.FirstField("fileName") != "selected.aasx" || upload.FirstField("aasIds") != "one,two" {
 		t.Fatalf("unexpected upload metadata: %+v", upload)
+	}
+}
+
+func TestReadMultipartUploadAcceptsFileAtConfiguredLimit(t *testing.T) {
+	const maximum int64 = 1024
+	payload := bytes.Repeat([]byte("x"), int(maximum))
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "maximum.aasx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if int64(body.Len()) <= maximum {
+		t.Fatalf("expected multipart request to exceed file limit, got %d bytes", body.Len())
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/packages", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	upload, err := ReadMultipartUpload(httptest.NewRecorder(), request, maximum, "file", multipartMemoryStager)
+	if err != nil {
+		t.Fatalf("expected file at configured limit to succeed, got %v", err)
+	}
+	defer func() { _ = upload.Close() }()
+	content, err := io.ReadAll(upload.File)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(content, payload) {
+		t.Fatalf("unexpected staged payload length %d", len(content))
+	}
+}
+
+func TestMultipartRequestSizeLimitSaturatesOnOverflow(t *testing.T) {
+	if maximum := MultipartRequestSizeLimit(math.MaxInt64); maximum != math.MaxInt64 {
+		t.Fatalf("expected saturated limit %d, got %d", int64(math.MaxInt64), maximum)
 	}
 }
 

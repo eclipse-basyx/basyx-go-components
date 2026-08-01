@@ -2014,7 +2014,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetFileByPathSubmodelRepo(w http.Re
 // PutFileByPathSubmodelRepo - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.ResponseWriter, r *http.Request) {
 	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, common.MultipartRequestSizeLimit(maxUploadSizeBytes))
 
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
