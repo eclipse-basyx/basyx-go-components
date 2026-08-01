@@ -240,11 +240,11 @@ general:
     aasxMaxPartCount: 10000
     aasxMaxOPCMetadataSizeBytes: 16777216
     aasxMaxPartExpandedSizeBytes: 134217728
-    aasxMaxTotalExpandedSizeBytes: 134217728
+    aasxMaxTotalExpandedSizeBytes: 536870912
     aasxMaxThumbnailSizeBytes: 16777216
 ```
 
-`uploadMaxSizeBytes` limits the compressed HTTP request, including multipart overhead. The AASX limits constrain entry count, expanded OPC metadata, each expanded part, all expanded payload parts combined, and thumbnails respectively. All limits must be positive, and the total expanded limit must be greater than or equal to the per-part limit, which must be greater than or equal to the thumbnail limit.
+`uploadMaxSizeBytes` limits the uploaded file content for AASX packages, File element attachments, and thumbnails. Multipart metadata and framing use a separate bounded allowance, so a file whose content exactly matches the configured limit is accepted. The default 128 MiB file limit therefore accommodates common 50 MiB PDF attachments. The AASX limits constrain entry count, expanded OPC metadata, each expanded part, all expanded payload parts combined, and thumbnails respectively. The 512 MiB total expansion default allows a package to contain multiple large payload parts while the 128 MiB per-part limit continues to bound any single expanded file. All limits must be positive, and the total expanded limit must be greater than or equal to the per-part limit, which must be greater than or equal to the thumbnail limit.
 
 AASX request bodies and generated specification parts use transaction-scoped PostgreSQL large objects for seekable staging; no writable local temporary directory is required. Package parts, attachments, thumbnails, and generated AASX output are streamed. The parsed AAS object model remains in memory because the current AAS SDK requires an in-memory model representation.
 

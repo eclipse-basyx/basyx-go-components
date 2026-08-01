@@ -36,7 +36,7 @@ const (
 	defaultAASXMaxPartCount              = 10000
 	defaultAASXMaxOPCMetadataSizeBytes   = 16 << 20
 	defaultAASXMaxPartExpandedSizeBytes  = 128 << 20
-	defaultAASXMaxTotalExpandedSizeBytes = 128 << 20
+	defaultAASXMaxTotalExpandedSizeBytes = 512 << 20
 	defaultAASXMaxThumbnailSizeBytes     = 16 << 20
 )
 

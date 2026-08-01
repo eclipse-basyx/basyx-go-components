@@ -51,6 +51,17 @@ func TestAASXLimitsFromConfigMapsConfiguredValues(t *testing.T) {
 	}
 }
 
+func TestAASXLimitsFromConfigUsesPackageFriendlyDefaults(t *testing.T) {
+	limits := AASXLimitsFromConfig(nil)
+
+	if limits.MaxPartExpandedSizeBytes != 128<<20 {
+		t.Fatalf("expected 128 MiB per-part limit, got %d", limits.MaxPartExpandedSizeBytes)
+	}
+	if limits.MaxTotalExpandedSizeBytes != 512<<20 {
+		t.Fatalf("expected 512 MiB total expanded limit, got %d", limits.MaxTotalExpandedSizeBytes)
+	}
+}
+
 func TestAASXReaderOptionsEnforceEveryConfiguredReaderLimit(t *testing.T) {
 	packageBytes := buildAASXLimitFixture(t, bytes.Repeat([]byte("x"), 64))
 	tests := []struct {

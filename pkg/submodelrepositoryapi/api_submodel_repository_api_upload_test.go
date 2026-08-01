@@ -73,10 +73,33 @@ func TestPutFileByPathSubmodelRepoDoesNotRequireTempDirectory(t *testing.T) {
 	}
 }
 
+func TestPutFileByPathSubmodelRepoAcceptsFileAtConfiguredLimit(t *testing.T) {
+	const uploadLimit int64 = 1024
+	payload := bytes.Repeat([]byte("x"), int(uploadLimit))
+	request := newMultipartUploadRequest(t, "/submodels/sm/submodel-elements/file/attachment", "maximum.txt", payload)
+	applyUploadLimit(request, uploadLimit)
+	addRouteParam(request, "submodelIdentifier", "sm")
+	addRouteParam(request, "idShortPath", "file")
+
+	service := &captureSubmodelFileUploadService{}
+	controller := NewSubmodelRepositoryAPIAPIController(service, "", "")
+	response := httptest.NewRecorder()
+
+	controller.PutFileByPathSubmodelRepo(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("expected file at configured limit to succeed, got status %d body %s", response.Code, response.Body.String())
+	}
+	if !bytes.Equal(service.content, payload) {
+		t.Fatalf("expected %d uploaded bytes, got %d", len(payload), len(service.content))
+	}
+}
+
 func TestPutFileByPathSubmodelRepoReturnsPayloadTooLargeForOversizedStream(t *testing.T) {
-	payload := bytes.Repeat([]byte("x"), 1024)
+	const uploadLimit int64 = 1024
+	payload := bytes.Repeat([]byte("x"), int(common.MultipartRequestSizeLimit(uploadLimit)))
 	request := newMultipartUploadRequest(t, "/submodels/sm/submodel-elements/file/attachment", "oversized.txt", payload)
-	applyUploadLimit(request, request.ContentLength-int64(len(payload)/2))
+	applyUploadLimit(request, uploadLimit)
 	addRouteParam(request, "submodelIdentifier", "sm")
 	addRouteParam(request, "idShortPath", "file")
 
