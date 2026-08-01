@@ -54,7 +54,7 @@ general:
   aasxMaxPartCount: 10000
   aasxMaxOPCMetadataSizeBytes: 16777216
   aasxMaxPartExpandedSizeBytes: 134217728
-  aasxMaxTotalExpandedSizeBytes: 134217728
+  aasxMaxTotalExpandedSizeBytes: 536870912
   aasxMaxThumbnailSizeBytes: 16777216
 
 # swagger:
