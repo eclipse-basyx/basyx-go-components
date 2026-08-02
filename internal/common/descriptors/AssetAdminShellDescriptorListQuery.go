@@ -175,9 +175,41 @@ func buildSingleStatementAASDescriptorListQuery(
 			Fragment: "$aasdesc#createdAt", FlagAlias: "flag_createdat", RawAlias: common.ColCreatedAt,
 		})
 	}
-	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, maskCollector, maskedColumns)
+	maskRuntime, err := buildOptionalDescriptorMaskRuntime(ctx, maskCollector, maskedColumns)
 	if err != nil {
 		return nil, err
+	}
+	if maskRuntime == nil {
+		aas := goqu.T(common.TblAASDescriptor)
+		payload := goqu.T("aas_payload")
+		rawExpressions := []exp.Expression{
+			aas.Col(common.ColIDShort),
+			aas.Col(common.ColAssetKind),
+			aas.Col(common.ColAssetType),
+			aas.Col(common.ColGlobalAssetID),
+			payload.Col(common.ColAdministrativeInfoPayload),
+			payload.Col(common.ColDisplayNamePayload),
+			payload.Col(common.ColDescriptionPayload),
+			payload.Col(common.ColExtensionsPayload),
+		}
+		if includeCreatedAt {
+			rawExpressions = append(rawExpressions, aas.Col(common.ColCreatedAt))
+		}
+		descriptorJSON, err := buildAASDescriptorJSON(
+			ctx,
+			dialect,
+			common.TblAASDescriptor,
+			aas,
+			rawExpressions,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return dialect.From(page.As(pageAlias)).
+			InnerJoin(aasSource, goqu.On(aas.Col(common.ColDescriptorID).Eq(pageTable.Col(common.ColDescriptorID)))).
+			InnerJoin(payloadSource, goqu.On(payload.Col(common.ColDescriptorID).Eq(pageTable.Col(common.ColDescriptorID)))).
+			Select(descriptorJSON).
+			Order(pageTable.Col("sort_aas_id").Asc()), nil
 	}
 	dataColumns := []interface{}{
 		aasSource.Col(common.ColDescriptorID).As(common.ColDescriptorID),
@@ -199,7 +231,7 @@ func buildSingleStatementAASDescriptorListQuery(
 		InnerJoin(aasSource, goqu.On(aasSource.Col(common.ColDescriptorID).Eq(pageTable.Col(common.ColDescriptorID)))).
 		InnerJoin(payloadSource, goqu.On(payloadSource.Col(common.ColDescriptorID).Eq(pageTable.Col(common.ColDescriptorID)))).
 		Select(append(dataColumns, maskRuntime.Projections()...)...)
-	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
+	maskedExpressions, err := descriptorMaskedExpressions(maskRuntime, dataAlias, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +253,11 @@ func buildAASDescriptorJSON(
 	aas exp.IdentifierExpression,
 	maskedExpressions []exp.Expression,
 ) (exp.Expression, error) {
-	collector, err := newAASDescriptorJSONCollector(aasAlias, common.ColDescriptorID, aasAlias)
+	endpointCollector, err := newAASDescriptorJSONCollector(
+		aasAlias,
+		common.ColDescriptorID,
+		common.AliasAASDescriptorEndpoint,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +268,7 @@ func buildAASDescriptorJSON(
 		common.AliasAASDescriptorEndpoint,
 		aas.Col(common.ColDescriptorID),
 		"$aasdesc#endpoints[]",
-		collector,
+		endpointCollector,
 	)
 	if err != nil {
 		return nil, err
@@ -291,7 +327,7 @@ func buildEndpointArraySubquery(
 	ds := dialect.From(endpoint).
 		Select(jsonArrayAggregate(endpointJSON, endpoint.Col(common.ColPosition))).
 		Where(endpoint.Col(common.ColDescriptorID).Eq(descriptorID))
-	return auth.AddFilterQueryFromContext(ctx, ds, fragment, collector)
+	return auth.AddCorrelatedFilterQueryFromContext(ctx, ds, fragment, collector)
 }
 
 func buildSpecificAssetIDArraySubquery(
@@ -299,6 +335,9 @@ func buildSpecificAssetIDArraySubquery(
 	dialect goqu.DialectWrapper,
 	descriptorID exp.Expression,
 ) (*goqu.SelectDataset, error) {
+	if !hasAASDescriptorFilters(ctx) {
+		return buildUnfilteredSpecificAssetIDArraySubquery(ctx, dialect, descriptorID)
+	}
 	specificAssetID := goqu.T(common.TblSpecificAssetID).As(common.AliasSpecificAssetID)
 	payload := goqu.T(common.TblSpecificAssetIDPayload).As("specific_asset_payload")
 	externalReferenceRow := goqu.T(specificAssetExternalReferenceTable).As(common.AliasExternalSubjectReference)
@@ -319,14 +358,21 @@ func buildSpecificAssetIDArraySubquery(
 		{Fragment: "$aasdesc#specificAssetIds[].value", FlagAlias: "flag_said_value", RawAlias: common.ColValue},
 		{Fragment: "$aasdesc#specificAssetIds[].externalSubjectId", FlagAlias: "flag_said_external_subject", RawAlias: "external_reference_id"},
 	}
-	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
+	maskRuntime, err := buildOptionalDescriptorMaskRuntime(ctx, collector, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
 	inner := dialect.From(specificAssetID).
 		LeftJoin(payload, goqu.On(payload.Col(common.ColSpecificAssetID).Eq(specificAssetID.Col(common.ColID)))).
-		LeftJoin(externalReferenceRow, goqu.On(externalReferenceRow.Col(common.ColID).Eq(specificAssetID.Col(common.ColID)))).
-		LeftJoin(externalReferenceKey, goqu.On(externalReferenceKey.Col(common.ColReferenceID).Eq(externalReferenceRow.Col(common.ColID)))).
+		LeftJoin(externalReferenceRow, goqu.On(externalReferenceRow.Col(common.ColID).Eq(specificAssetID.Col(common.ColID))))
+	needsFilterJoins := maskRuntime != nil || hasAASDescriptorFragmentFilter(ctx, "$aasdesc#specificAssetIds[]")
+	if needsFilterJoins {
+		inner = inner.LeftJoin(
+			externalReferenceKey,
+			goqu.On(externalReferenceKey.Col(common.ColReferenceID).Eq(externalReferenceRow.Col(common.ColID))),
+		)
+	}
+	inner = inner.
 		Select(append([]interface{}{
 			specificAssetID.Col(common.ColID).As(common.ColID),
 			specificAssetID.Col(common.ColDescriptorID).As(common.ColDescriptorID),
@@ -336,25 +382,26 @@ func buildSpecificAssetIDArraySubquery(
 			payload.Col("semantic_id_payload").As("semantic_id_payload"),
 			externalReferenceRow.Col(common.ColID).As("external_reference_id"),
 		}, maskRuntime.Projections()...)...).
-		Distinct().
 		Where(
 			specificAssetID.Col(common.ColDescriptorID).Eq(descriptorID),
 			specificAssetID.Col(common.ColName).Neq(globalAssetIDSpecificAssetIDName),
 		)
-	inner, err = auth.AddFilterQueryFromContext(ctx, inner, "$aasdesc#specificAssetIds[]", collector)
+	if needsFilterJoins {
+		inner = inner.Distinct()
+	}
+	inner, err = auth.AddCorrelatedFilterQueryFromContext(ctx, inner, "$aasdesc#specificAssetIds[]", collector)
 	if err != nil {
 		return nil, err
 	}
 
 	data := goqu.T(dataAlias)
-	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
+	maskedExpressions, err := descriptorMaskedExpressions(maskRuntime, dataAlias, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
-	referenceCollector, err := newAASDescriptorJSONCollector(
+	externalReferenceCollector, err := newAASDescriptorJSONCollector(
 		dataAlias,
 		common.ColDescriptorID,
-		dataAlias,
 		common.AliasExternalSubjectReference,
 		common.AliasExternalSubjectReferenceKey,
 	)
@@ -370,7 +417,7 @@ func buildSpecificAssetIDArraySubquery(
 		common.ColID,
 		data.Col(common.ColID),
 		"$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-		referenceCollector,
+		externalReferenceCollector,
 	)
 	if err != nil {
 		return nil, err
@@ -409,6 +456,9 @@ func buildSubmodelDescriptorArraySubquery(
 	dialect goqu.DialectWrapper,
 	aasDescriptorID exp.Expression,
 ) (*goqu.SelectDataset, error) {
+	if !hasAASDescriptorFilters(ctx) {
+		return buildUnfilteredSubmodelDescriptorArraySubquery(ctx, dialect, aasDescriptorID)
+	}
 	submodel := goqu.T(common.TblSubmodelDescriptor).As(common.AliasSubmodelDescriptor)
 	payload := goqu.T(common.TblDescriptorPayload).As("submodel_descriptor_payload")
 	semanticReferenceRow := goqu.T(submodelDescriptorSemanticReferenceTable).As(common.AliasSubmodelDescriptorSemanticIDReference)
@@ -418,15 +468,24 @@ func buildSubmodelDescriptorArraySubquery(
 		supplementalKeyAlias       = "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"
 		dataAlias                  = "submodel_descriptor_json_data"
 	)
+	rowFiltered := hasAASDescriptorFragmentFilter(ctx, "$aasdesc#submodelDescriptors[]")
+	inlineAliases := []string{
+		common.AliasSubmodelDescriptor,
+		common.AliasSubmodelDescriptorSemanticIDReference,
+		common.AliasSubmodelDescriptorSemanticIDReferenceKey,
+	}
+	if rowFiltered {
+		inlineAliases = append(
+			inlineAliases,
+			common.AliasSubmodelDescriptorEndpoint,
+			supplementalReferenceAlias,
+			supplementalKeyAlias,
+		)
+	}
 	collector, err := newAASDescriptorJSONCollector(
 		common.AliasSubmodelDescriptor,
 		common.ColAASDescriptorID,
-		common.AliasSubmodelDescriptor,
-		common.AliasSubmodelDescriptorEndpoint,
-		common.AliasSubmodelDescriptorSemanticIDReference,
-		common.AliasSubmodelDescriptorSemanticIDReferenceKey,
-		supplementalReferenceAlias,
-		supplementalKeyAlias,
+		inlineAliases...,
 	)
 	if err != nil {
 		return nil, err
@@ -435,14 +494,39 @@ func buildSubmodelDescriptorArraySubquery(
 		{Fragment: "$aasdesc#submodelDescriptors[].idShort", FlagAlias: "flag_smdesc_idshort", RawAlias: common.ColIDShort},
 		{Fragment: "$aasdesc#submodelDescriptors[].semanticId", FlagAlias: "flag_smdesc_semanticid", RawAlias: "semantic_reference_id"},
 	}
-	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
+	maskRuntime, err := buildOptionalDescriptorMaskRuntime(ctx, collector, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
 	inner := dialect.From(submodel).
 		InnerJoin(payload, goqu.On(payload.Col(common.ColDescriptorID).Eq(submodel.Col(common.ColDescriptorID)))).
-		LeftJoin(semanticReferenceRow, goqu.On(semanticReferenceRow.Col(common.ColID).Eq(submodel.Col(common.ColDescriptorID)))).
-		LeftJoin(semanticReferenceKey, goqu.On(semanticReferenceKey.Col(common.ColReferenceID).Eq(semanticReferenceRow.Col(common.ColID)))).
+		LeftJoin(semanticReferenceRow, goqu.On(semanticReferenceRow.Col(common.ColID).Eq(submodel.Col(common.ColDescriptorID))))
+	needsFilterJoins := maskRuntime != nil || rowFiltered
+	if needsFilterJoins {
+		inner = inner.LeftJoin(
+			semanticReferenceKey,
+			goqu.On(semanticReferenceKey.Col(common.ColReferenceID).Eq(semanticReferenceRow.Col(common.ColID))),
+		)
+	}
+	if rowFiltered {
+		endpoint := goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasSubmodelDescriptorEndpoint)
+		supplementalReference := goqu.T(common.TblSubmodelDescriptorSuppSemantic).As(supplementalReferenceAlias)
+		supplementalKey := goqu.T(common.TblSubmodelDescriptorSuppSemantic + "_key").As(supplementalKeyAlias)
+		inner = inner.
+			LeftJoin(
+				endpoint,
+				goqu.On(endpoint.Col(common.ColDescriptorID).Eq(submodel.Col(common.ColDescriptorID))),
+			).
+			LeftJoin(
+				supplementalReference,
+				goqu.On(supplementalReference.Col(common.ColDescriptorID).Eq(submodel.Col(common.ColDescriptorID))),
+			).
+			LeftJoin(
+				supplementalKey,
+				goqu.On(supplementalKey.Col(common.ColReferenceID).Eq(supplementalReference.Col(common.ColID))),
+			)
+	}
+	inner = inner.
 		Select(append([]interface{}{
 			submodel.Col(common.ColDescriptorID).As(common.ColDescriptorID),
 			submodel.Col(common.ColAASDescriptorID).As(common.ColAASDescriptorID),
@@ -455,27 +539,25 @@ func buildSubmodelDescriptorArraySubquery(
 			payload.Col(common.ColExtensionsPayload).As(common.ColExtensionsPayload),
 			semanticReferenceRow.Col(common.ColID).As("semantic_reference_id"),
 		}, maskRuntime.Projections()...)...).
-		Distinct().
 		Where(submodel.Col(common.ColAASDescriptorID).Eq(aasDescriptorID))
+	if needsFilterJoins {
+		inner = inner.Distinct()
+	}
 	inner, err = auth.AddCorrelatedFilterQueryFromContext(ctx, inner, "$aasdesc#submodelDescriptors[]", collector)
 	if err != nil {
 		return nil, err
 	}
 
 	data := goqu.T(dataAlias)
-	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
+	maskedExpressions, err := descriptorMaskedExpressions(maskRuntime, dataAlias, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
-	referenceCollector, err := newAASDescriptorJSONCollector(
+	semanticReferenceCollector, err := newAASDescriptorJSONCollector(
 		dataAlias,
 		common.ColAASDescriptorID,
-		dataAlias,
-		common.AliasSubmodelDescriptorEndpoint,
 		common.AliasSubmodelDescriptorSemanticIDReference,
 		common.AliasSubmodelDescriptorSemanticIDReferenceKey,
-		supplementalReferenceAlias,
-		supplementalKeyAlias,
 	)
 	if err != nil {
 		return nil, err
@@ -489,7 +571,16 @@ func buildSubmodelDescriptorArraySubquery(
 		common.ColID,
 		data.Col(common.ColDescriptorID),
 		"$aasdesc#submodelDescriptors[].semanticId.keys[]",
-		referenceCollector,
+		semanticReferenceCollector,
+	)
+	if err != nil {
+		return nil, err
+	}
+	supplementalReferenceCollector, err := newAASDescriptorJSONCollector(
+		dataAlias,
+		common.ColAASDescriptorID,
+		supplementalReferenceAlias,
+		supplementalKeyAlias,
 	)
 	if err != nil {
 		return nil, err
@@ -504,7 +595,15 @@ func buildSubmodelDescriptorArraySubquery(
 		data.Col(common.ColDescriptorID),
 		"$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
 		"$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
-		referenceCollector,
+		supplementalReferenceCollector,
+	)
+	if err != nil {
+		return nil, err
+	}
+	endpointCollector, err := newAASDescriptorJSONCollector(
+		dataAlias,
+		common.ColAASDescriptorID,
+		common.AliasSubmodelDescriptorEndpoint,
 	)
 	if err != nil {
 		return nil, err
@@ -516,7 +615,7 @@ func buildSubmodelDescriptorArraySubquery(
 		common.AliasSubmodelDescriptorEndpoint,
 		data.Col(common.ColDescriptorID),
 		"$aasdesc#submodelDescriptors[].endpoints[]",
-		referenceCollector,
+		endpointCollector,
 	)
 	if err != nil {
 		return nil, err
@@ -539,6 +638,129 @@ func buildSubmodelDescriptorArraySubquery(
 		Select(jsonArrayAggregate(submodelJSON, data.Col(common.ColPosition), data.Col(common.ColDescriptorID))), nil
 }
 
+func buildUnfilteredSpecificAssetIDArraySubquery(
+	ctx context.Context,
+	dialect goqu.DialectWrapper,
+	descriptorID exp.Expression,
+) (*goqu.SelectDataset, error) {
+	specificAssetID := goqu.T(common.TblSpecificAssetID).As(common.AliasSpecificAssetID)
+	payload := goqu.T(common.TblSpecificAssetIDPayload).As("specific_asset_payload")
+	externalReference, err := buildReferenceObjectSubquery(
+		ctx,
+		dialect,
+		specificAssetExternalReferenceTable,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+		common.ColID,
+		specificAssetID.Col(common.ColID),
+		"",
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	supplementalReferences, err := buildReferenceArraySubquery(
+		ctx,
+		dialect,
+		common.TblSpecificAssetIDSuppSemantic,
+		"specific_asset_supplemental_semantic_id_reference",
+		"specific_asset_supplemental_semantic_id_reference_key",
+		common.ColSpecificAssetIDID,
+		specificAssetID.Col(common.ColID),
+		"",
+		"",
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	specificAssetJSON, err := buildMaskedJSONObject(ctx, nil, []descriptorJSONField{
+		{name: "name", value: specificAssetID.Col(common.ColName)},
+		{name: "value", value: specificAssetID.Col(common.ColValue)},
+		{name: "semanticId", value: emptyJSONToNull(payload.Col("semantic_id_payload"))},
+		{name: "externalSubjectId", value: externalReference},
+		{name: "supplementalSemanticIds", value: emptyJSONToNull(supplementalReferences)},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return dialect.From(specificAssetID).
+		LeftJoin(payload, goqu.On(payload.Col(common.ColSpecificAssetID).Eq(specificAssetID.Col(common.ColID)))).
+		Select(jsonArrayAggregate(specificAssetJSON, specificAssetID.Col(common.ColPosition))).
+		Where(
+			specificAssetID.Col(common.ColDescriptorID).Eq(descriptorID),
+			specificAssetID.Col(common.ColName).Neq(globalAssetIDSpecificAssetIDName),
+		), nil
+}
+
+func buildUnfilteredSubmodelDescriptorArraySubquery(
+	ctx context.Context,
+	dialect goqu.DialectWrapper,
+	aasDescriptorID exp.Expression,
+) (*goqu.SelectDataset, error) {
+	submodel := goqu.T(common.TblSubmodelDescriptor).As(common.AliasSubmodelDescriptor)
+	payload := goqu.T(common.TblDescriptorPayload).As("submodel_descriptor_payload")
+	semanticReference, err := buildReferenceObjectSubquery(
+		ctx,
+		dialect,
+		submodelDescriptorSemanticReferenceTable,
+		common.AliasSubmodelDescriptorSemanticIDReference,
+		common.AliasSubmodelDescriptorSemanticIDReferenceKey,
+		common.ColID,
+		submodel.Col(common.ColDescriptorID),
+		"",
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	supplementalReferences, err := buildReferenceArraySubquery(
+		ctx,
+		dialect,
+		common.TblSubmodelDescriptorSuppSemantic,
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+		common.ColDescriptorID,
+		submodel.Col(common.ColDescriptorID),
+		"",
+		"",
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	endpoints, err := buildEndpointArraySubquery(
+		ctx,
+		dialect,
+		common.TblAASDescriptorEndpoint,
+		common.AliasSubmodelDescriptorEndpoint,
+		submodel.Col(common.ColDescriptorID),
+		"",
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	submodelJSON, err := buildMaskedJSONObject(ctx, nil, []descriptorJSONField{
+		{name: "id", value: submodel.Col(common.ColAASID)},
+		{name: "idShort", value: submodel.Col(common.ColIDShort)},
+		{name: "administration", value: emptyJSONToNull(payload.Col(common.ColAdministrativeInfoPayload))},
+		{name: "displayName", value: payload.Col(common.ColDisplayNamePayload)},
+		{name: "description", value: payload.Col(common.ColDescriptionPayload)},
+		{name: "extensions", value: payload.Col(common.ColExtensionsPayload)},
+		{name: "semanticId", value: semanticReference},
+		{name: "supplementalSemanticIds", value: supplementalReferences},
+		{name: "endpoints", value: endpoints},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return dialect.From(submodel).
+		InnerJoin(payload, goqu.On(payload.Col(common.ColDescriptorID).Eq(submodel.Col(common.ColDescriptorID)))).
+		Select(jsonArrayAggregate(submodelJSON, submodel.Col(common.ColPosition), submodel.Col(common.ColDescriptorID))).
+		Where(submodel.Col(common.ColAASDescriptorID).Eq(aasDescriptorID)), nil
+}
+
 func buildReferenceObjectSubquery(
 	ctx context.Context,
 	dialect goqu.DialectWrapper,
@@ -559,11 +781,18 @@ func buildReferenceObjectSubquery(
 	if err != nil {
 		return nil, err
 	}
-	return dialect.From(referenceTable).
+	ds := dialect.From(referenceTable).
 		LeftJoin(payloadTable, goqu.On(payload.Col(common.ColReferenceID).Eq(reference.Col(common.ColID)))).
-		Select(referenceJSON).
-		Where(reference.Col(ownerColumn).Eq(ownerID)).
-		Limit(1), nil
+		Where(reference.Col(ownerColumn).Eq(ownerID))
+	if hasAASDescriptorFragmentFilter(ctx, keyFragment) {
+		key := goqu.T(table + "_key").As(keyAlias)
+		ds = ds.InnerJoin(key, goqu.On(key.Col(common.ColReferenceID).Eq(reference.Col(common.ColID))))
+		ds, err = auth.AddCorrelatedFilterQueryFromContext(ctx, ds, keyFragment, collector)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ds.Select(referenceJSON).Limit(1), nil
 }
 
 func buildReferenceArraySubquery(
@@ -578,16 +807,43 @@ func buildReferenceArraySubquery(
 	keyFragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
-	reference := goqu.T(table).As(referenceAlias)
-	payload := goqu.T(table + "_payload").As("reference_array_payload")
-	ds := dialect.From(reference).
-		LeftJoin(payload, goqu.On(payload.Col(common.ColReferenceID).Eq(reference.Col(common.ColID))))
-	if hasAASDescriptorFragmentFilter(ctx, referenceFragment) {
+	referenceTable := goqu.T(table).As(referenceAlias)
+	reference := goqu.T(referenceAlias)
+	const payloadAlias = "reference_array_payload"
+	payloadTable := goqu.T(table + "_payload").As(payloadAlias)
+	payload := goqu.T(payloadAlias)
+	filtered := hasAASDescriptorFragmentFilter(ctx, referenceFragment) || hasAASDescriptorFragmentFilter(ctx, keyFragment)
+	if !filtered {
+		referenceJSON, err := buildReferenceJSON(
+			ctx,
+			dialect,
+			table,
+			keyAlias,
+			reference,
+			payload,
+			keyFragment,
+			collector,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return dialect.From(referenceTable).
+			LeftJoin(payloadTable, goqu.On(payload.Col(common.ColReferenceID).Eq(reference.Col(common.ColID)))).
+			Select(jsonArrayAggregate(referenceJSON, reference.Col(common.ColPosition), reference.Col(common.ColID))).
+			Where(reference.Col(ownerColumn).Eq(ownerID)), nil
+	}
+	ds := dialect.From(referenceTable).
+		LeftJoin(payloadTable, goqu.On(payload.Col(common.ColReferenceID).Eq(reference.Col(common.ColID))))
+	if hasAASDescriptorFragmentFilter(ctx, referenceFragment) || hasAASDescriptorFragmentFilter(ctx, keyFragment) {
 		key := goqu.T(table + "_key").As(keyAlias)
-		ds = ds.LeftJoin(key, goqu.On(key.Col(common.ColReferenceID).Eq(reference.Col(common.ColID))))
+		ds = ds.InnerJoin(key, goqu.On(key.Col(common.ColReferenceID).Eq(reference.Col(common.ColID))))
 	}
 	ds = ds.Where(reference.Col(ownerColumn).Eq(ownerID))
-	ds, err := auth.AddFilterQueryFromContext(ctx, ds, referenceFragment, collector)
+	ds, err := auth.AddCorrelatedFilterQueryFromContext(ctx, ds, referenceFragment, collector)
+	if err != nil {
+		return nil, err
+	}
+	ds, err = auth.AddCorrelatedFilterQueryFromContext(ctx, ds, keyFragment, collector)
 	if err != nil {
 		return nil, err
 	}
@@ -640,7 +896,7 @@ func buildReferenceJSON(
 			key.Col(common.ColID),
 		)).
 		Where(key.Col(common.ColReferenceID).Eq(reference.Col(common.ColID)))
-	keys, err := auth.AddFilterQueryFromContext(ctx, keys, keyFragment, collector)
+	keys, err := auth.AddCorrelatedFilterQueryFromContext(ctx, keys, keyFragment, collector)
 	if err != nil {
 		return nil, err
 	}
@@ -698,6 +954,39 @@ func newAASDescriptorJSONCollector(
 func hasAASDescriptorFragmentFilter(ctx context.Context, fragment grammar.FragmentStringPattern) bool {
 	queryFilter := auth.GetQueryFilter(ctx)
 	return queryFilter != nil && len(queryFilter.FilterExpressionEntriesFor(fragment)) > 0
+}
+
+func hasAASDescriptorFilters(ctx context.Context) bool {
+	queryFilter := auth.GetQueryFilter(ctx)
+	return queryFilter != nil && len(queryFilter.Filters) > 0
+}
+
+func buildOptionalDescriptorMaskRuntime(
+	ctx context.Context,
+	collector *grammar.ResolvedFieldPathCollector,
+	columns []auth.MaskedInnerColumnSpec,
+) (*auth.SharedFragmentMaskRuntime, error) {
+	for _, column := range columns {
+		if hasAASDescriptorFragmentFilter(ctx, column.Fragment) {
+			return auth.BuildSharedFragmentMaskRuntime(ctx, collector, columns)
+		}
+	}
+	return nil, nil
+}
+
+func descriptorMaskedExpressions(
+	runtime *auth.SharedFragmentMaskRuntime,
+	dataAlias string,
+	columns []auth.MaskedInnerColumnSpec,
+) ([]exp.Expression, error) {
+	if runtime != nil {
+		return runtime.MaskedInnerAliasExprs(dataAlias, columns)
+	}
+	expressions := make([]exp.Expression, 0, len(columns))
+	for _, column := range columns {
+		expressions = append(expressions, goqu.I(dataAlias+"."+column.RawAlias))
+	}
+	return expressions, nil
 }
 
 func jsonArrayAggregate(value exp.Expression, order ...exp.Expression) exp.Expression {

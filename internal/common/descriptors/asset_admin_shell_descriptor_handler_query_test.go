@@ -39,6 +39,16 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
+func descriptorFieldEquals(field grammar.ModelStringPattern, value string) grammar.LogicalExpression {
+	literal := grammar.StandardString(value)
+	return grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &field},
+			{StrVal: &literal},
+		},
+	}
+}
+
 func TestIsTransactionQueryerRecognizesDebugWrapper(t *testing.T) {
 	tx := &stdsql.Tx{}
 	wrapped := &descriptorDebugQueryer{db: tx}
@@ -146,4 +156,100 @@ func TestBuildSingleStatementAASDescriptorListQueryAppliesSharedMaskCondition(t 
 	if got := strings.Count(sql, "EXISTS ("); got != 1 {
 		t.Fatalf("expected exactly 1 EXISTS for shared fragment condition, got %d: %s", got, sql)
 	}
+}
+
+func TestBuildSingleStatementAASDescriptorListQueryCorrelatesSubmodelRouteFilters(t *testing.T) {
+	fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[]")
+	supplementalKey := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
+	externalSubjectKey := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	condition := grammar.LogicalExpression{
+		And: []grammar.LogicalExpression{
+			descriptorFieldEquals(supplementalKey, "PUBLIC_READABLE"),
+			descriptorFieldEquals(externalSubjectKey, "PUBLIC_READABLE"),
+		},
+	}
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: condition},
+		FilterMatch: auth.FragmentMatchModes{
+			fragment: true,
+		},
+	})
+
+	ds, err := buildSingleStatementAASDescriptorListQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
+	}
+	sql, _, err := ds.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	for _, correlatedPath := range []string{
+		`LEFT JOIN "submodel_descriptor_supplemental_semantic_id_reference"`,
+		`"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"."value" = 'PUBLIC_READABLE'`,
+		`EXISTS (SELECT 1 FROM "specific_asset_id"`,
+	} {
+		if !strings.Contains(sql, correlatedPath) {
+			t.Fatalf("expected route filter to contain %q, got: %s", correlatedPath, sql)
+		}
+	}
+}
+
+func TestBuildSingleStatementAASDescriptorListQueryFiltersReferenceParentsByKeys(t *testing.T) {
+	fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]")
+	keyValue := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			fragment: descriptorFieldEquals(keyValue, "VISIBLE_KEY"),
+		},
+	})
+
+	ds, err := buildSingleStatementAASDescriptorListQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
+	}
+	sql, args, err := ds.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if got := countArgument(args, "VISIBLE_KEY"); got != 2 {
+		t.Fatalf("expected the key predicate on both parent and key queries, got %d occurrences: %s", got, sql)
+	}
+}
+
+func TestBuildSingleStatementAASDescriptorListQueryAvoidsMaskLayersWithoutFilters(t *testing.T) {
+	ds, err := buildSingleStatementAASDescriptorListQuery(
+		contextWithABACDisabled(t),
+		2,
+		"",
+		"",
+		"",
+		"",
+		time.Time{},
+		time.Time{},
+	)
+	if err != nil {
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
+	}
+	sql, _, err := ds.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	for _, unwanted := range []string{`"flag_`, `SELECT DISTINCT`} {
+		if strings.Contains(sql, unwanted) {
+			t.Fatalf("expected the unfiltered query to avoid %q, got: %s", unwanted, sql)
+		}
+	}
+}
+
+func countArgument(args []interface{}, expected string) int {
+	count := 0
+	for _, arg := range args {
+		if arg == expected {
+			count++
+		}
+	}
+	return count
 }
