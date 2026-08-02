@@ -93,7 +93,8 @@ func main() {
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_8.sql"), "v1.1.8"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_9.sql"), "v1.1.9"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_10.sql"), "v1.1.10"))
-	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_11.sql"), common.CURRENT_DATABASE_VERSION))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_11.sql"), "v1.1.11"))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_12.sql"), common.CURRENT_DATABASE_VERSION))
 
 	if err = schemInit.Execute(); err != nil {
 		slog.Error("configuration failed", "error.code", "BASYXCFG-MAIN-EXECUTE", "error", err)
