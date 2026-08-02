@@ -64,9 +64,9 @@ func contextWithABACDisabled(t *testing.T) context.Context {
 	return cfgCtx
 }
 
-func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAndPayloadFlags(t *testing.T) {
+func TestBuildSingleStatementAASDescriptorListQueryUsesPagedInnerQuery(t *testing.T) {
 	ctx := contextWithABACDisabled(t)
-	ds, err := buildListAssetAdministrationShellDescriptorsQuery(
+	ds, err := buildSingleStatementAASDescriptorListQuery(
 		ctx,
 		2,
 		"",
@@ -77,7 +77,7 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAn
 		time.Time{},
 	)
 	if err != nil {
-		t.Fatalf("buildListAssetAdministrationShellDescriptorsQuery returned error: %v", err)
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
 	}
 
 	sql, args, err := ds.Prepared(true).ToSQL()
@@ -89,9 +89,8 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAn
 		`FROM (SELECT`,
 		`AS "aas_page"`,
 		`LIMIT $`,
-		`AS "flag_`,
-		`"aas_list_data"."flag_`,
-		`"aas_list_data"."raw_admin_payload"`,
+		`jsonb_build_object`,
+		`"aas_descriptor"."descriptor_id"`,
 	} {
 		if !strings.Contains(sql, want) {
 			t.Fatalf("expected SQL to contain %q, got: %s", want, sql)
@@ -113,7 +112,7 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAn
 	}
 }
 
-func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditionAcrossFragments(t *testing.T) {
+func TestBuildSingleStatementAASDescriptorListQueryAppliesSharedMaskCondition(t *testing.T) {
 	field := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
 	lit := grammar.StandardString("PUBLIC_READABLE")
 	cond := grammar.LogicalExpression{
@@ -135,9 +134,9 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditi
 		},
 	})
 
-	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
+	ds, err := buildSingleStatementAASDescriptorListQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
 	if err != nil {
-		t.Fatalf("buildListAssetAdministrationShellDescriptorsQuery returned error: %v", err)
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
 	}
 	sql, _, err := ds.Prepared(true).ToSQL()
 	if err != nil {

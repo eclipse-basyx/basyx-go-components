@@ -27,6 +27,7 @@
 package descriptors
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -39,12 +40,26 @@ import (
 )
 
 func TestListAssetAdministrationShellDescriptorsUsesOneQuery(t *testing.T) {
+	assertAASDescriptorListUsesOneQuery(common.ContextWithConfig(t.Context(), &common.Config{}), t)
+}
+
+func TestListAssetAdministrationShellDescriptorsUsesOneQueryWithRestrictiveFragmentMask(t *testing.T) {
+	deny := false
+	ctx := auth.WithQueryFilter(common.ContextWithConfig(t.Context(), &common.Config{}), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			grammar.FragmentStringPattern("$aasdesc#specificAssetIds[]"): {Boolean: &deny},
+		},
+	})
+	assertAASDescriptorListUsesOneQuery(ctx, t)
+}
+
+func assertAASDescriptorListUsesOneQuery(ctx context.Context, t *testing.T) {
+	t.Helper()
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 
 	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"descriptor"}).AddRow([]byte(`{"id":"aas-1"}`)))
 	mock.ExpectClose()
-	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
 
 	descriptors, cursor, err := ListAssetAdministrationShellDescriptors(
 		ctx,
@@ -64,28 +79,4 @@ func TestListAssetAdministrationShellDescriptorsUsesOneQuery(t *testing.T) {
 	require.Equal(t, "aas-1", descriptors[0].Id)
 	require.NoError(t, db.Close())
 	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestSingleStatementAASDescriptorListSupportsFormulaAndUnrestrictedFragmentFilters(t *testing.T) {
-	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
-	require.True(t, useSingleStatementAASDescriptorList(ctx, ""))
-	require.False(t, useSingleStatementAASDescriptorList(ctx, "aas-id"))
-
-	allow := true
-	formulaCtx := auth.WithQueryFilter(ctx, &auth.QueryFilter{
-		Formula: &grammar.LogicalExpression{Boolean: &allow},
-	})
-	require.True(t, useSingleStatementAASDescriptorList(formulaCtx, ""))
-
-	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[]")
-	fragmentCtx := auth.WithQueryFilter(ctx, &auth.QueryFilter{
-		Filters: auth.FragmentFilters{fragment: {Boolean: &allow}},
-	})
-	require.True(t, useSingleStatementAASDescriptorList(fragmentCtx, ""))
-
-	deny := false
-	restrictedFragmentCtx := auth.WithQueryFilter(ctx, &auth.QueryFilter{
-		Filters: auth.FragmentFilters{fragment: {Boolean: &deny}},
-	})
-	require.False(t, useSingleStatementAASDescriptorList(restrictedFragmentCtx, ""))
 }

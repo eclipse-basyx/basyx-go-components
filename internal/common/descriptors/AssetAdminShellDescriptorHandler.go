@@ -50,13 +50,11 @@ import (
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/stringification"
-	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	"golang.org/x/sync/errgroup"
 )
 
 // InsertAssetAdministrationShellDescriptor creates a new AssetAdministrationShellDescriptor
@@ -471,7 +469,7 @@ func buildAASDescriptorUpdateRecord(
 func GetAssetAdministrationShellDescriptorByID(
 	ctx context.Context, db *sql.DB, aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	result, _, err := listAssetAdministrationShellDescriptors(ctx, db, 1, "", "", "", aasIdentifier, time.Time{}, time.Time{}, true)
+	result, _, err := listAssetAdministrationShellDescriptorsSingleStatement(ctx, db, 1, "", "", "", aasIdentifier, time.Time{}, time.Time{})
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
@@ -487,7 +485,7 @@ func GetAssetAdministrationShellDescriptorByID(
 func GetAssetAdministrationShellDescriptorByIDTx(
 	ctx context.Context, tx *sql.Tx, aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	result, _, err := listAssetAdministrationShellDescriptors(ctx, tx, 1, "", "", "", aasIdentifier, time.Time{}, time.Time{}, false)
+	result, _, err := listAssetAdministrationShellDescriptorsSingleStatement(ctx, tx, 1, "", "", "", aasIdentifier, time.Time{}, time.Time{})
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
@@ -676,107 +674,6 @@ func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd 
 	return result, tx.Commit()
 }
 
-func buildListAssetAdministrationShellDescriptorsQuery(
-	ctx context.Context,
-	peekLimit int32,
-	cursor string,
-	assetKind model.AssetKind,
-	assetType string,
-	identifiable string,
-	createdFrom time.Time,
-	updatedFrom time.Time,
-) (*goqu.SelectDataset, error) {
-	d := goqu.Dialect(common.Dialect)
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
-	if err != nil {
-		return nil, err
-	}
-	pageDS, err := buildListAASDescriptorPageQuery(ctx, peekLimit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, collector)
-	if err != nil {
-		return nil, err
-	}
-	const (
-		pageAlias = "aas_page"
-		dataAlias = "aas_list_data"
-	)
-	includeCreatedAt := includeAASDescriptorCreatedAtFromContext(ctx)
-	maskedColumns := []auth.MaskedInnerColumnSpec{
-		{Fragment: "$aasdesc#assetKind", FlagAlias: "flag_assetkind", RawAlias: "c1"},
-		{Fragment: "$aasdesc#assetType", FlagAlias: "flag_assettype", RawAlias: "c2"},
-		{Fragment: "$aasdesc#globalAssetId", FlagAlias: "flag_globalassetid", RawAlias: "c3"},
-		{Fragment: "$aasdesc#idShort", FlagAlias: "flag_idshort", RawAlias: "c4"},
-		{Fragment: "$aasdesc#administration", FlagAlias: "flag_admin", RawAlias: "raw_admin_payload"},
-		{Fragment: "$aasdesc#displayName", FlagAlias: "flag_displayname", RawAlias: "raw_displayname_payload"},
-		{Fragment: "$aasdesc#description", FlagAlias: "flag_description", RawAlias: "raw_description_payload"},
-	}
-	if includeCreatedAt {
-		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{Fragment: "$aasdesc#createdAt", FlagAlias: "flag_createdat", RawAlias: "c6"})
-	}
-	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
-	if err != nil {
-		return nil, err
-	}
-	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
-	if err != nil {
-		return nil, err
-	}
-
-	innerSelectExpressions := []interface{}{
-		common.TAASDescriptor.Col(common.ColDescriptorID).As("c0"),
-		common.TAASDescriptor.Col(common.ColAssetKind).As("c1"),
-		common.TAASDescriptor.Col(common.ColAssetType).As("c2"),
-		common.TAASDescriptor.Col(common.ColGlobalAssetID).As("c3"),
-		common.TAASDescriptor.Col(common.ColIDShort).As("c4"),
-		common.TAASDescriptor.Col(common.ColAASID).As("c5"),
-		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload"),
-		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload)).As("raw_displayname_payload"),
-		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload)).As("raw_description_payload"),
-		common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
-	}
-	if includeCreatedAt {
-		innerSelectExpressions = append(innerSelectExpressions, common.TAASDescriptor.Col(common.ColCreatedAt).As("c6"))
-	} else {
-		innerSelectExpressions = append(innerSelectExpressions, goqu.L("NULL").As("c6"))
-	}
-
-	dataDS := d.From(pageDS.As(pageAlias)).
-		InnerJoin(
-			common.TDescriptor,
-			goqu.On(common.TDescriptor.Col(common.ColID).Eq(goqu.I(pageAlias+".descriptor_id"))),
-		).
-		InnerJoin(
-			common.TAASDescriptor,
-			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
-		).
-		LeftJoin(
-			common.TDescriptorPayload,
-			goqu.On(common.TDescriptorPayload.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
-		).
-		Select(append(innerSelectExpressions, maskRuntime.Projections()...)...)
-
-	outerSelectExpressions := []interface{}{
-		goqu.I(dataAlias + ".c0"),
-		maskedExpressions[0],
-		maskedExpressions[1],
-		maskedExpressions[2],
-		maskedExpressions[3],
-		goqu.I(dataAlias + ".c5"),
-	}
-	if includeCreatedAt {
-		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[7])
-		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[4], maskedExpressions[5], maskedExpressions[6])
-	} else {
-		outerSelectExpressions = append(outerSelectExpressions, goqu.I(dataAlias+".c6"))
-		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[4], maskedExpressions[5], maskedExpressions[6])
-	}
-
-	ds := d.From(dataDS.As(dataAlias)).
-		Select(outerSelectExpressions...).
-		Order(goqu.I(dataAlias + ".sort_aas_id").Asc())
-
-	return ds, nil
-}
-
 func buildListAASDescriptorPageQuery(
 	ctx context.Context,
 	peekLimit int32,
@@ -873,220 +770,17 @@ func ListAssetAdministrationShellDescriptors(
 			slog.DebugContext(ctx, "AAS descriptor list completed", "duration", time.Since(start))
 		}(time.Now())
 	}
-	if useSingleStatementAASDescriptorList(ctx, identifiable) {
-		return listAssetAdministrationShellDescriptorsSingleStatement(
-			ctx,
-			db,
-			limit,
-			cursor,
-			assetKind,
-			assetType,
-			createdFrom,
-			updatedFrom,
-		)
-	}
-	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, !isTransactionQueryer(db))
-}
-
-//nolint:revive // has to be refactored later. i have no time
-func listAssetAdministrationShellDescriptors(
-	ctx context.Context,
-	db DBQueryer,
-	limit int32,
-	cursor string,
-	assetKind model.AssetKind,
-	assetType string,
-	identifiable string,
-	createdFrom time.Time,
-	updatedFrom time.Time,
-	allowParallel bool,
-) ([]model.AssetAdministrationShellDescriptor, string, error) {
-	db = withDescriptorDebugQueryer(ctx, db)
-
-	if limit <= 0 {
-		limit = 100
-	}
-	if cursor != "" {
-		cursorExists, cursorErr := existsAASByID(ctx, db, cursor)
-		if cursorErr != nil {
-			return nil, "", common.NewInternalServerError("AASREG-LISTAAS-CURSORCHECK " + cursorErr.Error())
-		}
-		if !cursorExists {
-			return []model.AssetAdministrationShellDescriptor{}, "", nil
-		}
-	}
-	peekLimit := limit + 1
-	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, peekLimit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom)
-	if err != nil {
-		return nil, "", err
-	}
-	sqlStr, args, err := ds.ToSQL()
-	if debugEnabled(ctx) {
-		slog.DebugContext(ctx, "AAS descriptor database query prepared")
-	}
-
-	if err != nil {
-		return nil, "", err
-	}
-
-	rows, err := db.QueryContext(ctx, sqlStr, args...)
-	if err != nil {
-		return nil, "", err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	descRows := make([]model.AssetAdministrationShellDescriptorRow, 0, peekLimit)
-	for rows.Next() {
-		var r model.AssetAdministrationShellDescriptorRow
-		var adminPayloadText sql.NullString
-		var displayNamePayloadText sql.NullString
-		var descriptionPayloadText sql.NullString
-		if err := rows.Scan(
-			&r.DescID,
-			&r.AssetKind,
-			&r.AssetType,
-			&r.GlobalAssetID,
-			&r.IDShort,
-			&r.IDStr,
-			&r.CreatedAt,
-			&adminPayloadText,
-			&displayNamePayloadText,
-			&descriptionPayloadText,
-		); err != nil {
-			return nil, "", common.NewInternalServerError("Failed to scan AAS descriptor row. See server logs for details.")
-		}
-		if adminPayloadText.Valid {
-			r.AdministrativeInfoPayload = []byte(adminPayloadText.String)
-		}
-		if displayNamePayloadText.Valid {
-			r.DisplayNamePayload = []byte(displayNamePayloadText.String)
-		}
-		if descriptionPayloadText.Valid {
-			r.DescriptionPayload = []byte(descriptionPayloadText.String)
-		}
-		descRows = append(descRows, r)
-	}
-	if rows.Err() != nil {
-		return nil, "", common.NewInternalServerError("Failed to iterate AAS descriptors. See server logs for details.")
-	}
-
-	descRows, nextCursor := applyCursorLimit(descRows, limit, func(r model.AssetAdministrationShellDescriptorRow) string {
-		return r.IDStr
-	})
-
-	if len(descRows) == 0 {
-		return []model.AssetAdministrationShellDescriptor{}, nextCursor, nil
-	}
-
-	descIDs := make([]int64, 0, len(descRows))
-
-	seenDesc := make(map[int64]struct{}, len(descRows))
-
-	for _, r := range descRows {
-		if _, ok := seenDesc[r.DescID]; !ok {
-			seenDesc[r.DescID] = struct{}{}
-			descIDs = append(descIDs, r.DescID)
-		}
-	}
-
-	endpointsByDesc := map[int64][]model.Endpoint{}
-	specificByDesc := map[int64][]types.ISpecificAssetID{}
-	extByDesc := map[int64][]types.Extension{}
-	smdByDesc := map[int64][]model.SubmodelDescriptor{}
-
-	if allowParallel {
-		g, gctx := errgroup.WithContext(ctx)
-
-		if len(descIDs) > 0 {
-			ids := append([]int64(nil), descIDs...)
-			GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-				return ReadEndpointsByDescriptorIDs(gctx, db, ids, "aas")
-			}, &endpointsByDesc)
-			GoAssign(g, func() (map[int64][]types.ISpecificAssetID, error) {
-				return ReadSpecificAssetIDsByDescriptorIDs(gctx, db, ids)
-			}, &specificByDesc)
-			GoAssign(g, func() (map[int64][]types.Extension, error) {
-				return ReadExtensionsByDescriptorIDs(gctx, db, ids)
-			}, &extByDesc)
-			GoAssign(g, func() (map[int64][]model.SubmodelDescriptor, error) {
-				return ReadSubmodelDescriptorsByAASDescriptorIDs(gctx, db, ids, false)
-			}, &smdByDesc)
-		}
-
-		if err := g.Wait(); err != nil {
-			return nil, "", err
-		}
-	} else {
-		var err error
-		if len(descIDs) > 0 {
-			endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, descIDs, "aas")
-			if err != nil {
-				return nil, "", err
-			}
-			specificByDesc, err = ReadSpecificAssetIDsByDescriptorIDs(ctx, db, descIDs)
-			if err != nil {
-				return nil, "", err
-			}
-			extByDesc, err = ReadExtensionsByDescriptorIDs(ctx, db, descIDs)
-			if err != nil {
-				return nil, "", err
-			}
-			smdByDesc, err = ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, descIDs, false)
-			if err != nil {
-				return nil, "", err
-			}
-		}
-	}
-
-	out := make([]model.AssetAdministrationShellDescriptor, 0, len(descRows))
-	for _, r := range descRows {
-		var ak *types.AssetKind
-		if r.AssetKind.Valid {
-			localAk := types.AssetKind(r.AssetKind.Int64)
-			ak = &localAk
-		}
-
-		adminInfo, err := parseAdministrativeInfoPayload(r.AdministrativeInfoPayload)
-		if err != nil {
-			return nil, "", common.NewInternalServerError("AASDESC-LIST-ADMINPAYLOAD")
-		}
-		displayName, err := parseLangStringNamePayload(r.DisplayNamePayload)
-		if err != nil {
-			return nil, "", common.NewInternalServerError("AASDESC-LIST-DISPLAYNAMEPAYLOAD")
-		}
-		description, err := parseLangStringTextPayload(r.DescriptionPayload)
-		if err != nil {
-			return nil, "", common.NewInternalServerError("AASDESC-LIST-DESCRIPTIONPAYLOAD")
-		}
-
-		out = append(out, model.AssetAdministrationShellDescriptor{
-			AssetKind:           ak,
-			AssetType:           r.AssetType.String,
-			GlobalAssetId:       r.GlobalAssetID.String,
-			IdShort:             r.IDShort.String,
-			Id:                  r.IDStr,
-			CreatedAt:           nullTimeToPtr(r.CreatedAt),
-			Administration:      adminInfo,
-			DisplayName:         displayName,
-			Description:         description,
-			Endpoints:           endpointsByDesc[r.DescID],
-			SpecificAssetIds:    specificByDesc[r.DescID],
-			Extensions:          extByDesc[r.DescID],
-			SubmodelDescriptors: smdByDesc[r.DescID],
-		})
-	}
-
-	return out, nextCursor, nil
-}
-
-func nullTimeToPtr(nt sql.NullTime) *time.Time {
-	if !nt.Valid {
-		return nil
-	}
-	t := nt.Time
-	return &t
+	return listAssetAdministrationShellDescriptorsSingleStatement(
+		ctx,
+		db,
+		limit,
+		cursor,
+		assetKind,
+		assetType,
+		identifiable,
+		createdFrom,
+		updatedFrom,
+	)
 }
 
 // ExistsAASByID performs a lightweight existence check for an AAS by its Id
