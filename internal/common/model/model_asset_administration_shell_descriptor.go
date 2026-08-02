@@ -133,6 +133,18 @@ func AssertAssetAdministrationShellDescriptorConstraints(obj AssetAdministration
 // UnmarshalJSON implements custom unmarshaling for AssetAdministrationShellDescriptor
 // It handles the Fromsonable Unmarshalling of the aas-go-sdk types
 func (obj *AssetAdministrationShellDescriptor) UnmarshalJSON(data []byte) error {
+	return obj.unmarshalJSON(data, true)
+}
+
+// DecodeStoredAssetAdministrationShellDescriptor decodes a descriptor read from
+// trusted persistence without applying request-body semantic verification.
+func DecodeStoredAssetAdministrationShellDescriptor(data []byte) (AssetAdministrationShellDescriptor, error) {
+	var descriptor AssetAdministrationShellDescriptor
+	err := descriptor.unmarshalJSON(data, false)
+	return descriptor, err
+}
+
+func (obj *AssetAdministrationShellDescriptor) unmarshalJSON(data []byte, verifySemantic bool) error {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	var jsonable map[string]any
 	if err := json.Unmarshal(data, &jsonable); err != nil {
@@ -262,22 +274,27 @@ func (obj *AssetAdministrationShellDescriptor) UnmarshalJSON(data []byte) error 
 		}
 	}
 
-	mode := GetVerificationMode()
+	mode := VerificationModeOff
+	if verifySemantic {
+		mode = GetVerificationMode()
+	}
 
 	//Extensions
-	for _, ext := range obj.Extensions {
-		extension := ext
-		if err := ValidateWithMode(
-			mode,
-			"AssetAdministrationShellDescriptor.Extensions",
-			func(collector func(*verification.VerificationError) bool) {
-				verification.Verify(&extension, collector)
-			},
-			func(message string) error {
-				return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + message)
-			},
-		); err != nil {
-			return err
+	if mode != VerificationModeOff {
+		for _, ext := range obj.Extensions {
+			extension := ext
+			if err := ValidateWithMode(
+				mode,
+				"AssetAdministrationShellDescriptor.Extensions",
+				func(collector func(*verification.VerificationError) bool) {
+					verification.Verify(&extension, collector)
+				},
+				func(message string) error {
+					return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + message)
+				},
+			); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -293,7 +310,7 @@ func (obj *AssetAdministrationShellDescriptor) UnmarshalJSON(data []byte) error 
 			if err != nil {
 				return err
 			}
-			err = jsoniter.Unmarshal(smdBytes, &submodelDescriptor)
+			err = submodelDescriptor.unmarshalJSON(smdBytes, verifySemantic)
 			if err != nil {
 				return err
 			}

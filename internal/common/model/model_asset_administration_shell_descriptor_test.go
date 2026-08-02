@@ -94,3 +94,32 @@ func TestAssetAdministrationShellDescriptorUnmarshalPermissiveStillRejectsEmptyS
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestDecodeStoredAssetAdministrationShellDescriptorSkipsRequestVerification(t *testing.T) {
+	setVerificationMode(t, "strict")
+	t.Cleanup(func() {
+		setVerificationMode(t, "off")
+	})
+
+	payload := []byte(`{
+		"id":"aas-1",
+		"submodelDescriptors":[{
+			"id":"submodel-1",
+			"endpoints":[{"interface":"SUBMODEL-3.0","protocolInformation":{"href":"http://example.com"}}],
+			"semanticId":{"type":"ExternalReference","keys":[{"type":"Submodel","value":"semantic-id"}]}
+		}]
+	}`)
+
+	var requestDescriptor AssetAdministrationShellDescriptor
+	if err := json.Unmarshal(payload, &requestDescriptor); err == nil {
+		t.Fatal("expected request decoding to reject the invalid semantic reference")
+	}
+
+	descriptor, err := DecodeStoredAssetAdministrationShellDescriptor(payload)
+	if err != nil {
+		t.Fatalf("stored descriptor decoding failed: %v", err)
+	}
+	if len(descriptor.SubmodelDescriptors) != 1 {
+		t.Fatalf("expected 1 Submodel descriptor, got %d", len(descriptor.SubmodelDescriptors))
+	}
+}
