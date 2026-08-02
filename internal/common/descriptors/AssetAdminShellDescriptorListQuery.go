@@ -28,7 +28,6 @@ package descriptors
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/stringification"
@@ -37,6 +36,7 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -47,15 +47,22 @@ const (
 
 func useSingleStatementAASDescriptorList(
 	ctx context.Context,
-	assetKind model.AssetKind,
-	assetType string,
 	identifiable string,
-	createdFrom time.Time,
-	updatedFrom time.Time,
 ) bool {
-	cfg, ok := common.ConfigFromContext(ctx)
-	return ok && cfg != nil && !cfg.ABAC.Enabled && auth.GetQueryFilter(ctx) == nil &&
-		assetKind == "" && assetType == "" && identifiable == "" && createdFrom.IsZero() && updatedFrom.IsZero()
+	queryFilter := auth.GetQueryFilter(ctx)
+	return identifiable == "" && !hasRestrictiveFragmentFilters(queryFilter)
+}
+
+func hasRestrictiveFragmentFilters(queryFilter *auth.QueryFilter) bool {
+	if queryFilter == nil {
+		return false
+	}
+	for _, filter := range queryFilter.Filters {
+		if filter.Boolean == nil || !*filter.Boolean {
+			return true
+		}
+	}
+	return false
 }
 
 func listAssetAdministrationShellDescriptorsSingleStatement(
@@ -63,6 +70,10 @@ func listAssetAdministrationShellDescriptorsSingleStatement(
 	db DBQueryer,
 	limit int32,
 	cursor string,
+	assetKind model.AssetKind,
+	assetType string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 	db = withDescriptorDebugQueryer(ctx, db)
 	if limit <= 0 {
@@ -73,7 +84,18 @@ func listAssetAdministrationShellDescriptorsSingleStatement(
 		peekLimit++
 	}
 
-	ds := buildSingleStatementAASDescriptorListQuery(ctx, peekLimit, cursor)
+	ds, err := buildSingleStatementAASDescriptorListQuery(
+		ctx,
+		peekLimit,
+		cursor,
+		assetKind,
+		assetType,
+		createdFrom,
+		updatedFrom,
+	)
+	if err != nil {
+		return nil, "", err
+	}
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREG-LISTAAS-BUILDQUERY " + err.Error())
@@ -90,9 +112,9 @@ func listAssetAdministrationShellDescriptorsSingleStatement(
 		if scanErr := rows.Scan(&payload); scanErr != nil {
 			return nil, "", common.NewInternalServerError("AASREG-LISTAAS-SCANROW " + scanErr.Error())
 		}
-		var descriptor model.AssetAdministrationShellDescriptor
-		if unmarshalErr := json.Unmarshal(payload, &descriptor); unmarshalErr != nil {
-			return nil, "", common.NewInternalServerError("AASREG-LISTAAS-DECODE " + unmarshalErr.Error())
+		descriptor, decodeErr := model.DecodeStoredAssetAdministrationShellDescriptor(payload)
+		if decodeErr != nil {
+			return nil, "", common.NewInternalServerError("AASREG-LISTAAS-DECODE " + decodeErr.Error())
 		}
 		descriptors = append(descriptors, descriptor)
 	}
@@ -106,24 +128,41 @@ func listAssetAdministrationShellDescriptorsSingleStatement(
 	return page, nextCursor, nil
 }
 
-func buildSingleStatementAASDescriptorListQuery(ctx context.Context, peekLimit int32, cursor string) *goqu.SelectDataset {
+func buildSingleStatementAASDescriptorListQuery(
+	ctx context.Context,
+	peekLimit int32,
+	cursor string,
+	assetKind model.AssetKind,
+	assetType string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+) (*goqu.SelectDataset, error) {
 	dialect := goqu.Dialect(common.Dialect)
-	pageLimit := uint(0)
-	if peekLimit > 0 {
-		pageLimit = uint(peekLimit)
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		return nil, err
 	}
-	aas := goqu.T(common.TblAASDescriptor).As("aas_page_source")
-	page := dialect.From(aas).
-		Select(aas.Col(common.ColDescriptorID), aas.Col(common.ColAASID)).
-		Order(aas.Col(common.ColAASID).Asc()).
-		Limit(pageLimit)
+	page, err := buildListAASDescriptorPageQuery(
+		ctx,
+		peekLimit,
+		cursor,
+		assetKind,
+		assetType,
+		"",
+		createdFrom,
+		updatedFrom,
+		collector,
+	)
+	if err != nil {
+		return nil, err
+	}
 	if cursor != "" {
 		cursorAAS := goqu.T(common.TblAASDescriptor).As("cursor_aas")
 		cursorExists := dialect.From(cursorAAS).
 			Select(goqu.L("1")).
 			Where(cursorAAS.Col(common.ColAASID).Eq(cursor)).
 			Limit(1)
-		page = page.Where(aas.Col(common.ColAASID).Gte(cursor), goqu.L("EXISTS ?", cursorExists))
+		page = page.Where(goqu.L("EXISTS ?", cursorExists))
 	}
 
 	pageAlias := goqu.T("aas_page")
@@ -135,7 +174,7 @@ func buildSingleStatementAASDescriptorListQuery(ctx context.Context, peekLimit i
 		InnerJoin(aasData, goqu.On(aasData.Col(common.ColDescriptorID).Eq(pageAlias.Col(common.ColDescriptorID)))).
 		InnerJoin(payload, goqu.On(payload.Col(common.ColDescriptorID).Eq(pageAlias.Col(common.ColDescriptorID)))).
 		Select(descriptorJSON).
-		Order(pageAlias.Col(common.ColAASID).Asc())
+		Order(pageAlias.Col("sort_aas_id").Asc()), nil
 }
 
 func buildAASDescriptorJSON(

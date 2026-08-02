@@ -33,6 +33,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,13 +66,26 @@ func TestListAssetAdministrationShellDescriptorsUsesOneQuery(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestSingleStatementAASDescriptorListRequiresUnsecuredUnfilteredRequest(t *testing.T) {
+func TestSingleStatementAASDescriptorListSupportsFormulaAndUnrestrictedFragmentFilters(t *testing.T) {
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
-	require.True(t, useSingleStatementAASDescriptorList(ctx, model.AssetKind(""), "", "", time.Time{}, time.Time{}))
-	require.False(t, useSingleStatementAASDescriptorList(ctx, model.AssetKind(""), "machine", "", time.Time{}, time.Time{}))
+	require.True(t, useSingleStatementAASDescriptorList(ctx, ""))
+	require.False(t, useSingleStatementAASDescriptorList(ctx, "aas-id"))
 
-	securedConfig := &common.Config{}
-	securedConfig.ABAC.Enabled = true
-	securedCtx := common.ContextWithConfig(t.Context(), securedConfig)
-	require.False(t, useSingleStatementAASDescriptorList(securedCtx, model.AssetKind(""), "", "", time.Time{}, time.Time{}))
+	allow := true
+	formulaCtx := auth.WithQueryFilter(ctx, &auth.QueryFilter{
+		Formula: &grammar.LogicalExpression{Boolean: &allow},
+	})
+	require.True(t, useSingleStatementAASDescriptorList(formulaCtx, ""))
+
+	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[]")
+	fragmentCtx := auth.WithQueryFilter(ctx, &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: {Boolean: &allow}},
+	})
+	require.True(t, useSingleStatementAASDescriptorList(fragmentCtx, ""))
+
+	deny := false
+	restrictedFragmentCtx := auth.WithQueryFilter(ctx, &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: {Boolean: &deny}},
+	})
+	require.False(t, useSingleStatementAASDescriptorList(restrictedFragmentCtx, ""))
 }

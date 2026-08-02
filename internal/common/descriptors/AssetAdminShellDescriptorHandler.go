@@ -873,8 +873,17 @@ func ListAssetAdministrationShellDescriptors(
 			slog.DebugContext(ctx, "AAS descriptor list completed", "duration", time.Since(start))
 		}(time.Now())
 	}
-	if useSingleStatementAASDescriptorList(ctx, assetKind, assetType, identifiable, createdFrom, updatedFrom) {
-		return listAssetAdministrationShellDescriptorsSingleStatement(ctx, db, limit, cursor)
+	if useSingleStatementAASDescriptorList(ctx, identifiable) {
+		return listAssetAdministrationShellDescriptorsSingleStatement(
+			ctx,
+			db,
+			limit,
+			cursor,
+			assetKind,
+			assetType,
+			createdFrom,
+			updatedFrom,
+		)
 	}
 	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, !isTransactionQueryer(db))
 }
