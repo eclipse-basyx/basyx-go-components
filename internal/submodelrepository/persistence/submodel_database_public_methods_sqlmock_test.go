@@ -122,7 +122,7 @@ func TestGetSubmodelsClosesLookaheadRowsBeforeSupplementalReferenceQuery(t *test
 	fragment := grammar.FragmentStringPattern("$sm#supplementalSemanticIds[]")
 	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			fragment: {Boolean: &visible},
+			fragment: auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &visible}, false),
 		},
 	})
 

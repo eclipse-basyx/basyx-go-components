@@ -79,7 +79,10 @@ func TestCanSkipCreateReadbackRequiresUnrestrictedCreateFormula(t *testing.T) {
 			name: "fragment filter",
 			qf: &auth.QueryFilter{
 				Filters: auth.FragmentFilters{
-					grammar.FragmentStringPattern("$aas#idShort"): {Boolean: &allow},
+					grammar.FragmentStringPattern("$aas#idShort"): auth.NewFragmentFilterPredicate(
+						grammar.LogicalExpression{Boolean: &allow},
+						false,
+					),
 				},
 			},
 			want: false,

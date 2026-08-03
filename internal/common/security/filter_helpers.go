@@ -400,21 +400,14 @@ func buildFragmentMaskCondition(
 		return nil, false, nil
 	}
 
-	filters := p.FilterExpressionEntriesFor(fragment)
+	filters := p.FilterPredicateEntriesFor(fragment)
 	if len(filters) == 0 {
 		return nil, false, nil
 	}
 
 	wcs := make([]exp.Expression, 0, len(filters))
 	for _, filter := range filters {
-		evalCollector := collector.ForFragmentMatch(filter.Fragment)
-		if !filter.Match {
-			evalCollector = collector.WithoutInlineAliases()
-		}
-		wc, _, err := filter.Expression.EvaluateToExpressionWithNegatedFragments(
-			evalCollector,
-			[]grammar.FragmentStringPattern{grammar.FragmentStringPattern(filter.Fragment)},
-		)
+		wc, err := evaluateFragmentFilterPredicate(filter.Predicate, filter.Fragment, collector)
 		if err != nil {
 			return nil, false, err
 		}
@@ -424,6 +417,62 @@ func buildFragmentMaskCondition(
 		return wcs[0], true, nil
 	}
 	return goqu.And(wcs...), true, nil
+}
+
+func evaluateFragmentFilterPredicate(
+	predicate FragmentFilterPredicate,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+) (exp.Expression, error) {
+	if predicate.Condition != nil {
+		return evaluateFragmentFilterLeaf(predicate, fragment, collector)
+	}
+	if len(predicate.And) > 0 {
+		return evaluateFragmentFilterChildren(predicate.And, fragment, collector, true)
+	}
+	if len(predicate.Or) > 0 {
+		return evaluateFragmentFilterChildren(predicate.Or, fragment, collector, false)
+	}
+	return nil, fmt.Errorf("FILTER-EVALPRED-INVALID fragment filter predicate is empty")
+}
+
+func evaluateFragmentFilterLeaf(
+	predicate FragmentFilterPredicate,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+) (exp.Expression, error) {
+	evalCollector := collector.WithoutInlineAliases()
+	if predicate.Match {
+		evalCollector = collector.ForFragmentMatch(fragment)
+	}
+	whereCondition, _, err := predicate.Condition.EvaluateToExpressionWithNegatedFragments(
+		evalCollector,
+		[]grammar.FragmentStringPattern{fragment},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return whereCondition, nil
+}
+
+func evaluateFragmentFilterChildren(
+	children []FragmentFilterPredicate,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+	and bool,
+) (exp.Expression, error) {
+	expressions := make([]exp.Expression, 0, len(children))
+	for _, child := range children {
+		expression, err := evaluateFragmentFilterPredicate(child, fragment, collector)
+		if err != nil {
+			return nil, err
+		}
+		expressions = append(expressions, expression)
+	}
+	if and {
+		return goqu.And(expressions...), nil
+	}
+	return goqu.Or(expressions...), nil
 }
 
 func matchesAnyFragmentPattern(fragment grammar.FragmentStringPattern, patterns []grammar.FragmentStringPattern) bool {
@@ -462,14 +511,14 @@ func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentSt
 	if p == nil {
 		return "no-query-filter", nil
 	}
-	filters := p.FilterExpressionEntriesFor(fragment)
+	filters := p.FilterPredicateEntriesFor(fragment)
 	if len(filters) == 0 {
 		return "no-fragment-filter", nil
 	}
 
 	parts := make([]string, 0, len(filters))
 	for _, filter := range filters {
-		exprJSON, err := json.Marshal(filter.Expression)
+		exprJSON, err := json.Marshal(filter.Predicate)
 		if err != nil {
 			return "", err
 		}
@@ -481,7 +530,7 @@ func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentSt
 		if err != nil {
 			return "", err
 		}
-		parts = append(parts, fmt.Sprintf("%t|%s|%s", filter.Match, exprJSON, bindingsJSON))
+		parts = append(parts, fmt.Sprintf("%s|%s", exprJSON, bindingsJSON))
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, "&&"), nil

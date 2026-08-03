@@ -50,10 +50,7 @@ func TestReadAASSubmodelReferencesMatchesCurrentReferenceAndCorrelatesParent(t *
 		},
 	}
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
-		Filters: auth.FragmentFilters{fragment: condition},
-		FilterMatch: auth.FragmentMatchModes{
-			fragment: true,
-		},
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, true)},
 	})
 
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
@@ -133,10 +130,7 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 	}
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			fragment: condition,
-		},
-		FilterMatch: auth.FragmentMatchModes{
-			fragment: true,
+			fragment: auth.NewFragmentFilterPredicate(condition, true),
 		},
 	})
 
@@ -246,13 +240,11 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 			}
 			ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 				Filters: auth.FragmentFilters{
-					test.fragment: condition,
-					unrelatedFragment: {
-						Boolean: boolPointer(false),
-					},
-				},
-				FilterMatch: auth.FragmentMatchModes{
-					test.fragment: true,
+					test.fragment: auth.NewFragmentFilterPredicate(condition, true),
+					unrelatedFragment: auth.NewFragmentFilterPredicate(
+						grammar.LogicalExpression{Boolean: boolPointer(false)},
+						false,
+					),
 				},
 			})
 
@@ -318,7 +310,7 @@ func TestReadSubmodelSupplementalSemanticReferencesCorrelatesNonMatchFilterToOwn
 		},
 	}
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
-		Filters: auth.FragmentFilters{fragment: condition},
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, false)},
 	})
 
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {

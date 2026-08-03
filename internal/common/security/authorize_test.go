@@ -523,7 +523,7 @@ func TestMergeQueryFilterDoesNotImplicitlyMatchArrayEndedFragments(t *testing.T)
 	if queryFilter == nil {
 		t.Fatal("expected merged query filter")
 	}
-	if queryFilter.FilterMatch != nil && queryFilter.FilterMatch[fragment] {
+	if queryFilter.Filters[fragment].Match {
 		t.Fatal("array-ended user query fragment must not enable MATCH implicitly")
 	}
 }
@@ -543,7 +543,7 @@ func TestMergeQueryFilterUsesExplicitFragmentMatch(t *testing.T) {
 	})
 
 	queryFilter := GetQueryFilter(ctx)
-	if queryFilter == nil || !queryFilter.FilterMatch[fragment] {
+	if queryFilter == nil || !queryFilter.Filters[fragment].Match {
 		t.Fatal("explicit $match must enable row-local fragment matching")
 	}
 }

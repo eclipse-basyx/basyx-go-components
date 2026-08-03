@@ -912,21 +912,15 @@ func normalizeSMERowFilters(ctx context.Context) (context.Context, []grammar.Fra
 	}
 
 	rowFilters := make(auth.FragmentFilters)
-	rowFilterMatch := make(auth.FragmentMatchModes)
-	for fragment, expression := range queryFilter.Filters {
+	for fragment, predicate := range queryFilter.Filters {
 		if strings.Contains(string(fragment), "#") || !isSMEStructuralFragment(fragment) {
 			continue
 		}
 		normalizedFragment := normalizeSMERowFragment(fragment)
 		if existing, exists := rowFilters[normalizedFragment]; exists {
-			rowFilters[normalizedFragment] = grammar.LogicalExpression{
-				And: []grammar.LogicalExpression{existing, expression},
-			}
+			rowFilters[normalizedFragment] = auth.AndFragmentFilterPredicates(existing, predicate)
 		} else {
-			rowFilters[normalizedFragment] = expression
-		}
-		if queryFilter.FilterMatch != nil && queryFilter.FilterMatch[fragment] {
-			rowFilterMatch[normalizedFragment] = true
+			rowFilters[normalizedFragment] = predicate
 		}
 	}
 	if len(rowFilters) == 0 {
@@ -934,9 +928,6 @@ func normalizeSMERowFilters(ctx context.Context) (context.Context, []grammar.Fra
 	}
 
 	rowQueryFilter := &auth.QueryFilter{Filters: rowFilters}
-	if len(rowFilterMatch) > 0 {
-		rowQueryFilter.FilterMatch = rowFilterMatch
-	}
 	fragments := make(map[grammar.FragmentStringPattern]struct{}, len(rowFilters))
 	for fragment := range rowFilters {
 		fragments[fragment] = struct{}{}

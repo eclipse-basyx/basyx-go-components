@@ -462,14 +462,10 @@ func supplementalSemanticIDFilterContext(
 
 	specs := make([]referenceFilterSpec, 0, len(fragments))
 	filteredQueryFilter := &auth.QueryFilter{
-		Filters:     make(auth.FragmentFilters, len(fragments)),
-		FilterMatch: make(auth.FragmentMatchModes, len(fragments)),
+		Filters: make(auth.FragmentFilters, len(fragments)),
 	}
 	for _, fragment := range fragments {
 		filteredQueryFilter.Filters[fragment] = queryFilter.Filters[fragment]
-		if queryFilter.FilterMatch != nil {
-			filteredQueryFilter.FilterMatch[fragment] = queryFilter.FilterMatch[fragment]
-		}
 		specs = append(specs, referenceFilterSpec{
 			fragment:  fragment,
 			collector: collector,
