@@ -232,7 +232,8 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
 func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
-	if !hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds") {
+	if !hasFragmentFilterPrefix(ctx, "$sm#semanticId.keys") &&
+		!hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds") {
 		return s.getSubmodelsWithOptionalFiltersWithQueryer(ctx, s.readDB(ctx), limit, cursor, submodelIdentifier, idShort, semanticID, createdFrom, updatedFrom)
 	}
 
@@ -290,10 +291,12 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-MASKEXPR " + maskedExprErr.Error())
 	}
 
+	filterSemanticIDKeys := hasFragmentFilterPrefix(ctx, "$sm#semanticId.keys")
 	filterSupplementalSemanticIDs := hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds")
+	filterReferenceRows := filterSemanticIDKeys || filterSupplementalSemanticIDs
 	additionalProjections := maskRuntime.Projections()
-	if filterSupplementalSemanticIDs {
-		additionalProjections = append(additionalProjections, goqu.I("submodel.id").As("supplemental_owner_id"))
+	if filterReferenceRows {
+		additionalProjections = append(additionalProjections, goqu.I("submodel.id").As("reference_owner_id"))
 	}
 	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, idShortFilter, limitFilter, cursorFilter, createdFrom, updatedFrom, additionalProjections)
 	if err != nil {
@@ -313,11 +316,11 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-ABACFORMULA " + err.Error())
 		}
 	}
-	query, args, err := submodelqueries.BuildSubmodelListSQLWithSupplementalOwnerID(
+	query, args, err := submodelqueries.BuildSubmodelListSQLWithReferenceOwnerID(
 		selectDS,
 		dataAlias,
 		maskedExpressions,
-		filterSupplementalSemanticIDs,
+		filterReferenceRows,
 	)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BUILDSQL " + err.Error())
@@ -340,7 +343,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 	}
 
 	submodels := make([]types.ISubmodel, 0)
-	supplementalOwnerIDs := make([]int64, 0)
+	referenceOwnerIDs := make([]int64, 0)
 	nextCursor := ""
 	for rows.Next() {
 		scanTargets := []any{
@@ -357,9 +360,9 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 			&qualifiersJsonString,
 			&semanticIDJSONString,
 		}
-		var supplementalOwnerID int64
-		if filterSupplementalSemanticIDs {
-			scanTargets = append(scanTargets, &supplementalOwnerID)
+		var referenceOwnerID int64
+		if filterReferenceRows {
+			scanTargets = append(scanTargets, &referenceOwnerID)
 		}
 		if err := rows.Scan(scanTargets...); err != nil {
 			return nil, "", err
@@ -401,8 +404,8 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		}
 
 		submodels = append(submodels, submodel)
-		if filterSupplementalSemanticIDs {
-			supplementalOwnerIDs = append(supplementalOwnerIDs, supplementalOwnerID)
+		if filterReferenceRows {
+			referenceOwnerIDs = append(referenceOwnerIDs, referenceOwnerID)
 		}
 	}
 
@@ -410,16 +413,30 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		return nil, "", err
 	}
 
+	if filterSemanticIDKeys {
+		filteredReferences, readErr := descriptors.ReadSubmodelSemanticReferencesBySubmodelIDs(
+			ctx,
+			db,
+			referenceOwnerIDs,
+		)
+		if readErr != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-READSEMANTICID " + readErr.Error())
+		}
+		for index, ownerID := range referenceOwnerIDs {
+			submodels[index].SetSemanticID(filteredReferences[ownerID])
+		}
+	}
+
 	if filterSupplementalSemanticIDs {
 		filteredReferences, readErr := descriptors.ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 			ctx,
 			db,
-			supplementalOwnerIDs,
+			referenceOwnerIDs,
 		)
 		if readErr != nil {
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-READSUPPSEM " + readErr.Error())
 		}
-		for index, ownerID := range supplementalOwnerIDs {
+		for index, ownerID := range referenceOwnerIDs {
 			submodels[index].SetSupplementalSemanticIDs(filteredReferences[ownerID])
 		}
 	}

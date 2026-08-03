@@ -53,7 +53,7 @@ func AddFilterQueryFromContext(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
-	maskCondition, hasMask, err := buildFragmentMaskConditionWithOptions(ctx, fragment, collector, true)
+	maskCondition, hasMask, err := buildFragmentMaskCondition(ctx, fragment, collector)
 	return addFilterCondition(ds, maskCondition, hasMask, err)
 }
 
@@ -67,7 +67,7 @@ func AddCorrelatedFilterQueryFromContext(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
-	maskCondition, hasMask, err := buildFragmentMaskConditionWithOptions(ctx, fragment, collector, false)
+	maskCondition, hasMask, err := buildFragmentMaskCondition(ctx, fragment, collector)
 	return addFilterCondition(ds, maskCondition, hasMask, err)
 }
 
@@ -395,15 +395,6 @@ func buildFragmentMaskCondition(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (exp.Expression, bool, error) {
-	return buildFragmentMaskConditionWithOptions(ctx, fragment, collector, false)
-}
-
-func buildFragmentMaskConditionWithOptions(
-	ctx context.Context,
-	fragment grammar.FragmentStringPattern,
-	collector *grammar.ResolvedFieldPathCollector,
-	inlineArrayEndedFragments bool,
-) (exp.Expression, bool, error) {
 	p := GetQueryFilter(ctx)
 	if p == nil {
 		return nil, false, nil
@@ -417,10 +408,8 @@ func buildFragmentMaskConditionWithOptions(
 	wcs := make([]exp.Expression, 0, len(filters))
 	for _, filter := range filters {
 		evalCollector := collector
-		if inlineArrayEndedFragments && filter.Match && fragmentEndsWithWildcardArraySegment(filter.Fragment) {
-			// Array-ended fragments must be evaluated against the current row context
-			// instead of descriptor-wide EXISTS correlation.
-			evalCollector = nil
+		if !filter.Match {
+			evalCollector = collector.WithoutInlineAliases()
 		}
 		wc, _, err := filter.Expression.EvaluateToExpressionWithNegatedFragments(
 			evalCollector,
@@ -435,15 +424,6 @@ func buildFragmentMaskConditionWithOptions(
 		return wcs[0], true, nil
 	}
 	return goqu.And(wcs...), true, nil
-}
-
-func fragmentEndsWithWildcardArraySegment(fragment grammar.FragmentStringPattern) bool {
-	tokens := builder.TokenizeField(string(fragment))
-	if len(tokens) == 0 {
-		return false
-	}
-	arrayToken, isArray := tokens[len(tokens)-1].(builder.ArrayToken)
-	return isArray && arrayToken.Index < 0
 }
 
 func fragmentEndsWithArraySegment(fragment grammar.FragmentStringPattern) bool {
@@ -510,7 +490,7 @@ func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentSt
 		if err != nil {
 			return "", err
 		}
-		parts = append(parts, string(exprJSON)+"|"+string(bindingsJSON))
+		parts = append(parts, fmt.Sprintf("%t|%s|%s", filter.Match, exprJSON, bindingsJSON))
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, "&&"), nil

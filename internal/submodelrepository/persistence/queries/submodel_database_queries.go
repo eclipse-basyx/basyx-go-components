@@ -207,16 +207,16 @@ func ApplySubmodelSemanticIDFilter(selectDS *goqu.SelectDataset, semanticID stri
 
 // BuildSubmodelListSQL builds the final SQL for a masked submodel list query.
 func BuildSubmodelListSQL(selectDS *goqu.SelectDataset, dataAlias string, maskedExpressions []exp.Expression) (string, []any, error) {
-	return BuildSubmodelListSQLWithSupplementalOwnerID(selectDS, dataAlias, maskedExpressions, false)
+	return BuildSubmodelListSQLWithReferenceOwnerID(selectDS, dataAlias, maskedExpressions, false)
 }
 
-// BuildSubmodelListSQLWithSupplementalOwnerID builds the final SQL and
+// BuildSubmodelListSQLWithReferenceOwnerID builds the final SQL and
 // optionally exposes the database ID needed to reconstruct filtered references.
-func BuildSubmodelListSQLWithSupplementalOwnerID(
+func BuildSubmodelListSQLWithReferenceOwnerID(
 	selectDS *goqu.SelectDataset,
 	dataAlias string,
 	maskedExpressions []exp.Expression,
-	includeSupplementalOwnerID bool,
+	includeReferenceOwnerID bool,
 ) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
 	projections := []interface{}{
@@ -233,8 +233,8 @@ func BuildSubmodelListSQLWithSupplementalOwnerID(
 		goqu.I(dataAlias + ".raw_qualifiers_payload"),
 		maskedExpressions[1],
 	}
-	if includeSupplementalOwnerID {
-		projections = append(projections, goqu.I(dataAlias+".supplemental_owner_id"))
+	if includeReferenceOwnerID {
+		projections = append(projections, goqu.I(dataAlias+".reference_owner_id"))
 	}
 
 	return dialect.From(selectDS.As(dataAlias)).

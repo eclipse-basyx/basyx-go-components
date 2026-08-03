@@ -140,7 +140,7 @@ func TestGetSubmodelsClosesLookaheadRowsBeforeSupplementalReferenceQuery(t *test
 		"extensions",
 		"qualifiers",
 		"semantic_id",
-		"supplemental_owner_id",
+		"reference_owner_id",
 	}).
 		AddRow("urn:sm:first", "First", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(1)).
 		AddRow("urn:sm:lookahead", "Lookahead", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(2))

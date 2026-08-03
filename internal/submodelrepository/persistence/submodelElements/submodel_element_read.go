@@ -1566,6 +1566,12 @@ func executeLoadedSMERowQuery(
 		return nil, common.NewInternalServerError(errorCodePrefix + "-ROWSERR " + rowsErr.Error())
 	}
 
+	if hasSMESemanticIDKeyFilter(ctx) {
+		if filterErr := applyFilteredSMESemanticIDs(ctx, db, parsedRows); filterErr != nil {
+			return nil, common.NewInternalServerError(errorCodePrefix + "-FILTERSEMANTIC " + filterErr.Error())
+		}
+	}
+
 	if hasSMESupplementalSemanticIDFilter(ctx) {
 		if filterErr := applyFilteredSMESupplementalSemanticIDs(ctx, db, parsedRows); filterErr != nil {
 			return nil, common.NewInternalServerError(errorCodePrefix + "-FILTERSUPPSEM " + filterErr.Error())
@@ -1575,14 +1581,64 @@ func executeLoadedSMERowQuery(
 	return parsedRows, nil
 }
 
+func hasSMESemanticIDKeyFilter(ctx context.Context) bool {
+	return hasSMEReferenceFragmentFilter(ctx, "#semanticId.keys")
+}
+
+func applyFilteredSMESemanticIDs(
+	ctx context.Context,
+	db DBQueryer,
+	rows []loadedSMERow,
+) error {
+	ownerIDs := make([]int64, 0, len(rows))
+	for _, item := range rows {
+		if item.row.DbID.Valid {
+			ownerIDs = append(ownerIDs, item.row.DbID.Int64)
+		}
+	}
+
+	filteredReferences, err := descriptors.ReadSubmodelElementSemanticReferencesByElementIDs(
+		ctx,
+		db,
+		ownerIDs,
+	)
+	if err != nil {
+		return err
+	}
+
+	for index := range rows {
+		if !rows[index].row.DbID.Valid || !rows[index].semanticVisible {
+			rows[index].semanticPayload = nil
+			rows[index].semanticVisible = false
+			continue
+		}
+		reference := filteredReferences[rows[index].row.DbID.Int64]
+		if reference == nil {
+			rows[index].semanticPayload = nil
+			rows[index].semanticVisible = false
+			continue
+		}
+		payload, marshalErr := marshalReference(reference)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		rows[index].semanticPayload = payload
+	}
+	return nil
+}
+
 func hasSMESupplementalSemanticIDFilter(ctx context.Context) bool {
+	return hasSMEReferenceFragmentFilter(ctx, "#supplementalSemanticIds")
+}
+
+func hasSMEReferenceFragmentFilter(ctx context.Context, referencePath string) bool {
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter == nil {
 		return false
 	}
 	for fragment := range queryFilter.Filters {
 		value := string(fragment)
-		if strings.HasPrefix(value, "$sme") && strings.Contains(value, "#supplementalSemanticIds") {
+		if strings.HasPrefix(value, "$sme") && strings.Contains(value, referencePath) {
 			return true
 		}
 	}
@@ -1625,6 +1681,14 @@ func applyFilteredSMESupplementalSemanticIDs(
 		rows[index].row.SupplementalSemanticIDs = bytesToRawMessagePtr(payload)
 	}
 	return nil
+}
+
+func marshalReference(reference types.IReference) ([]byte, error) {
+	jsonableReference, err := jsonization.ToJsonable(reference)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(jsonableReference)
 }
 
 func marshalReferences(references []types.IReference) ([]byte, error) {

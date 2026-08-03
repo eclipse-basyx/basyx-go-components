@@ -852,6 +852,19 @@ func (c *ResolvedFieldPathCollector) AllowInlineAliases(aliases ...string) {
 	}
 }
 
+// WithoutInlineAliases returns an independent collector that preserves the
+// correlation plan but evaluates every field through the legacy non-row-local
+// path.
+func (c *ResolvedFieldPathCollector) WithoutInlineAliases() *ResolvedFieldPathCollector {
+	if c == nil {
+		return nil
+	}
+
+	clone := *c
+	clone.inlineAliases = nil
+	return &clone
+}
+
 // SetRootJoinKey configures the outer alias and column used to correlate
 // generated EXISTS expressions with the caller's dataset.
 func (c *ResolvedFieldPathCollector) SetRootJoinKey(alias string, column string) {
@@ -889,8 +902,14 @@ func (c *ResolvedFieldPathCollector) canEvaluateInline(resolved []ResolvedFieldP
 				return false
 			}
 		}
-		if len(path.ArrayBindings) > 0 {
-			return false
+		for _, binding := range path.ArrayBindings {
+			alias, ok := leadingAlias(binding.Alias)
+			if !ok {
+				return false
+			}
+			if _, ok := c.inlineAliases[alias]; !ok {
+				return false
+			}
 		}
 	}
 	return true

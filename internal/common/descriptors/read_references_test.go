@@ -37,6 +37,75 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
+func TestReadAASSubmodelReferencesMatchesCurrentReferenceAndCorrelatesParent(t *testing.T) {
+	keyField := grammar.ModelStringPattern("$aas#submodels[].keys[].value")
+	rootField := grammar.ModelStringPattern("$aas#idShort")
+	visibleKey := grammar.StandardString("urn:example:submodel:visible")
+	publicAAS := grammar.StandardString("public-aas")
+	fragment := grammar.FragmentStringPattern("$aas#submodels[]")
+	condition := grammar.LogicalExpression{
+		And: []grammar.LogicalExpression{
+			{Eq: grammar.ComparisonItems{{Field: &rootField}, {StrVal: &publicAAS}}},
+			{Eq: grammar.ComparisonItems{{Field: &keyField}, {StrVal: &visibleKey}}},
+		},
+	}
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: condition},
+		FilterMatch: auth.FragmentMatchModes{
+			fragment: true,
+		},
+	})
+
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+		if !strings.Contains(actual, `"aas_submodel_reference_key"."value" = 'urn:example:submodel:visible'`) {
+			return fmt.Errorf("expected current key-row predicate, got: %s", actual)
+		}
+		if !strings.Contains(actual, `"aas"."id" = "aas_submodel_reference"."aas_id"`) {
+			return fmt.Errorf("expected parent AAS correlation, got: %s", actual)
+		}
+		if !strings.Contains(actual, `EXISTS`) {
+			return fmt.Errorf("expected correlated parent condition, got: %s", actual)
+		}
+		return nil
+	})))
+	if err != nil {
+		t.Fatalf("sqlmock.New failed: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery("AAS submodel reference row match").WillReturnRows(sqlmock.NewRows([]string{
+		"owner_id",
+		"ref_id",
+		"ref_type",
+		"key_id",
+		"key_type",
+		"key_value",
+		"parent_reference_payload",
+	}).AddRow(
+		int64(7),
+		int64(11),
+		int64(types.ReferenceTypesExternalReference),
+		int64(13),
+		int64(types.KeyTypesGlobalReference),
+		string(visibleKey),
+		nil,
+	))
+
+	references, err := ReadAASSubmodelReferencesByAASIDs(ctx, db, []int64{7})
+	if err != nil {
+		t.Fatalf("ReadAASSubmodelReferencesByAASIDs returned error: %v", err)
+	}
+	if len(references[7]) != 1 || len(references[7][0].Keys()) != 1 {
+		t.Fatalf("expected one filtered reference with one key, got %#v", references[7])
+	}
+	if references[7][0].Keys()[0].Value() != string(visibleKey) {
+		t.Fatalf("unexpected filtered key: %q", references[7][0].Keys()[0].Value())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
 func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilter(t *testing.T) {
 	field := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
 	routeField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")

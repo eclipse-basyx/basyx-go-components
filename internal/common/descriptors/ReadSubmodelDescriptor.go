@@ -97,6 +97,10 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
+	collector.AllowInlineAliases(
+		common.AliasSubmodelDescriptor,
+		common.AliasSubmodelDescriptorSemanticIDReference,
+	)
 	const dataAlias = "smd_by_desc_data"
 	maskedColumns := []auth.MaskedInnerColumnSpec{
 		{Fragment: "$smdesc#idShort", FlagAlias: "flag_smdesc_idshort", RawAlias: "c2"},
@@ -236,6 +240,12 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
+	collector.AllowInlineAliases(
+		"descriptor",
+		"aas_descriptor",
+		common.AliasSubmodelDescriptor,
+		common.AliasSubmodelDescriptorSemanticIDReference,
+	)
 	const dataAlias = "smd_by_aas_data"
 	maskedColumns := []auth.MaskedInnerColumnSpec{
 		{Fragment: "$aasdesc#submodelDescriptors[].idShort", FlagAlias: "flag_aas_smdesc_idshort", RawAlias: "c2"},
