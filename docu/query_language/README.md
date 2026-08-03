@@ -402,9 +402,44 @@ Why this matters:
 - The guard keeps unrelated rows in the result set when a fragment filter targets a specific fragment.
 - If a fragment has no bindings, negation would be redundant, so it is skipped.
 
-### Array-ended fragment filters are row-local
+### Explicit row-local fragment matching
 
-For fragment filters whose fragment identifier ends in an array segment (for example, $aasdesc#specificAssetIds[] or $aasdesc#endpoints[]), row-local evaluation can be enabled explicitly with:
+Fragment filters use parent-level existential evaluation by default. A condition
+may therefore be satisfied by another row belonging to the same parent. This
+preserves the complete fragment when at least one matching row exists.
+
+Set `$match` explicitly in a request query when the condition must be evaluated
+against the fragment row currently being reconstructed:
+
+```json
+{
+  "$condition": {
+    "$eq": [
+      { "$field": "$smdesc#supplementalSemanticIds[].keys[].value" },
+      { "$strVal": "QUERY_ALLOWED" }
+    ]
+  },
+  "$filters": [
+    {
+      "$fragment": "$smdesc#supplementalSemanticIds[]",
+      "$match": true,
+      "$condition": {
+        "$eq": [
+          { "$field": "$smdesc#supplementalSemanticIds[].keys[].value" },
+          { "$strVal": "FILTER_VISIBLE" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+With `$match: true`, only supplemental semantic ID rows satisfying the filter
+condition are returned. Omitting `$match`, or setting it to `false`, keeps the
+existential behavior. Array-ended fragments never enable matching implicitly.
+
+ABAC policy filters use the equivalent uppercase `MATCH` property because the
+access-rule schema uses uppercase property names:
 
 ```json
 {
@@ -414,22 +449,15 @@ For fragment filters whose fragment identifier ends in an array segment (for exa
 }
 ```
 
-Default behavior is unchanged (`MATCH` omitted or `false`): legacy descriptor-level fragment guard behavior is used.
-
-Practical effect:
-- Before this behavior, a condition on one array element could make the whole array fragment appear as matched for the parent descriptor.
-- With `MATCH: true`, each array item is included or excluded based on that item's own data.
-
-Scope:
-- This applies to fragment filter WHERE evaluation when `MATCH: true`.
-- Mask flag projections keep collector-based translation behavior.
+Both forms are explicit and are supported for every fragment handled by its
+reader. Row-local behavior is especially relevant for arrays and nested arrays,
+where it keeps conditions bound to the same item and array indices.
 
 Implementation reference:
-- AddFilterQueryFromContext in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
-- buildFragmentMaskConditionWithOptions in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
-- fragmentEndsWithArraySegment in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
-
-Implementation reference:
+- Request query parsing in [internal/common/model/grammar/query.go](../../internal/common/model/grammar/query.go)
+- QueryFilter merging in [internal/common/security/authorize.go](../../internal/common/security/authorize.go)
+- ABAC match propagation in [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go)
+- Row-local and existential evaluation in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 - EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](../../internal/common/model/grammar/logical_expression_to_sql.go)
 - ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](../../internal/common/model/grammar/fieldidentifier_processing.go)
 
