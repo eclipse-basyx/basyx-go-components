@@ -307,6 +307,56 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 	}
 }
 
+func TestReadSubmodelSupplementalSemanticReferencesCorrelatesNonMatchFilterToOwnerAlias(t *testing.T) {
+	field := grammar.ModelStringPattern("$sm#supplementalSemanticIds[].keys[].value")
+	value := grammar.StandardString("FILTER_VISIBLE")
+	fragment := grammar.FragmentStringPattern("$sm#supplementalSemanticIds[]")
+	condition := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &field},
+			{StrVal: &value},
+		},
+	}
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: condition},
+	})
+
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+		if !strings.Contains(actual, `EXISTS`) {
+			return fmt.Errorf("expected non-MATCH filter to use EXISTS, got: %s", actual)
+		}
+		if !strings.Contains(actual, `"s"."id"`) {
+			return fmt.Errorf("expected correlation to outer owner alias s, got: %s", actual)
+		}
+		if strings.Contains(actual, `"submodel"."id"`) {
+			return fmt.Errorf("unexpected unbound submodel alias, got: %s", actual)
+		}
+		return nil
+	})))
+	if err != nil {
+		t.Fatalf("sqlmock.New failed: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery("submodel supplemental reference non-MATCH correlation").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"owner_id",
+			"ref_id",
+			"ref_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_reference_payload",
+		}))
+
+	if _, err := ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(ctx, db, []int64{12}); err != nil {
+		t.Fatalf("ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs returned error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
 func boolPointer(value bool) *bool {
 	return &value
 }

@@ -42,6 +42,9 @@ type SubFilter struct {
 
 	// FRAGMENT corresponds to the JSON schema field "FRAGMENT".
 	Fragment *FragmentStringPattern `json:"$fragment,omitempty" yaml:"$fragment,omitempty" mapstructure:"$fragment,omitempty"`
+
+	// Match enables row-local evaluation for the selected fragment.
+	Match *bool `json:"$match,omitempty" yaml:"$match,omitempty" mapstructure:"$match,omitempty"`
 }
 
 // UnmarshalJSON implements json.Unmarshaler for SubFilter.

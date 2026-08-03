@@ -892,6 +892,9 @@ components:
       properties:
         $fragment:
           $ref: '#/components/schemas/FragmentFieldIdentifier'
+        $match:
+          type: boolean
+          default: false
         $condition:
           $ref: '#/components/schemas/logicalExpression'
       required:

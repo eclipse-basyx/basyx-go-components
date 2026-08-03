@@ -350,6 +350,31 @@ func TestQueryWrapperUnmarshal_EmptyQuery(t *testing.T) {
 	}
 }
 
+func TestQueryWrapperUnmarshal_SubFilterMatch(t *testing.T) {
+	jsonStr := `{
+		"Query": {
+			"$condition": {"$boolean": true},
+			"$filters": [{
+				"$fragment": "$sm#supplementalSemanticIds[]",
+				"$match": true,
+				"$condition": {"$boolean": true}
+			}]
+		}
+	}`
+
+	var wrapper QueryWrapper
+	if err := json.Unmarshal([]byte(jsonStr), &wrapper); err != nil {
+		t.Fatalf("Failed to unmarshal query filter MATCH: %v", err)
+	}
+	if len(wrapper.Query.FilterConditions) != 1 {
+		t.Fatalf("Expected one filter condition, got %d", len(wrapper.Query.FilterConditions))
+	}
+	match := wrapper.Query.FilterConditions[0].Match
+	if match == nil || !*match {
+		t.Fatal("Expected explicit $match to be preserved")
+	}
+}
+
 func TestQueryWrapperUnmarshal_FieldToFieldComparison(t *testing.T) {
 	jsonStr := `{
 		"Query": {

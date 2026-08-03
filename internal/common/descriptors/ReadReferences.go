@@ -382,6 +382,7 @@ func ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 		"sm_supplemental_semantic_id_reference",
 		"sm_supplemental_semantic_id_reference_key",
 	)
+	collector.SetRootJoinKey("s", common.ColID)
 	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sm#", collector)
 
 	return readContextReferences1ToManyByOwnerIDs(

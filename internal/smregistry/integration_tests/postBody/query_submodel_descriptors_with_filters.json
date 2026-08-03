@@ -12,6 +12,7 @@
   "$filters": [
     {
       "$fragment": "$smdesc#supplementalSemanticIds[]",
+      "$match": true,
       "$condition": {
         "$eq": [
           {
