@@ -62,17 +62,16 @@ type DBQueryer interface {
 type postgresInt64Array []int64
 
 func (values postgresInt64Array) Value() (driver.Value, error) {
-	var array strings.Builder
-	array.Grow(2 + len(values)*4)
-	array.WriteByte('{')
+	array := make([]byte, 0, 2+len(values)*4)
+	array = append(array, '{')
 	for index, value := range values {
 		if index > 0 {
-			array.WriteByte(',')
+			array = append(array, ',')
 		}
-		array.WriteString(strconv.FormatInt(value, 10))
+		array = strconv.AppendInt(array, value, 10)
 	}
-	array.WriteByte('}')
-	return array.String(), nil
+	array = append(array, '}')
+	return string(array), nil
 }
 
 func postgresInt64ArrayContains(column exp.Expression, values []int64) exp.Expression {

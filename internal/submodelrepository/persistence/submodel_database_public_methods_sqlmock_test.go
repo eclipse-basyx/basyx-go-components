@@ -371,7 +371,7 @@ func TestGetSubmodelElementsCoreReturnsOnlyRootElements(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*parent_sme_id.*IS NULL`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "idshort_path"}).AddRow(10, "RootCollection"))
 
-	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."id" IN`).
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."id" = ANY`).
 		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
 			AddRow(
 				10,
@@ -428,7 +428,7 @@ func TestGetSubmodelElementsDeepReturnsRootWithChildren(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*parent_sme_id.*IS NULL`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "idshort_path"}).AddRow(10, "RootCollection"))
 
-	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*COALESCE\("sme"\."root_sme_id", "sme"\."id"\) IN`).
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*COALESCE\("sme"\."root_sme_id", "sme"\."id"\) = ANY`).
 		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
 			AddRow(
 				10,
