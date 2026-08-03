@@ -15,6 +15,7 @@
       },
       {
           "$fragment": "$sme.NewTestList[]",
+          "$match": true,
           "$condition": { "$eq": [ {"$field": "$sme#idShort"}, {"$strVal": "InstanceId" } ] }
 
       }

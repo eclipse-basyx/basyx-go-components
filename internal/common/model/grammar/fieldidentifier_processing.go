@@ -124,6 +124,8 @@ type ResolvedFieldPath struct {
 	// The bindings are ordered from outermost to innermost array access
 	// as they appear in the original FieldIdentifier.
 	ArrayBindings []ArrayIndexBinding
+
+	rootContext resolveContext
 }
 
 // ResolveScalarFieldToSQL converts a FieldIdentifier value into its SQL
@@ -192,7 +194,11 @@ func ResolveScalarFieldToSQL(field *ModelStringPattern) (ResolvedFieldPath, erro
 		return ResolvedFieldPath{}, err
 	}
 
-	return ResolvedFieldPath{Column: column, ArrayBindings: bindings}, nil
+	return ResolvedFieldPath{
+		Column:        column,
+		ArrayBindings: bindings,
+		rootContext:   contextFromFieldPrefix(fieldStr),
+	}, nil
 }
 
 // ResolveFragmentFieldToSQL resolves a fragment identifier that ends in an array segment.
@@ -369,16 +375,14 @@ func smeIDShortPathFromField(fieldStr string) (string, bool) {
 }
 
 func smeRawIDShortPathFromField(fieldStr string) (string, bool) {
-	parts := strings.SplitN(fieldStr, "#", 2)
-	if len(parts) != 2 {
+	prefix, _, _ := strings.Cut(fieldStr, "#")
+	if prefix == "$sme" {
 		return "", false
 	}
-	prefix := parts[0]
-	if !strings.HasPrefix(prefix, "$sme") {
+	if !strings.HasPrefix(prefix, "$sme.") {
 		return "", false
 	}
-	path := strings.TrimPrefix(prefix, "$sme")
-	path = strings.TrimPrefix(path, ".")
+	path := strings.TrimPrefix(prefix, "$sme.")
 	if strings.TrimSpace(path) == "" {
 		return "", false
 	}

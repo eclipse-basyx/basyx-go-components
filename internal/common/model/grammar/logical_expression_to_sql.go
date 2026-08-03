@@ -987,6 +987,9 @@ func (c *ResolvedFieldPathCollector) smeCorrelationForResolved(resolved []Resolv
 
 	conditionPaths := resolvedSMEIDShortPaths(resolved)
 	if len(conditionPaths) == 0 {
+		if c.resolvedUsesSMERow(resolved) {
+			return smeMatchSameRow
+		}
 		return smeMatchContainingSubmodel
 	}
 
@@ -1002,6 +1005,15 @@ func (c *ResolvedFieldPathCollector) smeCorrelationForResolved(resolved []Resolv
 		}
 	}
 	return correlation
+}
+
+func (c *ResolvedFieldPathCollector) resolvedUsesSMERow(resolved []ResolvedFieldPath) bool {
+	for _, path := range resolved {
+		if path.rootContext == ctxSME {
+			return true
+		}
+	}
+	return false
 }
 
 func resolvedSMEIDShortPaths(resolved []ResolvedFieldPath) []string {
@@ -1330,7 +1342,15 @@ func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
 }
 
 func resolvedSlicesEqual(a, b []ResolvedFieldPath) bool {
-	return reflect.DeepEqual(a, b)
+	if len(a) != len(b) {
+		return false
+	}
+	for index := range a {
+		if a[index].Column != b[index].Column || !reflect.DeepEqual(a[index].ArrayBindings, b[index].ArrayBindings) {
+			return false
+		}
+	}
+	return true
 }
 
 func resolvedNeedsCTE(resolved []ResolvedFieldPath) bool {

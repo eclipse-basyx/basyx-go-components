@@ -150,3 +150,66 @@ func TestSMEIDShortPathRegexKeepsListWildcardsWithinTheirSegments(t *testing.T) 
 		}
 	}
 }
+
+func TestSMEIDShortPathSupportsStructuralFragments(t *testing.T) {
+	tests := map[string]string{
+		"$sme.a[]":                "a[]",
+		"$sme.a[1].b[]":           "a[1].b[]",
+		"$sme.a[].b[]#semanticId": "a[].b[]",
+	}
+	for field, expected := range tests {
+		actual, ok := smeIDShortPathFromField(field)
+		if !ok || actual != expected {
+			t.Fatalf("field %q: got path %q with found=%t, want %q", field, actual, ok, expected)
+		}
+	}
+	if _, ok := smeIDShortPathFromField("$sme"); ok {
+		t.Fatal("root SME fragment must not report an idShort path")
+	}
+}
+
+func TestSMEFragmentMatchPathlessSMEFieldsUseCurrentRow(t *testing.T) {
+	collector, err := NewResolvedFieldPathCollectorForSMERow("sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	fragment := FragmentStringPattern("$sme.NewTestList[]")
+	matchCollector := collector.ForFragmentMatch(fragment)
+
+	tests := []struct {
+		field       ModelStringPattern
+		correlation smeMatchCorrelation
+	}{
+		{field: "$sme#idShort", correlation: smeMatchSameRow},
+		{field: "$sme#value", correlation: smeMatchSameRow},
+		{field: "$sme#semanticId.keys[].value", correlation: smeMatchSameRow},
+		{field: "$sm#idShort", correlation: smeMatchContainingSubmodel},
+	}
+	for _, test := range tests {
+		resolved, resolveErr := ResolveScalarFieldToSQL(&test.field)
+		if resolveErr != nil {
+			t.Fatalf("ResolveScalarFieldToSQL(%q) returned error: %v", test.field, resolveErr)
+		}
+		if actual := matchCollector.smeCorrelationForResolved([]ResolvedFieldPath{resolved}); actual != test.correlation {
+			t.Fatalf("field %q: got correlation %v, want %v", test.field, actual, test.correlation)
+		}
+	}
+}
+
+func TestSMERootFragmentMatchUsesCurrentRowForPathCondition(t *testing.T) {
+	collector, err := NewResolvedFieldPathCollectorForSMERow("sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	fragment := FragmentStringPattern("$sme")
+	field := ModelStringPattern("$sme.NewTestList[]#value")
+	resolved, err := ResolveScalarFieldToSQL(&field)
+	if err != nil {
+		t.Fatalf("ResolveScalarFieldToSQL returned error: %v", err)
+	}
+
+	actual := collector.ForFragmentMatch(fragment).smeCorrelationForResolved([]ResolvedFieldPath{resolved})
+	if actual != smeMatchSameRow {
+		t.Fatalf("got correlation %v, want current-row correlation", actual)
+	}
+}

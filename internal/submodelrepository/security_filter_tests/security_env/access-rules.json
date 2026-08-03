@@ -129,6 +129,7 @@
         "USEFORMULA": "is_nameplate",
         "FILTER": {
           "FRAGMENT": "$sme",
+          "MATCH": true,
           "USEFORMULA": "is_manufacturer_product_root"
         }
       },
