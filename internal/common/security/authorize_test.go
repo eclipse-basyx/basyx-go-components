@@ -507,6 +507,27 @@ func TestShouldEnforceFormula_AppliesMergedQueryWhenABACDisabled(t *testing.T) {
 	}
 }
 
+func TestMergeQueryFilterDoesNotImplicitlyMatchArrayEndedFragments(t *testing.T) {
+	t.Parallel()
+
+	condition := boolExpression(true)
+	fragment := grammar.FragmentStringPattern("$smdesc#supplementalSemanticIds[]")
+	ctx := MergeQueryFilter(context.Background(), grammar.Query{
+		FilterConditions: []grammar.SubFilter{{
+			Condition: &condition,
+			Fragment:  &fragment,
+		}},
+	})
+
+	queryFilter := GetQueryFilter(ctx)
+	if queryFilter == nil {
+		t.Fatal("expected merged query filter")
+	}
+	if queryFilter.FilterMatch != nil && queryFilter.FilterMatch[fragment] {
+		t.Fatal("array-ended user query fragment must not enable MATCH implicitly")
+	}
+}
+
 func TestShouldEnforceFormula_InconsistentQueryFilterErrorDoesNotMentionABACEnabled(t *testing.T) {
 	t.Parallel()
 

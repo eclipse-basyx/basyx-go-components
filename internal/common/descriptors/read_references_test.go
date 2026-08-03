@@ -88,7 +88,7 @@ func TestReadAASSubmodelReferencesMatchesCurrentReferenceAndCorrelatesParent(t *
 		int64(13),
 		int64(types.KeyTypesGlobalReference),
 		string(visibleKey),
-		nil,
+		[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:example:submodel:visible"}]}`),
 	))
 
 	references, err := ReadAASSubmodelReferencesByAASIDs(ctx, db, []int64{7})
@@ -100,6 +100,9 @@ func TestReadAASSubmodelReferencesMatchesCurrentReferenceAndCorrelatesParent(t *
 	}
 	if references[7][0].Keys()[0].Value() != string(visibleKey) {
 		t.Fatalf("unexpected filtered key: %q", references[7][0].Keys()[0].Value())
+	}
+	if references[7][0].ReferredSemanticID() != nil {
+		t.Fatalf("full AAS submodel reference payload must not become referredSemanticId: %#v", references[7][0].ReferredSemanticID())
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sqlmock expectations: %v", err)

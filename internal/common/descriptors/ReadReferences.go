@@ -60,10 +60,11 @@ func ReadAASSubmodelReferencesByAASIDs(
 		db,
 		aasIDs,
 		contextReferences1ToManyQuerySpec{
-			ownerIDColumn:     "aas_id",
-			referenceTable:    "aas_submodel_reference",
-			referenceAlias:    "aas_submodel_reference",
-			referenceKeyAlias: "aas_submodel_reference_key",
+			ownerIDColumn:                "aas_id",
+			referenceTable:               "aas_submodel_reference",
+			referenceAlias:               "aas_submodel_reference",
+			referenceKeyAlias:            "aas_submodel_reference_key",
+			payloadContainsFullReference: true,
 			filterSpecs: []referenceFilterSpec{
 				{fragment: "$aas#submodels[]", collector: collector},
 				{fragment: "$aas#submodels[].keys[]", collector: collector},
@@ -502,15 +503,16 @@ type referenceQuerySpec struct {
 }
 
 type contextReferences1ToManyQuerySpec struct {
-	ownerTable        string
-	ownerJoinColumn   string
-	ownerIDColumn     string
-	referenceTable    string
-	ownerAlias        string
-	referenceAlias    string
-	referenceKeyAlias string
-	filterSpecs       []referenceFilterSpec
-	errPrefix         string
+	ownerTable                   string
+	ownerJoinColumn              string
+	ownerIDColumn                string
+	referenceTable               string
+	ownerAlias                   string
+	referenceAlias               string
+	referenceKeyAlias            string
+	payloadContainsFullReference bool
+	filterSpecs                  []referenceFilterSpec
+	errPrefix                    string
 }
 
 func queryReferenceRowsByOwnerIDs(
@@ -728,6 +730,9 @@ func readContextReferences1ToManyByOwnerIDs(
 			parentReference, err := parseReferencePayload(row.parentReferencePayload)
 			if err != nil {
 				return nil, fmt.Errorf("%s-PARSEPARENTPAYLOAD: %w", spec.errPrefix, err)
+			}
+			if spec.payloadContainsFullReference && parentReference != nil {
+				parentReference = parentReference.ReferredSemanticID()
 			}
 			ref.SetReferredSemanticID(parentReference)
 			refBuilders[referenceID] = rb

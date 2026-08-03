@@ -426,15 +426,6 @@ func buildFragmentMaskCondition(
 	return goqu.And(wcs...), true, nil
 }
 
-func fragmentEndsWithArraySegment(fragment grammar.FragmentStringPattern) bool {
-	tokens := builder.TokenizeField(string(fragment))
-	if len(tokens) == 0 {
-		return false
-	}
-	_, isArray := tokens[len(tokens)-1].(builder.ArrayToken)
-	return isArray
-}
-
 func matchesAnyFragmentPattern(fragment grammar.FragmentStringPattern, patterns []grammar.FragmentStringPattern) bool {
 	for _, pattern := range patterns {
 		if fragmentPathMatches(fragment, pattern) {
