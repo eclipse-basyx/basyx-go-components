@@ -27,6 +27,7 @@ package submodelelements
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -87,6 +88,68 @@ func TestEscapeSQLLikePatternEscapesWildcardCharacters(t *testing.T) {
 	require.Equal(t, "A!%B", escapeSQLLikePattern("A%B"))
 	require.Equal(t, "A!!B", escapeSQLLikePattern("A!B"))
 	require.Equal(t, "A!!B!_C!%", escapeSQLLikePattern("A!B_C%"))
+}
+
+func TestSubmodelElementPathReadReusesSQLShapeForDifferentPaths(t *testing.T) {
+	t.Parallel()
+
+	firstQuery := captureSubmodelElementPathReadQuery(t, "Motor.Nameplate.ManufacturerName")
+	secondQuery := captureSubmodelElementPathReadQuery(t, "TechnicalData.Sections[12].MaximumRotationSpeed")
+
+	require.Equal(t, firstQuery, secondQuery)
+	require.NotContains(t, firstQuery, "Motor.Nameplate.ManufacturerName")
+	require.NotContains(t, secondQuery, "TechnicalData.Sections[12].MaximumRotationSpeed")
+}
+
+func TestSubmodelElementBatchReadReusesSQLShapeForDifferentRootCounts(t *testing.T) {
+	t.Parallel()
+
+	oneRootQuery := captureSubmodelElementBatchReadQuery(t, []int64{11})
+	manyRootsQuery := captureSubmodelElementBatchReadQuery(t, []int64{11, 22, 33, 44})
+
+	require.Equal(t, oneRootQuery, manyRootsQuery)
+	require.Contains(t, oneRootQuery, "ANY($")
+	require.Contains(t, oneRootQuery, "array_position($")
+}
+
+func captureSubmodelElementPathReadQuery(t *testing.T, idShortPath string) string {
+	t.Helper()
+
+	return captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
+		rows, err := readSubmodelElementRowsByPath(contextWithABACDisabled(t), db, 42, idShortPath, true, true)
+		require.Empty(t, rows)
+		return err
+	})
+}
+
+func captureSubmodelElementBatchReadQuery(t *testing.T, rootIDs []int64) string {
+	t.Helper()
+
+	return captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
+		rows, err := readSubmodelElementRowsByRootIDs(contextWithABACDisabled(t), db, 42, rootIDs, true, true, true)
+		require.Empty(t, rows)
+		return err
+	})
+}
+
+func captureSubmodelElementReadQuery(t *testing.T, read func(db *sql.DB) error) string {
+	t.Helper()
+
+	var capturedQuery string
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actualQuery string) error {
+		capturedQuery = actualQuery
+		return nil
+	})))
+	require.NoError(t, err)
+
+	mock.ExpectQuery("capture query").WillReturnRows(sqlmock.NewRows([]string{"unused"}))
+	require.NoError(t, read(db))
+	mock.ExpectClose()
+	require.NoError(t, db.Close())
+	require.NoError(t, mock.ExpectationsWereMet())
+	require.NotEmpty(t, capturedQuery)
+
+	return capturedQuery
 }
 
 func TestAddSMERowFilterQueriesCorrelatesStructuralConditionToCurrentElement(t *testing.T) {
