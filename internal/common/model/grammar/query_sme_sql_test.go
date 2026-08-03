@@ -133,7 +133,7 @@ func TestQueryWrapper_SMECondition_ListWildcardValueType_ToSQL(t *testing.T) {
 	if !strings.Contains(sql, `ESCAPE`) {
 		t.Fatalf("expected ESCAPE clause for [] wildcard idshort_path constraint, got: %s", sql)
 	}
-	if !argListContains(args, "New!_TestList[%") {
+	if !argListContains(args, "New!_TestList[%]") {
 		t.Fatalf("expected args to contain escaped prefix, got %#v", args)
 	}
 }

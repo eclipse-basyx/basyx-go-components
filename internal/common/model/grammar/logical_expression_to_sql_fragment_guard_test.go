@@ -165,8 +165,38 @@ func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_SMERowWildca
 	if !strings.Contains(sqlStr, `"sme"."idshort_path" LIKE`) {
 		t.Fatalf("expected wildcard guard against the rewritten SME alias, got: %s", sqlStr)
 	}
-	if !argListContains(args, "NewTestList[%") {
+	if !argListContains(args, "NewTestList[%]") {
 		t.Fatalf("expected wildcard path argument, got %#v", args)
+	}
+}
+
+func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_SMERowNestedWildcards(t *testing.T) {
+	deny := false
+	le := &LogicalExpression{Boolean: &deny}
+	collector, err := NewResolvedFieldPathCollectorForSMERow("sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+
+	whereExpr, _, err := le.EvaluateToExpressionWithNegatedFragments(
+		collector,
+		[]FragmentStringPattern{"$sme.a[].b[]#idShort"},
+	)
+	if err != nil {
+		t.Fatalf("EvaluateToExpressionWithNegatedFragments returned error: %v", err)
+	}
+
+	_, args, err := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.V(1)).
+		Where(whereExpr).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	if !argListContains(args, "a[%].b[%]") {
+		t.Fatalf("expected every nested wildcard in the path argument, got %#v", args)
 	}
 }
 

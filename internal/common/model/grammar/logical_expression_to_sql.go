@@ -1443,9 +1443,9 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
 			}
 			if b.Index.stringValue != nil {
-				if strings.HasSuffix(b.Alias, ".idshort_path") && strings.HasSuffix(*b.Index.stringValue, "[]") {
-					prefix := strings.TrimSuffix(*b.Index.stringValue, "[]")
-					where = append(where, goqu.L("? LIKE ? ESCAPE '!'", goqu.I(b.Alias), escapeSQLLikePattern(prefix)+"[%"))
+				if strings.HasSuffix(b.Alias, ".idshort_path") && strings.Contains(*b.Index.stringValue, "[]") {
+					pattern := strings.ReplaceAll(escapeSQLLikePattern(*b.Index.stringValue), "[]", "[%]")
+					where = append(where, goqu.L("? LIKE ? ESCAPE '!'", goqu.I(b.Alias), pattern))
 					continue
 				}
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
