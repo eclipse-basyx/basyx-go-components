@@ -464,8 +464,8 @@ func buildSubmodelSemanticIDSelectExpression(dialect *goqu.DialectWrapper) exp.A
 					"jsonb_agg",
 					goqu.Func(
 						"jsonb_build_object",
-						goqu.V("type"), goqu.I("ordered_key_values.type"),
-						goqu.V("value"), goqu.I("ordered_key_values.value"),
+						goqu.L("?::text", "type"), goqu.I("ordered_key_values.type"),
+						goqu.L("?::text", "value"), goqu.I("ordered_key_values.value"),
 					),
 				),
 				goqu.L("'[]'::jsonb"),
@@ -477,8 +477,8 @@ func buildSubmodelSemanticIDSelectExpression(dialect *goqu.DialectWrapper) exp.A
 		Select(
 			goqu.Func(
 				"jsonb_build_object",
-				goqu.V("type"), referenceTypeSelectExpression,
-				goqu.V("keys"), aggregatedKeyValuesSelectDS,
+				goqu.L("?::text", "type"), referenceTypeSelectExpression,
+				goqu.L("?::text", "keys"), aggregatedKeyValuesSelectDS,
 			),
 		).
 		Where(goqu.I("ssr.id").Eq(goqu.I("submodel.id"))).

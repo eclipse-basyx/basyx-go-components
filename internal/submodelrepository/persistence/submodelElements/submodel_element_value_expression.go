@@ -36,11 +36,15 @@ func temporalColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression
 	return goqu.L(`trim(both '"' from to_json(?)::text)`, column)
 }
 
+func postgresText(value string) exp.LiteralExpression {
+	return goqu.L("?::text", value)
+}
+
 func operationValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue bool) exp.Expression {
 	var payload exp.Expression = goqu.Func("jsonb_build_object",
-		goqu.V("input_variables"), goqu.I("oe.input_variables"),
-		goqu.V("output_variables"), goqu.I("oe.output_variables"),
-		goqu.V("inoutput_variables"), goqu.I("oe.inoutput_variables"),
+		postgresText("input_variables"), goqu.I("oe.input_variables"),
+		postgresText("output_variables"), goqu.I("oe.output_variables"),
+		postgresText("inoutput_variables"), goqu.I("oe.inoutput_variables"),
 	)
 	if !includeBlobValue {
 		payload = withoutEmbeddedBlobValues(dialect, payload)
@@ -141,10 +145,10 @@ func withoutEmbeddedBlobValues(dialect goqu.DialectWrapper, payload exp.Expressi
 
 func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue bool) exp.CaseExpression {
 	blobPayload := []interface{}{
-		goqu.V("content_type"), goqu.I("be.content_type"),
+		postgresText("content_type"), goqu.I("be.content_type"),
 	}
 	if includeBlobValue {
-		blobPayload = append(blobPayload, goqu.V("value"), goqu.I("be.value"))
+		blobPayload = append(blobPayload, postgresText("value"), goqu.I("be.value"))
 	}
 
 	return goqu.Case().
@@ -152,8 +156,8 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 			goqu.I("sme.model_type").Eq(types.ModelTypeAnnotatedRelationshipElement),
 			dialect.From(goqu.T("annotated_relationship_element").As("are")).
 				Select(goqu.Func("jsonb_build_object",
-					goqu.V("first"), goqu.I("are.first"),
-					goqu.V("second"), goqu.I("are.second"),
+					postgresText("first"), goqu.I("are.first"),
+					postgresText("second"), goqu.I("are.second"),
 				)).
 				Where(goqu.I("are.id").Eq(goqu.I("sme.id"))).
 				Limit(1),
@@ -162,14 +166,14 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 			goqu.I("sme.model_type").Eq(types.ModelTypeBasicEventElement),
 			dialect.From(goqu.T("basic_event_element").As("bee")).
 				Select(goqu.Func("jsonb_build_object",
-					goqu.V("direction"), goqu.I("bee.direction"),
-					goqu.V("state"), goqu.I("bee.state"),
-					goqu.V("message_topic"), goqu.I("bee.message_topic"),
-					goqu.V("last_update"), goqu.I("bee.last_update"),
-					goqu.V("min_interval"), goqu.I("bee.min_interval"),
-					goqu.V("max_interval"), goqu.I("bee.max_interval"),
-					goqu.V("observed"), goqu.I("bee.observed"),
-					goqu.V("message_broker"), goqu.I("bee.message_broker"),
+					postgresText("direction"), goqu.I("bee.direction"),
+					postgresText("state"), goqu.I("bee.state"),
+					postgresText("message_topic"), goqu.I("bee.message_topic"),
+					postgresText("last_update"), goqu.I("bee.last_update"),
+					postgresText("min_interval"), goqu.I("bee.min_interval"),
+					postgresText("max_interval"), goqu.I("bee.max_interval"),
+					postgresText("observed"), goqu.I("bee.observed"),
+					postgresText("message_broker"), goqu.I("bee.message_broker"),
 				)).
 				Where(goqu.I("bee.id").Eq(goqu.I("sme.id"))).
 				Limit(1),
@@ -185,9 +189,9 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 			goqu.I("sme.model_type").Eq(types.ModelTypeEntity),
 			dialect.From(goqu.T("entity_element").As("ee")).
 				Select(goqu.Func("jsonb_build_object",
-					goqu.V("entity_type"), goqu.I("ee.entity_type"),
-					goqu.V("global_asset_id"), goqu.I("ee.global_asset_id"),
-					goqu.V("specific_asset_ids"), goqu.I("ee.specific_asset_ids"),
+					postgresText("entity_type"), goqu.I("ee.entity_type"),
+					postgresText("global_asset_id"), goqu.I("ee.global_asset_id"),
+					postgresText("specific_asset_ids"), goqu.I("ee.specific_asset_ids"),
 				)).
 				Where(goqu.I("ee.id").Eq(goqu.I("sme.id"))).
 				Limit(1),
@@ -196,8 +200,8 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 			goqu.I("sme.model_type").Eq(types.ModelTypeFile),
 			dialect.From(goqu.T("file_element").As("fe")).
 				Select(goqu.Func("jsonb_build_object",
-					goqu.V("value"), goqu.I("fe.value"),
-					goqu.V("content_type"), goqu.I("fe.content_type"),
+					postgresText("value"), goqu.I("fe.value"),
+					postgresText("content_type"), goqu.I("fe.content_type"),
 				)).
 				Where(goqu.I("fe.id").Eq(goqu.I("sme.id"))).
 				Limit(1),
@@ -206,10 +210,10 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 			goqu.I("sme.model_type").Eq(types.ModelTypeSubmodelElementList),
 			dialect.From(goqu.T("submodel_element_list").As("sel")).
 				Select(goqu.Func("jsonb_build_object",
-					goqu.V("order_relevant"), goqu.I("sel.order_relevant"),
-					goqu.V("type_value_list_element"), goqu.I("sel.type_value_list_element"),
-					goqu.V("value_type_list_element"), goqu.I("sel.value_type_list_element"),
-					goqu.V("semantic_id_list_element"), goqu.I("sel.semantic_id_list_element"),
+					postgresText("order_relevant"), goqu.I("sel.order_relevant"),
+					postgresText("type_value_list_element"), goqu.I("sel.type_value_list_element"),
+					postgresText("value_type_list_element"), goqu.I("sel.value_type_list_element"),
+					postgresText("semantic_id_list_element"), goqu.I("sel.semantic_id_list_element"),
 				)).
 				Where(goqu.I("sel.id").Eq(goqu.I("sme.id"))).
 				Limit(1),
@@ -217,20 +221,20 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 		When(
 			goqu.I("sme.model_type").Eq(types.ModelTypeMultiLanguageProperty),
 			goqu.Func("jsonb_build_object",
-				goqu.V("value_id"), goqu.COALESCE(
+				postgresText("value_id"), goqu.COALESCE(
 					dialect.From(goqu.T("multilanguage_property_payload").As("mlpp")).
 						Select(goqu.I("mlpp.value_id_payload")).
 						Where(goqu.I("mlpp.submodel_element_id").Eq(goqu.I("sme.id"))).
 						Limit(1),
 					goqu.L("'[]'::jsonb"),
 				),
-				goqu.V("value_id_referred"), goqu.L("'[]'::jsonb"),
-				goqu.V("value"),
+				postgresText("value_id_referred"), goqu.L("'[]'::jsonb"),
+				postgresText("value"),
 				dialect.From(goqu.T("multilanguage_property_value").As("mlpv")).
 					Select(goqu.Func("jsonb_agg", goqu.Func("jsonb_build_object",
-						goqu.V("language"), goqu.I("mlpv.language"),
-						goqu.V("text"), goqu.I("mlpv.text"),
-						goqu.V("id"), goqu.I("mlpv.id"),
+						postgresText("language"), goqu.I("mlpv.language"),
+						postgresText("text"), goqu.I("mlpv.text"),
+						postgresText("id"), goqu.I("mlpv.id"),
 					))).
 					Where(goqu.I("mlpv.submodel_element_id").Eq(goqu.I("sme.id"))),
 			),
@@ -243,7 +247,7 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 			goqu.I("sme.model_type").Eq(types.ModelTypeProperty),
 			dialect.From(goqu.T("property_element").As("pe")).
 				Select(goqu.Func("jsonb_build_object",
-					goqu.V("value"), goqu.COALESCE(
+					postgresText("value"), goqu.COALESCE(
 						goqu.I("pe.value_text"),
 						goqu.L("?::text", goqu.I("pe.value_num")),
 						goqu.L("?::text", goqu.I("pe.value_bool")),
@@ -251,15 +255,15 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 						temporalColumnAsText(goqu.I("pe.value_date")),
 						temporalColumnAsText(goqu.I("pe.value_datetime")),
 					),
-					goqu.V("value_type"), goqu.I("pe.value_type"),
-					goqu.V("value_id"), goqu.COALESCE(
+					postgresText("value_type"), goqu.I("pe.value_type"),
+					postgresText("value_id"), goqu.COALESCE(
 						dialect.From(goqu.T("property_element_payload").As("pep")).
 							Select(goqu.I("pep.value_id_payload")).
 							Where(goqu.I("pep.property_element_id").Eq(goqu.I("sme.id"))).
 							Limit(1),
 						goqu.L("'[]'::jsonb"),
 					),
-					goqu.V("value_id_referred"), goqu.L("'[]'::jsonb"),
+					postgresText("value_id_referred"), goqu.L("'[]'::jsonb"),
 				)).
 				Where(goqu.I("pe.id").Eq(goqu.I("sme.id"))).
 				Limit(1),
@@ -268,15 +272,15 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 			goqu.I("sme.model_type").Eq(types.ModelTypeRange),
 			dialect.From(goqu.T("range_element").As("re")).
 				Select(goqu.Func("jsonb_build_object",
-					goqu.V("value_type"), goqu.I("re.value_type"),
-					goqu.V("min"), goqu.COALESCE(
+					postgresText("value_type"), goqu.I("re.value_type"),
+					postgresText("min"), goqu.COALESCE(
 						goqu.I("re.min_text"),
 						goqu.L("?::text", goqu.I("re.min_num")),
 						temporalColumnAsText(goqu.I("re.min_time")),
 						temporalColumnAsText(goqu.I("re.min_date")),
 						temporalColumnAsText(goqu.I("re.min_datetime")),
 					),
-					goqu.V("max"), goqu.COALESCE(
+					postgresText("max"), goqu.COALESCE(
 						goqu.I("re.max_text"),
 						goqu.L("?::text", goqu.I("re.max_num")),
 						temporalColumnAsText(goqu.I("re.max_time")),
@@ -291,7 +295,7 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 			goqu.I("sme.model_type").Eq(types.ModelTypeReferenceElement),
 			dialect.From(goqu.T("reference_element").As("refe")).
 				Select(goqu.Func("jsonb_build_object",
-					goqu.V("value"), goqu.I("refe.value"),
+					postgresText("value"), goqu.I("refe.value"),
 				)).
 				Where(goqu.I("refe.id").Eq(goqu.I("sme.id"))).
 				Limit(1),
@@ -300,8 +304,8 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 			goqu.I("sme.model_type").Eq(types.ModelTypeRelationshipElement),
 			dialect.From(goqu.T("relationship_element").As("rle")).
 				Select(goqu.Func("jsonb_build_object",
-					goqu.V("first"), goqu.I("rle.first"),
-					goqu.V("second"), goqu.I("rle.second"),
+					postgresText("first"), goqu.I("rle.first"),
+					postgresText("second"), goqu.I("rle.second"),
 				)).
 				Where(goqu.I("rle.id").Eq(goqu.I("sme.id"))).
 				Limit(1),

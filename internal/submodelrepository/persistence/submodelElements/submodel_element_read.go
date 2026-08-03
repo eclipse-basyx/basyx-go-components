@@ -28,6 +28,7 @@ package submodelelements
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"regexp"
@@ -56,6 +57,30 @@ type DBQueryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRow(query string, args ...any) *sql.Row
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+type postgresInt64Array []int64
+
+func (values postgresInt64Array) Value() (driver.Value, error) {
+	var array strings.Builder
+	array.Grow(2 + len(values)*4)
+	array.WriteByte('{')
+	for index, value := range values {
+		if index > 0 {
+			array.WriteByte(',')
+		}
+		array.WriteString(strconv.FormatInt(value, 10))
+	}
+	array.WriteByte('}')
+	return array.String(), nil
+}
+
+func postgresInt64ArrayContains(column exp.Expression, values []int64) exp.Expression {
+	return goqu.L("? = ANY(?::bigint[])", column, postgresInt64Array(values))
+}
+
+func postgresInt64ArrayPosition(values []int64, value exp.Expression) exp.LiteralExpression {
+	return goqu.L("array_position(?::bigint[], ?)", postgresInt64Array(values), value)
 }
 
 // GetSubmodelElementByIDShortOrPath loads a submodel element by path and applies optional ABAC formula filters from ctx.
@@ -714,7 +739,7 @@ func getRootElementPage(ctx context.Context, db DBQueryer, submodelDatabaseID in
 		query = query.Limit(uint(*limit + 1))
 	}
 
-	sqlQuery, args, toSQLErr := query.ToSQL()
+	sqlQuery, args, toSQLErr := query.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-BUILDQ " + toSQLErr.Error())
 	}
@@ -1118,7 +1143,7 @@ func addSMEPathAncestorVisibilityQuery(
 	ancestors := targetQuery.UnionAll(ancestorQuery)
 	visibleRoot := dialect.
 		From(goqu.T(ancestorCTE)).
-		Select(goqu.V(1)).
+		Select(goqu.L("1")).
 		Where(goqu.I(ancestorCTE + ".parent_sme_id").IsNull())
 	return query.
 		WithRecursive(ancestorCTE+"(id,parent_sme_id)", ancestors).
@@ -1133,7 +1158,7 @@ func buildSMEPathAuthorizationQuery(
 	dialect := goqu.Dialect("postgres")
 	query := dialect.
 		From(goqu.T("submodel_element").As("sme")).
-		Select(goqu.V(1)).
+		Select(goqu.L("1")).
 		Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
 			goqu.I("sme.idshort_path").Eq(targetPath),
@@ -1193,7 +1218,7 @@ func sortedFragments(items map[grammar.FragmentStringPattern]struct{}) []grammar
 
 func buildSharedMaskVisibilityExpr(dataAlias string, runtime *auth.SharedFragmentMaskRuntime, fragments []grammar.FragmentStringPattern) (exp.Expression, error) {
 	if len(fragments) == 0 {
-		return goqu.V(true), nil
+		return goqu.L("TRUE"), nil
 	}
 
 	seenAliases := make(map[string]struct{}, len(fragments))
@@ -1211,7 +1236,7 @@ func buildSharedMaskVisibilityExpr(dataAlias string, runtime *auth.SharedFragmen
 	}
 
 	if len(conditions) == 0 {
-		return goqu.V(true), nil
+		return goqu.L("TRUE"), nil
 	}
 	if len(conditions) == 1 {
 		return conditions[0], nil
@@ -1337,12 +1362,12 @@ func readSubmodelElementRowsByPath(ctx context.Context, db DBQueryer, submodelDa
 			goqu.I(dataAlias+".raw_supplemental_semantic_ids_referred_payload"),
 			goqu.I(dataAlias+".raw_qualifiers_payload"),
 			goqu.Case().When(semanticVisibleExpr, goqu.I(dataAlias+".raw_semantic_payload")).Else(nil),
-			goqu.Case().When(semanticVisibleExpr, true).Else(false),
-			goqu.Case().When(valueVisibleExpr, true).Else(false),
+			goqu.Case().When(semanticVisibleExpr, goqu.L("TRUE")).Else(goqu.L("FALSE")),
+			goqu.Case().When(valueVisibleExpr, goqu.L("TRUE")).Else(goqu.L("FALSE")),
 		).
 		Order(goqu.I(dataAlias+".c_idshort_path").Asc(), goqu.I(dataAlias+".c_position").Asc())
 
-	sqlQuery, args, toSQLErr := query.ToSQL()
+	sqlQuery, args, toSQLErr := query.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-BUILDQ " + toSQLErr.Error())
 	}
@@ -1378,21 +1403,17 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db DBQueryer, submode
 	if valueVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-VALUEMASK " + valueVisibleErr.Error())
 	}
-	rootOrderExpr := goqu.Case().
-		Value(goqu.L("COALESCE(sme.root_sme_id, sme.id)"))
-	for index, rootID := range rootIDs {
-		rootOrderExpr = rootOrderExpr.When(rootID, index)
-	}
-	rootOrderExpr = rootOrderExpr.Else(len(rootIDs))
+	rootIDExpression := goqu.L("COALESCE(?, ?)", goqu.I("sme.root_sme_id"), goqu.I("sme.id"))
+	rootOrderExpr := postgresInt64ArrayPosition(rootIDs, rootIDExpression)
 
-	var rootFilter exp.Expression = goqu.I("sme.id").In(rootIDs)
+	rootFilter := postgresInt64ArrayContains(goqu.I("sme.id"), rootIDs)
 	if includeChildren {
-		rootFilter = goqu.COALESCE(goqu.I("sme.root_sme_id"), goqu.I("sme.id")).In(rootIDs)
+		rootFilter = postgresInt64ArrayContains(rootIDExpression, rootIDs)
 	} else if !includeChildren && isGetSubmodelElements {
 		// For GET /submodel-elements with level=core, return root elements and their direct children.
 		rootFilter = goqu.Or(
-			goqu.I("sme.id").In(rootIDs),
-			goqu.I("sme.parent_sme_id").In(rootIDs),
+			postgresInt64ArrayContains(goqu.I("sme.id"), rootIDs),
+			postgresInt64ArrayContains(goqu.I("sme.parent_sme_id"), rootIDs),
 		)
 	}
 
@@ -1459,8 +1480,8 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db DBQueryer, submode
 			goqu.I(dataAlias+".raw_supplemental_semantic_ids_referred_payload"),
 			goqu.I(dataAlias+".raw_qualifiers_payload"),
 			goqu.Case().When(semanticVisibleExpr, goqu.I(dataAlias+".raw_semantic_payload")).Else(nil),
-			goqu.Case().When(semanticVisibleExpr, true).Else(false),
-			goqu.Case().When(valueVisibleExpr, true).Else(false),
+			goqu.Case().When(semanticVisibleExpr, goqu.L("TRUE")).Else(goqu.L("FALSE")),
+			goqu.Case().When(valueVisibleExpr, goqu.L("TRUE")).Else(goqu.L("FALSE")),
 		).
 		Order(
 			goqu.I(dataAlias+".sort_root_order").Asc(),
@@ -1469,7 +1490,7 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db DBQueryer, submode
 			goqu.I(dataAlias+".sort_id").Asc(),
 		)
 
-	sqlQuery, args, toSQLErr := query.ToSQL()
+	sqlQuery, args, toSQLErr := query.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-BUILDQ " + toSQLErr.Error())
 	}
@@ -1910,7 +1931,8 @@ func getReferencesFromKeyTables(db DBQueryer, referenceTable string, referenceKe
 	typeQuery, typeArgs, typeToSQLErr := dialect.
 		From(goqu.T(referenceTable)).
 		Select(goqu.I("id"), goqu.I("type")).
-		Where(goqu.I("id").In(referenceIDs)).
+		Where(postgresInt64ArrayContains(goqu.I("id"), referenceIDs)).
+		Prepared(true).
 		ToSQL()
 	if typeToSQLErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-READTYPES-BUILDQ " + typeToSQLErr.Error())
@@ -1943,8 +1965,9 @@ func getReferencesFromKeyTables(db DBQueryer, referenceTable string, referenceKe
 	keysQuery, keyArgs, keysToSQLErr := dialect.
 		From(goqu.T(referenceKeyTable)).
 		Select(goqu.I("reference_id"), goqu.I("type"), goqu.I("value")).
-		Where(goqu.I("reference_id").In(referenceIDs)).
+		Where(postgresInt64ArrayContains(goqu.I("reference_id"), referenceIDs)).
 		Order(goqu.I("reference_id").Asc(), goqu.I("position").Asc()).
+		Prepared(true).
 		ToSQL()
 	if keysToSQLErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-READKEYS-BUILDQ " + keysToSQLErr.Error())
