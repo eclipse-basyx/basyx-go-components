@@ -271,8 +271,17 @@ Notes:
 - QueryFilter is stored in request context after ABAC evaluation.
 - Controllers can enforce it on payloads or results.
 - Persistence helpers apply it to SQL queries and fragment projections.
+- ABAC `FILTER`/`FILTERLIST` and query-endpoint `$filters` use the same QL
+  expression and fragment-filter implementation; their casing identifies the
+  source, not different semantics.
+- ABAC filters are mandatory policy constraints. Request-query filters are
+  ANDed with them, so callers can narrow policy-visible results but cannot widen
+  them.
 - QueryFilter carries right-scoped formulas in `FormulasByRight` (for example, separate formulas for `CREATE` and `UPDATE`).
 - `SelectPutFormulaByExistence(ctx, dataExists)` switches the active `Formula` for PUT upsert checks (create vs update).
+
+See [Query endpoints and ABAC rules use the same QL](../query_language/README.md#query-endpoints-and-abac-rules-use-the-same-ql)
+for the syntax mapping, evaluation order, and composition rules.
 
 ## Formula enforcement gate
 

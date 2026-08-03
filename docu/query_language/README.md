@@ -2,6 +2,9 @@
 
 This document explains how logical expressions are simplified and converted into SQL. It focuses on the internal pipeline: expression trees, implicit casts, field identifiers, fragment identifiers, and filter mapping.
 
+For request/response examples, including query-endpoint and ABAC composition,
+see [Query Language Examples](examples.md).
+
 ## Quick mental model (no background required)
 
 - A query is a tree of logical operators (AND/OR/NOT) and comparisons (EQ/GT/etc).
@@ -402,6 +405,59 @@ Why this matters:
 - The guard keeps unrelated rows in the result set when a fragment filter targets a specific fragment.
 - If a fragment has no bindings, negation would be redundant, so it is skipped.
 
+### Query endpoints and ABAC rules use the same QL
+
+Query-endpoint filters and ABAC rule filters are translated into the same
+internal query-filter representation and use the same logical-expression
+grammar. They therefore support the same field identifiers, comparison and
+string operators, fragment guards, and row-local matching semantics. Their
+different JSON naming reflects their different sources, not different filter
+logic.
+
+| Concept | Query endpoint | ABAC rule |
+| --- | --- | --- |
+| Main resource condition | Required top-level `$condition` | Rule `FORMULA` or `USEFORMULA` |
+| Fragment filters | `$filters` | `FILTER` or `FILTERLIST` |
+| Target fragment | `$fragment` | `FRAGMENT` |
+| Fragment condition | `$condition` | `CONDITION` or `USEFORMULA` |
+| Row-local evaluation | `$match` | `MATCH` |
+
+`$match` and `MATCH` are optional flags inside a fragment filter. They do not
+add another condition, select a parent resource, or decide whether an ABAC rule
+permits a request. They only control how that filter's condition is correlated
+to the fragment row being reconstructed.
+
+The two sources have different responsibilities:
+
+- An ABAC rule first matches the route, operation, objects, and caller. Its
+  formula constrains the resources visible to that caller, and its fragment
+  filters are mandatory response masks. A client cannot remove them.
+- A query endpoint's top-level `$condition` selects parent resources. Its
+  `$filters` shape fragments inside those results and can only narrow what the
+  active ABAC policy already allows.
+- When both sources are present, the policy formula and query condition are
+  combined with `AND`. Policy and request predicates for the same fragment are
+  also combined with `AND`.
+- Alternatives from multiple permitting ABAC rules are combined with `OR`
+  before the request query is applied. Each fragment predicate retains its own
+  `MATCH` or `$match` value throughout this composition.
+
+Conceptually, persistence reads apply:
+
+```text
+resources visible through ABAC AND resources selected by the query
+```
+
+and then reconstruct each fragment using:
+
+```text
+mandatory ABAC fragment filter AND optional request fragment filter
+```
+
+This means a query can narrow a result but can never use QL to widen access
+granted by the policy. If ABAC is disabled, the query condition and request
+fragment filters are applied on their own.
+
 ### Explicit row-local fragment matching
 
 Fragment filters use parent-level existential evaluation by default. A condition
@@ -452,6 +508,19 @@ access-rule schema uses uppercase property names:
 Both forms are explicit and are supported for every fragment handled by its
 reader. Row-local behavior is especially relevant for arrays and nested arrays,
 where it keeps conditions bound to the same item and array indices.
+
+#### Behavior and compatibility
+
+| Filter source | `$match` / `MATCH` omitted or `false` | `$match` / `MATCH` set to `true` |
+| --- | --- | --- |
+| Request query (`$filters`) | The condition is evaluated at parent scope. A matching sibling can keep the complete fragment in the response. | The condition is evaluated against the current fragment row. Only matching rows of that fragment are reconstructed. |
+| ABAC policy (`FILTER` / `FILTERLIST`) | The policy condition keeps parent-level existential semantics. | The policy condition masks the current fragment row. Each condition retains its own match mode when filters and rules are combined. |
+
+This changes the previous request-query behavior for wildcard array fragments:
+an array-ended `$fragment` no longer enables row-local matching automatically.
+Clients that depend on receiving only the matching array entries must add
+`"$match": true`. Existing queries remain valid, but their returned fragment
+contents can be broader when `$match` is omitted.
 
 Implementation reference:
 - Request query parsing in [internal/common/model/grammar/query.go](../../internal/common/model/grammar/query.go)
