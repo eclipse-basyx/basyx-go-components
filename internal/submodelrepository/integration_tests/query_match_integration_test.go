@@ -73,6 +73,31 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 		assert.Equal(t, [][]string{{"a0-b1"}, {}}, nestedBValues(t, result))
 	})
 
+	t.Run("ExplicitFirstParentIndexOnlyFiltersThatParent", func(t *testing.T) {
+		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
+			"$sme.a[0].b[]",
+			true,
+			equalsCondition("$sme.a[].b[]#value", "a0-b1"),
+		))
+
+		assert.Equal(t, [][]string{{"a0-b1"}, {"a1-b0", "a1-b1"}}, nestedBValues(t, result))
+	})
+
+	t.Run("ExplicitSecondParentIndexOnlyFiltersThatParent", func(t *testing.T) {
+		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
+			"$sme.a[1].b[]",
+			true,
+			map[string]any{
+				"$contains": []any{
+					map[string]any{"$field": "$sme.a[].b[]#value"},
+					map[string]any{"$strVal": "-b0"},
+				},
+			},
+		))
+
+		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}, {"a1-b0"}}, nestedBValues(t, result))
+	})
+
 	t.Run("DescendantPathMatchesSharedParentListIndex", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
 			"$sme.a[]",
@@ -211,7 +236,7 @@ func nestedBValues(t *testing.T, submodel map[string]any) [][]string {
 		collection := objectValue(t, aEntry)
 		b := elementByIDShort(t, arrayValue(t, collection["value"]), "b")
 		values := make([]string, 0)
-		for _, bEntry := range arrayValue(t, b["value"]) {
+		for _, bEntry := range optionalArrayValue(t, b["value"]) {
 			property := objectValue(t, bEntry)
 			value, ok := property["value"].(string)
 			require.True(t, ok, "property value is not a string: %#v", property["value"])
@@ -277,6 +302,15 @@ func arrayValue(t *testing.T, value any) []any {
 	result, ok := value.([]any)
 	require.True(t, ok, "value is not an array: %#v", value)
 	return result
+}
+
+func optionalArrayValue(t *testing.T, value any) []any {
+	t.Helper()
+
+	if value == nil {
+		return []any{}
+	}
+	return arrayValue(t, value)
 }
 
 func objectValue(t *testing.T, value any) map[string]any {

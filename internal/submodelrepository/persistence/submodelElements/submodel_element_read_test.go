@@ -89,7 +89,7 @@ func TestEscapeSQLLikePatternEscapesWildcardCharacters(t *testing.T) {
 	require.Equal(t, "A!!B!_C!%", escapeSQLLikePattern("A!B_C%"))
 }
 
-func TestAddSMERowFilterQueriesCorrelatesStructuralConditionToCurrentElement(t *testing.T) {
+func TestAddSMERowFilterQueriesWithoutMatchUsesContainingSubmodel(t *testing.T) {
 	t.Parallel()
 
 	var condition grammar.LogicalExpression
@@ -115,8 +115,93 @@ func TestAddSMERowFilterQueriesCorrelatesStructuralConditionToCurrentElement(t *
 	require.NoError(t, err)
 
 	normalizedSQL := strings.ReplaceAll(sqlQuery, " ", "")
+	require.Contains(t, normalizedSQL, `"submodel_element"."submodel_id"="sme"."submodel_id"`)
+	require.NotContains(t, normalizedSQL, `"submodel_element"."id"="sme"."id"`)
+}
+
+func TestAddSMERowFilterQueriesMatchCorrelatesSamePathToCurrentElement(t *testing.T) {
+	t.Parallel()
+
+	fragment := grammar.FragmentStringPattern("$sme.a[].b[]")
+	condition := unmarshalLogicalExpression(t, `{
+		"$eq": [
+			{"$field": "$sme.a[].b[]#value"},
+			{"$strVal": "blue"}
+		]
+	}`)
+
+	sqlQuery := buildSMERowFilterSQL(t, fragment, condition, true)
+	normalizedSQL := strings.ReplaceAll(sqlQuery, " ", "")
 	require.Contains(t, normalizedSQL, `"submodel_element"."id"="sme"."id"`)
 	require.NotContains(t, normalizedSQL, `"submodel_element"."submodel_id"="sme"."submodel_id"`)
+}
+
+func TestAddSMERowFilterQueriesMatchCorrelatesDescendantPathToCurrentPath(t *testing.T) {
+	t.Parallel()
+
+	fragment := grammar.FragmentStringPattern("$sme.a[]")
+	condition := unmarshalLogicalExpression(t, `{
+		"$eq": [
+			{"$field": "$sme.a[].b[]#value"},
+			{"$strVal": "blue"}
+		]
+	}`)
+
+	sqlQuery := buildSMERowFilterSQL(t, fragment, condition, true)
+	require.Contains(t, sqlQuery, `"submodel_element"."idshort_path" ~`)
+	require.Contains(t, sqlQuery, `"sme"."idshort_path"`)
+	require.Contains(t, sqlQuery, "REPLACE")
+	require.NotContains(t, strings.ReplaceAll(sqlQuery, " ", ""), `"submodel_element"."id"="sme"."id"`)
+}
+
+func TestAddSMERowFilterQueriesMatchEvaluatesUnrelatedPathAgainstContainingSubmodel(t *testing.T) {
+	t.Parallel()
+
+	fragment := grammar.FragmentStringPattern("$sme.a[].b[]")
+	condition := unmarshalLogicalExpression(t, `{
+		"$eq": [
+			{"$field": "$sme.guard#value"},
+			{"$strVal": "enabled"}
+		]
+	}`)
+
+	sqlQuery := buildSMERowFilterSQL(t, fragment, condition, true)
+	normalizedSQL := strings.ReplaceAll(sqlQuery, " ", "")
+	require.Contains(t, normalizedSQL, `"submodel_element"."submodel_id"="sme"."submodel_id"`)
+	require.NotContains(t, normalizedSQL, `"submodel_element"."id"="sme"."id"`)
+}
+
+func unmarshalLogicalExpression(t *testing.T, value string) grammar.LogicalExpression {
+	t.Helper()
+
+	var condition grammar.LogicalExpression
+	require.NoError(t, json.Unmarshal([]byte(value), &condition))
+	return condition
+}
+
+func buildSMERowFilterSQL(
+	t *testing.T,
+	fragment grammar.FragmentStringPattern,
+	condition grammar.LogicalExpression,
+	match bool,
+) string {
+	t.Helper()
+
+	queryFilter := &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: condition},
+	}
+	if match {
+		queryFilter.FilterMatch = auth.FragmentMatchModes{fragment: true}
+	}
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), queryFilter)
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.id"))
+	filtered, err := addSMERowFilterQueries(ctx, dataset)
+	require.NoError(t, err)
+	sqlQuery, _, err := filtered.ToSQL()
+	require.NoError(t, err)
+	return sqlQuery
 }
 
 func TestAddSMERowFilterQueriesGuardsPathSpecificStructuralFragment(t *testing.T) {

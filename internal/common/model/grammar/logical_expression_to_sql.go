@@ -40,6 +40,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
 
 // columnToExpression converts a column string to a goqu expression.
@@ -165,6 +166,18 @@ func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPat
 	}
 
 	collector := NewResolvedFieldPathCollectorWithConfig(&cfg)
+	nonMatchCfg := joinPlanConfigForSME()
+	nonMatchCfg.RootJoinKey = func() exp.IdentifierExpression {
+		return goqu.I(rootAlias + ".submodel_id")
+	}
+	nonMatchCfg.RootJoinKeyAlias = func() string {
+		return rootAlias
+	}
+	nonMatchCfg.RootJoinKeyColumn = func() string {
+		return "submodel_id"
+	}
+	collector.nonMatchJoinConfig = &nonMatchCfg
+	collector.smeRowAlias = rootAlias
 	collector.fragmentBindingAliasRewrites = map[string]string{
 		"submodel_element": rootAlias,
 	}
@@ -826,8 +839,11 @@ func joinPlanConfigForBD() JoinPlanConfig {
 // ResolvedFieldPathCollector carries join configuration for inline EXISTS evaluation.
 type ResolvedFieldPathCollector struct {
 	joinConfig                   *JoinPlanConfig
+	nonMatchJoinConfig           *JoinPlanConfig
 	inlineAliases                map[string]struct{}
 	fragmentBindingAliasRewrites map[string]string
+	matchFragment                *FragmentStringPattern
+	smeRowAlias                  string
 }
 
 // NewResolvedFieldPathCollectorWithConfig creates a collector with the provided join config.
@@ -862,6 +878,23 @@ func (c *ResolvedFieldPathCollector) WithoutInlineAliases() *ResolvedFieldPathCo
 
 	clone := *c
 	clone.inlineAliases = nil
+	clone.matchFragment = nil
+	if clone.nonMatchJoinConfig != nil {
+		cfg := *clone.nonMatchJoinConfig
+		clone.joinConfig = &cfg
+	}
+	return &clone
+}
+
+// ForFragmentMatch returns a collector configured to correlate condition
+// fields with the current row represented by fragment.
+func (c *ResolvedFieldPathCollector) ForFragmentMatch(fragment FragmentStringPattern) *ResolvedFieldPathCollector {
+	if c == nil {
+		return nil
+	}
+
+	clone := *c
+	clone.matchFragment = &fragment
 	return &clone
 }
 
@@ -934,10 +967,114 @@ func (c *ResolvedFieldPathCollector) rewriteFragmentBindings(bindings []ArrayInd
 	return rewritten
 }
 
+type smeMatchCorrelation int
+
+const (
+	smeMatchSameRow smeMatchCorrelation = iota
+	smeMatchDescendant
+	smeMatchContainingSubmodel
+)
+
+func (c *ResolvedFieldPathCollector) smeCorrelationForResolved(resolved []ResolvedFieldPath) smeMatchCorrelation {
+	if c == nil || c.matchFragment == nil || c.smeRowAlias == "" {
+		return smeMatchSameRow
+	}
+
+	fragmentPath, hasFragmentPath := smeIDShortPathFromField(string(*c.matchFragment))
+	if !hasFragmentPath {
+		return smeMatchSameRow
+	}
+
+	conditionPaths := resolvedSMEIDShortPaths(resolved)
+	if len(conditionPaths) == 0 {
+		return smeMatchContainingSubmodel
+	}
+
+	correlation := smeMatchSameRow
+	for _, conditionPath := range conditionPaths {
+		switch compareSMEPathShapes(fragmentPath, conditionPath) {
+		case smeMatchSameRow:
+			continue
+		case smeMatchDescendant:
+			correlation = smeMatchDescendant
+		default:
+			return smeMatchContainingSubmodel
+		}
+	}
+	return correlation
+}
+
+func resolvedSMEIDShortPaths(resolved []ResolvedFieldPath) []string {
+	paths := make([]string, 0, len(resolved))
+	seen := make(map[string]struct{}, len(resolved))
+	for _, path := range resolved {
+		for _, binding := range path.ArrayBindings {
+			if !strings.HasSuffix(binding.Alias, ".idshort_path") || binding.Index.stringValue == nil {
+				continue
+			}
+			value := *binding.Index.stringValue
+			if _, exists := seen[value]; exists {
+				continue
+			}
+			seen[value] = struct{}{}
+			paths = append(paths, value)
+		}
+	}
+	return paths
+}
+
+func compareSMEPathShapes(fragmentPath string, conditionPath string) smeMatchCorrelation {
+	fragmentTokens := builder.TokenizeField("$sme#" + fragmentPath)
+	conditionTokens := builder.TokenizeField("$sme#" + conditionPath)
+	if len(fragmentTokens) > len(conditionTokens) {
+		return smeMatchContainingSubmodel
+	}
+	for index := range fragmentTokens {
+		if !sameSMEPathTokenShape(fragmentTokens[index], conditionTokens[index]) {
+			return smeMatchContainingSubmodel
+		}
+	}
+	if len(fragmentTokens) == len(conditionTokens) {
+		return smeMatchSameRow
+	}
+	return smeMatchDescendant
+}
+
+func sameSMEPathTokenShape(first builder.Token, second builder.Token) bool {
+	if first.GetName() != second.GetName() {
+		return false
+	}
+	_, firstIsArray := first.(builder.ArrayToken)
+	_, secondIsArray := second.(builder.ArrayToken)
+	return firstIsArray == secondIsArray
+}
+
+func (c *ResolvedFieldPathCollector) nonMatchConfig() JoinPlanConfig {
+	if c != nil && c.nonMatchJoinConfig != nil {
+		return *c.nonMatchJoinConfig
+	}
+	return c.effectiveJoinConfig()
+}
+
+func buildSMEDescendantCorrelation(innerAlias string, outerAlias string) exp.Expression {
+	innerPath := goqu.I(innerAlias + ".idshort_path")
+	outerPath := goqu.I(outerAlias + ".idshort_path")
+	escapedOuterPath := goqu.L("REPLACE(REPLACE(REPLACE(?, '!', '!!'), '%', '!%'), '_', '!_')", outerPath)
+	return goqu.Or(
+		goqu.L("? LIKE (? || '.%') ESCAPE '!'", innerPath, escapedOuterPath),
+		goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", innerPath, escapedOuterPath),
+	)
+}
+
 func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
 	cfg := defaultJoinPlanConfig()
+	correlationMode := smeMatchSameRow
 	if collector != nil {
 		cfg = collector.effectiveJoinConfig()
+		correlationMode = collector.smeCorrelationForResolved(resolved)
+		if correlationMode == smeMatchContainingSubmodel {
+			cfg = collector.nonMatchConfig()
+		}
 	}
 	plan, err := buildJoinPlanForResolvedWithConfig(resolved, cfg)
 	if err != nil {
@@ -1014,6 +1151,9 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 
 	whereExpr := andBindingsForResolvedFieldPaths(resolved, predicate)
 	var correlation exp.Expression = groupKey.Eq(rootKey)
+	if correlationMode == smeMatchDescendant && collector != nil {
+		correlation = buildSMEDescendantCorrelation(plan.BaseAlias, collector.smeRowAlias)
+	}
 	if aliasCollision && rootAlias != "" && rootColumn != "" {
 		outerPlaceholder := "__outer__"
 		correlation = groupKey.Eq(goqu.I(outerPlaceholder + "." + rootColumn))
@@ -1444,8 +1584,7 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 			}
 			if b.Index.stringValue != nil {
 				if strings.HasSuffix(b.Alias, ".idshort_path") && strings.Contains(*b.Index.stringValue, "[]") {
-					pattern := strings.ReplaceAll(escapeSQLLikePattern(*b.Index.stringValue), "[]", "[%]")
-					where = append(where, goqu.L("? LIKE ? ESCAPE '!'", goqu.I(b.Alias), pattern))
+					where = append(where, goqu.L("? ~ ?", goqu.I(b.Alias), smeIDShortPathRegex(*b.Index.stringValue)))
 					continue
 				}
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
@@ -1456,6 +1595,12 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 		return goqu.L("1=1")
 	}
 	return goqu.And(where...)
+}
+
+func smeIDShortPathRegex(path string) string {
+	escapedPath := regexp.QuoteMeta(path)
+	escapedWildcard := regexp.QuoteMeta("[]")
+	return "^" + strings.ReplaceAll(escapedPath, escapedWildcard, `\[[0-9]+\]`) + "$"
 }
 
 func escapeSQLLikePattern(value string) string {

@@ -407,7 +407,7 @@ func buildFragmentMaskCondition(
 
 	wcs := make([]exp.Expression, 0, len(filters))
 	for _, filter := range filters {
-		evalCollector := collector
+		evalCollector := collector.ForFragmentMatch(filter.Fragment)
 		if !filter.Match {
 			evalCollector = collector.WithoutInlineAliases()
 		}

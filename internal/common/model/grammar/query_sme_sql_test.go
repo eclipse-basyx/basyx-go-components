@@ -127,13 +127,26 @@ func TestQueryWrapper_SMECondition_ListWildcardValueType_ToSQL(t *testing.T) {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if !strings.Contains(sql, `"submodel_element"."idshort_path" LIKE`) {
-		t.Fatalf("expected LIKE idshort_path constraint for [] wildcard, got: %s", sql)
+	if !strings.Contains(sql, `"submodel_element"."idshort_path" ~`) {
+		t.Fatalf("expected regex idshort_path constraint for [] wildcard, got: %s", sql)
 	}
-	if !strings.Contains(sql, `ESCAPE`) {
-		t.Fatalf("expected ESCAPE clause for [] wildcard idshort_path constraint, got: %s", sql)
-	}
-	if !argListContains(args, "New!_TestList[%]") {
+	if !argListContains(args, `^New_TestList\[[0-9]+\]$`) {
 		t.Fatalf("expected args to contain escaped prefix, got %#v", args)
+	}
+}
+
+func TestSMEIDShortPathRegexKeepsListWildcardsWithinTheirSegments(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]string{
+		"a[]":       `^a\[[0-9]+\]$`,
+		"a[].b[]":   `^a\[[0-9]+\]\.b\[[0-9]+\]$`,
+		"a[1].b[]":  `^a\[1\]\.b\[[0-9]+\]$`,
+		"A_B.C+D[]": `^A_B\.C\+D\[[0-9]+\]$`,
+	}
+	for path, expected := range tests {
+		if actual := smeIDShortPathRegex(path); actual != expected {
+			t.Fatalf("path %q: got %q, want %q", path, actual, expected)
+		}
 	}
 }

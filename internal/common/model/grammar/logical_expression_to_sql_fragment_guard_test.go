@@ -162,10 +162,10 @@ func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_SMERowWildca
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if !strings.Contains(sqlStr, `"sme"."idshort_path" LIKE`) {
+	if !strings.Contains(sqlStr, `"sme"."idshort_path" ~`) {
 		t.Fatalf("expected wildcard guard against the rewritten SME alias, got: %s", sqlStr)
 	}
-	if !argListContains(args, "NewTestList[%]") {
+	if !argListContains(args, `^NewTestList\[[0-9]+\]$`) {
 		t.Fatalf("expected wildcard path argument, got %#v", args)
 	}
 }
@@ -195,7 +195,7 @@ func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_SMERowNested
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
-	if !argListContains(args, "a[%].b[%]") {
+	if !argListContains(args, `^a\[[0-9]+\]\.b\[[0-9]+\]$`) {
 		t.Fatalf("expected every nested wildcard in the path argument, got %#v", args)
 	}
 }
