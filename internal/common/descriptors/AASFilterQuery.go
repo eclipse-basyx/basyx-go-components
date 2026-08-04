@@ -29,6 +29,7 @@ package descriptors
 import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 var (
@@ -39,3 +40,30 @@ var (
 	companyDescriptorAlias          = goqu.T(common.TblCompanyDescriptor).As(common.AliasCompanyDescriptor)
 	companyDescriptorEndpointAlias  = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasCompanyDescriptorEndpoint)
 )
+
+type submodelDescriptorChildFilterCollectors struct {
+	aas        *grammar.ResolvedFieldPathCollector
+	standalone *grammar.ResolvedFieldPathCollector
+}
+
+func newSubmodelDescriptorChildFilterCollectors(
+	inlineAliases ...string,
+) (submodelDescriptorChildFilterCollectors, error) {
+	aasCollector, err := grammar.NewResolvedFieldPathCollectorForNestedSMDesc()
+	if err != nil {
+		return submodelDescriptorChildFilterCollectors{}, err
+	}
+	aasCollector.SetNonMatchRootJoinKey(common.AliasSubmodelDescriptor, common.ColAASDescriptorID)
+	aasCollector.AllowInlineAliases(inlineAliases...)
+
+	standaloneCollector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+	if err != nil {
+		return submodelDescriptorChildFilterCollectors{}, err
+	}
+	standaloneCollector.AllowInlineAliases(inlineAliases...)
+
+	return submodelDescriptorChildFilterCollectors{
+		aas:        aasCollector,
+		standalone: standaloneCollector,
+	}, nil
+}

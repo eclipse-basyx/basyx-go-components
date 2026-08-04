@@ -41,8 +41,8 @@ func TestAddFilterQueriesFromContext_DeduplicatesEquivalentSignatures(t *testing
 
 	qf := &QueryFilter{
 		Filters: FragmentFilters{
-			"$aasdesc#endpoints[2]":  expr,
-			"$aasdesc#endpoints[10]": expr,
+			"$aasdesc#endpoints[2]":  NewFragmentFilterPredicate(expr, false),
+			"$aasdesc#endpoints[10]": NewFragmentFilterPredicate(expr, false),
 		},
 	}
 	ctx := context.WithValue(context.Background(), filterKey, qf)
@@ -77,6 +77,51 @@ func TestAddFilterQueriesFromContext_DeduplicatesEquivalentSignatures(t *testing
 	}
 }
 
+func TestMergedSMEStructuralFilterDropsTrueGlobalFormulaAndUsesReaderAlias(t *testing.T) {
+	allow := true
+	deny := false
+	originalFragment := grammar.FragmentStringPattern("$sme.ARestricted")
+	normalizedFragment := grammar.FragmentStringPattern("$sme.ARestricted#idShort")
+	predicate := AndFragmentFilterPredicates(
+		newGlobalFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}),
+		scopeFragmentFilterPredicate(
+			NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
+			originalFragment,
+		),
+	)
+
+	if predicate.Condition == nil || predicate.Condition.Boolean == nil || *predicate.Condition.Boolean {
+		t.Fatalf("expected the true global formula to simplify to the scoped deny leaf, got %#v", predicate)
+	}
+	if predicate.evaluationFragment(normalizedFragment) != normalizedFragment {
+		t.Fatalf("expected original path with the normalized field suffix, got %#v", predicate)
+	}
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	condition, err := evaluateFragmentFilterPredicate(predicate, normalizedFragment, collector)
+	if err != nil {
+		t.Fatalf("evaluateFragmentFilterPredicate returned error: %v", err)
+	}
+	sql, _, err := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.id")).
+		Where(condition).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if !strings.Contains(sql, `"sme"."idshort_path"`) {
+		t.Fatalf("expected structural guard to use the reader alias: %s", sql)
+	}
+	if strings.Contains(sql, `"submodel_element"."idshort_path"`) {
+		t.Fatalf("structural guard escaped the reader alias: %s", sql)
+	}
+}
+
 func mustParseLogicalExpression(t *testing.T, raw string) grammar.LogicalExpression {
 	t.Helper()
 	var expr grammar.LogicalExpression
@@ -104,14 +149,9 @@ func containsIntArg(args []interface{}, want int) bool {
 
 func TestAddFilterQueryFromContext_ArrayEndedFragment_UsesInlinePredicate(t *testing.T) {
 	expr := mustParseLogicalExpression(t, `{"$or":[{"$eq":[{"$strVal":"BPN_A"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]},{"$eq":[{"$strVal":"PUBLIC_READABLE"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]}]}`)
-	match := true
-
 	qf := &QueryFilter{
 		Filters: FragmentFilters{
-			"$aasdesc#specificAssetIds[]": expr,
-		},
-		FilterMatch: FragmentMatchModes{
-			"$aasdesc#specificAssetIds[]": match,
+			"$aasdesc#specificAssetIds[]": NewFragmentFilterPredicate(expr, true),
 		},
 	}
 	ctx := context.WithValue(context.Background(), filterKey, qf)
@@ -120,6 +160,11 @@ func TestAddFilterQueryFromContext_ArrayEndedFragment_UsesInlinePredicate(t *tes
 	if err != nil {
 		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
 	}
+	collector.AllowInlineAliases(
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
 
 	d := goqu.Dialect("postgres")
 	ds := d.From(goqu.T(common.TblDescriptor).As("descriptor")).
@@ -165,7 +210,7 @@ func TestAddFilterQueryFromContext_ArrayEndedFragment_DefaultBehavior_UsesExists
 
 	qf := &QueryFilter{
 		Filters: FragmentFilters{
-			"$aasdesc#specificAssetIds[]": expr,
+			"$aasdesc#specificAssetIds[]": NewFragmentFilterPredicate(expr, false),
 		},
 	}
 	ctx := context.WithValue(context.Background(), filterKey, qf)
@@ -174,6 +219,11 @@ func TestAddFilterQueryFromContext_ArrayEndedFragment_DefaultBehavior_UsesExists
 	if err != nil {
 		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
 	}
+	collector.AllowInlineAliases(
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
 
 	d := goqu.Dialect("postgres")
 	ds := d.From(goqu.T(common.TblDescriptor).As("descriptor")).
@@ -199,16 +249,12 @@ func TestAddFilterQueryFromContext_ArrayEndedFragment_DefaultBehavior_UsesExists
 	}
 }
 
-func TestAddFilterQueryFromContext_IndexedFragment_UsesExists(t *testing.T) {
+func TestAddFilterQueryFromContext_IndexedFragment_UsesCurrentRow(t *testing.T) {
 	expr := mustParseLogicalExpression(t, `{"$eq":[{"$field":"$aasdesc#specificAssetIds[1].name"},{"$strVal":"Banane2"}]}`)
-	match := true
 	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[0]")
 	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
 		Filters: FragmentFilters{
-			fragment: expr,
-		},
-		FilterMatch: FragmentMatchModes{
-			fragment: match,
+			fragment: NewFragmentFilterPredicate(expr, true),
 		},
 	})
 
@@ -240,24 +286,55 @@ func TestAddFilterQueryFromContext_IndexedFragment_UsesExists(t *testing.T) {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if !strings.Contains(sqlStr, "EXISTS (") {
-		t.Fatalf("expected indexed fragment condition to use EXISTS: %s", sqlStr)
+	if strings.Contains(sqlStr, "EXISTS (") {
+		t.Fatalf("indexed MATCH condition must use the current row: %s", sqlStr)
 	}
 	if !strings.Contains(sqlStr, `"specific_asset_id"."position"`) {
 		t.Fatalf("expected indexed fragment condition to bind the indexed row: %s", sqlStr)
 	}
 }
 
+func TestAddFilterQueryFromContext_FieldFragment_UsesCurrentArrayRow(t *testing.T) {
+	expr := mustParseLogicalExpression(t, `{"$eq":[{"$field":"$aasdesc#specificAssetIds[].name"},{"$strVal":"public-id"}]}`)
+	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[].name")
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		Filters: FragmentFilters{fragment: NewFragmentFilterPredicate(expr, true)},
+	})
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	}
+	collector.AllowInlineAliases(common.AliasSpecificAssetID)
+
+	ds := goqu.Dialect("postgres").
+		From(goqu.T(common.TblSpecificAssetID).As(common.AliasSpecificAssetID)).
+		Select(goqu.V(1)).
+		Prepared(true)
+
+	filteredDS, err := AddFilterQueryFromContext(ctx, ds, fragment, collector)
+	if err != nil {
+		t.Fatalf("AddFilterQueryFromContext returned error: %v", err)
+	}
+	sqlStr, _, err := filteredDS.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if strings.Contains(sqlStr, "EXISTS (") {
+		t.Fatalf("field fragment MATCH must use the current array row: %s", sqlStr)
+	}
+	if !strings.Contains(sqlStr, `"specific_asset_id"."name"`) {
+		t.Fatalf("expected current specific asset ID predicate: %s", sqlStr)
+	}
+}
+
 func TestAddCorrelatedFilterQueryFromContext_MixedAliasesUseInlineAndExists(t *testing.T) {
 	expr := mustParseLogicalExpression(t, `{"$and":[{"$eq":[{"$strVal":"PUBLIC_READABLE"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]},{"$eq":[{"$strVal":"BPN_A"},{"$field":"$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"}]}]}`)
-	match := true
 	fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[]")
 	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
 		Filters: FragmentFilters{
-			fragment: expr,
-		},
-		FilterMatch: FragmentMatchModes{
-			fragment: match,
+			fragment: NewFragmentFilterPredicate(expr, true),
 		},
 	})
 
@@ -303,5 +380,70 @@ func TestAddCorrelatedFilterQueryFromContext_MixedAliasesUseInlineAndExists(t *t
 	if !strings.Contains(sqlStr, `EXISTS (`) ||
 		!strings.Contains(sqlStr, `"external_subject_reference_key__exists"."value"`) {
 		t.Fatalf("expected specific asset route guard in correlated EXISTS: %s", sqlStr)
+	}
+}
+
+func TestMergedRequestAndABACFiltersPreserveMatchScopeWithNestedMatchCondition(t *testing.T) {
+	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[]")
+	nameField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	abacValue := grammar.StandardString("abac-visible")
+	requestValue := grammar.StandardString("request-visible")
+	nestedValue := grammar.StandardString("request-prefix")
+
+	abacCondition := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{{Field: &nameField}, {StrVal: &abacValue}},
+	}
+	requestCondition := grammar.LogicalExpression{
+		Match: []grammar.MatchExpression{
+			{Eq: grammar.ComparisonItems{{Field: &nameField}, {StrVal: &requestValue}}},
+			{Match: []grammar.MatchExpression{
+				{StartsWith: grammar.StringItems{{Field: &nameField}, {StrVal: &nestedValue}}},
+			}},
+		},
+	}
+
+	ctx := WithQueryFilter(context.Background(), &QueryFilter{Filters: FragmentFilters{
+		fragment: NewFragmentFilterPredicate(abacCondition, false),
+	}})
+	match := true
+	ctx = MergeQueryFilter(ctx, grammar.Query{FilterConditions: []grammar.SubFilter{{
+		Condition: &requestCondition,
+		Fragment:  &fragment,
+		Match:     &match,
+	}}})
+
+	predicate := GetQueryFilter(ctx).Filters[fragment]
+	if len(predicate.And) != 2 {
+		t.Fatalf("expected ABAC and request predicates to remain separate, got %#v", predicate)
+	}
+	if predicate.And[0].Match || !predicate.And[1].Match {
+		t.Fatalf("expected match modes false and true, got %#v", predicate.And)
+	}
+	if predicate.And[1].Condition == nil || len(predicate.And[1].Condition.Match) != 2 ||
+		len(predicate.And[1].Condition.Match[1].Match) != 1 {
+		t.Fatalf("nested condition $match was not preserved: %#v", predicate.And[1])
+	}
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	}
+	collector.AllowInlineAliases(common.AliasSpecificAssetID)
+	condition, hasMask, err := buildFragmentMaskCondition(ctx, fragment, collector)
+	if err != nil {
+		t.Fatalf("buildFragmentMaskCondition returned error: %v", err)
+	}
+	if !hasMask {
+		t.Fatal("expected fragment mask")
+	}
+	sqlString, _, err := goqu.Dialect("postgres").From("descriptor").Select(goqu.V(1)).Where(condition).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	if !strings.Contains(sqlString, `EXISTS (`) || !strings.Contains(sqlString, `'abac-visible'`) {
+		t.Fatalf("expected non-MATCH ABAC condition in EXISTS: %s", sqlString)
+	}
+	if !strings.Contains(sqlString, `"specific_asset_id"."name"`) {
+		t.Fatalf("expected MATCH request condition on current row: %s", sqlString)
 	}
 }

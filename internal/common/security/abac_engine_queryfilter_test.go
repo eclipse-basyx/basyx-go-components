@@ -38,17 +38,17 @@ func TestQueryFilter_FilterExpressionsFor_ExactMatch(t *testing.T) {
 	expr := grammar.LogicalExpression{Boolean: &b}
 
 	q := QueryFilter{Filters: FragmentFilters{
-		"$aasdesc#endpoints[2]": expr,
+		"$aasdesc#endpoints[2]": NewFragmentFilterPredicate(expr, false),
 	}}
 
-	entries := q.FilterExpressionEntriesFor("$aasdesc#endpoints[2]")
+	entries := q.FilterPredicateEntriesFor("$aasdesc#endpoints[2]")
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
 	if entries[0].Fragment != "$aasdesc#endpoints[2]" {
 		t.Fatalf("expected fragment %q, got %q", "$aasdesc#endpoints[2]", entries[0].Fragment)
 	}
-	jEntry, _ := json.Marshal(entries[0].Expression)
+	jEntry, _ := json.Marshal(entries[0].Predicate.Condition)
 	jWantEntry, _ := json.Marshal(expr)
 	if string(jEntry) != string(jWantEntry) {
 		t.Fatalf("expected %s, got %s", string(jWantEntry), string(jEntry))
@@ -58,11 +58,11 @@ func TestQueryFilter_FilterExpressionsFor_ExactMatch(t *testing.T) {
 func TestQueryFilter_FilterExpressionEntriesFor_DoesNotMatchDifferentRoots(t *testing.T) {
 	allow := true
 	q := QueryFilter{Filters: FragmentFilters{
-		"$sm#idShort":  {Boolean: &allow},
-		"$sme#idShort": {Boolean: &allow},
+		"$sm#idShort":  NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
+		"$sme#idShort": NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
 	}}
 
-	entries := q.FilterExpressionEntriesFor("$sm#idShort")
+	entries := q.FilterPredicateEntriesFor("$sm#idShort")
 	if len(entries) != 1 {
 		t.Fatalf("expected one $sm entry, got %d", len(entries))
 	}
@@ -97,12 +97,12 @@ func TestQueryFilter_FilterExpressionEntriesFor_WildcardIncludesLiteralAndIndexe
 	expr10 := grammar.LogicalExpression{Boolean: &b3}
 
 	q := QueryFilter{Filters: FragmentFilters{
-		"$aasdesc#specificAssetIds[]":   exprWildcard,
-		"$aasdesc#specificAssetIds[2]":  expr2,
-		"$aasdesc#specificAssetIds[10]": expr10,
+		"$aasdesc#specificAssetIds[]":   NewFragmentFilterPredicate(exprWildcard, false),
+		"$aasdesc#specificAssetIds[2]":  NewFragmentFilterPredicate(expr2, false),
+		"$aasdesc#specificAssetIds[10]": NewFragmentFilterPredicate(expr10, false),
 	}}
 
-	entries := q.FilterExpressionEntriesFor("$aasdesc#specificAssetIds[]")
+	entries := q.FilterPredicateEntriesFor("$aasdesc#specificAssetIds[]")
 	if len(entries) != 3 {
 		t.Fatalf("expected 3 entries, got %d", len(entries))
 	}
@@ -126,10 +126,10 @@ func TestQueryFilter_FilterExpressionEntriesFor_SMEWildcardMatchesIndexedPath(t 
 
 	allow := true
 	q := QueryFilter{Filters: FragmentFilters{
-		"$sme.List[0]#value": {Boolean: &allow},
+		"$sme.List[0]#value": NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
 	}}
 
-	entries := q.FilterExpressionEntriesFor("$sme.List[]#value")
+	entries := q.FilterPredicateEntriesFor("$sme.List[]#value")
 	if len(entries) != 1 {
 		t.Fatalf("expected indexed SME path to match wildcard, got %d entries", len(entries))
 	}
@@ -146,12 +146,12 @@ func TestQueryFilter_FilterExpressionsFor_WildcardMatchesIndexedAndSorted(t *tes
 	expr10 := grammar.LogicalExpression{Boolean: &b3}
 
 	q := QueryFilter{Filters: FragmentFilters{
-		"$aasdesc#endpoints[10]": expr10,
-		"$aasdesc#endpoints[2]":  expr2,
-		"$aasdesc#other[1]":      expr2,
+		"$aasdesc#endpoints[10]": NewFragmentFilterPredicate(expr10, false),
+		"$aasdesc#endpoints[2]":  NewFragmentFilterPredicate(expr2, false),
+		"$aasdesc#other[1]":      NewFragmentFilterPredicate(expr2, false),
 	}}
 
-	entries := q.FilterExpressionEntriesFor("$aasdesc#endpoints[]")
+	entries := q.FilterPredicateEntriesFor("$aasdesc#endpoints[]")
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
@@ -177,12 +177,12 @@ func TestQueryFilter_FilterExpressionEntriesFor_WildcardSuffixMustMatchPath(t *t
 	expr2 := grammar.LogicalExpression{Boolean: &b3}
 
 	q := QueryFilter{Filters: FragmentFilters{
-		"$aasdesc#specificAssetIds[]":       exprLiteral,
-		"$aasdesc#specificAssetIds[2].name": expr2name,
-		"$aasdesc#specificAssetIds[2]":      expr2,
+		"$aasdesc#specificAssetIds[]":       NewFragmentFilterPredicate(exprLiteral, false),
+		"$aasdesc#specificAssetIds[2].name": NewFragmentFilterPredicate(expr2name, false),
+		"$aasdesc#specificAssetIds[2]":      NewFragmentFilterPredicate(expr2, false),
 	}}
 
-	entries := q.FilterExpressionEntriesFor("$aasdesc#specificAssetIds[].name")
+	entries := q.FilterPredicateEntriesFor("$aasdesc#specificAssetIds[].name")
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
@@ -192,18 +192,18 @@ func TestQueryFilter_FilterExpressionEntriesFor_WildcardSuffixMustMatchPath(t *t
 }
 
 func TestQueryFilter_FilterExpressionFor_WildcardCombinesOr(t *testing.T) {
-	// FilterExpressionFor was removed; FilterExpressionEntriesFor returns the matching entries.
+	// FilterExpressionFor was removed; FilterPredicateEntriesFor returns the matching entries.
 	b1 := true
 	b2 := false
 	exprA := grammar.LogicalExpression{Boolean: &b1}
 	exprB := grammar.LogicalExpression{Boolean: &b2}
 
 	q := QueryFilter{Filters: FragmentFilters{
-		"$aasdesc#endpoints[0]": exprA,
-		"$aasdesc#endpoints[1]": exprB,
+		"$aasdesc#endpoints[0]": NewFragmentFilterPredicate(exprA, false),
+		"$aasdesc#endpoints[1]": NewFragmentFilterPredicate(exprB, false),
 	}}
 
-	entries := q.FilterExpressionEntriesFor("$aasdesc#endpoints[]")
+	entries := q.FilterPredicateEntriesFor("$aasdesc#endpoints[]")
 	if len(entries) != 2 {
 		j, _ := json.Marshal(entries)
 		t.Fatalf("expected 2 entries, got %d: %s", len(entries), string(j))
@@ -216,18 +216,15 @@ func TestQueryFilter_FilterExpressionEntriesFor_PropagatesMatchFlag(t *testing.T
 
 	q := QueryFilter{
 		Filters: FragmentFilters{
-			"$aasdesc#specificAssetIds[]": expr,
-		},
-		FilterMatch: FragmentMatchModes{
-			"$aasdesc#specificAssetIds[]": true,
+			"$aasdesc#specificAssetIds[]": NewFragmentFilterPredicate(expr, true),
 		},
 	}
 
-	entries := q.FilterExpressionEntriesFor("$aasdesc#specificAssetIds[]")
+	entries := q.FilterPredicateEntriesFor("$aasdesc#specificAssetIds[]")
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
-	if !entries[0].Match {
+	if !entries[0].Predicate.Match {
 		t.Fatalf("expected Match=true for fragment entry")
 	}
 }

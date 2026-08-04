@@ -33,34 +33,6 @@
             ]
           },
           {
-            "$eq": [
-              {
-                "$strCast": {
-                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                }
-              },
-              {
-                "$strVal": "WRITTEN_BY_Y"
-              }
-            ]
-          }
-        ]
-      },
-      "$aasdesc#endpoints[0]": {
-        "$or": [
-          {
-            "$eq": [
-              {
-                "$strCast": {
-                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                }
-              },
-              {
-                "$strVal": "WRITTEN_BY_X"
-              }
-            ]
-          },
-          {
             "$and": [
               {
                 "$eq": [

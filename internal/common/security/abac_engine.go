@@ -28,6 +28,7 @@ package auth
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -100,14 +101,6 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessMod
 	}, nil
 }
 
-// FragmentFilters groups conditional parts by fragment name so callers can pick
-// the subset relevant to the resource they are processing.
-type FragmentFilters map[grammar.FragmentStringPattern]grammar.LogicalExpression
-
-// FragmentMatchModes stores per-fragment row-local match mode.
-// true means fragment filters for that fragment should be evaluated row-local.
-type FragmentMatchModes map[grammar.FragmentStringPattern]bool
-
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
 // even when ACCESS=ALLOW. Controllers can use it to restrict rows, constrain
 // mutations, or redact fields. The Discovery Service currently does not require
@@ -116,16 +109,6 @@ type QueryFilter struct {
 	Formula         *grammar.LogicalExpression                       `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
 	FormulasByRight map[grammar.RightsEnum]grammar.LogicalExpression `json:"FormulasByRight,omitempty" yaml:"FormulasByRight,omitempty" mapstructure:"FormulasByRight,omitempty"`
 	Filters         FragmentFilters                                  `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
-	FilterMatch     FragmentMatchModes                               `json:"FilterMatch,omitempty" yaml:"FilterMatch,omitempty" mapstructure:"FilterMatch,omitempty"`
-}
-
-// FragmentExpression pairs a concrete fragment key with its logical expression.
-// This is useful for wildcard lookups like "...[]" where multiple indexed
-// fragments may match.
-type FragmentExpression struct {
-	Fragment   grammar.FragmentStringPattern
-	Expression grammar.LogicalExpression
-	Match      bool
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -222,7 +205,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	}
 
 	var ruleExprs []QueryFilter
-	var allFragments []grammar.FragmentStringPattern
+	allFragments := make(map[grammar.FragmentStringPattern]struct{})
 	matchedRuleIDs := make([]string, 0, len(m.rules))
 	relevantRights := collectRelevantRights(rightAlternatives)
 	ruleExprsByRight := make(map[grammar.RightsEnum][]grammar.LogicalExpression, len(relevantRights))
@@ -280,36 +263,18 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		if r.id != "" {
 			matchedRuleIDs = append(matchedRuleIDs, r.id)
 		}
-		fragments := make(map[grammar.FragmentStringPattern]grammar.LogicalExpression)
-		fragmentMatch := make(map[grammar.FragmentStringPattern]bool)
+		fragments := make(FragmentFilters)
 		for _, filter := range r.filterList {
 			fragment := *filter.FRAGMENT
 			matchMode := filter.MATCH != nil && *filter.MATCH
-			if existing, ok := fragmentMatch[fragment]; ok {
-				fragmentMatch[fragment] = existing || matchMode
-			} else {
-				fragmentMatch[fragment] = matchMode
-			}
-
+			simplifiedCondition, _ := filter.CONDITION.SimplifyForBackendFilterWithOptions(resolver, opts)
+			condition := NewFragmentFilterPredicate(simplifiedCondition, matchMode)
 			if existing, ok := fragments[fragment]; ok {
-				existing.And = append(existing.And, *filter.CONDITION)
-				fragments[fragment] = existing
+				fragments[fragment] = AndFragmentFilterPredicates(existing, condition)
 			} else {
-				fragments[fragment] = grammar.LogicalExpression{
-					And: []grammar.LogicalExpression{
-						adapted,
-						*filter.CONDITION,
-					},
-				}
+				fragments[fragment] = condition
 			}
-			allFragments = append(allFragments, fragment)
-		}
-
-		// Deduplicate And expressions in fragments
-		for fragment, expr := range fragments {
-			if len(expr.And) > 0 {
-				fragments[fragment] = expr
-			}
+			allFragments[fragment] = struct{}{}
 		}
 
 		for _, right := range relevantRights {
@@ -320,9 +285,8 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 
 		ruleExprs = append(ruleExprs, QueryFilter{
-			Formula:     &adapted,
-			Filters:     fragments,
-			FilterMatch: fragmentMatch,
+			Formula: &adapted,
+			Filters: fragments,
 		})
 	}
 
@@ -331,38 +295,9 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	}
 
 	combined := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
-	combinedFragments := make(map[grammar.FragmentStringPattern]grammar.LogicalExpression)
-	combinedFragmentMatch := make(map[grammar.FragmentStringPattern]bool)
+	combinedFragments := mergeRuleFragmentFilters(ruleExprs, allFragments)
 	for _, qfr := range ruleExprs {
 		combined.Or = append(combined.Or, *qfr.Formula)
-
-		// filter
-		for _, fragment := range allFragments {
-			cur := combinedFragments[fragment]
-			if existing, ok := qfr.Filters[fragment]; ok {
-				cur.Or = append(cur.Or, existing)
-			} else {
-				cur.Or = append(cur.Or, *qfr.Formula)
-			}
-			if qfr.FilterMatch != nil && qfr.FilterMatch[fragment] {
-				combinedFragmentMatch[fragment] = true
-			}
-			combinedFragments[fragment] = cur
-		}
-	}
-
-	for fragment, expr := range combinedFragments {
-		if len(expr.Or) > 0 {
-			combinedFragments[fragment] = expr
-		}
-	}
-
-	for fragment, le := range combinedFragments {
-		resolver := func(attr grammar.AttributeValue) any {
-			return resolveAttributeValue(attr, in.Claims)
-		}
-		simpleFilter, _ := le.SimplifyForBackendFilterWithOptions(resolver, opts)
-		combinedFragments[fragment] = simpleFilter
 	}
 
 	resolver := func(attr grammar.AttributeValue) any {
@@ -411,9 +346,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 		if len(combinedFragments) > 0 {
 			qf.Filters = combinedFragments
-			if len(combinedFragmentMatch) > 0 {
-				qf.FilterMatch = combinedFragmentMatch
-			}
 		}
 	}
 
@@ -467,7 +399,114 @@ func boolExpression(v bool) grammar.LogicalExpression {
 	}
 }
 
-// FilterExpressionEntriesFor returns all (fragment, expression) pairs from
+type fragmentShapeGroup struct {
+	fragment  grammar.FragmentStringPattern
+	fragments []grammar.FragmentStringPattern
+}
+
+func mergeRuleFragmentFilters(
+	ruleExprs []QueryFilter,
+	allFragments map[grammar.FragmentStringPattern]struct{},
+) FragmentFilters {
+	combined := make(FragmentFilters)
+	for _, group := range groupFragmentsByShape(allFragments) {
+		alternatives := make([]FragmentFilterPredicate, 0, len(ruleExprs))
+		for _, ruleExpr := range ruleExprs {
+			alternative := []FragmentFilterPredicate{newGlobalFragmentFilterPredicate(*ruleExpr.Formula)}
+			for _, fragment := range group.fragments {
+				if predicate, ok := ruleExpr.Filters[fragment]; ok {
+					alternative = append(alternative, scopeFragmentFilterPredicate(predicate, fragment))
+				}
+			}
+			alternatives = append(alternatives, AndFragmentFilterPredicates(alternative...))
+		}
+		predicate := OrFragmentFilterPredicates(alternatives...)
+		if unrestricted, constant := predicate.globalBooleanValue(); constant && unrestricted {
+			continue
+		}
+		combined[group.fragment] = predicate
+	}
+	return combined
+}
+
+func groupFragmentsByShape(fragments map[grammar.FragmentStringPattern]struct{}) []fragmentShapeGroup {
+	groupsByShape := make(map[string]*fragmentShapeGroup)
+	for fragment := range fragments {
+		shape := fragmentShapeKey(fragment)
+		group, ok := groupsByShape[shape]
+		if !ok {
+			group = &fragmentShapeGroup{fragment: wildcardFragment(fragment)}
+			groupsByShape[shape] = group
+		}
+		group.fragments = append(group.fragments, fragment)
+	}
+
+	shapes := make([]string, 0, len(groupsByShape))
+	for shape := range groupsByShape {
+		shapes = append(shapes, shape)
+	}
+	sort.Strings(shapes)
+
+	groups := make([]fragmentShapeGroup, 0, len(shapes))
+	for _, shape := range shapes {
+		group := groupsByShape[shape]
+		sort.Slice(group.fragments, func(i, j int) bool {
+			iIndexes := indexedFragmentTokenCount(group.fragments[i])
+			jIndexes := indexedFragmentTokenCount(group.fragments[j])
+			if iIndexes != jIndexes {
+				return iIndexes < jIndexes
+			}
+			return group.fragments[i] < group.fragments[j]
+		})
+		groups = append(groups, *group)
+	}
+	return groups
+}
+
+func indexedFragmentTokenCount(fragment grammar.FragmentStringPattern) int {
+	count := 0
+	for _, token := range builder.TokenizeField(string(fragment)) {
+		array, isArray := token.(builder.ArrayToken)
+		if isArray && array.Index >= 0 {
+			count++
+		}
+	}
+	return count
+}
+
+func fragmentShapeKey(fragment grammar.FragmentStringPattern) string {
+	parts := []string{fragmentRoot(fragment)}
+	for _, token := range builder.TokenizeField(string(fragment)) {
+		kind := "simple"
+		if _, isArray := token.(builder.ArrayToken); isArray {
+			kind = "array"
+		}
+		parts = append(parts, fmt.Sprintf("|%s:%d:%s", kind, len(token.GetName()), token.GetName()))
+	}
+	return strings.Join(parts, "")
+}
+
+func wildcardFragment(fragment grammar.FragmentStringPattern) grammar.FragmentStringPattern {
+	value := string(fragment)
+	wildcard := make([]byte, 0, len(value))
+	for len(value) > 0 {
+		open := strings.IndexByte(value, '[')
+		if open < 0 {
+			wildcard = append(wildcard, value...)
+			break
+		}
+		closeOffset := strings.IndexByte(value[open:], ']')
+		if closeOffset < 0 {
+			return fragment
+		}
+		wildcard = append(wildcard, value[:open]...)
+		wildcard = append(wildcard, '[', ']')
+		value = value[open+closeOffset+1:]
+	}
+	return grammar.FragmentStringPattern(string(wildcard))
+}
+
+// FilterPredicateEntriesFor returns all (fragment, predicate) pairs from
 // q.Filters whose tokenized fragment path matches the tokenized `key`.
 //
 // A fragment matches when, for every token position i:
@@ -478,8 +517,8 @@ func boolExpression(v bool) grammar.LogicalExpression {
 // key such as "...[]" matches entries like "...[0]", "...[1]", etc.
 //
 // Note: the returned slice order is not guaranteed (q.Filters is a map).
-func (q *QueryFilter) FilterExpressionEntriesFor(key grammar.FragmentStringPattern) []FragmentExpression {
-	var out []FragmentExpression
+func (q *QueryFilter) FilterPredicateEntriesFor(key grammar.FragmentStringPattern) []FragmentFilterEntry {
+	var out []FragmentFilterEntry
 	keyTokens := builder.TokenizeField(string(key))
 
 	for k, expr := range q.Filters {
@@ -509,14 +548,9 @@ func (q *QueryFilter) FilterExpressionEntriesFor(key grammar.FragmentStringPatte
 		}
 
 		if matches {
-			matchMode := false
-			if q.FilterMatch != nil {
-				matchMode = q.FilterMatch[k]
-			}
-			out = append(out, FragmentExpression{
-				Fragment:   k,
-				Expression: expr,
-				Match:      matchMode,
+			out = append(out, FragmentFilterEntry{
+				Fragment:  k,
+				Predicate: expr,
 			})
 		}
 	}

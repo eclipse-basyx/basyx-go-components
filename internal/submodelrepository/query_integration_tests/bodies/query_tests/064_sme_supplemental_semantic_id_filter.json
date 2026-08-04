@@ -12,6 +12,7 @@
   "$filters": [
     {
       "$fragment": "$sme#supplementalSemanticIds[]",
+      "$match": true,
       "$condition": {
         "$eq": [
           {

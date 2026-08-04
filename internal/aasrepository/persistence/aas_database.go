@@ -2428,61 +2428,15 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 }
 
 func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBIDs(ctx context.Context, db aasDBQueryer, aasDBIDs []int64) (map[int64][]types.IReference, error) {
-	out := make(map[int64][]types.IReference, len(aasDBIDs))
 	if len(aasDBIDs) == 0 {
-		return out, nil
+		return map[int64][]types.IReference{}, nil
 	}
 
-	dialect := goqu.Dialect("postgres")
-	submodelDS := buildGetSubmodelReferencePayloadsByAASIDsDataset(&dialect, aasDBIDs)
-	collector, collectorErr := buildAASCollector()
-	if collectorErr != nil {
-		return nil, collectorErr
+	references, err := descriptors.ReadAASSubmodelReferencesByAASIDs(ctx, db, aasDBIDs)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-READREFERENCES " + err.Error())
 	}
-	submodelDS, filterErr := auth.AddFilterQueryFromContext(ctx, submodelDS, "$aas#submodels[]", collector)
-	if filterErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-ABACFILTERS " + filterErr.Error())
-	}
-	submodelDS, filterErr = auth.AddFilterQueryFromContext(ctx, submodelDS, "$aas#submodels[].keys[]", collector)
-	if filterErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-ABACKEYFILTERS " + filterErr.Error())
-	}
-
-	submodelSQL, submodelArgs, submodelBuildErr := submodelDS.Prepared(true).ToSQL()
-	if submodelBuildErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-BUILDSQL " + submodelBuildErr.Error())
-	}
-
-	rows, submodelQueryErr := db.QueryContext(ctx, submodelSQL, submodelArgs...)
-	if submodelQueryErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-EXECSQL " + submodelQueryErr.Error())
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	for rows.Next() {
-		var aasDBID int64
-		var payload []byte
-		if scanErr := rows.Scan(&aasDBID, &payload); scanErr != nil {
-			return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-SCANROW " + scanErr.Error())
-		}
-
-		reference, parseErr := parseReferencePayload(payload, "AASREPO-READSMREFBATCH-PARSEREFERENCE")
-		if parseErr != nil {
-			return nil, parseErr
-		}
-		if reference == nil {
-			continue
-		}
-
-		out[aasDBID] = append(out[aasDBID], reference)
-	}
-	if rowsErr := rows.Err(); rowsErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-ITERROWS " + rowsErr.Error())
-	}
-
-	return out, nil
+	return references, nil
 }
 
 func buildAssetAdministrationShellFromCoreRow(row coreAssetAdministrationShellRow, submodels []types.IReference, specificAssetIDs []types.ISpecificAssetID, errorPrefix string) (types.IAssetAdministrationShell, error) {
@@ -2778,6 +2732,12 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	if collectorErr != nil {
 		return nil, collectorErr
 	}
+	collector.AllowInlineAliases(
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
+	collector.SetRootJoinKey(common.AliasSpecificAssetID, common.ColAssetInformationID)
 	queryDS, filterErr := auth.AddFilterQueryFromContext(ctx, queryDS, "$aas#assetInformation.specificAssetIds[]", collector)
 	if filterErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-ABACFILTERS " + filterErr.Error())
@@ -2864,6 +2824,12 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	if collectorErr != nil {
 		return nil, collectorErr
 	}
+	collector.AllowInlineAliases(
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
+	collector.SetRootJoinKey(common.AliasSpecificAssetID, common.ColAssetInformationID)
 	queryDS, filterErr := auth.AddFilterQueryFromContext(ctx, queryDS, "$aas#assetInformation.specificAssetIds[]", collector)
 	if filterErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-ABACFILTERS " + filterErr.Error())

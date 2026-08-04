@@ -33,6 +33,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
@@ -91,18 +92,47 @@ type adaptCase struct {
 
 // response envelope we assert against
 type resp struct {
-	Ok          bool              `json:"ok"`
-	Reason      auth.DecisionCode `json:"reason"`
-	QueryFilter *auth.QueryFilter `json:"queryFilter,omitempty"`
+	Ok          bool                  `json:"ok"`
+	Reason      auth.DecisionCode     `json:"reason"`
+	QueryFilter *sanitizedQueryFilter `json:"queryFilter,omitempty"`
 }
 
-func sanitizeQueryFilter(qf *auth.QueryFilter) *auth.QueryFilter {
+type sanitizedQueryFilter struct {
+	Formula *grammar.LogicalExpression                                  `json:"Formula,omitempty"`
+	Filters map[grammar.FragmentStringPattern]grammar.LogicalExpression `json:"Filters,omitempty"`
+}
+
+func sanitizeQueryFilter(qf *auth.QueryFilter) *sanitizedQueryFilter {
 	if qf == nil {
 		return nil
 	}
-	sanitized := *qf
-	sanitized.FormulasByRight = nil
-	return &sanitized
+	sanitized := &sanitizedQueryFilter{Formula: qf.Formula}
+	if len(qf.Filters) == 0 {
+		return sanitized
+	}
+	sanitized.Filters = make(map[grammar.FragmentStringPattern]grammar.LogicalExpression, len(qf.Filters))
+	for fragment, predicate := range qf.Filters {
+		sanitized.Filters[fragment] = flattenFragmentFilterPredicate(predicate)
+	}
+	return sanitized
+}
+
+func flattenFragmentFilterPredicate(predicate auth.FragmentFilterPredicate) grammar.LogicalExpression {
+	if predicate.Condition != nil {
+		return *predicate.Condition
+	}
+	if len(predicate.And) > 0 {
+		children := make([]grammar.LogicalExpression, 0, len(predicate.And))
+		for _, child := range predicate.And {
+			children = append(children, flattenFragmentFilterPredicate(child))
+		}
+		return grammar.LogicalExpression{And: children}
+	}
+	children := make([]grammar.LogicalExpression, 0, len(predicate.Or))
+	for _, child := range predicate.Or {
+		children = append(children, flattenFragmentFilterPredicate(child))
+	}
+	return grammar.LogicalExpression{Or: children}
 }
 
 // TestAdaptLEForBackend loads cases from unit_tests/adapt_le/testcases.json

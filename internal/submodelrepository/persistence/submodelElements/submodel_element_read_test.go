@@ -226,7 +226,7 @@ func captureSubmodelElementCursorQuery(t *testing.T, cursor string) string {
 	})
 }
 
-func TestAddSMERowFilterQueriesCorrelatesStructuralConditionToCurrentElement(t *testing.T) {
+func TestAddSMERowFilterQueriesWithoutMatchUsesContainingSubmodel(t *testing.T) {
 	t.Parallel()
 
 	var condition grammar.LogicalExpression
@@ -240,7 +240,7 @@ func TestAddSMERowFilterQueriesCorrelatesStructuralConditionToCurrentElement(t *
 
 	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sme": condition,
+			"$sme": auth.NewFragmentFilterPredicate(condition, false),
 		},
 	})
 	dataset := goqu.Dialect("postgres").
@@ -252,8 +252,90 @@ func TestAddSMERowFilterQueriesCorrelatesStructuralConditionToCurrentElement(t *
 	require.NoError(t, err)
 
 	normalizedSQL := strings.ReplaceAll(sqlQuery, " ", "")
+	require.Contains(t, normalizedSQL, `"submodel_element"."submodel_id"="sme"."submodel_id"`)
+	require.NotContains(t, normalizedSQL, `"submodel_element"."id"="sme"."id"`)
+}
+
+func TestAddSMERowFilterQueriesMatchCorrelatesSamePathToCurrentElement(t *testing.T) {
+	t.Parallel()
+
+	fragment := grammar.FragmentStringPattern("$sme.a[].b[]")
+	condition := unmarshalLogicalExpression(t, `{
+		"$eq": [
+			{"$field": "$sme.a[].b[]#value"},
+			{"$strVal": "blue"}
+		]
+	}`)
+
+	sqlQuery := buildSMERowFilterSQL(t, fragment, condition, true)
+	normalizedSQL := strings.ReplaceAll(sqlQuery, " ", "")
 	require.Contains(t, normalizedSQL, `"submodel_element"."id"="sme"."id"`)
 	require.NotContains(t, normalizedSQL, `"submodel_element"."submodel_id"="sme"."submodel_id"`)
+}
+
+func TestAddSMERowFilterQueriesMatchCorrelatesDescendantPathToCurrentPath(t *testing.T) {
+	t.Parallel()
+
+	fragment := grammar.FragmentStringPattern("$sme.a[]")
+	condition := unmarshalLogicalExpression(t, `{
+		"$eq": [
+			{"$field": "$sme.a[].b[]#value"},
+			{"$strVal": "blue"}
+		]
+	}`)
+
+	sqlQuery := buildSMERowFilterSQL(t, fragment, condition, true)
+	require.Contains(t, sqlQuery, `"submodel_element"."idshort_path" ~`)
+	require.Contains(t, sqlQuery, `"sme"."idshort_path"`)
+	require.Contains(t, sqlQuery, "REPLACE")
+	require.NotContains(t, strings.ReplaceAll(sqlQuery, " ", ""), `"submodel_element"."id"="sme"."id"`)
+}
+
+func TestAddSMERowFilterQueriesMatchEvaluatesUnrelatedPathAgainstContainingSubmodel(t *testing.T) {
+	t.Parallel()
+
+	fragment := grammar.FragmentStringPattern("$sme.a[].b[]")
+	condition := unmarshalLogicalExpression(t, `{
+		"$eq": [
+			{"$field": "$sme.guard#value"},
+			{"$strVal": "enabled"}
+		]
+	}`)
+
+	sqlQuery := buildSMERowFilterSQL(t, fragment, condition, true)
+	normalizedSQL := strings.ReplaceAll(sqlQuery, " ", "")
+	require.Contains(t, normalizedSQL, `"submodel_element"."submodel_id"="sme"."submodel_id"`)
+	require.NotContains(t, normalizedSQL, `"submodel_element"."id"="sme"."id"`)
+}
+
+func unmarshalLogicalExpression(t *testing.T, value string) grammar.LogicalExpression {
+	t.Helper()
+
+	var condition grammar.LogicalExpression
+	require.NoError(t, json.Unmarshal([]byte(value), &condition))
+	return condition
+}
+
+func buildSMERowFilterSQL(
+	t *testing.T,
+	fragment grammar.FragmentStringPattern,
+	condition grammar.LogicalExpression,
+	match bool,
+) string {
+	t.Helper()
+
+	queryFilter := &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, match)},
+	}
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), queryFilter)
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.id"))
+	filtered, err := addSMERowFilterQueries(ctx, dataset)
+	require.NoError(t, err)
+	sqlQuery, _, err := filtered.ToSQL()
+	require.NoError(t, err)
+	return sqlQuery
 }
 
 func TestAddSMERowFilterQueriesGuardsPathSpecificStructuralFragment(t *testing.T) {
@@ -262,7 +344,7 @@ func TestAddSMERowFilterQueriesGuardsPathSpecificStructuralFragment(t *testing.T
 	deny := false
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sme.ARestricted": {Boolean: &deny},
+			"$sme.ARestricted": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
 		},
 	})
 	dataset := goqu.Dialect("postgres").
@@ -285,7 +367,7 @@ func TestAddSMEVisibleTreeQueryFiltersAncestorsBeforeLimit(t *testing.T) {
 	deny := false
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sme.ARestricted": {Boolean: &deny},
+			"$sme.ARestricted": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
 		},
 	})
 	dataset := goqu.Dialect("postgres").
@@ -314,7 +396,7 @@ func TestAddSMEVisibleTreeQueryForLevelUsesRowFilterOnlyForCore(t *testing.T) {
 	deny := false
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sme.ARestricted": {Boolean: &deny},
+			"$sme.ARestricted": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
 		},
 	})
 	dataset := goqu.Dialect("postgres").
@@ -337,7 +419,7 @@ func TestAddSMEVisibleSubtreeQueryForLevelRecursesOnlyForDeep(t *testing.T) {
 	allow := true
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sme": {Boolean: &allow},
+			"$sme": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
 		},
 	})
 	dataset := goqu.Dialect("postgres").
@@ -364,7 +446,7 @@ func TestAddSMEPathAncestorVisibilityQueryStartsAtTarget(t *testing.T) {
 	allow := true
 	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sme": {Boolean: &allow},
+			"$sme": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
 		},
 	})
 	dataset := goqu.Dialect("postgres").
@@ -406,7 +488,7 @@ func TestGetSubmodelElementByPathCombinesAuthorizationAndPayloadQuery(t *testing
 			grammar.RightsEnumREAD: formula,
 		},
 		Filters: auth.FragmentFilters{
-			"$sme": {Boolean: &allow},
+			"$sme": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
 		},
 	})
 
@@ -473,8 +555,8 @@ func TestNormalizeSMERowFiltersIgnoresOtherStructuralRoots(t *testing.T) {
 	allow := true
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sm":  {Boolean: &allow},
-			"$sme": {Boolean: &allow},
+			"$sm":  auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
+			"$sme": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
 		},
 	})
 
@@ -492,8 +574,8 @@ func TestNormalizeSMERowFiltersDoesNotMergeFieldMasks(t *testing.T) {
 	deny := false
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sme":         {Boolean: &allow},
-			"$sme#idShort": {Boolean: &deny},
+			"$sme":         auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
+			"$sme#idShort": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
 		},
 	})
 
@@ -501,6 +583,7 @@ func TestNormalizeSMERowFiltersDoesNotMergeFieldMasks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []grammar.FragmentStringPattern{"$sme#idShort"}, fragments)
 	rowFilter := auth.GetQueryFilter(filterCtx).Filters["$sme#idShort"]
-	require.NotNil(t, rowFilter.Boolean)
-	require.True(t, *rowFilter.Boolean)
+	require.NotNil(t, rowFilter.Condition)
+	require.NotNil(t, rowFilter.Condition.Boolean)
+	require.True(t, *rowFilter.Condition.Boolean)
 }

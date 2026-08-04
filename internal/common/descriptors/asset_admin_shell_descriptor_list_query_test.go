@@ -47,7 +47,10 @@ func TestListAssetAdministrationShellDescriptorsUsesOneQueryWithRestrictiveFragm
 	deny := false
 	ctx := auth.WithQueryFilter(common.ContextWithConfig(t.Context(), &common.Config{}), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			grammar.FragmentStringPattern("$aasdesc#specificAssetIds[]"): {Boolean: &deny},
+			grammar.FragmentStringPattern("$aasdesc#specificAssetIds[]"): auth.NewFragmentFilterPredicate(
+				grammar.LogicalExpression{Boolean: &deny},
+				false,
+			),
 		},
 	})
 	assertAASDescriptorListUsesOneQuery(ctx, t)

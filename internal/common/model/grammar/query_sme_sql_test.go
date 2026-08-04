@@ -27,6 +27,7 @@ package grammar
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -127,13 +128,139 @@ func TestQueryWrapper_SMECondition_ListWildcardValueType_ToSQL(t *testing.T) {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if !strings.Contains(sql, `"submodel_element"."idshort_path" LIKE`) {
-		t.Fatalf("expected LIKE idshort_path constraint for [] wildcard, got: %s", sql)
+	if !strings.Contains(sql, `"submodel_element"."idshort_path" ~`) {
+		t.Fatalf("expected regex idshort_path constraint for [] wildcard, got: %s", sql)
 	}
-	if !strings.Contains(sql, `ESCAPE`) {
-		t.Fatalf("expected ESCAPE clause for [] wildcard idshort_path constraint, got: %s", sql)
-	}
-	if !argListContains(args, "New!_TestList[%") {
+	if !argListContains(args, `^New_TestList\[[0-9]+\]$`) {
 		t.Fatalf("expected args to contain escaped prefix, got %#v", args)
+	}
+}
+
+func TestSMEIDShortPathRegexKeepsListWildcardsWithinTheirSegments(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]string{
+		"a[]":       `^a\[[0-9]+\]$`,
+		"a[].b[]":   `^a\[[0-9]+\]\.b\[[0-9]+\]$`,
+		"a[1].b[]":  `^a\[1\]\.b\[[0-9]+\]$`,
+		"A_B.C+D[]": `^A_B\.C\+D\[[0-9]+\]$`,
+	}
+	for path, expected := range tests {
+		if actual := smeIDShortPathRegex(path); actual != expected {
+			t.Fatalf("path %q: got %q, want %q", path, actual, expected)
+		}
+	}
+}
+
+func TestSMEIDShortPathSupportsStructuralFragments(t *testing.T) {
+	tests := map[string]string{
+		"$sme.a[]":                "a[]",
+		"$sme.a[1].b[]":           "a[1].b[]",
+		"$sme.a[].b[]#semanticId": "a[].b[]",
+	}
+	for field, expected := range tests {
+		actual, ok := smeIDShortPathFromField(field)
+		if !ok || actual != expected {
+			t.Fatalf("field %q: got path %q with found=%t, want %q", field, actual, ok, expected)
+		}
+	}
+	if _, ok := smeIDShortPathFromField("$sme"); ok {
+		t.Fatal("root SME fragment must not report an idShort path")
+	}
+}
+
+func TestSMEFragmentMatchPathlessSMEFieldsUseCurrentRow(t *testing.T) {
+	collector, err := NewResolvedFieldPathCollectorForSMERow("sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	fragment := FragmentStringPattern("$sme.NewTestList[]")
+	matchCollector := collector.ForFragmentMatch(fragment)
+
+	tests := []struct {
+		field       ModelStringPattern
+		correlation smeMatchCorrelation
+	}{
+		{field: "$sme#idShort", correlation: smeMatchSameRow},
+		{field: "$sme#value", correlation: smeMatchSameRow},
+		{field: "$sme#semanticId.keys[].value", correlation: smeMatchSameRow},
+		{field: "$sm#idShort", correlation: smeMatchContainingSubmodel},
+	}
+	for _, test := range tests {
+		resolved, resolveErr := ResolveScalarFieldToSQL(&test.field)
+		if resolveErr != nil {
+			t.Fatalf("ResolveScalarFieldToSQL(%q) returned error: %v", test.field, resolveErr)
+		}
+		if actual := matchCollector.smeCorrelationForResolved([]ResolvedFieldPath{resolved}); actual != test.correlation {
+			t.Fatalf("field %q: got correlation %v, want %v", test.field, actual, test.correlation)
+		}
+	}
+}
+
+func TestSMERootFragmentMatchUsesCurrentRowForPathCondition(t *testing.T) {
+	collector, err := NewResolvedFieldPathCollectorForSMERow("sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	fragment := FragmentStringPattern("$sme")
+	field := ModelStringPattern("$sme.NewTestList[]#value")
+	resolved, err := ResolveScalarFieldToSQL(&field)
+	if err != nil {
+		t.Fatalf("ResolveScalarFieldToSQL returned error: %v", err)
+	}
+
+	actual := collector.ForFragmentMatch(fragment).smeCorrelationForResolved([]ResolvedFieldPath{resolved})
+	if actual != smeMatchSameRow {
+		t.Fatalf("got correlation %v, want current-row correlation", actual)
+	}
+}
+
+func TestSMEDescendantMatchCorrelatesContainingSubmodel(t *testing.T) {
+	fragment := FragmentStringPattern("$sme.a[]")
+	conditionField := ModelStringPattern("$sme.a[].b[]#value")
+	conditionValue := StandardString("allowed")
+	condition := LogicalExpression{
+		Eq: ComparisonItems{
+			{Field: &conditionField},
+			{StrVal: &conditionValue},
+		},
+	}
+
+	for _, outerAlias := range []string{"sme", "submodel_element"} {
+		t.Run(outerAlias, func(t *testing.T) {
+			collector, err := NewResolvedFieldPathCollectorForSMERow(outerAlias)
+			if err != nil {
+				t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+			}
+			whereExpression, _, err := condition.EvaluateToExpression(collector.ForFragmentMatch(fragment))
+			if err != nil {
+				t.Fatalf("EvaluateToExpression returned error: %v", err)
+			}
+
+			sql, _, err := goqu.Dialect("postgres").
+				From(goqu.T("submodel_element").As(outerAlias)).
+				Select(goqu.V(1)).
+				Where(whereExpression).
+				ToSQL()
+			if err != nil {
+				t.Fatalf("ToSQL returned error: %v", err)
+			}
+
+			innerAlias := "submodel_element"
+			if outerAlias == innerAlias {
+				innerAlias += "__exists"
+			}
+			expectedCorrelation := fmt.Sprintf(
+				`"%s"."submodel_id" = "%s"."submodel_id"`,
+				innerAlias,
+				outerAlias,
+			)
+			if !strings.Contains(sql, expectedCorrelation) {
+				t.Fatalf("expected containing-submodel correlation %q, got: %s", expectedCorrelation, sql)
+			}
+			if !strings.Contains(sql, `"`+innerAlias+`"."idshort_path" LIKE`) {
+				t.Fatalf("expected descendant path correlation, got: %s", sql)
+			}
+		})
 	}
 }

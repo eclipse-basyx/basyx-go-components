@@ -37,6 +37,126 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
+func TestReadAASSubmodelReferencesMatchesCurrentReferenceAndCorrelatesParent(t *testing.T) {
+	keyField := grammar.ModelStringPattern("$aas#submodels[].keys[].value")
+	rootField := grammar.ModelStringPattern("$aas#idShort")
+	visibleKey := grammar.StandardString("urn:example:submodel:visible")
+	publicAAS := grammar.StandardString("public-aas")
+	fragment := grammar.FragmentStringPattern("$aas#submodels[]")
+	condition := grammar.LogicalExpression{
+		And: []grammar.LogicalExpression{
+			{Eq: grammar.ComparisonItems{{Field: &rootField}, {StrVal: &publicAAS}}},
+			{Eq: grammar.ComparisonItems{{Field: &keyField}, {StrVal: &visibleKey}}},
+		},
+	}
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, true)},
+	})
+
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+		if !strings.Contains(actual, `"aas_submodel_reference_key"."value" = $`) {
+			return fmt.Errorf("expected current key-row predicate, got: %s", actual)
+		}
+		if !strings.Contains(actual, `"aas"."id" = "aas_submodel_reference"."aas_id"`) {
+			return fmt.Errorf("expected parent AAS correlation, got: %s", actual)
+		}
+		if !strings.Contains(actual, `EXISTS`) {
+			return fmt.Errorf("expected correlated parent condition, got: %s", actual)
+		}
+		return nil
+	})))
+	if err != nil {
+		t.Fatalf("sqlmock.New failed: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery("AAS submodel reference row match").
+		WithArgs(sqlmock.AnyArg(), string(publicAAS), string(visibleKey)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"owner_id",
+			"ref_id",
+			"ref_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_reference_payload",
+		}).AddRow(
+			int64(7),
+			int64(11),
+			int64(types.ReferenceTypesExternalReference),
+			int64(13),
+			int64(types.KeyTypesGlobalReference),
+			string(visibleKey),
+			[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:example:submodel:visible"}]}`),
+		))
+
+	references, err := ReadAASSubmodelReferencesByAASIDs(ctx, db, []int64{7})
+	if err != nil {
+		t.Fatalf("ReadAASSubmodelReferencesByAASIDs returned error: %v", err)
+	}
+	if len(references[7]) != 1 || len(references[7][0].Keys()) != 1 {
+		t.Fatalf("expected one filtered reference with one key, got %#v", references[7])
+	}
+	if references[7][0].Keys()[0].Value() != string(visibleKey) {
+		t.Fatalf("unexpected filtered key: %q", references[7][0].Keys()[0].Value())
+	}
+	if references[7][0].ReferredSemanticID() != nil {
+		t.Fatalf("full AAS submodel reference payload must not become referredSemanticId: %#v", references[7][0].ReferredSemanticID())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestReadSubmodelSemanticReferencesCorrelatesNonMatchFilterToOwnerAlias(t *testing.T) {
+	field := grammar.ModelStringPattern("$sm#semanticId.keys[].value")
+	value := grammar.StandardString("FILTER_VISIBLE")
+	fragment := grammar.FragmentStringPattern("$sm#semanticId.keys[]")
+	condition := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &field},
+			{StrVal: &value},
+		},
+	}
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, false)},
+	})
+
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+		if !strings.Contains(actual, `EXISTS`) {
+			return fmt.Errorf("expected non-MATCH filter to use EXISTS, got: %s", actual)
+		}
+		if !strings.Contains(actual, `"s"."id"`) {
+			return fmt.Errorf("expected correlation to outer owner alias s, got: %s", actual)
+		}
+		if strings.Contains(actual, `"submodel"."id"`) {
+			return fmt.Errorf("unexpected unbound submodel alias, got: %s", actual)
+		}
+		return nil
+	})))
+	if err != nil {
+		t.Fatalf("sqlmock.New failed: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery("submodel semantic reference non-MATCH correlation").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"owner_id",
+			"ref_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_reference_payload",
+		}))
+
+	if _, err := ReadSubmodelSemanticReferencesBySubmodelIDs(ctx, db, []int64{12}); err != nil {
+		t.Fatalf("ReadSubmodelSemanticReferencesBySubmodelIDs returned error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
 func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilter(t *testing.T) {
 	field := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
 	routeField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
@@ -61,10 +181,7 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 	}
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			fragment: condition,
-		},
-		FilterMatch: auth.FragmentMatchModes{
-			fragment: true,
+			fragment: auth.NewFragmentFilterPredicate(condition, true),
 		},
 	})
 
@@ -111,6 +228,108 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
+	tests := []struct {
+		name                string
+		fragment            grammar.FragmentStringPattern
+		field               grammar.ModelStringPattern
+		expectedCorrelation string
+		unexpected          string
+		columns             []string
+		read                func(context.Context, DBQueryer, []int64) error
+	}{
+		{
+			name:                "nested semantic keys correlate to owning AAS descriptor",
+			fragment:            "$aasdesc#submodelDescriptors[].semanticId.keys[]",
+			field:               "$aasdesc#submodelDescriptors[].idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			columns:             []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+		{
+			name:                "standalone semantic keys stay on current submodel descriptor",
+			fragment:            "$smdesc#semanticId.keys[]",
+			field:               "$smdesc#idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			columns:             []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+		{
+			name:                "nested supplemental references correlate to owning AAS descriptor",
+			fragment:            "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+			field:               "$aasdesc#submodelDescriptors[].idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			columns:             []string{"owner_id", "ref_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+		{
+			name:                "standalone supplemental keys stay on current submodel descriptor",
+			fragment:            "$smdesc#supplementalSemanticIds[].keys[]",
+			field:               "$smdesc#idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			columns:             []string{"owner_id", "ref_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			value := grammar.StandardString("matching-sibling")
+			condition := grammar.LogicalExpression{
+				Eq: grammar.ComparisonItems{
+					{Field: &test.field},
+					{StrVal: &value},
+				},
+			}
+			ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+				Filters: auth.FragmentFilters{
+					test.fragment: auth.NewFragmentFilterPredicate(condition, false),
+				},
+			})
+
+			db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+				if !strings.Contains(actual, test.expectedCorrelation) {
+					return fmt.Errorf("expected correlation %q, got: %s", test.expectedCorrelation, actual)
+				}
+				if strings.Contains(actual, test.unexpected) {
+					return fmt.Errorf("unexpected correlation %q, got: %s", test.unexpected, actual)
+				}
+				return nil
+			})))
+			if err != nil {
+				t.Fatalf("sqlmock.New failed: %v", err)
+			}
+			defer func() { _ = db.Close() }()
+
+			mock.ExpectQuery("submodel descriptor child reference correlation").
+				WillReturnRows(sqlmock.NewRows(test.columns))
+
+			if err := test.read(ctx, db, []int64{12}); err != nil {
+				t.Fatalf("reference read returned error: %v", err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("unmet sqlmock expectations: %v", err)
+			}
+		})
 	}
 }
 
@@ -174,13 +393,11 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 			}
 			ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 				Filters: auth.FragmentFilters{
-					test.fragment: condition,
-					unrelatedFragment: {
-						Boolean: boolPointer(false),
-					},
-				},
-				FilterMatch: auth.FragmentMatchModes{
-					test.fragment: true,
+					test.fragment: auth.NewFragmentFilterPredicate(condition, true),
+					unrelatedFragment: auth.NewFragmentFilterPredicate(
+						grammar.LogicalExpression{Boolean: boolPointer(false)},
+						false,
+					),
 				},
 			})
 
@@ -230,6 +447,56 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 				t.Fatalf("unmet sqlmock expectations: %v", expectationErr)
 			}
 		})
+	}
+}
+
+func TestReadSubmodelSupplementalSemanticReferencesCorrelatesNonMatchFilterToOwnerAlias(t *testing.T) {
+	field := grammar.ModelStringPattern("$sm#supplementalSemanticIds[].keys[].value")
+	value := grammar.StandardString("FILTER_VISIBLE")
+	fragment := grammar.FragmentStringPattern("$sm#supplementalSemanticIds[]")
+	condition := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &field},
+			{StrVal: &value},
+		},
+	}
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, false)},
+	})
+
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+		if !strings.Contains(actual, `EXISTS`) {
+			return fmt.Errorf("expected non-MATCH filter to use EXISTS, got: %s", actual)
+		}
+		if !strings.Contains(actual, `"s"."id"`) {
+			return fmt.Errorf("expected correlation to outer owner alias s, got: %s", actual)
+		}
+		if strings.Contains(actual, `"submodel"."id"`) {
+			return fmt.Errorf("unexpected unbound submodel alias, got: %s", actual)
+		}
+		return nil
+	})))
+	if err != nil {
+		t.Fatalf("sqlmock.New failed: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery("submodel supplemental reference non-MATCH correlation").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"owner_id",
+			"ref_id",
+			"ref_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_reference_payload",
+		}))
+
+	if _, err := ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(ctx, db, []int64{12}); err != nil {
+		t.Fatalf("ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs returned error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
 	}
 }
 

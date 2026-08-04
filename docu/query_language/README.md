@@ -2,6 +2,9 @@
 
 This document explains how logical expressions are simplified and converted into SQL. It focuses on the internal pipeline: expression trees, implicit casts, field identifiers, fragment identifiers, and filter mapping.
 
+For request/response examples, including query-endpoint and ABAC composition,
+see [Query Language Examples](examples.md).
+
 ## Quick mental model (no background required)
 
 - A query is a tree of logical operators (AND/OR/NOT) and comparisons (EQ/GT/etc).
@@ -402,9 +405,97 @@ Why this matters:
 - The guard keeps unrelated rows in the result set when a fragment filter targets a specific fragment.
 - If a fragment has no bindings, negation would be redundant, so it is skipped.
 
-### Array-ended fragment filters are row-local
+### Query endpoints and ABAC rules use the same QL
 
-For fragment filters whose fragment identifier ends in an array segment (for example, $aasdesc#specificAssetIds[] or $aasdesc#endpoints[]), row-local evaluation can be enabled explicitly with:
+Query-endpoint filters and ABAC rule filters are translated into the same
+internal query-filter representation and use the same logical-expression
+grammar. They therefore support the same field identifiers, comparison and
+string operators, fragment guards, and row-local matching semantics. Their
+different JSON naming reflects their different sources, not different filter
+logic.
+
+| Concept | Query endpoint | ABAC rule |
+| --- | --- | --- |
+| Main resource condition | Required top-level `$condition` | Rule `FORMULA` or `USEFORMULA` |
+| Fragment filters | `$filters` | `FILTER` or `FILTERLIST` |
+| Target fragment | `$fragment` | `FRAGMENT` |
+| Fragment condition | `$condition` | `CONDITION` or `USEFORMULA` |
+| Row-local evaluation | `$match` | `MATCH` |
+
+`$match` and `MATCH` are optional flags inside a fragment filter. They do not
+add another condition, select a parent resource, or decide whether an ABAC rule
+permits a request. They only control how that filter's condition is correlated
+to the fragment row being reconstructed.
+
+The two sources have different responsibilities:
+
+- An ABAC rule first matches the route, operation, objects, and caller. Its
+  formula constrains the resources visible to that caller, and its fragment
+  filters are mandatory response masks. A client cannot remove them.
+- A query endpoint's top-level `$condition` selects parent resources. Its
+  `$filters` shape fragments inside those results and can only narrow what the
+  active ABAC policy already allows.
+- When both sources are present, the policy formula and query condition are
+  combined with `AND`. Policy and request predicates for the same fragment are
+  also combined with `AND`.
+- Alternatives from multiple permitting ABAC rules are combined with `OR`
+  before the request query is applied. Each fragment predicate retains its own
+  `MATCH` or `$match` value throughout this composition.
+
+Conceptually, persistence reads apply:
+
+```text
+resources visible through ABAC AND resources selected by the query
+```
+
+and then reconstruct each fragment using:
+
+```text
+mandatory ABAC fragment filter AND optional request fragment filter
+```
+
+This means a query can narrow a result but can never use QL to widen access
+granted by the policy. If ABAC is disabled, the query condition and request
+fragment filters are applied on their own.
+
+### Explicit row-local fragment matching
+
+Fragment filters use parent-level existential evaluation by default. A condition
+may therefore be satisfied by another row belonging to the same parent. This
+preserves the complete fragment when at least one matching row exists.
+
+Set `$match` explicitly in a request query when the condition must be evaluated
+against the fragment row currently being reconstructed:
+
+```json
+{
+  "$condition": {
+    "$eq": [
+      { "$field": "$smdesc#supplementalSemanticIds[].keys[].value" },
+      { "$strVal": "QUERY_ALLOWED" }
+    ]
+  },
+  "$filters": [
+    {
+      "$fragment": "$smdesc#supplementalSemanticIds[]",
+      "$match": true,
+      "$condition": {
+        "$eq": [
+          { "$field": "$smdesc#supplementalSemanticIds[].keys[].value" },
+          { "$strVal": "FILTER_VISIBLE" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+With `$match: true`, only supplemental semantic ID rows satisfying the filter
+condition are returned. Omitting `$match`, or setting it to `false`, keeps the
+existential behavior. Array-ended fragments never enable matching implicitly.
+
+ABAC policy filters use the equivalent uppercase `MATCH` property because the
+access-rule schema uses uppercase property names:
 
 ```json
 {
@@ -414,23 +505,116 @@ For fragment filters whose fragment identifier ends in an array segment (for exa
 }
 ```
 
-Default behavior is unchanged (`MATCH` omitted or `false`): legacy descriptor-level fragment guard behavior is used.
+Both forms are explicit and are supported for every fragment handled by its
+reader. Row-local behavior is especially relevant for arrays and nested arrays,
+where it keeps conditions bound to the same item and array indices.
 
-Practical effect:
-- Before this behavior, a condition on one array element could make the whole array fragment appear as matched for the parent descriptor.
-- With `MATCH: true`, each array item is included or excluded based on that item's own data.
+#### Root scope and correlation boundaries
 
-Scope:
-- This applies to fragment filter WHERE evaluation when `MATCH: true`.
-- Mask flag projections keep collector-based translation behavior.
+The root prefix describes the resource through which a fragment is read. It is
+not changed by `$match` or `MATCH`:
+
+| Query context | Fragment and field prefix | Scope without matching | Scope with matching |
+| --- | --- | --- | --- |
+| Submodel Descriptor nested in an AAS Descriptor | `$aasdesc#submodelDescriptors[]...` | The owning AAS Descriptor. A sibling Submodel Descriptor in that AAS Descriptor may satisfy the condition, preserving the complete requested child fragment. | The currently reconstructed nested Submodel Descriptor or child row. |
+| Standalone Submodel Descriptor | `$smdesc#...` | The current Submodel Descriptor. | The currently reconstructed child row. |
+
+For example, a DTR policy that filters supplemental-semantic-ID keys of nested
+Submodel Descriptors uses the AAS Descriptor root consistently in both the
+fragment and the formula field:
+
+```json
+{
+  "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
+  "MATCH": true,
+  "USEFORMULA": "submodel_descriptor_bpn_or_public_filter"
+}
+```
+
+The referenced formula must use the same root, for example:
+
+```json
+{
+  "$eq": [
+    {
+      "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
+    },
+    { "$strVal": "PUBLIC_READABLE" }
+  ]
+}
+```
+
+`$smdesc#supplementalSemanticIds[].keys[]` is the corresponding path only when
+the query result itself is rooted at a standalone Submodel Descriptor. The
+correlation never crosses the resource boundary: a nested descriptor condition
+cannot be satisfied by a descriptor belonging to another AAS Descriptor.
+
+The same boundary applies to Submodel Element descendant filters. Descendant
+paths are correlated by both `idShortPath` and the containing Submodel. An
+identical path in another Submodel cannot satisfy the condition.
+
+#### How the SQL correlation is selected
+
+Fragment conditions are evaluated through correlated `EXISTS` expressions. The
+correlation key depends on the root and match mode:
+
+| Context | Correlation |
+| --- | --- |
+| Nested `$aasdesc#submodelDescriptors[]...`, matching disabled | `inner_submodel_descriptor.aas_descriptor_id = outer_submodel_descriptor.aas_descriptor_id` |
+| Nested `$aasdesc#submodelDescriptors[]...`, matching enabled | `inner_submodel_descriptor.descriptor_id = outer_submodel_descriptor.descriptor_id`, followed by the applicable child owner keys for deeper arrays |
+| Standalone `$smdesc#...` | `inner_submodel_descriptor.descriptor_id = outer_submodel_descriptor.descriptor_id`, followed by the applicable child owner keys |
+| Submodel Element descendant | `inner.submodel_id = outer.submodel_id` plus an `idShortPath` descendant comparison |
+
+Using `aas_descriptor_id` for a non-matching nested condition is deliberate: it
+implements parent-level existential semantics, so one Submodel Descriptor may
+satisfy the condition while the complete fragment of its siblings in the same
+AAS Descriptor is retained. Correlation by the current Submodel Descriptor is
+retained for `MATCH`, which masks non-matching siblings or child rows.
+
+The nested and standalone collectors are selected independently by the child
+readers. This applies consistently to Submodel Descriptor endpoints,
+`semanticId.keys[]`, supplemental semantic ID references, and their `keys[]`.
+Consequently, a `$aasdesc` filter is never evaluated with the standalone
+`$smdesc` scope merely because both paths read the same database tables.
+
+For Submodel Element descendants, the generated correlation is equivalent to:
+
+```sql
+inner.submodel_id = outer.submodel_id
+AND (
+  inner.idshort_path LIKE (escaped_outer_path || '.%') ESCAPE '!'
+  OR inner.idshort_path LIKE (escaped_outer_path || '[%]%') ESCAPE '!'
+)
+```
+
+Here `escaped_outer_path` is the outer `idshort_path` with SQL `LIKE` wildcard
+characters escaped. The `submodel_id` equality is required because
+`idShortPath` is unique only within a Submodel. Without it, an identically
+structured Submodel could satisfy the `EXISTS` condition for the wrong
+Submodel.
+
+#### Behavior and compatibility
+
+| Filter source | `$match` / `MATCH` omitted or `false` | `$match` / `MATCH` set to `true` |
+| --- | --- | --- |
+| Request query (`$filters`) | The condition is evaluated at parent scope. A matching sibling can keep the complete fragment in the response. | The condition is evaluated against the current fragment row. Only matching rows of that fragment are reconstructed. |
+| ABAC policy (`FILTER` / `FILTERLIST`) | The policy condition keeps parent-level existential semantics. | The policy condition masks the current fragment row. Each condition retains its own match mode when filters and rules are combined. |
+
+This changes the previous request-query behavior for wildcard array fragments:
+an array-ended `$fragment` no longer enables row-local matching automatically.
+Clients that depend on receiving only the matching array entries must add
+`"$match": true`. Existing queries remain valid, but their returned fragment
+contents can be broader when `$match` is omitted.
 
 Implementation reference:
-- AddFilterQueryFromContext in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
-- buildFragmentMaskConditionWithOptions in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
-- fragmentEndsWithArraySegment in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
-
-Implementation reference:
+- Request query parsing in [internal/common/model/grammar/query.go](../../internal/common/model/grammar/query.go)
+- QueryFilter merging in [internal/common/security/authorize.go](../../internal/common/security/authorize.go)
+- ABAC match propagation in [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go)
+- Row-local and existential evaluation in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 - EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](../../internal/common/model/grammar/logical_expression_to_sql.go)
+- Nested and standalone Submodel Descriptor collector selection in [internal/common/descriptors/AASFilterQuery.go](../../internal/common/descriptors/AASFilterQuery.go)
+- Submodel Descriptor endpoint filtering in [internal/common/descriptors/ReadEndpoint.go](../../internal/common/descriptors/ReadEndpoint.go)
+- Submodel Descriptor reference filtering in [internal/common/descriptors/ReadReferences.go](../../internal/common/descriptors/ReadReferences.go)
 - ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](../../internal/common/model/grammar/fieldidentifier_processing.go)
 
 Beginner notes:

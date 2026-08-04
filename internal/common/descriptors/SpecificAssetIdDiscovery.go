@@ -108,6 +108,11 @@ func ReadSpecificAssetIDsByAASRef(
 	if err != nil {
 		return nil, err
 	}
+	collector.AllowInlineAliases(
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+	)
+	collector.SetRootJoinKey(common.AliasSpecificAssetID, common.ColAASRef)
 	expressions, err := auth.GetColumnSelectStatement(ctx, bdColumns, collector)
 	if err != nil {
 		return nil, err

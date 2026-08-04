@@ -29,6 +29,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 )
 
 // WithQueryFilter stores the provided query filter in the context.
@@ -60,6 +61,48 @@ func CloneQueryFilter(queryFilter *QueryFilter) (*QueryFilter, error) {
 	if err := json.Unmarshal(b, &cloned); err != nil {
 		return nil, err
 	}
+	for fragment, predicate := range queryFilter.Filters {
+		clonedPredicate, ok := cloned.Filters[fragment]
+		if !ok {
+			continue
+		}
+		clonedPredicate, err = restoreFragmentFilterPredicateMetadata(clonedPredicate, predicate)
+		if err != nil {
+			return nil, err
+		}
+		cloned.Filters[fragment] = clonedPredicate
+	}
 
 	return &cloned, nil
+}
+
+func restoreFragmentFilterPredicateMetadata(
+	cloned FragmentFilterPredicate,
+	source FragmentFilterPredicate,
+) (FragmentFilterPredicate, error) {
+	if (cloned.Condition == nil) != (source.Condition == nil) ||
+		len(cloned.And) != len(source.And) ||
+		len(cloned.Or) != len(source.Or) {
+		return FragmentFilterPredicate{}, fmt.Errorf("AUTH-CLONEQF-SCOPEMISMATCH fragment predicate shape changed during clone")
+	}
+	cloned.global = source.global
+	if source.fragment != nil {
+		fragmentCopy := *source.fragment
+		cloned.fragment = &fragmentCopy
+	}
+	for i := range cloned.And {
+		var err error
+		cloned.And[i], err = restoreFragmentFilterPredicateMetadata(cloned.And[i], source.And[i])
+		if err != nil {
+			return FragmentFilterPredicate{}, err
+		}
+	}
+	for i := range cloned.Or {
+		var err error
+		cloned.Or[i], err = restoreFragmentFilterPredicateMetadata(cloned.Or[i], source.Or[i])
+		if err != nil {
+			return FragmentFilterPredicate{}, err
+		}
+	}
+	return cloned, nil
 }

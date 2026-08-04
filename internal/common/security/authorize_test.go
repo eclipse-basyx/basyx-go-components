@@ -507,6 +507,47 @@ func TestShouldEnforceFormula_AppliesMergedQueryWhenABACDisabled(t *testing.T) {
 	}
 }
 
+func TestMergeQueryFilterDoesNotImplicitlyMatchArrayEndedFragments(t *testing.T) {
+	t.Parallel()
+
+	condition := boolExpression(true)
+	fragment := grammar.FragmentStringPattern("$smdesc#supplementalSemanticIds[]")
+	ctx := MergeQueryFilter(context.Background(), grammar.Query{
+		FilterConditions: []grammar.SubFilter{{
+			Condition: &condition,
+			Fragment:  &fragment,
+		}},
+	})
+
+	queryFilter := GetQueryFilter(ctx)
+	if queryFilter == nil {
+		t.Fatal("expected merged query filter")
+	}
+	if queryFilter.Filters[fragment].Match {
+		t.Fatal("array-ended user query fragment must not enable MATCH implicitly")
+	}
+}
+
+func TestMergeQueryFilterUsesExplicitFragmentMatch(t *testing.T) {
+	t.Parallel()
+
+	condition := boolExpression(true)
+	fragment := grammar.FragmentStringPattern("$smdesc#supplementalSemanticIds[]")
+	match := true
+	ctx := MergeQueryFilter(context.Background(), grammar.Query{
+		FilterConditions: []grammar.SubFilter{{
+			Condition: &condition,
+			Fragment:  &fragment,
+			Match:     &match,
+		}},
+	})
+
+	queryFilter := GetQueryFilter(ctx)
+	if queryFilter == nil || !queryFilter.Filters[fragment].Match {
+		t.Fatal("explicit $match must enable row-local fragment matching")
+	}
+}
+
 func TestShouldEnforceFormula_InconsistentQueryFilterErrorDoesNotMentionABACEnabled(t *testing.T) {
 	t.Parallel()
 

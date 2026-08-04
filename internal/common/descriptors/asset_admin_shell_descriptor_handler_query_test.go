@@ -283,10 +283,7 @@ func TestBuildSingleStatementAASDescriptorListQueryCorrelatesSubmodelRouteFilter
 		},
 	}
 	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
-		Filters: auth.FragmentFilters{fragment: condition},
-		FilterMatch: auth.FragmentMatchModes{
-			fragment: true,
-		},
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, true)},
 	})
 
 	ds, err := buildSingleStatementAASDescriptorListQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
@@ -314,7 +311,7 @@ func TestBuildSingleStatementAASDescriptorListQueryFiltersReferenceParentsByKeys
 	keyValue := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
 	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			fragment: descriptorFieldEquals(keyValue, "VISIBLE_KEY"),
+			fragment: auth.NewFragmentFilterPredicate(descriptorFieldEquals(keyValue, "VISIBLE_KEY"), false),
 		},
 	})
 

@@ -29,15 +29,10 @@ package grammar
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
-
-var smeIDShortPathArrayIndexPattern = regexp.MustCompile(`\[[^\]]*\]`)
-var smeIDShortPathTerminalIndexPattern = regexp.MustCompile(`(\[[0-9]+\])$`)
-var smeIDShortPathTerminalWildcardPattern = regexp.MustCompile(`(\[\])$`)
 
 // ArrayIndexBinding represents a concrete index access on an array-like
 // segment of a field path that has been normalized into SQL.
@@ -129,6 +124,8 @@ type ResolvedFieldPath struct {
 	// The bindings are ordered from outermost to innermost array access
 	// as they appear in the original FieldIdentifier.
 	ArrayBindings []ArrayIndexBinding
+
+	rootContext resolveContext
 }
 
 // ResolveScalarFieldToSQL converts a FieldIdentifier value into its SQL
@@ -197,7 +194,11 @@ func ResolveScalarFieldToSQL(field *ModelStringPattern) (ResolvedFieldPath, erro
 		return ResolvedFieldPath{}, err
 	}
 
-	return ResolvedFieldPath{Column: column, ArrayBindings: bindings}, nil
+	return ResolvedFieldPath{
+		Column:        column,
+		ArrayBindings: bindings,
+		rootContext:   contextFromFieldPrefix(fieldStr),
+	}, nil
 }
 
 // ResolveFragmentFieldToSQL resolves a fragment identifier that ends in an array segment.
@@ -367,66 +368,25 @@ func smeIDShortPathFromField(fieldStr string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-
-	terminalIndex := ""
-	if matches := smeIDShortPathTerminalIndexPattern.FindStringSubmatch(rawPath); len(matches) == 2 {
-		terminalIndex = matches[1]
-	}
-	terminalWildcard := smeIDShortPathTerminalWildcardPattern.MatchString(rawPath)
-
-	path := smeIDShortPathArrayIndexPattern.ReplaceAllString(rawPath, "")
-	if terminalIndex != "" {
-		path += terminalIndex
-	} else if terminalWildcard {
-		path += "[]"
-	}
-	if strings.TrimSpace(path) == "" {
+	if strings.TrimSpace(rawPath) == "" {
 		return "", false
 	}
-	return path, true
+	return rawPath, true
 }
 
 func smeRawIDShortPathFromField(fieldStr string) (string, bool) {
-	parts := strings.SplitN(fieldStr, "#", 2)
-	if len(parts) != 2 {
+	prefix, _, _ := strings.Cut(fieldStr, "#")
+	if prefix == "$sme" {
 		return "", false
 	}
-	prefix := parts[0]
-	if !strings.HasPrefix(prefix, "$sme") {
+	if !strings.HasPrefix(prefix, "$sme.") {
 		return "", false
 	}
-	path := strings.TrimPrefix(prefix, "$sme")
-	path = strings.TrimPrefix(path, ".")
+	path := strings.TrimPrefix(prefix, "$sme.")
 	if strings.TrimSpace(path) == "" {
 		return "", false
 	}
 	return path, true
-}
-
-func smePrefixIndexBindingsFromField(fieldStr string) []ArrayIndexBinding {
-	rawPath, ok := smeRawIDShortPathFromField(fieldStr)
-	if !ok {
-		return nil
-	}
-
-	// Reuse the existing tokenizer by fabricating a field prefix.
-	tokens := builder.TokenizeField("$sme#" + rawPath)
-	if len(tokens) == 0 {
-		return nil
-	}
-
-	// We only have the target SME row alias in the current SQL translation path.
-	// Therefore we can bind only the closest array index (target row position).
-	for i := len(tokens) - 1; i >= 0; i-- {
-		if at, ok := tokens[i].(builder.ArrayToken); ok && at.Index >= 0 {
-			return []ArrayIndexBinding{{
-				Alias: "submodel_element.position",
-				Index: NewArrayIndexPosition(at.Index),
-			}}
-		}
-	}
-
-	return nil
 }
 
 func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndexBinding, error) {
@@ -441,7 +401,6 @@ func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndex
 		if idShortPath, ok := smeIDShortPathFromField(fieldStr); ok {
 			bindings = append(bindings, ArrayIndexBinding{Alias: "submodel_element.idshort_path", Index: NewArrayIndexString(idShortPath)})
 		}
-		bindings = append(bindings, smePrefixIndexBindingsFromField(fieldStr)...)
 	}
 	prevSimple := ""
 	for _, tok := range tokens {

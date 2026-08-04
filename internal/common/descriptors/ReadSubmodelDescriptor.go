@@ -97,6 +97,10 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
+	collector.AllowInlineAliases(
+		common.AliasSubmodelDescriptor,
+		common.AliasSubmodelDescriptorSemanticIDReference,
+	)
 	const dataAlias = "smd_by_desc_data"
 	maskedColumns := []auth.MaskedInnerColumnSpec{
 		{Fragment: "$smdesc#idShort", FlagAlias: "flag_smdesc_idshort", RawAlias: "c2"},
@@ -232,10 +236,16 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	d := goqu.Dialect(common.Dialect)
 	payloadAlias := common.TDescriptorPayload.As("smd_payload")
 	semanticRefAlias := goqu.T("submodel_descriptor_semantic_id_reference").As(common.AliasSubmodelDescriptorSemanticIDReference)
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+	collector, err := grammar.NewResolvedFieldPathCollectorForNestedSMDesc()
 	if err != nil {
 		return nil, err
 	}
+	collector.AllowInlineAliases(
+		"descriptor",
+		"aas_descriptor",
+		common.AliasSubmodelDescriptor,
+		common.AliasSubmodelDescriptorSemanticIDReference,
+	)
 	const dataAlias = "smd_by_aas_data"
 	maskedColumns := []auth.MaskedInnerColumnSpec{
 		{Fragment: "$aasdesc#submodelDescriptors[].idShort", FlagAlias: "flag_aas_smdesc_idshort", RawAlias: "c2"},

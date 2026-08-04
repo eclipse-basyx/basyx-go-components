@@ -125,6 +125,7 @@
           },
           {
             "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+            "MATCH": true,
             "CONDITION": {
               "$eq": [
                 {"$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"},

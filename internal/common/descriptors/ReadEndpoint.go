@@ -158,13 +158,15 @@ func ReadEndpointsByDescriptorIDs(
 		).
 		Prepared(true)
 
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	filterSpecs, err := endpointFilterContext(joinOnMainTable)
 	if err != nil {
 		return nil, err
 	}
-	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]", collector)
-	if err != nil {
-		return nil, err
+	for _, filterSpec := range filterSpecs {
+		ds, err = auth.AddFilterQueryFromContext(ctx, ds, filterSpec.fragment, filterSpec.collector)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sqlStr, args, err := ds.ToSQL()
@@ -222,4 +224,45 @@ func ReadEndpointsByDescriptorIDs(
 	}
 
 	return out, nil
+}
+
+type endpointFilterSpec struct {
+	fragment  grammar.FragmentStringPattern
+	collector *grammar.ResolvedFieldPathCollector
+}
+
+func endpointFilterContext(joinOnMainTable string) ([]endpointFilterSpec, error) {
+	switch joinOnMainTable {
+	case "aas":
+		collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+		if err != nil {
+			return nil, err
+		}
+		collector.AllowInlineAliases("descriptor", "aas_descriptor", common.AliasAASDescriptorEndpoint)
+		return []endpointFilterSpec{{
+			fragment:  "$aasdesc#endpoints[]",
+			collector: collector,
+		}}, nil
+	case "submodel":
+		collectors, err := newSubmodelDescriptorChildFilterCollectors(
+			"descriptor",
+			common.AliasSubmodelDescriptor,
+			common.AliasSubmodelDescriptorEndpoint,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return []endpointFilterSpec{
+			{
+				fragment:  "$aasdesc#submodelDescriptors[].endpoints[]",
+				collector: collectors.aas,
+			},
+			{
+				fragment:  "$smdesc#endpoints[]",
+				collector: collectors.standalone,
+			},
+		}, nil
+	default:
+		return nil, nil
+	}
 }

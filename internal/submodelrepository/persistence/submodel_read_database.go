@@ -35,6 +35,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
@@ -232,7 +233,8 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
 func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
-	if !hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds") {
+	if !hasFragmentFilterPrefix(ctx, "$sm#semanticId.keys") &&
+		!hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds") {
 		return s.getSubmodelsWithOptionalFiltersWithQueryer(ctx, s.readDB(ctx), limit, cursor, submodelIdentifier, idShort, semanticID, createdFrom, updatedFrom)
 	}
 
@@ -277,9 +279,13 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 	}
 
 	const dataAlias = "submodel_list_data"
+	const semanticIDFragment grammar.FragmentStringPattern = "$sm#semanticId"
+	filterSemanticIDKeys := hasFragmentFilterPrefix(ctx, "$sm#semanticId.keys")
+	filterSupplementalSemanticIDs := hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds")
+	filterReferenceRows := filterSemanticIDKeys || filterSupplementalSemanticIDs
 	maskedColumns := []auth.MaskedInnerColumnSpec{
 		{Fragment: "$sm#idShort", FlagAlias: "flag_idshort", RawAlias: "c1"},
-		{Fragment: "$sm#semanticId", FlagAlias: "flag_semanticid", RawAlias: "raw_semantic_id_payload"},
+		{Fragment: semanticIDFragment, FlagAlias: "flag_semanticid", RawAlias: "raw_semantic_id_payload"},
 	}
 	maskRuntime, maskRuntimeErr := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
 	if maskRuntimeErr != nil {
@@ -290,10 +296,9 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-MASKEXPR " + maskedExprErr.Error())
 	}
 
-	filterSupplementalSemanticIDs := hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds")
 	additionalProjections := maskRuntime.Projections()
-	if filterSupplementalSemanticIDs {
-		additionalProjections = append(additionalProjections, goqu.I("submodel.id").As("supplemental_owner_id"))
+	if filterReferenceRows {
+		additionalProjections = append(additionalProjections, goqu.I("submodel.id").As("reference_owner_id"))
 	}
 	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, idShortFilter, limitFilter, cursorFilter, createdFrom, updatedFrom, additionalProjections)
 	if err != nil {
@@ -313,11 +318,23 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-ABACFORMULA " + err.Error())
 		}
 	}
-	query, args, err := submodelqueries.BuildSubmodelListSQLWithSupplementalOwnerID(
+	outerProjections := make([]exp.Expression, 0, 1)
+	if filterSemanticIDKeys {
+		semanticIDFlagAlias, flagErr := maskRuntime.FlagAlias(semanticIDFragment)
+		if flagErr != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-SEMANTICFLAG " + flagErr.Error())
+		}
+		outerProjections = append(
+			outerProjections,
+			goqu.I(dataAlias+"."+semanticIDFlagAlias).As("semantic_id_visible"),
+		)
+	}
+	query, args, err := submodelqueries.BuildSubmodelListSQLWithReferenceOwnerID(
 		selectDS,
 		dataAlias,
 		maskedExpressions,
-		filterSupplementalSemanticIDs,
+		filterReferenceRows,
+		outerProjections...,
 	)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BUILDSQL " + err.Error())
@@ -340,7 +357,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 	}
 
 	submodels := make([]types.ISubmodel, 0)
-	supplementalOwnerIDs := make([]int64, 0)
+	referenceStates := make([]submodelReferenceReadState, 0)
 	nextCursor := ""
 	for rows.Next() {
 		scanTargets := []any{
@@ -357,9 +374,12 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 			&qualifiersJsonString,
 			&semanticIDJSONString,
 		}
-		var supplementalOwnerID int64
-		if filterSupplementalSemanticIDs {
-			scanTargets = append(scanTargets, &supplementalOwnerID)
+		var referenceState submodelReferenceReadState
+		if filterReferenceRows {
+			scanTargets = append(scanTargets, &referenceState.ownerID)
+		}
+		if filterSemanticIDKeys {
+			scanTargets = append(scanTargets, &referenceState.semanticIDVisible)
 		}
 		if err := rows.Scan(scanTargets...); err != nil {
 			return nil, "", err
@@ -401,8 +421,8 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		}
 
 		submodels = append(submodels, submodel)
-		if filterSupplementalSemanticIDs {
-			supplementalOwnerIDs = append(supplementalOwnerIDs, supplementalOwnerID)
+		if filterReferenceRows {
+			referenceStates = append(referenceStates, referenceState)
 		}
 	}
 
@@ -410,21 +430,70 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		return nil, "", err
 	}
 
+	if filterSemanticIDKeys {
+		if applyErr := applyFilteredSubmodelSemanticIDs(ctx, db, submodels, referenceStates); applyErr != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-READSEMANTICID " + applyErr.Error())
+		}
+	}
+
 	if filterSupplementalSemanticIDs {
+		referenceOwnerIDs := submodelReferenceOwnerIDs(referenceStates)
 		filteredReferences, readErr := descriptors.ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 			ctx,
 			db,
-			supplementalOwnerIDs,
+			referenceOwnerIDs,
 		)
 		if readErr != nil {
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-READSUPPSEM " + readErr.Error())
 		}
-		for index, ownerID := range supplementalOwnerIDs {
+		for index, ownerID := range referenceOwnerIDs {
 			submodels[index].SetSupplementalSemanticIDs(filteredReferences[ownerID])
 		}
 	}
 
 	return submodels, nextCursor, nil
+}
+
+type submodelReferenceReadState struct {
+	ownerID           int64
+	semanticIDVisible bool
+}
+
+func applyFilteredSubmodelSemanticIDs(
+	ctx context.Context,
+	db descriptors.DBQueryer,
+	submodels []types.ISubmodel,
+	referenceStates []submodelReferenceReadState,
+) error {
+	if len(submodels) != len(referenceStates) {
+		return common.NewInternalServerError("SMREPO-APPLYFILTEREDSEM-STATEMISMATCH submodel and reference state counts differ")
+	}
+	visibleOwnerIDs := make([]int64, 0, len(referenceStates))
+	for _, state := range referenceStates {
+		if state.semanticIDVisible {
+			visibleOwnerIDs = append(visibleOwnerIDs, state.ownerID)
+		}
+	}
+	filteredReferences, err := descriptors.ReadSubmodelSemanticReferencesBySubmodelIDs(ctx, db, visibleOwnerIDs)
+	if err != nil {
+		return err
+	}
+	for index, state := range referenceStates {
+		if !state.semanticIDVisible {
+			submodels[index].SetSemanticID(nil)
+			continue
+		}
+		submodels[index].SetSemanticID(filteredReferences[state.ownerID])
+	}
+	return nil
+}
+
+func submodelReferenceOwnerIDs(referenceStates []submodelReferenceReadState) []int64 {
+	ownerIDs := make([]int64, 0, len(referenceStates))
+	for _, state := range referenceStates {
+		ownerIDs = append(ownerIDs, state.ownerID)
+	}
+	return ownerIDs
 }
 
 func hasFragmentFilterPrefix(ctx context.Context, prefix string) bool {

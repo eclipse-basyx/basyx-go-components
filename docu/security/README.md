@@ -271,8 +271,74 @@ Notes:
 - QueryFilter is stored in request context after ABAC evaluation.
 - Controllers can enforce it on payloads or results.
 - Persistence helpers apply it to SQL queries and fragment projections.
+- ABAC `FILTER`/`FILTERLIST` and query-endpoint `$filters` use the same QL
+  expression and fragment-filter implementation; their casing identifies the
+  source, not different semantics.
+- ABAC filters are mandatory policy constraints. Request-query filters are
+  ANDed with them, so callers can narrow policy-visible results but cannot widen
+  them.
+- Multi-stage persistence readers must carry the parent fragment's mask result
+  into later reconstruction stages. Child or key filters may narrow a visible
+  parent value, but fallback and reconstruction queries must neither load nor
+  restore a parent value whose visibility flag is false.
 - QueryFilter carries right-scoped formulas in `FormulasByRight` (for example, separate formulas for `CREATE` and `UPDATE`).
 - `SelectPutFormulaByExistence(ctx, dataExists)` switches the active `Formula` for PUT upsert checks (create vs update).
+
+See [Query endpoints and ABAC rules use the same QL](../query_language/README.md#query-endpoints-and-abac-rules-use-the-same-ql)
+for the syntax mapping, evaluation order, and composition rules.
+
+### Indexed fragment visibility
+
+An indexed fragment filter restricts only the selected array position. For
+example, a filter for `$aasdesc#specificAssetIds[0]` controls the visibility of
+position `0`; it does not by itself restrict the other positions. A wildcard
+filter such as `$aasdesc#specificAssetIds[]` applies to every position.
+
+`MATCH` controls where the fragment condition is evaluated; it does not change
+which positions the fragment targets. For example:
+
+```json
+{
+  "FRAGMENT": "$aasdesc#specificAssetIds[]",
+  "MATCH": true,
+  "CONDITION": {
+    "$eq": [
+      { "$field": "$aasdesc#specificAssetIds[].name" },
+      { "$strVal": "customerPartId" }
+    ]
+  }
+}
+```
+
+Here the wildcard targets every `specificAssetIds` position, while
+`MATCH: true` evaluates the condition against the row currently being
+reconstructed. Only rows whose `name` is `customerPartId` are visible. If
+`MATCH` is omitted or `false`, the condition has parent-level existential
+semantics: one matching `specificAssetIds` row can make the condition pass for
+all positions of that fragment, preserving the complete array. `MATCH: true`
+therefore makes wildcard fragment filtering row-local; it does not turn the
+wildcard into an indexed fragment.
+
+Fragment filters are composed at rule boundaries:
+
+- Within one rule, all applicable fragment restrictions are combined with
+  logical AND. Equivalent `[0]` and `[]` entries in the same `FILTERLIST` must
+  therefore both pass at position `0`.
+- Across separate permitting rules, complete rule alternatives are combined
+  with logical OR. Each alternative keeps its rule formula associated with its
+  own fragment restrictions.
+
+For example, consider two permitting rules whose formulas both pass. One rule
+has `$aasdesc#specificAssetIds[] = false`; the other has
+`$aasdesc#specificAssetIds[0] = false`. Position `0` is hidden because both rule
+alternatives deny it. The other positions remain visible because the indexed
+restriction does not apply to them.
+
+When multiple permitting rules apply, a position is visible when at least one
+rule permits that position and its applicable fragment restrictions pass. An
+unrestricted position from an indexed rule must not make that rule unrestricted
+at the indexed position itself. Wildcard and indexed filters therefore need to
+retain their position-specific meaning when rule alternatives are combined.
 
 ## Formula enforcement gate
 
@@ -321,7 +387,8 @@ Validation invariants enforced by the current implementation:
   - `FILTER` (single) and `FILTERLIST` (multiple) are both supported
   - each filter entry must define `FRAGMENT`
   - each filter entry must define exactly one of `CONDITION` or `USEFORMULA`
-  - optional `MATCH` boolean defaults to `false`; when `true` on array-ended fragments, filter evaluation is row-local
+  - optional `MATCH` boolean defaults to `false`; when explicitly `true`, filter evaluation is row-local for every supported fragment, including nested arrays
+  - request query filters use the equivalent lowercase `"$match": true`; neither form is enabled implicitly for array-ended fragments
 - Reference resolution:
   - `USEACL`, `USEATTRIBUTES`, `USEFORMULA`, and `USEOBJECTS` are resolved during model materialization at startup
   - unknown references fail fast (`... not found`)

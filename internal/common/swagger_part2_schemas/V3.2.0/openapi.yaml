@@ -892,6 +892,12 @@ components:
       properties:
         $fragment:
           $ref: '#/components/schemas/FragmentFieldIdentifier'
+        $match:
+          type: boolean
+          default: false
+          description: >-
+            Evaluate the condition against the current fragment row. Omitted or
+            false uses parent-level existential evaluation.
         $condition:
           $ref: '#/components/schemas/logicalExpression'
       required:

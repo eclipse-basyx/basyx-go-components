@@ -961,7 +961,7 @@ func newAASDescriptorJSONCollector(
 
 func hasAASDescriptorFragmentFilter(ctx context.Context, fragment grammar.FragmentStringPattern) bool {
 	queryFilter := auth.GetQueryFilter(ctx)
-	return queryFilter != nil && len(queryFilter.FilterExpressionEntriesFor(fragment)) > 0
+	return queryFilter != nil && len(queryFilter.FilterPredicateEntriesFor(fragment)) > 0
 }
 
 func hasAASDescriptorFilters(ctx context.Context) bool {

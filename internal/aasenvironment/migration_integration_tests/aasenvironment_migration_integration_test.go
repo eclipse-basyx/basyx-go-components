@@ -494,6 +494,7 @@ func assertMigratedSupplementalSemanticIDsAreQueryable(t *testing.T) {
 			"$filters": []any{
 				map[string]any{
 					"$fragment": "$sm#supplementalSemanticIds[]",
+					"$match":    true,
 					"$condition": map[string]any{
 						"$eq": []any{
 							map[string]any{"$field": "$sm#supplementalSemanticIds[].keys[].value"},
@@ -503,6 +504,7 @@ func assertMigratedSupplementalSemanticIDsAreQueryable(t *testing.T) {
 				},
 				map[string]any{
 					"$fragment": "$sme#supplementalSemanticIds[]",
+					"$match":    true,
 					"$condition": map[string]any{
 						"$eq": []any{
 							map[string]any{"$field": "$sme#supplementalSemanticIds[].keys[].value"},
@@ -533,6 +535,7 @@ func assertMigratedSupplementalSemanticIDsAreQueryable(t *testing.T) {
 			"$filters": []any{
 				map[string]any{
 					"$fragment": "$smdesc#supplementalSemanticIds[]",
+					"$match":    true,
 					"$condition": map[string]any{
 						"$eq": []any{
 							map[string]any{"$field": "$smdesc#supplementalSemanticIds[].keys[].value"},
@@ -558,6 +561,7 @@ func assertMigratedSupplementalSemanticIDsAreQueryable(t *testing.T) {
 			"$filters": []any{
 				map[string]any{
 					"$fragment": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+					"$match":    true,
 					"$condition": map[string]any{
 						"$eq": []any{
 							map[string]any{"$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"},

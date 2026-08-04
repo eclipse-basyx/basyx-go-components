@@ -148,6 +148,24 @@ $aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]
 Filtering the supplemental-semantic-ID reference and its keys prevents an
 allowed descriptor from leaking marker values belonging to another company.
 
+The `$aasdesc` prefix is intentional here: the DTR response is rooted at an AAS
+Descriptor and the Submodel Descriptors are nested below it. The same prefix is
+therefore used in the policy fragment and in every `$field` of its formula, for
+example
+`$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value`.
+`$smdesc#supplementalSemanticIds[].keys[]` applies only to a standalone
+Submodel-Descriptor query. With `MATCH`, the DTR paths are evaluated against the
+current nested descriptor, reference, or key; they cannot match a descriptor
+belonging to another AAS Descriptor.
+
+Internally, non-`MATCH` DTR filters correlate the candidate descriptor through
+`aas_descriptor_id`, preserving parent-level existential behavior among sibling
+descriptors of the same AAS Descriptor. `MATCH` keeps the correlation on the
+current Submodel Descriptor and its current reference or key, so only matching
+rows are materialized. The same collector selection is used for nested
+descriptor endpoints, semantic-ID keys, supplemental-semantic-ID references,
+and supplemental-semantic-ID keys.
+
 ## Submodel Repository visibility
 
 Submodel Repository data reads require an authenticated non-provider token.

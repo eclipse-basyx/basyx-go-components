@@ -3,6 +3,7 @@
   "$filters": [
       {
           "$fragment": "$sme",
+          "$match": true,
           "$condition": {"$eq": [{ "$field": "$sme.NewTestList[0]#value"}, {"$strVal": "listValue1_8"} ] }
       },
       {
