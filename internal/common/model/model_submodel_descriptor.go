@@ -193,6 +193,10 @@ func (obj SubmodelDescriptor) ToJsonable() (map[string]any, error) {
 // UnmarshalJSON implements custom unmarshaling for SubmodelDescriptor
 // It handles the FromJsonable Unmarshalling of the aas-go-sdk types
 func (obj *SubmodelDescriptor) UnmarshalJSON(data []byte) error {
+	return obj.unmarshalJSON(data, true)
+}
+
+func (obj *SubmodelDescriptor) unmarshalJSON(data []byte, verifySemantic bool) error {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	var jsonable map[string]any
 	if err := json.Unmarshal(data, &jsonable); err != nil {
@@ -345,7 +349,10 @@ func (obj *SubmodelDescriptor) UnmarshalJSON(data []byte) error {
 		obj.Id = id
 	}
 
-	mode := GetVerificationMode()
+	mode := VerificationModeOff
+	if verifySemantic {
+		mode = GetVerificationMode()
+	}
 
 	if mode == VerificationModeOff {
 		return nil

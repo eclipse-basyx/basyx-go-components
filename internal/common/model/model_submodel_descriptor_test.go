@@ -46,7 +46,7 @@ func TestSubmodelDescriptorUnmarshalRejectsSingularWhenDisabled(t *testing.T) {
 	SetSupportsSingularSupplementalSemanticId(false)
 
 	payload := `{
-		"endpoints":[{"interface":"IF","protocolInformation":{"href":"http://example.com"}}],
+		"endpoints":[{"interface":"SUBMODEL-3.0","protocolInformation":{"href":"http://example.com"}}],
 		"id":"submodel-id",
 		"supplementalSemanticId":[{"type":"ModelReference","keys":[{"type":"Submodel","value":"x"}]}]
 	}`
@@ -69,7 +69,7 @@ func TestSubmodelDescriptorUnmarshalAcceptsSingularWhenEnabled(t *testing.T) {
 	})
 
 	payload := `{
-		"endpoints":[{"interface":"IF","protocolInformation":{"href":"http://example.com"}}],
+		"endpoints":[{"interface":"SUBMODEL-3.0","protocolInformation":{"href":"http://example.com"}}],
 		"id":"submodel-id",
 		"supplementalSemanticId":[{"type":"ModelReference","keys":[{"type":"Submodel","value":"x"}]}]
 	}`
@@ -137,7 +137,7 @@ func TestSubmodelDescriptorUnmarshalSkipsSemanticVerificationWhenStrictDisabled(
 	})
 
 	payload := `{
-		"endpoints":[{"interface":"IF","protocolInformation":{"href":"http://example.com"}}],
+		"endpoints":[{"interface":"SUBMODEL-3.0","protocolInformation":{"href":"http://example.com"}}],
 		"id":"submodel-id",
 		"semanticId":{"type":"ExternalReference","keys":[{"type":"Submodel","value":"semanticIdExample"}]}
 	}`
@@ -156,7 +156,7 @@ func TestSubmodelDescriptorUnmarshalSkipsSemanticVerificationWhenPermissive(t *t
 	})
 
 	payload := `{
-		"endpoints":[{"interface":"IF","protocolInformation":{"href":"http://example.com"}}],
+		"endpoints":[{"interface":"SUBMODEL-3.0","protocolInformation":{"href":"http://example.com"}}],
 		"id":"submodel-id",
 		"semanticId":{"type":"ExternalReference","keys":[{"type":"Submodel","value":"semanticIdExample"}]}
 	}`
@@ -175,7 +175,7 @@ func TestSubmodelDescriptorUnmarshalFailsSemanticVerificationWhenStrictEnabled(t
 	})
 
 	payload := `{
-		"endpoints":[{"interface":"IF","protocolInformation":{"href":"http://example.com"}}],
+		"endpoints":[{"interface":"SUBMODEL-3.0","protocolInformation":{"href":"http://example.com"}}],
 		"id":"submodel-id",
 		"semanticId":{"type":"ExternalReference","keys":[{"type":"Submodel","value":"semanticIdExample"}]}
 	}`

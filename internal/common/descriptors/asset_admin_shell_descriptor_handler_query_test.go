@@ -28,6 +28,7 @@ package descriptors
 import (
 	"context"
 	stdsql "database/sql"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,6 +39,16 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
+
+func descriptorFieldEquals(field grammar.ModelStringPattern, value string) grammar.LogicalExpression {
+	literal := grammar.StandardString(value)
+	return grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &field},
+			{StrVal: &literal},
+		},
+	}
+}
 
 func TestIsTransactionQueryerRecognizesDebugWrapper(t *testing.T) {
 	tx := &stdsql.Tx{}
@@ -64,9 +75,9 @@ func contextWithABACDisabled(t *testing.T) context.Context {
 	return cfgCtx
 }
 
-func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAndPayloadFlags(t *testing.T) {
+func TestBuildSingleStatementAASDescriptorListQueryUsesPagedInnerQuery(t *testing.T) {
 	ctx := contextWithABACDisabled(t)
-	ds, err := buildListAssetAdministrationShellDescriptorsQuery(
+	ds, err := buildSingleStatementAASDescriptorListQuery(
 		ctx,
 		2,
 		"",
@@ -77,7 +88,7 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAn
 		time.Time{},
 	)
 	if err != nil {
-		t.Fatalf("buildListAssetAdministrationShellDescriptorsQuery returned error: %v", err)
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
 	}
 
 	sql, args, err := ds.Prepared(true).ToSQL()
@@ -89,9 +100,8 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAn
 		`FROM (SELECT`,
 		`AS "aas_page"`,
 		`LIMIT $`,
-		`AS "flag_`,
-		`"aas_list_data"."flag_`,
-		`"aas_list_data"."raw_admin_payload"`,
+		`jsonb_build_object`,
+		`"aas_descriptor"."descriptor_id"`,
 	} {
 		if !strings.Contains(sql, want) {
 			t.Fatalf("expected SQL to contain %q, got: %s", want, sql)
@@ -113,7 +123,120 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAn
 	}
 }
 
-func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditionAcrossFragments(t *testing.T) {
+func TestBuildSingleStatementAASDescriptorListQueryReusesSQLShape(t *testing.T) {
+	build := func(
+		limit int32,
+		cursor string,
+		assetType string,
+		identifiable string,
+		createdFrom time.Time,
+		updatedFrom time.Time,
+	) (string, []interface{}) {
+		t.Helper()
+		ds, err := buildSingleStatementAASDescriptorListQuery(
+			contextWithABACDisabled(t),
+			limit,
+			cursor,
+			"Instance",
+			assetType,
+			identifiable,
+			createdFrom,
+			updatedFrom,
+		)
+		if err != nil {
+			t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
+		}
+		sql, args, err := ds.Prepared(true).ToSQL()
+		if err != nil {
+			t.Fatalf("ToSQL returned error: %v", err)
+		}
+		return sql, args
+	}
+
+	firstSQL, firstArgs := build(
+		2,
+		"urn:example:cursor:first",
+		"urn:example:asset-type:first",
+		"urn:example:aas:first",
+		time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.January, 2, 0, 0, 0, 0, time.UTC),
+	)
+	secondSQL, secondArgs := build(
+		20,
+		"urn:example:cursor:second",
+		"urn:example:asset-type:second",
+		"urn:example:aas:second",
+		time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.February, 2, 0, 0, 0, 0, time.UTC),
+	)
+
+	if firstSQL != secondSQL {
+		t.Fatalf("expected reusable SQL shape, got:\nfirst:  %s\nsecond: %s", firstSQL, secondSQL)
+	}
+	if fmt.Sprint(firstArgs) == fmt.Sprint(secondArgs) {
+		t.Fatalf("expected different runtime arguments, got: %#v", firstArgs)
+	}
+}
+
+func TestBuildSingleStatementAASDescriptorListQueryCorrelatesMultiKeyMaskFlags(t *testing.T) {
+	tests := []struct {
+		name             string
+		fragment         grammar.FragmentStringPattern
+		conditionField   grammar.ModelStringPattern
+		joinedKeyPattern string
+		partitionPattern string
+	}{
+		{
+			name:             "specific asset ID",
+			fragment:         "$aasdesc#specificAssetIds[].name",
+			conditionField:   "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value",
+			joinedKeyPattern: `LEFT JOIN "specific_asset_id_external_subject_id_reference_key" AS "external_subject_reference_key"`,
+			partitionPattern: `OVER (PARTITION BY "specific_asset_id"."id")`,
+		},
+		{
+			name:             "submodel descriptor",
+			fragment:         "$aasdesc#submodelDescriptors[].semanticId",
+			conditionField:   "$aasdesc#submodelDescriptors[].semanticId.keys[].value",
+			joinedKeyPattern: `LEFT JOIN "submodel_descriptor_semantic_id_reference_key" AS "aasdesc_submodel_descriptor_semantic_id_reference_key"`,
+			partitionPattern: `OVER (PARTITION BY "submodel_descriptor"."descriptor_id")`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := auth.MergeQueryFilter(contextWithABACDisabled(t), grammar.Query{
+				FilterConditions: []grammar.SubFilter{
+					{Fragment: &test.fragment, Condition: pointerToDescriptorExpression(descriptorFieldEquals(test.conditionField, "MASK_MATCH"))},
+				},
+			})
+
+			ds, err := buildSingleStatementAASDescriptorListQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
+			if err != nil {
+				t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
+			}
+			sql, _, err := ds.Prepared(true).ToSQL()
+			if err != nil {
+				t.Fatalf("ToSQL returned error: %v", err)
+			}
+
+			if !strings.Contains(sql, "BOOL_OR(") {
+				t.Fatalf("expected mask flag to aggregate matching reference keys: %s", sql)
+			}
+			if !strings.Contains(sql, test.joinedKeyPattern) {
+				t.Fatalf("expected mask query to join the reference keys: %s", sql)
+			}
+			if !strings.Contains(sql, test.partitionPattern) {
+				t.Fatalf("expected mask flags to aggregate per parent: %s", sql)
+			}
+		})
+	}
+}
+
+func pointerToDescriptorExpression(expression grammar.LogicalExpression) *grammar.LogicalExpression {
+	return &expression
+}
+
+func TestBuildSingleStatementAASDescriptorListQueryAppliesSharedMaskCondition(t *testing.T) {
 	field := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
 	lit := grammar.StandardString("PUBLIC_READABLE")
 	cond := grammar.LogicalExpression{
@@ -135,9 +258,9 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditi
 		},
 	})
 
-	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
+	ds, err := buildSingleStatementAASDescriptorListQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
 	if err != nil {
-		t.Fatalf("buildListAssetAdministrationShellDescriptorsQuery returned error: %v", err)
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
 	}
 	sql, _, err := ds.Prepared(true).ToSQL()
 	if err != nil {
@@ -149,31 +272,95 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditi
 	}
 }
 
-func TestBuildListAssetAdministrationShellDescriptorsQuery_MasksExtensionsInFirstStage(t *testing.T) {
-	denied := false
-	fragment := grammar.FragmentStringPattern("$aasdesc#extension")
-	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
-		Filters: auth.FragmentFilters{
-			fragment: auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &denied}, false),
+func TestBuildSingleStatementAASDescriptorListQueryCorrelatesSubmodelRouteFilters(t *testing.T) {
+	fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[]")
+	supplementalKey := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
+	externalSubjectKey := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	condition := grammar.LogicalExpression{
+		And: []grammar.LogicalExpression{
+			descriptorFieldEquals(supplementalKey, "PUBLIC_READABLE"),
+			descriptorFieldEquals(externalSubjectKey, "PUBLIC_READABLE"),
 		},
+	}
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, true)},
 	})
 
-	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
+	ds, err := buildSingleStatementAASDescriptorListQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
 	if err != nil {
-		t.Fatalf("buildListAssetAdministrationShellDescriptorsQuery returned error: %v", err)
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
 	}
 	sql, _, err := ds.ToSQL()
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	normalizedSQL := strings.Join(strings.Fields(sql), " ")
-	for _, want := range []string{
-		`CASE WHEN FALSE THEN TRUE ELSE FALSE END AS "flag_extension"`,
-		`CASE WHEN "aas_list_data"."flag_extension" THEN "aas_list_data"."raw_extensions_payload" ELSE NULL END`,
+	for _, correlatedPath := range []string{
+		`LEFT JOIN "submodel_descriptor_supplemental_semantic_id_reference"`,
+		`"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"."value" = 'PUBLIC_READABLE'`,
+		`EXISTS (SELECT 1 FROM "specific_asset_id"`,
 	} {
-		if !strings.Contains(normalizedSQL, want) {
-			t.Fatalf("expected extension mask SQL to contain %q, got: %s", want, sql)
+		if !strings.Contains(sql, correlatedPath) {
+			t.Fatalf("expected route filter to contain %q, got: %s", correlatedPath, sql)
 		}
 	}
+}
+
+func TestBuildSingleStatementAASDescriptorListQueryFiltersReferenceParentsByKeys(t *testing.T) {
+	fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]")
+	keyValue := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			fragment: auth.NewFragmentFilterPredicate(descriptorFieldEquals(keyValue, "VISIBLE_KEY"), false),
+		},
+	})
+
+	ds, err := buildSingleStatementAASDescriptorListQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
+	}
+	sql, args, err := ds.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if got := countArgument(args, "VISIBLE_KEY"); got != 2 {
+		t.Fatalf("expected the key predicate on both parent and key queries, got %d occurrences: %s", got, sql)
+	}
+}
+
+func TestBuildSingleStatementAASDescriptorListQueryAvoidsMaskLayersWithoutFilters(t *testing.T) {
+	ds, err := buildSingleStatementAASDescriptorListQuery(
+		contextWithABACDisabled(t),
+		2,
+		"",
+		"",
+		"",
+		"",
+		time.Time{},
+		time.Time{},
+	)
+	if err != nil {
+		t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
+	}
+	sql, _, err := ds.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	for _, unwanted := range []string{`"flag_`, `SELECT DISTINCT`} {
+		if strings.Contains(sql, unwanted) {
+			t.Fatalf("expected the unfiltered query to avoid %q, got: %s", unwanted, sql)
+		}
+	}
+}
+
+func countArgument(args []interface{}, expected string) int {
+	count := 0
+	for _, arg := range args {
+		if arg == expected {
+			count++
+		}
+	}
+	return count
 }

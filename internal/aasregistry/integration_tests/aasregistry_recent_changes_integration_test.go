@@ -99,11 +99,14 @@ func TestAASRegistryListFiltersHistoryAndBatchAssetKind(t *testing.T) {
 	}
 
 	updatePayloadV3 := map[string]any{
-		"id":                  descriptorID,
-		"idShort":             "BatchDescriptor",
-		"assetKind":           "Batch",
-		"assetType":           "type-v3",
-		"globalAssetId":       globalAssetID,
+		"id":            descriptorID,
+		"idShort":       "BatchDescriptor",
+		"assetKind":     "Batch",
+		"assetType":     "type-v3",
+		"globalAssetId": globalAssetID,
+		"specificAssetIds": []any{
+			map[string]any{"name": "serialNumber", "value": "SN-1000"},
+		},
 		"submodelDescriptors": submodelDescriptors,
 		"administration": map[string]any{
 			"createdAt": "2030-01-02T03:04:05Z",
@@ -114,6 +117,9 @@ func TestAASRegistryListFiltersHistoryAndBatchAssetKind(t *testing.T) {
 	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodPut, aasRegistryBaseURL+"/shell-descriptors/"+encodedDescriptorID, updatePayloadV3)
 	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
 	requireDescriptorHistoryPayloadTypes(t, descriptorID, []string{"snapshot", "diff", "diff", "snapshot", "diff", "diff"})
+	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodGet, aasRegistryBaseURL+"/shell-descriptors?limit=100", nil)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	requireDescriptorWithAssetType(t, decodeAASRegistryMap(t, body), descriptorID, "type-v3")
 
 	listURL := aasRegistryBaseURL + "/shell-descriptors?limit=10&updatedFrom=" + url.QueryEscape(changedAfter)
 	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodGet, listURL, nil)

@@ -290,6 +290,26 @@ func (r *SharedFragmentMaskRuntime) Projections() []interface{} {
 	return r.projections
 }
 
+// BoolOrProjections aggregates each mask flag across rows of the same parent.
+func (r *SharedFragmentMaskRuntime) BoolOrProjections(partitionBy ...interface{}) ([]interface{}, error) {
+	if r == nil {
+		return nil, nil
+	}
+	projections := make([]interface{}, 0, len(r.projections))
+	window := goqu.W().PartitionBy(partitionBy...)
+	for _, projection := range r.projections {
+		aliased, ok := projection.(exp.AliasedExpression)
+		if !ok {
+			return nil, fmt.Errorf("SECURITY-MASKPROJ-ASSERTALIASED: mask projection is not aliased")
+		}
+		projections = append(
+			projections,
+			goqu.Func("BOOL_OR", aliased.Aliased()).Over(window).As(aliased.GetAs()),
+		)
+	}
+	return projections, nil
+}
+
 // ApplyFilters appends WHERE predicates for the runtime's fragment masks.
 //
 // The ctx parameter supplies the QueryFilter and collector resolves grammar
