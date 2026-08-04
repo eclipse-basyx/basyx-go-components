@@ -33,6 +33,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -224,8 +225,8 @@ func buildGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsDataset(
 		Select(goqu.I("aas.aas_id")).
 		Distinct().
 		Where(
-			goqu.I("asset_information.global_asset_id").In(globalAssetIDs),
-			goqu.I("semantic_id_key.value").In(submodelSemanticIDs),
+			common.PostgreSQLTextArrayContains(goqu.I("asset_information.global_asset_id"), globalAssetIDs),
+			common.PostgreSQLTextArrayContains(goqu.I("semantic_id_key.value"), submodelSemanticIDs),
 		).
 		Order(goqu.I("aas.aas_id").Asc())
 
@@ -249,7 +250,7 @@ func buildSpecificAssetIDFilterExpression(dialect *goqu.DialectWrapper, specific
 
 	specificAssetIDTable := goqu.T("specific_asset_id").As("specific_asset_id_filter")
 	existsSub := dialect.From(specificAssetIDTable).
-		Select(goqu.V(1)).
+		Select(goqu.L("1")).
 		Where(goqu.And(
 			goqu.I("specific_asset_id_filter.asset_information_id").Eq(goqu.I("asset_information.asset_information_id")),
 			goqu.I("specific_asset_id_filter.name").Eq(specificAssetID.Name()),
@@ -276,7 +277,7 @@ func uniqueSpecificAssetIDs(specificAssetIDs []types.ISpecificAssetID) []types.I
 }
 
 func buildGetAssetAdministrationShellCursorByDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
-	return dialect.From("aas").Select("aas_id").Where(goqu.I("id").Eq(aasDBID)).ToSQL()
+	return dialect.From("aas").Select("aas_id").Where(goqu.I("id").Eq(aasDBID)).Prepared(true).ToSQL()
 }
 
 func buildGetAssetAdministrationShellDBIDByIdentifierDataset(dialect *goqu.DialectWrapper, aasIdentifier string) *goqu.SelectDataset {
@@ -309,6 +310,7 @@ func buildGetAssetInformationCurrentStateQuery(dialect *goqu.DialectWrapper, aas
 	return dialect.From("asset_information").
 		Select("asset_kind", "global_asset_id", "asset_type").
 		Where(goqu.I("asset_information_id").Eq(aasDBID)).
+		Prepared(true).
 		ToSQL()
 }
 
@@ -344,7 +346,7 @@ func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aas
 		ds = ds.Where(goqu.I("r.id").Gte(cursorID))
 	}
 
-	return ds.ToSQL()
+	return ds.Prepared(true).ToSQL()
 }
 
 func buildFindSubmodelReferenceIDByAASIDAndSubmodelIdentifierQuery(dialect *goqu.DialectWrapper, aasDBID int64, submodelIdentifier string) (string, []any, error) {
@@ -357,6 +359,7 @@ func buildFindSubmodelReferenceIDByAASIDAndSubmodelIdentifierQuery(dialect *goqu
 			goqu.I("k.value").Eq(submodelIdentifier),
 		).
 		Limit(1).
+		Prepared(true).
 		ToSQL()
 }
 
@@ -368,6 +371,7 @@ func buildListAASIdentifiersBySubmodelIdentifierQuery(dialect *goqu.DialectWrapp
 		SelectDistinct(goqu.I("a.aas_id")).
 		Where(goqu.I("k.value").Eq(submodelIdentifier)).
 		Order(goqu.I("a.aas_id").Asc()).
+		Prepared(true).
 		ToSQL()
 }
 
@@ -406,6 +410,7 @@ func buildGetAssetAdministrationShellMapByDBIDQueryWithSelect(dialect *goqu.Dial
 		LeftJoin(goqu.T("thumbnail_file_element").As("tfe"), goqu.On(goqu.I("tfe.id").Eq(goqu.I("aas.id")))).
 		Select(selectExpressions...).
 		Where(goqu.I("aas.id").Eq(aasDBID)).
+		Prepared(true).
 		ToSQL()
 }
 
@@ -416,8 +421,38 @@ func buildGetAssetAdministrationShellMapsByDBIDsQueryWithSelect(dialect *goqu.Di
 		LeftJoin(goqu.T("asset_information").As("asset_information"), goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id")))).
 		LeftJoin(goqu.T("thumbnail_file_element").As("tfe"), goqu.On(goqu.I("tfe.id").Eq(goqu.I("aas.id")))).
 		Select(selectExpressions...).
-		Where(goqu.I("aas.id").In(aasDBIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(goqu.I("aas.id"), aasDBIDs)).
+		Prepared(true).
 		ToSQL()
+}
+
+func buildGetSubmodelReferencePayloadsByAASIDsDataset(dialect *goqu.DialectWrapper, aasDBIDs []int64) *goqu.SelectDataset {
+	return dialect.
+		From(goqu.T("aas_submodel_reference").As("aas_submodel_reference")).
+		InnerJoin(
+			goqu.T("aas_submodel_reference_payload").As("rp"),
+			goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("aas_submodel_reference.id"))),
+		).
+		LeftJoin(
+			goqu.T("aas_submodel_reference_key").As("aas_submodel_reference_key"),
+			goqu.On(goqu.I("aas_submodel_reference_key.reference_id").Eq(goqu.I("aas_submodel_reference.id"))),
+		).
+		Select(
+			goqu.I("aas_submodel_reference.aas_id"),
+			goqu.I("rp.parent_reference_payload"),
+		).
+		Where(common.PostgreSQLBigIntArrayContains(goqu.I("aas_submodel_reference.aas_id"), aasDBIDs)).
+		GroupBy(
+			goqu.I("aas_submodel_reference.id"),
+			goqu.I("aas_submodel_reference.aas_id"),
+			goqu.I("aas_submodel_reference.position"),
+			goqu.I("rp.parent_reference_payload"),
+		).
+		Order(
+			goqu.I("aas_submodel_reference.aas_id").Asc(),
+			goqu.I("aas_submodel_reference.position").Asc(),
+			goqu.I("aas_submodel_reference.id").Asc(),
+		)
 }
 
 func buildReadSpecificAssetIDsByAssetInformationIDDataset(dialect *goqu.DialectWrapper, assetInformationID int64) *goqu.SelectDataset {
@@ -448,7 +483,7 @@ func buildReadSpecificAssetIDsByAssetInformationIDsDataset(dialect *goqu.Dialect
 			goqu.I("specific_asset_id.value"),
 			goqu.I("sp.semantic_id_payload"),
 		).
-		Where(goqu.I("specific_asset_id.asset_information_id").In(assetInformationIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(goqu.I("specific_asset_id.asset_information_id"), assetInformationIDs)).
 		GroupBy(
 			goqu.I("specific_asset_id.asset_information_id"),
 			goqu.I("specific_asset_id.id"),

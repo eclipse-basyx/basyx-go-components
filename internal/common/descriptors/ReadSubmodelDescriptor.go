@@ -138,7 +138,7 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 		}, maskRuntime.Projections()...)...).
 		Where(
 			goqu.And(
-				submodelDescriptorAlias.Col(common.ColDescriptorID).In(uniqDesc),
+				common.PostgreSQLBigIntArrayContains(submodelDescriptorAlias.Col(common.ColDescriptorID), uniqDesc),
 				submodelDescriptorAlias.Col(common.ColAASDescriptorID).IsNull(),
 			),
 		)
@@ -288,7 +288,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			submodelDescriptorAlias.Col(common.ColPosition).As("sort_smd_position"),
 			submodelDescriptorAlias.Col(common.ColDescriptorID).As("sort_smd_descriptor_id"),
 		}, maskRuntime.Projections()...)...).
-		Where(submodelDescriptorAlias.Col(common.ColAASDescriptorID).In(uniqAASDesc))
+		Where(common.PostgreSQLBigIntArrayContains(submodelDescriptorAlias.Col(common.ColAASDescriptorID), uniqAASDesc))
 
 	inner = inner.Order(
 		submodelDescriptorAlias.Col(common.ColPosition).Asc(),
@@ -520,7 +520,7 @@ func readSubmodelDescriptorRows(
 	perGroupCap int,
 	allSmdDescCap int,
 ) (map[int64][]model.SubmodelDescriptorRow, []int64, error) {
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, nil, err
 	}

@@ -541,7 +541,7 @@ func queryReferenceRowsByOwnerIDs(
 			rkt.Col(common.ColValue).As("key_value"),
 			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
 		).
-		Where(ot.Col(spec.ownerIDColumn).In(ownerIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(ot.Col(spec.ownerIDColumn), ownerIDs)).
 		Order(
 			ot.Col(spec.ownerIDColumn).Asc(),
 			rkt.Col(common.ColPosition).Asc(),
@@ -556,7 +556,7 @@ func queryReferenceRowsByOwnerIDs(
 		}
 	}
 
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, fmt.Errorf("REFREAD-BUILDQUERY: %w", err)
 	}
@@ -649,7 +649,7 @@ func readContextReferences1ToManyByOwnerIDs(
 			rkt.Col(common.ColValue).As("key_value"),
 			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
 		).
-		Where(rt.Col(spec.ownerIDColumn).In(ownerIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(rt.Col(spec.ownerIDColumn), ownerIDs)).
 		Order(
 			rt.Col(spec.ownerIDColumn).Asc(),
 			rt.Col(common.ColPosition).Asc(),
@@ -674,7 +674,7 @@ func readContextReferences1ToManyByOwnerIDs(
 		}
 	}
 
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, fmt.Errorf("%s-BUILDQUERY: %w", spec.errPrefix, err)
 	}

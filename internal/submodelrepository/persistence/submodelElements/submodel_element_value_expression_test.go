@@ -63,7 +63,7 @@ func TestGetSMEValueExpressionForReadSanitizesOperationVariableBlobs(t *testing.
 	require.NoError(t, err)
 	require.Contains(t, withoutBlobValueSQL, "WITH RECURSIVE operation_json_nodes")
 	require.Contains(t, withoutBlobValueSQL, `"current"."payload" #- "target"."path"`)
-	require.Contains(t, withoutBlobValueSQL, `"operation_json_nodes"."node" ->> 'modelType' = 'Blob'`)
+	require.Contains(t, withoutBlobValueSQL, `"operation_json_nodes"."node" ->> 'modelType'::text = 'Blob'::text`)
 
 	withBlobValueSQL, _, err := dialect.
 		Select(getSMEValueExpressionForRead(dialect, true)).
@@ -71,4 +71,18 @@ func TestGetSMEValueExpressionForReadSanitizesOperationVariableBlobs(t *testing.
 	require.NoError(t, err)
 	require.NotContains(t, withBlobValueSQL, "WITH RECURSIVE operation_json_nodes")
 	require.NotContains(t, withBlobValueSQL, `"current"."payload" #- "target"."path"`)
+}
+
+func TestGetSMEValueExpressionDoesNotBindStaticJSONKeys(t *testing.T) {
+	t.Parallel()
+
+	dialect := goqu.Dialect("postgres")
+	_, args, err := dialect.
+		Select(getSMEValueExpressionForRead(dialect, true)).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+	require.NotContains(t, args, "content_type")
+	require.NotContains(t, args, "value")
+	require.NotContains(t, args, "modelType")
 }

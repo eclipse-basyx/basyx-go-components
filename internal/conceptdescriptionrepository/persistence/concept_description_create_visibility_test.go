@@ -64,8 +64,8 @@ func TestGetConceptDescriptionsValidatesCursorInPageQuery(t *testing.T) {
 	matcher := sqlmock.QueryMatcherFunc(func(_ string, actualSQL string) error {
 		for _, expected := range []string{
 			`SELECT 1 FROM "concept_description" AS "cursor_cd"`,
-			`"cursor_cd"."id" = 'urn:cd:cursor'`,
-			`"id" >= 'urn:cd:cursor'`,
+			`"cursor_cd"."id" = $1`,
+			`"id" >= $2`,
 		} {
 			if !strings.Contains(actualSQL, expected) {
 				return fmt.Errorf("expected SQL to contain %q, got: %s", expected, actualSQL)
@@ -81,6 +81,7 @@ func TestGetConceptDescriptionsValidatesCursorInPageQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	mock.ExpectQuery("cursor query").
+		WithArgs("urn:cd:cursor", "urn:cd:cursor", sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "id_short", "data"}))
 
 	cursor := "urn:cd:cursor"
@@ -117,7 +118,8 @@ func TestConceptDescriptionRepositoryCreateExistingUnauthorizedConceptDescriptio
 		WillReturnRows(sqlmock.NewRows([]string{"?column?"}).AddRow(1))
 	mock.ExpectQuery(`SELECT 1 FROM "concept_description"`).
 		WillReturnRows(sqlmock.NewRows([]string{"?column?"}).AddRow(1))
-	mock.ExpectQuery(`SELECT "id" FROM "concept_description".*FALSE`).
+	mock.ExpectQuery(`SELECT "id" FROM "concept_description".*\$2`).
+		WithArgs(conceptDescription.ID(), false, sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectRollback()
 

@@ -441,7 +441,7 @@ func TestGetSubmodelElementsCoreReturnsOnlyRootElements(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*parent_sme_id.*IS NULL`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "idshort_path"}).AddRow(10, "RootCollection"))
 
-	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."id" IN`).
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."id" = ANY`).
 		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
 			AddRow(
 				10,
@@ -498,7 +498,7 @@ func TestGetSubmodelElementsDeepReturnsRootWithChildren(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*parent_sme_id.*IS NULL`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "idshort_path"}).AddRow(10, "RootCollection"))
 
-	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*COALESCE\("sme"\."root_sme_id", "sme"\."id"\) IN`).
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*COALESCE\("sme"\."root_sme_id", "sme"\."id"\) = ANY`).
 		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
 			AddRow(
 				10,
@@ -1285,10 +1285,10 @@ func TestGetSubmodelElementPathPageAcceptsCompositeCursor(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 
-	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."submodel_id" = 42.*"sme"\."idshort_path" = 'A'.*"sme"\."id" = 10`).
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."submodel_id" = \$1.*"sme"\."idshort_path" = \$2.*"sme"\."id" = \$3`).
 		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "id"}).AddRow("A", int64(10)))
 
-	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" > 'A'.*"sme"\."idshort_path" = 'A'.*"sme"\."id" > 10`).
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" > \$2.*"sme"\."idshort_path" = \$3.*"sme"\."id" > \$4`).
 		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "id"}).
 			AddRow("A", int64(20)).
 			AddRow("B", int64(30)))
