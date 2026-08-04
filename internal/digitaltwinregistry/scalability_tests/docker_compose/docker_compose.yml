@@ -58,8 +58,9 @@ services:
       - keycloak
 
   basyx-configuration:
-    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
-    pull_policy: always
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
     environment: *postgres-environment
     extra_hosts:
       - host.docker.internal:host-gateway

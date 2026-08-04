@@ -79,9 +79,10 @@ func ReadEndpointsByDescriptorID(
 //   - Nullable text columns are COALESCE'd to empty strings; JSON arrays default to empty.
 //
 // Implementation notes:
-// - Uses SQL ANY with pgx slice parameters for efficient multi-key filtering.
-// - Uses LEFT JOINs so descriptors without endpoints are still handled.
-// - Prepared statements are enabled via goqu to allow DB plan caching.
+//   - Uses a typed PostgreSQL array parameter with prepared Goqu rendering for
+//     stable, efficient multi-key filtering.
+//   - Uses LEFT JOINs so descriptors without endpoints are still handled.
+//   - Prepared statements are enabled via goqu to allow DB plan caching.
 //
 // Errors may occur while building the SQL statement, executing the query,
 // scanning columns, or decoding the aggregated JSON payload of security
@@ -139,7 +140,7 @@ func ReadEndpointsByDescriptorIDs(
 	}
 
 	ds = ds.
-		Where(joinOn.Col(common.ColDescriptorID).In(descriptorIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(joinOn.Col(common.ColDescriptorID), descriptorIDs)).
 		Select(
 			joinOn.Col(common.ColDescriptorID),
 			joinOn.Col(common.ColID),

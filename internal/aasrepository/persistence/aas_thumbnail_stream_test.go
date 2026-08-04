@@ -45,7 +45,9 @@ func TestStreamThumbnailDoesNotExposeABACHiddenAAS(t *testing.T) {
 
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT "id" FROM "aas"`).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
-	mock.ExpectQuery(`FROM "aas" AS "aas".*FALSE`).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectQuery(`FROM "aas" AS "aas".*\$2`).
+		WithArgs("aas-id", false, sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectRollback()
 	consumed := false
 

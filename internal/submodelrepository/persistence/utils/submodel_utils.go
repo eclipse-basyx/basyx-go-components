@@ -70,9 +70,10 @@ func GetSubmodelDatabaseIDForUpdate(tx *sql.Tx, submodelID string) (int, error) 
 
 func getSubmodelDatabaseID(db SubmodelIDQueryer, submodelID string, forUpdate bool) (int, error) {
 	var databaseID int
-	query := goqu.Select("id").
+	query := goqu.Dialect("postgres").Select("id").
 		From("submodel").
-		Where(goqu.I("submodel_identifier").Eq(submodelID))
+		Where(goqu.I("submodel_identifier").Eq(submodelID)).
+		Prepared(true)
 	if forUpdate {
 		query = query.ForUpdate(goqu.Wait)
 	}

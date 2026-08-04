@@ -154,7 +154,7 @@ func ReadSpecificAssetIDsByAASRef(
 		}
 	}
 
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func descriptorIDForAASIDTx(ctx context.Context, tx *sql.Tx, aasID string) (sql.
 		Where(common.TAASDescriptor.Col(common.ColAASID).Eq(aasID)).
 		Limit(1)
 
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
@@ -331,7 +331,7 @@ func nextSpecificAssetIDPositionByAASRefTx(ctx context.Context, tx *sql.Tx, aasR
 		Select(goqu.L("COALESCE(MAX(position), -1) + 1")).
 		Where(common.TSpecificAssetID.Col(common.ColAASRef).Eq(aasRef))
 
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return 0, err
 	}

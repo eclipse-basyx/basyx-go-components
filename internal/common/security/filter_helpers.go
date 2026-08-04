@@ -385,9 +385,9 @@ func buildFragmentMaskFlagProjection(
 		return nil, err
 	}
 	if !hasMask {
-		return goqu.V(true).As(alias), nil
+		return goqu.L("TRUE").As(alias), nil
 	}
-	return goqu.Case().When(maskCondition, true).Else(false).As(alias), nil
+	return goqu.Case().When(maskCondition, goqu.L("TRUE")).Else(goqu.L("FALSE")).As(alias), nil
 }
 
 func buildFragmentMaskCondition(
