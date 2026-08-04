@@ -280,7 +280,7 @@ func nestedBValues(t *testing.T, submodel map[string]any) [][]string {
 
 	a := elementByIDShort(t, arrayValue(t, submodel["submodelElements"]), "a")
 	result := make([][]string, 0)
-	for _, aEntry := range arrayValue(t, a["value"]) {
+	for _, aEntry := range optionalArrayValue(t, a["value"]) {
 		collection := objectValue(t, aEntry)
 		b := elementByIDShort(t, arrayValue(t, collection["value"]), "b")
 		values := make([]string, 0)
