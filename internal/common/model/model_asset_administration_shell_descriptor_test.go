@@ -26,7 +26,9 @@
 package model
 
 import (
+	"bytes"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -92,5 +94,61 @@ func TestAssetAdministrationShellDescriptorUnmarshalPermissiveStillRejectsEmptyS
 	}
 	if !strings.Contains(err.Error(), "specificAssetIds.semanticId.keys must not be empty") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDecodeStoredAssetAdministrationShellDescriptorSkipsRequestVerification(t *testing.T) {
+	setVerificationMode(t, "strict")
+	t.Cleanup(func() {
+		setVerificationMode(t, "off")
+	})
+
+	payload := []byte(`{
+		"id":"aas-1",
+		"submodelDescriptors":[{
+			"id":"submodel-1",
+			"endpoints":[{"interface":"SUBMODEL-3.0","protocolInformation":{"href":"http://example.com"}}],
+			"semanticId":{"type":"ExternalReference","keys":[{"type":"Submodel","value":"semantic-id"}]}
+		}]
+	}`)
+
+	var requestDescriptor AssetAdministrationShellDescriptor
+	if err := json.Unmarshal(payload, &requestDescriptor); err == nil {
+		t.Fatal("expected request decoding to reject the invalid semantic reference")
+	}
+
+	descriptor, err := DecodeStoredAssetAdministrationShellDescriptor(payload)
+	if err != nil {
+		t.Fatalf("stored descriptor decoding failed: %v", err)
+	}
+	if len(descriptor.SubmodelDescriptors) != 1 {
+		t.Fatalf("expected 1 Submodel descriptor, got %d", len(descriptor.SubmodelDescriptors))
+	}
+}
+
+func TestAssetAdministrationShellDescriptorUnmarshalWarnsOncePerInvalidExtension(t *testing.T) {
+	setVerificationMode(t, "permissive")
+	t.Cleanup(func() {
+		setVerificationMode(t, "off")
+	})
+
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() {
+		slog.SetDefault(previousLogger)
+	})
+
+	payload := []byte(`{
+		"id":"aas-1",
+		"extensions":[{"name":"invalid-value","valueType":"xs:boolean","value":"not-a-boolean"}]
+	}`)
+	var descriptor AssetAdministrationShellDescriptor
+	if err := json.Unmarshal(payload, &descriptor); err != nil {
+		t.Fatalf("permissive unmarshal failed: %v", err)
+	}
+
+	if warningCount := strings.Count(logs.String(), "semantic verification warning"); warningCount != 1 {
+		t.Fatalf("expected one extension verification warning, got %d: %s", warningCount, logs.String())
 	}
 }
