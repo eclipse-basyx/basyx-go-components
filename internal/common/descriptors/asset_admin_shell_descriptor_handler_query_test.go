@@ -148,3 +148,31 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditi
 		t.Fatalf("expected exactly 1 EXISTS for shared fragment condition, got %d: %s", got, sql)
 	}
 }
+
+func TestBuildListAssetAdministrationShellDescriptorsQuery_MasksExtensionsInFirstStage(t *testing.T) {
+	denied := false
+	fragment := grammar.FragmentStringPattern("$aasdesc#extension")
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			fragment: auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &denied}, false),
+		},
+	})
+
+	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("buildListAssetAdministrationShellDescriptorsQuery returned error: %v", err)
+	}
+	sql, _, err := ds.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	for _, want := range []string{
+		`FALSE AS "flag_extension"`,
+		`CASE WHEN "aas_list_data"."flag_extension" THEN "aas_list_data"."raw_extensions_payload" ELSE NULL END`,
+	} {
+		if !strings.Contains(sql, want) {
+			t.Fatalf("expected extension mask SQL to contain %q, got: %s", want, sql)
+		}
+	}
+}

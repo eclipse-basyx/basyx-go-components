@@ -167,6 +167,76 @@ func TestGetSubmodelsClosesLookaheadRowsBeforeSupplementalReferenceQuery(t *test
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetSubmodelsSemanticKeyFilterDoesNotRestoreMaskedParent(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	denied := false
+	allowed := true
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sm#semanticId":        auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &denied}, false),
+			"$sm#semanticId.keys[]": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allowed}, false),
+		},
+	})
+
+	mock.ExpectBegin()
+	mainRows := sqlmock.NewRows([]string{
+		"submodel_identifier",
+		"id_short",
+		"category",
+		"kind",
+		"description",
+		"display_name",
+		"administrative_information",
+		"embedded_data_specification",
+		"supplemental_semantic_ids",
+		"extensions",
+		"qualifiers",
+		"semantic_id",
+		"reference_owner_id",
+		"semantic_id_visible",
+	}).
+		AddRow("urn:sm:masked", "Masked", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(1), false).
+		AddRow("urn:sm:visible", "Visible", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(2), true)
+	mock.ExpectQuery(`SELECT .*"semantic_id_visible".*FROM .*"submodel"`).
+		WillReturnRows(mainRows).
+		RowsWillBeClosed()
+	mock.ExpectQuery(`SELECT .*FROM "submodel" AS "s".*"s"\."id" IN \(2\)`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"owner_id",
+			"ref_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_reference_payload",
+		}).AddRow(
+			int64(2),
+			int64(types.ReferenceTypesExternalReference),
+			int64(20),
+			int64(types.KeyTypesGlobalReference),
+			"urn:semantic:visible",
+			nil,
+		))
+	mock.ExpectCommit()
+
+	items, nextCursor, err := sut.GetSubmodels(ctx, 10, "", "", "", time.Time{}, time.Time{})
+	require.NoError(t, err)
+	require.Empty(t, nextCursor)
+	require.Len(t, items, 2)
+	require.Nil(t, items[0].SemanticID())
+	require.NotNil(t, items[1].SemanticID())
+	require.Len(t, items[1].SemanticID().Keys(), 1)
+	require.Equal(t, "urn:semantic:visible", items[1].SemanticID().Keys()[0].Value())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetSubmodelByIDRollsBackWhenSnapshotReadFails(t *testing.T) {
 	t.Parallel()
 

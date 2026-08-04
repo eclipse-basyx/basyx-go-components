@@ -277,6 +277,10 @@ Notes:
 - ABAC filters are mandatory policy constraints. Request-query filters are
   ANDed with them, so callers can narrow policy-visible results but cannot widen
   them.
+- Multi-stage persistence readers must carry the parent fragment's mask result
+  into later reconstruction stages. Child or key filters may narrow a visible
+  parent value, but fallback and reconstruction queries must neither load nor
+  restore a parent value whose visibility flag is false.
 - QueryFilter carries right-scoped formulas in `FormulasByRight` (for example, separate formulas for `CREATE` and `UPDATE`).
 - `SelectPutFormulaByExistence(ctx, dataExists)` switches the active `Formula` for PUT upsert checks (create vs update).
 

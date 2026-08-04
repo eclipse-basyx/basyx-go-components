@@ -210,13 +210,14 @@ func BuildSubmodelListSQL(selectDS *goqu.SelectDataset, dataAlias string, masked
 	return BuildSubmodelListSQLWithReferenceOwnerID(selectDS, dataAlias, maskedExpressions, false)
 }
 
-// BuildSubmodelListSQLWithReferenceOwnerID builds the final SQL and
-// optionally exposes the database ID needed to reconstruct filtered references.
+// BuildSubmodelListSQLWithReferenceOwnerID builds the final SQL and optionally
+// exposes reference reconstruction metadata from the inner query.
 func BuildSubmodelListSQLWithReferenceOwnerID(
 	selectDS *goqu.SelectDataset,
 	dataAlias string,
 	maskedExpressions []exp.Expression,
 	includeReferenceOwnerID bool,
+	additionalProjections ...exp.Expression,
 ) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
 	projections := []interface{}{
@@ -235,6 +236,9 @@ func BuildSubmodelListSQLWithReferenceOwnerID(
 	}
 	if includeReferenceOwnerID {
 		projections = append(projections, goqu.I(dataAlias+".reference_owner_id"))
+	}
+	for _, projection := range additionalProjections {
+		projections = append(projections, projection)
 	}
 
 	return dialect.From(selectDS.As(dataAlias)).

@@ -556,6 +556,7 @@ type AssetAdministrationShellDescriptorRow struct {
 	AdministrativeInfoPayload json.RawMessage
 	DisplayNamePayload        json.RawMessage
 	DescriptionPayload        json.RawMessage
+	ExtensionsPayload         json.RawMessage
 }
 
 // SubmodelDescriptorRow represents a single SQL result row for a Submodel

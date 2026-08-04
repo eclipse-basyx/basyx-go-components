@@ -708,8 +708,12 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		{Fragment: "$aasdesc#administration", FlagAlias: "flag_admin", RawAlias: "raw_admin_payload"},
 		{Fragment: "$aasdesc#displayName", FlagAlias: "flag_displayname", RawAlias: "raw_displayname_payload"},
 		{Fragment: "$aasdesc#description", FlagAlias: "flag_description", RawAlias: "raw_description_payload"},
+		{Fragment: "$aasdesc#extension", FlagAlias: "flag_extension", RawAlias: "raw_extensions_payload"},
 	}
+	extensionMaskIndex := len(maskedColumns) - 1
+	createdAtMaskIndex := -1
 	if includeCreatedAt {
+		createdAtMaskIndex = len(maskedColumns)
 		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{Fragment: "$aasdesc#createdAt", FlagAlias: "flag_createdat", RawAlias: "c6"})
 	}
 	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
@@ -731,6 +735,7 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload"),
 		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload)).As("raw_displayname_payload"),
 		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload)).As("raw_description_payload"),
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColExtensionsPayload)).As("raw_extensions_payload"),
 		common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
 	}
 	if includeCreatedAt {
@@ -763,12 +768,13 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		goqu.I(dataAlias + ".c5"),
 	}
 	if includeCreatedAt {
-		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[7])
+		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[createdAtMaskIndex])
 		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[4], maskedExpressions[5], maskedExpressions[6])
 	} else {
 		outerSelectExpressions = append(outerSelectExpressions, goqu.I(dataAlias+".c6"))
 		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[4], maskedExpressions[5], maskedExpressions[6])
 	}
+	outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[extensionMaskIndex])
 
 	ds := d.From(dataDS.As(dataAlias)).
 		Select(outerSelectExpressions...).
@@ -931,6 +937,7 @@ func listAssetAdministrationShellDescriptors(
 		var adminPayloadText sql.NullString
 		var displayNamePayloadText sql.NullString
 		var descriptionPayloadText sql.NullString
+		var extensionsPayloadText sql.NullString
 		if err := rows.Scan(
 			&r.DescID,
 			&r.AssetKind,
@@ -942,6 +949,7 @@ func listAssetAdministrationShellDescriptors(
 			&adminPayloadText,
 			&displayNamePayloadText,
 			&descriptionPayloadText,
+			&extensionsPayloadText,
 		); err != nil {
 			return nil, "", common.NewInternalServerError("Failed to scan AAS descriptor row. See server logs for details.")
 		}
@@ -953,6 +961,9 @@ func listAssetAdministrationShellDescriptors(
 		}
 		if descriptionPayloadText.Valid {
 			r.DescriptionPayload = []byte(descriptionPayloadText.String)
+		}
+		if extensionsPayloadText.Valid {
+			r.ExtensionsPayload = []byte(extensionsPayloadText.String)
 		}
 		descRows = append(descRows, r)
 	}
@@ -981,7 +992,6 @@ func listAssetAdministrationShellDescriptors(
 
 	endpointsByDesc := map[int64][]model.Endpoint{}
 	specificByDesc := map[int64][]types.ISpecificAssetID{}
-	extByDesc := map[int64][]types.Extension{}
 	smdByDesc := map[int64][]model.SubmodelDescriptor{}
 
 	if allowParallel {
@@ -995,9 +1005,6 @@ func listAssetAdministrationShellDescriptors(
 			GoAssign(g, func() (map[int64][]types.ISpecificAssetID, error) {
 				return ReadSpecificAssetIDsByDescriptorIDs(gctx, db, ids)
 			}, &specificByDesc)
-			GoAssign(g, func() (map[int64][]types.Extension, error) {
-				return ReadExtensionsByDescriptorIDs(gctx, db, ids)
-			}, &extByDesc)
 			GoAssign(g, func() (map[int64][]model.SubmodelDescriptor, error) {
 				return ReadSubmodelDescriptorsByAASDescriptorIDs(gctx, db, ids, false)
 			}, &smdByDesc)
@@ -1014,10 +1021,6 @@ func listAssetAdministrationShellDescriptors(
 				return nil, "", err
 			}
 			specificByDesc, err = ReadSpecificAssetIDsByDescriptorIDs(ctx, db, descIDs)
-			if err != nil {
-				return nil, "", err
-			}
-			extByDesc, err = ReadExtensionsByDescriptorIDs(ctx, db, descIDs)
 			if err != nil {
 				return nil, "", err
 			}
@@ -1048,6 +1051,10 @@ func listAssetAdministrationShellDescriptors(
 		if err != nil {
 			return nil, "", common.NewInternalServerError("AASDESC-LIST-DESCRIPTIONPAYLOAD")
 		}
+		extensions, err := parseExtensionsPayload(r.ExtensionsPayload)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("AASDESC-LIST-EXTENSIONPAYLOAD")
+		}
 
 		out = append(out, model.AssetAdministrationShellDescriptor{
 			AssetKind:           ak,
@@ -1061,7 +1068,7 @@ func listAssetAdministrationShellDescriptors(
 			Description:         description,
 			Endpoints:           endpointsByDesc[r.DescID],
 			SpecificAssetIds:    specificByDesc[r.DescID],
-			Extensions:          extByDesc[r.DescID],
+			Extensions:          extensions,
 			SubmodelDescriptors: smdByDesc[r.DescID],
 		})
 	}
