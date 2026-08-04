@@ -236,7 +236,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	d := goqu.Dialect(common.Dialect)
 	payloadAlias := common.TDescriptorPayload.As("smd_payload")
 	semanticRefAlias := goqu.T("submodel_descriptor_semantic_id_reference").As(common.AliasSubmodelDescriptorSemanticIDReference)
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	collector, err := grammar.NewResolvedFieldPathCollectorForNestedSMDesc()
 	if err != nil {
 		return nil, err
 	}

@@ -137,6 +137,24 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
 }
 
+// NewResolvedFieldPathCollectorForNestedSMDesc creates a collector that
+// evaluates MATCH filters against the current submodel descriptor and
+// non-MATCH filters against its owning AAS descriptor.
+func NewResolvedFieldPathCollectorForNestedSMDesc() (*ResolvedFieldPathCollector, error) {
+	matchCfg, err := joinPlanConfigForRoot(CollectorRootSMDesc)
+	if err != nil {
+		return nil, fmt.Errorf("GRAMMAR-NESTEDSMDESC-MATCHCONFIG: %w", err)
+	}
+	nonMatchCfg, err := joinPlanConfigForRoot(CollectorRootAASDesc)
+	if err != nil {
+		return nil, fmt.Errorf("GRAMMAR-NESTEDSMDESC-NONMATCHCONFIG: %w", err)
+	}
+
+	collector := NewResolvedFieldPathCollectorWithConfig(&matchCfg)
+	collector.nonMatchJoinConfig = &nonMatchCfg
+	return collector, nil
+}
+
 // NewResolvedFieldPathCollectorForSMERow creates an SME collector correlated
 // to the current submodel element instead of the containing submodel.
 // Fragment filters use this collector so their conditions are evaluated for

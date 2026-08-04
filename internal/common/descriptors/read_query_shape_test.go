@@ -94,46 +94,74 @@ func TestListSubmodelDescriptorsForAASReusesLookupSQLShape(t *testing.T) {
 	require.Equal(t, `SELECT "aas"."descriptor_id" FROM "aas_descriptor" AS "aas" WHERE ("aas"."id" = $1) LIMIT $2`, firstQuery)
 }
 
-func TestReadSubmodelDescriptorsByAASDescriptorIDsNonMatchFilterCorrelatesToParentDescriptor(t *testing.T) {
-	field := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].idShort")
-	value := grammar.StandardString("matching-sibling")
-	fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[]")
-	condition := grammar.LogicalExpression{
-		Eq: grammar.ComparisonItems{
-			{Field: &field},
-			{StrVal: &value},
+func TestReadSubmodelDescriptorsByAASDescriptorIDsFilterCorrelation(t *testing.T) {
+	tests := []struct {
+		name                string
+		field               grammar.ModelStringPattern
+		match               bool
+		expectedCorrelation string
+		unexpected          string
+	}{
+		{
+			name:                "non-MATCH correlates to parent descriptor",
+			field:               "$aasdesc#submodelDescriptors[].idShort",
+			expectedCorrelation: `"submodel_descriptor"."aas_descriptor_id" = "descriptor"."id"`,
+			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+		},
+		{
+			name:                "MATCH correlates to current submodel descriptor",
+			field:               "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value",
+			match:               true,
+			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor"."aas_descriptor_id" = "descriptor"."id"`,
 		},
 	}
-	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
-		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, false)},
-	})
 
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
-		if !strings.Contains(actual, `EXISTS`) {
-			return fmt.Errorf("expected non-MATCH filter to use EXISTS, got: %s", actual)
-		}
-		if !strings.Contains(actual, `"submodel_descriptor"."aas_descriptor_id" = "descriptor"."id"`) {
-			return fmt.Errorf("expected filter correlation to parent AAS descriptor, got: %s", actual)
-		}
-		return nil
-	})))
-	require.NoError(t, err)
-	defer func() { _ = db.Close() }()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			value := grammar.StandardString("matching-sibling")
+			fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[]")
+			condition := grammar.LogicalExpression{
+				Eq: grammar.ComparisonItems{
+					{Field: &test.field},
+					{StrVal: &value},
+				},
+			}
+			ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+				Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, test.match)},
+			})
 
-	mock.ExpectQuery("nested submodel descriptor non-MATCH correlation").
-		WillReturnRows(sqlmock.NewRows([]string{
-			"c0",
-			"c1",
-			"c2",
-			"c3",
-			"c4",
-			"c5",
-			"c6",
-			"c7",
-		}))
+			db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+				if !strings.Contains(actual, `EXISTS`) {
+					return fmt.Errorf("expected filter to use EXISTS, got: %s", actual)
+				}
+				if !strings.Contains(actual, test.expectedCorrelation) {
+					return fmt.Errorf("expected correlation %q, got: %s", test.expectedCorrelation, actual)
+				}
+				if strings.Contains(actual, test.unexpected) {
+					return fmt.Errorf("unexpected correlation %q, got: %s", test.unexpected, actual)
+				}
+				return nil
+			})))
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
 
-	descriptors, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{12}, false)
-	require.NoError(t, err)
-	require.Nil(t, descriptors[12])
-	require.NoError(t, mock.ExpectationsWereMet())
+			mock.ExpectQuery("nested submodel descriptor filter correlation").
+				WillReturnRows(sqlmock.NewRows([]string{
+					"c0",
+					"c1",
+					"c2",
+					"c3",
+					"c4",
+					"c5",
+					"c6",
+					"c7",
+				}))
+
+			descriptors, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{12}, false)
+			require.NoError(t, err)
+			require.Nil(t, descriptors[12])
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }
