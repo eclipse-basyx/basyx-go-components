@@ -139,7 +139,7 @@ func (p *AASXFileServerDatabase) listPackagesInTransaction(ctx context.Context, 
 	// #nosec G115 -- limit is normalized to a positive int32 value above.
 	ds = ds.Limit(uint(limit + 1))
 
-	sqlQuery, args, err := ds.ToSQL()
+	sqlQuery, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, 0, common.NewInternalServerError("AASXFS-LISTPACKAGES-BUILDSQL " + err.Error())
 	}
@@ -343,6 +343,7 @@ func (p *AASXFileServerDatabase) GetPackageByID(ctx context.Context, packageID s
 	query, args, err := dialect.From("aasx_package").
 		Select("id", "file_oid", "file_name", "content_type").
 		Where(goqu.C("package_id").Eq(packageID)).
+		Prepared(true).
 		ToSQL()
 	if err != nil {
 		return nil, common.NewInternalServerError("AASXFS-GETPACKAGE-BUILDSQL " + err.Error())
@@ -444,6 +445,7 @@ func (p *AASXFileServerDatabase) getAASIDsTx(ctx context.Context, queryable inte
 		Select("aas_id").
 		Where(goqu.C("package_db_id").Eq(packageDBID)).
 		Order(goqu.I("position").Asc()).
+		Prepared(true).
 		ToSQL()
 	if err != nil {
 		return nil, common.NewInternalServerError("AASXFS-GETAASIDS-BUILDSQL " + err.Error())
