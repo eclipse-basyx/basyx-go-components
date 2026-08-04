@@ -28,6 +28,7 @@ package descriptors
 import (
 	"context"
 	stdsql "database/sql"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -120,6 +121,119 @@ func TestBuildSingleStatementAASDescriptorListQueryUsesPagedInnerQuery(t *testin
 	if !hasLimitArg {
 		t.Fatalf("expected prepared args to contain limit 2, got: %#v", args)
 	}
+}
+
+func TestBuildSingleStatementAASDescriptorListQueryReusesSQLShape(t *testing.T) {
+	build := func(
+		limit int32,
+		cursor string,
+		assetType string,
+		identifiable string,
+		createdFrom time.Time,
+		updatedFrom time.Time,
+	) (string, []interface{}) {
+		t.Helper()
+		ds, err := buildSingleStatementAASDescriptorListQuery(
+			contextWithABACDisabled(t),
+			limit,
+			cursor,
+			"Instance",
+			assetType,
+			identifiable,
+			createdFrom,
+			updatedFrom,
+		)
+		if err != nil {
+			t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
+		}
+		sql, args, err := ds.Prepared(true).ToSQL()
+		if err != nil {
+			t.Fatalf("ToSQL returned error: %v", err)
+		}
+		return sql, args
+	}
+
+	firstSQL, firstArgs := build(
+		2,
+		"urn:example:cursor:first",
+		"urn:example:asset-type:first",
+		"urn:example:aas:first",
+		time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.January, 2, 0, 0, 0, 0, time.UTC),
+	)
+	secondSQL, secondArgs := build(
+		20,
+		"urn:example:cursor:second",
+		"urn:example:asset-type:second",
+		"urn:example:aas:second",
+		time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.February, 2, 0, 0, 0, 0, time.UTC),
+	)
+
+	if firstSQL != secondSQL {
+		t.Fatalf("expected reusable SQL shape, got:\nfirst:  %s\nsecond: %s", firstSQL, secondSQL)
+	}
+	if fmt.Sprint(firstArgs) == fmt.Sprint(secondArgs) {
+		t.Fatalf("expected different runtime arguments, got: %#v", firstArgs)
+	}
+}
+
+func TestBuildSingleStatementAASDescriptorListQueryCorrelatesMultiKeyMaskFlags(t *testing.T) {
+	tests := []struct {
+		name             string
+		fragment         grammar.FragmentStringPattern
+		conditionField   grammar.ModelStringPattern
+		joinedKeyPattern string
+		partitionPattern string
+	}{
+		{
+			name:             "specific asset ID",
+			fragment:         "$aasdesc#specificAssetIds[].name",
+			conditionField:   "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value",
+			joinedKeyPattern: `LEFT JOIN "specific_asset_id_external_subject_id_reference_key" AS "external_subject_reference_key"`,
+			partitionPattern: `OVER (PARTITION BY "specific_asset_id"."id")`,
+		},
+		{
+			name:             "submodel descriptor",
+			fragment:         "$aasdesc#submodelDescriptors[].semanticId",
+			conditionField:   "$aasdesc#submodelDescriptors[].semanticId.keys[].value",
+			joinedKeyPattern: `LEFT JOIN "submodel_descriptor_semantic_id_reference_key" AS "aasdesc_submodel_descriptor_semantic_id_reference_key"`,
+			partitionPattern: `OVER (PARTITION BY "submodel_descriptor"."descriptor_id")`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := auth.MergeQueryFilter(contextWithABACDisabled(t), grammar.Query{
+				FilterConditions: []grammar.SubFilter{
+					{Fragment: &test.fragment, Condition: pointerToDescriptorExpression(descriptorFieldEquals(test.conditionField, "MASK_MATCH"))},
+				},
+			})
+
+			ds, err := buildSingleStatementAASDescriptorListQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
+			if err != nil {
+				t.Fatalf("buildSingleStatementAASDescriptorListQuery returned error: %v", err)
+			}
+			sql, _, err := ds.Prepared(true).ToSQL()
+			if err != nil {
+				t.Fatalf("ToSQL returned error: %v", err)
+			}
+
+			if !strings.Contains(sql, "BOOL_OR(") {
+				t.Fatalf("expected mask flag to aggregate matching reference keys: %s", sql)
+			}
+			if !strings.Contains(sql, test.joinedKeyPattern) {
+				t.Fatalf("expected mask query to join the reference keys: %s", sql)
+			}
+			if !strings.Contains(sql, test.partitionPattern) {
+				t.Fatalf("expected mask flags to aggregate per parent: %s", sql)
+			}
+		})
+	}
+}
+
+func pointerToDescriptorExpression(expression grammar.LogicalExpression) *grammar.LogicalExpression {
+	return &expression
 }
 
 func TestBuildSingleStatementAASDescriptorListQueryAppliesSharedMaskCondition(t *testing.T) {

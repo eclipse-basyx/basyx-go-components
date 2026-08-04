@@ -279,25 +279,6 @@ func (obj *AssetAdministrationShellDescriptor) unmarshalJSON(data []byte, verify
 		mode = GetVerificationMode()
 	}
 
-	//Extensions
-	if mode != VerificationModeOff {
-		for _, ext := range obj.Extensions {
-			extension := ext
-			if err := ValidateWithMode(
-				mode,
-				"AssetAdministrationShellDescriptor.Extensions",
-				func(collector func(*verification.VerificationError) bool) {
-					verification.Verify(&extension, collector)
-				},
-				func(message string) error {
-					return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + message)
-				},
-			); err != nil {
-				return err
-			}
-		}
-	}
-
 	// Submodel Descriptors
 	if smds, ok := jsonable["submodelDescriptors"].([]any); ok {
 		for _, smd := range smds {

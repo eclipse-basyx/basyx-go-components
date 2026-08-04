@@ -78,7 +78,7 @@ func listAssetAdministrationShellDescriptorsSingleStatement(
 	if err != nil {
 		return nil, "", err
 	}
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREG-LISTAAS-BUILDQUERY " + err.Error())
 	}
@@ -313,15 +313,15 @@ func buildEndpointArraySubquery(
 ) (*goqu.SelectDataset, error) {
 	endpoint := goqu.T(table).As(alias)
 	endpointJSON := goqu.Func("jsonb_strip_nulls", goqu.Func("jsonb_build_object",
-		goqu.V("interface"), endpoint.Col(common.ColInterface),
-		goqu.V("protocolInformation"), goqu.Func("jsonb_strip_nulls", goqu.Func("jsonb_build_object",
-			goqu.V("href"), endpoint.Col(common.ColHref),
-			goqu.V("endpointProtocol"), endpoint.Col(common.ColEndpointProtocol),
-			goqu.V("endpointProtocolVersion"), endpoint.Col(common.ColEndpointProtocolVersion),
-			goqu.V("subprotocol"), endpoint.Col(common.ColSubProtocol),
-			goqu.V("subprotocolBody"), endpoint.Col(common.ColSubProtocolBody),
-			goqu.V("subprotocolBodyEncoding"), endpoint.Col(common.ColSubProtocolBodyEncoding),
-			goqu.V("securityAttributes"), endpoint.Col(common.ColSecurityAttributes),
+		common.PostgreSQLTextLiteral("interface"), endpoint.Col(common.ColInterface),
+		common.PostgreSQLTextLiteral("protocolInformation"), goqu.Func("jsonb_strip_nulls", goqu.Func("jsonb_build_object",
+			common.PostgreSQLTextLiteral("href"), endpoint.Col(common.ColHref),
+			common.PostgreSQLTextLiteral("endpointProtocol"), endpoint.Col(common.ColEndpointProtocol),
+			common.PostgreSQLTextLiteral("endpointProtocolVersion"), endpoint.Col(common.ColEndpointProtocolVersion),
+			common.PostgreSQLTextLiteral("subprotocol"), endpoint.Col(common.ColSubProtocol),
+			common.PostgreSQLTextLiteral("subprotocolBody"), endpoint.Col(common.ColSubProtocolBody),
+			common.PostgreSQLTextLiteral("subprotocolBodyEncoding"), endpoint.Col(common.ColSubProtocolBodyEncoding),
+			common.PostgreSQLTextLiteral("securityAttributes"), endpoint.Col(common.ColSecurityAttributes),
 		)),
 	))
 	ds := dialect.From(endpoint).
@@ -362,6 +362,10 @@ func buildSpecificAssetIDArraySubquery(
 	if err != nil {
 		return nil, err
 	}
+	maskProjections, err := maskRuntime.BoolOrProjections(specificAssetID.Col(common.ColID))
+	if err != nil {
+		return nil, err
+	}
 	inner := dialect.From(specificAssetID).
 		LeftJoin(payload, goqu.On(payload.Col(common.ColSpecificAssetID).Eq(specificAssetID.Col(common.ColID)))).
 		LeftJoin(externalReferenceRow, goqu.On(externalReferenceRow.Col(common.ColID).Eq(specificAssetID.Col(common.ColID))))
@@ -381,7 +385,7 @@ func buildSpecificAssetIDArraySubquery(
 			specificAssetID.Col(common.ColPosition).As(common.ColPosition),
 			payload.Col("semantic_id_payload").As("semantic_id_payload"),
 			externalReferenceRow.Col(common.ColID).As("external_reference_id"),
-		}, maskRuntime.Projections()...)...).
+		}, maskProjections...)...).
 		Where(
 			specificAssetID.Col(common.ColDescriptorID).Eq(descriptorID),
 			specificAssetID.Col(common.ColName).Neq(globalAssetIDSpecificAssetIDName),
@@ -498,6 +502,10 @@ func buildSubmodelDescriptorArraySubquery(
 	if err != nil {
 		return nil, err
 	}
+	maskProjections, err := maskRuntime.BoolOrProjections(submodel.Col(common.ColDescriptorID))
+	if err != nil {
+		return nil, err
+	}
 	inner := dialect.From(submodel).
 		InnerJoin(payload, goqu.On(payload.Col(common.ColDescriptorID).Eq(submodel.Col(common.ColDescriptorID)))).
 		LeftJoin(semanticReferenceRow, goqu.On(semanticReferenceRow.Col(common.ColID).Eq(submodel.Col(common.ColDescriptorID))))
@@ -538,7 +546,7 @@ func buildSubmodelDescriptorArraySubquery(
 			payload.Col(common.ColDescriptionPayload).As(common.ColDescriptionPayload),
 			payload.Col(common.ColExtensionsPayload).As(common.ColExtensionsPayload),
 			semanticReferenceRow.Col(common.ColID).As("semantic_reference_id"),
-		}, maskRuntime.Projections()...)...).
+		}, maskProjections...)...).
 		Where(submodel.Col(common.ColAASDescriptorID).Eq(aasDescriptorID))
 	if needsFilterJoins {
 		inner = inner.Distinct()
@@ -889,8 +897,8 @@ func buildReferenceJSON(
 	keys := dialect.From(key).
 		Select(jsonArrayAggregate(
 			goqu.Func("jsonb_build_object",
-				goqu.V("type"), buildKeyTypeStringExpression(key.Col(common.ColType)),
-				goqu.V("value"), key.Col(common.ColValue),
+				common.PostgreSQLTextLiteral("type"), buildKeyTypeStringExpression(key.Col(common.ColType)),
+				common.PostgreSQLTextLiteral("value"), key.Col(common.ColValue),
 			),
 			key.Col(common.ColPosition),
 			key.Col(common.ColID),
@@ -901,9 +909,9 @@ func buildReferenceJSON(
 		return nil, err
 	}
 	return goqu.Func("jsonb_strip_nulls", goqu.Func("jsonb_build_object",
-		goqu.V("type"), buildReferenceTypeStringExpression(reference.Col(common.ColType)),
-		goqu.V("keys"), keys,
-		goqu.V("referredSemanticId"), emptyJSONToNull(payload.Col("parent_reference_payload")),
+		common.PostgreSQLTextLiteral("type"), buildReferenceTypeStringExpression(reference.Col(common.ColType)),
+		common.PostgreSQLTextLiteral("keys"), keys,
+		common.PostgreSQLTextLiteral("referredSemanticId"), emptyJSONToNull(payload.Col("parent_reference_payload")),
 	)), nil
 }
 
@@ -932,7 +940,7 @@ func buildMaskedJSONObject(
 	}
 	jsonFields := make([]interface{}, 0, len(fields)*2)
 	for index, field := range fields {
-		jsonFields = append(jsonFields, goqu.V(field.name), values[index])
+		jsonFields = append(jsonFields, common.PostgreSQLTextLiteral(field.name), values[index])
 	}
 	return goqu.Func("jsonb_strip_nulls", goqu.Func("jsonb_build_object", jsonFields...)), nil
 }
@@ -1015,23 +1023,23 @@ func emptyJSONToNull(value exp.Expression) exp.Expression {
 func buildAssetKindStringExpression(value exp.Expression) exp.CaseExpression {
 	result := goqu.Case().Value(value)
 	for _, assetKind := range types.LiteralsOfAssetKind {
-		result = result.When(int(assetKind), stringification.MustAssetKindToString(assetKind))
+		result = result.When(int(assetKind), common.PostgreSQLTextLiteral(stringification.MustAssetKindToString(assetKind)))
 	}
-	return result.Else(nil)
+	return result.Else(goqu.L("NULL"))
 }
 
 func buildReferenceTypeStringExpression(value exp.Expression) exp.CaseExpression {
 	result := goqu.Case().Value(value)
 	for _, referenceType := range types.LiteralsOfReferenceTypes {
-		result = result.When(int(referenceType), stringification.MustReferenceTypesToString(referenceType))
+		result = result.When(int(referenceType), common.PostgreSQLTextLiteral(stringification.MustReferenceTypesToString(referenceType)))
 	}
-	return result.Else(nil)
+	return result.Else(goqu.L("NULL"))
 }
 
 func buildKeyTypeStringExpression(value exp.Expression) exp.CaseExpression {
 	result := goqu.Case().Value(value)
 	for _, keyType := range types.LiteralsOfKeyTypes {
-		result = result.When(int(keyType), stringification.MustKeyTypesToString(keyType))
+		result = result.When(int(keyType), common.PostgreSQLTextLiteral(stringification.MustKeyTypesToString(keyType)))
 	}
-	return result.Else(nil)
+	return result.Else(goqu.L("NULL"))
 }
