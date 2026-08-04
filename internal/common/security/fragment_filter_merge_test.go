@@ -72,11 +72,29 @@ func TestAuthorizeSingleABACRulePreservesMatchModePerFilter(t *testing.T) {
 
 	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[]")
 	predicate := result.QueryFilter.Filters[fragment]
-	if len(predicate.And) != 3 {
-		t.Fatalf("expected rule formula and two filter leaves joined by AND, got %#v", predicate)
+	if len(predicate.And) != 2 {
+		t.Fatalf("expected the true rule formula to be removed from the two filter leaves, got %#v", predicate)
 	}
 	assertRuleFilterLeafMatch(t, predicate, "global-name", false)
 	assertRuleFilterLeafMatch(t, predicate, "local-name", true)
+}
+
+func TestAuthorizeUnrestrictedRuleRemovesEquivalentFragmentRestriction(t *testing.T) {
+	model := mustParseAASRegistryAccessModel(t, mixedMatchRulesModelJSON)
+	model.rules[1].filterList = nil
+
+	result := model.AuthorizeWithFilterWithOptions(EvalInput{
+		Method: "GET",
+		Path:   "/shell-descriptors",
+	}, grammar.DefaultSimplifyOptions())
+	if !result.Allowed || result.QueryFilter == nil {
+		t.Fatalf("expected authorization result, got %#v", result)
+	}
+
+	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[]")
+	if _, restricted := result.QueryFilter.Filters[fragment]; restricted {
+		t.Fatalf("unrestricted rule must remove the equivalent fragment restriction: %#v", result.QueryFilter.Filters)
+	}
 }
 
 func TestAuthorizeMultipleABACRulesEquivalentFragmentsDoNotExposeRestrictedIndex(t *testing.T) {

@@ -420,7 +420,11 @@ func mergeRuleFragmentFilters(
 			}
 			alternatives = append(alternatives, AndFragmentFilterPredicates(alternative...))
 		}
-		combined[group.fragment] = OrFragmentFilterPredicates(alternatives...)
+		predicate := OrFragmentFilterPredicates(alternatives...)
+		if unrestricted, constant := predicate.globalBooleanValue(); constant && unrestricted {
+			continue
+		}
+		combined[group.fragment] = predicate
 	}
 	return combined
 }
@@ -471,36 +475,35 @@ func indexedFragmentTokenCount(fragment grammar.FragmentStringPattern) int {
 }
 
 func fragmentShapeKey(fragment grammar.FragmentStringPattern) string {
-	var shape strings.Builder
-	shape.WriteString(fragmentRoot(fragment))
+	parts := []string{fragmentRoot(fragment)}
 	for _, token := range builder.TokenizeField(string(fragment)) {
 		kind := "simple"
 		if _, isArray := token.(builder.ArrayToken); isArray {
 			kind = "array"
 		}
-		fmt.Fprintf(&shape, "|%s:%d:%s", kind, len(token.GetName()), token.GetName())
+		parts = append(parts, fmt.Sprintf("|%s:%d:%s", kind, len(token.GetName()), token.GetName()))
 	}
-	return shape.String()
+	return strings.Join(parts, "")
 }
 
 func wildcardFragment(fragment grammar.FragmentStringPattern) grammar.FragmentStringPattern {
 	value := string(fragment)
-	var wildcard strings.Builder
+	wildcard := make([]byte, 0, len(value))
 	for len(value) > 0 {
 		open := strings.IndexByte(value, '[')
 		if open < 0 {
-			wildcard.WriteString(value)
+			wildcard = append(wildcard, value...)
 			break
 		}
-		close := strings.IndexByte(value[open:], ']')
-		if close < 0 {
+		closeOffset := strings.IndexByte(value[open:], ']')
+		if closeOffset < 0 {
 			return fragment
 		}
-		wildcard.WriteString(value[:open])
-		wildcard.WriteString("[]")
-		value = value[open+close+1:]
+		wildcard = append(wildcard, value[:open]...)
+		wildcard = append(wildcard, '[', ']')
+		value = value[open+closeOffset+1:]
 	}
-	return grammar.FragmentStringPattern(wildcard.String())
+	return grammar.FragmentStringPattern(string(wildcard))
 }
 
 // FilterPredicateEntriesFor returns all (fragment, predicate) pairs from

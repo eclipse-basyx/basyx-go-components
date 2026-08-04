@@ -77,6 +77,51 @@ func TestAddFilterQueriesFromContext_DeduplicatesEquivalentSignatures(t *testing
 	}
 }
 
+func TestMergedSMEStructuralFilterDropsTrueGlobalFormulaAndUsesReaderAlias(t *testing.T) {
+	allow := true
+	deny := false
+	originalFragment := grammar.FragmentStringPattern("$sme.ARestricted")
+	normalizedFragment := grammar.FragmentStringPattern("$sme.ARestricted#idShort")
+	predicate := AndFragmentFilterPredicates(
+		newGlobalFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}),
+		scopeFragmentFilterPredicate(
+			NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
+			originalFragment,
+		),
+	)
+
+	if predicate.Condition == nil || predicate.Condition.Boolean == nil || *predicate.Condition.Boolean {
+		t.Fatalf("expected the true global formula to simplify to the scoped deny leaf, got %#v", predicate)
+	}
+	if predicate.evaluationFragment(normalizedFragment) != normalizedFragment {
+		t.Fatalf("expected original path with the normalized field suffix, got %#v", predicate)
+	}
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	condition, err := evaluateFragmentFilterPredicate(predicate, normalizedFragment, collector)
+	if err != nil {
+		t.Fatalf("evaluateFragmentFilterPredicate returned error: %v", err)
+	}
+	sql, _, err := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.id")).
+		Where(condition).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if !strings.Contains(sql, `"sme"."idshort_path"`) {
+		t.Fatalf("expected structural guard to use the reader alias: %s", sql)
+	}
+	if strings.Contains(sql, `"submodel_element"."idshort_path"`) {
+		t.Fatalf("structural guard escaped the reader alias: %s", sql)
+	}
+}
+
 func mustParseLogicalExpression(t *testing.T, raw string) grammar.LogicalExpression {
 	t.Helper()
 	var expr grammar.LogicalExpression

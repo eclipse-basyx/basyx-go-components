@@ -54,7 +54,7 @@ func TestReadAASSubmodelReferencesMatchesCurrentReferenceAndCorrelatesParent(t *
 	})
 
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
-		if !strings.Contains(actual, `"aas_submodel_reference_key"."value" = 'urn:example:submodel:visible'`) {
+		if !strings.Contains(actual, `"aas_submodel_reference_key"."value" = $`) {
 			return fmt.Errorf("expected current key-row predicate, got: %s", actual)
 		}
 		if !strings.Contains(actual, `"aas"."id" = "aas_submodel_reference"."aas_id"`) {
@@ -70,23 +70,25 @@ func TestReadAASSubmodelReferencesMatchesCurrentReferenceAndCorrelatesParent(t *
 	}
 	defer func() { _ = db.Close() }()
 
-	mock.ExpectQuery("AAS submodel reference row match").WillReturnRows(sqlmock.NewRows([]string{
-		"owner_id",
-		"ref_id",
-		"ref_type",
-		"key_id",
-		"key_type",
-		"key_value",
-		"parent_reference_payload",
-	}).AddRow(
-		int64(7),
-		int64(11),
-		int64(types.ReferenceTypesExternalReference),
-		int64(13),
-		int64(types.KeyTypesGlobalReference),
-		string(visibleKey),
-		[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:example:submodel:visible"}]}`),
-	))
+	mock.ExpectQuery("AAS submodel reference row match").
+		WithArgs(sqlmock.AnyArg(), string(publicAAS), string(visibleKey)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"owner_id",
+			"ref_id",
+			"ref_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_reference_payload",
+		}).AddRow(
+			int64(7),
+			int64(11),
+			int64(types.ReferenceTypesExternalReference),
+			int64(13),
+			int64(types.KeyTypesGlobalReference),
+			string(visibleKey),
+			[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:example:submodel:visible"}]}`),
+		))
 
 	references, err := ReadAASSubmodelReferencesByAASIDs(ctx, db, []int64{7})
 	if err != nil {

@@ -26,7 +26,11 @@
 
 package auth
 
-import "github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+import (
+	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+)
 
 // FragmentFilters groups filter predicates by the fragment they control.
 type FragmentFilters map[grammar.FragmentStringPattern]FragmentFilterPredicate
@@ -87,7 +91,16 @@ func (predicate FragmentFilterPredicate) evaluationFragment(fallback grammar.Fra
 	if predicate.fragment == nil {
 		return fallback
 	}
-	return *predicate.fragment
+	fragment := *predicate.fragment
+	if strings.Contains(string(fragment), "#") {
+		return fragment
+	}
+	fallbackValue := string(fallback)
+	fragmentSuffixIndex := strings.LastIndex(fallbackValue, "#")
+	if fragmentSuffixIndex < 0 {
+		return fragment
+	}
+	return grammar.FragmentStringPattern(string(fragment) + fallbackValue[fragmentSuffixIndex:])
 }
 
 // AndFragmentFilterPredicates combines predicates without changing leaf scope.
@@ -103,7 +116,15 @@ func OrFragmentFilterPredicates(predicates ...FragmentFilterPredicate) FragmentF
 func combineFragmentFilterPredicates(and bool, predicates []FragmentFilterPredicate) FragmentFilterPredicate {
 	children := make([]FragmentFilterPredicate, 0, len(predicates))
 	for _, predicate := range predicates {
+		predicate = simplifyFragmentFilterPredicate(predicate)
 		if predicate.isZero() {
+			continue
+		}
+		if value, constant := predicate.globalBooleanValue(); constant {
+			shortCircuits := (and && !value) || (!and && value)
+			if shortCircuits {
+				return predicate
+			}
 			continue
 		}
 		if and && len(predicate.And) > 0 && predicate.Condition == nil && len(predicate.Or) == 0 {
@@ -116,6 +137,9 @@ func combineFragmentFilterPredicates(and bool, predicates []FragmentFilterPredic
 		}
 		children = append(children, predicate)
 	}
+	if len(children) == 0 {
+		return newGlobalFragmentFilterPredicate(boolExpression(and))
+	}
 	if len(children) == 1 {
 		return children[0]
 	}
@@ -123,6 +147,23 @@ func combineFragmentFilterPredicates(and bool, predicates []FragmentFilterPredic
 		return FragmentFilterPredicate{And: children}
 	}
 	return FragmentFilterPredicate{Or: children}
+}
+
+func simplifyFragmentFilterPredicate(predicate FragmentFilterPredicate) FragmentFilterPredicate {
+	if predicate.Condition != nil || predicate.isZero() {
+		return predicate
+	}
+	if len(predicate.And) > 0 {
+		return AndFragmentFilterPredicates(predicate.And...)
+	}
+	return OrFragmentFilterPredicates(predicate.Or...)
+}
+
+func (predicate FragmentFilterPredicate) globalBooleanValue() (bool, bool) {
+	if predicate.Condition == nil || predicate.Condition.Boolean == nil || !predicate.global {
+		return false, false
+	}
+	return *predicate.Condition.Boolean, true
 }
 
 func (predicate FragmentFilterPredicate) isZero() bool {

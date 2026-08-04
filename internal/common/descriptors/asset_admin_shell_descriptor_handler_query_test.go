@@ -167,11 +167,12 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_MasksExtensionsInFirs
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
+	normalizedSQL := strings.Join(strings.Fields(sql), " ")
 	for _, want := range []string{
-		`FALSE AS "flag_extension"`,
+		`CASE WHEN FALSE THEN TRUE ELSE FALSE END AS "flag_extension"`,
 		`CASE WHEN "aas_list_data"."flag_extension" THEN "aas_list_data"."raw_extensions_payload" ELSE NULL END`,
 	} {
-		if !strings.Contains(sql, want) {
+		if !strings.Contains(normalizedSQL, want) {
 			t.Fatalf("expected extension mask SQL to contain %q, got: %s", want, sql)
 		}
 	}
