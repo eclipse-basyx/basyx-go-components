@@ -154,9 +154,6 @@ func contentTypeFromExtension(fileName string) string {
 	if ext == "" {
 		return ""
 	}
-	if ext == ".csv" {
-		return "text/csv"
-	}
 
 	return normalizeContentType(mime.TypeByExtension(ext))
 }

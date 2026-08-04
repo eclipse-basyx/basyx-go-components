@@ -294,6 +294,31 @@ example, a filter for `$aasdesc#specificAssetIds[0]` controls the visibility of
 position `0`; it does not by itself restrict the other positions. A wildcard
 filter such as `$aasdesc#specificAssetIds[]` applies to every position.
 
+`MATCH` controls where the fragment condition is evaluated; it does not change
+which positions the fragment targets. For example:
+
+```json
+{
+  "FRAGMENT": "$aasdesc#specificAssetIds[]",
+  "MATCH": true,
+  "CONDITION": {
+    "$eq": [
+      { "$field": "$aasdesc#specificAssetIds[].name" },
+      { "$strVal": "customerPartId" }
+    ]
+  }
+}
+```
+
+Here the wildcard targets every `specificAssetIds` position, while
+`MATCH: true` evaluates the condition against the row currently being
+reconstructed. Only rows whose `name` is `customerPartId` are visible. If
+`MATCH` is omitted or `false`, the condition has parent-level existential
+semantics: one matching `specificAssetIds` row can make the condition pass for
+all positions of that fragment, preserving the complete array. `MATCH: true`
+therefore makes wildcard fragment filtering row-local; it does not turn the
+wildcard into an indexed fragment.
+
 Fragment filters are composed at rule boundaries:
 
 - Within one rule, all applicable fragment restrictions are combined with
