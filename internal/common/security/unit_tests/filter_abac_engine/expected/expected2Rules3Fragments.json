@@ -29,6 +29,18 @@
                     "$strVal": "hrefB"
                   }
                 ]
+              },
+              {
+                "$eq": [
+                  {
+                    "$strCast": {
+                      "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                    }
+                  },
+                  {
+                    "$strVal": "hrefA"
+                  }
+                ]
               }
             ]
           },
@@ -57,50 +69,6 @@
                     "$strVal": "hrefB"
                   }
                 ]
-              }
-            ]
-          }
-        ]
-      },
-      "$aasdesc#endpoints[0]": {
-        "$or": [
-          {
-            "$and": [
-              {
-                "$eq": [
-                  {
-                    "$strCast": {
-                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                    }
-                  },
-                  {
-                    "$strVal": "WRITTEN_BY_X"
-                  }
-                ]
-              },
-              {
-                "$eq": [
-                  {
-                    "$strCast": {
-                      "$field": "$aasdesc#endpoints[].protocolinformation.href"
-                    }
-                  },
-                  {
-                    "$strVal": "hrefA"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "$eq": [
-              {
-                "$strCast": {
-                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                }
-              },
-              {
-                "$strVal": "WRITTEN_BY_Y"
               }
             ]
           }

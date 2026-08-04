@@ -441,6 +441,11 @@ func evaluateFragmentFilterLeaf(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (exp.Expression, error) {
+	if predicate.global {
+		whereCondition, _, err := predicate.Condition.EvaluateToExpression(collector.WithoutInlineAliases())
+		return whereCondition, err
+	}
+	fragment = predicate.evaluationFragment(fragment)
 	evalCollector := collector.WithoutInlineAliases()
 	if predicate.Match {
 		evalCollector = collector.ForFragmentMatch(fragment)
@@ -530,10 +535,39 @@ func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentSt
 		if err != nil {
 			return "", err
 		}
-		parts = append(parts, fmt.Sprintf("%s|%s", exprJSON, bindingsJSON))
+		parts = append(parts, fmt.Sprintf(
+			"%s|%s|%s",
+			exprJSON,
+			fragmentFilterPredicateScopeSignature(filter.Predicate),
+			bindingsJSON,
+		))
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, "&&"), nil
+}
+
+func fragmentFilterPredicateScopeSignature(predicate FragmentFilterPredicate) string {
+	if predicate.Condition != nil {
+		if predicate.global {
+			return "leaf:global"
+		}
+		if predicate.fragment == nil {
+			return "leaf"
+		}
+		return "leaf:" + string(*predicate.fragment)
+	}
+	if len(predicate.And) > 0 {
+		return "and(" + fragmentFilterPredicateScopesSignature(predicate.And) + ")"
+	}
+	return "or(" + fragmentFilterPredicateScopesSignature(predicate.Or) + ")"
+}
+
+func fragmentFilterPredicateScopesSignature(predicates []FragmentFilterPredicate) string {
+	parts := make([]string, 0, len(predicates))
+	for _, predicate := range predicates {
+		parts = append(parts, fragmentFilterPredicateScopeSignature(predicate))
+	}
+	return strings.Join(parts, ",")
 }
 
 // GetColumnSelectStatement builds SELECT expressions while honoring fragment

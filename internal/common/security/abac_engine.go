@@ -28,6 +28,7 @@ package auth
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -271,10 +272,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			if existing, ok := fragments[fragment]; ok {
 				fragments[fragment] = AndFragmentFilterPredicates(existing, condition)
 			} else {
-				fragments[fragment] = AndFragmentFilterPredicates(
-					NewFragmentFilterPredicate(adapted, false),
-					condition,
-				)
+				fragments[fragment] = condition
 			}
 			allFragments[fragment] = struct{}{}
 		}
@@ -297,21 +295,9 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	}
 
 	combined := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
-	combinedFragments := make(FragmentFilters)
+	combinedFragments := mergeRuleFragmentFilters(ruleExprs, allFragments)
 	for _, qfr := range ruleExprs {
 		combined.Or = append(combined.Or, *qfr.Formula)
-	}
-
-	for fragment := range allFragments {
-		alternatives := make([]FragmentFilterPredicate, 0, len(ruleExprs))
-		for _, qfr := range ruleExprs {
-			if predicate, ok := qfr.Filters[fragment]; ok {
-				alternatives = append(alternatives, predicate)
-				continue
-			}
-			alternatives = append(alternatives, NewFragmentFilterPredicate(*qfr.Formula, false))
-		}
-		combinedFragments[fragment] = OrFragmentFilterPredicates(alternatives...)
 	}
 
 	resolver := func(attr grammar.AttributeValue) any {
@@ -411,6 +397,110 @@ func boolExpression(v bool) grammar.LogicalExpression {
 	return grammar.LogicalExpression{
 		Boolean: &v,
 	}
+}
+
+type fragmentShapeGroup struct {
+	fragment  grammar.FragmentStringPattern
+	fragments []grammar.FragmentStringPattern
+}
+
+func mergeRuleFragmentFilters(
+	ruleExprs []QueryFilter,
+	allFragments map[grammar.FragmentStringPattern]struct{},
+) FragmentFilters {
+	combined := make(FragmentFilters)
+	for _, group := range groupFragmentsByShape(allFragments) {
+		alternatives := make([]FragmentFilterPredicate, 0, len(ruleExprs))
+		for _, ruleExpr := range ruleExprs {
+			alternative := []FragmentFilterPredicate{newGlobalFragmentFilterPredicate(*ruleExpr.Formula)}
+			for _, fragment := range group.fragments {
+				if predicate, ok := ruleExpr.Filters[fragment]; ok {
+					alternative = append(alternative, scopeFragmentFilterPredicate(predicate, fragment))
+				}
+			}
+			alternatives = append(alternatives, AndFragmentFilterPredicates(alternative...))
+		}
+		combined[group.fragment] = OrFragmentFilterPredicates(alternatives...)
+	}
+	return combined
+}
+
+func groupFragmentsByShape(fragments map[grammar.FragmentStringPattern]struct{}) []fragmentShapeGroup {
+	groupsByShape := make(map[string]*fragmentShapeGroup)
+	for fragment := range fragments {
+		shape := fragmentShapeKey(fragment)
+		group, ok := groupsByShape[shape]
+		if !ok {
+			group = &fragmentShapeGroup{fragment: wildcardFragment(fragment)}
+			groupsByShape[shape] = group
+		}
+		group.fragments = append(group.fragments, fragment)
+	}
+
+	shapes := make([]string, 0, len(groupsByShape))
+	for shape := range groupsByShape {
+		shapes = append(shapes, shape)
+	}
+	sort.Strings(shapes)
+
+	groups := make([]fragmentShapeGroup, 0, len(shapes))
+	for _, shape := range shapes {
+		group := groupsByShape[shape]
+		sort.Slice(group.fragments, func(i, j int) bool {
+			iIndexes := indexedFragmentTokenCount(group.fragments[i])
+			jIndexes := indexedFragmentTokenCount(group.fragments[j])
+			if iIndexes != jIndexes {
+				return iIndexes < jIndexes
+			}
+			return group.fragments[i] < group.fragments[j]
+		})
+		groups = append(groups, *group)
+	}
+	return groups
+}
+
+func indexedFragmentTokenCount(fragment grammar.FragmentStringPattern) int {
+	count := 0
+	for _, token := range builder.TokenizeField(string(fragment)) {
+		array, isArray := token.(builder.ArrayToken)
+		if isArray && array.Index >= 0 {
+			count++
+		}
+	}
+	return count
+}
+
+func fragmentShapeKey(fragment grammar.FragmentStringPattern) string {
+	var shape strings.Builder
+	shape.WriteString(fragmentRoot(fragment))
+	for _, token := range builder.TokenizeField(string(fragment)) {
+		kind := "simple"
+		if _, isArray := token.(builder.ArrayToken); isArray {
+			kind = "array"
+		}
+		fmt.Fprintf(&shape, "|%s:%d:%s", kind, len(token.GetName()), token.GetName())
+	}
+	return shape.String()
+}
+
+func wildcardFragment(fragment grammar.FragmentStringPattern) grammar.FragmentStringPattern {
+	value := string(fragment)
+	var wildcard strings.Builder
+	for len(value) > 0 {
+		open := strings.IndexByte(value, '[')
+		if open < 0 {
+			wildcard.WriteString(value)
+			break
+		}
+		close := strings.IndexByte(value[open:], ']')
+		if close < 0 {
+			return fragment
+		}
+		wildcard.WriteString(value[:open])
+		wildcard.WriteString("[]")
+		value = value[open+close+1:]
+	}
+	return grammar.FragmentStringPattern(wildcard.String())
 }
 
 // FilterPredicateEntriesFor returns all (fragment, predicate) pairs from

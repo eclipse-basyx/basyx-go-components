@@ -31,13 +31,15 @@ import "github.com/eclipse-basyx/basyx-go-components/internal/common/model/gramm
 // FragmentFilters groups filter predicates by the fragment they control.
 type FragmentFilters map[grammar.FragmentStringPattern]FragmentFilterPredicate
 
-// FragmentFilterPredicate preserves the Boolean composition of fragment
-// conditions while keeping row-local match mode attached to each leaf.
+// FragmentFilterPredicate preserves Boolean composition and the evaluation
+// scope of each fragment-condition leaf.
 type FragmentFilterPredicate struct {
 	Condition *grammar.LogicalExpression `json:"$condition,omitempty" yaml:"$condition,omitempty" mapstructure:"$condition,omitempty"`
 	Match     bool                       `json:"$match,omitempty" yaml:"$match,omitempty" mapstructure:"$match,omitempty"`
 	And       []FragmentFilterPredicate  `json:"$and,omitempty" yaml:"$and,omitempty" mapstructure:"$and,omitempty"`
 	Or        []FragmentFilterPredicate  `json:"$or,omitempty" yaml:"$or,omitempty" mapstructure:"$or,omitempty"`
+	fragment  *grammar.FragmentStringPattern
+	global    bool
 }
 
 // FragmentFilterEntry associates a concrete fragment with its predicate.
@@ -49,6 +51,43 @@ type FragmentFilterEntry struct {
 // NewFragmentFilterPredicate creates a leaf with its evaluation scope.
 func NewFragmentFilterPredicate(expression grammar.LogicalExpression, match bool) FragmentFilterPredicate {
 	return FragmentFilterPredicate{Condition: &expression, Match: match}
+}
+
+func newGlobalFragmentFilterPredicate(expression grammar.LogicalExpression) FragmentFilterPredicate {
+	return FragmentFilterPredicate{Condition: &expression, global: true}
+}
+
+func scopeFragmentFilterPredicate(predicate FragmentFilterPredicate, fragment grammar.FragmentStringPattern) FragmentFilterPredicate {
+	if predicate.Condition != nil {
+		if predicate.global {
+			return predicate
+		}
+		fragmentCopy := fragment
+		predicate.fragment = &fragmentCopy
+		return predicate
+	}
+	if len(predicate.And) > 0 {
+		predicate.And = scopeFragmentFilterPredicates(predicate.And, fragment)
+	}
+	if len(predicate.Or) > 0 {
+		predicate.Or = scopeFragmentFilterPredicates(predicate.Or, fragment)
+	}
+	return predicate
+}
+
+func scopeFragmentFilterPredicates(predicates []FragmentFilterPredicate, fragment grammar.FragmentStringPattern) []FragmentFilterPredicate {
+	scoped := make([]FragmentFilterPredicate, len(predicates))
+	for i, predicate := range predicates {
+		scoped[i] = scopeFragmentFilterPredicate(predicate, fragment)
+	}
+	return scoped
+}
+
+func (predicate FragmentFilterPredicate) evaluationFragment(fallback grammar.FragmentStringPattern) grammar.FragmentStringPattern {
+	if predicate.fragment == nil {
+		return fallback
+	}
+	return *predicate.fragment
 }
 
 // AndFragmentFilterPredicates combines predicates without changing leaf scope.

@@ -283,6 +283,34 @@ Notes:
 See [Query endpoints and ABAC rules use the same QL](../query_language/README.md#query-endpoints-and-abac-rules-use-the-same-ql)
 for the syntax mapping, evaluation order, and composition rules.
 
+### Indexed fragment visibility
+
+An indexed fragment filter restricts only the selected array position. For
+example, a filter for `$aasdesc#specificAssetIds[0]` controls the visibility of
+position `0`; it does not by itself restrict the other positions. A wildcard
+filter such as `$aasdesc#specificAssetIds[]` applies to every position.
+
+Fragment filters are composed at rule boundaries:
+
+- Within one rule, all applicable fragment restrictions are combined with
+  logical AND. Equivalent `[0]` and `[]` entries in the same `FILTERLIST` must
+  therefore both pass at position `0`.
+- Across separate permitting rules, complete rule alternatives are combined
+  with logical OR. Each alternative keeps its rule formula associated with its
+  own fragment restrictions.
+
+For example, consider two permitting rules whose formulas both pass. One rule
+has `$aasdesc#specificAssetIds[] = false`; the other has
+`$aasdesc#specificAssetIds[0] = false`. Position `0` is hidden because both rule
+alternatives deny it. The other positions remain visible because the indexed
+restriction does not apply to them.
+
+When multiple permitting rules apply, a position is visible when at least one
+rule permits that position and its applicable fragment restrictions pass. An
+unrestricted position from an indexed rule must not make that rule unrestricted
+at the indexed position itself. Wildcard and indexed filters therefore need to
+retain their position-specific meaning when rule alternatives are combined.
+
 ## Formula enforcement gate
 
 - `ShouldEnforceFormula(ctx)` is the single helper used by components to decide if formula-based ABAC checks must run.
