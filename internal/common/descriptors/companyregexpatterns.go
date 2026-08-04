@@ -90,8 +90,9 @@ func readCompanyRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, 
 			patternTbl.Col(common.ColDescriptorID),
 			patternTbl.Col(common.ColRegexPattern),
 		).
-		Where(patternTbl.Col(common.ColDescriptorID).In(descriptorIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(patternTbl.Col(common.ColDescriptorID), descriptorIDs)).
 		Order(patternTbl.Col(common.ColDescriptorID).Asc(), patternTbl.Col(common.ColPosition).Asc()).
+		Prepared(true).
 		ToSQL()
 	if err != nil {
 		return nil, err

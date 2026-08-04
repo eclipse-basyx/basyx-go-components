@@ -139,7 +139,7 @@ func ReadEndpointsByDescriptorIDs(
 	}
 
 	ds = ds.
-		Where(joinOn.Col(common.ColDescriptorID).In(descriptorIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(joinOn.Col(common.ColDescriptorID), descriptorIDs)).
 		Select(
 			joinOn.Col(common.ColDescriptorID),
 			joinOn.Col(common.ColID),

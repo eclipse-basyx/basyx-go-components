@@ -162,7 +162,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		common.TSpecificAssetID.Col(common.ColPosition).As("sort_specific_asset_position"),
 	}, maskRuntime.Projections()...)...).
 		Where(
-			specificAssetIDAlias.Col(common.ColDescriptorID).In(descriptorIDs),
+			common.PostgreSQLBigIntArrayContains(specificAssetIDAlias.Col(common.ColDescriptorID), descriptorIDs),
 			common.TSpecificAssetID.Col(common.ColName).Neq(globalAssetIDSpecificAssetIDName),
 		)
 
@@ -187,7 +187,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		).
 		Order(goqu.I(dataAlias + ".sort_specific_asset_position").Asc())
 
-	sqlStr, args, err := base.ToSQL()
+	sqlStr, args, err := base.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, err
 	}

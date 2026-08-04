@@ -101,8 +101,9 @@ func ReadExtensionsByDescriptorIDs(
 			dp.Col(common.ColDescriptorID),
 			dp.Col(common.ColExtensionsPayload),
 		).
-		Where(dp.Col(common.ColDescriptorID).In(descriptorIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(dp.Col(common.ColDescriptorID), descriptorIDs)).
 		Order(dp.Col(common.ColDescriptorID).Asc()).
+		Prepared(true).
 		ToSQL()
 	if err != nil {
 		return nil, err

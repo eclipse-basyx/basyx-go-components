@@ -410,7 +410,7 @@ func ExistsSubmodelForAAS(ctx context.Context, db *sql.DB, aasID, submodelID str
 		).
 		Limit(1)
 
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return false, err
 	}
@@ -687,7 +687,7 @@ func existsSubmodelByID(ctx context.Context, db DBQueryer, submodelID string) (b
 			),
 		).
 		Limit(1)
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return false, err
 	}
@@ -749,7 +749,7 @@ func listSubmodelDescriptorIDsWithoutAAS(
 	}
 	ds = ds.Order(smd.Col(common.ColAASID).Asc()).Limit(uint(peekLimit))
 
-	sqlStr, args, buildErr := ds.ToSQL()
+	sqlStr, args, buildErr := ds.Prepared(true).ToSQL()
 	if buildErr != nil {
 		return nil, "", common.NewInternalServerError("Failed to build submodel descriptor lookup query. See server logs for details.")
 	}
@@ -795,7 +795,7 @@ func lookupSubmodelDescriptorID(ctx context.Context, db DBQueryer, submodelID st
 			),
 		).
 		Limit(1)
-	sqlStr, args, buildErr := ds.ToSQL()
+	sqlStr, args, buildErr := ds.Prepared(true).ToSQL()
 	if buildErr != nil {
 		return 0, common.NewInternalServerError("Failed to build submodel lookup query. See server logs for details.")
 	}
