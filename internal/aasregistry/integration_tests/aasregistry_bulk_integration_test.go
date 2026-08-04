@@ -149,6 +149,105 @@ func TestBulkOperationsAtomicity(t *testing.T) {
 	})
 }
 
+func TestNestedSubmodelDescriptorNonMatchFilterPreservesSiblings(t *testing.T) {
+	descriptorID := "urn:basyx:integration:nested-filter-siblings"
+	encodedDescriptorID := base64.RawURLEncoding.EncodeToString([]byte(descriptorID))
+	t.Cleanup(func() {
+		status, _, _ := doAASRequest(
+			t,
+			aasNoRedirectClient,
+			http.MethodDelete,
+			aasRegistryBaseURL+"/shell-descriptors/"+encodedDescriptorID,
+			nil,
+		)
+		require.Contains(t, []int{http.StatusNoContent, http.StatusNotFound}, status)
+	})
+
+	endpoint := func(id string) map[string]any {
+		return map[string]any{
+			"interface": "SUBMODEL-3.0",
+			"protocolInformation": map[string]any{
+				"href":             "https://example.com/submodels/" + id,
+				"endpointProtocol": "https",
+			},
+		}
+	}
+	createAASDescriptor(t, map[string]any{
+		"id":        descriptorID,
+		"assetKind": "Instance",
+		"endpoints": []any{
+			map[string]any{
+				"interface": "AAS-3.0",
+				"protocolInformation": map[string]any{
+					"href":             "https://example.com/shells/nested-filter-siblings",
+					"endpointProtocol": "https",
+				},
+			},
+		},
+		"submodelDescriptors": []any{
+			map[string]any{
+				"id":        "urn:basyx:integration:nested-filter:matching",
+				"idShort":   "matching-child",
+				"endpoints": []any{endpoint("matching")},
+			},
+			map[string]any{
+				"id":        "urn:basyx:integration:nested-filter:sibling",
+				"idShort":   "preserved-sibling",
+				"endpoints": []any{endpoint("sibling")},
+			},
+		},
+	}, http.StatusCreated)
+
+	for _, test := range []struct {
+		name          string
+		explicitFalse bool
+	}{
+		{name: "omitted match"},
+		{name: "explicit false match", explicitFalse: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			filter := map[string]any{
+				"$fragment": "$aasdesc#submodelDescriptors[]",
+				"$condition": map[string]any{
+					"$eq": []any{
+						map[string]any{"$field": "$aasdesc#submodelDescriptors[].idShort"},
+						map[string]any{"$strVal": "matching-child"},
+					},
+				},
+			}
+			if test.explicitFalse {
+				filter["$match"] = false
+			}
+			query := map[string]any{
+				"$condition": map[string]any{
+					"$eq": []any{
+						map[string]any{"$field": "$aasdesc#id"},
+						map[string]any{"$strVal": descriptorID},
+					},
+				},
+				"$filters": []any{filter},
+			}
+
+			status, body, _ := doAASRequest(
+				t,
+				aasNoRedirectClient,
+				http.MethodPost,
+				aasRegistryBaseURL+"/query/shell-descriptors",
+				query,
+			)
+			require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+			var response struct {
+				Result []map[string]any `json:"result"`
+			}
+			require.NoError(t, json.Unmarshal(body, &response))
+			require.Len(t, response.Result, 1)
+			children, ok := response.Result[0]["submodelDescriptors"].([]any)
+			require.True(t, ok)
+			require.Len(t, children, 2)
+		})
+	}
+}
+
 func loadAASJSONFixtureMap(t *testing.T, relativePath string) map[string]any {
 	t.Helper()
 	bytesPayload, err := osReadAASFile(relativePath)

@@ -108,6 +108,55 @@ func TestReadAASSubmodelReferencesMatchesCurrentReferenceAndCorrelatesParent(t *
 	}
 }
 
+func TestReadSubmodelSemanticReferencesCorrelatesNonMatchFilterToOwnerAlias(t *testing.T) {
+	field := grammar.ModelStringPattern("$sm#semanticId.keys[].value")
+	value := grammar.StandardString("FILTER_VISIBLE")
+	fragment := grammar.FragmentStringPattern("$sm#semanticId.keys[]")
+	condition := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &field},
+			{StrVal: &value},
+		},
+	}
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, false)},
+	})
+
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+		if !strings.Contains(actual, `EXISTS`) {
+			return fmt.Errorf("expected non-MATCH filter to use EXISTS, got: %s", actual)
+		}
+		if !strings.Contains(actual, `"s"."id"`) {
+			return fmt.Errorf("expected correlation to outer owner alias s, got: %s", actual)
+		}
+		if strings.Contains(actual, `"submodel"."id"`) {
+			return fmt.Errorf("unexpected unbound submodel alias, got: %s", actual)
+		}
+		return nil
+	})))
+	if err != nil {
+		t.Fatalf("sqlmock.New failed: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery("submodel semantic reference non-MATCH correlation").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"owner_id",
+			"ref_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_reference_payload",
+		}))
+
+	if _, err := ReadSubmodelSemanticReferencesBySubmodelIDs(ctx, db, []int64{12}); err != nil {
+		t.Fatalf("ReadSubmodelSemanticReferencesBySubmodelIDs returned error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
 func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilter(t *testing.T) {
 	field := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
 	routeField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")

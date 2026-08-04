@@ -27,9 +27,13 @@ package descriptors
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
@@ -88,4 +92,48 @@ func TestListSubmodelDescriptorsForAASReusesLookupSQLShape(t *testing.T) {
 
 	require.Equal(t, firstQuery, secondQuery)
 	require.Equal(t, `SELECT "aas"."descriptor_id" FROM "aas_descriptor" AS "aas" WHERE ("aas"."id" = $1) LIMIT $2`, firstQuery)
+}
+
+func TestReadSubmodelDescriptorsByAASDescriptorIDsNonMatchFilterCorrelatesToParentDescriptor(t *testing.T) {
+	field := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].idShort")
+	value := grammar.StandardString("matching-sibling")
+	fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[]")
+	condition := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &field},
+			{StrVal: &value},
+		},
+	}
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{fragment: auth.NewFragmentFilterPredicate(condition, false)},
+	})
+
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+		if !strings.Contains(actual, `EXISTS`) {
+			return fmt.Errorf("expected non-MATCH filter to use EXISTS, got: %s", actual)
+		}
+		if !strings.Contains(actual, `"submodel_descriptor"."aas_descriptor_id" = "descriptor"."id"`) {
+			return fmt.Errorf("expected filter correlation to parent AAS descriptor, got: %s", actual)
+		}
+		return nil
+	})))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery("nested submodel descriptor non-MATCH correlation").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"c0",
+			"c1",
+			"c2",
+			"c3",
+			"c4",
+			"c5",
+			"c6",
+			"c7",
+		}))
+
+	descriptors, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{12}, false)
+	require.NoError(t, err)
+	require.Nil(t, descriptors[12])
+	require.NoError(t, mock.ExpectationsWereMet())
 }

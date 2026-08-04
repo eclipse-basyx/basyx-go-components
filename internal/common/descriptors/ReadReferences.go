@@ -148,6 +148,7 @@ func ReadSubmodelSemanticReferencesBySubmodelIDs(
 		return nil, fmt.Errorf("REFREAD-SEMSM-COLLECTOR: %w", err)
 	}
 	collector.AllowInlineAliases("s", "semantic_id_reference", "semantic_id_reference_key")
+	collector.SetRootJoinKey("s", common.ColID)
 
 	return queryReferenceRowsByOwnerIDs(
 		ctx,

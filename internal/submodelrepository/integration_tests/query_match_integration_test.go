@@ -63,6 +63,32 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}, {"a1-b0", "a1-b1"}}, nestedBValues(t, result))
 	})
 
+	for _, test := range []struct {
+		name          string
+		explicitFalse bool
+	}{
+		{name: "OmittedMatchKeepsSubmodelSemanticID"},
+		{name: "ExplicitFalseMatchKeepsSubmodelSemanticID", explicitFalse: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			filter := nestedMatchFilter(
+				"$sm#semanticId.keys[]",
+				false,
+				equalsCondition("$sm#semanticId.keys[].value", "submodel-semantic-allowed"),
+			)
+			if test.explicitFalse {
+				filter["$match"] = false
+			}
+
+			result := queryNestedMatchSubmodel(t, filter)
+
+			assert.Equal(t,
+				[]string{"submodel-semantic-allowed", "submodel-semantic-extra"},
+				referenceKeyValues(t, []any{result["semanticId"]}),
+			)
+		})
+	}
+
 	t.Run("SamePathMatchesCurrentNestedListEntry", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
 			"$sme.a[].b[]",
@@ -323,9 +349,10 @@ func objectValue(t *testing.T, value any) map[string]any {
 
 func nestedMatchSubmodel() map[string]any {
 	return map[string]any{
-		"id":        nestedMatchSubmodelID,
-		"idShort":   "NestedMatch",
-		"modelType": "Submodel",
+		"id":         nestedMatchSubmodelID,
+		"idShort":    "NestedMatch",
+		"modelType":  "Submodel",
+		"semanticId": referenceWithKeys("submodel-semantic-allowed", "submodel-semantic-extra"),
 		"supplementalSemanticIds": []any{
 			reference("submodel-allowed"),
 			reference("submodel-denied"),
