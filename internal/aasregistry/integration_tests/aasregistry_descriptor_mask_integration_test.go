@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -85,6 +86,118 @@ func TestAASRegistryListMasksMultiKeyReferencesWithoutDuplicates(t *testing.T) {
 	require.Len(t, result[0].SubmodelDescriptors[0].SemanticId.Keys(), 2)
 }
 
+func TestNestedSubmodelDescriptorChildFiltersPreserveAASSiblings(t *testing.T) {
+	deleteAllAASDescriptorsHTTP(t)
+	t.Cleanup(func() {
+		deleteAllAASDescriptorsHTTP(t)
+	})
+	descriptorID := fmt.Sprintf("urn:example:aas:nested-child-filter:%d", time.Now().UnixNano())
+	createAASDescriptor(t, nestedChildFilterDescriptorPayload(descriptorID), http.StatusCreated)
+
+	db, err := sql.Open("pgx", aasRegistryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	dialect := goqu.Dialect(common.Dialect)
+	lookup := dialect.From(common.TAASDescriptor).
+		Select(common.TAASDescriptor.Col(common.ColDescriptorID)).
+		Where(common.TAASDescriptor.Col(common.ColID).Eq(descriptorID)).
+		Prepared(true)
+	lookupSQL, lookupArgs, err := lookup.ToSQL()
+	require.NoError(t, err)
+	var aasDescriptorID int64
+	require.NoError(t, db.QueryRowContext(t.Context(), lookupSQL, lookupArgs...).Scan(&aasDescriptorID))
+
+	tests := []struct {
+		name     string
+		fragment grammar.FragmentStringPattern
+		assert   func(*testing.T, model.SubmodelDescriptor, bool)
+	}{
+		{
+			name:     "endpoints",
+			fragment: "$aasdesc#submodelDescriptors[].endpoints[]",
+			assert: func(t *testing.T, descriptor model.SubmodelDescriptor, visible bool) {
+				t.Helper()
+				if visible {
+					require.Len(t, descriptor.Endpoints, 1)
+					return
+				}
+				require.Empty(t, descriptor.Endpoints)
+			},
+		},
+		{
+			name:     "semantic ID keys",
+			fragment: "$aasdesc#submodelDescriptors[].semanticId.keys[]",
+			assert: func(t *testing.T, descriptor model.SubmodelDescriptor, visible bool) {
+				t.Helper()
+				if visible {
+					require.NotNil(t, descriptor.SemanticId)
+					require.Len(t, descriptor.SemanticId.Keys(), 2)
+					return
+				}
+				require.Nil(t, descriptor.SemanticId)
+			},
+		},
+		{
+			name:     "supplemental semantic IDs",
+			fragment: "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+			assert: func(t *testing.T, descriptor model.SubmodelDescriptor, visible bool) {
+				t.Helper()
+				if visible {
+					require.Len(t, descriptor.SupplementalSemanticId, 1)
+					return
+				}
+				require.Empty(t, descriptor.SupplementalSemanticId)
+			},
+		},
+		{
+			name:     "supplemental semantic ID keys",
+			fragment: "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
+			assert: func(t *testing.T, descriptor model.SubmodelDescriptor, visible bool) {
+				t.Helper()
+				if visible {
+					require.Len(t, descriptor.SupplementalSemanticId, 1)
+					require.Len(t, descriptor.SupplementalSemanticId[0].Keys(), 2)
+					return
+				}
+				require.Empty(t, descriptor.SupplementalSemanticId)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		for _, match := range []bool{false, true} {
+			name := "non-MATCH"
+			if match {
+				name = "MATCH"
+			}
+			t.Run(test.name+"/"+name, func(t *testing.T) {
+				field := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].idShort")
+				ctx := auth.MergeQueryFilter(common.ContextWithConfig(t.Context(), &common.Config{}), grammar.Query{
+					FilterConditions: []grammar.SubFilter{{
+						Fragment:  &test.fragment,
+						Condition: logicalExpressionPointer(descriptorFieldEquals(field, "matching-child")),
+						Match:     &match,
+					}},
+				})
+
+				result, err := descriptors.ReadSubmodelDescriptorsByAASDescriptorIDs(
+					ctx,
+					db,
+					[]int64{aasDescriptorID},
+					false,
+				)
+				require.NoError(t, err)
+				require.Len(t, result[aasDescriptorID], 2)
+				for _, descriptor := range result[aasDescriptorID] {
+					visible := descriptor.IdShort == "matching-child" || !match
+					test.assert(t, descriptor, visible)
+				}
+			})
+		}
+	}
+}
+
 func multiKeyMaskDescriptorPayload(descriptorID string) map[string]any {
 	return map[string]any{
 		"id": descriptorID,
@@ -108,6 +221,36 @@ func multiKeyMaskDescriptorPayload(descriptorID string) map[string]any {
 					},
 				},
 			},
+		},
+	}
+}
+
+func nestedChildFilterDescriptorPayload(descriptorID string) map[string]any {
+	endpoint := func(id string) map[string]any {
+		return map[string]any{
+			"interface": "SUBMODEL-3.0",
+			"protocolInformation": map[string]any{
+				"href":             "https://example.com/submodels/" + id,
+				"endpointProtocol": "https",
+			},
+		}
+	}
+	submodelDescriptor := func(id string, idShort string) map[string]any {
+		return map[string]any{
+			"id":                      descriptorID + ":" + id,
+			"idShort":                 idShort,
+			"endpoints":               []any{endpoint(id)},
+			"semanticId":              multiKeyMaskReference(),
+			"supplementalSemanticIds": []any{multiKeyMaskReference()},
+		}
+	}
+	return map[string]any{
+		"id":        descriptorID,
+		"assetKind": "Instance",
+		"endpoints": []any{endpoint("aas")},
+		"submodelDescriptors": []any{
+			submodelDescriptor("matching", "matching-child"),
+			submodelDescriptor("sibling", "preserved-sibling"),
 		},
 	}
 }

@@ -509,6 +509,90 @@ Both forms are explicit and are supported for every fragment handled by its
 reader. Row-local behavior is especially relevant for arrays and nested arrays,
 where it keeps conditions bound to the same item and array indices.
 
+#### Root scope and correlation boundaries
+
+The root prefix describes the resource through which a fragment is read. It is
+not changed by `$match` or `MATCH`:
+
+| Query context | Fragment and field prefix | Scope without matching | Scope with matching |
+| --- | --- | --- | --- |
+| Submodel Descriptor nested in an AAS Descriptor | `$aasdesc#submodelDescriptors[]...` | The owning AAS Descriptor. A sibling Submodel Descriptor in that AAS Descriptor may satisfy the condition, preserving the complete requested child fragment. | The currently reconstructed nested Submodel Descriptor or child row. |
+| Standalone Submodel Descriptor | `$smdesc#...` | The current Submodel Descriptor. | The currently reconstructed child row. |
+
+For example, a DTR policy that filters supplemental-semantic-ID keys of nested
+Submodel Descriptors uses the AAS Descriptor root consistently in both the
+fragment and the formula field:
+
+```json
+{
+  "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
+  "MATCH": true,
+  "USEFORMULA": "submodel_descriptor_bpn_or_public_filter"
+}
+```
+
+The referenced formula must use the same root, for example:
+
+```json
+{
+  "$eq": [
+    {
+      "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
+    },
+    { "$strVal": "PUBLIC_READABLE" }
+  ]
+}
+```
+
+`$smdesc#supplementalSemanticIds[].keys[]` is the corresponding path only when
+the query result itself is rooted at a standalone Submodel Descriptor. The
+correlation never crosses the resource boundary: a nested descriptor condition
+cannot be satisfied by a descriptor belonging to another AAS Descriptor.
+
+The same boundary applies to Submodel Element descendant filters. Descendant
+paths are correlated by both `idShortPath` and the containing Submodel. An
+identical path in another Submodel cannot satisfy the condition.
+
+#### How the SQL correlation is selected
+
+Fragment conditions are evaluated through correlated `EXISTS` expressions. The
+correlation key depends on the root and match mode:
+
+| Context | Correlation |
+| --- | --- |
+| Nested `$aasdesc#submodelDescriptors[]...`, matching disabled | `inner_submodel_descriptor.aas_descriptor_id = outer_submodel_descriptor.aas_descriptor_id` |
+| Nested `$aasdesc#submodelDescriptors[]...`, matching enabled | `inner_submodel_descriptor.descriptor_id = outer_submodel_descriptor.descriptor_id`, followed by the applicable child owner keys for deeper arrays |
+| Standalone `$smdesc#...` | `inner_submodel_descriptor.descriptor_id = outer_submodel_descriptor.descriptor_id`, followed by the applicable child owner keys |
+| Submodel Element descendant | `inner.submodel_id = outer.submodel_id` plus an `idShortPath` descendant comparison |
+
+Using `aas_descriptor_id` for a non-matching nested condition is deliberate: it
+implements parent-level existential semantics, so one Submodel Descriptor may
+satisfy the condition while the complete fragment of its siblings in the same
+AAS Descriptor is retained. Correlation by the current Submodel Descriptor is
+retained for `MATCH`, which masks non-matching siblings or child rows.
+
+The nested and standalone collectors are selected independently by the child
+readers. This applies consistently to Submodel Descriptor endpoints,
+`semanticId.keys[]`, supplemental semantic ID references, and their `keys[]`.
+Consequently, a `$aasdesc` filter is never evaluated with the standalone
+`$smdesc` scope merely because both paths read the same database tables.
+
+For Submodel Element descendants, the generated correlation is equivalent to:
+
+```sql
+inner.submodel_id = outer.submodel_id
+AND (
+  inner.idshort_path LIKE (escaped_outer_path || '.%') ESCAPE '!'
+  OR inner.idshort_path LIKE (escaped_outer_path || '[%]%') ESCAPE '!'
+)
+```
+
+Here `escaped_outer_path` is the outer `idshort_path` with SQL `LIKE` wildcard
+characters escaped. The `submodel_id` equality is required because
+`idShortPath` is unique only within a Submodel. Without it, an identically
+structured Submodel could satisfy the `EXISTS` condition for the wrong
+Submodel.
+
 #### Behavior and compatibility
 
 | Filter source | `$match` / `MATCH` omitted or `false` | `$match` / `MATCH` set to `true` |
@@ -528,6 +612,9 @@ Implementation reference:
 - ABAC match propagation in [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go)
 - Row-local and existential evaluation in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 - EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](../../internal/common/model/grammar/logical_expression_to_sql.go)
+- Nested and standalone Submodel Descriptor collector selection in [internal/common/descriptors/AASFilterQuery.go](../../internal/common/descriptors/AASFilterQuery.go)
+- Submodel Descriptor endpoint filtering in [internal/common/descriptors/ReadEndpoint.go](../../internal/common/descriptors/ReadEndpoint.go)
+- Submodel Descriptor reference filtering in [internal/common/descriptors/ReadReferences.go](../../internal/common/descriptors/ReadReferences.go)
 - ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](../../internal/common/model/grammar/fieldidentifier_processing.go)
 
 Beginner notes:

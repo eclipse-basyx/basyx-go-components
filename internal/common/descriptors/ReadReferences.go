@@ -86,15 +86,14 @@ func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 		return out, nil
 	}
 
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
-	if err != nil {
-		return nil, fmt.Errorf("REFREAD-SEMSMDESC-COLLECTOR: %w", err)
-	}
-	collector.AllowInlineAliases(
+	collectors, err := newSubmodelDescriptorChildFilterCollectors(
 		common.AliasSubmodelDescriptor,
 		common.AliasSubmodelDescriptorSemanticIDReference,
 		common.AliasSubmodelDescriptorSemanticIDReferenceKey,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SEMSMDESC-COLLECTOR: %w", err)
+	}
 
 	rows, err := queryReferenceRowsByOwnerIDs(
 		ctx,
@@ -111,11 +110,11 @@ func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 			filterSpecs: []referenceFilterSpec{
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].semanticId.keys[]",
-					collector: collector,
+					collector: collectors.aas,
 				},
 				{
 					fragment:  "$smdesc#semanticId.keys[]",
-					collector: collector,
+					collector: collectors.standalone,
 				},
 			},
 		},
@@ -323,15 +322,14 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 	db DBQueryer,
 	descriptorIDs []int64,
 ) (map[int64][]types.IReference, error) {
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
-	if err != nil {
-		return nil, fmt.Errorf("REFREAD-SUPPSMDESC-COLLECTOR: %w", err)
-	}
-	collector.AllowInlineAliases(
+	collectors, err := newSubmodelDescriptorChildFilterCollectors(
 		"submodel_descriptor",
 		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
 		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
 	)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSMDESC-COLLECTOR: %w", err)
+	}
 
 	return readContextReferences1ToManyByOwnerIDs(
 		ctx,
@@ -347,19 +345,19 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 			filterSpecs: []referenceFilterSpec{
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
-					collector: collector,
+					collector: collectors.aas,
 				},
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
-					collector: collector,
+					collector: collectors.aas,
 				},
 				{
 					fragment:  "$smdesc#supplementalSemanticIds[]",
-					collector: collector,
+					collector: collectors.standalone,
 				},
 				{
 					fragment:  "$smdesc#supplementalSemanticIds[].keys[]",
-					collector: collector,
+					collector: collectors.standalone,
 				},
 			},
 			errPrefix: "REFREAD-SUPPSMDESC",

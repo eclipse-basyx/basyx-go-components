@@ -926,15 +926,32 @@ func (c *ResolvedFieldPathCollector) SetRootJoinKey(alias string, column string)
 		cfg := defaultJoinPlanConfig()
 		c.joinConfig = &cfg
 	}
+	setJoinPlanRootKey(c.joinConfig, alias, column)
+}
+
+// SetNonMatchRootJoinKey configures the outer alias and column used by
+// non-MATCH EXISTS expressions without changing MATCH row correlation.
+func (c *ResolvedFieldPathCollector) SetNonMatchRootJoinKey(alias string, column string) {
+	if c == nil {
+		return
+	}
+	if c.nonMatchJoinConfig == nil {
+		cfg := c.effectiveJoinConfig()
+		c.nonMatchJoinConfig = &cfg
+	}
+	setJoinPlanRootKey(c.nonMatchJoinConfig, alias, column)
+}
+
+func setJoinPlanRootKey(config *JoinPlanConfig, alias string, column string) {
 	alias = strings.TrimSpace(alias)
 	column = strings.TrimSpace(column)
-	c.joinConfig.RootJoinKey = func() exp.IdentifierExpression {
+	config.RootJoinKey = func() exp.IdentifierExpression {
 		return goqu.I(alias + "." + column)
 	}
-	c.joinConfig.RootJoinKeyAlias = func() string {
+	config.RootJoinKeyAlias = func() string {
 		return alias
 	}
-	c.joinConfig.RootJoinKeyColumn = func() string {
+	config.RootJoinKeyColumn = func() string {
 		return column
 	}
 }
@@ -1090,9 +1107,12 @@ func buildSMEDescendantCorrelation(innerAlias string, outerAlias string) exp.Exp
 	innerPath := goqu.I(innerAlias + ".idshort_path")
 	outerPath := goqu.I(outerAlias + ".idshort_path")
 	escapedOuterPath := goqu.L("REPLACE(REPLACE(REPLACE(?, '!', '!!'), '%', '!%'), '_', '!_')", outerPath)
-	return goqu.Or(
-		goqu.L("? LIKE (? || '.%') ESCAPE '!'", innerPath, escapedOuterPath),
-		goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", innerPath, escapedOuterPath),
+	return goqu.And(
+		goqu.I(innerAlias+".submodel_id").Eq(goqu.I(outerAlias+".submodel_id")),
+		goqu.Or(
+			goqu.L("? LIKE (? || '.%') ESCAPE '!'", innerPath, escapedOuterPath),
+			goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", innerPath, escapedOuterPath),
+		),
 	)
 }
 
@@ -1182,9 +1202,13 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 	whereExpr := andBindingsForResolvedFieldPaths(resolved, predicate)
 	var correlation exp.Expression = groupKey.Eq(rootKey)
 	if correlationMode == smeMatchDescendant && collector != nil {
-		correlation = buildSMEDescendantCorrelation(plan.BaseAlias, collector.smeRowAlias)
+		descendantOuterAlias := collector.smeRowAlias
+		if aliasCollision {
+			descendantOuterAlias = "__outer__"
+		}
+		correlation = buildSMEDescendantCorrelation(plan.BaseAlias, descendantOuterAlias)
 	}
-	if aliasCollision && rootAlias != "" && rootColumn != "" {
+	if aliasCollision && rootAlias != "" && rootColumn != "" && correlationMode != smeMatchDescendant {
 		outerPlaceholder := "__outer__"
 		correlation = groupKey.Eq(goqu.I(outerPlaceholder + "." + rootColumn))
 	}

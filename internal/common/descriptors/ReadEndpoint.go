@@ -158,12 +158,12 @@ func ReadEndpointsByDescriptorIDs(
 		).
 		Prepared(true)
 
-	collector, fragments, err := endpointFilterContext(joinOnMainTable)
+	filterSpecs, err := endpointFilterContext(joinOnMainTable)
 	if err != nil {
 		return nil, err
 	}
-	for _, fragment := range fragments {
-		ds, err = auth.AddFilterQueryFromContext(ctx, ds, fragment, collector)
+	for _, filterSpec := range filterSpecs {
+		ds, err = auth.AddFilterQueryFromContext(ctx, ds, filterSpec.fragment, filterSpec.collector)
 		if err != nil {
 			return nil, err
 		}
@@ -226,26 +226,43 @@ func ReadEndpointsByDescriptorIDs(
 	return out, nil
 }
 
-func endpointFilterContext(joinOnMainTable string) (*grammar.ResolvedFieldPathCollector, []grammar.FragmentStringPattern, error) {
+type endpointFilterSpec struct {
+	fragment  grammar.FragmentStringPattern
+	collector *grammar.ResolvedFieldPathCollector
+}
+
+func endpointFilterContext(joinOnMainTable string) ([]endpointFilterSpec, error) {
 	switch joinOnMainTable {
 	case "aas":
 		collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		collector.AllowInlineAliases("descriptor", "aas_descriptor", common.AliasAASDescriptorEndpoint)
-		return collector, []grammar.FragmentStringPattern{"$aasdesc#endpoints[]"}, nil
+		return []endpointFilterSpec{{
+			fragment:  "$aasdesc#endpoints[]",
+			collector: collector,
+		}}, nil
 	case "submodel":
-		collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+		collectors, err := newSubmodelDescriptorChildFilterCollectors(
+			"descriptor",
+			common.AliasSubmodelDescriptor,
+			common.AliasSubmodelDescriptorEndpoint,
+		)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		collector.AllowInlineAliases("descriptor", common.AliasSubmodelDescriptor, common.AliasSubmodelDescriptorEndpoint)
-		return collector, []grammar.FragmentStringPattern{
-			"$aasdesc#submodelDescriptors[].endpoints[]",
-			"$smdesc#endpoints[]",
+		return []endpointFilterSpec{
+			{
+				fragment:  "$aasdesc#submodelDescriptors[].endpoints[]",
+				collector: collectors.aas,
+			},
+			{
+				fragment:  "$smdesc#endpoints[]",
+				collector: collectors.standalone,
+			},
 		}, nil
 	default:
-		return nil, nil, nil
+		return nil, nil
 	}
 }

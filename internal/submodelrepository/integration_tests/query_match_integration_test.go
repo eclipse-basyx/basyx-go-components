@@ -37,20 +37,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const nestedMatchSubmodelID = "urn:basyx:integration:query-match:nested"
+const (
+	nestedMatchSubmodelID        = "urn:basyx:integration:query-match:nested"
+	foreignNestedMatchSubmodelID = "urn:basyx:integration:query-match:foreign"
+)
 
 func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
-	encodedID := base64.RawURLEncoding.EncodeToString([]byte(nestedMatchSubmodelID))
-	endpoint := fmt.Sprintf("%s/submodels/%s", submodelRepositoryBaseURL, encodedID)
-	_, _, _ = requestJSON(http.MethodDelete, endpoint, nil)
+	endpointForID := func(id string) string {
+		encodedID := base64.RawURLEncoding.EncodeToString([]byte(id))
+		return fmt.Sprintf("%s/submodels/%s", submodelRepositoryBaseURL, encodedID)
+	}
+	for _, id := range []string{nestedMatchSubmodelID, foreignNestedMatchSubmodelID} {
+		_, _, _ = requestJSON(http.MethodDelete, endpointForID(id), nil)
+	}
 
 	statusCode, body, err := requestJSON(http.MethodPost, submodelRepositoryBaseURL+"/submodels", nestedMatchSubmodel())
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+	statusCode, body, err = requestJSON(http.MethodPost, submodelRepositoryBaseURL+"/submodels", foreignNestedMatchSubmodel())
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
 	t.Cleanup(func() {
-		deleteStatus, deleteBody, deleteErr := requestJSON(http.MethodDelete, endpoint, nil)
-		assert.NoError(t, deleteErr)
-		assert.Equal(t, http.StatusNoContent, deleteStatus, "response=%s", string(deleteBody))
+		for _, id := range []string{nestedMatchSubmodelID, foreignNestedMatchSubmodelID} {
+			deleteStatus, deleteBody, deleteErr := requestJSON(http.MethodDelete, endpointForID(id), nil)
+			assert.NoError(t, deleteErr)
+			assert.Equal(t, http.StatusNoContent, deleteStatus, "response=%s", string(deleteBody))
+		}
 	})
 
 	t.Run("OmittedMatchKeepsExistentialBehavior", func(t *testing.T) {
@@ -132,6 +144,16 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 		))
 
 		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}}, nestedBValues(t, result))
+	})
+
+	t.Run("DescendantPathCannotMatchAnotherSubmodel", func(t *testing.T) {
+		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
+			"$sme.a[]",
+			true,
+			equalsCondition("$sme.a[].b[]#value", "foreign-b0"),
+		))
+
+		assert.Empty(t, nestedBValues(t, result))
 	})
 
 	t.Run("ConditionMayContinueThroughMoreArrays", func(t *testing.T) {
@@ -367,6 +389,25 @@ func nestedMatchSubmodel() map[string]any {
 				"value": []any{
 					nestedMatchAEntry("a0"),
 					nestedMatchAEntry("a1"),
+				},
+			},
+		},
+	}
+}
+
+func foreignNestedMatchSubmodel() map[string]any {
+	return map[string]any{
+		"id":        foreignNestedMatchSubmodelID,
+		"idShort":   "ForeignNestedMatch",
+		"modelType": "Submodel",
+		"submodelElements": []any{
+			map[string]any{
+				"idShort":              "a",
+				"modelType":            "SubmodelElementList",
+				"orderRelevant":        true,
+				"typeValueListElement": "SubmodelElementCollection",
+				"value": []any{
+					nestedMatchAEntry("foreign"),
 				},
 			},
 		},

@@ -231,6 +231,108 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 	}
 }
 
+func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
+	tests := []struct {
+		name                string
+		fragment            grammar.FragmentStringPattern
+		field               grammar.ModelStringPattern
+		expectedCorrelation string
+		unexpected          string
+		columns             []string
+		read                func(context.Context, DBQueryer, []int64) error
+	}{
+		{
+			name:                "nested semantic keys correlate to owning AAS descriptor",
+			fragment:            "$aasdesc#submodelDescriptors[].semanticId.keys[]",
+			field:               "$aasdesc#submodelDescriptors[].idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			columns:             []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+		{
+			name:                "standalone semantic keys stay on current submodel descriptor",
+			fragment:            "$smdesc#semanticId.keys[]",
+			field:               "$smdesc#idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			columns:             []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+		{
+			name:                "nested supplemental references correlate to owning AAS descriptor",
+			fragment:            "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+			field:               "$aasdesc#submodelDescriptors[].idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			columns:             []string{"owner_id", "ref_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+		{
+			name:                "standalone supplemental keys stay on current submodel descriptor",
+			fragment:            "$smdesc#supplementalSemanticIds[].keys[]",
+			field:               "$smdesc#idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			columns:             []string{"owner_id", "ref_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			value := grammar.StandardString("matching-sibling")
+			condition := grammar.LogicalExpression{
+				Eq: grammar.ComparisonItems{
+					{Field: &test.field},
+					{StrVal: &value},
+				},
+			}
+			ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+				Filters: auth.FragmentFilters{
+					test.fragment: auth.NewFragmentFilterPredicate(condition, false),
+				},
+			})
+
+			db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+				if !strings.Contains(actual, test.expectedCorrelation) {
+					return fmt.Errorf("expected correlation %q, got: %s", test.expectedCorrelation, actual)
+				}
+				if strings.Contains(actual, test.unexpected) {
+					return fmt.Errorf("unexpected correlation %q, got: %s", test.unexpected, actual)
+				}
+				return nil
+			})))
+			if err != nil {
+				t.Fatalf("sqlmock.New failed: %v", err)
+			}
+			defer func() { _ = db.Close() }()
+
+			mock.ExpectQuery("submodel descriptor child reference correlation").
+				WillReturnRows(sqlmock.NewRows(test.columns))
+
+			if err := test.read(ctx, db, []int64{12}); err != nil {
+				t.Fatalf("reference read returned error: %v", err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("unmet sqlmock expectations: %v", err)
+			}
+		})
+	}
+}
+
 func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *testing.T) {
 	tests := []struct {
 		name           string

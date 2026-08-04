@@ -165,3 +165,85 @@ func TestReadSubmodelDescriptorsByAASDescriptorIDsFilterCorrelation(t *testing.T
 		})
 	}
 }
+
+func TestReadSubmodelDescriptorEndpointsFilterCorrelation(t *testing.T) {
+	tests := []struct {
+		name                string
+		fragment            grammar.FragmentStringPattern
+		field               grammar.ModelStringPattern
+		match               bool
+		expectedCorrelation string
+		unexpected          string
+	}{
+		{
+			name:                "nested non-MATCH correlates to owning AAS descriptor",
+			fragment:            "$aasdesc#submodelDescriptors[].endpoints[]",
+			field:               "$aasdesc#submodelDescriptors[].idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+		},
+		{
+			name:                "nested MATCH correlates to current submodel descriptor",
+			fragment:            "$aasdesc#submodelDescriptors[].endpoints[]",
+			field:               "$aasdesc#specificAssetIds[].name",
+			match:               true,
+			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+		},
+		{
+			name:                "standalone non-MATCH stays on current submodel descriptor",
+			fragment:            "$smdesc#endpoints[]",
+			field:               "$smdesc#idShort",
+			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			value := grammar.StandardString("matching-sibling")
+			condition := grammar.LogicalExpression{
+				Eq: grammar.ComparisonItems{
+					{Field: &test.field},
+					{StrVal: &value},
+				},
+			}
+			ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+				Filters: auth.FragmentFilters{
+					test.fragment: auth.NewFragmentFilterPredicate(condition, test.match),
+				},
+			})
+
+			db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+				if !strings.Contains(actual, test.expectedCorrelation) {
+					return fmt.Errorf("expected correlation %q, got: %s", test.expectedCorrelation, actual)
+				}
+				if strings.Contains(actual, test.unexpected) {
+					return fmt.Errorf("unexpected correlation %q, got: %s", test.unexpected, actual)
+				}
+				return nil
+			})))
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+
+			mock.ExpectQuery("submodel descriptor endpoint filter correlation").
+				WillReturnRows(sqlmock.NewRows([]string{
+					"descriptor_id",
+					"endpoint_id",
+					"href",
+					"endpoint_protocol",
+					"subprotocol",
+					"subprotocol_body",
+					"subprotocol_body_encoding",
+					"interface",
+					"versions",
+					"security_attributes",
+				}))
+
+			endpoints, err := ReadEndpointsByDescriptorIDs(ctx, db, []int64{12}, "submodel")
+			require.NoError(t, err)
+			require.Empty(t, endpoints[12])
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}

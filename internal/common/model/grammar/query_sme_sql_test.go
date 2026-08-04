@@ -27,6 +27,7 @@ package grammar
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -211,5 +212,55 @@ func TestSMERootFragmentMatchUsesCurrentRowForPathCondition(t *testing.T) {
 	actual := collector.ForFragmentMatch(fragment).smeCorrelationForResolved([]ResolvedFieldPath{resolved})
 	if actual != smeMatchSameRow {
 		t.Fatalf("got correlation %v, want current-row correlation", actual)
+	}
+}
+
+func TestSMEDescendantMatchCorrelatesContainingSubmodel(t *testing.T) {
+	fragment := FragmentStringPattern("$sme.a[]")
+	conditionField := ModelStringPattern("$sme.a[].b[]#value")
+	conditionValue := StandardString("allowed")
+	condition := LogicalExpression{
+		Eq: ComparisonItems{
+			{Field: &conditionField},
+			{StrVal: &conditionValue},
+		},
+	}
+
+	for _, outerAlias := range []string{"sme", "submodel_element"} {
+		t.Run(outerAlias, func(t *testing.T) {
+			collector, err := NewResolvedFieldPathCollectorForSMERow(outerAlias)
+			if err != nil {
+				t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+			}
+			whereExpression, _, err := condition.EvaluateToExpression(collector.ForFragmentMatch(fragment))
+			if err != nil {
+				t.Fatalf("EvaluateToExpression returned error: %v", err)
+			}
+
+			sql, _, err := goqu.Dialect("postgres").
+				From(goqu.T("submodel_element").As(outerAlias)).
+				Select(goqu.V(1)).
+				Where(whereExpression).
+				ToSQL()
+			if err != nil {
+				t.Fatalf("ToSQL returned error: %v", err)
+			}
+
+			innerAlias := "submodel_element"
+			if outerAlias == innerAlias {
+				innerAlias += "__exists"
+			}
+			expectedCorrelation := fmt.Sprintf(
+				`"%s"."submodel_id" = "%s"."submodel_id"`,
+				innerAlias,
+				outerAlias,
+			)
+			if !strings.Contains(sql, expectedCorrelation) {
+				t.Fatalf("expected containing-submodel correlation %q, got: %s", expectedCorrelation, sql)
+			}
+			if !strings.Contains(sql, `"`+innerAlias+`"."idshort_path" LIKE`) {
+				t.Fatalf("expected descendant path correlation, got: %s", sql)
+			}
+		})
 	}
 }
