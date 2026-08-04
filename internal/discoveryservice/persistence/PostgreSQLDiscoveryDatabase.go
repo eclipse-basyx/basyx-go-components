@@ -271,7 +271,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if cursor != "" {
 		cursorExists := d.
 			From(goqu.T("aas_identifier").As("cursor_ai")).
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(goqu.I("cursor_ai.aasid").Eq(cursor))
 		ds = ds.
 			Where(goqu.Func("EXISTS", cursorExists)).
@@ -288,7 +288,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			}
 
 			existsSub := d.From(sai).
-				Select(goqu.V(1)).
+				Select(goqu.L("1")).
 				Where(goqu.And(
 					goqu.I("sai.aasref").Eq(ai.Col(common.ColID)),
 					goqu.I("sai.name").Eq(link.Name),
@@ -314,7 +314,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
 	}
 
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	debugEnabled := common.DebugEnabled(ctx)
 	if debugEnabled {
 		slog.DebugContext(ctx, "discovery database query prepared")

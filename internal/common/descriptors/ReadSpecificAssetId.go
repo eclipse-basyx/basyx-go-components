@@ -83,9 +83,10 @@ func ReadSpecificAssetIDsByDescriptorID(
 // present in the map with a nil slice to distinguish from absent keys.
 //
 // Implementation notes:
-// - Uses goqu to build SQL and pgx slice parameters for efficient ANY(bigint[]) filtering.
-// - Preloads semantic and external subject references in one pass to avoid N+1.
-// - Preserves a stable order by descriptor_id, id to ensure deterministic output.
+//   - Uses Goqu with a typed PostgreSQL array parameter and prepared rendering
+//     for stable, efficient ANY(bigint[]) filtering.
+//   - Preloads semantic and external subject references in one pass to avoid N+1.
+//   - Preserves a stable order by descriptor_id, id to ensure deterministic output.
 func ReadSpecificAssetIDsByDescriptorIDs(
 	ctx context.Context,
 	db DBQueryer,
@@ -162,7 +163,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		common.TSpecificAssetID.Col(common.ColPosition).As("sort_specific_asset_position"),
 	}, maskRuntime.Projections()...)...).
 		Where(
-			specificAssetIDAlias.Col(common.ColDescriptorID).In(descriptorIDs),
+			common.PostgreSQLBigIntArrayContains(specificAssetIDAlias.Col(common.ColDescriptorID), descriptorIDs),
 			common.TSpecificAssetID.Col(common.ColName).Neq(globalAssetIDSpecificAssetIDName),
 		)
 
@@ -187,7 +188,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		).
 		Order(goqu.I(dataAlias + ".sort_specific_asset_position").Asc())
 
-	sqlStr, args, err := base.ToSQL()
+	sqlStr, args, err := base.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, err
 	}

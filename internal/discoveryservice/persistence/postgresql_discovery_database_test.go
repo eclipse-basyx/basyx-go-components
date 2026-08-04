@@ -95,8 +95,8 @@ func TestSearchAASIDsByAssetLinks_ValidatesCursorInPageQuery(t *testing.T) {
 	matcher := sqlmock.QueryMatcherFunc(func(_ string, actualSQL string) error {
 		for _, expected := range []string{
 			`SELECT 1 FROM "aas_identifier" AS "cursor_ai"`,
-			`"cursor_ai"."aasid" = 'urn:aas:cursor'`,
-			`"aas_identifier"."aasid" >= 'urn:aas:cursor'`,
+			`"cursor_ai"."aasid" = $1`,
+			`"aas_identifier"."aasid" >= $2`,
 		} {
 			if !strings.Contains(actualSQL, expected) {
 				return fmt.Errorf("expected SQL to contain %q, got: %s", expected, actualSQL)
@@ -116,6 +116,7 @@ func TestSearchAASIDsByAssetLinks_ValidatesCursorInPageQuery(t *testing.T) {
 	}
 
 	mock.ExpectQuery("cursor query").
+		WithArgs("urn:aas:cursor", "urn:aas:cursor", 11).
 		WillReturnRows(sqlmock.NewRows([]string{"aasid"}))
 
 	ids, nextCursor, err := backend.SearchAASIDsByAssetLinks(

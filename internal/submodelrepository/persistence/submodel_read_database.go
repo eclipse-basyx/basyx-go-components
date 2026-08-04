@@ -166,7 +166,7 @@ func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Cont
 		}
 	}
 
-	query, args, err := selectDS.ToSQL()
+	query, args, err := selectDS.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-BUILDSQL " + err.Error())
 	}

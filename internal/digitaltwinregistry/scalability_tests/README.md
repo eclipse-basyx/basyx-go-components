@@ -1,6 +1,6 @@
 # DTR scalability tests
 
-This suite starts a local Keycloak and local Keycloak PostgreSQL database, runs the BaSyx configuration service from `eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT`, and builds the DTR from the current repository code. The configuration service and DTR both use the external PostgreSQL database configured in `.env`.
+This suite starts a local Keycloak and local Keycloak PostgreSQL database and builds both the BaSyx configuration service and DTR from the current repository code. The configuration service and DTR both use the external PostgreSQL database configured in `.env`, so the schema and service binaries always come from the same revision.
 
 The default workload is read-only after configuration-service schema initialization. It obtains specific asset-link values through `GET /lookup/shells/{aasIdentifier}` and the global asset ID through `GET /shell-descriptors/{aasIdentifier}`; neither is hard-coded.
 
@@ -144,4 +144,4 @@ All descriptors use IDs beginning with `urn:basyx:dtr-scalability:async-bulk:`. 
 - `GET /bulk/status/{handleId}`
 - `GET /bulk/result/{handleId}`
 
-The local Keycloak database is destroyed when the test ends. The external database is never dropped or reset; use a database account that is permitted to run the BaSyx schema configuration service and, when enabled, the async bulk mutations.
+The local Keycloak database is destroyed when the test ends. The external database is never dropped or reset, but the configuration service can apply schema migrations. Use a dedicated scalability database with an appropriate backup and an account that is permitted to run the BaSyx schema configuration service and, when enabled, the async bulk mutations.

@@ -794,7 +794,7 @@ func existsAASByID(ctx context.Context, db DBQueryer, aasID string) (bool, error
 	aas := goqu.T(common.TblAASDescriptor).As("aas")
 
 	ds := d.From(aas).Select(goqu.L("1")).Where(aas.Col(common.ColAASID).Eq(aasID)).Limit(1)
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return false, err
 	}

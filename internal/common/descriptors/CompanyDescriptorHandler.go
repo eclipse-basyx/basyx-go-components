@@ -535,7 +535,7 @@ func ListCompanyDescriptors(
 	if strings.TrimSpace(assetID) != "" {
 		assetIdRegexExists := d.
 			From(assetIdPattern).
-			Select(goqu.V(true)).
+			Select(goqu.L("TRUE")).
 			Where(
 				assetIdPattern.Col(common.ColDescriptorID).Eq(comp.Col(common.ColDescriptorID)),
 				goqu.L("? ~ ?", assetID, assetIdPattern.Col(common.ColRegexPattern)),
@@ -552,7 +552,7 @@ func ListCompanyDescriptors(
 		Order(comp.Col(common.ColCompanyDomain).Asc()).
 		Limit(uint(peekLimit))
 
-	sqlStr, args, buildErr := ds.ToSQL()
+	sqlStr, args, buildErr := ds.Prepared(true).ToSQL()
 	if buildErr != nil {
 		return nil, "", common.NewInternalServerError("Failed to build Company Descriptor query. See server logs for details.")
 	}
@@ -670,7 +670,7 @@ func ExistsCompanyDescriptorByID(ctx context.Context, db DBQueryer, companyIdent
 	comp := goqu.T(common.TblCompanyDescriptor).As("comp")
 
 	ds := d.From(comp).Select(goqu.L("1")).Where(comp.Col(common.ColCompanyDomain).Eq(companyIdentifier)).Limit(1)
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
 		return false, err
 	}

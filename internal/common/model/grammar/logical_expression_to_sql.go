@@ -926,7 +926,7 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias)).Select(goqu.V(1))
+	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias)).Select(goqu.L("1"))
 
 	applied := map[string]struct{}{plan.BaseAlias: {}}
 	visiting := map[string]struct{}{}

@@ -82,8 +82,9 @@ func readCompanyNameOptionsByDescriptorIDs(ctx context.Context, db DBQueryer, de
 			nameOpt.Col(common.ColDescriptorID),
 			nameOpt.Col(common.ColNameOption),
 		).
-		Where(nameOpt.Col(common.ColDescriptorID).In(descriptorIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(nameOpt.Col(common.ColDescriptorID), descriptorIDs)).
 		Order(nameOpt.Col(common.ColDescriptorID).Asc(), nameOpt.Col(common.ColPosition).Asc()).
+		Prepared(true).
 		ToSQL()
 	if err != nil {
 		return nil, err

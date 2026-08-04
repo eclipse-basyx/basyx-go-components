@@ -23,43 +23,24 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package aas_repository_utils contains utility functions for the Asset Administration Shell Repository component, such as parsing and handling of aas-related data.
-package aas_repository_utils
+package common
 
 import (
-	"database/sql"
+	"testing"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/stretchr/testify/require"
 )
 
-// GetAssetAdministrationShellDatabaseID returns the internal database ID for a given AAS identifier.
-func GetAssetAdministrationShellDatabaseID(tx *sql.Tx, aasId string) (int64, error) {
-	return getAssetAdministrationShellDatabaseID(tx, aasId, false)
-}
+func TestPostgreSQLTextLiteralDoesNotCreateBindArgument(t *testing.T) {
+	t.Parallel()
 
-// GetAssetAdministrationShellDatabaseIDForUpdate returns and locks the internal database ID for a given AAS identifier.
-func GetAssetAdministrationShellDatabaseIDForUpdate(tx *sql.Tx, aasId string) (int64, error) {
-	return getAssetAdministrationShellDatabaseID(tx, aasId, true)
-}
+	query, args, err := goqu.Dialect("postgres").
+		Select(PostgreSQLTextLiteral("owner's value")).
+		Prepared(true).
+		ToSQL()
 
-func getAssetAdministrationShellDatabaseID(tx *sql.Tx, aasId string, forUpdate bool) (int64, error) {
-	var databaseID int64
-	dialect := goqu.Dialect("postgres")
-	query := dialect.Select("id").
-		From("aas").
-		Where(goqu.I("aas_id").Eq(aasId)).
-		Prepared(true)
-	if forUpdate {
-		query = query.ForUpdate(goqu.Wait)
-	}
-
-	sqlQuery, args, err := query.ToSQL()
-	if err != nil {
-		return 0, err
-	}
-	err = tx.QueryRow(sqlQuery, args...).Scan(&databaseID)
-	if err != nil {
-		return 0, err
-	}
-	return databaseID, nil
+	require.NoError(t, err)
+	require.Equal(t, "SELECT 'owner''s value'::text", query)
+	require.Empty(t, args)
 }

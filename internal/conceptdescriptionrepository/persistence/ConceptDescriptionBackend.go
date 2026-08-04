@@ -255,10 +255,12 @@ func (b *ConceptDescriptionBackend) deleteConceptDescriptionInTx(ctx context.Con
 }
 
 func conceptDescriptionExistsInTx(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
-	query, args, err := goqu.From("concept_description").
-		Select(goqu.V(1)).
+	dialect := goqu.Dialect("postgres")
+	query, args, err := dialect.From("concept_description").
+		Select(goqu.L("1")).
 		Where(goqu.Ex{"id": id}).
 		Limit(1).
+		Prepared(true).
 		ToSQL()
 	if err != nil {
 		return false, common.NewInternalServerError("CDREPO-CDEXIST-BUILDSQL " + err.Error())
@@ -298,7 +300,8 @@ func (b *ConceptDescriptionBackend) checkConceptDescriptionVisibilityInTx(ctx co
 		return false, false, common.NewInternalServerError("CDREPO-ABACCHKCD-BADCOLLECTOR " + collectorErr.Error())
 	}
 
-	query := goqu.From("concept_description").
+	dialect := goqu.Dialect("postgres")
+	query := dialect.From("concept_description").
 		Select(goqu.C("id")).
 		Where(goqu.C("id").Eq(id)).
 		Limit(1)
@@ -308,7 +311,7 @@ func (b *ConceptDescriptionBackend) checkConceptDescriptionVisibilityInTx(ctx co
 		return false, false, common.NewInternalServerError("CDREPO-ABACCHKCD-ADDFORMULA " + addFormulaErr.Error())
 	}
 
-	sqlQuery, args, toSQLErr := query.ToSQL()
+	sqlQuery, args, toSQLErr := query.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return false, false, common.NewInternalServerError("CDREPO-ABACCHKCD-BUILDSQL " + toSQLErr.Error())
 	}
@@ -417,7 +420,8 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 		return nil, "", common.NewInternalServerError("CDREPO-GCDS-BUILDMASKS " + selectErr.Error())
 	}
 
-	query := goqu.From("concept_description").
+	dialect := goqu.Dialect("postgres")
+	query := dialect.From("concept_description").
 		Select(selectExpressions...).
 		Order(goqu.I("id").Asc()).
 		Limit(peekLimit)
@@ -457,9 +461,9 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 
 	if cursor != nil && strings.TrimSpace(*cursor) != "" {
 		trimmedCursor := strings.TrimSpace(*cursor)
-		cursorExists := goqu.
+		cursorExists := dialect.
 			From(goqu.T("concept_description").As("cursor_cd")).
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(goqu.I("cursor_cd.id").Eq(trimmedCursor))
 		query = query.
 			Where(goqu.Func("EXISTS", cursorExists)).
@@ -478,7 +482,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 		}
 	}
 
-	sqlQuery, args, err := query.ToSQL()
+	sqlQuery, args, err := query.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, "", fmt.Errorf("CDREPO-GCDS-BUILDSQL failed to build SQL query: %w", err)
 	}
@@ -542,7 +546,8 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 		return nil, common.NewInternalServerError("CDREPO-GCDBYID-BUILDMASKS " + selectErr.Error())
 	}
 
-	query := goqu.From("concept_description").
+	dialect := goqu.Dialect("postgres")
+	query := dialect.From("concept_description").
 		Select(selectExpressions...).
 		Where(goqu.C("id").Eq(id)).
 		Limit(1)
@@ -559,7 +564,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 		}
 	}
 
-	sqlQuery, args, err := query.ToSQL()
+	sqlQuery, args, err := query.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, common.NewInternalServerError("CDREPO-GCDBYID-BUILDSQL " + err.Error())
 	}
