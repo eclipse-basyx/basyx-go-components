@@ -55,3 +55,27 @@ func TestPostgreSQLBigIntArrayExpressionsReuseSQLShape(t *testing.T) {
 	require.Contains(t, oneValueQuery, "ANY($")
 	require.Contains(t, oneValueQuery, "array_position($")
 }
+
+func TestPostgreSQLTextArrayContainsReusesSQLShape(t *testing.T) {
+	t.Parallel()
+
+	build := func(values []string) (string, []any) {
+		query, args, err := goqu.Dialect("postgres").
+			From("resource").
+			Select(goqu.I("id")).
+			Where(PostgreSQLTextArrayContains(goqu.I("value"), values)).
+			Prepared(true).
+			ToSQL()
+		require.NoError(t, err)
+		return query, args
+	}
+
+	oneValueQuery, oneValueArgs := build([]string{"one"})
+	manyValuesQuery, manyValuesArgs := build([]string{"one", `two"quoted`, `three\escaped`})
+
+	require.Equal(t, oneValueQuery, manyValuesQuery)
+	require.Equal(t, `SELECT "id" FROM "resource" WHERE "value" = ANY($1::text[])`, oneValueQuery)
+	require.Len(t, oneValueArgs, 1)
+	require.Len(t, manyValuesArgs, 1)
+	require.Equal(t, `{"one","two\"quoted","three\\escaped"}`, manyValuesArgs[0])
+}

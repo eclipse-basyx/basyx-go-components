@@ -58,7 +58,7 @@ func TestAASRepositoryCreateExistingUnauthorizedShellDoesNotReturnConflict(t *te
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
 	mock.ExpectQuery(`SELECT "id" FROM "aas"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
-	mock.ExpectQuery(`FROM "aas" AS "aas".*FALSE`).
+	mock.ExpectQuery(`FROM "aas" AS "aas".*\$2`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectRollback()
 

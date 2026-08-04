@@ -35,6 +35,8 @@ import (
 
 type postgresInt64Array []int64
 
+type postgresTextArray []string
+
 func (values postgresInt64Array) Value() (driver.Value, error) {
 	array := make([]byte, 0, 2+len(values)*4)
 	array = append(array, '{')
@@ -48,10 +50,36 @@ func (values postgresInt64Array) Value() (driver.Value, error) {
 	return string(array), nil
 }
 
+func (values postgresTextArray) Value() (driver.Value, error) {
+	array := make([]byte, 0, 2+len(values)*8)
+	array = append(array, '{')
+	for index, value := range values {
+		if index > 0 {
+			array = append(array, ',')
+		}
+		array = append(array, '"')
+		for _, character := range []byte(value) {
+			if character == '\\' || character == '"' {
+				array = append(array, '\\')
+			}
+			array = append(array, character)
+		}
+		array = append(array, '"')
+	}
+	array = append(array, '}')
+	return string(array), nil
+}
+
 // PostgreSQLBigIntArrayContains builds a stable SQL membership expression for
 // a PostgreSQL bigint array parameter.
 func PostgreSQLBigIntArrayContains(column exp.Expression, values []int64) exp.Expression {
 	return goqu.L("? = ANY(?::bigint[])", column, postgresInt64Array(values))
+}
+
+// PostgreSQLTextArrayContains builds a stable SQL membership expression for
+// a PostgreSQL text array parameter.
+func PostgreSQLTextArrayContains(column exp.Expression, values []string) exp.Expression {
+	return goqu.L("? = ANY(?::text[])", column, postgresTextArray(values))
 }
 
 // PostgreSQLBigIntArrayPosition returns the one-based position of value in a

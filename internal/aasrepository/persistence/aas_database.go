@@ -384,7 +384,7 @@ func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Co
 		return false, false, common.NewInternalServerError("AASREPO-ABACCHKAAS-ADDFORMULA " + addFormulaErr.Error())
 	}
 
-	sqlQuery, args, toSQLErr := ds.ToSQL()
+	sqlQuery, args, toSQLErr := ds.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return false, false, common.NewInternalServerError("AASREPO-ABACCHKAAS-BUILDSQL " + toSQLErr.Error())
 	}
@@ -847,7 +847,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsInTransac
 			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-ABACFORMULA " + err.Error())
 		}
 	}
-	sqlQuery, args, toSQLErr := selectDS.ToSQL()
+	sqlQuery, args, toSQLErr := selectDS.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + toSQLErr.Error())
 	}
@@ -940,7 +940,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 		}
 	}
 
-	query, args, err := selectDS.ToSQL()
+	query, args, err := selectDS.Prepared(true).ToSQL()
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-BUILDSQL " + err.Error())
 	}
@@ -973,7 +973,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 }
 
 func (s *AssetAdministrationShellDatabase) assetAdministrationShellCursorExists(ctx context.Context, db aasDBQueryer, dialect *goqu.DialectWrapper, cursor string) (bool, error) {
-	query, args, buildErr := dialect.From("aas").Select(goqu.V(1)).Where(goqu.I("aas_id").Eq(cursor)).Limit(1).ToSQL()
+	query, args, buildErr := dialect.From("aas").Select(goqu.L("1")).Where(goqu.I("aas_id").Eq(cursor)).Limit(1).Prepared(true).ToSQL()
 	if buildErr != nil {
 		return false, common.NewInternalServerError("AASREPO-CHECKAASCURSOR-BUILDSQL " + buildErr.Error())
 	}
@@ -1020,7 +1020,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellByIDInTran
 		}
 	}
 
-	sqlQuery, args, toSQLErr := selectDS.ToSQL()
+	sqlQuery, args, toSQLErr := selectDS.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-GETAASBYID-BUILDSQL " + toSQLErr.Error())
 	}
@@ -2009,7 +2009,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 		}
 	}
 
-	aasDBIDSQL, aasDBIDArgs, aasDBIDBuildErr := selectDS.ToSQL()
+	aasDBIDSQL, aasDBIDArgs, aasDBIDBuildErr := selectDS.Prepared(true).ToSQL()
 	if aasDBIDBuildErr != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-BUILDAASSQL " + aasDBIDBuildErr.Error())
 	}
@@ -2149,12 +2149,13 @@ func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelIDInTrans
 func submodelReferenceCursorExists(ctx context.Context, tx *sql.Tx, dialect *goqu.DialectWrapper, aasDBID int64, cursorID int64) (bool, error) {
 	query, args, buildErr := dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).
-		Select(goqu.V(1)).
+		Select(goqu.L("1")).
 		Where(
 			goqu.I("r.id").Eq(cursorID),
 			goqu.I("r.aas_id").Eq(aasDBID),
 		).
 		Limit(1).
+		Prepared(true).
 		ToSQL()
 	if buildErr != nil {
 		return false, common.NewInternalServerError("AASREPO-CHECKSMREFCURSOR-BUILDSQL " + buildErr.Error())
@@ -2447,7 +2448,7 @@ func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBI
 		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-ABACKEYFILTERS " + filterErr.Error())
 	}
 
-	submodelSQL, submodelArgs, submodelBuildErr := submodelDS.ToSQL()
+	submodelSQL, submodelArgs, submodelBuildErr := submodelDS.Prepared(true).ToSQL()
 	if submodelBuildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-BUILDSQL " + submodelBuildErr.Error())
 	}
@@ -2782,7 +2783,7 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-ABACFILTERS " + filterErr.Error())
 	}
 
-	querySQL, queryArgs, buildErr := queryDS.ToSQL()
+	querySQL, queryArgs, buildErr := queryDS.Prepared(true).ToSQL()
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-BUILDSQL " + buildErr.Error())
 	}
@@ -2868,7 +2869,7 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-ABACFILTERS " + filterErr.Error())
 	}
 
-	querySQL, queryArgs, buildErr := queryDS.ToSQL()
+	querySQL, queryArgs, buildErr := queryDS.Prepared(true).ToSQL()
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-BUILDSQL " + buildErr.Error())
 	}

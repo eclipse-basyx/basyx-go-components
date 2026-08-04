@@ -104,10 +104,11 @@ func TestGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsUsesJoinedQu
 			`INNER JOIN "aas_submodel_reference_key" AS "submodel_reference_key" ON ("submodel_reference_key"."reference_id" = "submodel_reference"."id") ` +
 			`INNER JOIN "submodel" AS "submodel" ON ("submodel"."submodel_identifier" = "submodel_reference_key"."value") ` +
 			`INNER JOIN "submodel_semantic_id_reference_key" AS "semantic_id_key" ON ("semantic_id_key"."reference_id" = "submodel"."id") ` +
-			`WHERE (("asset_information"."global_asset_id" IN ('product-1', 'product-2')) AND ("semantic_id_key"."value" IN ('https://admin-shell.io/idta/cds/dppMetadata/1'))) ` +
-			`ORDER BY "aas"."aas_id" ASC LIMIT 2`,
+			`WHERE ("asset_information"."global_asset_id" = ANY($1::text[]) AND "semantic_id_key"."value" = ANY($2::text[])) ` +
+			`ORDER BY "aas"."aas_id" ASC LIMIT $3`,
 	)
 	mock.ExpectQuery(queryPattern).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), 2).
 		WillReturnRows(sqlmock.NewRows([]string{"aas_id"}).
 			AddRow("dpp-1").
 			AddRow("dpp-2"))
