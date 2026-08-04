@@ -28,7 +28,6 @@ package submodelelements
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"regexp"
@@ -57,29 +56,6 @@ type DBQueryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRow(query string, args ...any) *sql.Row
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-type postgresInt64Array []int64
-
-func (values postgresInt64Array) Value() (driver.Value, error) {
-	array := make([]byte, 0, 2+len(values)*4)
-	array = append(array, '{')
-	for index, value := range values {
-		if index > 0 {
-			array = append(array, ',')
-		}
-		array = strconv.AppendInt(array, value, 10)
-	}
-	array = append(array, '}')
-	return string(array), nil
-}
-
-func postgresInt64ArrayContains(column exp.Expression, values []int64) exp.Expression {
-	return goqu.L("? = ANY(?::bigint[])", column, postgresInt64Array(values))
-}
-
-func postgresInt64ArrayPosition(values []int64, value exp.Expression) exp.LiteralExpression {
-	return goqu.L("array_position(?::bigint[], ?)", postgresInt64Array(values), value)
 }
 
 // GetSubmodelElementByIDShortOrPath loads a submodel element by path and applies optional ABAC formula filters from ctx.
@@ -200,7 +176,7 @@ func GetSubmodelElementPathsBySubmodelID(ctx context.Context, db DBQueryer, subm
 
 	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
 
-	sqlQuery, args, toSQLErr := query.ToSQL()
+	sqlQuery, args, toSQLErr := query.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHS-BUILDQ " + toSQLErr.Error())
 	}
@@ -301,7 +277,7 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db DBQueryer, 
 		//nolint:gosec // pageLimit is validated to be >= 0
 		Limit(uint(pageLimit) + 1)
 
-	sqlQuery, args, toSQLErr := query.ToSQL()
+	sqlQuery, args, toSQLErr := query.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-BUILDQ " + toSQLErr.Error())
 	}
@@ -564,18 +540,7 @@ func GetSubmodelElementReferencesBySubmodelID(ctx context.Context, db DBQueryer,
 		rootIDs = append(rootIDs, rootElement.id)
 	}
 
-	dialect := goqu.Dialect("postgres")
-	modelTypesQuery, modelTypesArgs, modelTypesSQLErr := dialect.
-		From(goqu.T("submodel_element").As("sme")).
-		Select(
-			goqu.I("sme.id"),
-			goqu.I("sme.model_type"),
-		).
-		Where(
-			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.I("sme.id").In(rootIDs),
-		).
-		ToSQL()
+	modelTypesQuery, modelTypesArgs, modelTypesSQLErr := buildSubmodelElementModelTypesQuery(submodelDatabaseID, rootIDs)
 	if modelTypesSQLErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-BUILDMODELTYPESQ " + modelTypesSQLErr.Error())
 	}
@@ -616,6 +581,21 @@ func GetSubmodelElementReferencesBySubmodelID(ctx context.Context, db DBQueryer,
 	}
 
 	return references, nextCursor, nil
+}
+
+func buildSubmodelElementModelTypesQuery(submodelDatabaseID int, rootIDs []int64) (string, []any, error) {
+	return goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(
+			goqu.I("sme.id"),
+			goqu.I("sme.model_type"),
+		).
+		Where(
+			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
+			common.PostgreSQLBigIntArrayContains(goqu.I("sme.id"), rootIDs),
+		).
+		Prepared(true).
+		ToSQL()
 }
 
 func buildSubmodelElementReference(submodelID string, modelType types.ModelType, idShortPath string) (types.IReference, error) {
@@ -826,7 +806,7 @@ func submodelElementCursorExists(ctx context.Context, db DBQueryer, query *goqu.
 	if hasCursorID {
 		cursorQuery = cursorQuery.Where(goqu.I("sme.id").Eq(cursorID))
 	}
-	sqlQuery, args, buildErr := cursorQuery.Limit(1).ToSQL()
+	sqlQuery, args, buildErr := cursorQuery.Limit(1).Prepared(true).ToSQL()
 	if buildErr != nil {
 		return false, common.NewInternalServerError("SMREPO-CHECKSMECURSOR-BUILDQ " + buildErr.Error())
 	}
@@ -1403,16 +1383,16 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db DBQueryer, submode
 		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-VALUEMASK " + valueVisibleErr.Error())
 	}
 	rootIDExpression := goqu.L("COALESCE(?, ?)", goqu.I("sme.root_sme_id"), goqu.I("sme.id"))
-	rootOrderExpr := postgresInt64ArrayPosition(rootIDs, rootIDExpression)
+	rootOrderExpr := common.PostgreSQLBigIntArrayPosition(rootIDs, rootIDExpression)
 
-	rootFilter := postgresInt64ArrayContains(goqu.I("sme.id"), rootIDs)
+	rootFilter := common.PostgreSQLBigIntArrayContains(goqu.I("sme.id"), rootIDs)
 	if includeChildren {
-		rootFilter = postgresInt64ArrayContains(rootIDExpression, rootIDs)
+		rootFilter = common.PostgreSQLBigIntArrayContains(rootIDExpression, rootIDs)
 	} else if !includeChildren && isGetSubmodelElements {
 		// For GET /submodel-elements with level=core, return root elements and their direct children.
 		rootFilter = goqu.Or(
-			postgresInt64ArrayContains(goqu.I("sme.id"), rootIDs),
-			postgresInt64ArrayContains(goqu.I("sme.parent_sme_id"), rootIDs),
+			common.PostgreSQLBigIntArrayContains(goqu.I("sme.id"), rootIDs),
+			common.PostgreSQLBigIntArrayContains(goqu.I("sme.parent_sme_id"), rootIDs),
 		)
 	}
 
@@ -1930,7 +1910,7 @@ func getReferencesFromKeyTables(db DBQueryer, referenceTable string, referenceKe
 	typeQuery, typeArgs, typeToSQLErr := dialect.
 		From(goqu.T(referenceTable)).
 		Select(goqu.I("id"), goqu.I("type")).
-		Where(postgresInt64ArrayContains(goqu.I("id"), referenceIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(goqu.I("id"), referenceIDs)).
 		Prepared(true).
 		ToSQL()
 	if typeToSQLErr != nil {
@@ -1964,7 +1944,7 @@ func getReferencesFromKeyTables(db DBQueryer, referenceTable string, referenceKe
 	keysQuery, keyArgs, keysToSQLErr := dialect.
 		From(goqu.T(referenceKeyTable)).
 		Select(goqu.I("reference_id"), goqu.I("type"), goqu.I("value")).
-		Where(postgresInt64ArrayContains(goqu.I("reference_id"), referenceIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(goqu.I("reference_id"), referenceIDs)).
 		Order(goqu.I("reference_id").Asc(), goqu.I("position").Asc()).
 		Prepared(true).
 		ToSQL()

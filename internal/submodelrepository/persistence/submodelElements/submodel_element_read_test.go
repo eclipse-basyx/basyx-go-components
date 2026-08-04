@@ -112,6 +112,31 @@ func TestSubmodelElementBatchReadReusesSQLShapeForDifferentRootCounts(t *testing
 	require.Contains(t, oneRootQuery, "array_position($")
 }
 
+func TestSubmodelElementReferenceModelTypesReuseSQLShapeForDifferentRootCounts(t *testing.T) {
+	t.Parallel()
+
+	oneRootQuery, oneRootArgs, err := buildSubmodelElementModelTypesQuery(42, []int64{11})
+	require.NoError(t, err)
+	manyRootsQuery, manyRootsArgs, err := buildSubmodelElementModelTypesQuery(42, []int64{11, 22, 33, 44})
+	require.NoError(t, err)
+
+	require.Equal(t, oneRootQuery, manyRootsQuery)
+	require.Len(t, oneRootArgs, 2)
+	require.Len(t, manyRootsArgs, 2)
+	require.Contains(t, oneRootQuery, "ANY($")
+}
+
+func TestSubmodelElementCursorCheckReusesSQLShapeForDifferentCursors(t *testing.T) {
+	t.Parallel()
+
+	firstQuery := captureSubmodelElementCursorQuery(t, "Motor|11")
+	secondQuery := captureSubmodelElementCursorQuery(t, "TechnicalData|44")
+
+	require.Equal(t, firstQuery, secondQuery)
+	require.NotContains(t, firstQuery, "Motor")
+	require.NotContains(t, secondQuery, "TechnicalData")
+}
+
 func captureSubmodelElementPathReadQuery(t *testing.T, idShortPath string) string {
 	t.Helper()
 
@@ -150,6 +175,18 @@ func captureSubmodelElementReadQuery(t *testing.T, read func(db *sql.DB) error) 
 	require.NotEmpty(t, capturedQuery)
 
 	return capturedQuery
+}
+
+func captureSubmodelElementCursorQuery(t *testing.T, cursor string) string {
+	t.Helper()
+
+	return captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
+		query := goqu.Dialect("postgres").
+			From(goqu.T("submodel_element").As("sme")).
+			Select(goqu.I("sme.id"))
+		_, err := submodelElementCursorExists(contextWithABACDisabled(t), db, query, cursor)
+		return err
+	})
 }
 
 func TestAddSMERowFilterQueriesCorrelatesStructuralConditionToCurrentElement(t *testing.T) {
