@@ -59,3 +59,33 @@ func TestDescriptorBatchReadReusesSQLShape(t *testing.T) {
 	require.Equal(t, oneIDQuery, manyIDsQuery)
 	require.Contains(t, oneIDQuery, `= ANY($1::bigint[])`)
 }
+
+func TestListSubmodelDescriptorsForAASReusesLookupSQLShape(t *testing.T) {
+	t.Parallel()
+
+	build := func(aasID string) string {
+		var query string
+		db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+			query = actual
+			return nil
+		})))
+		require.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		mock.ExpectQuery("AAS descriptor lookup").
+			WithArgs(aasID, sqlmock.AnyArg()).
+			WillReturnRows(sqlmock.NewRows([]string{"descriptor_id"}))
+		descriptors, cursor, err := ListSubmodelDescriptorsForAAS(context.Background(), db, aasID, 100, "")
+		require.NoError(t, err)
+		require.Empty(t, descriptors)
+		require.Empty(t, cursor)
+		require.NoError(t, mock.ExpectationsWereMet())
+		return query
+	}
+
+	firstQuery := build("urn:example:aas:first")
+	secondQuery := build("urn:example:aas:second")
+
+	require.Equal(t, firstQuery, secondQuery)
+	require.Equal(t, `SELECT "aas"."descriptor_id" FROM "aas_descriptor" AS "aas" WHERE ("aas"."id" = $1) LIMIT $2`, firstQuery)
+}

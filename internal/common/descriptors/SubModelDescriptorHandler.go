@@ -85,7 +85,7 @@ func ListSubmodelDescriptorsForAAS(
 		Where(aas.Col(common.ColAASID).Eq(aasID)).
 		Limit(1)
 
-	sqlStr, args, buildErr := ds.ToSQL()
+	sqlStr, args, buildErr := ds.Prepared(true).ToSQL()
 	if buildErr != nil {
 		return nil, "", common.NewInternalServerError("Failed to build AAS lookup query. See server logs for details.")
 	}

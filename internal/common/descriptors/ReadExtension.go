@@ -74,7 +74,8 @@ func ReadExtensionsByDescriptorID(
 //     references are loaded via the respective link tables.
 //
 // Implementation notes:
-//   - Uses SQL ANY with pgx slice parameters for efficient multi-key filtering.
+//   - Uses a typed PostgreSQL array parameter with prepared Goqu rendering for
+//     stable, efficient multi-key filtering.
 //   - Performs a single join to fetch base extension rows, then batches lookups
 //     for references to minimize round trips.
 //   - Converts ValueType strings to model.DataTypeDefXsd via

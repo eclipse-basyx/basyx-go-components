@@ -71,19 +71,22 @@ func (values postgresTextArray) Value() (driver.Value, error) {
 }
 
 // PostgreSQLBigIntArrayContains builds a stable SQL membership expression for
-// a PostgreSQL bigint array parameter.
+// a PostgreSQL bigint array parameter. The enclosing Goqu dataset must use
+// Prepared(true) when rendered so values remain bind parameters.
 func PostgreSQLBigIntArrayContains(column exp.Expression, values []int64) exp.Expression {
 	return goqu.L("? = ANY(?::bigint[])", column, postgresInt64Array(values))
 }
 
 // PostgreSQLTextArrayContains builds a stable SQL membership expression for
-// a PostgreSQL text array parameter.
+// a PostgreSQL text array parameter. The enclosing Goqu dataset must use
+// Prepared(true) when rendered so values remain bind parameters.
 func PostgreSQLTextArrayContains(column exp.Expression, values []string) exp.Expression {
 	return goqu.L("? = ANY(?::text[])", column, postgresTextArray(values))
 }
 
 // PostgreSQLBigIntArrayPosition returns the one-based position of value in a
-// PostgreSQL bigint array parameter.
+// PostgreSQL bigint array parameter. The enclosing Goqu dataset must use
+// Prepared(true) when rendered so values remain bind parameters.
 func PostgreSQLBigIntArrayPosition(values []int64, value exp.Expression) exp.LiteralExpression {
 	return goqu.L("array_position(?::bigint[], ?)", postgresInt64Array(values), value)
 }

@@ -119,6 +119,7 @@ func TestConceptDescriptionRepositoryCreateExistingUnauthorizedConceptDescriptio
 	mock.ExpectQuery(`SELECT 1 FROM "concept_description"`).
 		WillReturnRows(sqlmock.NewRows([]string{"?column?"}).AddRow(1))
 	mock.ExpectQuery(`SELECT "id" FROM "concept_description".*\$2`).
+		WithArgs(conceptDescription.ID(), false, sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectRollback()
 

@@ -101,6 +101,17 @@ func TestSubmodelElementPathReadReusesSQLShapeForDifferentPaths(t *testing.T) {
 	require.NotContains(t, secondQuery, "TechnicalData.Sections[12].MaximumRotationSpeed")
 }
 
+func TestSubmodelElementPathListReusesSQLShapeForDifferentPaths(t *testing.T) {
+	t.Parallel()
+
+	firstQuery := captureSubmodelElementPathListQuery(t, "Motor.Nameplate.ManufacturerName")
+	secondQuery := captureSubmodelElementPathListQuery(t, "TechnicalData.Sections[12].MaximumRotationSpeed")
+
+	require.Equal(t, firstQuery, secondQuery)
+	require.NotContains(t, firstQuery, "Motor.Nameplate.ManufacturerName")
+	require.NotContains(t, secondQuery, "TechnicalData.Sections[12].MaximumRotationSpeed")
+}
+
 func TestSubmodelElementBatchReadReusesSQLShapeForDifferentRootCounts(t *testing.T) {
 	t.Parallel()
 
@@ -145,6 +156,32 @@ func captureSubmodelElementPathReadQuery(t *testing.T, idShortPath string) strin
 		require.Empty(t, rows)
 		return err
 	})
+}
+
+func captureSubmodelElementPathListQuery(t *testing.T, idShortPath string) string {
+	t.Helper()
+
+	queries := make([]string, 0, 2)
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actualQuery string) error {
+		queries = append(queries, actualQuery)
+		return nil
+	})))
+	require.NoError(t, err)
+
+	mock.ExpectQuery("submodel lookup").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+	mock.ExpectQuery("submodel element path list").
+		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}).AddRow(idShortPath))
+
+	paths, err := GetSubmodelElementPathsByPath(contextWithABACDisabled(t), db, "urn:example:submodel", idShortPath, "deep")
+	require.NoError(t, err)
+	require.Equal(t, []string{idShortPath}, paths)
+	mock.ExpectClose()
+	require.NoError(t, db.Close())
+	require.NoError(t, mock.ExpectationsWereMet())
+	require.Len(t, queries, 2)
+
+	return queries[1]
 }
 
 func captureSubmodelElementBatchReadQuery(t *testing.T, rootIDs []int64) string {

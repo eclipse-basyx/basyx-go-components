@@ -382,7 +382,7 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db DBQueryer, submodelID
 
 	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
 
-	sqlQuery, args, toSQLErr := query.ToSQL()
+	sqlQuery, args, toSQLErr := query.Prepared(true).ToSQL()
 	if toSQLErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-BUILDQ " + toSQLErr.Error())
 	}
