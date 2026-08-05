@@ -61,6 +61,13 @@
     "expectedStatus": 200
   },
   {
+    "context": "Unfiltered editor rule grants access despite another matching filtered rule",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ARestricted",
+    "expectedStatus": 200
+  },
+  {
     "context": "Anonymous cannot read a nonmatching SME directly",
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ARestricted",
