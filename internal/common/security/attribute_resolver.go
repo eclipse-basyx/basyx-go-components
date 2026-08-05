@@ -30,25 +30,37 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	jsoniter "github.com/json-iterator/go"
 )
 
-func resolveGlobalToken(name string, claims Claims) (any, bool) {
-	switch strings.ToUpper(name) {
-	case "UTCNOW":
-		if val, ok := claims["UTCNOW"]; ok {
-			return normalizeClaimScalar(val), true
-		}
-		return "", false
-	case "LOCALNOW":
-		if val, ok := claims["LOCALNOW"]; ok {
-			return normalizeClaimScalar(val), true
-		}
-		return "", false
-	case "CLIENTNOW":
-		if val, ok := claims["CLIENTNOW"]; ok {
+func globalAttributesForEvaluation(configured GlobalAttributes, claims Claims, currentTime time.Time) GlobalAttributes {
+	globals := make(GlobalAttributes, len(configured)+3)
+	for name, value := range configured {
+		globals[name] = value
+	}
+
+	if _, exists := globals["UTCNOW"]; !exists {
+		globals["UTCNOW"] = currentTime.UTC().Format(time.RFC3339)
+	}
+	if _, exists := globals["LOCALNOW"]; !exists {
+		globals["LOCALNOW"] = currentTime.In(time.Local).Format(time.RFC3339)
+	}
+	delete(globals, "CLIENTNOW")
+	if clientNow, exists := claims["CLIENTNOW"]; exists {
+		globals["CLIENTNOW"] = normalizeClaimScalar(clientNow)
+	}
+
+	return globals
+}
+
+func resolveGlobalToken(name string, globals GlobalAttributes) (any, bool) {
+	normalizedName := strings.ToUpper(name)
+	switch normalizedName {
+	case "UTCNOW", "LOCALNOW", "CLIENTNOW":
+		if val, ok := globals[normalizedName]; ok {
 			return normalizeClaimScalar(val), true
 		}
 		return "", false
@@ -61,7 +73,7 @@ func resolveGlobalToken(name string, claims Claims) (any, bool) {
 
 // resolveAttributeValue resolves a grammar.AttributeValue to a concrete literal using claims/globals.
 // It also normalizes common claim container shapes (e.g., single-element arrays from Keycloak).
-func resolveAttributeValue(attr grammar.AttributeValue, claims Claims) any {
+func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals GlobalAttributes) any {
 	m, ok := asStringMap(attr)
 	if !ok {
 		return nil
@@ -78,7 +90,7 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims) any {
 		return fmt.Sprint(normalized)
 	}
 	if g := m["GLOBAL"]; g != "" {
-		if val, ok := resolveGlobalToken(g, claims); ok {
+		if val, ok := resolveGlobalToken(g, globals); ok {
 			return val
 		}
 	}

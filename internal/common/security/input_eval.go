@@ -33,7 +33,12 @@ type EvalInput struct {
 	Path      string
 	RoutePath string
 	Claims    Claims
+	Globals   GlobalAttributes
 }
 
 // Claims represents token claims extracted from a verified token.
 type Claims map[string]any
+
+// GlobalAttributes represents trusted environmental values used during ABAC
+// formula evaluation.
+type GlobalAttributes map[string]any

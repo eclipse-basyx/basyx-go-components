@@ -193,6 +193,15 @@ func TestOIDCMiddleware_AppliesClaimMappingsAndTokenTypeIndicators(t *testing.T)
 		if got := claims["basyx.scopes"]; !reflect.DeepEqual(got, wantScopes) {
 			t.Fatalf("basyx.scopes = %#v, want %#v", got, wantScopes)
 		}
+		if got := claims["CLIENTNOW"]; got != "2026-08-05T12:30:00+02:00" {
+			t.Fatalf("CLIENTNOW = %#v, want token-provided value", got)
+		}
+		if _, exists := claims["UTCNOW"]; exists {
+			t.Fatal("UTCNOW must not be stored as a JWT claim")
+		}
+		if _, exists := claims["LOCALNOW"]; exists {
+			t.Fatal("LOCALNOW must not be stored as a JWT claim")
+		}
 
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -201,6 +210,7 @@ func TestOIDCMiddleware_AppliesClaimMappingsAndTokenTypeIndicators(t *testing.T)
 		"aud":          "basyx-api",
 		"scp":          "access_as_user profile",
 		"idtyp":        "app",
+		"CLIENTNOW":    "2026-08-05T12:30:00+02:00",
 		"roles":        []any{"viewer", "admin"},
 		"realm_access": map[string]any{"roles": []any{"admin", "editor"}},
 	})

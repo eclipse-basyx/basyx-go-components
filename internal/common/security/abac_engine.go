@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -203,6 +204,10 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	if !mapped {
 		return AuthorizationEvaluation{Reason: DecisionNoMatch}
 	}
+	globals := globalAttributesForEvaluation(in.Globals, in.Claims, time.Now())
+	resolver := func(attr grammar.AttributeValue) any {
+		return resolveAttributeValue(attr, in.Claims, globals)
+	}
 
 	var ruleExprs []QueryFilter
 	allFragments := make(map[grammar.FragmentStringPattern]struct{})
@@ -253,9 +258,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			return AuthorizationEvaluation{Reason: DecisionNoMatch}
 		}
 
-		resolver := func(attr grammar.AttributeValue) any {
-			return resolveAttributeValue(attr, in.Claims)
-		}
 		adapted, decision := combinedLE.SimplifyForBackendFilterWithOptions(resolver, opts)
 		if decision == grammar.SimplifyFalse {
 			continue
@@ -300,9 +302,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		combined.Or = append(combined.Or, *qfr.Formula)
 	}
 
-	resolver := func(attr grammar.AttributeValue) any {
-		return resolveAttributeValue(attr, in.Claims)
-	}
 	simplified, decision := combined.SimplifyForBackendFilterWithOptions(resolver, opts)
 	combinedByRight := make(map[grammar.RightsEnum]grammar.LogicalExpression, len(relevantRights))
 	for _, right := range relevantRights {
