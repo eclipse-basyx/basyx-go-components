@@ -297,6 +297,23 @@ Behavior:
 
 Submodel element changes are tracked as part of the owning Submodel. If a Submodel Element is added, changed, deleted, or has an attachment update, the next Submodel history version reconstructs to a full Submodel snapshot even when the stored payload row is a diff.
 
+## Full Submodel Replacement
+
+`PUT /submodels/{submodelIdentifier}` keeps replacement semantics at the API
+boundary. For an existing Submodel, the repository compares the authorized old
+snapshot with the submitted snapshot and reconciles only changed normalized
+rows. All live-model changes are executed by one parameterized PostgreSQL
+statement in the same transaction as authorization readback and history or
+evidence creation. Unchanged elements retain their persistence IDs. A no-op
+replacement skips the live-model statement but still performs authorization and
+records the acknowledged update when history or evidence is enabled.
+
+Named children are matched by `idShort`; `SubmodelElementList` children are
+matched by position. Added, removed, moved, or model-type-changed subtrees are
+replaced, while same-type elements are updated in place. Any failed mutation,
+readback, authorization check, or history/evidence append rolls back the entire
+replacement.
+
 ## Submodel Element History FAQ
 
 Submodel Elements do not have independent history streams. They are part of their owning Submodel. An SME write therefore appends an `Updated` event for the Submodel, even when the SME itself was newly created or deleted.

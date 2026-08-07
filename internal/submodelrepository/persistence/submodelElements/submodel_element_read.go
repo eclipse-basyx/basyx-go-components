@@ -465,6 +465,68 @@ func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodel
 	return getSubmodelElementsByDatabaseID(ctx, tx, int64(submodelDatabaseID), limit, cursor, level, includeBlobValue)
 }
 
+// GetSubmodelElementsByDatabaseIDTxInPersistenceOrder loads a complete Submodel
+// snapshot in its stored sibling order without applying public cursor ordering.
+func GetSubmodelElementsByDatabaseIDTxInPersistenceOrder(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, includeBlobValue bool) ([]types.ISubmodelElement, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMESORDERED-NILTX transaction must not be nil")
+	}
+	rootIDs, err := getRootElementIDsInPersistenceOrder(ctx, tx, int64(submodelDatabaseID))
+	if err != nil {
+		return nil, err
+	}
+	if len(rootIDs) == 0 {
+		return []types.ISubmodelElement{}, nil
+	}
+	rows, err := readSubmodelElementRowsByRootIDs(ctx, tx, int64(submodelDatabaseID), rootIDs, true, true, includeBlobValue)
+	if err != nil {
+		return nil, err
+	}
+	forest, err := buildSubmodelElementForestFromRows(tx, rows)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]types.ISubmodelElement, 0, len(rootIDs))
+	for _, rootID := range rootIDs {
+		if element, exists := forest[rootID]; exists {
+			result = append(result, element)
+		}
+	}
+	return result, nil
+}
+
+func getRootElementIDsInPersistenceOrder(ctx context.Context, db DBQueryer, submodelDatabaseID int64) ([]int64, error) {
+	query := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element")).
+		Select(goqu.C("id")).
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("parent_sme_id").IsNull(),
+		).
+		Order(goqu.C("position").Asc(), goqu.C("id").Asc())
+	sqlQuery, args, err := query.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMESORDERED-BUILDQ " + err.Error())
+	}
+	rows, err := db.QueryContext(ctx, sqlQuery, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMESORDERED-EXECQ " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	rootIDs := make([]int64, 0)
+	for rows.Next() {
+		var rootID int64
+		if err = rows.Scan(&rootID); err != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMESORDERED-SCANQ " + err.Error())
+		}
+		rootIDs = append(rootIDs, rootID)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMESORDERED-ROWSERR " + err.Error())
+	}
+	return rootIDs, nil
+}
+
 func getSubmodelElementsByDatabaseID(ctx context.Context, db DBQueryer, submodelDatabaseID int64, limit *int, cursor string, level string, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
 	rootElements, nextCursor, rootPathErr := getRootElementPage(ctx, db, submodelDatabaseID, limit, cursor)
 	if rootPathErr != nil {

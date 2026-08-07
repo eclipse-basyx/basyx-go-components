@@ -283,6 +283,11 @@ Notes:
   restore a parent value whose visibility flag is false.
 - QueryFilter carries right-scoped formulas in `FormulasByRight` (for example, separate formulas for `CREATE` and `UPDATE`).
 - `SelectPutFormulaByExistence(ctx, dataExists)` switches the active `Formula` for PUT upsert checks (create vs update).
+- Existing-Submodel `PUT` applies the selected `UPDATE` formula to both the
+  pre-mutation full-state read and the transactional readback. Fragment filters
+  are not allowed to truncate these internal snapshots. A raw row that is not
+  returned by either authorized read produces `403`, and the transaction is
+  rolled back.
 
 See [Query endpoints and ABAC rules use the same QL](../query_language/README.md#query-endpoints-and-abac-rules-use-the-same-ql)
 for the syntax mapping, evaluation order, and composition rules.
