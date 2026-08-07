@@ -30,42 +30,35 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
-// attributesSatisfiedAll returns true only if ALL required attributes are satisfied.
-// Rules supported:
-//   - GLOBAL=ANONYMOUS         → satisfied unconditionally
-//   - CLAIM=<claimKey>         → user must have that claim key (presence check)
-//
-// If items is empty, it returns true. Unknown kinds fail closed (return false).
+// attributesSatisfiedAll returns true when all required claims are present and
+// the attributes identify either a claim-based or anonymous subject. Date-time
+// globals do not restrict access at this stage and are resolved when evaluating
+// formulas. Unknown attributes fail closed.
 func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
-	// with no attributes deny access per default
 	if len(items) == 0 {
 		return false
 	}
 
+	hasSubjectAttribute := false
 	for _, it := range items {
 		switch it.Kind {
 		case grammar.ATTRGLOBAL:
-			// Currently only ANONYMOUS is supported per your comment.
-			if it.Value == "ANONYMOUS" {
-				// satisfied → continue checking the rest
-				continue
+			switch it.Value {
+			case "ANONYMOUS":
+				hasSubjectAttribute = true
+			case "UTCNOW", "LOCALNOW", "CLIENTNOW":
+			default:
+				return false
 			}
-			// Unsupported GLOBAL value → ignore
-			continue
-
 		case grammar.ATTRCLAIM:
-			// Presence-only check: user must have this claim key
-
+			hasSubjectAttribute = true
 			if _, ok := claims[it.Value]; !ok {
 				return false
 			}
-
 		default:
-			// Unknown attribute type → fail closed
 			return false
 		}
 	}
 
-	// All attributes satisfied
-	return true
+	return hasSubjectAttribute
 }

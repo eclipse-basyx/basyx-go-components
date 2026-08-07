@@ -12,12 +12,15 @@
 
 Welcome to the BaSyx Go project! This guide is designed to help new developers onboard quickly, understand the architecture, and contribute effectively.
 
+See the [changelog](CHANGELOG.md) for release changes and upgrade considerations.
+
 > [!NOTE]
 > We also provide a wiki at https://wiki.basyx.org with a extensive user and developer documentation.
 
 ## Table of Contents
 
 - [BaSyx Go Components](#basyx-go-components)
+  - [Changelog](CHANGELOG.md)
   - [Table of Contents](#table-of-contents)
   - [1. Project Overview](#1-project-overview)
   - [2. Architecture Overview](#2-architecture-overview)

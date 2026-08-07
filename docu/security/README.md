@@ -376,6 +376,15 @@ Access rules define:
 - DEFFORMULAS: reusable boolean expressions.
 - rules: ordered rules that combine ACLs, objects, and formulas.
 
+Attribute satisfaction follows these rules:
+
+- An attribute list must contain at least one subject attribute: `CLAIM` or `GLOBAL=ANONYMOUS`.
+- Every declared `CLAIM` must be present. `GLOBAL=ANONYMOUS` does not compensate for a missing claim.
+- Date-time globals are optional at this gate and are resolved during formula evaluation.
+- `GLOBAL=UTCNOW` and `GLOBAL=LOCALNOW` come from the server's trusted clock and are available to authenticated and anonymous requests.
+- `GLOBAL=CLIENTNOW` comes from the verified access-token claim with the same name. It is unavailable when that claim or access token is absent.
+- A list containing only date-time globals does not satisfy the attribute gate.
+
 Validation invariants enforced by the current implementation:
 - Rule-level one-of:
   - exactly one of `ACL` or `USEACL`

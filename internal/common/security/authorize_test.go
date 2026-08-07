@@ -154,6 +154,48 @@ func TestSecurityMiddleware_RejectsAnonymousGetWhenACLRequiresSubClaim(t *testin
 	}
 }
 
+func TestAuthorizeWithFilter_AllowsAnonymousServerTimeFormula(t *testing.T) {
+	t.Parallel()
+
+	router := api.NewRouter()
+	router.Get("/description", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"rules": [{
+				"ACL": {
+					"ACCESS": "ALLOW",
+					"RIGHTS": ["READ"],
+					"ATTRIBUTES": [
+						{"GLOBAL": "ANONYMOUS"},
+						{"GLOBAL": "UTCNOW"}
+					]
+				},
+				"OBJECTS": [{"ROUTE": "/description"}],
+				"FORMULA": {
+					"$gt": [
+						{"$attribute": {"GLOBAL": "UTCNOW"}},
+						{"$dateTimeVal": "2000-01-01T00:00:00Z"}
+					]
+				}
+			}]
+		}
+	}`), router, "")
+	if err != nil {
+		t.Fatalf("ParseAccessModel() error = %v", err)
+	}
+
+	allowed, reason, _ := model.AuthorizeWithFilter(EvalInput{
+		Method: http.MethodGet,
+		Path:   "/description",
+		Claims: Claims{},
+	})
+	if !allowed || reason != DecisionAllow {
+		t.Fatalf("anonymous time-based rule denied access: allowed=%t reason=%s", allowed, reason)
+	}
+}
+
 func TestVerifyEndpointRequiresAuthWhenABACEnabled(t *testing.T) {
 	router := api.NewRouter()
 	model := &AccessModel{

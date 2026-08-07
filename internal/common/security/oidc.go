@@ -35,7 +35,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -231,12 +230,6 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 			respondOIDCStatus(w, http.StatusForbidden)
 			return
 		}
-
-		// add time claims sourced from the current request context
-		currTime := time.Now()
-		c["CLIENTNOW"] = currTime.Format(time.RFC3339)
-		c["LOCALNOW"] = currTime.In(time.Local).Format(time.RFC3339)
-		c["UTCNOW"] = currTime.UTC().Format(time.RFC3339)
 
 		r = r.WithContext(context.WithValue(r.Context(), ClaimsKey, c))
 		next.ServeHTTP(w, r)
