@@ -31,6 +31,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
@@ -628,7 +629,32 @@ func submodelToReconciliationSnapshot(submodel types.ISubmodel) (map[string]any,
 		return nil, err
 	}
 	pruneEmptyJSONArrays(snapshot)
+	normalizeReconciliationDateTimes(snapshot)
 	return snapshot, nil
+}
+
+func normalizeReconciliationDateTimes(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, child := range typed {
+			normalizeReconciliationDateTimes(child)
+		}
+		if typed["modelType"] != "Property" || typed["valueType"] != "xs:dateTime" {
+			return
+		}
+		dateTime, ok := typed["value"].(string)
+		if !ok {
+			return
+		}
+		parsed, err := common.ParseISO8601DateTime(dateTime)
+		if err == nil {
+			typed["value"] = parsed.UTC().Round(time.Microsecond).Format(time.RFC3339Nano)
+		}
+	case []any:
+		for _, child := range typed {
+			normalizeReconciliationDateTimes(child)
+		}
+	}
 }
 
 func pruneEmptyJSONArrays(value any) {

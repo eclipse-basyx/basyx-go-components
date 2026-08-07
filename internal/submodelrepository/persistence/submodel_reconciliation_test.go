@@ -37,6 +37,7 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
@@ -125,6 +126,19 @@ func TestReconciliationPlanOnlyMarksChangedPersistenceSection(t *testing.T) {
 	require.False(t, changes.SupplementalID)
 	require.False(t, changes.LanguageValues)
 	require.False(t, changes.ValueID)
+}
+
+func TestReconciliationSnapshotCanonicalizesDateTimePropertyValues(t *testing.T) {
+	submitted := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"lastUpdate","modelType":"Property","valueType":"xs:dateTime","value":"2026-08-07T11:16:26.125183291Z"}]}`)
+	persisted := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"lastUpdate","modelType":"Property","valueType":"xs:dateTime","value":"2026-08-07T11:16:26.125183+00:00"}]}`)
+
+	submittedSnapshot, err := submodelToReconciliationSnapshot(submitted)
+	require.NoError(t, err)
+	persistedSnapshot, err := submodelToReconciliationSnapshot(persisted)
+	require.NoError(t, err)
+	diff, err := history.BuildJSONPatch(submittedSnapshot, persistedSnapshot)
+	require.NoError(t, err)
+	require.Empty(t, diff)
 }
 
 func TestReconciliationQueryParameterCountIsConstantAtScale(t *testing.T) {

@@ -109,9 +109,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPSectionPathEquals(t, readBody, lifecycleTechnicalDataSpec, "manual.resourceTitle", "User Manual")
 	assertDPPSectionPathEquals(t, readBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4180.75")
 
-	time.Sleep(30 * time.Millisecond)
-	createdVersionDate := time.Now().UTC()
-	time.Sleep(30 * time.Millisecond)
+	createdVersionDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	createdVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, createdVersionDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, createdVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
 
@@ -148,9 +146,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	updatedDimensionWidth := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+dimensionWidthPath, 121, http.StatusOK)
 	assertScalarEquals(t, updatedDimensionWidth, "121")
 
-	time.Sleep(30 * time.Millisecond)
-	beforePatchDate := time.Now().UTC()
-	time.Sleep(30 * time.Millisecond)
+	beforePatchDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	patchBody := doJSON(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, map[string]any{
 		lifecycleTechnicalDataSpec: map[string]any{
 			"manufacturerName": "Acme Updated GmbH",
@@ -165,9 +161,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	prePatchVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforePatchDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, prePatchVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
 
-	time.Sleep(30 * time.Millisecond)
-	updatedVersionDate := time.Now().UTC()
-	time.Sleep(30 * time.Millisecond)
+	updatedVersionDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	updatedVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, updatedVersionDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, updatedVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme Updated GmbH")
 
@@ -203,13 +197,11 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPSectionArrayValue(t, readAfterElementUpdate, lifecycleTechnicalDataSpec, "serialNumbers", 0, "SN-UPDATED")
 	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4200.5")
 
-	time.Sleep(30 * time.Millisecond)
-	beforeDeleteDate := time.Now().UTC()
-	time.Sleep(30 * time.Millisecond)
+	beforeDeleteDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNoContent)
 	preDeleteVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforeDeleteDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, preDeleteVersionBody, lifecycleTechnicalDataSpec, "energyClass", "B")
-	doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, time.Now().UTC(), "compressed"), nil, http.StatusNotFound)
+	doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, latestDPPHistoryTimestamp(t, databasePort, dppID), "compressed"), nil, http.StatusNotFound)
 	doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNotFound)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(optionalDPPID), nil, http.StatusNoContent)
 }
@@ -430,6 +422,38 @@ func openDPPIntegrationDatabase(t *testing.T, databasePort int) *sql.DB {
 		t.Fatalf("open DPP integration database: %v", err)
 	}
 	return db
+}
+
+func latestDPPHistoryTimestamp(t *testing.T, databasePort int, aasID string) time.Time {
+	t.Helper()
+	db := openDPPIntegrationDatabase(t, databasePort)
+	defer func() {
+		_ = db.Close()
+	}()
+	dialect := goqu.Dialect("postgres")
+	aasEvents := dialect.From("aas_history").
+		Select("operation_time").
+		Where(goqu.C("identifier").Eq(aasID)).
+		Prepared(true)
+	submodelEvents := dialect.From(goqu.T("submodel_history").As("history")).
+		Join(goqu.T("aas_submodel_reference_key").As("key"), goqu.On(goqu.I("history.identifier").Eq(goqu.I("key.value")))).
+		Join(goqu.T("aas_submodel_reference").As("reference"), goqu.On(goqu.I("key.reference_id").Eq(goqu.I("reference.id")))).
+		Join(goqu.T("aas").As("aas"), goqu.On(goqu.I("reference.aas_id").Eq(goqu.I("aas.id")))).
+		Select(goqu.I("history.operation_time")).
+		Where(goqu.I("aas.aas_id").Eq(aasID))
+	events := aasEvents.UnionAll(submodelEvents).As("events")
+	query, args, err := dialect.From(events).
+		Select(goqu.MAX("operation_time")).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("build DPP history timestamp query: %v", err)
+	}
+	var timestamp time.Time
+	if err = db.QueryRowContext(t.Context(), query, args...).Scan(&timestamp); err != nil {
+		t.Fatalf("read DPP history timestamp for %q: %v", aasID, err)
+	}
+	return timestamp
 }
 
 func composeUp(ctx context.Context, t *testing.T, composeFile string, projectName string, environment dppComposeEnvironment) {
