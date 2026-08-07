@@ -31,6 +31,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
@@ -445,56 +446,232 @@ func (s *SubmodelDatabase) PutSubmodelInTransaction(ctx context.Context, tx *sql
 }
 
 func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
-	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSM-SHOULDENFORCE")
-	if enforceErr != nil {
-		return false, enforceErr
-	}
-	if shouldEnforce {
-		exists, _, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
-		if visErr != nil {
-			return false, visErr
-		}
-		ctx = auth.SelectPutFormulaByExistence(ctx, exists)
-		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
-		if visErr != nil {
-			return false, visErr
-		}
-		if exists && !visible {
-			return false, common.NewErrDenied("SMREPO-PUTSM-ABACDENIED Existing submodel is not accessible under ABAC constraints")
-		}
-	}
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
-	if err != nil && !common.IsErrNotFound(err) {
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelID); err != nil {
 		return false, err
 	}
 
-	isUpdate, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, false)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return s.createSubmodelForPutTx(ctx, tx, submodel)
+	}
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-PUTSM-LOCKSUBMODEL " + err.Error())
+	}
+	return s.reconcileExistingSubmodelForPutTx(ctx, tx, submodelDatabaseID, submodel)
+}
+
+func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) (bool, error) {
+	readCtx, shouldEnforce, err := selectPutFormulaContext(ctx, false)
 	if err != nil {
 		return false, err
 	}
-
-	if shouldEnforce {
-		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
-		if visErr != nil {
-			return false, visErr
-		}
-		if !exists {
-			return false, common.NewInternalServerError("SMREPO-PUTSM-ABACCHECKMISSING written submodel not found before commit")
-		}
-		if !visible {
-			return false, common.NewErrDenied("SMREPO-PUTSM-ABACDENIED Written submodel is not accessible under ABAC constraints")
-		}
-	}
-
-	changeType := history.ChangeCreated
-	if isUpdate {
-		changeType = history.ChangeUpdated
-	}
-	if err := s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, changeType); err != nil {
+	if err = s.createSubmodelInTransaction(tx, submodel); err != nil {
 		return false, err
 	}
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodel.ID())
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-PUTSM-RESOLVECREATED " + err.Error())
+	}
+	persisted, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submodel.ID())
+	if err != nil {
+		return false, mapPutReadbackError(err, shouldEnforce, false)
+	}
+	if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, nil, history.ChangeCreated, false); err != nil {
+		return false, err
+	}
+	return false, nil
+}
 
-	return isUpdate, nil
+func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submitted types.ISubmodel) (bool, error) {
+	readCtx, shouldEnforce, err := selectPutFormulaContext(ctx, true)
+	if err != nil {
+		return false, err
+	}
+	previous, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
+	if err != nil {
+		return false, mapPutReadbackError(err, shouldEnforce, true)
+	}
+	previousHistorySnapshot, err := submodelToHistorySnapshot(previous)
+	if err != nil {
+		return false, err
+	}
+	previousSnapshot, err := submodelToReconciliationSnapshot(previous)
+	if err != nil {
+		return false, err
+	}
+	submittedSnapshot, err := submodelToReconciliationSnapshot(submitted)
+	if err != nil {
+		return false, err
+	}
+	diff, err := history.BuildJSONPatch(previousSnapshot, submittedSnapshot)
+	if err != nil {
+		return false, err
+	}
+	if len(diff) > 0 {
+		if err = s.executeSubmodelReconciliationTx(ctx, tx, previous, submitted, previousSnapshot, submittedSnapshot); err != nil {
+			return false, err
+		}
+	}
+	persisted, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
+	if err != nil {
+		return false, mapPutReadbackError(err, shouldEnforce, false)
+	}
+	if err = verifyPutReadback(submitted, persisted); err != nil {
+		return false, err
+	}
+	if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, previousHistorySnapshot, history.ChangeUpdated, false); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *SubmodelDatabase) executeSubmodelReconciliationTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	previous types.ISubmodel,
+	submitted types.ISubmodel,
+	previousSnapshot map[string]any,
+	submittedSnapshot map[string]any,
+) error {
+	plan, err := s.buildSubmodelReconciliationPlan(previous, submitted, previousSnapshot, submittedSnapshot)
+	if err != nil {
+		return err
+	}
+	if !plan.hasLiveMutation() {
+		return nil
+	}
+	if err = deferSubmodelElementReconciliationConstraints(ctx, tx); err != nil {
+		return err
+	}
+	_, err = executeSubmodelReconciliationStatement(ctx, tx, submitted.ID(), plan)
+	return err
+}
+
+func selectPutFormulaContext(ctx context.Context, exists bool) (context.Context, bool, error) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSM-SHOULDENFORCE")
+	if enforceErr != nil {
+		return nil, false, enforceErr
+	}
+	if !shouldEnforce {
+		return auth.ContextWithoutQueryFilter(ctx), false, nil
+	}
+	return auth.SelectPutFormulaByExistence(ctx, exists), true, nil
+}
+
+func (s *SubmodelDatabase) readPutSubmodelStateTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submodelID string) (types.ISubmodel, error) {
+	metadataCtx, err := contextWithoutFragmentFilters(ctx)
+	if err != nil {
+		return nil, err
+	}
+	submodel, err := s.getSubmodelMetadataByIDInTransaction(metadataCtx, tx, submodelID)
+	if err != nil {
+		return nil, err
+	}
+	elements, err := submodelelements.GetSubmodelElementsByDatabaseIDTxInPersistenceOrder(
+		auth.ContextWithoutQueryFilter(ctx), tx, submodelDatabaseID, true,
+	)
+	if err != nil {
+		return nil, err
+	}
+	submodel.SetSubmodelElements(elements)
+	return submodel, nil
+}
+
+func contextWithoutFragmentFilters(ctx context.Context) (context.Context, error) {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return ctx, nil
+	}
+	cloned, err := auth.CloneQueryFilter(queryFilter)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-PUTSM-CLONEFILTER " + err.Error())
+	}
+	cloned.Filters = nil
+	return auth.WithQueryFilter(ctx, cloned), nil
+}
+
+func mapPutReadbackError(err error, shouldEnforce bool, existingState bool) error {
+	if !common.IsErrNotFound(err) {
+		return err
+	}
+	if shouldEnforce {
+		state := "Written"
+		if existingState {
+			state = "Existing"
+		}
+		return common.NewErrDenied("SMREPO-PUTSM-ABACDENIED " + state + " submodel is not accessible under ABAC constraints")
+	}
+	return common.NewInternalServerError("SMREPO-PUTSM-READBACKMISSING written submodel not found inside transaction")
+}
+
+func verifyPutReadback(submitted types.ISubmodel, persisted types.ISubmodel) error {
+	submittedSnapshot, err := submodelToReconciliationSnapshot(submitted)
+	if err != nil {
+		return err
+	}
+	persistedSnapshot, err := submodelToReconciliationSnapshot(persisted)
+	if err != nil {
+		return err
+	}
+	diff, err := history.BuildJSONPatch(submittedSnapshot, persistedSnapshot)
+	if err != nil {
+		return err
+	}
+	if len(diff) != 0 {
+		return common.NewInternalServerError("SMREPO-PUTSM-READBACKMISMATCH persisted Submodel does not match submitted replacement")
+	}
+	return nil
+}
+
+func submodelToReconciliationSnapshot(submodel types.ISubmodel) (map[string]any, error) {
+	snapshot, err := submodelToHistorySnapshot(submodel)
+	if err != nil {
+		return nil, err
+	}
+	pruneEmptyJSONArrays(snapshot)
+	normalizeReconciliationDateTimes(snapshot)
+	return snapshot, nil
+}
+
+func normalizeReconciliationDateTimes(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, child := range typed {
+			normalizeReconciliationDateTimes(child)
+		}
+		if typed["modelType"] != "Property" || typed["valueType"] != "xs:dateTime" {
+			return
+		}
+		dateTime, ok := typed["value"].(string)
+		if !ok {
+			return
+		}
+		parsed, err := common.ParseISO8601DateTime(dateTime)
+		if err == nil {
+			typed["value"] = parsed.UTC().Round(time.Microsecond).Format(time.RFC3339Nano)
+		}
+	case []any:
+		for _, child := range typed {
+			normalizeReconciliationDateTimes(child)
+		}
+	}
+}
+
+func pruneEmptyJSONArrays(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if array, ok := child.([]any); ok && len(array) == 0 {
+				delete(typed, key)
+				continue
+			}
+			pruneEmptyJSONArrays(child)
+		}
+	case []any:
+		for _, child := range typed {
+			pruneEmptyJSONArrays(child)
+		}
+	}
 }
 
 // DeleteSubmodel deletes a submodel and checks ABAC access on the existing submodel before delete when ABAC is enabled.

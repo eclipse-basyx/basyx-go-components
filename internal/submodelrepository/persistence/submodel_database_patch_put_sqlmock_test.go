@@ -27,6 +27,7 @@
 package persistence
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"testing"
@@ -36,6 +37,8 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
@@ -221,7 +224,7 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(300))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectCurrentSubmodelSnapshotLoad(mock, "sm-new", "smnew")
+	expectCreatedPutSubmodelSnapshotLoad(mock, "sm-new", "smnew")
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-new", submodel)
@@ -245,22 +248,69 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
-	expectNoManagedFileReferences(mock)
-	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
-	mock.ExpectExec(`DELETE FROM .*submodel`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(401))
-	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectCurrentSubmodelSnapshotLoad(mock, "sm-existing", "smexisting")
+	expectBareSubmodelStateLoad(mock, "sm-existing", "smexisting")
+	expectBareSubmodelStateLoad(mock, "sm-existing", "smexisting")
+	expectSubmodelHistoryAppend(mock)
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
 	require.NoError(t, err)
 	require.True(t, isUpdate)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPutSubmodelUpdateFormulaDenialRollsBackBeforeDiff(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-existing")
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
+	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
+		WillReturnRows(sqlmock.NewRows(submodelStateColumns()))
+	mock.ExpectRollback()
+
+	_, err = sut.PutSubmodel(contextWithUpdateFormula(t, false), "sm-existing", submodel)
+	require.Error(t, err)
+	require.Truef(t, common.IsErrDenied(err), "got %v", err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPutSubmodelPostUpdateFormulaDenialRollsBack(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-existing")
+	idShort := "smexisting"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
+	expectBareSubmodelStateLoad(mock, "sm-existing", idShort)
+	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
+		WillReturnRows(sqlmock.NewRows(submodelStateColumns()))
+	mock.ExpectRollback()
+
+	_, err = sut.PutSubmodel(contextWithUpdateFormula(t, true), "sm-existing", submodel)
+	require.Error(t, err)
+	require.Truef(t, common.IsErrDenied(err), "got %v", err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func contextWithUpdateFormula(t *testing.T, allowed bool) context.Context {
+	t.Helper()
+	expression := grammar.LogicalExpression{Boolean: &allowed}
+	return auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Formula: &expression,
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumUPDATE: expression,
+		},
+	})
 }
 
 func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
@@ -402,27 +452,59 @@ func expectMutatedSubmodelHistoryFallback(mock sqlmock.Sqlmock) {
 }
 
 func expectCurrentSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID string, idShort string) {
+	expectSubmodelStateLoad(mock, submodelID, idShort, "[]", "[]", "{}", "[]", "[]", "[]", "[]", "{}")
+	expectSubmodelHistoryAppend(mock)
+}
+
+func expectCreatedPutSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID string, idShort string) {
+	expectSubmodelDatabaseIDLoad(mock)
+	expectSubmodelMetadataStateLoad(mock, submodelID, idShort, "[]", "[]", "{}", "[]", "[]", "[]", "[]", "{}")
+	expectEmptyRootSubmodelElementsLoad(mock)
+	expectSubmodelHistoryAppend(mock)
+}
+
+func expectBareSubmodelStateLoad(mock sqlmock.Sqlmock, submodelID string, idShort string) {
+	expectSubmodelMetadataStateLoad(mock, submodelID, idShort, nil, nil, nil, nil, nil, nil, nil, nil)
+	expectEmptyRootSubmodelElementsLoad(mock)
+}
+
+func expectSubmodelStateLoad(mock sqlmock.Sqlmock, submodelID string, idShort string, payloads ...any) {
+	expectSubmodelMetadataStateLoad(mock, submodelID, idShort, payloads...)
+	expectSubmodelDatabaseIDLoad(mock)
+	expectEmptyRootSubmodelElementsLoad(mock)
+}
+
+func expectSubmodelMetadataStateLoad(mock sqlmock.Sqlmock, submodelID string, idShort string, payloads ...any) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"submodel_identifier",
-			"id_short",
-			"category",
-			"kind",
-			"description_payload",
-			"displayname_payload",
-			"administrative_information_payload",
-			"embedded_data_specification_payload",
-			"supplemental_semantic_ids_payload",
-			"extensions_payload",
-			"qualifiers_payload",
-			"semantic_id_payload",
-			"sort_submodel_identifier",
-		}).AddRow(submodelID, idShort, nil, nil, "[]", "[]", "{}", "[]", "[]", "[]", "[]", "{}", submodelID))
+		WillReturnRows(sqlmock.NewRows(submodelStateColumns()).AddRow(submodelID, idShort, nil, nil, payloads[0], payloads[1], payloads[2], payloads[3], payloads[4], payloads[5], payloads[6], payloads[7], submodelID))
+}
+
+func expectSubmodelDatabaseIDLoad(mock sqlmock.Sqlmock) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+}
+
+func expectEmptyRootSubmodelElementsLoad(mock sqlmock.Sqlmock) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel_element"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "idshort_path"}))
-	expectSubmodelHistoryAppend(mock)
+}
+
+func submodelStateColumns() []string {
+	return []string{
+		"submodel_identifier",
+		"id_short",
+		"category",
+		"kind",
+		"description_payload",
+		"displayname_payload",
+		"administrative_information_payload",
+		"embedded_data_specification_payload",
+		"supplemental_semantic_ids_payload",
+		"extensions_payload",
+		"qualifiers_payload",
+		"semantic_id_payload",
+		"sort_submodel_identifier",
+	}
 }
 
 func TestPatchSubmodelElementByPathNotFoundReturnsNotFound(t *testing.T) {

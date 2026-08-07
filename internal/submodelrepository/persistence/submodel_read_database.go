@@ -531,8 +531,10 @@ func scanSubmodelMetadataRow(rows *sql.Rows) (types.ISubmodel, error) {
 
 	var submodel types.ISubmodel
 	submodel = types.NewSubmodel(identifier.String)
-	idShortValue := idShort.String
-	submodel.SetIDShort(&idShortValue)
+	if idShort.Valid {
+		idShortValue := idShort.String
+		submodel.SetIDShort(&idShortValue)
+	}
 	if category.Valid {
 		categoryValue := category.String
 		submodel.SetCategory(&categoryValue)
