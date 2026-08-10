@@ -155,13 +155,13 @@ func stagedInsertRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 func allStagedElementChanges() exp.Expression {
 	return goqu.Func(
 		"jsonb_build_object",
-		common.PostgreSQLTextLiteral("core"), true,
-		common.PostgreSQLTextLiteral("payload"), true,
-		common.PostgreSQLTextLiteral("semanticId"), true,
-		common.PostgreSQLTextLiteral("supplementalId"), true,
-		common.PostgreSQLTextLiteral("typeData"), true,
-		common.PostgreSQLTextLiteral("languageValues"), true,
-		common.PostgreSQLTextLiteral("valueId"), true,
+		common.PostgreSQLTextLiteral("core"), goqu.L("TRUE"),
+		common.PostgreSQLTextLiteral("payload"), goqu.L("TRUE"),
+		common.PostgreSQLTextLiteral("semanticId"), goqu.L("TRUE"),
+		common.PostgreSQLTextLiteral("supplementalId"), goqu.L("TRUE"),
+		common.PostgreSQLTextLiteral("typeData"), goqu.L("TRUE"),
+		common.PostgreSQLTextLiteral("languageValues"), goqu.L("TRUE"),
+		common.PostgreSQLTextLiteral("valueId"), goqu.L("TRUE"),
 	)
 }
 
@@ -325,7 +325,7 @@ func currentReferenceKeysJSON(dialect goqu.DialectWrapper, tables reconciliation
 func currentSemanticReferenceJSON(dialect goqu.DialectWrapper, tables reconciliationReferenceTables, owner exp.Expression) exp.Expression {
 	reference := goqu.Func(
 		"jsonb_build_object",
-		common.PostgreSQLTextLiteral("position"), 0,
+		common.PostgreSQLTextLiteral("position"), integerLiteral(0),
 		common.PostgreSQLTextLiteral("type"), goqu.I("reference.type"),
 		common.PostgreSQLTextLiteral("payload"), goqu.I("payload.parent_reference_payload"),
 		common.PostgreSQLTextLiteral("keys"), currentReferenceKeysJSON(dialect, tables),

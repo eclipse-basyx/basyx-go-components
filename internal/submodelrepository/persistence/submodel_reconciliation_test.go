@@ -125,6 +125,26 @@ func TestStagedSubmodelVerificationQueryUsesExplicitCrossJoins(t *testing.T) {
 	require.Contains(t, query, `"submodel_element" AS "live" CROSS JOIN "target_submodel" AS "sm"`)
 }
 
+func TestStagedJSONConstantsDoNotCreateUntypedBindParameters(t *testing.T) {
+	dialect := goqu.Dialect(common.Dialect)
+	expressions := map[string]any{
+		"insert changes": allStagedElementChanges(),
+		"semantic reference": currentSemanticReferenceJSON(
+			dialect,
+			submodelSemanticReferenceTables(),
+			goqu.I("target.id"),
+		),
+	}
+	for name, expression := range expressions {
+		t.Run(name, func(t *testing.T) {
+			query, args, err := dialect.Select(expression).Prepared(true).ToSQL()
+			require.NoError(t, err)
+			require.Empty(t, args)
+			require.Contains(t, query, "jsonb_build_object")
+		})
+	}
+}
+
 func TestContextWithoutFragmentFiltersPreservesUpdateFormula(t *testing.T) {
 	allowed := true
 	formula := grammar.LogicalExpression{Boolean: &allowed}
