@@ -47,11 +47,11 @@ func HTTPClient() *http.Client { return &http.Client{Timeout: 20 * time.Second} 
 // FindCompose searches for docker or podman on the PATH and returns the binary name and compose subcommand.
 // Returns an error if none of the supported compose engines is found.
 func FindCompose() (bin string, args []string, err error) {
-	if _, e := exec.LookPath("podman"); e == nil {
-		return "podman", []string{"compose"}, nil
-	}
 	if _, e := exec.LookPath("docker"); e == nil {
 		return "docker", []string{"compose"}, nil
+	}
+	if _, e := exec.LookPath("podman"); e == nil {
+		return "podman", []string{"compose"}, nil
 	}
 	return "", nil, errors.New("no compose engine found (docker compose, podman compose)")
 }
