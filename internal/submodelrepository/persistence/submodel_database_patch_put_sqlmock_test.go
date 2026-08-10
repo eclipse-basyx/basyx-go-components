@@ -520,7 +520,7 @@ func expectSubmodelPutStageLoad(mock sqlmock.Sqlmock) {
 }
 
 func expectSubmodelPutReconciliation(mock sqlmock.Sqlmock, updated int, inserted int, deleted int) {
-	mock.ExpectExec(`SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos DEFERRED`).
+	mock.ExpectExec(`UPDATE "submodel_element" AS "live" SET "parent_sme_id"=CASE`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`WITH RECURSIVE`).
 		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(updated, inserted, deleted))

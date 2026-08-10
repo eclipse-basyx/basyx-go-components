@@ -397,6 +397,60 @@ func stagedTypeDataChanged(dialect goqu.DialectWrapper, row exp.Expression) exp.
 	return result.Else(goqu.L("(? ->> 'typeTable') <> '' OR (? -> 'typeData') IS DISTINCT FROM '{}'::jsonb", row, row))
 }
 
+func releaseConflictingSubmodelElementConstraintsTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	staged *stagedSubmodelTarget,
+) error {
+	if tx == nil {
+		return common.NewInternalServerError("SMREPO-RELEASECONSTRAINTS-NILTX transaction must not be nil")
+	}
+	if staged == nil || staged.stage == nil {
+		return common.NewInternalServerError("SMREPO-RELEASECONSTRAINTS-NILSTAGE staged target must not be nil")
+	}
+	querySQL, args, err := buildReleaseConflictingSubmodelElementConstraintsQuery(submodelID, staged)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-RELEASECONSTRAINTS-BUILD " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, querySQL, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-RELEASECONSTRAINTS-EXEC " + err.Error())
+	}
+	return nil
+}
+
+func buildReleaseConflictingSubmodelElementConstraintsQuery(submodelID string, staged *stagedSubmodelTarget) (string, []any, error) {
+	dialect := goqu.Dialect(common.Dialect)
+	targetSubmodel := dialect.From("submodel").Select("id").Where(goqu.C("submodel_identifier").Eq(submodelID))
+	targetElementRows := staged.stage.Dataset(dialect, submodelElementStageDataset)
+	matchingTarget := dialect.From(goqu.T("target_element_rows").As("target")).
+		Where(
+			goqu.I("target.match_key").Eq(goqu.I("live.idshort_path")),
+			goqu.I("target.row_type").Eq(goqu.I("live.model_type")),
+		)
+	targetExists := goqu.Func("EXISTS", matchingTarget.Select(goqu.L("1")))
+	targetPosition := matchingTarget.Select(jsonInt("target.row_data", "position"))
+	targetOwner := dialect.From(goqu.T("target_submodel").As("target")).
+		Select(goqu.L("1")).
+		Where(goqu.I("target.id").Eq(goqu.I("live.submodel_id")))
+	return dialect.Update(goqu.T("submodel_element").As("live")).
+		Set(goqu.Record{
+			"parent_sme_id": goqu.Case().When(targetExists, goqu.I("live.parent_sme_id")).Else(goqu.L("NULL")),
+			"position":      goqu.L("NULL"),
+		}).
+		Where(
+			goqu.Func("EXISTS", targetOwner),
+			goqu.Or(
+				goqu.Func("NOT EXISTS", matchingTarget.Select(goqu.L("1"))),
+				goqu.L("live.position IS DISTINCT FROM (?)", targetPosition),
+			),
+		).
+		With("target_submodel", targetSubmodel).
+		With("target_element_rows", targetElementRows).
+		Prepared(true).
+		ToSQL()
+}
+
 func verifyStagedSubmodelStateTx(
 	ctx context.Context,
 	tx *sql.Tx,

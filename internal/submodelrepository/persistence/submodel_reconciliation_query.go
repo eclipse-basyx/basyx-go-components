@@ -980,17 +980,6 @@ func stringInterfaces(values []string) []interface{} {
 	return result
 }
 
-func deferSubmodelElementReconciliationConstraints(ctx context.Context, tx *sql.Tx) error {
-	if tx == nil {
-		return common.NewInternalServerError("SMREPO-RECON-DEFER-NILTX transaction must not be nil")
-	}
-	statement := goqu.L("SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos DEFERRED")
-	if _, err := tx.ExecContext(ctx, statement.Literal(), statement.Args()...); err != nil {
-		return common.NewInternalServerError("SMREPO-RECON-DEFER-EXEC " + err.Error())
-	}
-	return nil
-}
-
 func executeSubmodelReconciliationStatement(
 	ctx context.Context,
 	tx *sql.Tx,

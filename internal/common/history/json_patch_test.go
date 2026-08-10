@@ -27,10 +27,34 @@ package history
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func BenchmarkBuildJSONPatchReorderedSubmodel(b *testing.B) {
+	const elementCount = 1200
+	baseElements := make([]any, elementCount)
+	targetElements := make([]any, elementCount)
+	for position := range elementCount {
+		baseElements[position] = map[string]any{
+			"idShort": fmt.Sprintf("P%04d", position), "modelType": "Property", "valueType": "xs:string", "value": "old",
+		}
+		targetElements[position] = map[string]any{
+			"idShort": fmt.Sprintf("P%04d", elementCount-1-position), "modelType": "Property", "valueType": "xs:string", "value": "new",
+		}
+	}
+	base := map[string]any{"id": "sm", "submodelElements": baseElements}
+	target := map[string]any{"id": "sm", "submodelElements": targetElements}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if _, err := BuildJSONPatch(base, target); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
 
 func TestJSONPatchBuildAndApplyObjectOperations(t *testing.T) {
 	base := map[string]any{
@@ -98,6 +122,16 @@ func TestJSONPatchEmptyDiffRoundTrip(t *testing.T) {
 	actual, err := ApplyJSONPatch(base, patch)
 	require.NoError(t, err)
 	require.Equal(t, base, actual)
+}
+
+func TestJSONPatchDoesNotRetainTargetContainers(t *testing.T) {
+	targetNested := map[string]any{"value": "before"}
+	patch, err := BuildJSONPatch(map[string]any{}, map[string]any{"nested": targetNested})
+	require.NoError(t, err)
+	targetNested["value"] = "after"
+	require.Equal(t, map[string]any{
+		"op": "add", "path": "/nested", "value": map[string]any{"value": "before"},
+	}, patch[0])
 }
 
 func TestJSONPatchPreservesLargeIntegerValues(t *testing.T) {

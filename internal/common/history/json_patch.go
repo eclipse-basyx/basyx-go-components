@@ -26,9 +26,9 @@
 package history
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -65,8 +65,16 @@ const (
 //	}
 //	return patch, nil
 func BuildJSONPatch(from any, to any) ([]map[string]any, error) {
+	normalizedFrom, err := cloneJSONValue(from)
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-JSONPATCH-NORMALIZEFROM " + err.Error())
+	}
+	normalizedTo, err := cloneJSONValue(to)
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-JSONPATCH-NORMALIZETO " + err.Error())
+	}
 	operations := make([]map[string]any, 0)
-	if err := appendJSONPatchOperations(&operations, "", from, to); err != nil {
+	if err = appendJSONPatchOperations(&operations, "", normalizedFrom, normalizedTo); err != nil {
 		return nil, err
 	}
 	return operations, nil
@@ -135,14 +143,10 @@ func appendJSONPatchOperations(operations *[]map[string]any, path string, from a
 		return appendArrayPatchOperations(operations, path, fromArray, toArray)
 	}
 
-	value, err := cloneJSONValue(to)
-	if err != nil {
-		return common.NewInternalServerError("HISTORY-JSONPATCH-CLONEREPLACE " + err.Error())
-	}
 	*operations = append(*operations, map[string]any{
 		"op":    jsonPatchOpReplace,
 		"path":  path,
-		"value": value,
+		"value": to,
 	})
 	return nil
 }
@@ -162,14 +166,10 @@ func appendObjectPatchOperations(operations *[]map[string]any, path string, from
 	}
 
 	for _, key := range sortedMissingKeys(to, from) {
-		value, err := cloneJSONValue(to[key])
-		if err != nil {
-			return common.NewInternalServerError("HISTORY-JSONPATCH-CLONEADD " + err.Error())
-		}
 		*operations = append(*operations, map[string]any{
 			"op":    jsonPatchOpAdd,
 			"path":  appendJSONPointerToken(path, key),
-			"value": value,
+			"value": to[key],
 		})
 	}
 	return nil
@@ -192,14 +192,10 @@ func appendArrayPatchOperations(operations *[]map[string]any, path string, from 
 		})
 	}
 	for index := len(from); index < len(to); index++ {
-		value, err := cloneJSONValue(to[index])
-		if err != nil {
-			return common.NewInternalServerError("HISTORY-JSONPATCH-CLONEARRAYADD " + err.Error())
-		}
 		*operations = append(*operations, map[string]any{
 			"op":    jsonPatchOpAdd,
 			"path":  appendJSONPointerToken(path, strconv.Itoa(index)),
-			"value": value,
+			"value": to[index],
 		})
 	}
 	return nil
@@ -431,15 +427,7 @@ func unescapeJSONPointerToken(token string) (string, error) {
 }
 
 func jsonValuesEqual(left any, right any) (bool, error) {
-	leftJSON, err := CanonicalJSON(left)
-	if err != nil {
-		return false, err
-	}
-	rightJSON, err := CanonicalJSON(right)
-	if err != nil {
-		return false, err
-	}
-	return bytes.Equal(leftJSON, rightJSON), nil
+	return reflect.DeepEqual(left, right), nil
 }
 
 func cloneJSONValue(value any) (any, error) {

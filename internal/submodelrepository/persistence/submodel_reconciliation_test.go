@@ -28,6 +28,7 @@ package persistence
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -40,6 +41,40 @@ import (
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	"github.com/stretchr/testify/require"
 )
+
+func BenchmarkStreamReconciliationRowsForLargeSubmodel(b *testing.B) {
+	const elementCount = 1200
+	elements := make([]types.ISubmodelElement, elementCount)
+	for position := range elementCount {
+		property := types.NewProperty(types.DataTypeDefXSDString)
+		idShort := fmt.Sprintf("P%04d", position)
+		value := "value"
+		property.SetIDShort(&idShort)
+		property.SetValue(&value)
+		elements[position] = property
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		err := submodelelements.StreamReconciliationElementRows(b.Context(), nil, elements, func(row submodelelements.ReconciliationElementRow) error {
+			_, marshalErr := json.Marshal(row)
+			return marshalErr
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkBuildSubmodelReconciliationQuery(b *testing.B) {
+	stage := &postgresstaging.Stage{}
+	b.ReportAllocs()
+	for range b.N {
+		if _, _, err := newReconciliationQueryBuilder().build(stage, "sm"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
 
 func TestStreamReconciliationRowsIncludesNestedElements(t *testing.T) {
 	submodel := readReconciliationJSON(t, `{
@@ -128,6 +163,19 @@ func TestStagedSubmodelVerificationQueryUsesExplicitCrossJoins(t *testing.T) {
 	require.Contains(t, query, `"target_metadata" AS "metadata" CROSS JOIN "target_submodel" AS "target"`)
 	require.Contains(t, query, `"target_element_rows" AS "target" CROSS JOIN "target_submodel" AS "sm"`)
 	require.Contains(t, query, `"submodel_element" AS "live" CROSS JOIN "target_submodel" AS "sm"`)
+}
+
+func TestReleaseConflictingConstraintsKeepsUnchangedRowsStable(t *testing.T) {
+	query, _, err := buildReleaseConflictingSubmodelElementConstraintsQuery(
+		"sm",
+		&stagedSubmodelTarget{stage: &postgresstaging.Stage{}},
+	)
+	require.NoError(t, err)
+	require.Contains(t, query, `UPDATE "submodel_element" AS "live" SET "parent_sme_id"=CASE`)
+	require.Contains(t, query, `"position"=NULL`)
+	require.Contains(t, query, `"target"."match_key" = "live"."idshort_path"`)
+	require.Contains(t, query, `"target"."row_type" = "live"."model_type"`)
+	require.Contains(t, query, `live.position IS DISTINCT FROM`)
 }
 
 func TestStagedJSONConstantsDoNotCreateUntypedBindParameters(t *testing.T) {

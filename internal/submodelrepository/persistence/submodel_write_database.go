@@ -530,7 +530,7 @@ func (s *SubmodelDatabase) reconcileAndVerifyStagedSubmodelPutTx(
 	staged *stagedSubmodelTarget,
 	shouldEnforce bool,
 ) error {
-	if err := deferSubmodelElementReconciliationConstraints(ctx, tx); err != nil {
+	if err := releaseConflictingSubmodelElementConstraintsTx(ctx, tx, submodelID, staged); err != nil {
 		return err
 	}
 	reconciliationStarted := time.Now()

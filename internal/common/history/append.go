@@ -353,9 +353,12 @@ func appendVersionWithLatestTx(ctx context.Context, tx *sql.Tx, table string, id
 	if latest != nil {
 		previousHash = latest.rowHash
 	}
-	effectiveDiff, err := buildEffectiveDiff(snapshot, latest)
-	if err != nil {
-		return err
+	var effectiveDiff []map[string]any
+	if cfg.EvidenceEnabled {
+		effectiveDiff, err = buildEffectiveDiff(snapshot, latest)
+		if err != nil {
+			return err
+		}
 	}
 	return insertHistoryVersionTx(ctx, tx, historyVersionInsert{
 		table:         table,
