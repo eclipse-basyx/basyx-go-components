@@ -166,11 +166,11 @@ func reconciliationWALBytesSince(tb testing.TB, db *sql.DB, start string) float6
 	if err != nil {
 		tb.Fatal(err)
 	}
-	var bytes float64
-	if err = db.QueryRowContext(tb.Context(), query, args...).Scan(&bytes); err != nil {
+	var walBytes float64
+	if err = db.QueryRowContext(tb.Context(), query, args...).Scan(&walBytes); err != nil {
 		tb.Fatal(err)
 	}
-	return bytes
+	return walBytes
 }
 
 func TestPutSubmodelReconcilesThousandsOfElementsInPlace(t *testing.T) {

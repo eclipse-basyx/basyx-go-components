@@ -411,10 +411,6 @@ func BuildReconciliationReferences(references []types.IReference) ([]Reconciliat
 	return reconciliationReferences(references)
 }
 
-func reconciliationTypeData(node *flattenedInsertNode) (string, map[string]any, error) {
-	return reconciliationTypeDataValues(node.handler, node.element)
-}
-
 func reconciliationTypeDataValues(handler PostgreSQLSMECrudInterface, element types.ISubmodelElement) (string, map[string]any, error) {
 	part, err := handler.GetInsertQueryPart(nil, 0, element)
 	if err != nil {

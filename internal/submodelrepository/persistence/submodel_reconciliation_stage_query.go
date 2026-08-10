@@ -55,7 +55,8 @@ func (b *reconciliationQueryBuilder) addStagedReconciliationInputs(stage *postgr
 func stagedReconciliationMetadata(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	metadata := goqu.I("metadata.data")
 	changes := stagedMetadataChanges(dialect, metadata)
-	return dialect.From(goqu.T("target_metadata").As("metadata"), goqu.T("target_submodel").As("target")).
+	return dialect.From(goqu.T("target_metadata").As("metadata")).
+		CrossJoin(goqu.T("target_submodel").As("target")).
 		LeftJoin(goqu.T("submodel").As("sm"), goqu.On(goqu.I("sm.id").Eq(goqu.I("target.id")))).
 		LeftJoin(goqu.T("submodel_payload").As("payload"), goqu.On(goqu.I("payload.submodel_id").Eq(goqu.I("target.id")))).
 		Select(goqu.Func(
@@ -100,7 +101,8 @@ func stagedMetadataChanges(dialect goqu.DialectWrapper, metadata exp.Expression)
 }
 
 func directInsertCandidates(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-	return dialect.From(goqu.T("target_element_rows").As("target"), goqu.T("target_submodel").As("sm")).
+	return dialect.From(goqu.T("target_element_rows").As("target")).
+		CrossJoin(goqu.T("target_submodel").As("sm")).
 		LeftJoin(goqu.T("submodel_element").As("live"), goqu.On(
 			goqu.I("live.submodel_id").Eq(goqu.I("sm.id")),
 			goqu.I("live.idshort_path").Eq(goqu.I("target.match_key")),
@@ -166,7 +168,8 @@ func allStagedElementChanges() exp.Expression {
 func retainedStagedRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	inserted := dialect.From("insert_tree").Select(goqu.L("1")).
 		Where(goqu.I("insert_tree.match_key").Eq(goqu.I("target.match_key")))
-	return dialect.From(goqu.T("target_element_rows").As("target"), goqu.T("target_submodel").As("sm")).
+	return dialect.From(goqu.T("target_element_rows").As("target")).
+		CrossJoin(goqu.T("target_submodel").As("sm")).
 		Join(goqu.T("submodel_element").As("live"), goqu.On(
 			goqu.I("live.submodel_id").Eq(goqu.I("sm.id")),
 			goqu.I("live.idshort_path").Eq(goqu.I("target.match_key")),
@@ -403,19 +406,40 @@ func verifyStagedSubmodelStateTx(
 	if staged == nil || staged.stage == nil {
 		return common.NewInternalServerError("SMREPO-VERIFY-NILSTAGE staged target must not be nil")
 	}
+	querySQL, args, err := buildStagedSubmodelVerificationQuery(submodelID, staged)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-VERIFY-BUILD " + err.Error())
+	}
+	var missingSubmodel bool
+	var metadataDiff bool
+	var missingTarget bool
+	var extraCurrent bool
+	var changedCurrent bool
+	if err = tx.QueryRowContext(ctx, querySQL, args...).Scan(&missingSubmodel, &metadataDiff, &missingTarget, &extraCurrent, &changedCurrent); err != nil {
+		return common.NewInternalServerError("SMREPO-VERIFY-EXEC " + err.Error())
+	}
+	if missingSubmodel || metadataDiff || missingTarget || extraCurrent || changedCurrent {
+		return common.NewInternalServerError("SMREPO-PUTSM-READBACKMISMATCH persisted Submodel does not match staged replacement")
+	}
+	return nil
+}
+
+func buildStagedSubmodelVerificationQuery(submodelID string, staged *stagedSubmodelTarget) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
 	metadataRows := staged.stage.Dataset(dialect, submodelMetadataStageDataset)
 	elementRows := staged.stage.Dataset(dialect, submodelElementStageDataset)
 	targetSubmodel := dialect.From("submodel").Select("id").Where(goqu.C("submodel_identifier").Eq(submodelID))
 
 	metadataChanges := stagedMetadataChanges(dialect, goqu.I("metadata.data"))
-	metadataMismatch := dialect.From(goqu.T("target_metadata").As("metadata"), goqu.T("target_submodel").As("target")).
+	metadataMismatch := dialect.From(goqu.T("target_metadata").As("metadata")).
+		CrossJoin(goqu.T("target_submodel").As("target")).
 		Join(goqu.T("submodel").As("sm"), goqu.On(goqu.I("sm.id").Eq(goqu.I("target.id")))).
 		LeftJoin(goqu.T("submodel_payload").As("payload"), goqu.On(goqu.I("payload.submodel_id").Eq(goqu.I("target.id")))).
 		Select(goqu.L("1")).
 		Where(stagedChangesAny(metadataChanges, "coreChanged", "payloadChanged", "semanticIdChanged", "supplementalChanged"))
 
-	targetMismatch := dialect.From(goqu.T("target_element_rows").As("target"), goqu.T("target_submodel").As("sm")).
+	targetMismatch := dialect.From(goqu.T("target_element_rows").As("target")).
+		CrossJoin(goqu.T("target_submodel").As("sm")).
 		LeftJoin(goqu.T("submodel_element").As("live"), goqu.On(
 			goqu.I("live.submodel_id").Eq(goqu.I("sm.id")),
 			goqu.I("live.idshort_path").Eq(goqu.I("target.match_key")),
@@ -424,7 +448,8 @@ func verifyStagedSubmodelStateTx(
 		Select(goqu.L("1")).
 		Where(goqu.I("live.id").IsNull())
 
-	extraLive := dialect.From(goqu.T("submodel_element").As("live"), goqu.T("target_submodel").As("sm")).
+	extraLive := dialect.From(goqu.T("submodel_element").As("live")).
+		CrossJoin(goqu.T("target_submodel").As("sm")).
 		LeftJoin(goqu.T("target_element_rows").As("target"), goqu.On(
 			goqu.I("target.match_key").Eq(goqu.I("live.idshort_path")),
 			goqu.I("target.row_type").Eq(goqu.I("live.model_type")),
@@ -436,7 +461,8 @@ func verifyStagedSubmodelStateTx(
 		)
 
 	elementChanges := stagedElementChanges(dialect)
-	changedTarget := dialect.From(goqu.T("target_element_rows").As("target"), goqu.T("target_submodel").As("sm")).
+	changedTarget := dialect.From(goqu.T("target_element_rows").As("target")).
+		CrossJoin(goqu.T("target_submodel").As("sm")).
 		Join(goqu.T("submodel_element").As("sme"), goqu.On(
 			goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")),
 			goqu.I("sme.idshort_path").Eq(goqu.I("target.match_key")),
@@ -447,6 +473,7 @@ func verifyStagedSubmodelStateTx(
 		Where(stagedChangesAny(elementChanges, "core", "payload", "semanticId", "supplementalId", "typeData", "languageValues", "valueId"))
 
 	query := dialect.Select(
+		goqu.L("NOT EXISTS (SELECT 1 FROM target_submodel)"),
 		goqu.Func("EXISTS", metadataMismatch),
 		goqu.Func("EXISTS", targetMismatch),
 		goqu.Func("EXISTS", extraLive),
@@ -457,21 +484,7 @@ func verifyStagedSubmodelStateTx(
 		With("target_metadata", dialect.From("target_metadata_rows").Select(goqu.I("row_data").As("data"))).
 		With("target_element_rows", elementRows).
 		Prepared(true)
-	querySQL, args, err := query.ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-VERIFY-BUILD " + err.Error())
-	}
-	var metadataDiff bool
-	var missingTarget bool
-	var extraCurrent bool
-	var changedCurrent bool
-	if err = tx.QueryRowContext(ctx, querySQL, args...).Scan(&metadataDiff, &missingTarget, &extraCurrent, &changedCurrent); err != nil {
-		return common.NewInternalServerError("SMREPO-VERIFY-EXEC " + err.Error())
-	}
-	if metadataDiff || missingTarget || extraCurrent || changedCurrent {
-		return common.NewInternalServerError("SMREPO-PUTSM-READBACKMISMATCH persisted Submodel does not match staged replacement")
-	}
-	return nil
+	return query.ToSQL()
 }
 
 func stagedChangesAny(changes exp.Expression, fields ...string) exp.Expression {

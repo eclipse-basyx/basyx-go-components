@@ -63,23 +63,15 @@ func (s *SubmodelDatabase) stageSubmodelTargetTx(
 	if err != nil {
 		return nil, common.NewInternalServerError("SMREPO-STAGE-METADATAJSON " + err.Error())
 	}
-	metadataWriter, err := stage.NewWriter(submodelMetadataStageDataset)
+	writer, err := stage.NewWriter(submodelMetadataStageDataset)
 	if err != nil {
 		return nil, err
 	}
-	if err = metadataWriter.Add(ctx, postgresstaging.Row{
+	if err = writer.Add(ctx, postgresstaging.Row{
 		MatchKey: submodel.ID(),
 		Ordinal:  0,
 		Data:     metadataJSON,
 	}); err != nil {
-		return nil, err
-	}
-	if err = metadataWriter.Flush(ctx); err != nil {
-		return nil, err
-	}
-
-	elementWriter, err := stage.NewWriter(submodelElementStageDataset)
-	if err != nil {
 		return nil, err
 	}
 	elementCount := 0
@@ -98,7 +90,7 @@ func (s *SubmodelDatabase) stageSubmodelTargetTx(
 				parentKey = &value
 			}
 			rowType := row.ModelType
-			if addErr := elementWriter.Add(ctx, postgresstaging.Row{
+			if addErr := writer.AddToDataset(ctx, submodelElementStageDataset, postgresstaging.Row{
 				MatchKey:  row.Path,
 				ParentKey: parentKey,
 				RowType:   &rowType,
@@ -114,7 +106,7 @@ func (s *SubmodelDatabase) stageSubmodelTargetTx(
 	if err != nil {
 		return nil, err
 	}
-	if err = elementWriter.Flush(ctx); err != nil {
+	if err = writer.Flush(ctx); err != nil {
 		return nil, err
 	}
 	return &stagedSubmodelTarget{stage: stage, elementCount: elementCount}, nil

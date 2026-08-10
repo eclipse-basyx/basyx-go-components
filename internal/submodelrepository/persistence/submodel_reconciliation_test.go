@@ -35,6 +35,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/postgresstaging"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	"github.com/stretchr/testify/require"
@@ -94,6 +95,34 @@ func TestStagedDeleteClassificationUsesRetainedIDAntiJoin(t *testing.T) {
 	require.Contains(t, query, `FROM "retained_target_rows"`)
 	require.Contains(t, query, `"live"."submodel_id" = "sm"."id"`)
 	require.NotContains(t, query, "LIKE")
+}
+
+func TestStagedReconciliationQueriesUseExplicitCrossJoins(t *testing.T) {
+	dialect := goqu.Dialect(common.Dialect)
+	queries := map[string]*goqu.SelectDataset{
+		"metadata":          stagedReconciliationMetadata(dialect),
+		"insert candidates": directInsertCandidates(dialect),
+		"retained rows":     retainedStagedRows(dialect),
+	}
+	for name, dataset := range queries {
+		t.Run(name, func(t *testing.T) {
+			query, _, err := dataset.ToSQL()
+			require.NoError(t, err)
+			require.Contains(t, query, " CROSS JOIN ")
+		})
+	}
+}
+
+func TestStagedSubmodelVerificationQueryUsesExplicitCrossJoins(t *testing.T) {
+	query, _, err := buildStagedSubmodelVerificationQuery(
+		"sm",
+		&stagedSubmodelTarget{stage: &postgresstaging.Stage{}},
+	)
+	require.NoError(t, err)
+	require.NotContains(t, query, `, "target_submodel"`)
+	require.Contains(t, query, `"target_metadata" AS "metadata" CROSS JOIN "target_submodel" AS "target"`)
+	require.Contains(t, query, `"target_element_rows" AS "target" CROSS JOIN "target_submodel" AS "sm"`)
+	require.Contains(t, query, `"submodel_element" AS "live" CROSS JOIN "target_submodel" AS "sm"`)
 }
 
 func TestContextWithoutFragmentFiltersPreservesUpdateFormula(t *testing.T) {

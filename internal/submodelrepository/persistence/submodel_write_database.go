@@ -420,7 +420,7 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	}
 	defer cleanup(&err)
 
-	isUpdate, err := s.putSubmodelInTransaction(ctx, tx, submodelID, submodel)
+	isUpdate, err := s.putSubmodelInTransaction(ctx, tx, submodelID, submodel, false)
 	if err != nil {
 		return false, err
 	}
@@ -446,25 +446,25 @@ func (s *SubmodelDatabase) PutSubmodelInTransaction(ctx context.Context, tx *sql
 		return false, err
 	}
 
-	return s.putSubmodelInTransaction(ctx, tx, submodelID, submodel)
+	return s.putSubmodelInTransaction(ctx, tx, submodelID, submodel, true)
 }
 
-func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
+func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel, cleanupStageRows bool) (bool, error) {
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelID); err != nil {
 		return false, err
 	}
 
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return s.createSubmodelForPutTx(ctx, tx, submodel)
+		return s.createSubmodelForPutTx(ctx, tx, submodel, cleanupStageRows)
 	}
 	if err != nil {
 		return false, common.NewInternalServerError("SMREPO-PUTSM-LOCKSUBMODEL " + err.Error())
 	}
-	return s.reconcileExistingSubmodelForPutTx(ctx, tx, submodelDatabaseID, submodel)
+	return s.reconcileExistingSubmodelForPutTx(ctx, tx, submodelDatabaseID, submodel, cleanupStageRows)
 }
 
-func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) (bool, error) {
+func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel, cleanupStageRows bool) (bool, error) {
 	readCtx, shouldEnforce, err := selectPutFormulaContext(ctx, false)
 	if err != nil {
 		return false, err
@@ -484,19 +484,21 @@ func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.T
 	if err = appendSubmittedSubmodelHistoryTx(ctx, tx, submodel, nil, history.ChangeCreated); err != nil {
 		return false, err
 	}
-	if err = staged.stage.Cleanup(ctx); err != nil {
+	if err = cleanupPutStage(ctx, staged, cleanupStageRows); err != nil {
 		return false, err
 	}
 	return false, nil
 }
 
-func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, _ int, submitted types.ISubmodel) (bool, error) {
+func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, _ int, submitted types.ISubmodel, cleanupStageRows bool) (bool, error) {
 	readCtx, shouldEnforce, err := selectPutFormulaContext(ctx, true)
 	if err != nil {
 		return false, err
 	}
-	if err = s.authorizePutSubmodelStateTx(readCtx, tx, submitted.ID()); err != nil {
-		return false, mapPutReadbackError(err, shouldEnforce, true)
+	if shouldEnforce {
+		if err = s.authorizePutSubmodelStateTx(readCtx, tx, submitted.ID()); err != nil {
+			return false, mapPutReadbackError(err, true, true)
+		}
 	}
 	previousHistorySnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submitted.ID())
 	if err != nil {
@@ -514,7 +516,7 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 	if err = appendSubmittedSubmodelHistoryTx(ctx, tx, submitted, previousHistorySnapshot, history.ChangeUpdated); err != nil {
 		return false, err
 	}
-	if err = staged.stage.Cleanup(ctx); err != nil {
+	if err = cleanupPutStage(ctx, staged, cleanupStageRows); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -544,8 +546,10 @@ func (s *SubmodelDatabase) reconcileAndVerifyStagedSubmodelPutTx(
 		"inserted_elements", result.InsertedElements,
 		"deleted_elements", result.DeletedElements,
 	)
-	if err = s.authorizePutSubmodelStateTx(readCtx, tx, submodelID); err != nil {
-		return mapPutReadbackError(err, shouldEnforce, false)
+	if shouldEnforce {
+		if err = s.authorizePutSubmodelStateTx(readCtx, tx, submodelID); err != nil {
+			return mapPutReadbackError(err, true, false)
+		}
 	}
 	verificationStarted := time.Now()
 	if err = verifyStagedSubmodelStateTx(ctx, tx, submodelID, staged); err != nil {
@@ -553,6 +557,13 @@ func (s *SubmodelDatabase) reconcileAndVerifyStagedSubmodelPutTx(
 	}
 	slog.DebugContext(ctx, "Submodel PUT verification completed", "duration", time.Since(verificationStarted))
 	return nil
+}
+
+func cleanupPutStage(ctx context.Context, staged *stagedSubmodelTarget, cleanup bool) error {
+	if !cleanup {
+		return nil
+	}
+	return staged.stage.Cleanup(ctx)
 }
 
 func appendSubmittedSubmodelHistoryTx(

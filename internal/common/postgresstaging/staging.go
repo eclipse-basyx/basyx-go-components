@@ -65,7 +65,12 @@ type Writer struct {
 	stage     *Stage
 	dataset   string
 	batchSize int
-	rows      []Row
+	rows      []bufferedRow
+}
+
+type bufferedRow struct {
+	Dataset string `json:"dataset"`
+	Row
 }
 
 // Open prepares the session-local staging relation and allocates an operation ID.
@@ -76,10 +81,9 @@ func Open(ctx context.Context, tx *sql.Tx) (*Stage, error) {
 	if err := validateContext(ctx, "COMMON-STAGE-OPEN-NILCTX"); err != nil {
 		return nil, err
 	}
-	for _, statement := range stagingDDL() {
-		if _, err := tx.ExecContext(ctx, statement.Literal(), statement.Args()...); err != nil {
-			return nil, common.NewInternalServerError("COMMON-STAGE-OPEN-DDL " + err.Error())
-		}
+	statement := stagingDDL()
+	if _, err := tx.ExecContext(ctx, statement.Literal(), statement.Args()...); err != nil {
+		return nil, common.NewInternalServerError("COMMON-STAGE-OPEN-DDL " + err.Error())
 	}
 	stageID, err := newStageID()
 	if err != nil {
@@ -88,9 +92,10 @@ func Open(ctx context.Context, tx *sql.Tx) (*Stage, error) {
 	return &Stage{tx: tx, id: stageID}, nil
 }
 
-func stagingDDL() []exp.LiteralExpression {
-	return []exp.LiteralExpression{
-		goqu.L(`CREATE TEMPORARY TABLE IF NOT EXISTS basyx_mutation_stage (
+func stagingDDL() exp.LiteralExpression {
+	return goqu.L(`DO $basyx_stage$
+		BEGIN
+			CREATE TEMPORARY TABLE IF NOT EXISTS basyx_mutation_stage (
 			stage_id TEXT NOT NULL,
 			dataset TEXT NOT NULL,
 			match_key TEXT NOT NULL,
@@ -99,12 +104,13 @@ func stagingDDL() []exp.LiteralExpression {
 			ordinal BIGINT NOT NULL,
 			row_data JSONB NOT NULL,
 			PRIMARY KEY (stage_id, dataset, match_key)
-		) ON COMMIT DELETE ROWS`),
-		goqu.L(`CREATE INDEX IF NOT EXISTS ix_basyx_mutation_stage_parent
-			ON basyx_mutation_stage (stage_id, dataset, parent_key, ordinal)`),
-		goqu.L(`CREATE INDEX IF NOT EXISTS ix_basyx_mutation_stage_order
-			ON basyx_mutation_stage (stage_id, dataset, ordinal)`),
-	}
+			) ON COMMIT DELETE ROWS;
+			CREATE INDEX IF NOT EXISTS ix_basyx_mutation_stage_parent
+				ON basyx_mutation_stage (stage_id, dataset, parent_key, ordinal);
+			CREATE INDEX IF NOT EXISTS ix_basyx_mutation_stage_order
+				ON basyx_mutation_stage (stage_id, dataset, ordinal);
+		END
+	$basyx_stage$`)
 }
 
 func newStageID() (string, error) {
@@ -128,17 +134,33 @@ func (s *Stage) NewWriter(dataset string) (*Writer, error) {
 		stage:     s,
 		dataset:   dataset,
 		batchSize: defaultBatchSize,
-		rows:      make([]Row, 0, defaultBatchSize),
+		rows:      make([]bufferedRow, 0, defaultBatchSize),
 	}, nil
 }
 
 // Add validates and buffers one row, flushing when the configured batch is full.
 func (w *Writer) Add(ctx context.Context, row Row) error {
+	if w == nil {
+		return common.NewErrBadRequest("COMMON-STAGE-ADD-NILWRITER writer must not be nil")
+	}
+	return w.add(ctx, w.dataset, row)
+}
+
+// AddToDataset buffers a row for another dataset in the same database write batch.
+func (w *Writer) AddToDataset(ctx context.Context, dataset string, row Row) error {
+	return w.add(ctx, dataset, row)
+}
+
+func (w *Writer) add(ctx context.Context, dataset string, row Row) error {
 	if w == nil || w.stage == nil {
 		return common.NewErrBadRequest("COMMON-STAGE-ADD-NILWRITER writer must not be nil")
 	}
 	if err := validateContext(ctx, "COMMON-STAGE-ADD-NILCTX"); err != nil {
 		return err
+	}
+	dataset = strings.TrimSpace(dataset)
+	if dataset == "" {
+		return common.NewErrBadRequest("COMMON-STAGE-ADD-DATASET dataset must not be empty")
 	}
 	if strings.TrimSpace(row.MatchKey) == "" {
 		return common.NewErrBadRequest("COMMON-STAGE-ADD-KEY match key must not be empty")
@@ -146,7 +168,7 @@ func (w *Writer) Add(ctx context.Context, row Row) error {
 	if len(row.Data) == 0 || !json.Valid(row.Data) {
 		return common.NewErrBadRequest("COMMON-STAGE-ADD-DATA row data must contain valid JSON")
 	}
-	w.rows = append(w.rows, row)
+	w.rows = append(w.rows, bufferedRow{Dataset: dataset, Row: row})
 	if len(w.rows) < w.batchSize {
 		return nil
 	}
@@ -170,12 +192,12 @@ func (w *Writer) Flush(ctx context.Context) error {
 	}
 	dialect := goqu.Dialect(common.Dialect)
 	decoded := goqu.L(
-		"jsonb_to_recordset(?::jsonb) AS decoded(match_key text, parent_key text, row_type integer, ordinal bigint, row_data jsonb)",
+		"jsonb_to_recordset(?::jsonb) AS decoded(dataset text, match_key text, parent_key text, row_type integer, ordinal bigint, row_data jsonb)",
 		string(encoded),
 	)
 	source := dialect.From(decoded).Select(
 		goqu.L("?", w.stage.id),
-		goqu.L("?", w.dataset),
+		goqu.I("decoded.dataset"),
 		goqu.I("decoded.match_key"),
 		goqu.I("decoded.parent_key"),
 		goqu.I("decoded.row_type"),

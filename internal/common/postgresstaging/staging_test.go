@@ -165,6 +165,27 @@ func TestWriterFlushesInBoundedBatches(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestWriterFlushesMultipleDatasetsTogether(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	expectStageDDL(mock)
+	stage, err := Open(t.Context(), tx)
+	require.NoError(t, err)
+	writer, err := stage.NewWriter("metadata")
+	require.NoError(t, err)
+	require.NoError(t, writer.Add(t.Context(), Row{MatchKey: "model", Data: json.RawMessage(`{}`)}))
+	require.NoError(t, writer.AddToDataset(t.Context(), "elements", Row{MatchKey: "property", Data: json.RawMessage(`{}`)}))
+	mock.ExpectExec(`INSERT INTO "basyx_mutation_stage"`).WillReturnResult(sqlmock.NewResult(0, 2))
+	require.NoError(t, writer.Flush(t.Context()))
+	mock.ExpectRollback()
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestWriterPropagatesCancellationBeforeFlush(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -187,7 +208,5 @@ func TestWriterPropagatesCancellationBeforeFlush(t *testing.T) {
 }
 
 func expectStageDDL(mock sqlmock.Sqlmock) {
-	mock.ExpectExec("CREATE TEMPORARY TABLE").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("CREATE INDEX").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("CREATE INDEX").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("DO \\$basyx_stage\\$").WillReturnResult(sqlmock.NewResult(0, 0))
 }

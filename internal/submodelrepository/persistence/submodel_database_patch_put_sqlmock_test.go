@@ -220,16 +220,14 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnError(sql.ErrNoRows)
-	expectSubmodelPutStageLoad(mock, false)
+	expectSubmodelPutStageLoad(mock)
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(300))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	expectSubmodelPutReconciliation(mock, 0, 0, 0)
-	expectSubmodelMetadataStateLoad(mock, "sm-new", "smnew", "[]", "[]", "{}", "[]", "[]", "[]", "[]", "{}")
 	expectSubmodelPutVerification(mock)
 	expectSubmodelHistoryAppend(mock)
-	expectSubmodelPutStageCleanup(mock)
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-new", submodel)
@@ -253,18 +251,67 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
-	expectSubmodelMetadataStateLoad(mock, "sm-existing", "smexisting", nil, nil, nil, nil, nil, nil, nil, nil)
-	expectSubmodelPutStageLoad(mock, false)
+	expectSubmodelPutStageLoad(mock)
 	expectSubmodelPutReconciliation(mock, 0, 0, 0)
-	expectSubmodelMetadataStateLoad(mock, "sm-existing", "smexisting", nil, nil, nil, nil, nil, nil, nil, nil)
 	expectSubmodelPutVerification(mock)
 	expectSubmodelHistoryAppend(mock)
-	expectSubmodelPutStageCleanup(mock)
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
 	require.NoError(t, err)
 	require.True(t, isUpdate)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPutSubmodelInTransactionCleansStageRows(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-existing")
+	idShort := "smexisting"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
+	expectSubmodelPutStageLoad(mock)
+	expectSubmodelPutReconciliation(mock, 0, 0, 0)
+	expectSubmodelPutVerification(mock)
+	expectSubmodelHistoryAppend(mock)
+	expectSubmodelPutStageCleanup(mock)
+
+	isUpdate, err := sut.PutSubmodelInTransaction(contextWithABACDisabled(t), tx, "sm-existing", submodel)
+	require.NoError(t, err)
+	require.True(t, isUpdate)
+	mock.ExpectRollback()
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPutSubmodelVerificationRejectsMissingRoot(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-existing")
+	idShort := "smexisting"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
+	expectSubmodelPutStageLoad(mock)
+	expectSubmodelPutReconciliation(mock, 0, 0, 0)
+	expectSubmodelPutVerificationResult(mock, true)
+	mock.ExpectRollback()
+
+	_, err = sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
+	require.ErrorContains(t, err, "SMREPO-PUTSM-READBACKMISMATCH")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -301,7 +348,7 @@ func TestPutSubmodelPostUpdateFormulaDenialRollsBack(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	expectSubmodelMetadataStateLoad(mock, "sm-existing", idShort, nil, nil, nil, nil, nil, nil, nil, nil)
-	expectSubmodelPutStageLoad(mock, false)
+	expectSubmodelPutStageLoad(mock)
 	expectSubmodelPutReconciliation(mock, 0, 0, 0)
 	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
 		WillReturnRows(sqlmock.NewRows(submodelStateColumns()))
@@ -467,14 +514,9 @@ func expectCurrentSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID string, 
 	expectSubmodelHistoryAppend(mock)
 }
 
-func expectSubmodelPutStageLoad(mock sqlmock.Sqlmock, hasElements bool) {
-	mock.ExpectExec(`CREATE TEMPORARY TABLE`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE INDEX`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE INDEX`).WillReturnResult(sqlmock.NewResult(0, 0))
+func expectSubmodelPutStageLoad(mock sqlmock.Sqlmock) {
+	mock.ExpectExec(`DO \$basyx_stage\$`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`INSERT INTO "basyx_mutation_stage"`).WillReturnResult(sqlmock.NewResult(0, 1))
-	if hasElements {
-		mock.ExpectExec(`INSERT INTO "basyx_mutation_stage"`).WillReturnResult(sqlmock.NewResult(0, 1))
-	}
 }
 
 func expectSubmodelPutReconciliation(mock sqlmock.Sqlmock, updated int, inserted int, deleted int) {
@@ -485,8 +527,12 @@ func expectSubmodelPutReconciliation(mock sqlmock.Sqlmock, updated int, inserted
 }
 
 func expectSubmodelPutVerification(mock sqlmock.Sqlmock) {
+	expectSubmodelPutVerificationResult(mock, false)
+}
+
+func expectSubmodelPutVerificationResult(mock sqlmock.Sqlmock, missingSubmodel bool) {
 	mock.ExpectQuery(`WITH target_submodel`).
-		WillReturnRows(sqlmock.NewRows([]string{"metadata_diff", "missing_target", "extra_current", "changed_current"}).AddRow(false, false, false, false))
+		WillReturnRows(sqlmock.NewRows([]string{"missing_submodel", "metadata_diff", "missing_target", "extra_current", "changed_current"}).AddRow(missingSubmodel, false, false, false, false))
 }
 
 func expectSubmodelPutStageCleanup(mock sqlmock.Sqlmock) {
