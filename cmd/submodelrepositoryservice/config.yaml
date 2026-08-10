@@ -22,9 +22,9 @@ postgres:
   host: localhost
   port: 5432
   user: postgres
-  password: snoopy2002
+  password: postgres
   # dbname: basyxGoBenchmarkTest
-  dbname: putTest
+  dbname: basyx
   # sslmode: disable
   # sslcert: ""
   # sslkey: ""
