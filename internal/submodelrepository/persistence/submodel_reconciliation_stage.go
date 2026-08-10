@@ -37,8 +37,9 @@ import (
 )
 
 const (
-	submodelMetadataStageDataset = "submodel_metadata"
-	submodelElementStageDataset  = "submodel_elements"
+	submodelMetadataStageDataset         = "submodel_metadata"
+	submodelElementStageDataset          = "submodel_elements"
+	submodelClassifiedUpdateStageDataset = "submodel_classified_updates"
 )
 
 type stagedSubmodelTarget struct {

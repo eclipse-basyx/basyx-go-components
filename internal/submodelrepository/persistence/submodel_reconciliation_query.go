@@ -980,6 +980,27 @@ func stringInterfaces(values []string) []interface{} {
 	return result
 }
 
+func disableReconciliationJITTx(ctx context.Context, tx *sql.Tx) error {
+	if tx == nil {
+		return common.NewInternalServerError("SMREPO-RECONJIT-NILTX transaction must not be nil")
+	}
+	query, args, err := buildDisableReconciliationJITQuery()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-RECONJIT-BUILD " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-RECONJIT-EXEC " + err.Error())
+	}
+	return nil
+}
+
+func buildDisableReconciliationJITQuery() (string, []any, error) {
+	return goqu.Dialect(common.Dialect).
+		Select(goqu.Func("set_config", goqu.V("jit"), goqu.V("off"), goqu.V(true))).
+		Prepared(true).
+		ToSQL()
+}
+
 func executeSubmodelReconciliationStatement(
 	ctx context.Context,
 	tx *sql.Tx,

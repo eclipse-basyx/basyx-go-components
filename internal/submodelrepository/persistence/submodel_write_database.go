@@ -530,6 +530,14 @@ func (s *SubmodelDatabase) reconcileAndVerifyStagedSubmodelPutTx(
 	staged *stagedSubmodelTarget,
 	shouldEnforce bool,
 ) error {
+	if err := disableReconciliationJITTx(ctx, tx); err != nil {
+		return err
+	}
+	classificationStarted := time.Now()
+	if err := materializeClassifiedSubmodelUpdatesTx(ctx, submodelID, staged); err != nil {
+		return err
+	}
+	slog.DebugContext(ctx, "Submodel PUT classification completed", "duration", time.Since(classificationStarted))
 	if err := releaseConflictingSubmodelElementConstraintsTx(ctx, tx, submodelID, staged); err != nil {
 		return err
 	}

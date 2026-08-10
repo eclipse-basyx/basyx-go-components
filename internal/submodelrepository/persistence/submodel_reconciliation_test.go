@@ -76,6 +76,20 @@ func BenchmarkBuildSubmodelReconciliationQuery(b *testing.B) {
 	}
 }
 
+func TestSubmodelReconciliationUsesMaterializedClassification(t *testing.T) {
+	query, args, err := newReconciliationQueryBuilder().build(&postgresstaging.Stage{}, "sm")
+	require.NoError(t, err)
+	require.Contains(t, args, submodelClassifiedUpdateStageDataset)
+	require.NotContains(t, query, `"current_property_element"`)
+}
+
+func TestSubmodelReconciliationDisablesJITForTransaction(t *testing.T) {
+	query, args, err := buildDisableReconciliationJITQuery()
+	require.NoError(t, err)
+	require.Equal(t, `SELECT set_config($1, $2, $3)`, query)
+	require.Equal(t, []any{"jit", "off", true}, args)
+}
+
 func TestStreamReconciliationRowsIncludesNestedElements(t *testing.T) {
 	submodel := readReconciliationJSON(t, `{
 		"id":"sm",

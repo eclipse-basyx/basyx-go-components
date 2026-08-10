@@ -46,7 +46,8 @@ func (b *reconciliationQueryBuilder) addStagedReconciliationInputs(stage *postgr
 	b.addRecursive("insert_tree", stagedInsertTree(b.dialect))
 	b.add("staged_insert_rows", stagedInsertRows(b.dialect))
 	b.add("retained_target_rows", retainedStagedRows(b.dialect))
-	b.add("classified_update_rows", classifiedStagedUpdateRows(b.dialect))
+	b.add("classified_update_rows", stage.Dataset(b.dialect, submodelClassifiedUpdateStageDataset).
+		Select(goqu.I("row_data").As("row")))
 	b.add("raw_update_rows", changedStagedRows(b.dialect))
 	b.add("raw_insert_rows", b.dialect.From("staged_insert_rows").Select("row"))
 	b.add("delete_candidates", stagedDeleteCandidates(b.dialect))
@@ -192,9 +193,36 @@ func classifiedStagedUpdateRows(dialect goqu.DialectWrapper) *goqu.SelectDataset
 		Join(goqu.T("submodel_element").As("sme"), goqu.On(goqu.I("sme.id").Eq(goqu.I("target.id")))).
 		LeftJoin(goqu.T("submodel_element_payload").As("payload"), goqu.On(goqu.I("payload.submodel_element_id").Eq(goqu.I("sme.id")))).
 		Select(
-			goqu.I("target.id"),
-			goqu.Func("jsonb_set", goqu.I("target.row_data"), goqu.L("'{changes}'::text[]"), changes, true).As("row"),
+			goqu.I("target.match_key"),
+			goqu.I("target.parent_key"),
+			goqu.I("target.row_type"),
+			goqu.I("target.ordinal"),
+			goqu.Func("jsonb_set", goqu.I("target.row_data"), goqu.L("'{changes}'::text[]"), changes, true).As("row_data"),
 		)
+}
+
+func materializeClassifiedSubmodelUpdatesTx(
+	ctx context.Context,
+	submodelID string,
+	staged *stagedSubmodelTarget,
+) error {
+	if staged == nil || staged.stage == nil {
+		return common.NewInternalServerError("SMREPO-CLASSIFY-NILSTAGE staged target must not be nil")
+	}
+	dialect := goqu.Dialect(common.Dialect)
+	source := classifiedStagedUpdateRows(dialect).
+		With("target_submodel", dialect.From("submodel").
+			Select("id").
+			Where(goqu.C("submodel_identifier").Eq(submodelID))).
+		With("target_element_rows", staged.stage.Dataset(dialect, submodelElementStageDataset)).
+		With("direct_insert_candidates", directInsertCandidates(dialect)).
+		With("insert_roots", stagedInsertRoots(dialect)).
+		WithRecursive("insert_tree", stagedInsertTree(dialect)).
+		With("retained_target_rows", retainedStagedRows(dialect))
+	if err := staged.stage.Materialize(ctx, submodelClassifiedUpdateStageDataset, source); err != nil {
+		return common.NewInternalServerError("SMREPO-CLASSIFY-MATERIALIZE " + err.Error())
+	}
+	return nil
 }
 
 func stagedElementChanges(dialect goqu.DialectWrapper) exp.Expression {

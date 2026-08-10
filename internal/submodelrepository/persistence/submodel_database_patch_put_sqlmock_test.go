@@ -520,6 +520,8 @@ func expectSubmodelPutStageLoad(mock sqlmock.Sqlmock) {
 }
 
 func expectSubmodelPutReconciliation(mock sqlmock.Sqlmock, updated int, inserted int, deleted int) {
+	mock.ExpectExec(`SELECT set_config`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO "basyx_mutation_stage"`).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`UPDATE "submodel_element" AS "live" SET "parent_sme_id"=CASE`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`WITH RECURSIVE`).

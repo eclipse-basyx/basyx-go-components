@@ -186,6 +186,29 @@ func TestWriterFlushesMultipleDatasetsTogether(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStageMaterializesQueryAsScopedDataset(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	expectStageDDL(mock)
+	stage, err := Open(t.Context(), tx)
+	require.NoError(t, err)
+
+	source := goqu.Dialect(common.Dialect).From("source_rows").Select(
+		"match_key", "parent_key", "row_type", "ordinal", "row_data",
+	)
+	mock.ExpectExec(`INSERT INTO "basyx_mutation_stage"`).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	require.NoError(t, stage.Materialize(t.Context(), "classified", source))
+
+	mock.ExpectRollback()
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestWriterPropagatesCancellationBeforeFlush(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

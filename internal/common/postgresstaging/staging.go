@@ -229,6 +229,50 @@ func (s *Stage) Dataset(dialect goqu.DialectWrapper, dataset string) *goqu.Selec
 		Where(goqu.Ex{"stage_id": s.id, "dataset": dataset})
 }
 
+// Materialize stores a query result as another dataset in this operation.
+// The source must project match_key, parent_key, row_type, ordinal, and row_data.
+func (s *Stage) Materialize(ctx context.Context, dataset string, source *goqu.SelectDataset) error {
+	if s == nil || s.tx == nil {
+		return common.NewErrBadRequest("COMMON-STAGE-MATERIALIZE-NILSTAGE stage must not be nil")
+	}
+	if err := validateContext(ctx, "COMMON-STAGE-MATERIALIZE-NILCTX"); err != nil {
+		return err
+	}
+	dataset = strings.TrimSpace(dataset)
+	if dataset == "" {
+		return common.NewErrBadRequest("COMMON-STAGE-MATERIALIZE-DATASET dataset must not be empty")
+	}
+	if source == nil {
+		return common.NewErrBadRequest("COMMON-STAGE-MATERIALIZE-NILSOURCE source query must not be nil")
+	}
+
+	dialect := goqu.Dialect(common.Dialect)
+	rows := dialect.From(source.As("source")).Select(
+		goqu.V(s.id),
+		goqu.V(dataset),
+		goqu.I("source.match_key"),
+		goqu.I("source.parent_key"),
+		goqu.I("source.row_type"),
+		goqu.I("source.ordinal"),
+		goqu.I("source.row_data"),
+	)
+	query, args, err := dialect.Insert(tableName).
+		Cols("stage_id", "dataset", "match_key", "parent_key", "row_type", "ordinal", "row_data").
+		FromQuery(rows).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("COMMON-STAGE-MATERIALIZE-BUILD " + err.Error())
+	}
+	if _, err = s.tx.ExecContext(ctx, query, args...); err != nil {
+		if common.IsPostgresUniqueViolation(err) {
+			return common.NewErrBadRequest("COMMON-STAGE-MATERIALIZE-DUPLICATE duplicate match key in materialized dataset")
+		}
+		return common.NewInternalServerError("COMMON-STAGE-MATERIALIZE-EXEC " + err.Error())
+	}
+	return nil
+}
+
 // Cleanup removes only this operation's rows. ON COMMIT DELETE ROWS remains the
 // final safety net for errors and caller-owned transaction lifetimes.
 func (s *Stage) Cleanup(ctx context.Context) error {
