@@ -74,6 +74,11 @@ func TestStreamReconciliationRowsIncludesNestedElements(t *testing.T) {
 	require.Equal(t, "C.L", rows[2].ParentPath)
 	require.Equal(t, "C", rows[2].RootPath)
 	require.Equal(t, 2, rows[2].Depth)
+	require.NotNil(t, rows[0].LanguageValues)
+	require.NotNil(t, rows[2].LanguageValues)
+	serializedRow, err := json.Marshal(rows[2])
+	require.NoError(t, err)
+	require.Contains(t, string(serializedRow), `"languageValues":[]`)
 }
 
 func TestStagedElementComparisonUsesTypedPostgreSQLEquality(t *testing.T) {
@@ -143,6 +148,20 @@ func TestStagedJSONConstantsDoNotCreateUntypedBindParameters(t *testing.T) {
 			require.Contains(t, query, "jsonb_build_object")
 		})
 	}
+}
+
+func TestMissingSemanticReferenceIsComparedAsJSONNull(t *testing.T) {
+	query, args, err := goqu.Dialect(common.Dialect).Select(
+		currentSemanticReferenceJSON(
+			goqu.Dialect(common.Dialect),
+			submodelSemanticReferenceTables(),
+			goqu.I("target.id"),
+		),
+	).Prepared(true).ToSQL()
+	require.NoError(t, err)
+	require.Empty(t, args)
+	require.Contains(t, query, "COALESCE")
+	require.Contains(t, query, "'null'::jsonb")
 }
 
 func TestContextWithoutFragmentFiltersPreservesUpdateFormula(t *testing.T) {

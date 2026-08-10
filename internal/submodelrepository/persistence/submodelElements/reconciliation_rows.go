@@ -480,9 +480,9 @@ func reconciliationValueRows(element types.ISubmodelElement) ([]ReconciliationLa
 		return values, serialized, err
 	case *types.Property:
 		serialized, err := reconciliationValueID(typed.ValueID())
-		return nil, serialized, err
+		return []ReconciliationLanguageValue{}, serialized, err
 	default:
-		return nil, valueID, nil
+		return []ReconciliationLanguageValue{}, valueID, nil
 	}
 }
 

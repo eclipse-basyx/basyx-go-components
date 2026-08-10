@@ -334,7 +334,7 @@ func currentSemanticReferenceJSON(dialect goqu.DialectWrapper, tables reconcilia
 		LeftJoin(goqu.T(tables.payload).As("payload"), goqu.On(goqu.I("payload.reference_id").Eq(goqu.I("reference.id")))).
 		Select(reference).
 		Where(goqu.I("reference." + tables.owner).Eq(owner))
-	return goqu.L("(?)", query)
+	return goqu.Func("COALESCE", goqu.L("(?)", query), goqu.L("'null'::jsonb"))
 }
 
 func currentSupplementalReferencesJSON(dialect goqu.DialectWrapper, tables reconciliationReferenceTables, owner exp.Expression) exp.Expression {
