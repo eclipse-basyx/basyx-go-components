@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -155,22 +156,38 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelCreateDoesNotExist(ctx context.C
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel types.ISubmodel) error {
+	submodelDBID, err := s.createSubmodelMetadataInTransaction(tx, submodel)
+	if err != nil {
+		return err
+	}
+	if len(submodel.SubmodelElements()) == 0 {
+		return nil
+	}
+	submodelDatabaseID, err := submodelDatabaseIDAsInt(submodelDBID)
+	if err != nil {
+		return err
+	}
+	_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseID(s.db, submodelDatabaseID, submodel.SubmodelElements(), tx, nil)
+	return err
+}
+
+func (s *SubmodelDatabase) createSubmodelMetadataInTransaction(tx *sql.Tx, submodel types.ISubmodel) (int64, error) {
 	ids, args, err := submodelqueries.BuildInsertSubmodelSQL(submodel)
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-INSERTSQL " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-INSERTSQL " + err.Error())
 	}
 
 	var submodelDBID int64
 	if err := tx.QueryRow(ids, args...).Scan(&submodelDBID); err != nil {
 		if mappedErr := mapCreateSubmodelInsertError(err); mappedErr != nil {
-			return mappedErr
+			return 0, mappedErr
 		}
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSQL " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSQL " + err.Error())
 	}
 
 	jsonizedPayload, err := jsonizeSubmodelPayload(submodel)
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-JSON " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-JSON " + err.Error())
 	}
 
 	ids, args, err = submodelqueries.BuildInsertSubmodelPayloadSQL(
@@ -184,11 +201,11 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 		jsonizedPayload.qualifiers,
 	)
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-PAYLOADSQL " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-PAYLOADSQL " + err.Error())
 	}
 
 	if _, err := tx.Exec(ids, args...); err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECPAYLOADSQL " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECPAYLOADSQL " + err.Error())
 	}
 
 	if err := common.CreateContextReferences1ToMany(
@@ -198,54 +215,41 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 		common.TblSubmodelSuppSemantic,
 		common.ColSubmodelID,
 	); err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SUPPSEM " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-SUPPSEM " + err.Error())
 	}
 
 	semanticID := submodel.SemanticID()
 	if semanticID != nil {
 		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferenceSQL(submodelDBID, semanticID)
 		if err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDREFSQL " + err.Error())
+			return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDREFSQL " + err.Error())
 		}
 
 		if _, err := tx.Exec(ids, args...); err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDREFSQL " + err.Error())
+			return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDREFSQL " + err.Error())
 		}
 
 		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferenceKeysSQL(submodelDBID, semanticID)
 		if err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDKEYSQL " + err.Error())
+			return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDKEYSQL " + err.Error())
 		}
 
 		if ids != "" {
 			if _, err := tx.Exec(ids, args...); err != nil {
-				return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDKEYSQL " + err.Error())
+				return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDKEYSQL " + err.Error())
 			}
 		}
 
 		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferencePayloadSQL(submodelDBID, semanticID)
 		if err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDPAYLOADSQL " + err.Error())
+			return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDPAYLOADSQL " + err.Error())
 		}
 
 		if _, err := tx.Exec(ids, args...); err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDPAYLOADSQL " + err.Error())
+			return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDPAYLOADSQL " + err.Error())
 		}
 	}
-
-	if len(submodel.SubmodelElements()) > 0 {
-		submodelDatabaseID, conversionErr := submodelDatabaseIDAsInt(submodelDBID)
-		if conversionErr != nil {
-			return conversionErr
-		}
-
-		_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseID(s.db, submodelDatabaseID, submodel.SubmodelElements(), tx, nil)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return submodelDBID, nil
 }
 
 func submodelDatabaseIDAsInt(submodelDBID int64) (int, error) {
@@ -465,86 +469,107 @@ func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.T
 	if err != nil {
 		return false, err
 	}
-	if err = s.createSubmodelInTransaction(tx, submodel); err != nil {
+	stageStarted := time.Now()
+	staged, err := s.stageSubmodelTargetTx(ctx, tx, submodel)
+	if err != nil {
 		return false, err
 	}
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodel.ID())
-	if err != nil {
-		return false, common.NewInternalServerError("SMREPO-PUTSM-RESOLVECREATED " + err.Error())
+	slog.DebugContext(ctx, "Submodel PUT staging completed", "duration", time.Since(stageStarted), "staged_elements", staged.elementCount)
+	if _, err = s.createSubmodelMetadataInTransaction(tx, submodel); err != nil {
+		return false, err
 	}
-	persisted, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submodel.ID())
-	if err != nil {
-		return false, mapPutReadbackError(err, shouldEnforce, false)
+	if err = s.reconcileAndVerifyStagedSubmodelPutTx(ctx, readCtx, tx, submodel.ID(), staged, shouldEnforce); err != nil {
+		return false, err
 	}
-	if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, nil, history.ChangeCreated, false); err != nil {
+	if err = appendSubmittedSubmodelHistoryTx(ctx, tx, submodel, nil, history.ChangeCreated); err != nil {
+		return false, err
+	}
+	if err = staged.stage.Cleanup(ctx); err != nil {
 		return false, err
 	}
 	return false, nil
 }
 
-func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submitted types.ISubmodel) (bool, error) {
+func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, _ int, submitted types.ISubmodel) (bool, error) {
 	readCtx, shouldEnforce, err := selectPutFormulaContext(ctx, true)
 	if err != nil {
 		return false, err
 	}
-	previous, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
-	if err != nil {
+	if err = s.authorizePutSubmodelStateTx(readCtx, tx, submitted.ID()); err != nil {
 		return false, mapPutReadbackError(err, shouldEnforce, true)
 	}
-	previousHistorySnapshot, err := submodelToHistorySnapshot(previous)
+	previousHistorySnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submitted.ID())
 	if err != nil {
 		return false, err
 	}
-	previousSnapshot, err := submodelToReconciliationSnapshot(previous)
+	stageStarted := time.Now()
+	staged, err := s.stageSubmodelTargetTx(ctx, tx, submitted)
 	if err != nil {
 		return false, err
 	}
-	submittedSnapshot, err := submodelToReconciliationSnapshot(submitted)
-	if err != nil {
+	slog.DebugContext(ctx, "Submodel PUT staging completed", "duration", time.Since(stageStarted), "staged_elements", staged.elementCount)
+	if err = s.reconcileAndVerifyStagedSubmodelPutTx(ctx, readCtx, tx, submitted.ID(), staged, shouldEnforce); err != nil {
 		return false, err
 	}
-	diff, err := history.BuildJSONPatch(previousSnapshot, submittedSnapshot)
-	if err != nil {
+	if err = appendSubmittedSubmodelHistoryTx(ctx, tx, submitted, previousHistorySnapshot, history.ChangeUpdated); err != nil {
 		return false, err
 	}
-	if len(diff) > 0 {
-		if err = s.executeSubmodelReconciliationTx(ctx, tx, previous, submitted, previousSnapshot, submittedSnapshot); err != nil {
-			return false, err
-		}
-	}
-	persisted, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
-	if err != nil {
-		return false, mapPutReadbackError(err, shouldEnforce, false)
-	}
-	if err = verifyPutReadback(submitted, persisted); err != nil {
-		return false, err
-	}
-	if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, previousHistorySnapshot, history.ChangeUpdated, false); err != nil {
+	if err = staged.stage.Cleanup(ctx); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func (s *SubmodelDatabase) executeSubmodelReconciliationTx(
+func (s *SubmodelDatabase) reconcileAndVerifyStagedSubmodelPutTx(
 	ctx context.Context,
+	readCtx context.Context,
 	tx *sql.Tx,
-	previous types.ISubmodel,
-	submitted types.ISubmodel,
-	previousSnapshot map[string]any,
-	submittedSnapshot map[string]any,
+	submodelID string,
+	staged *stagedSubmodelTarget,
+	shouldEnforce bool,
 ) error {
-	plan, err := s.buildSubmodelReconciliationPlan(previous, submitted, previousSnapshot, submittedSnapshot)
+	if err := deferSubmodelElementReconciliationConstraints(ctx, tx); err != nil {
+		return err
+	}
+	reconciliationStarted := time.Now()
+	result, err := executeSubmodelReconciliationStatement(ctx, tx, submodelID, staged)
 	if err != nil {
 		return err
 	}
-	if !plan.hasLiveMutation() {
-		return nil
+	slog.DebugContext(
+		ctx,
+		"Submodel PUT comparison and reconciliation completed",
+		"duration", time.Since(reconciliationStarted),
+		"updated_elements", result.UpdatedElements,
+		"inserted_elements", result.InsertedElements,
+		"deleted_elements", result.DeletedElements,
+	)
+	if err = s.authorizePutSubmodelStateTx(readCtx, tx, submodelID); err != nil {
+		return mapPutReadbackError(err, shouldEnforce, false)
 	}
-	if err = deferSubmodelElementReconciliationConstraints(ctx, tx); err != nil {
+	verificationStarted := time.Now()
+	if err = verifyStagedSubmodelStateTx(ctx, tx, submodelID, staged); err != nil {
 		return err
 	}
-	_, err = executeSubmodelReconciliationStatement(ctx, tx, submitted.ID(), plan)
-	return err
+	slog.DebugContext(ctx, "Submodel PUT verification completed", "duration", time.Since(verificationStarted))
+	return nil
+}
+
+func appendSubmittedSubmodelHistoryTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodel types.ISubmodel,
+	previousSnapshot map[string]any,
+	changeType string,
+) error {
+	if !history.MutationRecordingEnabled() {
+		return nil
+	}
+	snapshot, err := submodelToHistorySnapshot(submodel)
+	if err != nil {
+		return err
+	}
+	return history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodel.ID(), changeType, previousSnapshot, snapshot, false)
 }
 
 func selectPutFormulaContext(ctx context.Context, exists bool) (context.Context, bool, error) {
@@ -558,23 +583,13 @@ func selectPutFormulaContext(ctx context.Context, exists bool) (context.Context,
 	return auth.SelectPutFormulaByExistence(ctx, exists), true, nil
 }
 
-func (s *SubmodelDatabase) readPutSubmodelStateTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submodelID string) (types.ISubmodel, error) {
+func (s *SubmodelDatabase) authorizePutSubmodelStateTx(ctx context.Context, tx *sql.Tx, submodelID string) error {
 	metadataCtx, err := contextWithoutFragmentFilters(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	submodel, err := s.getSubmodelMetadataByIDInTransaction(metadataCtx, tx, submodelID)
-	if err != nil {
-		return nil, err
-	}
-	elements, err := submodelelements.GetSubmodelElementsByDatabaseIDTxInPersistenceOrder(
-		auth.ContextWithoutQueryFilter(ctx), tx, submodelDatabaseID, true,
-	)
-	if err != nil {
-		return nil, err
-	}
-	submodel.SetSubmodelElements(elements)
-	return submodel, nil
+	_, err = s.getSubmodelMetadataByIDInTransaction(metadataCtx, tx, submodelID)
+	return err
 }
 
 func contextWithoutFragmentFilters(ctx context.Context) (context.Context, error) {
@@ -602,76 +617,6 @@ func mapPutReadbackError(err error, shouldEnforce bool, existingState bool) erro
 		return common.NewErrDenied("SMREPO-PUTSM-ABACDENIED " + state + " submodel is not accessible under ABAC constraints")
 	}
 	return common.NewInternalServerError("SMREPO-PUTSM-READBACKMISSING written submodel not found inside transaction")
-}
-
-func verifyPutReadback(submitted types.ISubmodel, persisted types.ISubmodel) error {
-	submittedSnapshot, err := submodelToReconciliationSnapshot(submitted)
-	if err != nil {
-		return err
-	}
-	persistedSnapshot, err := submodelToReconciliationSnapshot(persisted)
-	if err != nil {
-		return err
-	}
-	diff, err := history.BuildJSONPatch(submittedSnapshot, persistedSnapshot)
-	if err != nil {
-		return err
-	}
-	if len(diff) != 0 {
-		return common.NewInternalServerError("SMREPO-PUTSM-READBACKMISMATCH persisted Submodel does not match submitted replacement")
-	}
-	return nil
-}
-
-func submodelToReconciliationSnapshot(submodel types.ISubmodel) (map[string]any, error) {
-	snapshot, err := submodelToHistorySnapshot(submodel)
-	if err != nil {
-		return nil, err
-	}
-	pruneEmptyJSONArrays(snapshot)
-	normalizeReconciliationDateTimes(snapshot)
-	return snapshot, nil
-}
-
-func normalizeReconciliationDateTimes(value any) {
-	switch typed := value.(type) {
-	case map[string]any:
-		for _, child := range typed {
-			normalizeReconciliationDateTimes(child)
-		}
-		if typed["modelType"] != "Property" || typed["valueType"] != "xs:dateTime" {
-			return
-		}
-		dateTime, ok := typed["value"].(string)
-		if !ok {
-			return
-		}
-		parsed, err := common.ParseISO8601DateTime(dateTime)
-		if err == nil {
-			typed["value"] = parsed.UTC().Round(time.Microsecond).Format(time.RFC3339Nano)
-		}
-	case []any:
-		for _, child := range typed {
-			normalizeReconciliationDateTimes(child)
-		}
-	}
-}
-
-func pruneEmptyJSONArrays(value any) {
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, child := range typed {
-			if array, ok := child.([]any); ok && len(array) == 0 {
-				delete(typed, key)
-				continue
-			}
-			pruneEmptyJSONArrays(child)
-		}
-	case []any:
-		for _, child := range typed {
-			pruneEmptyJSONArrays(child)
-		}
-	}
 }
 
 // DeleteSubmodel deletes a submodel and checks ABAC access on the existing submodel before delete when ABAC is enabled.

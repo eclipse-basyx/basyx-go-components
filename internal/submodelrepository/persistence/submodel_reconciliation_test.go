@@ -28,149 +28,72 @@ package persistence
 
 import (
 	"encoding/json"
-	"os"
-	"regexp"
-	"strconv"
-	"strings"
 	"testing"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSubmodelReconciliationQueryHasConstantSingleStatementShape(t *testing.T) {
-	oldSubmodel := readReconciliationFixture(t, "../integration_tests/bodies/post/postSubmodel.json")
-	newSubmodel := readReconciliationFixture(t, "../integration_tests/bodies/put/putSubmodelUpdate.json")
-	oldSnapshot, err := submodelToHistorySnapshot(oldSubmodel)
+func TestStreamReconciliationRowsIncludesNestedElements(t *testing.T) {
+	submodel := readReconciliationJSON(t, `{
+		"id":"sm",
+		"modelType":"Submodel",
+		"submodelElements":[{
+			"idShort":"C",
+			"modelType":"SubmodelElementCollection",
+			"value":[{
+				"idShort":"L",
+				"modelType":"SubmodelElementList",
+				"typeValueListElement":"Property",
+				"value":[{"modelType":"Property","valueType":"xs:string","value":"nested"}]
+			}]
+		}]
+	}`)
+	rows := make([]submodelelements.ReconciliationElementRow, 0, 3)
+	err := submodelelements.StreamReconciliationElementRows(
+		t.Context(),
+		nil,
+		submodel.SubmodelElements(),
+		func(row submodelelements.ReconciliationElementRow) error {
+			rows = append(rows, row)
+			return nil
+		},
+	)
 	require.NoError(t, err)
-	newSnapshot, err := submodelToHistorySnapshot(newSubmodel)
-	require.NoError(t, err)
-
-	sut := &SubmodelDatabase{}
-	plan, err := sut.buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, oldSnapshot, newSnapshot)
-	require.NoError(t, err)
-	require.True(t, plan.hasLiveMutation())
-
-	planJSON, err := plan.marshal()
-	require.NoError(t, err)
-	query, args, err := newReconciliationQueryBuilder().build(planJSON, newSubmodel.ID())
-	require.NoError(t, err)
-	require.NotContains(t, strings.TrimSuffix(query, ";"), ";")
-	require.Contains(t, query, "WITH reconciliation_plan")
-	require.Contains(t, query, "jsonb_to_recordset")
-	require.Contains(t, query, "updated_element_rows AS (UPDATE")
-	require.Contains(t, query, "inserted_element_rows AS (INSERT")
-	require.Contains(t, query, "deleted_element_rows AS (DELETE")
-	require.Len(t, args, 2)
+	require.Len(t, rows, 3)
+	require.Equal(t, "C", rows[0].Path)
+	require.Equal(t, "C.L", rows[1].Path)
+	require.Equal(t, "C.L[0]", rows[2].Path)
+	require.Equal(t, "C.L", rows[2].ParentPath)
+	require.Equal(t, "C", rows[2].RootPath)
+	require.Equal(t, 2, rows[2].Depth)
 }
 
-func TestExecuteSubmodelReconciliationUsesOneQueryRowStatement(t *testing.T) {
-	db, mock, err := sqlmock.New()
+func TestStagedElementComparisonUsesTypedPostgreSQLEquality(t *testing.T) {
+	query, _, err := classifiedStagedUpdateRows(goqu.Dialect(common.Dialect)).ToSQL()
 	require.NoError(t, err)
-	defer func() { _ = db.Close() }()
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	require.NoError(t, err)
-	plan := submodelReconciliationPlan{
-		Updates: []submodelelements.ReconciliationElementRow{{Path: "Property"}},
-	}
-	mock.ExpectQuery(regexp.QuoteMeta("WITH reconciliation_plan")).
-		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(1, 0, 0))
-
-	result, err := executeSubmodelReconciliationStatement(t.Context(), tx, "sm", plan)
-	require.NoError(t, err)
-	require.Equal(t, 1, result.UpdatedElements)
-	mock.ExpectRollback()
-	require.NoError(t, tx.Rollback())
-	require.NoError(t, mock.ExpectationsWereMet())
+	require.Contains(t, query, "IS NOT DISTINCT FROM")
+	require.Contains(t, query, "::timestamptz")
+	require.Contains(t, query, "::time")
+	require.Contains(t, query, "::date")
+	require.Contains(t, query, "::numeric")
+	require.Contains(t, query, "::boolean")
+	require.Contains(t, query, "::interval")
+	require.NotContains(t, query, "BuildJSONPatch")
 }
 
-func TestReconciliationPlanMatchesNamedChildrenAndListsPositionally(t *testing.T) {
-	oldNamed := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"A","modelType":"Property","valueType":"xs:string","value":"a"},{"idShort":"B","modelType":"Property","valueType":"xs:string","value":"b"}]}`)
-	newNamed := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"B","modelType":"Property","valueType":"xs:string","value":"b"},{"idShort":"A","modelType":"Property","valueType":"xs:string","value":"a"}]}`)
-	plan := buildReconciliationPlanForTest(t, oldNamed, newNamed)
-	require.Len(t, plan.Updates, 2)
-	require.Empty(t, plan.Inserts)
-	require.Empty(t, plan.Deletes)
-	for _, row := range plan.Updates {
-		require.True(t, row.Changes.Core)
-		require.False(t, row.Changes.TypeData)
-	}
-
-	oldList := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"L","modelType":"SubmodelElementList","typeValueListElement":"Property","value":[{"modelType":"Property","valueType":"xs:string","value":"a"},{"modelType":"Property","valueType":"xs:string","value":"b"}]}]}`)
-	newList := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"L","modelType":"SubmodelElementList","typeValueListElement":"Property","value":[{"modelType":"Property","valueType":"xs:string","value":"b"},{"modelType":"Property","valueType":"xs:string","value":"a"}]}]}`)
-	plan = buildReconciliationPlanForTest(t, oldList, newList)
-	require.Len(t, plan.Updates, 2)
-	require.Empty(t, plan.Inserts)
-	require.Empty(t, plan.Deletes)
-	require.Equal(t, "L[0]", plan.Updates[0].Path)
-	require.Equal(t, "L[1]", plan.Updates[1].Path)
-}
-
-func TestReconciliationPlanOnlyMarksChangedPersistenceSection(t *testing.T) {
-	oldSubmodel := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"old"}]}`)
-	newSubmodel := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"new"}]}`)
-	plan := buildReconciliationPlanForTest(t, oldSubmodel, newSubmodel)
-	require.Len(t, plan.Updates, 1)
-	changes := plan.Updates[0].Changes
-	require.True(t, changes.TypeData)
-	require.False(t, changes.Core)
-	require.False(t, changes.Payload)
-	require.False(t, changes.SemanticID)
-	require.False(t, changes.SupplementalID)
-	require.False(t, changes.LanguageValues)
-	require.False(t, changes.ValueID)
-}
-
-func TestReconciliationSnapshotCanonicalizesDateTimePropertyValues(t *testing.T) {
-	submitted := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"lastUpdate","modelType":"Property","valueType":"xs:dateTime","value":"2026-08-07T11:16:26.125183291Z"}]}`)
-	persisted := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"lastUpdate","modelType":"Property","valueType":"xs:dateTime","value":"2026-08-07T11:16:26.125183+00:00"}]}`)
-
-	submittedSnapshot, err := submodelToReconciliationSnapshot(submitted)
+func TestStagedDeleteClassificationUsesRetainedIDAntiJoin(t *testing.T) {
+	query, _, err := stagedDeleteCandidates(goqu.Dialect(common.Dialect)).ToSQL()
 	require.NoError(t, err)
-	persistedSnapshot, err := submodelToReconciliationSnapshot(persisted)
-	require.NoError(t, err)
-	diff, err := history.BuildJSONPatch(submittedSnapshot, persistedSnapshot)
-	require.NoError(t, err)
-	require.Empty(t, diff)
-}
-
-func TestReconciliationQueryParameterCountIsConstantAtScale(t *testing.T) {
-	oldSubmodel := types.NewSubmodel("scale")
-	newSubmodel := types.NewSubmodel("scale")
-	oldElements := make([]types.ISubmodelElement, 2500)
-	newElements := make([]types.ISubmodelElement, 2500)
-	for index := range oldElements {
-		idShort := "P" + strconv.Itoa(index)
-		oldValue := "value"
-		newValue := oldValue
-		if index == len(oldElements)-1 {
-			newValue = "changed"
-		}
-		oldProperty := types.NewProperty(types.DataTypeDefXSDString)
-		oldProperty.SetIDShort(&idShort)
-		oldProperty.SetValue(&oldValue)
-		newProperty := types.NewProperty(types.DataTypeDefXSDString)
-		newProperty.SetIDShort(&idShort)
-		newProperty.SetValue(&newValue)
-		oldElements[index] = oldProperty
-		newElements[index] = newProperty
-	}
-	oldSubmodel.SetSubmodelElements(oldElements)
-	newSubmodel.SetSubmodelElements(newElements)
-	plan := buildReconciliationPlanForTest(t, oldSubmodel, newSubmodel)
-	require.Len(t, plan.Updates, 1)
-	planJSON, err := plan.marshal()
-	require.NoError(t, err)
-	_, args, err := newReconciliationQueryBuilder().build(planJSON, "scale")
-	require.NoError(t, err)
-	require.Len(t, args, 2)
+	require.Contains(t, query, `FROM "retained_target_rows"`)
+	require.Contains(t, query, `"live"."submodel_id" = "sm"."id"`)
+	require.NotContains(t, query, "LIKE")
 }
 
 func TestContextWithoutFragmentFiltersPreservesUpdateFormula(t *testing.T) {
@@ -191,33 +114,10 @@ func TestContextWithoutFragmentFiltersPreservesUpdateFormula(t *testing.T) {
 	require.NotNil(t, original.Filters)
 }
 
-func buildReconciliationPlanForTest(t *testing.T, oldSubmodel types.ISubmodel, newSubmodel types.ISubmodel) submodelReconciliationPlan {
-	t.Helper()
-	oldSnapshot, err := submodelToReconciliationSnapshot(oldSubmodel)
-	require.NoError(t, err)
-	newSnapshot, err := submodelToReconciliationSnapshot(newSubmodel)
-	require.NoError(t, err)
-	plan, err := (&SubmodelDatabase{}).buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, oldSnapshot, newSnapshot)
-	require.NoError(t, err)
-	return plan
-}
-
 func readReconciliationJSON(t *testing.T, payload string) types.ISubmodel {
 	t.Helper()
 	var jsonable map[string]any
 	require.NoError(t, json.Unmarshal([]byte(payload), &jsonable))
-	submodel, err := jsonization.SubmodelFromJsonable(jsonable)
-	require.NoError(t, err)
-	return submodel
-}
-
-func readReconciliationFixture(t *testing.T, path string) types.ISubmodel {
-	t.Helper()
-	// #nosec G304 -- paths are repository-owned test fixtures selected by the test.
-	payload, err := os.ReadFile(path)
-	require.NoError(t, err)
-	var jsonable map[string]any
-	require.NoError(t, json.Unmarshal(payload, &jsonable))
 	submodel, err := jsonization.SubmodelFromJsonable(jsonable)
 	require.NoError(t, err)
 	return submodel

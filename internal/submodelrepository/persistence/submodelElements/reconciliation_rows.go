@@ -27,9 +27,11 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"reflect"
+	"sort"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -117,6 +119,15 @@ type ReconciliationElementRow struct {
 	Changes                 ReconciliationElementChanges  `json:"changes"`
 }
 
+type reconciliationWalkFrame struct {
+	elements   []types.ISubmodelElement
+	index      int
+	parentPath string
+	rootPath   string
+	depth      int
+	fromList   bool
+}
+
 // BuildReconciliationElementRows flattens an AAS element tree and converts it
 // into database-ready rows without executing SQL.
 func BuildReconciliationElementRows(db *sql.DB, elements []types.ISubmodelElement) ([]ReconciliationElementRow, error) {
@@ -137,28 +148,79 @@ func BuildReconciliationElementRows(db *sql.DB, elements []types.ISubmodelElemen
 	return rows, nil
 }
 
-func buildReconciliationElementRow(node *flattenedInsertNode) (ReconciliationElementRow, error) {
-	payload, err := reconciliationElementPayload(node.element)
-	if err != nil {
-		return ReconciliationElementRow{}, err
+// StreamReconciliationElementRows converts one element tree into normalized
+// persistence rows without retaining a second flattened copy of the tree.
+func StreamReconciliationElementRows(
+	ctx context.Context,
+	db *sql.DB,
+	elements []types.ISubmodelElement,
+	consume func(ReconciliationElementRow) error,
+) error {
+	if ctx == nil {
+		return common.NewErrBadRequest("SMREPO-RECONROWS-NILCONTEXT context must not be nil")
 	}
-	semanticID, err := reconciliationReference(node.element.SemanticID(), 0, true)
-	if err != nil {
-		return ReconciliationElementRow{}, err
+	if consume == nil {
+		return common.NewErrBadRequest("SMREPO-RECONROWS-NILCONSUMER row consumer must not be nil")
 	}
-	supplemental, err := reconciliationReferences(node.element.SupplementalSemanticIDs())
-	if err != nil {
-		return ReconciliationElementRow{}, err
+	stack := []reconciliationWalkFrame{{elements: elements}}
+	for len(stack) > 0 {
+		frame := &stack[len(stack)-1]
+		if frame.index >= len(frame.elements) {
+			stack = stack[:len(stack)-1]
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		position := frame.index
+		element := frame.elements[position]
+		frame.index++
+		row, err := buildStreamedReconciliationElementRow(db, element, *frame, position)
+		if err != nil {
+			return err
+		}
+		if err = consume(row); err != nil {
+			return err
+		}
+		nested := getChildElements(element)
+		if len(nested) > 0 {
+			stack = append(stack, reconciliationWalkFrame{
+				elements:   nested,
+				parentPath: row.Path,
+				rootPath:   row.RootPath,
+				depth:      frame.depth + 1,
+				fromList:   element.ModelType() == types.ModelTypeSubmodelElementList,
+			})
+		}
 	}
-	typeTable, typeData, err := reconciliationTypeData(node)
-	if err != nil {
-		return ReconciliationElementRow{}, err
-	}
-	languageValues, valueID, err := reconciliationValueRows(node.element)
-	if err != nil {
-		return ReconciliationElementRow{}, err
-	}
+	return nil
+}
 
+func buildStreamedReconciliationElementRow(
+	db *sql.DB,
+	element types.ISubmodelElement,
+	frame reconciliationWalkFrame,
+	position int,
+) (ReconciliationElementRow, error) {
+	handler, err := GetSMEHandler(element, db)
+	if err != nil {
+		return ReconciliationElementRow{}, err
+	}
+	idShort := ""
+	if element.IDShort() != nil {
+		idShort = *element.IDShort()
+	}
+	path := buildIDShortPath(frame.parentPath, frame.fromList, position, idShort)
+	rootPath := frame.rootPath
+	if rootPath == "" {
+		rootPath = path
+	}
+	return buildReconciliationElementRowValues(
+		element, handler, position, idShort, path, frame.parentPath, rootPath, frame.depth,
+	)
+}
+
+func buildReconciliationElementRow(node *flattenedInsertNode) (ReconciliationElementRow, error) {
 	parentPath := ""
 	if node.parentIndex >= 0 {
 		parentPath = nodePathFromIndex(node, node.parentIndex)
@@ -167,16 +229,58 @@ func buildReconciliationElementRow(node *flattenedInsertNode) (ReconciliationEle
 	if node.rootNodeIndex >= 0 {
 		rootPath = nodePathFromIndex(node, node.rootNodeIndex)
 	}
+	return buildReconciliationElementRowValues(
+		node.element,
+		node.handler,
+		node.position,
+		node.idShort,
+		node.idShortPath,
+		parentPath,
+		rootPath,
+		node.depth,
+	)
+}
+
+func buildReconciliationElementRowValues(
+	element types.ISubmodelElement,
+	handler PostgreSQLSMECrudInterface,
+	position int,
+	idShort string,
+	path string,
+	parentPath string,
+	rootPath string,
+	depth int,
+) (ReconciliationElementRow, error) {
+	payload, err := reconciliationElementPayload(element)
+	if err != nil {
+		return ReconciliationElementRow{}, err
+	}
+	semanticID, err := reconciliationReference(element.SemanticID(), 0, true)
+	if err != nil {
+		return ReconciliationElementRow{}, err
+	}
+	supplemental, err := reconciliationReferences(element.SupplementalSemanticIDs())
+	if err != nil {
+		return ReconciliationElementRow{}, err
+	}
+	typeTable, typeData, err := reconciliationTypeDataValues(handler, element)
+	if err != nil {
+		return ReconciliationElementRow{}, err
+	}
+	languageValues, valueID, err := reconciliationValueRows(element)
+	if err != nil {
+		return ReconciliationElementRow{}, err
+	}
 
 	return ReconciliationElementRow{
-		Path:                    node.idShortPath,
+		Path:                    path,
 		ParentPath:              parentPath,
 		RootPath:                rootPath,
-		Position:                node.position,
-		Depth:                   node.depth,
-		IDShort:                 node.idShort,
-		Category:                node.element.Category(),
-		ModelType:               int(node.element.ModelType()),
+		Position:                position,
+		Depth:                   depth,
+		IDShort:                 idShort,
+		Category:                element.Category(),
+		ModelType:               int(element.ModelType()),
 		Payload:                 payload,
 		SemanticID:              semanticID,
 		SupplementalSemanticIDs: supplemental,
@@ -308,7 +412,11 @@ func BuildReconciliationReferences(references []types.IReference) ([]Reconciliat
 }
 
 func reconciliationTypeData(node *flattenedInsertNode) (string, map[string]any, error) {
-	part, err := node.handler.GetInsertQueryPart(nil, 0, node.element)
+	return reconciliationTypeDataValues(node.handler, node.element)
+}
+
+func reconciliationTypeDataValues(handler PostgreSQLSMECrudInterface, element types.ISubmodelElement) (string, map[string]any, error) {
+	part, err := handler.GetInsertQueryPart(nil, 0, element)
 	if err != nil {
 		return "", nil, err
 	}
@@ -366,6 +474,12 @@ func reconciliationValueRows(element types.ISubmodelElement) ([]ReconciliationLa
 		for _, value := range typed.Value() {
 			values = append(values, ReconciliationLanguageValue{Language: value.Language(), Text: value.Text()})
 		}
+		sort.Slice(values, func(left int, right int) bool {
+			if values[left].Language == values[right].Language {
+				return values[left].Text < values[right].Text
+			}
+			return values[left].Language < values[right].Language
+		})
 		serialized, err := reconciliationValueID(typed.ValueID())
 		return values, serialized, err
 	case *types.Property:

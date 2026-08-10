@@ -47,6 +47,132 @@ type persistedReconciliationElement struct {
 	position int
 }
 
+func BenchmarkPutSubmodelStagingChangeRatios(b *testing.B) {
+	for _, percentage := range []int{0, 1, 25, 100} {
+		b.Run(fmt.Sprintf("changed_%d_percent", percentage), func(b *testing.B) {
+			submodelID := fmt.Sprintf("urn:basyx:benchmark:put-staging-%d-%d", percentage, time.Now().UnixNano())
+			endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
+			status, body := sendReconciliationRequestWithoutFailure(
+				http.MethodPost,
+				submodelRepositoryBaseURL+"/submodels",
+				reconciliationBenchmarkSubmodel(submodelID, percentage, 0),
+			)
+			if status != http.StatusCreated {
+				b.Fatalf("initial create status=%d response=%s", status, string(body))
+			}
+			b.Cleanup(func() { _, _ = sendReconciliationRequestWithoutFailure(http.MethodDelete, endpoint, nil) })
+
+			db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.Cleanup(func() { _ = db.Close() })
+			walStart := reconciliationWALLSN(b, db)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for iteration := range b.N {
+				status, body = sendReconciliationRequestWithoutFailure(
+					http.MethodPut,
+					endpoint,
+					reconciliationBenchmarkSubmodel(submodelID, percentage, iteration+1),
+				)
+				if status != http.StatusNoContent {
+					b.Fatalf("PUT status=%d response=%s", status, string(body))
+				}
+			}
+			b.StopTimer()
+			b.ReportMetric(reconciliationWALBytesSince(b, db, walStart)/float64(b.N), "wal-bytes/op")
+			b.ReportMetric(float64(reconciliationScaleElementCount*percentage/100), "changed-rows/op")
+		})
+	}
+}
+
+func BenchmarkPutSubmodelDeleteReinsertBaseline(b *testing.B) {
+	submodelID := fmt.Sprintf("urn:basyx:benchmark:put-delete-reinsert-%d", time.Now().UnixNano())
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
+	status, body := sendReconciliationRequestWithoutFailure(
+		http.MethodPost,
+		submodelRepositoryBaseURL+"/submodels",
+		reconciliationBenchmarkSubmodel(submodelID, 100, 0),
+	)
+	if status != http.StatusCreated {
+		b.Fatalf("initial create status=%d response=%s", status, string(body))
+	}
+	b.Cleanup(func() { _, _ = sendReconciliationRequestWithoutFailure(http.MethodDelete, endpoint, nil) })
+
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = db.Close() })
+	walStart := reconciliationWALLSN(b, db)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for iteration := range b.N {
+		status, body = sendReconciliationRequestWithoutFailure(http.MethodDelete, endpoint, nil)
+		if status != http.StatusNoContent {
+			b.Fatalf("DELETE status=%d response=%s", status, string(body))
+		}
+		status, body = sendReconciliationRequestWithoutFailure(
+			http.MethodPost,
+			submodelRepositoryBaseURL+"/submodels",
+			reconciliationBenchmarkSubmodel(submodelID, 100, iteration+1),
+		)
+		if status != http.StatusCreated {
+			b.Fatalf("recreate status=%d response=%s", status, string(body))
+		}
+	}
+	b.StopTimer()
+	b.ReportMetric(reconciliationWALBytesSince(b, db, walStart)/float64(b.N), "wal-bytes/op")
+	b.ReportMetric(float64(reconciliationScaleElementCount), "changed-rows/op")
+}
+
+func reconciliationBenchmarkSubmodel(submodelID string, changedPercentage int, generation int) map[string]any {
+	changedElements := reconciliationScaleElementCount * changedPercentage / 100
+	elements := make([]any, reconciliationScaleElementCount)
+	for position := range elements {
+		value := "stable"
+		if position < changedElements {
+			value = fmt.Sprintf("generation-%d", generation%2)
+		}
+		elements[position] = map[string]any{
+			"idShort": fmt.Sprintf("P%04d", position), "modelType": "Property", "valueType": "xs:string", "value": value,
+		}
+	}
+	return map[string]any{
+		"id": submodelID, "idShort": "ReconciliationBenchmark", "modelType": "Submodel", "submodelElements": elements,
+	}
+}
+
+func reconciliationWALLSN(tb testing.TB, db *sql.DB) string {
+	tb.Helper()
+	query, args, err := goqu.Dialect(common.Dialect).Select(goqu.L("pg_current_wal_lsn()::text")).Prepared(true).ToSQL()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	var lsn string
+	if err = db.QueryRowContext(tb.Context(), query, args...).Scan(&lsn); err != nil {
+		tb.Fatal(err)
+	}
+	return lsn
+}
+
+func reconciliationWALBytesSince(tb testing.TB, db *sql.DB, start string) float64 {
+	tb.Helper()
+	query, args, err := goqu.Dialect(common.Dialect).
+		Select(goqu.Func("pg_wal_lsn_diff", goqu.Func("pg_current_wal_lsn"), goqu.L("?::pg_lsn", start))).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	var bytes float64
+	if err = db.QueryRowContext(tb.Context(), query, args...).Scan(&bytes); err != nil {
+		tb.Fatal(err)
+	}
+	return bytes
+}
+
 func TestPutSubmodelReconcilesThousandsOfElementsInPlace(t *testing.T) {
 	submodelID := fmt.Sprintf("urn:basyx:integration:put-reconciliation-%d", time.Now().UnixNano())
 	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
@@ -89,6 +215,110 @@ func TestPutSubmodelReconcilesThousandsOfElementsInPlace(t *testing.T) {
 		if path != "P0000" {
 			require.Equal(t, previousRow.id, typeChangedRows[path].id, "unrelated path %s was recreated", path)
 		}
+	}
+}
+
+func TestPutSubmodelReconcilesNestedSubtreesAndKeepsRetainedIDs(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:put-reconciliation-nested-%d", time.Now().UnixNano())
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
+	initial := nestedReconciliationSubmodel(submodelID, false)
+	status, body := sendReconciliationRequest(t, http.MethodPost, submodelRepositoryBaseURL+"/submodels", initial)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _ = sendReconciliationRequestWithoutFailure(http.MethodDelete, endpoint, nil) })
+
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	before := reconciliationAllElementRows(t, db, submodelID)
+	require.Contains(t, before, "Container.Retained")
+	require.Contains(t, before, "Container.Replaced")
+	require.Contains(t, before, "Container.Replaced.Child")
+	require.Contains(t, before, "Container.Items[0]")
+
+	replacement := nestedReconciliationSubmodel(submodelID, true)
+	status, body = sendReconciliationRequest(t, http.MethodPut, endpoint, replacement)
+	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
+	after := reconciliationAllElementRows(t, db, submodelID)
+	for _, path := range []string{"Container", "Container.Retained", "Container.Replaced", "Container.Replaced.Child", "Container.Items", "Container.Items[0]"} {
+		require.Contains(t, after, path)
+	}
+	require.Equal(t, before["Container"].id, after["Container"].id)
+	require.Equal(t, before["Container.Retained"].id, after["Container.Retained"].id)
+	require.Equal(t, before["Container.Items"].id, after["Container.Items"].id)
+	require.Equal(t, before["Container.Items[0]"].id, after["Container.Items[0]"].id)
+	require.NotEqual(t, before["Container.Replaced"].id, after["Container.Replaced"].id)
+	require.NotEqual(t, before["Container.Replaced.Child"].id, after["Container.Replaced.Child"].id)
+
+	status, body = sendReconciliationRequest(t, http.MethodPut, endpoint, replacement)
+	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
+	noOp := reconciliationAllElementRows(t, db, submodelID)
+	for path, previous := range after {
+		require.Equal(t, previous.id, noOp[path].id, "no-op PUT recreated path %s", path)
+	}
+}
+
+func TestPutSubmodelAcceptsTypedEquivalentLexicalValues(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:put-reconciliation-typed-%d", time.Now().UnixNano())
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
+	initial := typedReconciliationSubmodel(submodelID, "2026-08-10T12:00:00+02:00", "1.0", "2.00")
+	status, body := sendReconciliationRequest(t, http.MethodPost, submodelRepositoryBaseURL+"/submodels", initial)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _ = sendReconciliationRequestWithoutFailure(http.MethodDelete, endpoint, nil) })
+
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	before := reconciliationAllElementRows(t, db, submodelID)
+
+	equivalent := typedReconciliationSubmodel(submodelID, "2026-08-10T10:00:00Z", "1.00", "2")
+	status, body = sendReconciliationRequest(t, http.MethodPut, endpoint, equivalent)
+	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
+	after := reconciliationAllElementRows(t, db, submodelID)
+	require.Equal(t, before["Timestamp"].id, after["Timestamp"].id)
+	require.Equal(t, before["Bounds"].id, after["Bounds"].id)
+}
+
+func nestedReconciliationSubmodel(submodelID string, replacement bool) map[string]any {
+	replaced := map[string]any{
+		"idShort":   "Replaced",
+		"modelType": "SubmodelElementCollection",
+		"value": []any{map[string]any{
+			"idShort": "Child", "modelType": "Property", "valueType": "xs:string", "value": "old",
+		}},
+	}
+	retainedValue := "old"
+	if replacement {
+		retainedValue = "new"
+		replaced = map[string]any{
+			"idShort": "Replaced", "modelType": "Entity", "entityType": "CoManagedEntity",
+			"statements": []any{map[string]any{
+				"idShort": "Child", "modelType": "Property", "valueType": "xs:string", "value": "new",
+			}},
+		}
+	}
+	return map[string]any{
+		"id": submodelID, "idShort": "NestedReconciliation", "modelType": "Submodel",
+		"submodelElements": []any{map[string]any{
+			"idShort": "Container", "modelType": "SubmodelElementCollection",
+			"value": []any{
+				map[string]any{"idShort": "Retained", "modelType": "Property", "valueType": "xs:string", "value": retainedValue},
+				replaced,
+				map[string]any{
+					"idShort": "Items", "modelType": "SubmodelElementList", "typeValueListElement": "Property", "valueTypeListElement": "xs:string",
+					"value": []any{map[string]any{"modelType": "Property", "valueType": "xs:string", "value": "item"}},
+				},
+			},
+		}},
+	}
+}
+
+func typedReconciliationSubmodel(submodelID string, dateTime string, minValue string, maxValue string) map[string]any {
+	return map[string]any{
+		"id": submodelID, "idShort": "TypedReconciliation", "modelType": "Submodel",
+		"submodelElements": []any{
+			map[string]any{"idShort": "Timestamp", "modelType": "Property", "valueType": "xs:dateTime", "value": dateTime},
+			map[string]any{"idShort": "Bounds", "modelType": "Range", "valueType": "xs:decimal", "min": minValue, "max": maxValue},
+		},
 	}
 }
 
@@ -170,14 +400,25 @@ func reconciliationSubmodelDatabaseID(t *testing.T, db *sql.DB, submodelID strin
 
 func reconciliationElementRows(t *testing.T, db *sql.DB, submodelID string) map[string]persistedReconciliationElement {
 	t.Helper()
-	query, args, err := goqu.Dialect(common.Dialect).
+	return queryReconciliationElementRows(t, db, submodelID, true)
+}
+
+func reconciliationAllElementRows(t *testing.T, db *sql.DB, submodelID string) map[string]persistedReconciliationElement {
+	t.Helper()
+	return queryReconciliationElementRows(t, db, submodelID, false)
+}
+
+func queryReconciliationElementRows(t *testing.T, db *sql.DB, submodelID string, rootsOnly bool) map[string]persistedReconciliationElement {
+	t.Helper()
+	dataset := goqu.Dialect(common.Dialect).
 		From(goqu.T("submodel_element").As("element")).
 		Join(goqu.T("submodel").As("submodel"), goqu.On(goqu.I("submodel.id").Eq(goqu.I("element.submodel_id")))).
 		Select(goqu.I("element.idshort_path"), goqu.I("element.id"), goqu.I("element.position")).
-		Where(
-			goqu.I("submodel.submodel_identifier").Eq(submodelID),
-			goqu.I("element.parent_sme_id").IsNull(),
-		).
+		Where(goqu.I("submodel.submodel_identifier").Eq(submodelID))
+	if rootsOnly {
+		dataset = dataset.Where(goqu.I("element.parent_sme_id").IsNull())
+	}
+	query, args, err := dataset.
 		Prepared(true).
 		ToSQL()
 	require.NoError(t, err)

@@ -36,6 +36,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/postgresstaging"
 )
 
 type reconciliationMutationResult struct {
@@ -45,8 +46,9 @@ type reconciliationMutationResult struct {
 }
 
 type reconciliationCTE struct {
-	name  string
-	query exp.Expression
+	name      string
+	query     exp.Expression
+	recursive bool
 }
 
 type reconciliationQueryBuilder struct {
@@ -62,8 +64,12 @@ func (b *reconciliationQueryBuilder) add(name string, query exp.Expression) {
 	b.ctes = append(b.ctes, reconciliationCTE{name: name, query: query})
 }
 
-func (b *reconciliationQueryBuilder) build(planJSON []byte, submodelID string) (string, []any, error) {
-	b.addInputs(planJSON, submodelID)
+func (b *reconciliationQueryBuilder) addRecursive(name string, query exp.Expression) {
+	b.ctes = append(b.ctes, reconciliationCTE{name: name, query: query, recursive: true})
+}
+
+func (b *reconciliationQueryBuilder) build(stage *postgresstaging.Stage, submodelID string) (string, []any, error) {
+	b.addInputs(stage, submodelID)
 	b.addResolutionAndCleanupCTEs()
 	b.addSubmodelMetadataCTEs()
 	b.addElementBaseCTEs()
@@ -76,22 +82,20 @@ func (b *reconciliationQueryBuilder) build(planJSON []byte, submodelID string) (
 		goqu.L("(SELECT COUNT(*) FROM deleted_element_rows)").As("deleted_count"),
 	)
 	for _, cte := range b.ctes {
-		final = final.With(cte.name, cte.query)
+		if cte.recursive {
+			final = final.WithRecursive(cte.name, cte.query)
+		} else {
+			final = final.With(cte.name, cte.query)
+		}
 	}
 	return final.Prepared(true).ToSQL()
 }
 
-func (b *reconciliationQueryBuilder) addInputs(planJSON []byte, submodelID string) {
-	b.add("reconciliation_plan", b.dialect.Select(goqu.L("?::jsonb", string(planJSON)).As("data")))
+func (b *reconciliationQueryBuilder) addInputs(stage *postgresstaging.Stage, submodelID string) {
 	b.add("target_submodel", b.dialect.From("submodel").
 		Select("id").
 		Where(goqu.C("submodel_identifier").Eq(submodelID)))
-	b.add("raw_update_rows", jsonRecordRows(b.dialect, "updates"))
-	b.add("raw_insert_rows", jsonRecordRows(b.dialect, "inserts"))
-	b.add("delete_paths", b.dialect.From(
-		goqu.T("reconciliation_plan").As("p"),
-		jsonRecordSet("p.data", "deletes", "decoded(path text)"),
-	).Select(goqu.I("decoded.path")))
+	b.addStagedReconciliationInputs(stage)
 	b.add("owned_managed_files", b.dialect.From(goqu.T("target_submodel").As("sm")).
 		Join(goqu.T("submodel_element").As("sme"), goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
 		Join(goqu.T("file_element").As("fe"), goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
@@ -105,22 +109,6 @@ func (b *reconciliationQueryBuilder) addInputs(planJSON []byte, submodelID strin
 		))
 	b.add("update_rows", sanitizeManagedFileRows(b.dialect, "raw_update_rows"))
 	b.add("insert_rows", sanitizeManagedFileRows(b.dialect, "raw_insert_rows"))
-}
-
-func jsonRecordRows(dialect goqu.DialectWrapper, field string) *goqu.SelectDataset {
-	return dialect.From(
-		goqu.T("reconciliation_plan").As("p"),
-		jsonRecordSet("p.data", field, "decoded(row jsonb)"),
-	).Select(goqu.I("decoded.row"))
-}
-
-func jsonRecordSet(source string, field string, recordDefinition string) exp.LiteralExpression {
-	return goqu.L(
-		"jsonb_to_recordset(COALESCE(? -> ?, '[]'::jsonb)) AS ?",
-		goqu.I(source),
-		common.PostgreSQLTextLiteral(field),
-		goqu.L(recordDefinition),
-	)
 }
 
 func sanitizeManagedFileRows(dialect goqu.DialectWrapper, source string) *goqu.SelectDataset {
@@ -219,14 +207,7 @@ func resolvedInsertRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 }
 
 func deleteElementTargets(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-	return dialect.From(goqu.T("target_submodel").As("sm")).
-		Join(goqu.T("submodel_element").As("sme"), goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
-		Join(goqu.T("delete_paths").As("d"), goqu.On(goqu.Or(
-			goqu.I("sme.idshort_path").Eq(goqu.I("d.path")),
-			goqu.L("left(?, length(?) + 1) = ? || '.'", goqu.I("sme.idshort_path"), goqu.I("d.path"), goqu.I("d.path")),
-			goqu.L("left(?, length(?) + 1) = ? || '['", goqu.I("sme.idshort_path"), goqu.I("d.path"), goqu.I("d.path")),
-		))).
-		SelectDistinct(goqu.I("sme.id"))
+	return dialect.From("delete_candidates").Select("id")
 }
 
 func changedFileRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
@@ -1014,23 +995,18 @@ func executeSubmodelReconciliationStatement(
 	ctx context.Context,
 	tx *sql.Tx,
 	submodelID string,
-	plan submodelReconciliationPlan,
+	staged *stagedSubmodelTarget,
 ) (reconciliationMutationResult, error) {
-	planJSON, err := plan.marshal()
-	if err != nil {
-		return reconciliationMutationResult{}, err
+	if staged == nil || staged.stage == nil {
+		return reconciliationMutationResult{}, common.NewInternalServerError("SMREPO-RECON-NILSTAGE staged target must not be nil")
 	}
-	query, args, err := newReconciliationQueryBuilder().build(planJSON, submodelID)
+	query, args, err := newReconciliationQueryBuilder().build(staged.stage, submodelID)
 	if err != nil {
 		return reconciliationMutationResult{}, common.NewInternalServerError("SMREPO-RECON-BUILD " + err.Error())
 	}
 	var result reconciliationMutationResult
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(&result.UpdatedElements, &result.InsertedElements, &result.DeletedElements); err != nil {
 		return reconciliationMutationResult{}, common.NewInternalServerError("SMREPO-RECON-EXEC " + err.Error())
-	}
-	if result.UpdatedElements != len(plan.Updates) || result.InsertedElements != len(plan.Inserts) ||
-		result.DeletedElements != plan.ExpectedDeletedElements {
-		return reconciliationMutationResult{}, common.NewInternalServerError("SMREPO-RECON-COUNT affected element count does not match reconciliation plan")
 	}
 	return result, nil
 }
