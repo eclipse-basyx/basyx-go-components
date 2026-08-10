@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,6 +46,11 @@ const reconciliationScaleElementCount = 1200
 type persistedReconciliationElement struct {
 	id       int64
 	position int
+}
+
+type reconciliationRequestResult struct {
+	status int
+	body   []byte
 }
 
 func BenchmarkPutSubmodelStagingChangeRatios(b *testing.B) {
@@ -189,7 +195,7 @@ func TestPutSubmodelReconcilesThousandsOfElementsInPlace(t *testing.T) {
 	require.Len(t, before, reconciliationScaleElementCount)
 
 	replacement := scaledReconciliationSubmodel(submodelID, true)
-	status, body = sendReconciliationRequest(t, http.MethodPut, endpoint, replacement)
+	status, body = sendReconciliationRequestWithDatabaseActivity(t, db, http.MethodPut, endpoint, replacement)
 	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
 
 	require.Equal(t, rootIDBefore, reconciliationSubmodelDatabaseID(t, db, submodelID))
@@ -215,6 +221,89 @@ func TestPutSubmodelReconcilesThousandsOfElementsInPlace(t *testing.T) {
 		if path != "P0000" {
 			require.Equal(t, previousRow.id, typeChangedRows[path].id, "unrelated path %s was recreated", path)
 		}
+	}
+}
+
+func sendReconciliationRequestWithDatabaseActivity(
+	t *testing.T,
+	db *sql.DB,
+	method string,
+	endpoint string,
+	payload any,
+) (int, []byte) {
+	t.Helper()
+	result := make(chan reconciliationRequestResult, 1)
+	go func() {
+		status, body := sendReconciliationRequestWithoutFailure(method, endpoint, payload)
+		result <- reconciliationRequestResult{status: status, body: body}
+	}()
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case response := <-result:
+			return response.status, response.body
+		case <-ticker.C:
+			logReconciliationDatabaseActivity(t, db)
+		case <-t.Context().Done():
+			return 0, []byte(t.Context().Err().Error())
+		}
+	}
+}
+
+func logReconciliationDatabaseActivity(t *testing.T, db *sql.DB) {
+	t.Helper()
+	dialect := goqu.Dialect(common.Dialect)
+	query, args, err := dialect.From("pg_stat_activity").
+		Select(
+			"pid",
+			"state",
+			"wait_event_type",
+			"wait_event",
+			goqu.L("EXTRACT(EPOCH FROM clock_timestamp() - query_start)"),
+			"query",
+		).
+		Where(
+			goqu.C("datname").Eq(goqu.Func("current_database")),
+			goqu.C("pid").Neq(goqu.Func("pg_backend_pid")),
+			goqu.C("state").Neq("idle"),
+		).
+		Order(goqu.C("query_start").Asc()).
+		Limit(8).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		t.Logf("reconciliation activity query build failed: %v", err)
+		return
+	}
+	rows, err := db.QueryContext(t.Context(), query, args...)
+	if err != nil {
+		t.Logf("reconciliation activity query failed: %v", err)
+		return
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var pid int
+		var state string
+		var waitType sql.NullString
+		var waitEvent sql.NullString
+		var elapsed float64
+		var activeQuery string
+		if err = rows.Scan(&pid, &state, &waitType, &waitEvent, &elapsed, &activeQuery); err != nil {
+			t.Logf("reconciliation activity scan failed: %v", err)
+			return
+		}
+		activeQuery = strings.Join(strings.Fields(activeQuery), " ")
+		if len(activeQuery) > 240 {
+			activeQuery = activeQuery[:240]
+		}
+		t.Logf(
+			"reconciliation activity pid=%d state=%s wait_type=%s wait_event=%s elapsed=%.1fs query=%s",
+			pid, state, waitType.String, waitEvent.String, elapsed, activeQuery,
+		)
+	}
+	if err = rows.Err(); err != nil {
+		t.Logf("reconciliation activity rows failed: %v", err)
 	}
 }
 
