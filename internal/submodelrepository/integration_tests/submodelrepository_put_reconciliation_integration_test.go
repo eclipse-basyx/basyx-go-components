@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -89,6 +90,42 @@ func TestPutSubmodelReconcilesThousandsOfElementsInPlace(t *testing.T) {
 		if path != "P0000" {
 			require.Equal(t, previousRow.id, typeChangedRows[path].id, "unrelated path %s was recreated", path)
 		}
+	}
+}
+
+func TestConcurrentIdenticalPutSubmodelUpdatesExistingResource(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:concurrent-put-%d", time.Now().UnixNano())
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
+	payload := map[string]any{
+		"id": submodelID, "idShort": "ConcurrentPut", "modelType": "Submodel",
+		"submodelElements": []any{map[string]any{
+			"idShort": "Value", "modelType": "Property", "valueType": "xs:string", "value": "same",
+		}},
+	}
+	status, body := sendReconciliationRequest(t, http.MethodPost, submodelRepositoryBaseURL+"/submodels", payload)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _ = sendReconciliationRequestWithoutFailure(http.MethodDelete, endpoint, nil) })
+	payload["category"] = "updated"
+
+	type result struct {
+		status int
+		body   []byte
+	}
+	const requestCount = 8
+	results := make(chan result, requestCount)
+	var waitGroup sync.WaitGroup
+	for range requestCount {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			putStatus, putBody := sendReconciliationRequestWithoutFailure(http.MethodPut, endpoint, payload)
+			results <- result{status: putStatus, body: putBody}
+		}()
+	}
+	waitGroup.Wait()
+	close(results)
+	for putResult := range results {
+		require.Equal(t, http.StatusNoContent, putResult.status, "response=%s", string(putResult.body))
 	}
 }
 

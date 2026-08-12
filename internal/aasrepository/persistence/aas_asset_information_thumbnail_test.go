@@ -62,32 +62,6 @@ func TestCreateAssetAdministrationShellPersistsDefaultThumbnail(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestUpdateAssetInformationRecordPersistsDefaultThumbnail(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() { _ = db.Close() }()
-
-	tx := beginMockTransaction(t, db, mock)
-	dialect := goquDialect()
-	assetInformation := assetInformationWithDefaultThumbnail("https://example.com/thumb-update.png", "image/png")
-
-	mock.ExpectExec(`UPDATE "asset_information"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectInternalThumbnailCleanup(mock)
-	mock.ExpectExec(`INSERT INTO "thumbnail_file_element"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-
-	require.NoError(t, updateAssetInformationRecord(
-		tx,
-		&dialect,
-		int64(42),
-		"https://example.com/ids/aas/default-thumbnail-update",
-		assetInformation,
-		currentAssetInformationState{},
-	))
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-
 func expectInternalThumbnailCleanup(mock sqlmock.Sqlmock) {
 	mock.ExpectExec(`DELETE FROM "thumbnail_binary_reference"`).
 		WillReturnResult(sqlmock.NewResult(0, 0))

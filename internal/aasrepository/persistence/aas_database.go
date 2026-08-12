@@ -631,6 +631,16 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	if tx == nil {
 		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-NILTX transaction must not be nil")
 	}
+	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
+		return err
+	}
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return common.NewErrNotFound("AASREPO-NEWSMREFINAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-GETAASDBID " + err.Error())
+	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWSMREFINAAS-SHOULDENFORCE")
 	if enforceErr != nil {
@@ -648,12 +658,31 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 			return common.NewErrDenied("AASREPO-NEWSMREFINAAS-ABACDENIED writing to this AAS is not allowed")
 		}
 	}
-	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
 	if err != nil {
 		return err
 	}
-
-	if err := s.createSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelRef); err != nil {
+	keys := submodelRef.Keys()
+	if len(keys) > 0 && keys[0].Value() != "" && aasReferencesContainKeyValue(previous.Submodels(), keys[0].Value()) {
+		return common.NewErrConflict("AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + keys[0].Value() + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'")
+	}
+	var previousSnapshot map[string]any
+	if history.ActiveConfig().EvidenceEnabled {
+		previousSnapshot, err = aasToHistorySnapshot(previous)
+		if err != nil {
+			return err
+		}
+	}
+	target, err := cloneAssetAdministrationShell(previous)
+	if err != nil {
+		return err
+	}
+	target.SetSubmodels(append(target.Submodels(), submodelRef))
+	plan, err := buildAASReconciliationPlan(previous, target, aasReconciliationOptions{PreserveExistingManagedThumbnail: true})
+	if err != nil {
+		return err
+	}
+	if _, err = executeAASReconciliationStatement(ctx, tx, aasIdentifier, plan); err != nil {
 		return err
 	}
 
@@ -670,85 +699,6 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 		}
 	}
 	return s.appendAddedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelRef)
-}
-
-func (s *AssetAdministrationShellDatabase) getNextSubmodelReferencePositionInTransaction(tx *sql.Tx, aasDBID int64) (int, error) {
-	dialect := goqu.Dialect("postgres")
-	sqlQuery, args, buildErr := buildGetNextAssetAdministrationShellSubmodelReferencePositionQuery(&dialect, aasDBID)
-	if buildErr != nil {
-		return 0, common.NewInternalServerError("AASREPO-NEWSMREFINAAS-BUILDNEXTPOSSQL " + buildErr.Error())
-	}
-
-	var nextPosition int
-	if queryErr := tx.QueryRow(sqlQuery, args...).Scan(&nextPosition); queryErr != nil {
-		return 0, common.NewInternalServerError("AASREPO-NEWSMREFINAAS-EXECNEXTPOSSQL " + queryErr.Error())
-	}
-
-	return nextPosition, nil
-}
-
-// createSubmodelReferenceInAssetAdministrationShellInTransaction adds a submodel reference within an existing transaction.
-func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
-	// check if aas exists
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("AASREPO-NEWSMREFINAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		return common.NewInternalServerError("AASREPO-CHECKSMREFINAAS-GETAASDBID " + err.Error())
-	}
-
-	keys := submodelRef.Keys()
-	if len(keys) > 0 {
-		submodelIdentifier := keys[0].Value()
-		if submodelIdentifier != "" {
-			checkErr := s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
-			if checkErr == nil {
-				return common.NewErrConflict("AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + submodelIdentifier + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'")
-			}
-			if !common.IsErrNotFound(checkErr) {
-				return checkErr
-			}
-		}
-	}
-
-	dialect := goqu.Dialect("postgres")
-
-	nextPosition, nextPositionErr := s.getNextSubmodelReferencePositionInTransaction(tx, aasDBID)
-	if nextPositionErr != nil {
-		return nextPositionErr
-	}
-
-	ids, args, err := buildAssetAdministrationShellSubmodelReferenceQuery(&dialect, aasDBID, nextPosition, submodelRef)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-BUILDSUBMODELREFSQL " + err.Error())
-	}
-
-	var aasSubmodelReferenceDBID int64
-
-	if err := tx.QueryRow(ids, args...).Scan(&aasSubmodelReferenceDBID); err != nil {
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-EXECSUBMODELREFSQL" + err.Error())
-	}
-
-	ids, args, err = buildAssetAdministrationShellSubmodelReferenceKeysQuery(&dialect, aasSubmodelReferenceDBID, submodelRef)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-BUILDSUBMODELREFKEYSQL " + err.Error())
-	}
-
-	if _, err := tx.Exec(ids, args...); err != nil {
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-EXECSUBMODELREFKEYSSQL " + err.Error())
-	}
-
-	ids, args, err = buildAssetAdministrationShellSubmodelReferencePayloadQuery(&dialect, aasSubmodelReferenceDBID, submodelRef)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-BUILDSUBMODELREFPAYLOADQL " + err.Error())
-	}
-
-	if _, err := tx.Exec(ids, args...); err != nil {
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-EXECSUBMODELREFPAYLOADSSQL " + err.Error())
-	}
-
-	return nil
 }
 
 // CheckIfSubmodelReferenceExistsInAssetAdministrationShell checks whether a submodel reference exists in the specified AAS.
@@ -1093,7 +1043,6 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDInTran
 }
 
 func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTransactionValidated(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (PutAssetAdministrationShellResult, error) {
-	dialect := goqu.Dialect("postgres")
 	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
 		return PutAssetAdministrationShellResult{}, err
 	}
@@ -1115,18 +1064,23 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 	}
 
 	var previous types.IAssetAdministrationShell
+	var reconciliationPlan aasReconciliationPlan
 	if isUpdate {
-		var unchanged bool
-		previous, unchanged, scanErr = s.loadPreviousAASForPutTx(ctx, tx, aasIdentifier, existingID, aas, shouldEnforce)
+		previous, scanErr = s.loadPreviousAASForPutTx(ctx, tx, aasIdentifier, existingID, shouldEnforce)
 		if scanErr != nil {
 			return PutAssetAdministrationShellResult{}, scanErr
 		}
-		if unchanged {
+		reconciliationPlan, scanErr = buildAASReconciliationPlan(previous, aas, aasReconciliationOptions{
+			PreserveExistingManagedThumbnail: true,
+		})
+		if scanErr != nil {
+			return PutAssetAdministrationShellResult{}, scanErr
+		}
+		if !reconciliationPlan.hasLiveMutation() {
 			return PutAssetAdministrationShellResult{IsUpdate: true, Previous: previous}, nil
 		}
 	}
 	var previousSnapshot map[string]any
-	var managedThumbnail *commonmodel.ManagedThumbnailForReplacement
 	if isUpdate {
 		if history.ActiveConfig().EvidenceEnabled {
 			previousSnapshot, scanErr = aasToHistorySnapshot(previous)
@@ -1134,36 +1088,15 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 				return PutAssetAdministrationShellResult{}, scanErr
 			}
 		}
-		managedThumbnail, scanErr = loadManagedThumbnailForReplacementTx(tx, existingID)
-		if scanErr != nil {
-			return PutAssetAdministrationShellResult{}, scanErr
-		}
 	}
 
 	if isUpdate {
-		if cleanupErr := cleanupThumbnailLargeObjectsByAASDBID(tx, &dialect, existingID, "AASREPO-PUTAAS"); cleanupErr != nil {
-			return PutAssetAdministrationShellResult{}, cleanupErr
+		if _, reconciliationErr := executeAASReconciliationStatement(ctx, tx, aasIdentifier, reconciliationPlan); reconciliationErr != nil {
+			return PutAssetAdministrationShellResult{}, reconciliationErr
 		}
-
-		deleteSQL, deleteArgs, deleteBuildErr := buildDeleteAssetAdministrationShellByDBIDQuery(&dialect, existingID)
-		if deleteBuildErr != nil {
-			return PutAssetAdministrationShellResult{}, common.NewInternalServerError("AASREPO-PUTAAS-BUILDDELETE " + deleteBuildErr.Error())
-		}
-		if _, deleteErr := tx.Exec(deleteSQL, deleteArgs...); deleteErr != nil {
-			return PutAssetAdministrationShellResult{}, common.NewInternalServerError("AASREPO-PUTAAS-EXECDELETE " + deleteErr.Error())
-		}
-	}
-
-	if err := s.createAssetAdministrationShellInTransaction(tx, aas); err != nil {
-		return PutAssetAdministrationShellResult{}, err
-	}
-	if managedThumbnail != nil {
-		newAASID, idErr := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
-		if idErr != nil {
-			return PutAssetAdministrationShellResult{}, common.NewInternalServerError("AASREPO-PUTAAS-GETNEWAASID " + idErr.Error())
-		}
-		if restoreErr := restoreManagedThumbnailAfterReplacementTx(tx, newAASID, aas.AssetInformation(), *managedThumbnail); restoreErr != nil {
-			return PutAssetAdministrationShellResult{}, restoreErr
+	} else {
+		if err := s.createAssetAdministrationShellInTransaction(tx, aas); err != nil {
+			return PutAssetAdministrationShellResult{}, err
 		}
 	}
 
@@ -1196,107 +1129,25 @@ func (s *AssetAdministrationShellDatabase) loadPreviousAASForPutTx(
 	tx *sql.Tx,
 	aasIdentifier string,
 	aasDatabaseID int64,
-	submitted types.IAssetAdministrationShell,
 	shouldEnforce bool,
-) (types.IAssetAdministrationShell, bool, error) {
+) (types.IAssetAdministrationShell, error) {
 	if shouldEnforce {
 		exists, visible, err := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		if !exists {
-			return nil, false, common.NewErrNotFound("AASREPO-PUTAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+			return nil, common.NewErrNotFound("AASREPO-PUTAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 		}
 		if !visible {
-			return nil, false, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED existing AAS is not accessible under ABAC constraints")
+			return nil, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED existing AAS is not accessible under ABAC constraints")
 		}
 	}
 	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDatabaseID)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	unchanged, err := assetAdministrationShellsEqual(previous, submitted)
-	return previous, unchanged, err
-}
-
-func assetAdministrationShellsEqual(previous types.IAssetAdministrationShell, submitted types.IAssetAdministrationShell) (bool, error) {
-	previousSnapshot, err := aasToHistorySnapshot(previous)
-	if err != nil {
-		return false, err
-	}
-	submittedSnapshot, err := aasToHistorySnapshot(submitted)
-	if err != nil {
-		return false, err
-	}
-	previousHash, err := common.CanonicalJSONHash(previousSnapshot)
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-PUTAAS-HASHPREVIOUS " + err.Error())
-	}
-	submittedHash, err := common.CanonicalJSONHash(submittedSnapshot)
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-PUTAAS-HASHSUBMITTED " + err.Error())
-	}
-	return previousHash == submittedHash, nil
-}
-
-func loadManagedThumbnailForReplacementTx(tx *sql.Tx, aasDatabaseID int64) (*commonmodel.ManagedThumbnailForReplacement, error) {
-	query, args, err := goqu.From(goqu.T("thumbnail_file_element").As("thumbnail")).
-		Join(goqu.T(binarycontent.TableThumbnailReference).As("reference"), goqu.On(
-			goqu.I("reference.thumbnail_element_id").Eq(goqu.I("thumbnail.id")),
-		)).
-		Select("thumbnail.value", "thumbnail.content_type", "reference.binary_content_id", "reference.path_token", "reference.safe_file_name").
-		Where(goqu.I("thumbnail.id").Eq(aasDatabaseID)).ToSQL()
-	if err != nil {
-		return nil, common.NewInternalServerError("AASREPO-PUTAAS-BUILDMANAGEDTHUMBNAIL " + err.Error())
-	}
-	var thumbnail commonmodel.ManagedThumbnailForReplacement
-	if err = tx.QueryRow(query, args...).Scan(
-		&thumbnail.ManagedPath, &thumbnail.ContentType, &thumbnail.ContentID, &thumbnail.PathToken, &thumbnail.SafeFileName,
-	); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, common.NewInternalServerError("AASREPO-PUTAAS-QUERYMANAGEDTHUMBNAIL " + err.Error())
-	}
-	return &thumbnail, nil
-}
-
-func restoreManagedThumbnailAfterReplacementTx(tx *sql.Tx, aasDatabaseID int64, assetInformation types.IAssetInformation, thumbnail commonmodel.ManagedThumbnailForReplacement) error {
-	if assetInformation == nil || assetInformation.DefaultThumbnail() == nil || assetInformation.DefaultThumbnail().Path() != thumbnail.ManagedPath {
-		return nil
-	}
-	contentType := thumbnail.ContentType
-	if updatedContentType := assetInformation.DefaultThumbnail().ContentType(); updatedContentType != nil {
-		contentType = sql.NullString{String: *updatedContentType, Valid: true}
-	}
-	thumbnailQuery, thumbnailArgs, err := goqu.Insert("thumbnail_file_element").Rows(goqu.Record{
-		"id": aasDatabaseID, "content_type": nullableStringValue(contentType),
-		"file_name": thumbnail.SafeFileName, "value": thumbnail.ManagedPath,
-	}).ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-PUTAAS-BUILDRESTORETHUMBNAIL " + err.Error())
-	}
-	if _, err = tx.Exec(thumbnailQuery, thumbnailArgs...); err != nil {
-		return common.NewInternalServerError("AASREPO-PUTAAS-EXECRESTORETHUMBNAIL " + err.Error())
-	}
-	referenceQuery, referenceArgs, err := goqu.Insert(binarycontent.TableThumbnailReference).Rows(goqu.Record{
-		"thumbnail_element_id": aasDatabaseID, "binary_content_id": thumbnail.ContentID,
-		"path_token": thumbnail.PathToken, "safe_file_name": thumbnail.SafeFileName,
-	}).ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-PUTAAS-BUILDRESTORETHUMBREF " + err.Error())
-	}
-	if _, err = tx.Exec(referenceQuery, referenceArgs...); err != nil {
-		return common.NewInternalServerError("AASREPO-PUTAAS-EXECRESTORETHUMBREF " + err.Error())
-	}
-	return nil
-}
-
-func nullableStringValue(value sql.NullString) any {
-	if value.Valid {
-		return value.String
-	}
-	return nil
+	return previous, nil
 }
 
 // DeleteAssetAdministrationShellByID removes an AAS and checks ABAC visibility before deletion.
@@ -1488,6 +1339,9 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 	if err := s.verifyAssetInformation(assetInformation, "AASREPO-PUTASSETINFORMATION-VERIFY"); err != nil {
 		return err
 	}
+	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
+		return err
+	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTASSETINFO-SHOULDENFORCE")
 	if enforceErr != nil {
@@ -1502,22 +1356,29 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 		return err
 	}
 
-	dialect := goqu.Dialect("postgres")
-	currentState, err := loadCurrentAssetInformationState(tx, &dialect, aasDBID, aasIdentifier)
+	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
 	if err != nil {
 		return err
 	}
-	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	var previousSnapshot map[string]any
+	if history.ActiveConfig().EvidenceEnabled {
+		previousSnapshot, err = aasToHistorySnapshot(previous)
+		if err != nil {
+			return err
+		}
+	}
+	target, err := buildEffectiveAssetInformationTarget(previous, assetInformation)
 	if err != nil {
 		return err
 	}
-
-	if err := updateAssetInformationRecord(tx, &dialect, aasDBID, aasIdentifier, assetInformation, currentState); err != nil {
+	plan, err := buildAASReconciliationPlan(previous, target, aasReconciliationOptions{})
+	if err != nil {
 		return err
 	}
-
-	if err := replaceSpecificAssetIDsForAssetInformation(tx, &dialect, aasDBID, assetInformation); err != nil {
-		return err
+	if plan.hasLiveMutation() {
+		if _, err = executeAASReconciliationStatement(ctx, tx, aasIdentifier, plan); err != nil {
+			return err
+		}
 	}
 
 	if err := s.ensureAASVisibleAfterAssetInformationUpdate(ctx, tx, aasIdentifier, shouldEnforce); err != nil {
@@ -1525,12 +1386,6 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 	}
 
 	return s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, history.ChangeUpdated)
-}
-
-type currentAssetInformationState struct {
-	assetKind     sql.NullInt64
-	globalAssetID sql.NullString
-	assetType     sql.NullString
 }
 
 func (s *AssetAdministrationShellDatabase) ensureAASWritableForAssetInformationUpdate(
@@ -1557,7 +1412,7 @@ func (s *AssetAdministrationShellDatabase) ensureAASWritableForAssetInformationU
 }
 
 func getAASDatabaseIDForAssetInformationUpdate(tx *sql.Tx, aasIdentifier string) (int64, error) {
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, common.NewErrNotFound("AASREPO-PUTASSETINFO-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
@@ -1565,79 +1420,6 @@ func getAASDatabaseIDForAssetInformationUpdate(tx *sql.Tx, aasIdentifier string)
 		return 0, common.NewInternalServerError("AASREPO-PUTASSETINFO-GETAASDBID " + err.Error())
 	}
 	return aasDBID, nil
-}
-
-func loadCurrentAssetInformationState(
-	tx *sql.Tx,
-	dialect *goqu.DialectWrapper,
-	aasDBID int64,
-	aasIdentifier string,
-) (currentAssetInformationState, error) {
-	currentSQL, currentArgs, currentBuildErr := buildGetAssetInformationCurrentStateQuery(dialect, aasDBID)
-	if currentBuildErr != nil {
-		return currentAssetInformationState{}, common.NewInternalServerError("AASREPO-PUTASSETINFO-BUILDCURRENTSQL " + currentBuildErr.Error())
-	}
-
-	var currentState currentAssetInformationState
-	if currentErr := tx.QueryRow(currentSQL, currentArgs...).Scan(
-		&currentState.assetKind,
-		&currentState.globalAssetID,
-		&currentState.assetType,
-	); currentErr != nil {
-		if currentErr == sql.ErrNoRows {
-			return currentAssetInformationState{}, common.NewErrNotFound("AASREPO-PUTASSETINFO-ASSETINFONOTFOUND Asset Information for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		return currentAssetInformationState{}, common.NewInternalServerError("AASREPO-PUTASSETINFO-EXECCURRENTSQL " + currentErr.Error())
-	}
-	return currentState, nil
-}
-
-func updateAssetInformationRecord(
-	tx *sql.Tx,
-	dialect *goqu.DialectWrapper,
-	aasDBID int64,
-	aasIdentifier string,
-	assetInformation types.IAssetInformation,
-	currentState currentAssetInformationState,
-) error {
-	updatedAssetKind := int64(assetInformation.AssetKind())
-	if updatedAssetKind == 0 && currentState.assetKind.Valid {
-		updatedAssetKind = currentState.assetKind.Int64
-	}
-
-	updatedGlobalAssetID := assetInformation.GlobalAssetID()
-	if updatedGlobalAssetID == nil && currentState.globalAssetID.Valid {
-		updatedGlobalAssetID = &currentState.globalAssetID.String
-	}
-
-	updatedAssetType := assetInformation.AssetType()
-	if updatedAssetType == nil && currentState.assetType.Valid {
-		updatedAssetType = &currentState.assetType.String
-	}
-
-	updateSQL, updateArgs, buildErr := buildUpdateAssetInformationQuery(dialect, aasDBID, goqu.Record{
-		"asset_kind":      updatedAssetKind,
-		"global_asset_id": updatedGlobalAssetID,
-		"asset_type":      updatedAssetType,
-	})
-	if buildErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTASSETINFO-BUILDUPDATESQL " + buildErr.Error())
-	}
-
-	result, execErr := tx.Exec(updateSQL, updateArgs...)
-	if execErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTASSETINFO-EXECUPDATESQL " + execErr.Error())
-	}
-
-	rowsAffected, rowsErr := result.RowsAffected()
-	if rowsErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTASSETINFO-GETROWCOUNT " + rowsErr.Error())
-	}
-	if rowsAffected == 0 {
-		return common.NewErrNotFound("AASREPO-PUTASSETINFO-ASSETINFONOTFOUND Asset Information for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-	}
-
-	return upsertDefaultThumbnailForAssetInformation(tx, dialect, aasDBID, assetInformation, "AASREPO-PUTASSETINFO", true)
 }
 
 func upsertDefaultThumbnailForAssetInformation(
@@ -1758,29 +1540,6 @@ func buildUpsertDefaultThumbnailQuery(
 			"value":        thumbnailPath,
 		})).
 		ToSQL()
-}
-
-func replaceSpecificAssetIDsForAssetInformation(
-	tx *sql.Tx,
-	dialect *goqu.DialectWrapper,
-	aasDBID int64,
-	assetInformation types.IAssetInformation,
-) error {
-	if assetInformation.SpecificAssetIDs() == nil {
-		return nil
-	}
-
-	deleteSpecificSQL, deleteSpecificArgs, deleteSpecificBuildErr := buildDeleteSpecificAssetIDsByAssetInformationIDQuery(dialect, aasDBID)
-	if deleteSpecificBuildErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTASSETINFO-BUILDDELETESPECIFIC " + deleteSpecificBuildErr.Error())
-	}
-	if _, deleteErr := tx.Exec(deleteSpecificSQL, deleteSpecificArgs...); deleteErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTASSETINFO-EXECDELETESPECIFIC " + deleteErr.Error())
-	}
-	if err := common.CreateSpecificAssetIDForAssetInformation(tx, aasDBID, assetInformation.SpecificAssetIDs()); err != nil {
-		return common.NewInternalServerError("AASREPO-PUTASSETINFO-CREATESPECIFICASSETIDS " + err.Error())
-	}
-	return nil
 }
 
 func (s *AssetAdministrationShellDatabase) ensureAASVisibleAfterAssetInformationUpdate(
@@ -2257,6 +2016,16 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 			},
 		)
 	}
+	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
+		return err
+	}
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return common.NewErrNotFound("AASREPO-DELSMREF-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		return common.NewInternalServerError("AASREPO-DELSMREF-GETAASDBID " + err.Error())
+	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELSMREF-SHOULDENFORCE")
 	if enforceErr != nil {
@@ -2274,52 +2043,35 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 			return common.NewErrDenied("AASREPO-DELSMREF-ABACDENIED deleting this submodel reference is not allowed")
 		}
 	}
-	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
 	if err != nil {
 		return err
 	}
-
-	if err := s.deleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier); err != nil {
+	remainingReferences, removed := removeAASReferenceByKeyValue(previous.Submodels(), submodelIdentifier)
+	if !removed {
+		return common.NewErrNotFound("AASREPO-DELSMREF-SMREFNOTFOUND Submodel reference to Submodel with ID '" + submodelIdentifier + "' not found in Asset Administration Shell with ID '" + aasIdentifier + "'")
+	}
+	var previousSnapshot map[string]any
+	if history.ActiveConfig().EvidenceEnabled {
+		previousSnapshot, err = aasToHistorySnapshot(previous)
+		if err != nil {
+			return err
+		}
+	}
+	target, err := cloneAssetAdministrationShell(previous)
+	if err != nil {
+		return err
+	}
+	target.SetSubmodels(remainingReferences)
+	plan, err := buildAASReconciliationPlan(previous, target, aasReconciliationOptions{PreserveExistingManagedThumbnail: true})
+	if err != nil {
+		return err
+	}
+	if _, err = executeAASReconciliationStatement(ctx, tx, aasIdentifier, plan); err != nil {
 		return err
 	}
 
 	return s.appendRemovedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelIdentifier)
-}
-
-// deleteSubmodelReferenceInAssetAdministrationShellInTransaction removes a submodel reference within an existing transaction.
-func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("AASREPO-DELSMREF-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		return common.NewInternalServerError("AASREPO-DELSMREF-GETAASDBID " + err.Error())
-	}
-
-	dialect := goqu.Dialect("postgres")
-	findSQL, findArgs, findBuildErr := buildFindSubmodelReferenceIDByAASIDAndSubmodelIdentifierQuery(&dialect, aasDBID, submodelIdentifier)
-	if findBuildErr != nil {
-		return common.NewInternalServerError("AASREPO-DELSMREF-BUILDFINDSQL " + findBuildErr.Error())
-	}
-
-	var referenceID int64
-	if scanErr := tx.QueryRow(findSQL, findArgs...).Scan(&referenceID); scanErr != nil {
-		if scanErr == sql.ErrNoRows {
-			return common.NewErrNotFound("AASREPO-DELSMREF-SMREFNOTFOUND Submodel reference to Submodel with ID '" + submodelIdentifier + "' not found in Asset Administration Shell with ID '" + aasIdentifier + "'")
-		}
-		return common.NewInternalServerError("AASREPO-DELSMREF-EXECFINDSQL " + scanErr.Error())
-	}
-
-	deleteSQL, deleteArgs, deleteBuildErr := buildDeleteSubmodelReferenceByIDQuery(&dialect, referenceID)
-	if deleteBuildErr != nil {
-		return common.NewInternalServerError("AASREPO-DELSMREF-BUILDDELETESQL " + deleteBuildErr.Error())
-	}
-
-	if _, deleteErr := tx.Exec(deleteSQL, deleteArgs...); deleteErr != nil {
-		return common.NewInternalServerError("AASREPO-DELSMREF-EXECDELETESQL " + deleteErr.Error())
-	}
-
-	return nil
 }
 
 type coreAssetAdministrationShellRow struct {

@@ -27,7 +27,6 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -59,7 +58,7 @@ func TestDeleteAssetAdministrationShellCleansThumbnailLargeObjectBeforeDelete(t 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestPutAssetAdministrationShellReplacementCleansThumbnailLargeObjectBeforeDelete(t *testing.T) {
+func TestPutAssetAdministrationShellReconcilesExistingRootWithoutReplacement(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
@@ -75,18 +74,11 @@ func TestPutAssetAdministrationShellReplacementCleansThumbnailLargeObjectBeforeD
 	mock.ExpectQuery(`SELECT .*FROM "aas".*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
 	expectExistingAASRead(mock, aasID, globalAssetID, "previous")
-	mock.ExpectQuery(`SELECT .*thumbnail.*value.*FROM "thumbnail_file_element" AS "thumbnail"`).
-		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery(`SELECT COUNT\(\*\).*lo_unlink.*thumbnail_file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
-	mock.ExpectExec(`DELETE FROM "aas"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(43)))
-	mock.ExpectExec(`INSERT INTO "aas_payload"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`INSERT INTO "asset_information"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`WITH aas_reconciliation_plan`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"updated_specific", "inserted_specific", "deleted_specific",
+			"updated_references", "inserted_references", "deleted_references",
+		}).AddRow(0, 0, 0, 0, 0, 0))
 	mock.ExpectRollback()
 
 	isUpdate, err := repository.PutAssetAdministrationShellByIDInTransaction(contextWithConfig(), tx, aasID, aas)

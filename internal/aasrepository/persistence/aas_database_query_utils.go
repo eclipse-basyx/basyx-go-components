@@ -91,14 +91,6 @@ func buildAssetAdministrationShellSubmodelReferenceQuery(dialect *goqu.DialectWr
 	}).Returning(goqu.I("id")).ToSQL()
 }
 
-func buildGetNextAssetAdministrationShellSubmodelReferencePositionQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
-	return dialect.
-		From("aas_submodel_reference").
-		Select(goqu.L("COALESCE(MAX(position), -1) + 1")).
-		Where(goqu.I("aas_id").Eq(aasDBID)).
-		ToSQL()
-}
-
 func buildAssetAdministrationShellSubmodelReferenceKeysQuery(dialect *goqu.DialectWrapper, aasSubmodelReferenceDBID int64, submodelRef types.IReference) (string, []any, error) {
 	keyRows := make([]goqu.Record, 0, len(submodelRef.Keys()))
 	for position, key := range submodelRef.Keys() {
@@ -306,25 +298,6 @@ func buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect *goqu.DialectWrappe
 		ToSQL()
 }
 
-func buildGetAssetInformationCurrentStateQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
-	return dialect.From("asset_information").
-		Select("asset_kind", "global_asset_id", "asset_type").
-		Where(goqu.I("asset_information_id").Eq(aasDBID)).
-		Prepared(true).
-		ToSQL()
-}
-
-func buildUpdateAssetInformationQuery(dialect *goqu.DialectWrapper, aasDBID int64, record goqu.Record) (string, []any, error) {
-	return dialect.Update("asset_information").
-		Set(record).
-		Where(goqu.I("asset_information_id").Eq(aasDBID)).
-		ToSQL()
-}
-
-func buildDeleteSpecificAssetIDsByAssetInformationIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
-	return dialect.Delete("specific_asset_id").Where(goqu.I("asset_information_id").Eq(aasDBID)).ToSQL()
-}
-
 func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64, limit int32, cursorID int64) (string, []any, error) {
 	ds := dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).
@@ -349,20 +322,6 @@ func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aas
 	return ds.Prepared(true).ToSQL()
 }
 
-func buildFindSubmodelReferenceIDByAASIDAndSubmodelIdentifierQuery(dialect *goqu.DialectWrapper, aasDBID int64, submodelIdentifier string) (string, []any, error) {
-	return dialect.
-		From(goqu.T("aas_submodel_reference").As("r")).
-		InnerJoin(goqu.T("aas_submodel_reference_key").As("k"), goqu.On(goqu.I("k.reference_id").Eq(goqu.I("r.id")))).
-		Select(goqu.I("r.id")).
-		Where(
-			goqu.I("r.aas_id").Eq(aasDBID),
-			goqu.I("k.value").Eq(submodelIdentifier),
-		).
-		Limit(1).
-		Prepared(true).
-		ToSQL()
-}
-
 func buildListAASIdentifiersBySubmodelIdentifierQuery(dialect *goqu.DialectWrapper, submodelIdentifier string) (string, []any, error) {
 	return dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).
@@ -373,10 +332,6 @@ func buildListAASIdentifiersBySubmodelIdentifierQuery(dialect *goqu.DialectWrapp
 		Order(goqu.I("a.aas_id").Asc()).
 		Prepared(true).
 		ToSQL()
-}
-
-func buildDeleteSubmodelReferenceByIDQuery(dialect *goqu.DialectWrapper, submodelReferenceDBID int64) (string, []any, error) {
-	return dialect.Delete("aas_submodel_reference").Where(goqu.I("id").Eq(submodelReferenceDBID)).ToSQL()
 }
 
 func unmaskedCoreAssetAdministrationShellSelectExpressions(includeDatabaseID bool) []interface{} {
