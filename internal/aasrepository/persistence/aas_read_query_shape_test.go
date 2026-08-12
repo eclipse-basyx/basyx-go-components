@@ -28,7 +28,11 @@ package persistence
 import (
 	"testing"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,4 +65,59 @@ func TestAssetAdministrationShellBatchReadQueriesReuseSQLShape(t *testing.T) {
 	}
 
 	require.Equal(t, build([]int64{1}), build([]int64{1, 2, 3}))
+}
+
+func TestAASSubmodelReferenceExistenceQueryReusesSQLShape(t *testing.T) {
+	t.Parallel()
+
+	dialect := goqu.Dialect("postgres")
+	build := func(aasDBID int64, submodelIdentifier string) string {
+		query, args, err := buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(
+			&dialect, aasDBID, submodelIdentifier,
+		)
+		require.NoError(t, err)
+		require.Len(t, args, 3)
+		return query
+	}
+
+	firstQuery := build(1, "urn:example:submodel:first")
+	secondQuery := build(2, "urn:example:submodel:second")
+	require.Equal(t, firstQuery, secondQuery)
+	require.Contains(t, firstQuery, `"ref"."aas_id" = $1`)
+	require.Contains(t, firstQuery, `"key"."value" = $2`)
+	require.Contains(t, firstQuery, `LIMIT $3`)
+}
+
+func TestCreateAASSubmodelReferenceDuplicateSkipsAASSnapshotLoad(t *testing.T) {
+	previousHistoryConfig := history.ActiveConfig()
+	history.Configure(history.Config{Mode: history.ModeOff})
+	t.Cleanup(func() { history.Configure(previousHistoryConfig) })
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	aasIdentifier := "urn:example:aas:existing"
+	submodelIdentifier := "urn:example:submodel:existing"
+	reference := types.NewReference(
+		types.ReferenceTypesModelReference,
+		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)},
+	)
+	repository := &AssetAdministrationShellDatabase{db: db}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "aas".*FOR UPDATE`).
+		WithArgs(aasIdentifier).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	mock.ExpectQuery(`SELECT 1 FROM "aas_submodel_reference"`).
+		WithArgs(int64(42), submodelIdentifier, sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(1))
+	mock.ExpectRollback()
+
+	err = repository.CreateSubmodelReferenceInAssetAdministrationShell(
+		common.ContextWithConfig(t.Context(), &common.Config{}), aasIdentifier, reference,
+	)
+	require.Error(t, err)
+	require.True(t, common.IsErrConflict(err))
+	require.NoError(t, mock.ExpectationsWereMet())
 }

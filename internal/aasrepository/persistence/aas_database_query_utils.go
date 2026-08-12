@@ -140,6 +140,7 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 			goqu.I("key.value").Eq(submodelIdentifier),
 		).
 		Limit(1).
+		Prepared(true).
 		ToSQL()
 }
 

@@ -658,13 +658,22 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 			return common.NewErrDenied("AASREPO-NEWSMREFINAAS-ABACDENIED writing to this AAS is not allowed")
 		}
 	}
+	keys := submodelRef.Keys()
+	if len(keys) > 0 && keys[0].Value() != "" {
+		submodelIdentifier := keys[0].Value()
+		exists, existsErr := submodelReferenceExistsInAssetAdministrationShellInTransaction(
+			tx, aasDBID, submodelIdentifier, "AASREPO-NEWSMREFINAAS",
+		)
+		if existsErr != nil {
+			return existsErr
+		}
+		if exists {
+			return common.NewErrConflict("AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + submodelIdentifier + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'")
+		}
+	}
 	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
 	if err != nil {
 		return err
-	}
-	keys := submodelRef.Keys()
-	if len(keys) > 0 && keys[0].Value() != "" && aasReferencesContainKeyValue(previous.Submodels(), keys[0].Value()) {
-		return common.NewErrConflict("AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + keys[0].Value() + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'")
 	}
 	var previousSnapshot map[string]any
 	if history.ActiveConfig().EvidenceEnabled {
@@ -732,21 +741,39 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 		return common.NewInternalServerError("AASREPO-CHECKSMREFINAAS-GETAASDBID " + err.Error())
 	}
 
-	dialect := goqu.Dialect("postgres")
-	sqlQuery, args, err := buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(&dialect, aasDBID, submodelIdentifier)
+	exists, err := submodelReferenceExistsInAssetAdministrationShellInTransaction(
+		tx, aasDBID, submodelIdentifier, "AASREPO-CHECKSMREFINAAS",
+	)
 	if err != nil {
-		return common.NewInternalServerError("AASREPO-CHECKSMREFINAAS-BUILDEXISTSSQL " + err.Error())
+		return err
 	}
-
-	var submodelReferenceExists int
-	if err := tx.QueryRow(sqlQuery, args...).Scan(&submodelReferenceExists); err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("AASREPO-CHECKSMREFINAAS-SMREFNOTFOUND Submodel reference to Submodel with ID '" + submodelIdentifier + "' not found in Asset Administration Shell with ID '" + aasIdentifier + "'")
-		}
-		return common.NewInternalServerError("AASREPO-CHECKSMREFINAAS-EXECEXISTSSQL " + err.Error())
+	if !exists {
+		return common.NewErrNotFound("AASREPO-CHECKSMREFINAAS-SMREFNOTFOUND Submodel reference to Submodel with ID '" + submodelIdentifier + "' not found in Asset Administration Shell with ID '" + aasIdentifier + "'")
 	}
 
 	return nil
+}
+
+func submodelReferenceExistsInAssetAdministrationShellInTransaction(
+	tx *sql.Tx,
+	aasDBID int64,
+	submodelIdentifier string,
+	errorPrefix string,
+) (bool, error) {
+	dialect := goqu.Dialect("postgres")
+	sqlQuery, args, err := buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(&dialect, aasDBID, submodelIdentifier)
+	if err != nil {
+		return false, common.NewInternalServerError(errorPrefix + "-BUILDEXISTSSQL " + err.Error())
+	}
+
+	var submodelReferenceExists int
+	if err = tx.QueryRow(sqlQuery, args...).Scan(&submodelReferenceExists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError(errorPrefix + "-EXECEXISTSSQL " + err.Error())
+	}
+	return true, nil
 }
 
 // GetAssetAdministrationShells returns a paginated list of AAS objects and the next cursor.
