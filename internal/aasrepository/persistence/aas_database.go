@@ -1046,14 +1046,14 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		return false, err
 	}
 
-	isUpdate := false
+	result := PutAssetAdministrationShellResult{}
 	err := common.ExecuteInTransaction(
 		s.db,
 		"AASREPO-PUTAAS-STARTTX",
 		"AASREPO-PUTAAS-COMMIT",
 		func(tx *sql.Tx) error {
 			var txErr error
-			isUpdate, txErr = s.putAssetAdministrationShellByIDInTransactionValidated(ctx, tx, aasIdentifier, aas)
+			result, txErr = s.putAssetAdministrationShellByIDInTransactionValidated(ctx, tx, aasIdentifier, aas)
 			return txErr
 		},
 	)
@@ -1061,108 +1061,122 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		return false, err
 	}
 
-	return isUpdate, nil
+	return result.IsUpdate, nil
+}
+
+// PutAssetAdministrationShellResult describes the repository mutation performed by a PUT.
+type PutAssetAdministrationShellResult struct {
+	IsUpdate bool
+	Changed  bool
+	Previous types.IAssetAdministrationShell
 }
 
 // PutAssetAdministrationShellByIDInTransaction upserts an AAS using an existing transaction.
 func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (bool, error) {
+	result, err := s.PutAssetAdministrationShellByIDInTransactionWithResult(ctx, tx, aasIdentifier, aas)
+	return result.IsUpdate, err
+}
+
+// PutAssetAdministrationShellByIDInTransactionWithResult upserts an AAS and reports whether persisted content changed.
+func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDInTransactionWithResult(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (PutAssetAdministrationShellResult, error) {
 	if tx == nil {
-		return false, common.NewInternalServerError("AASREPO-PUTAAS-NILTX transaction must not be nil")
+		return PutAssetAdministrationShellResult{}, common.NewInternalServerError("AASREPO-PUTAAS-NILTX transaction must not be nil")
 	}
 	if aasIdentifier != aas.ID() {
-		return false, common.NewErrBadRequest("AASREPO-PUTAAS-IDMISMATCH Asset Administration Shell ID in path and body do not match")
+		return PutAssetAdministrationShellResult{}, common.NewErrBadRequest("AASREPO-PUTAAS-IDMISMATCH Asset Administration Shell ID in path and body do not match")
 	}
 	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-PUTAAS-VERIFY"); err != nil {
-		return false, err
+		return PutAssetAdministrationShellResult{}, err
 	}
 
 	return s.putAssetAdministrationShellByIDInTransactionValidated(ctx, tx, aasIdentifier, aas)
 }
 
-func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTransactionValidated(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (bool, error) {
+func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTransactionValidated(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (PutAssetAdministrationShellResult, error) {
 	dialect := goqu.Dialect("postgres")
 	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
-		return false, err
+		return PutAssetAdministrationShellResult{}, err
 	}
 	isUpdate := true
 	existingID, scanErr := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
 	if scanErr != nil {
 		if scanErr != sql.ErrNoRows {
-			return false, common.NewInternalServerError("AASREPO-PUTAAS-EXECSELECT " + scanErr.Error())
+			return PutAssetAdministrationShellResult{}, common.NewInternalServerError("AASREPO-PUTAAS-EXECSELECT " + scanErr.Error())
 		}
 		isUpdate = false
 	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTAAS-SHOULDENFORCE")
 	if enforceErr != nil {
-		return false, enforceErr
+		return PutAssetAdministrationShellResult{}, enforceErr
 	}
 	if shouldEnforce {
 		ctx = auth.SelectPutFormulaByExistence(ctx, isUpdate)
 	}
 
-	if shouldEnforce && isUpdate {
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
-		if visErr != nil {
-			return false, visErr
+	var previous types.IAssetAdministrationShell
+	if isUpdate {
+		var unchanged bool
+		previous, unchanged, scanErr = s.loadPreviousAASForPutTx(ctx, tx, aasIdentifier, existingID, aas, shouldEnforce)
+		if scanErr != nil {
+			return PutAssetAdministrationShellResult{}, scanErr
 		}
-		if !exists {
-			return false, common.NewErrNotFound("AASREPO-PUTAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		if !visible {
-			return false, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED existing AAS is not accessible under ABAC constraints")
+		if unchanged {
+			return PutAssetAdministrationShellResult{IsUpdate: true, Previous: previous}, nil
 		}
 	}
 	var previousSnapshot map[string]any
 	var managedThumbnail *commonmodel.ManagedThumbnailForReplacement
 	if isUpdate {
-		previousSnapshot, scanErr = s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
-		if scanErr != nil {
-			return false, scanErr
+		if history.ActiveConfig().EvidenceEnabled {
+			previousSnapshot, scanErr = aasToHistorySnapshot(previous)
+			if scanErr != nil {
+				return PutAssetAdministrationShellResult{}, scanErr
+			}
 		}
 		managedThumbnail, scanErr = loadManagedThumbnailForReplacementTx(tx, existingID)
 		if scanErr != nil {
-			return false, scanErr
+			return PutAssetAdministrationShellResult{}, scanErr
 		}
 	}
 
 	if isUpdate {
 		if cleanupErr := cleanupThumbnailLargeObjectsByAASDBID(tx, &dialect, existingID, "AASREPO-PUTAAS"); cleanupErr != nil {
-			return false, cleanupErr
+			return PutAssetAdministrationShellResult{}, cleanupErr
 		}
 
 		deleteSQL, deleteArgs, deleteBuildErr := buildDeleteAssetAdministrationShellByDBIDQuery(&dialect, existingID)
 		if deleteBuildErr != nil {
-			return false, common.NewInternalServerError("AASREPO-PUTAAS-BUILDDELETE " + deleteBuildErr.Error())
+			return PutAssetAdministrationShellResult{}, common.NewInternalServerError("AASREPO-PUTAAS-BUILDDELETE " + deleteBuildErr.Error())
 		}
 		if _, deleteErr := tx.Exec(deleteSQL, deleteArgs...); deleteErr != nil {
-			return false, common.NewInternalServerError("AASREPO-PUTAAS-EXECDELETE " + deleteErr.Error())
+			return PutAssetAdministrationShellResult{}, common.NewInternalServerError("AASREPO-PUTAAS-EXECDELETE " + deleteErr.Error())
 		}
 	}
 
 	if err := s.createAssetAdministrationShellInTransaction(tx, aas); err != nil {
-		return false, err
+		return PutAssetAdministrationShellResult{}, err
 	}
 	if managedThumbnail != nil {
 		newAASID, idErr := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 		if idErr != nil {
-			return false, common.NewInternalServerError("AASREPO-PUTAAS-GETNEWAASID " + idErr.Error())
+			return PutAssetAdministrationShellResult{}, common.NewInternalServerError("AASREPO-PUTAAS-GETNEWAASID " + idErr.Error())
 		}
 		if restoreErr := restoreManagedThumbnailAfterReplacementTx(tx, newAASID, aas.AssetInformation(), *managedThumbnail); restoreErr != nil {
-			return false, restoreErr
+			return PutAssetAdministrationShellResult{}, restoreErr
 		}
 	}
 
 	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
-			return false, visErr
+			return PutAssetAdministrationShellResult{}, visErr
 		}
 		if !exists {
-			return false, common.NewInternalServerError("AASREPO-PUTAAS-ABACCHECKMISSING written AAS not found before commit")
+			return PutAssetAdministrationShellResult{}, common.NewInternalServerError("AASREPO-PUTAAS-ABACCHECKMISSING written AAS not found before commit")
 		}
 		if !visible {
-			return false, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED written AAS is not accessible under ABAC constraints")
+			return PutAssetAdministrationShellResult{}, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED written AAS is not accessible under ABAC constraints")
 		}
 	}
 
@@ -1171,10 +1185,58 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 		changeType = history.ChangeUpdated
 	}
 	if err := s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, changeType); err != nil {
-		return false, err
+		return PutAssetAdministrationShellResult{}, err
 	}
 
-	return isUpdate, nil
+	return PutAssetAdministrationShellResult{IsUpdate: isUpdate, Changed: true, Previous: previous}, nil
+}
+
+func (s *AssetAdministrationShellDatabase) loadPreviousAASForPutTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+	aasDatabaseID int64,
+	submitted types.IAssetAdministrationShell,
+	shouldEnforce bool,
+) (types.IAssetAdministrationShell, bool, error) {
+	if shouldEnforce {
+		exists, visible, err := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+		if err != nil {
+			return nil, false, err
+		}
+		if !exists {
+			return nil, false, common.NewErrNotFound("AASREPO-PUTAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		if !visible {
+			return nil, false, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED existing AAS is not accessible under ABAC constraints")
+		}
+	}
+	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDatabaseID)
+	if err != nil {
+		return nil, false, err
+	}
+	unchanged, err := assetAdministrationShellsEqual(previous, submitted)
+	return previous, unchanged, err
+}
+
+func assetAdministrationShellsEqual(previous types.IAssetAdministrationShell, submitted types.IAssetAdministrationShell) (bool, error) {
+	previousSnapshot, err := aasToHistorySnapshot(previous)
+	if err != nil {
+		return false, err
+	}
+	submittedSnapshot, err := aasToHistorySnapshot(submitted)
+	if err != nil {
+		return false, err
+	}
+	previousHash, err := common.CanonicalJSONHash(previousSnapshot)
+	if err != nil {
+		return false, common.NewInternalServerError("AASREPO-PUTAAS-HASHPREVIOUS " + err.Error())
+	}
+	submittedHash, err := common.CanonicalJSONHash(submittedSnapshot)
+	if err != nil {
+		return false, common.NewInternalServerError("AASREPO-PUTAAS-HASHSUBMITTED " + err.Error())
+	}
+	return previousHash == submittedHash, nil
 }
 
 func loadManagedThumbnailForReplacementTx(tx *sql.Tx, aasDatabaseID int64) (*commonmodel.ManagedThumbnailForReplacement, error) {

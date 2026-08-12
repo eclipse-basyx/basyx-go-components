@@ -246,6 +246,65 @@ func TestBuildSubmodelDescriptorDerivesFromIdentifiable(t *testing.T) {
 	require.Equal(t, "http", descriptor.Endpoints[0].ProtocolInformation.EndpointProtocol)
 }
 
+func TestSubmodelDescriptorComparisonIgnoresElementChanges(t *testing.T) {
+	config := RegistrySyncConfig{ExternalBaseURLs: []string{"https://public.example/api/v3"}}
+	previous, err := jsonization.SubmodelFromJsonable(map[string]any{
+		"id": "urn:example:sm:compare", "modelType": "Submodel",
+		"submodelElements": []any{map[string]any{
+			"idShort": "value", "modelType": "Property", "valueType": "xs:string", "value": "old",
+		}},
+	})
+	require.NoError(t, err)
+	submitted, err := jsonization.SubmodelFromJsonable(map[string]any{
+		"id": "urn:example:sm:compare", "modelType": "Submodel",
+		"submodelElements": []any{map[string]any{
+			"idShort": "value", "modelType": "Property", "valueType": "xs:string", "value": "new",
+		}},
+	})
+	require.NoError(t, err)
+
+	previousDescriptor, err := config.buildSubmodelDescriptor(previous)
+	require.NoError(t, err)
+	submittedDescriptor, err := config.buildSubmodelDescriptor(submitted)
+	require.NoError(t, err)
+	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
+	require.NoError(t, err)
+	require.True(t, equal)
+
+	idShort := "changed"
+	submitted.SetIDShort(&idShort)
+	submittedDescriptor, err = config.buildSubmodelDescriptor(submitted)
+	require.NoError(t, err)
+	equal, err = registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
+	require.NoError(t, err)
+	require.False(t, equal)
+}
+
+func TestAASDescriptorComparisonIgnoresNonDescriptorMetadata(t *testing.T) {
+	config := RegistrySyncConfig{ExternalBaseURLs: []string{"https://public.example/api/v3"}}
+	assetInformation := types.NewAssetInformation(types.AssetKindInstance)
+	previous := types.NewAssetAdministrationShell("urn:example:aas:compare", assetInformation)
+	submitted := types.NewAssetAdministrationShell("urn:example:aas:compare", types.NewAssetInformation(types.AssetKindInstance))
+	category := "changed"
+	submitted.SetCategory(&category)
+
+	previousDescriptor, err := config.buildAASDescriptor(previous)
+	require.NoError(t, err)
+	submittedDescriptor, err := config.buildAASDescriptor(submitted)
+	require.NoError(t, err)
+	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
+	require.NoError(t, err)
+	require.True(t, equal)
+
+	globalAssetID := "urn:example:asset:changed"
+	submitted.AssetInformation().SetGlobalAssetID(&globalAssetID)
+	submittedDescriptor, err = config.buildAASDescriptor(submitted)
+	require.NoError(t, err)
+	equal, err = registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
+	require.NoError(t, err)
+	require.False(t, equal)
+}
+
 func TestBuildEmbeddedSubmodelDescriptorsSkipsNilReferencesAndKeys(t *testing.T) {
 	config := RegistrySyncConfig{ExternalBaseURLs: []string{"https://public.example/api/v3"}}
 

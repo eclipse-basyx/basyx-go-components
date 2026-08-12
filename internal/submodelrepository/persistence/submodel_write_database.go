@@ -415,7 +415,7 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	}
 	defer cleanup(&err)
 
-	isUpdate, err := s.putSubmodelInTransaction(ctx, tx, submodelID, submodel)
+	result, err := s.putSubmodelInTransaction(ctx, tx, submodelID, submodel)
 	if err != nil {
 		return false, err
 	}
@@ -425,36 +425,52 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 		return false, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
 	}
 
-	return isUpdate, nil
+	return result.IsUpdate, nil
+}
+
+// PutSubmodelResult describes the repository mutation performed by a PUT.
+type PutSubmodelResult struct {
+	IsUpdate bool
+	Changed  bool
+	Previous types.ISubmodel
 }
 
 // PutSubmodelInTransaction creates or replaces a submodel within an existing transaction.
 func (s *SubmodelDatabase) PutSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
+	result, err := s.PutSubmodelInTransactionWithResult(ctx, tx, submodelID, submodel)
+	return result.IsUpdate, err
+}
+
+// PutSubmodelInTransactionWithResult creates or replaces a submodel and reports whether persisted content changed.
+func (s *SubmodelDatabase) PutSubmodelInTransactionWithResult(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (PutSubmodelResult, error) {
 	if tx == nil {
-		return false, common.NewInternalServerError("SMREPO-PUTSM-NILTX transaction must not be nil")
+		return PutSubmodelResult{}, common.NewInternalServerError("SMREPO-PUTSM-NILTX transaction must not be nil")
 	}
 	if submodelID != submodel.ID() {
-		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
+		return PutSubmodelResult{}, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
 
 	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
-		return false, err
+		return PutSubmodelResult{}, err
 	}
 
 	return s.putSubmodelInTransaction(ctx, tx, submodelID, submodel)
 }
 
-func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
+func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (PutSubmodelResult, error) {
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelID); err != nil {
-		return false, err
+		return PutSubmodelResult{}, err
 	}
 
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return s.createSubmodelForPutTx(ctx, tx, submodel)
+		if _, createErr := s.createSubmodelForPutTx(ctx, tx, submodel); createErr != nil {
+			return PutSubmodelResult{}, createErr
+		}
+		return PutSubmodelResult{Changed: true}, nil
 	}
 	if err != nil {
-		return false, common.NewInternalServerError("SMREPO-PUTSM-LOCKSUBMODEL " + err.Error())
+		return PutSubmodelResult{}, common.NewInternalServerError("SMREPO-PUTSM-LOCKSUBMODEL " + err.Error())
 	}
 	return s.reconcileExistingSubmodelForPutTx(ctx, tx, submodelDatabaseID, submodel)
 }
@@ -487,51 +503,51 @@ func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.T
 	return false, nil
 }
 
-func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submitted types.ISubmodel) (bool, error) {
+func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submitted types.ISubmodel) (PutSubmodelResult, error) {
 	readCtx, shouldEnforce, err := selectPutFormulaContext(ctx, true)
 	if err != nil {
-		return false, err
+		return PutSubmodelResult{}, err
 	}
 	previous, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
 	if err != nil {
-		return false, mapPutReadbackError(err, shouldEnforce, true)
+		return PutSubmodelResult{}, mapPutReadbackError(err, shouldEnforce, true)
 	}
 	plan, err := s.buildSubmodelReconciliationPlan(previous, submitted)
 	if err != nil {
-		return false, err
+		return PutSubmodelResult{}, err
 	}
 	if !plan.hasLiveMutation() {
 		if shouldEnforce {
 			if _, err = s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID()); err != nil {
-				return false, mapPutReadbackError(err, true, false)
+				return PutSubmodelResult{}, mapPutReadbackError(err, true, false)
 			}
 		}
-		return true, nil
+		return PutSubmodelResult{IsUpdate: true, Previous: previous}, nil
 	}
 	var previousHistorySnapshot map[string]any
 	if history.ActiveConfig().EvidenceEnabled {
 		previousHistorySnapshot, err = submodelToHistorySnapshot(previous)
 		if err != nil {
-			return false, err
+			return PutSubmodelResult{}, err
 		}
 	}
 	if err = s.executeSubmodelReconciliationTx(ctx, tx, submitted.ID(), plan); err != nil {
-		return false, err
+		return PutSubmodelResult{}, err
 	}
 	recordHistory := history.MutationRecordingEnabled()
 	if !shouldEnforce && !recordHistory {
-		return true, nil
+		return PutSubmodelResult{IsUpdate: true, Changed: true, Previous: previous}, nil
 	}
 	persisted, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
 	if err != nil {
-		return false, mapPutReadbackError(err, shouldEnforce, false)
+		return PutSubmodelResult{}, mapPutReadbackError(err, shouldEnforce, false)
 	}
 	if recordHistory {
 		if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, previousHistorySnapshot, history.ChangeUpdated, false); err != nil {
-			return false, err
+			return PutSubmodelResult{}, err
 		}
 	}
-	return true, nil
+	return PutSubmodelResult{IsUpdate: true, Changed: true, Previous: previous}, nil
 }
 
 func (s *SubmodelDatabase) executeSubmodelReconciliationTx(

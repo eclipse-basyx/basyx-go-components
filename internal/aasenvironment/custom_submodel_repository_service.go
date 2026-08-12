@@ -178,15 +178,21 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 
 	isUpdate := false
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-		updated, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransaction(ctx, tx, decodedIdentifier, submodel)
+		putResult, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransactionWithResult(ctx, tx, decodedIdentifier, submodel)
 		if putErr != nil {
 			return putErr
 		}
-		isUpdate = updated
+		isUpdate = putResult.IsUpdate
+		if !putResult.Changed {
+			return nil
+		}
 
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+		descriptor, descriptorChanged, descriptorErr := s.syncConfig.changedSubmodelDescriptor(putResult.Previous, submodel)
 		if descriptorErr != nil {
 			return descriptorErr
+		}
+		if !descriptorChanged {
+			return nil
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
 			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
