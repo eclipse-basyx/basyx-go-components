@@ -30,6 +30,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"reflect"
+	"strings"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -320,9 +322,25 @@ func reconciliationTypeData(node *flattenedInsertNode) (string, map[string]any, 
 		if key == "id" {
 			continue
 		}
-		result[key] = reconciliationRecordValue(value)
+		result[key] = normalizedReconciliationRecordValue(key, value)
 	}
 	return part.TableName, result, nil
+}
+
+func normalizedReconciliationRecordValue(column string, value any) any {
+	normalized := reconciliationRecordValue(value)
+	if !strings.HasSuffix(column, "_datetime") {
+		return normalized
+	}
+	text, ok := normalized.(string)
+	if !ok {
+		return normalized
+	}
+	parsed, err := common.ParseISO8601DateTime(text)
+	if err != nil {
+		return normalized
+	}
+	return parsed.UTC().Round(time.Microsecond).Format(time.RFC3339Nano)
 }
 
 func reconciliationRecordValue(value any) any {

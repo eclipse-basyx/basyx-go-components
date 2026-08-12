@@ -31,7 +31,6 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
@@ -468,16 +467,22 @@ func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.T
 	if err = s.createSubmodelInTransaction(tx, submodel); err != nil {
 		return false, err
 	}
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodel.ID())
-	if err != nil {
-		return false, common.NewInternalServerError("SMREPO-PUTSM-RESOLVECREATED " + err.Error())
+	recordHistory := history.MutationRecordingEnabled()
+	persisted := submodel
+	if shouldEnforce || recordHistory {
+		submodelDatabaseID, resolveErr := persistenceutils.GetSubmodelDatabaseID(tx, submodel.ID())
+		if resolveErr != nil {
+			return false, common.NewInternalServerError("SMREPO-PUTSM-RESOLVECREATED " + resolveErr.Error())
+		}
+		persisted, err = s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submodel.ID())
+		if err != nil {
+			return false, mapPutReadbackError(err, shouldEnforce, false)
+		}
 	}
-	persisted, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submodel.ID())
-	if err != nil {
-		return false, mapPutReadbackError(err, shouldEnforce, false)
-	}
-	if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, nil, history.ChangeCreated, false); err != nil {
-		return false, err
+	if recordHistory {
+		if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, nil, history.ChangeCreated, false); err != nil {
+			return false, err
+		}
 	}
 	return false, nil
 }
@@ -491,36 +496,40 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 	if err != nil {
 		return false, mapPutReadbackError(err, shouldEnforce, true)
 	}
-	previousHistorySnapshot, err := submodelToHistorySnapshot(previous)
+	plan, err := s.buildSubmodelReconciliationPlan(previous, submitted)
 	if err != nil {
 		return false, err
 	}
-	previousSnapshot, err := submodelToReconciliationSnapshot(previous)
-	if err != nil {
-		return false, err
+	if !plan.hasLiveMutation() {
+		if shouldEnforce {
+			if _, err = s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID()); err != nil {
+				return false, mapPutReadbackError(err, true, false)
+			}
+		}
+		return true, nil
 	}
-	submittedSnapshot, err := submodelToReconciliationSnapshot(submitted)
-	if err != nil {
-		return false, err
-	}
-	diff, err := history.BuildJSONPatch(previousSnapshot, submittedSnapshot)
-	if err != nil {
-		return false, err
-	}
-	if len(diff) > 0 {
-		if err = s.executeSubmodelReconciliationTx(ctx, tx, previous, submitted, previousSnapshot, submittedSnapshot); err != nil {
+	var previousHistorySnapshot map[string]any
+	if history.ActiveConfig().EvidenceEnabled {
+		previousHistorySnapshot, err = submodelToHistorySnapshot(previous)
+		if err != nil {
 			return false, err
 		}
+	}
+	if err = s.executeSubmodelReconciliationTx(ctx, tx, submitted.ID(), plan); err != nil {
+		return false, err
+	}
+	recordHistory := history.MutationRecordingEnabled()
+	if !shouldEnforce && !recordHistory {
+		return true, nil
 	}
 	persisted, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
 	if err != nil {
 		return false, mapPutReadbackError(err, shouldEnforce, false)
 	}
-	if err = verifyPutReadback(submitted, persisted); err != nil {
-		return false, err
-	}
-	if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, previousHistorySnapshot, history.ChangeUpdated, false); err != nil {
-		return false, err
+	if recordHistory {
+		if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, previousHistorySnapshot, history.ChangeUpdated, false); err != nil {
+			return false, err
+		}
 	}
 	return true, nil
 }
@@ -528,22 +537,16 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 func (s *SubmodelDatabase) executeSubmodelReconciliationTx(
 	ctx context.Context,
 	tx *sql.Tx,
-	previous types.ISubmodel,
-	submitted types.ISubmodel,
-	previousSnapshot map[string]any,
-	submittedSnapshot map[string]any,
+	submodelID string,
+	plan submodelReconciliationPlan,
 ) error {
-	plan, err := s.buildSubmodelReconciliationPlan(previous, submitted, previousSnapshot, submittedSnapshot)
-	if err != nil {
-		return err
-	}
 	if !plan.hasLiveMutation() {
 		return nil
 	}
-	if err = deferSubmodelElementReconciliationConstraints(ctx, tx); err != nil {
+	if err := deferSubmodelElementReconciliationConstraints(ctx, tx); err != nil {
 		return err
 	}
-	_, err = executeSubmodelReconciliationStatement(ctx, tx, submitted.ID(), plan)
+	_, err := executeSubmodelReconciliationStatement(ctx, tx, submodelID, plan)
 	return err
 }
 
@@ -602,76 +605,6 @@ func mapPutReadbackError(err error, shouldEnforce bool, existingState bool) erro
 		return common.NewErrDenied("SMREPO-PUTSM-ABACDENIED " + state + " submodel is not accessible under ABAC constraints")
 	}
 	return common.NewInternalServerError("SMREPO-PUTSM-READBACKMISSING written submodel not found inside transaction")
-}
-
-func verifyPutReadback(submitted types.ISubmodel, persisted types.ISubmodel) error {
-	submittedSnapshot, err := submodelToReconciliationSnapshot(submitted)
-	if err != nil {
-		return err
-	}
-	persistedSnapshot, err := submodelToReconciliationSnapshot(persisted)
-	if err != nil {
-		return err
-	}
-	diff, err := history.BuildJSONPatch(submittedSnapshot, persistedSnapshot)
-	if err != nil {
-		return err
-	}
-	if len(diff) != 0 {
-		return common.NewInternalServerError("SMREPO-PUTSM-READBACKMISMATCH persisted Submodel does not match submitted replacement")
-	}
-	return nil
-}
-
-func submodelToReconciliationSnapshot(submodel types.ISubmodel) (map[string]any, error) {
-	snapshot, err := submodelToHistorySnapshot(submodel)
-	if err != nil {
-		return nil, err
-	}
-	pruneEmptyJSONArrays(snapshot)
-	normalizeReconciliationDateTimes(snapshot)
-	return snapshot, nil
-}
-
-func normalizeReconciliationDateTimes(value any) {
-	switch typed := value.(type) {
-	case map[string]any:
-		for _, child := range typed {
-			normalizeReconciliationDateTimes(child)
-		}
-		if typed["modelType"] != "Property" || typed["valueType"] != "xs:dateTime" {
-			return
-		}
-		dateTime, ok := typed["value"].(string)
-		if !ok {
-			return
-		}
-		parsed, err := common.ParseISO8601DateTime(dateTime)
-		if err == nil {
-			typed["value"] = parsed.UTC().Round(time.Microsecond).Format(time.RFC3339Nano)
-		}
-	case []any:
-		for _, child := range typed {
-			normalizeReconciliationDateTimes(child)
-		}
-	}
-}
-
-func pruneEmptyJSONArrays(value any) {
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, child := range typed {
-			if array, ok := child.([]any); ok && len(array) == 0 {
-				delete(typed, key)
-				continue
-			}
-			pruneEmptyJSONArrays(child)
-		}
-	case []any:
-		for _, child := range typed {
-			pruneEmptyJSONArrays(child)
-		}
-	}
 }
 
 // DeleteSubmodel deletes a submodel and checks ABAC access on the existing submodel before delete when ABAC is enabled.

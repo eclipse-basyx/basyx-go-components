@@ -233,7 +233,7 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
+func TestPutSubmodelNoOpUpdateReturnsTrueWithoutMutationOrHistory(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
@@ -249,7 +249,35 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	expectBareSubmodelStateLoad(mock, "sm-existing", "smexisting")
-	expectBareSubmodelStateLoad(mock, "sm-existing", "smexisting")
+	mock.ExpectCommit()
+
+	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
+	require.NoError(t, err)
+	require.True(t, isUpdate)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPutSubmodelChangedUpdateExecutesReconciliationAndHistory(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-existing")
+	idShort := "new"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
+	expectBareSubmodelStateLoad(mock, "sm-existing", "old")
+	mock.ExpectExec(`SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos DEFERRED`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`WITH reconciliation_plan`).
+		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 0, 0))
+	expectBareSubmodelStateLoad(mock, "sm-existing", "new")
 	expectSubmodelHistoryAppend(mock)
 	mock.ExpectCommit()
 

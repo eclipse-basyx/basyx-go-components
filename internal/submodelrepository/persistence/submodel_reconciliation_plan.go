@@ -34,7 +34,6 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 )
 
@@ -119,10 +118,8 @@ func wrapReconciliationDeleteRows(paths []string) []reconciliationDeleteJSONRow 
 func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 	oldSubmodel types.ISubmodel,
 	newSubmodel types.ISubmodel,
-	oldSnapshot map[string]any,
-	newSnapshot map[string]any,
 ) (submodelReconciliationPlan, error) {
-	metadata, err := buildSubmodelReconciliationMetadata(newSubmodel, oldSnapshot, newSnapshot)
+	metadata, err := buildSubmodelReconciliationMetadata(oldSubmodel, newSubmodel)
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
@@ -134,10 +131,7 @@ func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	updates, inserts, deletes, err := reconcileSubmodelElementRows(oldRows, newRows)
-	if err != nil {
-		return submodelReconciliationPlan{}, err
-	}
+	updates, inserts, deletes := reconcileSubmodelElementRows(oldRows, newRows)
 	return submodelReconciliationPlan{
 		Metadata:                metadata,
 		Updates:                 updates,
@@ -161,86 +155,64 @@ func countDeletedReconciliationRows(rows []submodelelements.ReconciliationElemen
 }
 
 func buildSubmodelReconciliationMetadata(
+	oldSubmodel types.ISubmodel,
 	newSubmodel types.ISubmodel,
-	oldSnapshot map[string]any,
-	newSnapshot map[string]any,
 ) (submodelReconciliationMetadata, error) {
-	metadataPatch, err := history.BuildJSONPatch(withoutSubmodelElements(oldSnapshot), withoutSubmodelElements(newSnapshot))
+	previous, err := buildSubmodelReconciliationMetadataValues(oldSubmodel)
 	if err != nil {
 		return submodelReconciliationMetadata{}, err
 	}
-	changedRoots := changedRootJSONFields(metadataPatch)
-	payload, err := jsonizeSubmodelPayload(newSubmodel)
+	target, err := buildSubmodelReconciliationMetadataValues(newSubmodel)
 	if err != nil {
 		return submodelReconciliationMetadata{}, err
 	}
-	semanticID, err := submodelelements.BuildReconciliationReference(newSubmodel.SemanticID(), true)
+	target.CoreChanged = !reflect.DeepEqual(previous.IDShort, target.IDShort) ||
+		!reflect.DeepEqual(previous.Category, target.Category) ||
+		!reflect.DeepEqual(previous.Kind, target.Kind)
+	target.PayloadChanged = !reflect.DeepEqual(previous.Description, target.Description) ||
+		!reflect.DeepEqual(previous.DisplayName, target.DisplayName) ||
+		!reflect.DeepEqual(previous.Administration, target.Administration) ||
+		!reflect.DeepEqual(previous.EmbeddedDataSpecs, target.EmbeddedDataSpecs) ||
+		!reflect.DeepEqual(previous.SupplementalIDs, target.SupplementalIDs) ||
+		!reflect.DeepEqual(previous.Extensions, target.Extensions) ||
+		!reflect.DeepEqual(previous.Qualifiers, target.Qualifiers)
+	target.SemanticIDChanged = !reflect.DeepEqual(previous.SemanticID, target.SemanticID)
+	target.SupplementalChanged = !reflect.DeepEqual(previous.SupplementalRefs, target.SupplementalRefs)
+	return target, nil
+}
+
+func buildSubmodelReconciliationMetadataValues(submodel types.ISubmodel) (submodelReconciliationMetadata, error) {
+	payload, err := jsonizeSubmodelPayload(submodel)
 	if err != nil {
 		return submodelReconciliationMetadata{}, err
 	}
-	supplemental, err := submodelelements.BuildReconciliationReferences(newSubmodel.SupplementalSemanticIDs())
+	semanticID, err := submodelelements.BuildReconciliationReference(submodel.SemanticID(), true)
+	if err != nil {
+		return submodelReconciliationMetadata{}, err
+	}
+	supplemental, err := submodelelements.BuildReconciliationReferences(submodel.SupplementalSemanticIDs())
 	if err != nil {
 		return submodelReconciliationMetadata{}, err
 	}
 	var kind *int
-	if newSubmodel.Kind() != nil {
-		kindValue := int(*newSubmodel.Kind())
+	if submodel.Kind() != nil {
+		kindValue := int(*submodel.Kind())
 		kind = &kindValue
 	}
 	return submodelReconciliationMetadata{
-		CoreChanged:         hasAnyRoot(changedRoots, "idShort", "category", "kind"),
-		PayloadChanged:      hasAnyRoot(changedRoots, "description", "displayName", "administration", "embeddedDataSpecifications", "supplementalSemanticIds", "extensions", "qualifiers"),
-		SemanticIDChanged:   changedRoots["semanticId"],
-		SupplementalChanged: changedRoots["supplementalSemanticIds"],
-		IDShort:             newSubmodel.IDShort(),
-		Category:            newSubmodel.Category(),
-		Kind:                kind,
-		Description:         nullableRawJSON(payload.description),
-		DisplayName:         nullableRawJSON(payload.displayName),
-		Administration:      nullableRawJSON(payload.administrativeInformation),
-		EmbeddedDataSpecs:   nullableRawJSON(payload.embeddedDataSpecification),
-		SupplementalIDs:     nullableRawJSON(payload.supplementalSemanticIDs),
-		Extensions:          nullableRawJSON(payload.extensions),
-		Qualifiers:          nullableRawJSON(payload.qualifiers),
-		SemanticID:          semanticID,
-		SupplementalRefs:    supplemental,
+		IDShort:           submodel.IDShort(),
+		Category:          submodel.Category(),
+		Kind:              kind,
+		Description:       nullableRawJSON(payload.description),
+		DisplayName:       nullableRawJSON(payload.displayName),
+		Administration:    nullableRawJSON(payload.administrativeInformation),
+		EmbeddedDataSpecs: nullableRawJSON(payload.embeddedDataSpecification),
+		SupplementalIDs:   nullableRawJSON(payload.supplementalSemanticIDs),
+		Extensions:        nullableRawJSON(payload.extensions),
+		Qualifiers:        nullableRawJSON(payload.qualifiers),
+		SemanticID:        semanticID,
+		SupplementalRefs:  supplemental,
 	}, nil
-}
-
-func withoutSubmodelElements(snapshot map[string]any) map[string]any {
-	result := make(map[string]any, len(snapshot))
-	for key, value := range snapshot {
-		if key != "submodelElements" {
-			result[key] = value
-		}
-	}
-	return result
-}
-
-func changedRootJSONFields(patch []map[string]any) map[string]bool {
-	result := make(map[string]bool)
-	for _, operation := range patch {
-		path, ok := operation["path"].(string)
-		if !ok || !strings.HasPrefix(path, "/") {
-			continue
-		}
-		token := strings.TrimPrefix(path, "/")
-		if separator := strings.IndexByte(token, '/'); separator >= 0 {
-			token = token[:separator]
-		}
-		token = strings.ReplaceAll(strings.ReplaceAll(token, "~1", "/"), "~0", "~")
-		result[token] = true
-	}
-	return result
-}
-
-func hasAnyRoot(fields map[string]bool, names ...string) bool {
-	for _, name := range names {
-		if fields[name] {
-			return true
-		}
-	}
-	return false
 }
 
 func nullableRawJSON(value *string) json.RawMessage {
@@ -253,7 +225,7 @@ func nullableRawJSON(value *string) json.RawMessage {
 func reconcileSubmodelElementRows(
 	oldRows []submodelelements.ReconciliationElementRow,
 	newRows []submodelelements.ReconciliationElementRow,
-) ([]submodelelements.ReconciliationElementRow, []submodelelements.ReconciliationElementRow, []string, error) {
+) ([]submodelelements.ReconciliationElementRow, []submodelelements.ReconciliationElementRow, []string) {
 	oldByPath := indexReconciliationRows(oldRows)
 	retained := make(map[string]bool, len(newRows))
 	inserted := make(map[string]bool, len(newRows))
@@ -270,12 +242,8 @@ func reconcileSubmodelElementRows(
 			continue
 		}
 		retained[target.Path] = true
-		patch, err := history.BuildJSONPatch(previous, target)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		if len(patch) > 0 {
-			target.Changes = reconciliationElementChanges(previous, target)
+		target.Changes = reconciliationElementChanges(previous, target)
+		if hasReconciliationElementChanges(target.Changes) {
 			updates = append(updates, target)
 		}
 	}
@@ -297,7 +265,12 @@ func reconcileSubmodelElementRows(
 		deletes = append(deletes, previous.Path)
 	}
 	sort.Strings(deletes)
-	return updates, inserts, deletes, nil
+	return updates, inserts, deletes
+}
+
+func hasReconciliationElementChanges(changes submodelelements.ReconciliationElementChanges) bool {
+	return changes.Core || changes.Payload || changes.SemanticID || changes.SupplementalID ||
+		changes.TypeData || changes.LanguageValues || changes.ValueID
 }
 
 func reconciliationElementChanges(

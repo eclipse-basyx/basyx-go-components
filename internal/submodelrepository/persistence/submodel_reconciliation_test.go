@@ -37,7 +37,6 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
@@ -47,13 +46,8 @@ import (
 func TestSubmodelReconciliationQueryHasConstantSingleStatementShape(t *testing.T) {
 	oldSubmodel := readReconciliationFixture(t, "../integration_tests/bodies/post/postSubmodel.json")
 	newSubmodel := readReconciliationFixture(t, "../integration_tests/bodies/put/putSubmodelUpdate.json")
-	oldSnapshot, err := submodelToHistorySnapshot(oldSubmodel)
-	require.NoError(t, err)
-	newSnapshot, err := submodelToHistorySnapshot(newSubmodel)
-	require.NoError(t, err)
-
 	sut := &SubmodelDatabase{}
-	plan, err := sut.buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, oldSnapshot, newSnapshot)
+	plan, err := sut.buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel)
 	require.NoError(t, err)
 	require.True(t, plan.hasLiveMutation())
 
@@ -128,17 +122,51 @@ func TestReconciliationPlanOnlyMarksChangedPersistenceSection(t *testing.T) {
 	require.False(t, changes.ValueID)
 }
 
-func TestReconciliationSnapshotCanonicalizesDateTimePropertyValues(t *testing.T) {
+func TestReconciliationPlanDetectsIdenticalSubmodelsAsNoOp(t *testing.T) {
+	payload := `{"id":"sm","idShort":"same","modelType":"Submodel","submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"same"}]}`
+	previous := readReconciliationJSON(t, payload)
+	target := readReconciliationJSON(t, payload)
+
+	plan := buildReconciliationPlanForTest(t, previous, target)
+	require.False(t, plan.hasLiveMutation())
+	require.Empty(t, plan.Updates)
+	require.Empty(t, plan.Inserts)
+	require.Empty(t, plan.Deletes)
+}
+
+func TestReconciliationPlanDetectsMetadataOnlyChange(t *testing.T) {
+	previous := readReconciliationJSON(t, `{"id":"sm","idShort":"old","modelType":"Submodel","submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"same"}]}`)
+	target := readReconciliationJSON(t, `{"id":"sm","idShort":"new","modelType":"Submodel","submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"same"}]}`)
+
+	plan := buildReconciliationPlanForTest(t, previous, target)
+	require.True(t, plan.Metadata.CoreChanged)
+	require.False(t, plan.Metadata.PayloadChanged)
+	require.False(t, plan.Metadata.SemanticIDChanged)
+	require.False(t, plan.Metadata.SupplementalChanged)
+	require.Empty(t, plan.Updates)
+	require.Empty(t, plan.Inserts)
+	require.Empty(t, plan.Deletes)
+}
+
+func TestReconciliationPlanOnlyUpdatesChangedNestedElement(t *testing.T) {
+	previous := readReconciliationJSON(t, `{"id":"sm","category":"old","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"SubmodelElementCollection","value":[{"idShort":"P0","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P1","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P2","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P3","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P4","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P5","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P6","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P7","modelType":"Property","valueType":"xs:string","value":"old"},{"idShort":"P8","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P9","modelType":"Property","valueType":"xs:string","value":"same"}]}]}`)
+	target := readReconciliationJSON(t, `{"id":"sm","category":"new","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"SubmodelElementCollection","value":[{"idShort":"P0","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P1","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P2","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P3","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P4","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P5","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P6","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P7","modelType":"Property","valueType":"xs:string","value":"new"},{"idShort":"P8","modelType":"Property","valueType":"xs:string","value":"same"},{"idShort":"P9","modelType":"Property","valueType":"xs:string","value":"same"}]}]}`)
+
+	plan := buildReconciliationPlanForTest(t, previous, target)
+	require.True(t, plan.Metadata.CoreChanged)
+	require.Len(t, plan.Updates, 1)
+	require.Equal(t, "Group.P7", plan.Updates[0].Path)
+	require.True(t, plan.Updates[0].Changes.TypeData)
+	require.Empty(t, plan.Inserts)
+	require.Empty(t, plan.Deletes)
+}
+
+func TestReconciliationPlanCanonicalizesDateTimePropertyValues(t *testing.T) {
 	submitted := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"lastUpdate","modelType":"Property","valueType":"xs:dateTime","value":"2026-08-07T11:16:26.125183291Z"}]}`)
 	persisted := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"lastUpdate","modelType":"Property","valueType":"xs:dateTime","value":"2026-08-07T11:16:26.125183+00:00"}]}`)
 
-	submittedSnapshot, err := submodelToReconciliationSnapshot(submitted)
-	require.NoError(t, err)
-	persistedSnapshot, err := submodelToReconciliationSnapshot(persisted)
-	require.NoError(t, err)
-	diff, err := history.BuildJSONPatch(submittedSnapshot, persistedSnapshot)
-	require.NoError(t, err)
-	require.Empty(t, diff)
+	plan := buildReconciliationPlanForTest(t, persisted, submitted)
+	require.False(t, plan.hasLiveMutation())
 }
 
 func TestReconciliationQueryParameterCountIsConstantAtScale(t *testing.T) {
@@ -193,11 +221,7 @@ func TestContextWithoutFragmentFiltersPreservesUpdateFormula(t *testing.T) {
 
 func buildReconciliationPlanForTest(t *testing.T, oldSubmodel types.ISubmodel, newSubmodel types.ISubmodel) submodelReconciliationPlan {
 	t.Helper()
-	oldSnapshot, err := submodelToReconciliationSnapshot(oldSubmodel)
-	require.NoError(t, err)
-	newSnapshot, err := submodelToReconciliationSnapshot(newSubmodel)
-	require.NoError(t, err)
-	plan, err := (&SubmodelDatabase{}).buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, oldSnapshot, newSnapshot)
+	plan, err := (&SubmodelDatabase{}).buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel)
 	require.NoError(t, err)
 	return plan
 }
