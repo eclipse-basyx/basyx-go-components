@@ -318,9 +318,28 @@ func TestAASReconciliationQueryHasConstantSingleStatementShape(t *testing.T) {
 	require.Contains(t, query, "updated_aas_metadata AS (UPDATE")
 	require.Contains(t, query, "updated_specific_rows AS (UPDATE")
 	require.Contains(t, query, "inserted_reference_rows AS (INSERT")
+	require.Contains(t, query, "updated_specific_external_payload AS (UPDATE")
+	require.Contains(t, query, "inserted_specific_external_payload AS (INSERT")
+	require.Contains(t, query, "updated_specific_supplemental_payload AS (UPDATE")
+	require.Contains(t, query, "inserted_specific_supplemental_payload AS (INSERT")
+	externalPayloadCTE := aasReconciliationCTESQL(t, query, "inserted_specific_external_payload", "deleted_specific_external_keys")
+	require.NotContains(t, externalPayloadCTE, "ON CONFLICT")
+	supplementalPayloadCTE := aasReconciliationCTESQL(t, query, "inserted_specific_supplemental_payload", "deleted_specific_supplemental_keys")
+	require.NotContains(t, supplementalPayloadCTE, "ON CONFLICT")
 	require.NotContains(t, strings.ToLower(query), `delete from "aas"`)
 	require.NotContains(t, strings.ToLower(query), `insert into "aas"`)
 	require.NotContains(t, strings.TrimSuffix(query, ";"), ";")
+}
+
+func aasReconciliationCTESQL(t *testing.T, query string, name string, nextName string) string {
+	t.Helper()
+	startMarker := name + " AS ("
+	endMarker := "), " + nextName + " AS ("
+	start := strings.Index(query, startMarker)
+	require.NotEqual(t, -1, start)
+	end := strings.Index(query[start:], endMarker)
+	require.NotEqual(t, -1, end)
+	return query[start : start+end]
 }
 
 func TestAASReconciliationQueryParameterCountIsConstantAtScale(t *testing.T) {

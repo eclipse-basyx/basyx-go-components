@@ -148,7 +148,7 @@ func aasReconciliationReference(submodelID string) map[string]any {
 
 func reconciliationAASDatabaseID(t *testing.T, db *sql.DB, aasID string) int64 {
 	t.Helper()
-	query, args, err := goqu.From("aas").Select("id").Where(goqu.C("aas_id").Eq(aasID)).Prepared(true).ToSQL()
+	query, args, err := goqu.Dialect("postgres").From("aas").Select("id").Where(goqu.C("aas_id").Eq(aasID)).Prepared(true).ToSQL()
 	require.NoError(t, err)
 	var id int64
 	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&id))
@@ -157,7 +157,7 @@ func reconciliationAASDatabaseID(t *testing.T, db *sql.DB, aasID string) int64 {
 
 func reconciliationSpecificAssetIDRows(t *testing.T, db *sql.DB, aasDatabaseID int64) map[int]int64 {
 	t.Helper()
-	query, args, err := goqu.From("specific_asset_id").Select("position", "id").
+	query, args, err := goqu.Dialect("postgres").From("specific_asset_id").Select("position", "id").
 		Where(goqu.C("asset_information_id").Eq(aasDatabaseID)).Prepared(true).ToSQL()
 	require.NoError(t, err)
 	rows, err := db.QueryContext(t.Context(), query, args...)
@@ -176,7 +176,7 @@ func reconciliationSpecificAssetIDRows(t *testing.T, db *sql.DB, aasDatabaseID i
 
 func reconciliationAASReferenceRows(t *testing.T, db *sql.DB, aasDatabaseID int64) map[string]persistedAASReconciliationReference {
 	t.Helper()
-	query, args, err := goqu.From(goqu.T("aas_submodel_reference").As("reference")).
+	query, args, err := goqu.Dialect("postgres").From(goqu.T("aas_submodel_reference").As("reference")).
 		Join(goqu.T("aas_submodel_reference_key").As("key"), goqu.On(goqu.I("key.reference_id").Eq(goqu.I("reference.id")))).
 		Select(goqu.I("key.value"), goqu.I("reference.id"), goqu.I("reference.position")).
 		Where(goqu.I("reference.aas_id").Eq(aasDatabaseID)).Prepared(true).ToSQL()

@@ -250,12 +250,28 @@ func (b *aasReconciliationQueryBuilder) addSpecificExternalReferenceCTEs() {
 		goqu.L("(SELECT COUNT(*) FROM deleted_specific_external) >= 0"))
 	b.add("upserted_specific_external", b.dialect.Insert("specific_asset_id_external_subject_id_reference").Cols("id", "type").
 		FromQuery(externalSource).OnConflict(goqu.DoUpdate("id", aasExcludedRecord("type"))).Returning("id"))
-	externalPayloadSource := b.dialect.From(goqu.T("affected_specific_rows").As("a"), goqu.T("upserted_specific_external").As("external")).Select(
+	b.add("updated_specific_external_payload", b.dialect.Update(
+		goqu.T("specific_asset_id_external_subject_id_reference_payload").As("payload"),
+	).Set(goqu.Record{
+		"parent_reference_payload": goqu.L("a.row -> 'externalSubjectId' -> 'payload'"),
+	}).From(
+		goqu.T("affected_specific_rows").As("a"), goqu.T("upserted_specific_external").As("external"),
+	).Where(
+		goqu.I("external.id").Eq(goqu.I("a.id")),
+		goqu.I("payload.reference_id").Eq(goqu.I("external.id")),
+	).Returning(goqu.I("payload.reference_id")))
+	externalPayloadSource := b.dialect.From(
+		goqu.T("affected_specific_rows").As("a"), goqu.T("upserted_specific_external").As("external"),
+	).Select(
 		goqu.I("a.id"), goqu.L("a.row -> 'externalSubjectId' -> 'payload'"),
-	).Where(goqu.I("external.id").Eq(goqu.I("a.id")))
-	b.add("upserted_specific_external_payload", b.dialect.Insert("specific_asset_id_external_subject_id_reference_payload").
-		Cols("reference_id", "parent_reference_payload").FromQuery(externalPayloadSource).
-		OnConflict(goqu.DoUpdate("reference_id", aasExcludedRecord("parent_reference_payload"))).Returning("reference_id"))
+	).Where(
+		goqu.I("external.id").Eq(goqu.I("a.id")),
+		goqu.L("(SELECT COUNT(*) FROM updated_specific_external_payload) >= 0"),
+		goqu.Func("NOT EXISTS", b.dialect.From("specific_asset_id_external_subject_id_reference_payload").
+			Select(goqu.L("1")).Where(goqu.I("reference_id").Eq(goqu.I("external.id")))),
+	)
+	b.add("inserted_specific_external_payload", b.dialect.Insert("specific_asset_id_external_subject_id_reference_payload").
+		Cols("reference_id", "parent_reference_payload").FromQuery(externalPayloadSource).Returning("reference_id"))
 	b.add("deleted_specific_external_keys", b.dialect.Delete("specific_asset_id_external_subject_id_reference_key").Where(
 		goqu.Func("EXISTS", b.dialect.From(goqu.T("affected_specific_rows").As("a"), goqu.T("upserted_specific_external").As("external")).
 			Select(goqu.L("1")).Where(
@@ -292,15 +308,30 @@ func (b *aasReconciliationQueryBuilder) addSpecificSupplementalReferenceCTEs() {
 	b.add("upserted_specific_supplemental", b.dialect.Insert("specific_asset_id_supplemental_semantic_id_reference").
 		Cols("specific_asset_id_id", "position", "type").FromQuery(supplementalSource).
 		OnConflict(goqu.DoUpdate("specific_asset_id_id,position", aasExcludedRecord("type"))).Returning("id", "specific_asset_id_id", "position"))
+	b.add("updated_specific_supplemental_payload", b.dialect.Update(
+		goqu.T("specific_asset_id_supplemental_semantic_id_reference_payload").As("payload"),
+	).Set(goqu.Record{
+		"parent_reference_payload": goqu.L("? -> 'payload'", goqu.I("reference")),
+	}).From(
+		goqu.T("affected_specific_rows").As("a"), goqu.T("upserted_specific_supplemental").As("persisted"),
+		goqu.L("jsonb_array_elements(COALESCE(a.row -> 'supplementalSemanticIds', '[]'::jsonb))").As("reference"),
+	).Where(
+		goqu.I("persisted.specific_asset_id_id").Eq(goqu.I("a.id")),
+		goqu.I("persisted.position").Eq(aasJSONInt("reference", "position")),
+		goqu.I("payload.reference_id").Eq(goqu.I("persisted.id")),
+	).Returning(goqu.I("payload.reference_id")))
 	supplementalPayloadSource := b.dialect.From(
 		goqu.T("affected_specific_rows").As("a"), goqu.T("upserted_specific_supplemental").As("persisted"),
 		goqu.L("jsonb_array_elements(COALESCE(a.row -> 'supplementalSemanticIds', '[]'::jsonb))").As("reference"),
-	).Select(goqu.I("persisted.id"), goqu.L("reference -> 'payload'")).Where(
-		goqu.I("persisted.specific_asset_id_id").Eq(goqu.I("a.id")), goqu.I("persisted.position").Eq(aasJSONInt("reference", "position")),
+	).Select(goqu.I("persisted.id"), goqu.L("? -> 'payload'", goqu.I("reference"))).Where(
+		goqu.I("persisted.specific_asset_id_id").Eq(goqu.I("a.id")),
+		goqu.I("persisted.position").Eq(aasJSONInt("reference", "position")),
+		goqu.L("(SELECT COUNT(*) FROM updated_specific_supplemental_payload) >= 0"),
+		goqu.Func("NOT EXISTS", b.dialect.From("specific_asset_id_supplemental_semantic_id_reference_payload").
+			Select(goqu.L("1")).Where(goqu.I("reference_id").Eq(goqu.I("persisted.id")))),
 	)
-	b.add("upserted_specific_supplemental_payload", b.dialect.Insert("specific_asset_id_supplemental_semantic_id_reference_payload").
-		Cols("reference_id", "parent_reference_payload").FromQuery(supplementalPayloadSource).
-		OnConflict(goqu.DoUpdate("reference_id", aasExcludedRecord("parent_reference_payload"))).Returning("reference_id"))
+	b.add("inserted_specific_supplemental_payload", b.dialect.Insert("specific_asset_id_supplemental_semantic_id_reference_payload").
+		Cols("reference_id", "parent_reference_payload").FromQuery(supplementalPayloadSource).Returning("reference_id"))
 	b.add("deleted_specific_supplemental_keys", b.dialect.Delete("specific_asset_id_supplemental_semantic_id_reference_key").Where(
 		goqu.Func("EXISTS", b.dialect.From(
 			goqu.T("affected_specific_rows").As("a"), goqu.T("upserted_specific_supplemental").As("persisted"),
