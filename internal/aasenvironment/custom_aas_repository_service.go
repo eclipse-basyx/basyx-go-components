@@ -448,54 +448,7 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		return newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
-	isUpdate := false
-	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-		putResult, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransactionWithResult(ctx, tx, decodedSubmodelIdentifier, submodel)
-		if putErr != nil {
-			return putErr
-		}
-		isUpdate = putResult.IsUpdate
-
-		submodelReference := types.NewReference(
-			types.ReferenceTypesModelReference,
-			[]types.IKey{types.NewKey(types.KeyTypesSubmodel, decodedSubmodelIdentifier)},
-		)
-		createReferenceErr := s.persistence.AASRepository.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, submodelReference)
-		if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
-			return createReferenceErr
-		}
-		referenceCreated := createReferenceErr == nil
-		if !putResult.Changed && !referenceCreated {
-			return nil
-		}
-
-		submodelDescriptor, descriptorChanged, descriptorErr := s.syncConfig.changedSubmodelDescriptor(putResult.Previous, submodel)
-		if descriptorErr != nil {
-			return descriptorErr
-		}
-
-		if s.syncConfig.SubmodelRegistryIntegration && descriptorChanged {
-			if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-				submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, submodelDescriptor,
-			); upsertErr != nil {
-				return upsertErr
-			}
-		}
-
-		if s.syncConfig.AASRegistryIntegration && (descriptorChanged || referenceCreated) {
-			aasDescriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedAASIdentifier, "")
-			if descriptorErr != nil {
-				return descriptorErr
-			}
-
-			aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
-			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
-				aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertEmbeddedOperation), tx, aasDescriptor,
-			)
-		}
-
-		return nil
-	})
+	isUpdate, err := s.putSubmodelAndSyncDescriptors(ctx, decodedAASIdentifier, decodedSubmodelIdentifier, submodel)
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAASRepoErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
@@ -522,6 +475,60 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 	}
 
 	return commonmodel.Response(http.StatusCreated, submodelJSON), nil
+}
+
+func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
+	ctx context.Context,
+	aasIdentifier string,
+	submodelIdentifier string,
+	submodel types.ISubmodel,
+) (bool, error) {
+	isUpdate := false
+	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
+		putResult, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransactionWithResult(ctx, tx, submodelIdentifier, submodel)
+		if putErr != nil {
+			return putErr
+		}
+		isUpdate = putResult.IsUpdate
+
+		submodelReference := types.NewReference(
+			types.ReferenceTypesModelReference,
+			[]types.IKey{types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)},
+		)
+		createReferenceErr := s.persistence.AASRepository.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, aasIdentifier, submodelReference)
+		if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
+			return createReferenceErr
+		}
+		referenceCreated := createReferenceErr == nil
+		if !putResult.Changed && !referenceCreated {
+			return nil
+		}
+
+		submodelDescriptor, descriptorChanged, descriptorErr := s.syncConfig.changedSubmodelDescriptor(putResult.Previous, submodel)
+		if descriptorErr != nil {
+			return descriptorErr
+		}
+		if s.syncConfig.SubmodelRegistryIntegration && descriptorChanged {
+			if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
+				submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, submodelDescriptor,
+			); upsertErr != nil {
+				return upsertErr
+			}
+		}
+		if !s.syncConfig.AASRegistryIntegration || (!descriptorChanged && !referenceCreated) {
+			return nil
+		}
+
+		aasDescriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, aasIdentifier, "")
+		if descriptorErr != nil {
+			return descriptorErr
+		}
+		aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
+		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+			aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertEmbeddedOperation), tx, aasDescriptor,
+		)
+	})
+	return isUpdate, err
 }
 
 // DeleteSubmodelByIdAasRepository deletes a submodel through the superpath and synchronizes descriptors.
