@@ -91,6 +91,14 @@ func buildAssetAdministrationShellSubmodelReferenceQuery(dialect *goqu.DialectWr
 	}).Returning(goqu.I("id")).ToSQL()
 }
 
+func buildGetNextAssetAdministrationShellSubmodelReferencePositionQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
+	return dialect.
+		From("aas_submodel_reference").
+		Select(goqu.L("COALESCE(MAX(position), -1) + 1")).
+		Where(goqu.I("aas_id").Eq(aasDBID)).
+		ToSQL()
+}
+
 func buildAssetAdministrationShellSubmodelReferenceKeysQuery(dialect *goqu.DialectWrapper, aasSubmodelReferenceDBID int64, submodelRef types.IReference) (string, []any, error) {
 	keyRows := make([]goqu.Record, 0, len(submodelRef.Keys()))
 	for position, key := range submodelRef.Keys() {
@@ -142,6 +150,24 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 		Limit(1).
 		Prepared(true).
 		ToSQL()
+}
+
+func buildFindSubmodelReferenceIDByAASIDAndSubmodelIdentifierQuery(dialect *goqu.DialectWrapper, aasDBID int64, submodelIdentifier string) (string, []any, error) {
+	return dialect.
+		From(goqu.T("aas_submodel_reference").As("r")).
+		InnerJoin(goqu.T("aas_submodel_reference_key").As("k"), goqu.On(goqu.I("k.reference_id").Eq(goqu.I("r.id")))).
+		Select(goqu.I("r.id")).
+		Where(
+			goqu.I("r.aas_id").Eq(aasDBID),
+			goqu.I("k.value").Eq(submodelIdentifier),
+		).
+		Limit(1).
+		Prepared(true).
+		ToSQL()
+}
+
+func buildDeleteSubmodelReferenceByIDQuery(dialect *goqu.DialectWrapper, submodelReferenceDBID int64) (string, []any, error) {
+	return dialect.Delete("aas_submodel_reference").Where(goqu.I("id").Eq(submodelReferenceDBID)).ToSQL()
 }
 
 func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) (*goqu.SelectDataset, error) {

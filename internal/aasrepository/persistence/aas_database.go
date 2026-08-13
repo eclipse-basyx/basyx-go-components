@@ -242,6 +242,13 @@ func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotBeforeMutationT
 		}
 		return nil, common.NewInternalServerError("AASREPO-HISTORY-GETAASDBID " + err.Error())
 	}
+	return s.loadAASHistorySnapshotByDBIDBeforeMutationTx(ctx, tx, aasDBID)
+}
+
+func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotByDBIDBeforeMutationTx(ctx context.Context, tx *sql.Tx, aasDBID int64) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
 	aas, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
 	if err != nil {
 		return nil, err
@@ -671,27 +678,11 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 			return common.NewErrConflict("AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + submodelIdentifier + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'")
 		}
 	}
-	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
+	previousSnapshot, err := s.loadAASHistorySnapshotByDBIDBeforeMutationTx(ctx, tx, aasDBID)
 	if err != nil {
 		return err
 	}
-	var previousSnapshot map[string]any
-	if history.ActiveConfig().EvidenceEnabled {
-		previousSnapshot, err = aasToHistorySnapshot(previous)
-		if err != nil {
-			return err
-		}
-	}
-	target, err := cloneAssetAdministrationShell(previous)
-	if err != nil {
-		return err
-	}
-	target.SetSubmodels(append(target.Submodels(), submodelRef))
-	plan, err := buildAASReconciliationPlan(previous, target, aasReconciliationOptions{PreserveExistingManagedThumbnail: true})
-	if err != nil {
-		return err
-	}
-	if _, err = executeAASReconciliationStatement(ctx, tx, aasIdentifier, plan); err != nil {
+	if err = appendSubmodelReferenceInAssetAdministrationShellTx(ctx, tx, aasDBID, submodelRef); err != nil {
 		return err
 	}
 
@@ -708,6 +699,52 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 		}
 	}
 	return s.appendAddedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelRef)
+}
+
+func appendSubmodelReferenceInAssetAdministrationShellTx(ctx context.Context, tx *sql.Tx, aasDBID int64, submodelRef types.IReference) error {
+	dialect := goqu.Dialect("postgres")
+	nextPosition, err := getNextSubmodelReferencePositionTx(ctx, tx, &dialect, aasDBID)
+	if err != nil {
+		return err
+	}
+
+	query, args, err := buildAssetAdministrationShellSubmodelReferenceQuery(&dialect, aasDBID, nextPosition, submodelRef)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-BUILDREFERENCE " + err.Error())
+	}
+	var referenceDBID int64
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&referenceDBID); err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-EXECREFERENCE " + err.Error())
+	}
+
+	query, args, err = buildAssetAdministrationShellSubmodelReferenceKeysQuery(&dialect, referenceDBID, submodelRef)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-BUILDKEYS " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-EXECKEYS " + err.Error())
+	}
+
+	query, args, err = buildAssetAdministrationShellSubmodelReferencePayloadQuery(&dialect, referenceDBID, submodelRef)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-BUILDPAYLOAD " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-EXECPAYLOAD " + err.Error())
+	}
+	return nil
+}
+
+func getNextSubmodelReferencePositionTx(ctx context.Context, tx *sql.Tx, dialect *goqu.DialectWrapper, aasDBID int64) (int, error) {
+	query, args, err := buildGetNextAssetAdministrationShellSubmodelReferencePositionQuery(dialect, aasDBID)
+	if err != nil {
+		return 0, common.NewInternalServerError("AASREPO-NEWSMREFINAAS-BUILDNEXTPOSITION " + err.Error())
+	}
+	var nextPosition int
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&nextPosition); err != nil {
+		return 0, common.NewInternalServerError("AASREPO-NEWSMREFINAAS-EXECNEXTPOSITION " + err.Error())
+	}
+	return nextPosition, nil
 }
 
 // CheckIfSubmodelReferenceExistsInAssetAdministrationShell checks whether a submodel reference exists in the specified AAS.
@@ -2092,35 +2129,39 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 			return common.NewErrDenied("AASREPO-DELSMREF-ABACDENIED deleting this submodel reference is not allowed")
 		}
 	}
-	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
+	previousSnapshot, err := s.loadAASHistorySnapshotByDBIDBeforeMutationTx(ctx, tx, aasDBID)
 	if err != nil {
 		return err
 	}
-	remainingReferences, removed := removeAASReferenceByKeyValue(previous.Submodels(), submodelIdentifier)
-	if !removed {
-		return common.NewErrNotFound("AASREPO-DELSMREF-SMREFNOTFOUND Submodel reference to Submodel with ID '" + submodelIdentifier + "' not found in Asset Administration Shell with ID '" + aasIdentifier + "'")
-	}
-	var previousSnapshot map[string]any
-	if history.ActiveConfig().EvidenceEnabled {
-		previousSnapshot, err = aasToHistorySnapshot(previous)
-		if err != nil {
-			return err
-		}
-	}
-	target, err := cloneAssetAdministrationShell(previous)
-	if err != nil {
-		return err
-	}
-	target.SetSubmodels(remainingReferences)
-	plan, err := buildAASReconciliationPlan(previous, target, aasReconciliationOptions{PreserveExistingManagedThumbnail: true})
-	if err != nil {
-		return err
-	}
-	if _, err = executeAASReconciliationStatement(ctx, tx, aasIdentifier, plan); err != nil {
+	if err = deleteSubmodelReferenceInAssetAdministrationShellTx(ctx, tx, aasDBID, aasIdentifier, submodelIdentifier); err != nil {
 		return err
 	}
 
 	return s.appendRemovedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelIdentifier)
+}
+
+func deleteSubmodelReferenceInAssetAdministrationShellTx(ctx context.Context, tx *sql.Tx, aasDBID int64, aasIdentifier string, submodelIdentifier string) error {
+	dialect := goqu.Dialect("postgres")
+	query, args, err := buildFindSubmodelReferenceIDByAASIDAndSubmodelIdentifierQuery(&dialect, aasDBID, submodelIdentifier)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-DELSMREF-BUILDFINDREFERENCE " + err.Error())
+	}
+	var referenceDBID int64
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&referenceDBID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return common.NewErrNotFound("AASREPO-DELSMREF-SMREFNOTFOUND Submodel reference to Submodel with ID '" + submodelIdentifier + "' not found in Asset Administration Shell with ID '" + aasIdentifier + "'")
+		}
+		return common.NewInternalServerError("AASREPO-DELSMREF-EXECFINDREFERENCE " + err.Error())
+	}
+
+	query, args, err = buildDeleteSubmodelReferenceByIDQuery(&dialect, referenceDBID)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-DELSMREF-BUILDDELETEREFERENCE " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("AASREPO-DELSMREF-EXECDELETEREFERENCE " + err.Error())
+	}
+	return nil
 }
 
 type coreAssetAdministrationShellRow struct {

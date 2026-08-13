@@ -118,6 +118,70 @@ func TestConcurrentIdenticalPutAssetAdministrationShellUpdatesExistingResource(t
 	}
 }
 
+func TestLargeAASSubmodelReferenceEndpointsMutateOnlyTargetedRows(t *testing.T) {
+	const referenceCount = 1200
+
+	testID := time.Now().UnixNano()
+	aasID := fmt.Sprintf("urn:basyx:integration:aas-targeted-references-%d", testID)
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	aasEndpoint := aasRepositoryBaseURL + "/shells/" + encodedAASID
+	referenceEndpoint := aasEndpoint + "/submodel-refs"
+	references := make([]any, 0, referenceCount)
+	referenceIDs := make([]string, 0, referenceCount)
+	for index := range referenceCount {
+		referenceID := fmt.Sprintf("urn:basyx:integration:sm-targeted-reference-%d-%d", testID, index)
+		referenceIDs = append(referenceIDs, referenceID)
+		references = append(references, aasReconciliationReference(referenceID))
+	}
+	payload := map[string]any{
+		"id": aasID, "modelType": "AssetAdministrationShell",
+		"assetInformation": map[string]any{"assetKind": "Instance"},
+		"submodels":        references,
+	}
+	encodedPayload, err := json.Marshal(payload)
+	require.NoError(t, err)
+	_, status, _, err := postJSONResponse(aasRepositoryBaseURL+"/shells", string(encodedPayload))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status)
+	t.Cleanup(func() { deleteAASForLargeObjectCleanupTest(t, aasEndpoint) })
+
+	db, err := sql.Open("pgx", integrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	aasDatabaseID := reconciliationAASDatabaseID(t, db, aasID)
+	rowsBefore := reconciliationAASReferenceRows(t, db, aasDatabaseID)
+	require.Len(t, rowsBefore, referenceCount)
+
+	addedReferenceID := fmt.Sprintf("urn:basyx:integration:sm-targeted-reference-%d-added", testID)
+	encodedReference, err := json.Marshal(aasReconciliationReference(addedReferenceID))
+	require.NoError(t, err)
+	status, err = postResponseStatus(referenceEndpoint, string(encodedReference))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status)
+
+	rowsAfterPost := reconciliationAASReferenceRows(t, db, aasDatabaseID)
+	require.Len(t, rowsAfterPost, referenceCount+1)
+	for referenceID, rowBefore := range rowsBefore {
+		require.Equal(t, rowBefore, rowsAfterPost[referenceID])
+	}
+	require.Equal(t, referenceCount, rowsAfterPost[addedReferenceID].position)
+
+	deletedReferenceID := referenceIDs[referenceCount/2]
+	deleteEndpoint := referenceEndpoint + "/" + base64.RawURLEncoding.EncodeToString([]byte(deletedReferenceID))
+	status, err = deleteResponseStatus(deleteEndpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status)
+
+	rowsAfterDelete := reconciliationAASReferenceRows(t, db, aasDatabaseID)
+	require.Len(t, rowsAfterDelete, referenceCount)
+	require.NotContains(t, rowsAfterDelete, deletedReferenceID)
+	for referenceID, rowBefore := range rowsAfterPost {
+		if referenceID != deletedReferenceID {
+			require.Equal(t, rowBefore, rowsAfterDelete[referenceID])
+		}
+	}
+}
+
 func aasReconciliationPayload(aasID string, replacement bool) map[string]any {
 	specificAssetIDs := []any{
 		map[string]any{"name": "serial", "value": "one"},

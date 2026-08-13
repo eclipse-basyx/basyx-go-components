@@ -26,6 +26,7 @@
 package persistence
 
 import (
+	"database/sql"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -119,5 +120,77 @@ func TestCreateAASSubmodelReferenceDuplicateSkipsAASSnapshotLoad(t *testing.T) {
 	)
 	require.Error(t, err)
 	require.True(t, common.IsErrConflict(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCreateAASSubmodelReferenceUsesTargetedMutationWithoutHistory(t *testing.T) {
+	previousHistoryConfig := history.ActiveConfig()
+	history.Configure(history.Config{Mode: history.ModeOff})
+	t.Cleanup(func() { history.Configure(previousHistoryConfig) })
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	aasIdentifier := "urn:example:aas:existing"
+	submodelIdentifier := "urn:example:submodel:new"
+	reference := types.NewReference(
+		types.ReferenceTypesModelReference,
+		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)},
+	)
+	repository := &AssetAdministrationShellDatabase{db: db}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "aas".*FOR UPDATE`).
+		WithArgs(aasIdentifier).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	mock.ExpectQuery(`SELECT 1 FROM "aas_submodel_reference"`).
+		WithArgs(int64(42), submodelIdentifier, sqlmock.AnyArg()).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT COALESCE\(MAX\(position\), -1\) \+ 1 FROM "aas_submodel_reference"`).
+		WillReturnRows(sqlmock.NewRows([]string{"position"}).AddRow(7))
+	mock.ExpectQuery(`INSERT INTO "aas_submodel_reference".*RETURNING "id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(101)))
+	mock.ExpectExec(`INSERT INTO "aas_submodel_reference_key"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO "aas_submodel_reference_payload"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err = repository.CreateSubmodelReferenceInAssetAdministrationShell(
+		common.ContextWithConfig(t.Context(), &common.Config{}), aasIdentifier, reference,
+	)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeleteAASSubmodelReferenceUsesTargetedMutationWithoutHistory(t *testing.T) {
+	previousHistoryConfig := history.ActiveConfig()
+	history.Configure(history.Config{Mode: history.ModeOff})
+	t.Cleanup(func() { history.Configure(previousHistoryConfig) })
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	aasIdentifier := "urn:example:aas:existing"
+	submodelIdentifier := "urn:example:submodel:existing"
+	repository := &AssetAdministrationShellDatabase{db: db}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "aas".*FOR UPDATE`).
+		WithArgs(aasIdentifier).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	mock.ExpectQuery(`SELECT "r"\."id" FROM "aas_submodel_reference" AS "r"`).
+		WithArgs(int64(42), submodelIdentifier, sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(101)))
+	mock.ExpectExec(`DELETE FROM "aas_submodel_reference"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err = repository.DeleteSubmodelReferenceInAssetAdministrationShell(
+		common.ContextWithConfig(t.Context(), &common.Config{}), aasIdentifier, submodelIdentifier,
+	)
+	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

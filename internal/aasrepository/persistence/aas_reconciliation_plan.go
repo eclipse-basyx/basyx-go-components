@@ -389,30 +389,6 @@ func aasSubmodelReferenceIdentity(reference types.IReference) *string {
 	return identity
 }
 
-func aasReferencesContainKeyValue(references []types.IReference, value string) bool {
-	for _, reference := range references {
-		for _, key := range reference.Keys() {
-			if key.Value() == value {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func removeAASReferenceByKeyValue(references []types.IReference, value string) ([]types.IReference, bool) {
-	result := make([]types.IReference, 0, len(references))
-	removed := false
-	for _, reference := range references {
-		if !removed && aasReferencesContainKeyValue([]types.IReference{reference}, value) {
-			removed = true
-			continue
-		}
-		result = append(result, reference)
-	}
-	return result, removed
-}
-
 func reconcileAASSubmodelReferences(
 	previous []aasSubmodelReferenceRow,
 	target []aasSubmodelReferenceRow,
