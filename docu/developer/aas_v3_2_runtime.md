@@ -229,7 +229,7 @@ These superpath routes reuse the Submodel persistence layer. They can affect mor
 | `PATCH /shells/{aas}/submodels/{sm}` and representation variants | Append `Updated` to `submodel_history`. The AAS reference itself is unchanged. |
 | `/shells/{aas}/submodels/{sm}/submodel-elements...` SME write routes | Append `Updated` to `submodel_history` only. The AAS reference itself is unchanged. |
 
-Registry synchronization can append additional descriptor history entries when configured. For example, adding, replacing, or removing a nested Submodel descriptor appends `Updated` to the owning AAS descriptor stream.
+Registry synchronization can append additional descriptor history entries when configured. Full-resource AAS and Submodel `PUT` synchronization occurs only when canonical comparison of the derived descriptors detects registry-relevant content changes; a successful `PUT` alone does not trigger it. For example, changing only a Submodel Element value through a full Submodel replacement does not update the Submodel Registry, while adding, replacing, or removing a nested Submodel descriptor appends `Updated` to the owning AAS descriptor stream.
 
 ### Guarded PostgreSQL Mode
 

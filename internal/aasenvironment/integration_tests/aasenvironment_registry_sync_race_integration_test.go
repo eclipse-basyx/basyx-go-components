@@ -28,6 +28,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -37,8 +38,172 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/stretchr/testify/require"
 )
+
+func TestConcurrentPutAndDeleteSubmodelThroughAASDoesNotDeadlock(t *testing.T) {
+	testCases := []struct {
+		name    string
+		baseURL string
+		dsn     string
+	}{
+		{name: "registry synchronization enabled", baseURL: aasEnvBaseURL, dsn: integrationTestDSN},
+		{name: "registry synchronization disabled", baseURL: aasEnvSyncOffBaseURL, dsn: uploadSyncDisabledIntegrationDSN},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			resetDatabaseForUploadIT(t, testCase.dsn)
+			testConcurrentPutAndDeleteSubmodelThroughAAS(t, testCase.baseURL, testCase.dsn)
+		})
+	}
+}
+
+func testConcurrentPutAndDeleteSubmodelThroughAAS(t *testing.T, baseURL string, dsn string) {
+	t.Helper()
+	testID := time.Now().UnixNano()
+	aasID := fmt.Sprintf("https://example.org/aas/put-delete-%d", testID)
+	submodelID := fmt.Sprintf("https://example.org/submodel/put-delete-%d", testID)
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, encodedAASID, encodedSubmodelID)
+
+	aasPayload := map[string]any{
+		"id":        aasID,
+		"idShort":   "ConcurrentPutDeleteShell",
+		"modelType": "AssetAdministrationShell",
+		"assetInformation": map[string]any{
+			"assetKind": "Instance",
+		},
+	}
+	status, body, _ := doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodPost, baseURL+"/shells", aasPayload)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+
+	initialSubmodel := concurrentPutDeleteSubmodelPayload(submodelID, "before")
+	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodPut, endpoint, initialSubmodel)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+
+	db, err := sql.Open("pgx", dsn)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	require.Equal(t, 0, databaseLockWaiterCount(t, db))
+
+	blockerTx, err := db.BeginTx(t.Context(), nil)
+	require.NoError(t, err)
+	blockerReleased := false
+	defer func() {
+		if !blockerReleased {
+			_ = blockerTx.Rollback()
+		}
+	}()
+	lockConcurrentPutDeleteProperty(t, blockerTx, submodelID)
+
+	type requestResult struct {
+		method string
+		status int
+		body   []byte
+		err    error
+	}
+	results := make(chan requestResult, 2)
+	go func() {
+		putStatus, putBody, putErr := doAASEnvRawJSONRequest(http.MethodPut, endpoint, concurrentPutDeleteSubmodelPayload(submodelID, "after"))
+		results <- requestResult{method: http.MethodPut, status: putStatus, body: putBody, err: putErr}
+	}()
+	waitForDatabaseLockWaiters(t, db, 1)
+
+	go func() {
+		deleteStatus, deleteBody, deleteErr := doAASEnvRawJSONRequest(http.MethodDelete, endpoint, nil)
+		results <- requestResult{method: http.MethodDelete, status: deleteStatus, body: deleteBody, err: deleteErr}
+	}()
+	waitForDatabaseLockWaiters(t, db, 2)
+
+	require.NoError(t, blockerTx.Commit())
+	blockerReleased = true
+
+	statuses := make(map[string]int, 2)
+	for range 2 {
+		select {
+		case result := <-results:
+			require.NoError(t, result.err)
+			require.NotEqual(t, http.StatusInternalServerError, result.status, "%s response=%s", result.method, string(result.body))
+			statuses[result.method] = result.status
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for concurrent PUT and DELETE requests")
+		}
+	}
+	require.Equal(t, http.StatusNoContent, statuses[http.MethodPut])
+	require.Equal(t, http.StatusNoContent, statuses[http.MethodDelete])
+
+	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodGet, endpoint, nil)
+	require.Equal(t, http.StatusNotFound, status, "response=%s", string(body))
+}
+
+func concurrentPutDeleteSubmodelPayload(submodelID string, value string) map[string]any {
+	return map[string]any{
+		"id":        submodelID,
+		"idShort":   "ConcurrentPutDeleteSubmodel",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+		"submodelElements": []any{
+			map[string]any{
+				"idShort":   "BlockedProperty",
+				"modelType": "Property",
+				"valueType": "xs:string",
+				"value":     value,
+			},
+		},
+	}
+}
+
+func lockConcurrentPutDeleteProperty(t *testing.T, tx *sql.Tx, submodelID string) {
+	t.Helper()
+	query, args, err := goqu.Dialect("postgres").
+		From(goqu.T("property_element").As("pe")).
+		Join(goqu.T("submodel_element").As("sme"), goqu.On(goqu.I("sme.id").Eq(goqu.I("pe.id")))).
+		Join(goqu.T("submodel").As("sm"), goqu.On(goqu.I("sm.id").Eq(goqu.I("sme.submodel_id")))).
+		Select(goqu.I("pe.id")).
+		Where(
+			goqu.I("sm.submodel_identifier").Eq(submodelID),
+			goqu.I("sme.id_short").Eq("BlockedProperty"),
+		).
+		ForUpdate(goqu.Wait, goqu.I("pe")).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+	var propertyID int64
+	require.NoError(t, tx.QueryRowContext(t.Context(), query, args...).Scan(&propertyID))
+}
+
+func waitForDatabaseLockWaiters(t *testing.T, db *sql.DB, expected int) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if databaseLockWaiterCount(t, db) >= expected {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %d database lock waiters", expected)
+}
+
+func databaseLockWaiterCount(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	query, args, err := goqu.Dialect("postgres").
+		From("pg_stat_activity").
+		Select(goqu.COUNT("*")).
+		Where(
+			goqu.C("datname").Eq(goqu.Func("current_database")),
+			goqu.C("pid").Neq(goqu.Func("pg_backend_pid")),
+			goqu.C("wait_event_type").Eq("Lock"),
+		).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+	var count int
+	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&count))
+	return count
+}
 
 func TestRegistrySyncConcurrentSubmodelReferenceCreationDoesNotRaceAASDescriptorUpsert(t *testing.T) {
 	resetDatabase(t)

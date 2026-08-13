@@ -820,17 +820,17 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 		"AASREPO-PUTSMBYID-STARTTX",
 		"AASREPO-PUTSMBYID-COMMIT",
 		func(tx *sql.Tx) error {
-			updated, putErr := s.submodelBackend.PutSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier, submodel)
-			if putErr != nil {
-				return putErr
-			}
-			isUpdate = updated
-
 			createReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, submodelReference)
 			if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
 				referenceCreateAASNotFound = isCreateSubmodelReferenceAASNotFoundErr(createReferenceErr)
 				return createReferenceErr
 			}
+
+			updated, putErr := s.submodelBackend.PutSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier, submodel)
+			if putErr != nil {
+				return putErr
+			}
+			isUpdate = updated
 			return nil
 		},
 	)

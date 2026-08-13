@@ -156,6 +156,44 @@ func (c RegistrySyncConfig) buildSubmodelDescriptor(submodel types.ISubmodel) (c
 	return descriptor, nil
 }
 
+func registrySyncDescriptorsEqual(previous any, submitted any) (bool, error) {
+	previousHash, err := common.CanonicalJSONHash(previous)
+	if err != nil {
+		return false, common.NewInternalServerError("AASENV-REGSYNC-HASHPREVIOUS " + err.Error())
+	}
+	submittedHash, err := common.CanonicalJSONHash(submitted)
+	if err != nil {
+		return false, common.NewInternalServerError("AASENV-REGSYNC-HASHSUBMITTED " + err.Error())
+	}
+	return previousHash == submittedHash, nil
+}
+
+func (c RegistrySyncConfig) changedSubmodelDescriptor(previous types.ISubmodel, submitted types.ISubmodel) (commonmodel.SubmodelDescriptor, bool, error) {
+	descriptor, err := c.buildSubmodelDescriptor(submitted)
+	if err != nil || previous == nil {
+		return descriptor, previous == nil, err
+	}
+	previousDescriptor, err := c.buildSubmodelDescriptor(previous)
+	if err != nil {
+		return commonmodel.SubmodelDescriptor{}, false, err
+	}
+	equal, err := registrySyncDescriptorsEqual(previousDescriptor, descriptor)
+	return descriptor, !equal, err
+}
+
+func (c RegistrySyncConfig) changedAASDescriptor(previous types.IAssetAdministrationShell, submitted types.IAssetAdministrationShell) (commonmodel.AssetAdministrationShellDescriptor, bool, error) {
+	descriptor, err := c.buildAASDescriptor(submitted)
+	if err != nil || previous == nil {
+		return descriptor, previous == nil, err
+	}
+	previousDescriptor, err := c.buildAASDescriptor(previous)
+	if err != nil {
+		return commonmodel.AssetAdministrationShellDescriptor{}, false, err
+	}
+	equal, err := registrySyncDescriptorsEqual(previousDescriptor, descriptor)
+	return descriptor, !equal, err
+}
+
 func (c RegistrySyncConfig) buildAASDescriptorEndpoints(aasID string) []commonmodel.Endpoint {
 	encodedID := common.EncodeString(aasID)
 	return c.buildEndpoints("/shells/"+encodedID, aasDescriptorInterface)

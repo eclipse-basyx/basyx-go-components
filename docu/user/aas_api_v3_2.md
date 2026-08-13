@@ -297,6 +297,48 @@ Behavior:
 
 Submodel element changes are tracked as part of the owning Submodel. If a Submodel Element is added, changed, deleted, or has an attachment update, the next Submodel history version reconstructs to a full Submodel snapshot even when the stored payload row is a diff.
 
+## Repository-to-Registry Synchronization
+
+When repository-to-registry integration is enabled, synchronization for
+full-resource AAS and Submodel `PUT` updates is driven by changes to the
+descriptor derived from the repository resource, not merely by a successful
+request. The repository derives descriptors from the previous and submitted
+states and compares their canonical representations. It writes to the
+configured registry only when that comparison detects content that must be
+transferred.
+
+Consequently, a semantic no-op `PUT` does not synchronize a registry. A live
+repository change submitted through such a `PUT` is also skipped when it affects
+only data that is not part of the derived descriptor. For example, changing only
+a Submodel Element value in a full Submodel replacement does not change the
+Submodel Descriptor, and changing AAS metadata outside the AAS Descriptor does
+not change the AAS Registry entry. These Submodel `PUT` updates propagate to
+embedded Submodel Descriptors in referencing AAS Descriptors only when the
+derived Submodel Descriptor changes.
+
+Creates, deletes, and relationship changes still synchronize the affected
+descriptor when required. Descriptor comparison and any resulting registry
+write run in the same database transaction as the full-resource `PUT`. History
+or WORM evidence recording is independent of this decision: an acknowledged
+no-op `PUT` can append audit evidence without causing a registry write.
+
+## Full Submodel Replacement
+
+`PUT /submodels/{submodelIdentifier}` keeps replacement semantics at the API
+boundary. For an existing Submodel, the repository compares the authorized old
+snapshot with the submitted snapshot and reconciles only changed normalized
+rows. All live-model changes are executed by one parameterized PostgreSQL
+statement in the same transaction as authorization readback and history or
+evidence creation. Unchanged elements retain their persistence IDs. A no-op
+replacement skips the live-model statement but still performs authorization and
+records the acknowledged update when history or evidence is enabled.
+
+Named children are matched by `idShort`; `SubmodelElementList` children are
+matched by position. Added, removed, moved, or model-type-changed subtrees are
+replaced, while same-type elements are updated in place. Any failed mutation,
+readback, authorization check, or history/evidence append rolls back the entire
+replacement.
+
 ## Submodel Element History FAQ
 
 Submodel Elements do not have independent history streams. They are part of their owning Submodel. An SME write therefore appends an `Updated` event for the Submodel, even when the SME itself was newly created or deleted.
