@@ -638,15 +638,9 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	if tx == nil {
 		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-NILTX transaction must not be nil")
 	}
-	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
-		return err
-	}
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
+	aasDBID, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-NEWSMREFINAAS")
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return common.NewErrNotFound("AASREPO-NEWSMREFINAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-GETAASDBID " + err.Error())
+		return err
 	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWSMREFINAAS-SHOULDENFORCE")
@@ -2102,15 +2096,9 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 			},
 		)
 	}
-	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
-		return err
-	}
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
+	aasDBID, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-DELSMREF")
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return common.NewErrNotFound("AASREPO-DELSMREF-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		return common.NewInternalServerError("AASREPO-DELSMREF-GETAASDBID " + err.Error())
+		return err
 	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELSMREF-SHOULDENFORCE")
@@ -2138,6 +2126,20 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 	}
 
 	return s.appendRemovedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelIdentifier)
+}
+
+func lockAssetAdministrationShellMutationTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, errorPrefix string) (int64, error) {
+	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
+		return 0, err
+	}
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
+	if err == nil {
+		return aasDBID, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, common.NewErrNotFound(errorPrefix + "-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+	}
+	return 0, common.NewInternalServerError(errorPrefix + "-GETAASDBID " + err.Error())
 }
 
 func deleteSubmodelReferenceInAssetAdministrationShellTx(ctx context.Context, tx *sql.Tx, aasDBID int64, aasIdentifier string, submodelIdentifier string) error {

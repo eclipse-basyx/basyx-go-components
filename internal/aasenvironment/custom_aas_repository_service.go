@@ -485,12 +485,6 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 ) (bool, error) {
 	isUpdate := false
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-		putResult, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransactionWithResult(ctx, tx, submodelIdentifier, submodel)
-		if putErr != nil {
-			return putErr
-		}
-		isUpdate = putResult.IsUpdate
-
 		submodelReference := types.NewReference(
 			types.ReferenceTypesModelReference,
 			[]types.IKey{types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)},
@@ -500,6 +494,12 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 			return createReferenceErr
 		}
 		referenceCreated := createReferenceErr == nil
+
+		putResult, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransactionWithResult(ctx, tx, submodelIdentifier, submodel)
+		if putErr != nil {
+			return putErr
+		}
+		isUpdate = putResult.IsUpdate
 		if !putResult.Changed && !referenceCreated {
 			return nil
 		}
