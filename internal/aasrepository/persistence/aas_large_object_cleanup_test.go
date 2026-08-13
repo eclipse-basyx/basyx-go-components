@@ -27,11 +27,13 @@ package persistence
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/stretchr/testify/require"
 )
 
@@ -88,7 +90,11 @@ func TestPutAssetAdministrationShellReconcilesExistingRootWithoutReplacement(t *
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestPutAssetAdministrationShellUnchangedSkipsReplacement(t *testing.T) {
+func TestPutAssetAdministrationShellUnchangedAppendsHistoryWithoutLiveMutation(t *testing.T) {
+	previousHistoryConfig := history.ActiveConfig()
+	history.Configure(history.Config{Mode: history.ModeAPI})
+	t.Cleanup(func() { history.Configure(previousHistoryConfig) })
+
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
@@ -104,6 +110,14 @@ func TestPutAssetAdministrationShellUnchangedSkipsReplacement(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM "aas".*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
 	expectExistingAASRead(mock, aasID, globalAssetID, "")
+	mock.ExpectExec(`SELECT .*pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "row_hash" FROM "aas_history"`).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`INSERT INTO "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(int64(1)))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectRollback()
 
 	result, err := repository.PutAssetAdministrationShellByIDInTransactionWithResult(contextWithConfig(), tx, aasID, aas)

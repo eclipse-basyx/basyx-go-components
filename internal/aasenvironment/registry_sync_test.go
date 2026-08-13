@@ -270,6 +270,9 @@ func TestSubmodelDescriptorComparisonIgnoresElementChanges(t *testing.T) {
 	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
 	require.True(t, equal)
+	_, descriptorChanged, err := config.changedSubmodelDescriptor(previous, submitted)
+	require.NoError(t, err)
+	require.False(t, descriptorChanged)
 
 	idShort := "changed"
 	submitted.SetIDShort(&idShort)
@@ -295,6 +298,9 @@ func TestAASDescriptorComparisonIgnoresNonDescriptorMetadata(t *testing.T) {
 	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
 	require.True(t, equal)
+	_, descriptorChanged, err := config.changedAASDescriptor(previous, submitted)
+	require.NoError(t, err)
+	require.False(t, descriptorChanged)
 
 	globalAssetID := "urn:example:asset:changed"
 	submitted.AssetInformation().SetGlobalAssetID(&globalAssetID)

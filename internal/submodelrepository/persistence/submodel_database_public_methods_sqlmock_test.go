@@ -108,6 +108,31 @@ func TestGetSubmodelsByListFiltersUsesIDShortColumn(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetSubmodelByIDPreservesEmptyIDShortForNullDatabaseValue(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	submodelID := "urn:sm:null-id-short"
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
+		WillReturnRows(sqlmock.NewRows(submodelStateColumns()).
+			AddRow(submodelID, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, submodelID))
+	mock.ExpectCommit()
+
+	submodel, err := sut.GetSubmodelByID(contextWithABACDisabled(t), submodelID, "deep", true, true)
+	require.NoError(t, err)
+	require.NotNil(t, submodel.IDShort())
+	require.Empty(t, *submodel.IDShort())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetSubmodelsClosesLookaheadRowsBeforeSupplementalReferenceQuery(t *testing.T) {
 	t.Parallel()
 

@@ -134,6 +134,17 @@ func TestReconciliationPlanDetectsIdenticalSubmodelsAsNoOp(t *testing.T) {
 	require.Empty(t, plan.Deletes)
 }
 
+func TestReconciliationMetadataTreatsMissingAndEmptyIDShortAsEqual(t *testing.T) {
+	previous := types.NewSubmodel("sm")
+	emptyIDShort := ""
+	previous.SetIDShort(&emptyIDShort)
+	target := types.NewSubmodel("sm")
+
+	metadata, err := buildSubmodelReconciliationMetadata(previous, target)
+	require.NoError(t, err)
+	require.False(t, metadata.CoreChanged)
+}
+
 func TestReconciliationPlanDetectsMetadataOnlyChange(t *testing.T) {
 	previous := readReconciliationJSON(t, `{"id":"sm","idShort":"old","modelType":"Submodel","submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"same"}]}`)
 	target := readReconciliationJSON(t, `{"id":"sm","idShort":"new","modelType":"Submodel","submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"same"}]}`)

@@ -233,7 +233,7 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestPutSubmodelNoOpUpdateReturnsTrueWithoutMutationOrHistory(t *testing.T) {
+func TestPutSubmodelNoOpUpdateAppendsHistoryWithoutLiveMutation(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
@@ -246,14 +246,20 @@ func TestPutSubmodelNoOpUpdateReturnsTrueWithoutMutationOrHistory(t *testing.T) 
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	expectBareSubmodelStateLoad(mock, "sm-existing", "smexisting")
-	mock.ExpectCommit()
+	expectSubmodelHistoryAppend(mock)
+	mock.ExpectRollback()
 
-	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
+	result, err := sut.PutSubmodelInTransactionWithResult(contextWithABACDisabled(t), tx, "sm-existing", submodel)
 	require.NoError(t, err)
-	require.True(t, isUpdate)
+	require.True(t, result.IsUpdate)
+	require.False(t, result.Changed)
+	require.NotNil(t, result.Previous)
+	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

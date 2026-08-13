@@ -517,19 +517,17 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 		return PutSubmodelResult{}, err
 	}
 	if !plan.hasLiveMutation() {
+		persisted := previous
 		if shouldEnforce {
-			if _, err = s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID()); err != nil {
+			persisted, err = s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
+			if err != nil {
 				return PutSubmodelResult{}, mapPutReadbackError(err, true, false)
 			}
 		}
-		return PutSubmodelResult{IsUpdate: true, Previous: previous}, nil
-	}
-	var previousHistorySnapshot map[string]any
-	if history.ActiveConfig().EvidenceEnabled {
-		previousHistorySnapshot, err = submodelToHistorySnapshot(previous)
-		if err != nil {
+		if err = s.appendAcknowledgedSubmodelPutHistoryTx(ctx, tx, previous, persisted); err != nil {
 			return PutSubmodelResult{}, err
 		}
+		return PutSubmodelResult{IsUpdate: true, Previous: previous}, nil
 	}
 	if err = s.executeSubmodelReconciliationTx(ctx, tx, submitted.ID(), plan); err != nil {
 		return PutSubmodelResult{}, err
@@ -542,12 +540,30 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 	if err != nil {
 		return PutSubmodelResult{}, mapPutReadbackError(err, shouldEnforce, false)
 	}
-	if recordHistory {
-		if err = s.appendSubmodelHistoryTx(ctx, tx, persisted, previousHistorySnapshot, history.ChangeUpdated, false); err != nil {
-			return PutSubmodelResult{}, err
-		}
+	if err = s.appendAcknowledgedSubmodelPutHistoryTx(ctx, tx, previous, persisted); err != nil {
+		return PutSubmodelResult{}, err
 	}
 	return PutSubmodelResult{IsUpdate: true, Changed: true, Previous: previous}, nil
+}
+
+func (s *SubmodelDatabase) appendAcknowledgedSubmodelPutHistoryTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	previous types.ISubmodel,
+	persisted types.ISubmodel,
+) error {
+	if !history.MutationRecordingEnabled() {
+		return nil
+	}
+	var previousSnapshot map[string]any
+	var err error
+	if history.ActiveConfig().EvidenceEnabled {
+		previousSnapshot, err = submodelToHistorySnapshot(previous)
+		if err != nil {
+			return err
+		}
+	}
+	return s.appendSubmodelHistoryTx(ctx, tx, persisted, previousSnapshot, history.ChangeUpdated, false)
 }
 
 func (s *SubmodelDatabase) executeSubmodelReconciliationTx(

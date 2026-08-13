@@ -1104,6 +1104,9 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 			return PutAssetAdministrationShellResult{}, scanErr
 		}
 		if !reconciliationPlan.hasLiveMutation() {
+			if historyErr := s.appendAcknowledgedAASPutHistoryTx(ctx, tx, previous); historyErr != nil {
+				return PutAssetAdministrationShellResult{}, historyErr
+			}
 			return PutAssetAdministrationShellResult{IsUpdate: true, Previous: previous}, nil
 		}
 	}
@@ -1149,6 +1152,25 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 	}
 
 	return PutAssetAdministrationShellResult{IsUpdate: isUpdate, Changed: true, Previous: previous}, nil
+}
+
+func (s *AssetAdministrationShellDatabase) appendAcknowledgedAASPutHistoryTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	previous types.IAssetAdministrationShell,
+) error {
+	if !history.MutationRecordingEnabled() {
+		return nil
+	}
+	var previousSnapshot map[string]any
+	var err error
+	if history.ActiveConfig().EvidenceEnabled {
+		previousSnapshot, err = aasToHistorySnapshot(previous)
+		if err != nil {
+			return err
+		}
+	}
+	return s.appendAASHistoryTx(ctx, tx, previous, previousSnapshot, history.ChangeUpdated, false)
 }
 
 func (s *AssetAdministrationShellDatabase) loadPreviousAASForPutTx(
