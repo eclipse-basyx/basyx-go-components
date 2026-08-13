@@ -575,11 +575,19 @@ func (s *SubmodelDatabase) executeSubmodelReconciliationTx(
 	if !plan.hasLiveMutation() {
 		return nil
 	}
-	if err := deferSubmodelElementReconciliationConstraints(ctx, tx); err != nil {
+	deferSiblingConstraints := plan.requiresDeferredSiblingConstraints()
+	if deferSiblingConstraints {
+		if err := deferSubmodelElementReconciliationConstraints(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if _, err := executeSubmodelReconciliationStatement(ctx, tx, submodelID, plan); err != nil {
 		return err
 	}
-	_, err := executeSubmodelReconciliationStatement(ctx, tx, submodelID, plan)
-	return err
+	if deferSiblingConstraints {
+		return enforceSubmodelElementReconciliationConstraints(ctx, tx)
+	}
+	return nil
 }
 
 func selectPutFormulaContext(ctx context.Context, exists bool) (context.Context, bool, error) {

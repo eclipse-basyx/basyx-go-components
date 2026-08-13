@@ -279,8 +279,6 @@ func TestPutSubmodelChangedUpdateExecutesReconciliationAndHistory(t *testing.T) 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	expectBareSubmodelStateLoad(mock, "sm-existing", "old")
-	mock.ExpectExec(`SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos DEFERRED`).
-		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`WITH reconciliation_plan`).
 		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 0, 0))
 	expectBareSubmodelStateLoad(mock, "sm-existing", "new")

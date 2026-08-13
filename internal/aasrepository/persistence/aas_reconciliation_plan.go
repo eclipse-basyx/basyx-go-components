@@ -543,15 +543,28 @@ func cloneAssetAdministrationShell(aas types.IAssetAdministrationShell) (types.I
 	return cloned, nil
 }
 
-func buildEffectiveAssetInformationTarget(
-	previous types.IAssetAdministrationShell,
+func buildAssetInformationReconciliationPlan(
+	aasIdentifier string,
+	current types.IAssetInformation,
 	submitted types.IAssetInformation,
-) (types.IAssetAdministrationShell, error) {
-	target, err := cloneAssetAdministrationShell(previous)
-	if err != nil {
-		return nil, err
+) (aasReconciliationPlan, error) {
+	previous := types.NewAssetAdministrationShell(aasIdentifier, current)
+	target := types.NewAssetAdministrationShell(aasIdentifier, buildEffectiveAssetInformation(current, submitted))
+	return buildAASReconciliationPlan(previous, target, aasReconciliationOptions{})
+}
+
+func assetInformationReconciliationView(current types.IAssetInformation, includeSpecificAssetIDs bool) types.IAssetInformation {
+	view := types.NewAssetInformation(current.AssetKind())
+	view.SetGlobalAssetID(current.GlobalAssetID())
+	view.SetAssetType(current.AssetType())
+	view.SetDefaultThumbnail(current.DefaultThumbnail())
+	if includeSpecificAssetIDs {
+		view.SetSpecificAssetIDs(current.SpecificAssetIDs())
 	}
-	current := previous.AssetInformation()
+	return view
+}
+
+func buildEffectiveAssetInformation(current types.IAssetInformation, submitted types.IAssetInformation) types.IAssetInformation {
 	assetKind := submitted.AssetKind()
 	if assetKind == 0 {
 		assetKind = current.AssetKind()
@@ -570,8 +583,7 @@ func buildEffectiveAssetInformationTarget(
 		effective.SetSpecificAssetIDs(current.SpecificAssetIDs())
 	}
 	effective.SetDefaultThumbnail(effectiveAssetInformationThumbnail(current.DefaultThumbnail(), submitted.DefaultThumbnail()))
-	target.SetAssetInformation(effective)
-	return target, nil
+	return effective
 }
 
 func effectiveAssetInformationThumbnail(current types.IResource, submitted types.IResource) types.IResource {

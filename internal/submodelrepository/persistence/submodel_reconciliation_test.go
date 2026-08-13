@@ -37,9 +37,11 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
 
@@ -105,6 +107,120 @@ func TestReconciliationPlanMatchesNamedChildrenAndListsPositionally(t *testing.T
 	require.Empty(t, plan.Deletes)
 	require.Equal(t, "L[0]", plan.Updates[0].Path)
 	require.Equal(t, "L[1]", plan.Updates[1].Path)
+}
+
+func TestReconciliationPlanRejectsDuplicateElementPaths(t *testing.T) {
+	testCases := []struct {
+		name     string
+		previous string
+		target   string
+	}{
+		{
+			name:     "duplicate existing root path",
+			previous: `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"old"}]}`,
+			target:   `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"first"},{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"second"}]}`,
+		},
+		{
+			name:     "duplicate new nested path",
+			previous: `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"SubmodelElementCollection","value":[]}]}`,
+			target:   `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"SubmodelElementCollection","value":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"first"},{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"second"}]}]}`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			previous := readReconciliationJSON(t, testCase.previous)
+			target := readReconciliationJSON(t, testCase.target)
+
+			_, err := (&SubmodelDatabase{}).buildSubmodelReconciliationPlan(previous, target)
+
+			require.Error(t, err)
+			require.Truef(t, common.IsErrConflict(err), "got %v", err)
+			require.Contains(t, err.Error(), "SMREPO-RECON-DUPLICATEPATH")
+		})
+	}
+}
+
+func TestReconcileSubmodelElementRowsRejectsDuplicateSiblingPositions(t *testing.T) {
+	rows := []submodelelements.ReconciliationElementRow{
+		{Path: "Group.A", ParentPath: "Group", Position: 0},
+		{Path: "Group.B", ParentPath: "Group", Position: 0},
+	}
+
+	_, _, _, err := reconcileSubmodelElementRows(nil, rows)
+
+	require.Error(t, err)
+	require.Truef(t, common.IsErrConflict(err), "got %v", err)
+	require.Contains(t, err.Error(), "SMREPO-RECON-DUPLICATEPOSITION")
+	_, _, _, err = reconcileSubmodelElementRows(nil, []submodelelements.ReconciliationElementRow{
+		{Path: "First.A", ParentPath: "First", Position: 0},
+		{Path: "Second.B", ParentPath: "Second", Position: 0},
+	})
+	require.NoError(t, err)
+}
+
+func TestReconciliationPlanDeletesOmittedSubtreeAndCompactsSiblingPosition(t *testing.T) {
+	previous := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"SubmodelElementCollection","value":[{"idShort":"Removed","modelType":"SubmodelElementCollection","value":[{"idShort":"Descendant","modelType":"Property","valueType":"xs:string","value":"delete"}]},{"idShort":"Keep","modelType":"Property","valueType":"xs:string","value":"same"}]}]}`)
+	target := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"SubmodelElementCollection","value":[{"idShort":"Keep","modelType":"Property","valueType":"xs:string","value":"same"}]}]}`)
+
+	plan := buildReconciliationPlanForTest(t, previous, target)
+
+	require.Equal(t, []string{"Group.Removed"}, plan.Deletes)
+	require.Equal(t, 2, plan.ExpectedDeletedElements)
+	require.Len(t, plan.Updates, 1)
+	require.Equal(t, "Group.Keep", plan.Updates[0].Path)
+	require.Equal(t, 0, plan.Updates[0].Position)
+	require.True(t, plan.Updates[0].Changes.Core)
+	require.Empty(t, plan.Inserts)
+}
+
+func TestReconciliationPlanCompactsAllSubmodelReferencePositions(t *testing.T) {
+	previous := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","semanticId":{"type":"ModelReference","keys":[{"type":"Submodel","value":"root"},{"type":"Property","value":"semantic-survivor"}]},"supplementalSemanticIds":[{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"removed-reference"}]},{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"supplemental-survivor"},{"type":"FragmentReference","value":"supplemental-fragment"}]}],"submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"same","semanticId":{"type":"ModelReference","keys":[{"type":"Submodel","value":"root"},{"type":"Property","value":"element-semantic-survivor"}]},"supplementalSemanticIds":[{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"element-removed-reference"}]},{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"element-supplemental-survivor"},{"type":"FragmentReference","value":"element-supplemental-fragment"}]}]}]}`)
+	target := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","semanticId":{"type":"ModelReference","keys":[{"type":"Property","value":"semantic-survivor"}]},"supplementalSemanticIds":[{"type":"ExternalReference","keys":[{"type":"FragmentReference","value":"supplemental-fragment"}]}],"submodelElements":[{"idShort":"P","modelType":"Property","valueType":"xs:string","value":"same","semanticId":{"type":"ModelReference","keys":[{"type":"Property","value":"element-semantic-survivor"}]},"supplementalSemanticIds":[{"type":"ExternalReference","keys":[{"type":"FragmentReference","value":"element-supplemental-fragment"}]}]}]}`)
+
+	plan := buildReconciliationPlanForTest(t, previous, target)
+
+	require.True(t, plan.Metadata.SemanticIDChanged)
+	require.Equal(t, 0, plan.Metadata.SemanticID.Keys[0].Position)
+	require.Equal(t, "semantic-survivor", plan.Metadata.SemanticID.Keys[0].Value)
+	require.True(t, plan.Metadata.SupplementalChanged)
+	require.Len(t, plan.Metadata.SupplementalRefs, 1)
+	require.Equal(t, 0, plan.Metadata.SupplementalRefs[0].Position)
+	require.Equal(t, 0, plan.Metadata.SupplementalRefs[0].Keys[0].Position)
+	require.Equal(t, "supplemental-fragment", plan.Metadata.SupplementalRefs[0].Keys[0].Value)
+	require.Len(t, plan.Updates, 1)
+	require.Equal(t, 0, plan.Updates[0].SemanticID.Keys[0].Position)
+	require.Equal(t, "element-semantic-survivor", plan.Updates[0].SemanticID.Keys[0].Value)
+	require.Len(t, plan.Updates[0].SupplementalSemanticIDs, 1)
+	require.Equal(t, 0, plan.Updates[0].SupplementalSemanticIDs[0].Position)
+	require.Equal(t, 0, plan.Updates[0].SupplementalSemanticIDs[0].Keys[0].Position)
+	require.Equal(t, "element-supplemental-fragment", plan.Updates[0].SupplementalSemanticIDs[0].Keys[0].Value)
+}
+
+func TestSubmodelReconciliationMapsDeferredUniqueViolationToConflict(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	plan := submodelReconciliationPlan{
+		Inserts: []submodelelements.ReconciliationElementRow{{Path: "P"}},
+	}
+	mock.ExpectExec(regexp.QuoteMeta("SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos DEFERRED")).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(regexp.QuoteMeta("WITH reconciliation_plan")).
+		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 1, 0))
+	mock.ExpectExec(regexp.QuoteMeta("SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos IMMEDIATE")).
+		WillReturnError(&pgconn.PgError{Code: "23505"})
+
+	err = (&SubmodelDatabase{}).executeSubmodelReconciliationTx(t.Context(), tx, "sm", plan)
+
+	require.Error(t, err)
+	require.Truef(t, common.IsErrConflict(err), "got %v", err)
+	mock.ExpectRollback()
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestReconciliationPlanOnlyMarksChangedPersistenceSection(t *testing.T) {

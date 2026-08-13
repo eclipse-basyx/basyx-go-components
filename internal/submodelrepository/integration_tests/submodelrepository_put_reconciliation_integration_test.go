@@ -48,6 +48,17 @@ type persistedReconciliationElement struct {
 	position int
 }
 
+type persistedReconciliationReferenceKey struct {
+	position int
+	value    string
+}
+
+type persistedReconciliationPositionedReferenceKey struct {
+	referencePosition int
+	keyPosition       int
+	value             string
+}
+
 func TestPutSubmodelReconcilesThousandsOfElementsInPlace(t *testing.T) {
 	submodelID := fmt.Sprintf("urn:basyx:integration:put-reconciliation-%d", time.Now().UnixNano())
 	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
@@ -129,6 +140,161 @@ func TestConcurrentIdenticalPutSubmodelUpdatesExistingResource(t *testing.T) {
 	}
 }
 
+func TestPutSubmodelRejectsDuplicateSiblingPathsWithoutMutation(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:put-duplicate-path-%d", time.Now().UnixNano())
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
+	initial := map[string]any{
+		"id": submodelID, "modelType": "Submodel",
+		"submodelElements": []any{map[string]any{
+			"idShort": "Group", "modelType": "SubmodelElementCollection",
+			"value": []any{map[string]any{
+				"idShort": "Existing", "modelType": "Property", "valueType": "xs:string", "value": "original",
+			}},
+		}},
+	}
+	status, body := sendReconciliationRequest(t, http.MethodPost, submodelRepositoryBaseURL+"/submodels", initial)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _ = sendReconciliationRequestWithoutFailure(http.MethodDelete, endpoint, nil) })
+
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	before := reconciliationAllElementRows(t, db, submodelID)
+
+	testCases := []struct {
+		name    string
+		idShort string
+	}{
+		{name: "existing path", idShort: "Existing"},
+		{name: "new path", idShort: "New"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			target := map[string]any{
+				"id": submodelID, "modelType": "Submodel",
+				"submodelElements": []any{map[string]any{
+					"idShort": "Group", "modelType": "SubmodelElementCollection",
+					"value": []any{
+						map[string]any{"idShort": testCase.idShort, "modelType": "Property", "valueType": "xs:string", "value": "first"},
+						map[string]any{"idShort": testCase.idShort, "modelType": "Property", "valueType": "xs:string", "value": "second"},
+					},
+				}},
+			}
+
+			putStatus, putBody := sendReconciliationRequest(t, http.MethodPut, endpoint, target)
+			require.Equal(t, http.StatusConflict, putStatus, "response=%s", string(putBody))
+			require.Equal(t, before, reconciliationAllElementRows(t, db, submodelID))
+		})
+	}
+}
+
+func TestPutSubmodelDeletesOmittedSubtreeAndCompactsReferenceKeyPositions(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:put-delete-parts-%d", time.Now().UnixNano())
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
+	initial := map[string]any{
+		"id": submodelID, "modelType": "Submodel",
+		"semanticId": map[string]any{
+			"type": "ModelReference",
+			"keys": []any{
+				map[string]any{"type": "Submodel", "value": submodelID},
+				map[string]any{"type": "Property", "value": "surviving-key"},
+			},
+		},
+		"supplementalSemanticIds": reconciliationPositionCompactionReferences(
+			"removed-submodel-reference", "removed-submodel-reference-key", "surviving-submodel-reference-key",
+		),
+		"submodelElements": []any{map[string]any{
+			"idShort": "Group", "modelType": "SubmodelElementCollection",
+			"value": []any{
+				map[string]any{
+					"idShort": "Removed", "modelType": "SubmodelElementCollection",
+					"value": []any{map[string]any{
+						"idShort": "Descendant", "modelType": "Property", "valueType": "xs:string", "value": "delete",
+					}},
+				},
+				map[string]any{
+					"idShort": "Keep", "modelType": "Property", "valueType": "xs:string", "value": "same",
+					"semanticId": map[string]any{
+						"type": "ModelReference",
+						"keys": []any{
+							map[string]any{"type": "Submodel", "value": submodelID},
+							map[string]any{"type": "Property", "value": "surviving-element-semantic-key"},
+						},
+					},
+					"supplementalSemanticIds": reconciliationPositionCompactionReferences(
+						"removed-element-reference", "removed-element-reference-key", "surviving-element-reference-key",
+					),
+				},
+			},
+		}},
+	}
+	status, body := sendReconciliationRequest(t, http.MethodPost, submodelRepositoryBaseURL+"/submodels", initial)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _ = sendReconciliationRequestWithoutFailure(http.MethodDelete, endpoint, nil) })
+
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	before := reconciliationAllElementRows(t, db, submodelID)
+	require.Contains(t, before, "Group.Removed.Descendant")
+
+	target := map[string]any{
+		"id": submodelID, "modelType": "Submodel",
+		"semanticId": map[string]any{
+			"type": "ModelReference",
+			"keys": []any{map[string]any{"type": "Property", "value": "surviving-key"}},
+		},
+		"supplementalSemanticIds": []any{map[string]any{
+			"type": "ExternalReference",
+			"keys": []any{map[string]any{"type": "FragmentReference", "value": "surviving-submodel-reference-key"}},
+		}},
+		"submodelElements": []any{map[string]any{
+			"idShort": "Group", "modelType": "SubmodelElementCollection",
+			"value": []any{map[string]any{
+				"idShort": "Keep", "modelType": "Property", "valueType": "xs:string", "value": "same",
+				"semanticId": map[string]any{
+					"type": "ModelReference",
+					"keys": []any{map[string]any{"type": "Property", "value": "surviving-element-semantic-key"}},
+				},
+				"supplementalSemanticIds": []any{map[string]any{
+					"type": "ExternalReference",
+					"keys": []any{map[string]any{"type": "FragmentReference", "value": "surviving-element-reference-key"}},
+				}},
+			}},
+		}},
+	}
+	status, body = sendReconciliationRequest(t, http.MethodPut, endpoint, target)
+	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
+
+	after := reconciliationAllElementRows(t, db, submodelID)
+	require.Len(t, after, 2)
+	require.NotContains(t, after, "Group.Removed")
+	require.NotContains(t, after, "Group.Removed.Descendant")
+	require.Equal(t, before["Group"].id, after["Group"].id)
+	require.Equal(t, before["Group.Keep"].id, after["Group.Keep"].id)
+	require.Equal(t, 0, after["Group.Keep"].position)
+	require.Equal(t, []persistedReconciliationReferenceKey{{position: 0, value: "surviving-key"}}, reconciliationSubmodelSemanticIDKeys(t, db, submodelID))
+	require.Equal(t, []persistedReconciliationPositionedReferenceKey{{referencePosition: 0, keyPosition: 0, value: "surviving-submodel-reference-key"}}, reconciliationSubmodelSupplementalReferenceKeys(t, db, submodelID))
+	require.Equal(t, []persistedReconciliationReferenceKey{{position: 0, value: "surviving-element-semantic-key"}}, reconciliationElementSemanticIDKeys(t, db, after["Group.Keep"].id))
+	require.Equal(t, []persistedReconciliationPositionedReferenceKey{{referencePosition: 0, keyPosition: 0, value: "surviving-element-reference-key"}}, reconciliationElementSupplementalReferenceKeys(t, db, after["Group.Keep"].id))
+}
+
+func reconciliationPositionCompactionReferences(removedReference string, removedKey string, survivingKey string) []any {
+	return []any{
+		map[string]any{
+			"type": "ExternalReference",
+			"keys": []any{map[string]any{"type": "GlobalReference", "value": removedReference}},
+		},
+		map[string]any{
+			"type": "ExternalReference",
+			"keys": []any{
+				map[string]any{"type": "GlobalReference", "value": removedKey},
+				map[string]any{"type": "FragmentReference", "value": survivingKey},
+			},
+		},
+	}
+}
+
 func scaledReconciliationSubmodel(submodelID string, replacement bool) map[string]any {
 	elements := make([]any, reconciliationScaleElementCount)
 	for position := range elements {
@@ -206,15 +372,24 @@ func reconciliationSubmodelDatabaseID(t *testing.T, db *sql.DB, submodelID strin
 }
 
 func reconciliationElementRows(t *testing.T, db *sql.DB, submodelID string) map[string]persistedReconciliationElement {
+	return reconciliationElementRowsWithScope(t, db, submodelID, true)
+}
+
+func reconciliationAllElementRows(t *testing.T, db *sql.DB, submodelID string) map[string]persistedReconciliationElement {
+	return reconciliationElementRowsWithScope(t, db, submodelID, false)
+}
+
+func reconciliationElementRowsWithScope(t *testing.T, db *sql.DB, submodelID string, rootOnly bool) map[string]persistedReconciliationElement {
 	t.Helper()
-	query, args, err := goqu.Dialect(common.Dialect).
+	dataset := goqu.Dialect(common.Dialect).
 		From(goqu.T("submodel_element").As("element")).
 		Join(goqu.T("submodel").As("submodel"), goqu.On(goqu.I("submodel.id").Eq(goqu.I("element.submodel_id")))).
 		Select(goqu.I("element.idshort_path"), goqu.I("element.id"), goqu.I("element.position")).
-		Where(
-			goqu.I("submodel.submodel_identifier").Eq(submodelID),
-			goqu.I("element.parent_sme_id").IsNull(),
-		).
+		Where(goqu.I("submodel.submodel_identifier").Eq(submodelID))
+	if rootOnly {
+		dataset = dataset.Where(goqu.I("element.parent_sme_id").IsNull())
+	}
+	query, args, err := dataset.
 		Prepared(true).
 		ToSQL()
 	require.NoError(t, err)
@@ -227,6 +402,99 @@ func reconciliationElementRows(t *testing.T, db *sql.DB, submodelID string) map[
 		var row persistedReconciliationElement
 		require.NoError(t, rows.Scan(&path, &row.id, &row.position))
 		result[path] = row
+	}
+	require.NoError(t, rows.Err())
+	return result
+}
+
+func reconciliationSubmodelSemanticIDKeys(t *testing.T, db *sql.DB, submodelID string) []persistedReconciliationReferenceKey {
+	t.Helper()
+	return reconciliationReferenceKeysByID(
+		t,
+		db,
+		"submodel_semantic_id_reference_key",
+		reconciliationSubmodelDatabaseID(t, db, submodelID),
+	)
+}
+
+func reconciliationReferenceKeysByID(t *testing.T, db *sql.DB, table string, referenceID int64) []persistedReconciliationReferenceKey {
+	t.Helper()
+	query, args, err := goqu.Dialect(common.Dialect).
+		From(table).
+		Select("position", "value").
+		Where(goqu.C("reference_id").Eq(referenceID)).
+		Order(goqu.C("position").Asc()).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+	rows, err := db.QueryContext(t.Context(), query, args...)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	result := make([]persistedReconciliationReferenceKey, 0)
+	for rows.Next() {
+		var key persistedReconciliationReferenceKey
+		require.NoError(t, rows.Scan(&key.position, &key.value))
+		result = append(result, key)
+	}
+	require.NoError(t, rows.Err())
+	return result
+}
+
+func reconciliationSubmodelSupplementalReferenceKeys(t *testing.T, db *sql.DB, submodelID string) []persistedReconciliationPositionedReferenceKey {
+	t.Helper()
+	return reconciliationPositionedReferenceKeys(
+		t,
+		db,
+		"submodel_supplemental_semantic_id_reference",
+		"submodel_supplemental_semantic_id_reference_key",
+		"submodel_id",
+		reconciliationSubmodelDatabaseID(t, db, submodelID),
+	)
+}
+
+func reconciliationElementSemanticIDKeys(t *testing.T, db *sql.DB, elementID int64) []persistedReconciliationReferenceKey {
+	t.Helper()
+	return reconciliationReferenceKeysByID(t, db, "submodel_element_semantic_id_reference_key", elementID)
+}
+
+func reconciliationElementSupplementalReferenceKeys(t *testing.T, db *sql.DB, elementID int64) []persistedReconciliationPositionedReferenceKey {
+	t.Helper()
+	return reconciliationPositionedReferenceKeys(
+		t,
+		db,
+		"submodel_element_supplemental_semantic_id_reference",
+		"submodel_element_supplemental_semantic_id_reference_key",
+		"submodel_element_id",
+		elementID,
+	)
+}
+
+func reconciliationPositionedReferenceKeys(
+	t *testing.T,
+	db *sql.DB,
+	referenceTable string,
+	keyTable string,
+	ownerColumn string,
+	ownerID int64,
+) []persistedReconciliationPositionedReferenceKey {
+	t.Helper()
+	query, args, err := goqu.Dialect(common.Dialect).
+		From(goqu.T(referenceTable).As("reference")).
+		Join(goqu.T(keyTable).As("key"), goqu.On(goqu.I("key.reference_id").Eq(goqu.I("reference.id")))).
+		Select(goqu.I("reference.position"), goqu.I("key.position"), goqu.I("key.value")).
+		Where(goqu.I("reference."+ownerColumn).Eq(ownerID)).
+		Order(goqu.I("reference.position").Asc(), goqu.I("key.position").Asc()).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+	rows, err := db.QueryContext(t.Context(), query, args...)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	result := make([]persistedReconciliationPositionedReferenceKey, 0)
+	for rows.Next() {
+		var key persistedReconciliationPositionedReferenceKey
+		require.NoError(t, rows.Scan(&key.referencePosition, &key.keyPosition, &key.value))
+		result = append(result, key)
 	}
 	require.NoError(t, rows.Err())
 	return result

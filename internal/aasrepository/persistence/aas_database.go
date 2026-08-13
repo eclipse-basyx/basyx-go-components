@@ -1436,22 +1436,14 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 		return err
 	}
 
-	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
+	includeSpecificAssetIDs := assetInformation.SpecificAssetIDs() != nil
+	currentAssetInformation, previousSnapshot, err := s.loadAssetInformationReconciliationStateTx(
+		ctx, tx, aasDBID, aasIdentifier, includeSpecificAssetIDs,
+	)
 	if err != nil {
 		return err
 	}
-	var previousSnapshot map[string]any
-	if history.ActiveConfig().EvidenceEnabled {
-		previousSnapshot, err = aasToHistorySnapshot(previous)
-		if err != nil {
-			return err
-		}
-	}
-	target, err := buildEffectiveAssetInformationTarget(previous, assetInformation)
-	if err != nil {
-		return err
-	}
-	plan, err := buildAASReconciliationPlan(previous, target, aasReconciliationOptions{})
+	plan, err := buildAssetInformationReconciliationPlan(aasIdentifier, currentAssetInformation, assetInformation)
 	if err != nil {
 		return err
 	}
@@ -1466,6 +1458,32 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 	}
 
 	return s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, history.ChangeUpdated)
+}
+
+func (s *AssetAdministrationShellDatabase) loadAssetInformationReconciliationStateTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasDBID int64,
+	aasIdentifier string,
+	includeSpecificAssetIDs bool,
+) (types.IAssetInformation, map[string]any, error) {
+	unfilteredContext := auth.ContextWithoutQueryFilter(ctx)
+	if !history.ActiveConfig().EvidenceEnabled {
+		current, err := s.loadAssetInformationForReconciliationTx(
+			unfilteredContext, tx, aasDBID, aasIdentifier, includeSpecificAssetIDs,
+		)
+		return current, nil, err
+	}
+
+	previous, err := s.getAssetAdministrationShellMapByDBIDInTransaction(unfilteredContext, tx, aasDBID)
+	if err != nil {
+		return nil, nil, err
+	}
+	previousSnapshot, err := aasToHistorySnapshot(previous)
+	if err != nil {
+		return nil, nil, err
+	}
+	return assetInformationReconciliationView(previous.AssetInformation(), includeSpecificAssetIDs), previousSnapshot, nil
 }
 
 func (s *AssetAdministrationShellDatabase) ensureAASWritableForAssetInformationUpdate(
@@ -1500,6 +1518,42 @@ func getAASDatabaseIDForAssetInformationUpdate(tx *sql.Tx, aasIdentifier string)
 		return 0, common.NewInternalServerError("AASREPO-PUTASSETINFO-GETAASDBID " + err.Error())
 	}
 	return aasDBID, nil
+}
+
+func (s *AssetAdministrationShellDatabase) loadAssetInformationForReconciliationTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasDBID int64,
+	aasIdentifier string,
+	includeSpecificAssetIDs bool,
+) (types.IAssetInformation, error) {
+	dialect := goqu.Dialect("postgres")
+	query, args, err := buildGetAssetInformationReconciliationStateQuery(&dialect, aasDBID)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-PUTASSETINFO-BUILDSTATE " + err.Error())
+	}
+	var row coreAssetAdministrationShellRow
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(
+		&row.assetKind,
+		&row.globalAssetID,
+		&row.assetType,
+		&row.thumbnailPath,
+		&row.thumbnailContentType,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("AASREPO-PUTASSETINFO-ASSETINFONOTFOUND Asset Information for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		return nil, common.NewInternalServerError("AASREPO-PUTASSETINFO-EXECSTATE " + err.Error())
+	}
+
+	var specificAssetIDs []types.ISpecificAssetID
+	if includeSpecificAssetIDs {
+		specificAssetIDs, err = s.readSpecificAssetIDsByAssetInformationID(ctx, tx, aasDBID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return buildAssetInformationFromCoreRow(row, specificAssetIDs), nil
 }
 
 func upsertDefaultThumbnailForAssetInformation(

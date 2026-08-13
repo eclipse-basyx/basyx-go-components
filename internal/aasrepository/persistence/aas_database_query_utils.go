@@ -83,6 +83,25 @@ func buildAssetInformationQuery(dialect *goqu.DialectWrapper, aasDBID int64, ass
 	}).ToSQL()
 }
 
+func buildGetAssetInformationReconciliationStateQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
+	return dialect.
+		From(goqu.T("asset_information").As("asset_information")).
+		LeftJoin(
+			goqu.T("thumbnail_file_element").As("thumbnail"),
+			goqu.On(goqu.I("thumbnail.id").Eq(goqu.I("asset_information.asset_information_id"))),
+		).
+		Select(
+			goqu.I("asset_information.asset_kind"),
+			goqu.I("asset_information.global_asset_id"),
+			goqu.I("asset_information.asset_type"),
+			goqu.I("thumbnail.value"),
+			goqu.I("thumbnail.content_type"),
+		).
+		Where(goqu.I("asset_information.asset_information_id").Eq(aasDBID)).
+		Prepared(true).
+		ToSQL()
+}
+
 func buildAssetAdministrationShellSubmodelReferenceQuery(dialect *goqu.DialectWrapper, aasDBID int64, position int, submodelRef types.IReference) (string, []any, error) {
 	return dialect.Insert("aas_submodel_reference").Rows(goqu.Record{
 		"aas_id":   aasDBID,

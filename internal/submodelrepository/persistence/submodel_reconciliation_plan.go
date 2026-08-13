@@ -85,6 +85,18 @@ func (p submodelReconciliationPlan) hasLiveMutation() bool {
 		p.Metadata.SupplementalChanged || len(p.Updates) > 0 || len(p.Inserts) > 0 || len(p.Deletes) > 0
 }
 
+func (p submodelReconciliationPlan) requiresDeferredSiblingConstraints() bool {
+	if len(p.Inserts) > 0 || len(p.Deletes) > 0 {
+		return true
+	}
+	for _, update := range p.Updates {
+		if update.Changes.Core {
+			return true
+		}
+	}
+	return false
+}
+
 func (p submodelReconciliationPlan) marshal() ([]byte, error) {
 	encoded, err := json.Marshal(submodelReconciliationPlanJSON{
 		Metadata:                p.Metadata,
@@ -131,7 +143,10 @@ func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	updates, inserts, deletes := reconcileSubmodelElementRows(oldRows, newRows)
+	updates, inserts, deletes, err := reconcileSubmodelElementRows(oldRows, newRows)
+	if err != nil {
+		return submodelReconciliationPlan{}, err
+	}
 	return submodelReconciliationPlan{
 		Metadata:                metadata,
 		Updates:                 updates,
@@ -139,6 +154,11 @@ func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 		Deletes:                 deletes,
 		ExpectedDeletedElements: countDeletedReconciliationRows(oldRows, deletes),
 	}, nil
+}
+
+type reconciliationSiblingPosition struct {
+	parentPath string
+	position   int
 }
 
 func countDeletedReconciliationRows(rows []submodelelements.ReconciliationElementRow, roots []string) int {
@@ -236,23 +256,27 @@ func nullableRawJSON(value *string) json.RawMessage {
 func reconcileSubmodelElementRows(
 	oldRows []submodelelements.ReconciliationElementRow,
 	newRows []submodelelements.ReconciliationElementRow,
-) ([]submodelelements.ReconciliationElementRow, []submodelelements.ReconciliationElementRow, []string) {
+) ([]submodelelements.ReconciliationElementRow, []submodelelements.ReconciliationElementRow, []string, error) {
 	oldByPath := indexReconciliationRows(oldRows)
-	retained := make(map[string]bool, len(newRows))
-	inserted := make(map[string]bool, len(newRows))
+	targetInsertedByPath := make(map[string]bool, len(newRows))
+	positions := make(map[reconciliationSiblingPosition]struct{}, len(newRows))
 	updates := make([]submodelelements.ReconciliationElementRow, 0)
 	inserts := make([]submodelelements.ReconciliationElementRow, 0)
 
 	for _, target := range newRows {
-		parentInserted := target.ParentPath != "" && inserted[target.ParentPath]
+		if err := validateTargetReconciliationRow(target, targetInsertedByPath, positions); err != nil {
+			return nil, nil, nil, err
+		}
+
+		parentInserted := target.ParentPath != "" && targetInsertedByPath[target.ParentPath]
 		previous, exists := oldByPath[target.Path]
 		if parentInserted || !exists || previous.ModelType != target.ModelType {
 			target.Changes = submodelelements.AllReconciliationElementChanges()
-			inserted[target.Path] = true
+			targetInsertedByPath[target.Path] = true
 			inserts = append(inserts, target)
 			continue
 		}
-		retained[target.Path] = true
+		targetInsertedByPath[target.Path] = false
 		target.Changes = reconciliationElementChanges(previous, target)
 		if hasReconciliationElementChanges(target.Changes) {
 			updates = append(updates, target)
@@ -261,7 +285,8 @@ func reconcileSubmodelElementRows(
 
 	deleteCandidates := make(map[string]bool)
 	for _, previous := range oldRows {
-		if !retained[previous.Path] {
+		inserted, exists := targetInsertedByPath[previous.Path]
+		if !exists || inserted {
 			deleteCandidates[previous.Path] = true
 		}
 	}
@@ -276,7 +301,23 @@ func reconcileSubmodelElementRows(
 		deletes = append(deletes, previous.Path)
 	}
 	sort.Strings(deletes)
-	return updates, inserts, deletes
+	return updates, inserts, deletes, nil
+}
+
+func validateTargetReconciliationRow(
+	target submodelelements.ReconciliationElementRow,
+	targetInsertedByPath map[string]bool,
+	positions map[reconciliationSiblingPosition]struct{},
+) error {
+	if _, exists := targetInsertedByPath[target.Path]; exists {
+		return common.NewErrConflict("SMREPO-RECON-DUPLICATEPATH Duplicate submodel element path '" + target.Path + "'")
+	}
+	siblingPosition := reconciliationSiblingPosition{parentPath: target.ParentPath, position: target.Position}
+	if _, exists := positions[siblingPosition]; exists {
+		return common.NewErrConflict("SMREPO-RECON-DUPLICATEPOSITION Duplicate submodel element sibling position")
+	}
+	positions[siblingPosition] = struct{}{}
+	return nil
 }
 
 func hasReconciliationElementChanges(changes submodelelements.ReconciliationElementChanges) bool {

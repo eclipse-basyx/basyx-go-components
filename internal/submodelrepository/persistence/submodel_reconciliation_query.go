@@ -1010,6 +1010,24 @@ func deferSubmodelElementReconciliationConstraints(ctx context.Context, tx *sql.
 	return nil
 }
 
+func enforceSubmodelElementReconciliationConstraints(ctx context.Context, tx *sql.Tx) error {
+	if tx == nil {
+		return common.NewInternalServerError("SMREPO-RECON-ENFORCE-NILTX transaction must not be nil")
+	}
+	statement := goqu.L("SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos IMMEDIATE")
+	if _, err := tx.ExecContext(ctx, statement.Literal(), statement.Args()...); err != nil {
+		return mapSubmodelReconciliationDatabaseError("SMREPO-RECON-ENFORCE", err)
+	}
+	return nil
+}
+
+func mapSubmodelReconciliationDatabaseError(errorCode string, err error) error {
+	if common.IsPostgresUniqueViolation(err) {
+		return common.NewErrConflict(errorCode + "-CONFLICT Duplicate submodel element sibling idShort or position")
+	}
+	return common.NewInternalServerError(errorCode + "-EXEC " + err.Error())
+}
+
 func executeSubmodelReconciliationStatement(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -1026,7 +1044,7 @@ func executeSubmodelReconciliationStatement(
 	}
 	var result reconciliationMutationResult
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(&result.UpdatedElements, &result.InsertedElements, &result.DeletedElements); err != nil {
-		return reconciliationMutationResult{}, common.NewInternalServerError("SMREPO-RECON-EXEC " + err.Error())
+		return reconciliationMutationResult{}, mapSubmodelReconciliationDatabaseError("SMREPO-RECON", err)
 	}
 	if result.UpdatedElements != len(plan.Updates) || result.InsertedElements != len(plan.Inserts) ||
 		result.DeletedElements != plan.ExpectedDeletedElements {

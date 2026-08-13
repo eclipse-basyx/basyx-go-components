@@ -214,6 +214,68 @@ func TestAASSubmodelReferencesWithoutSemanticIdentityMatchPositionally(t *testin
 	}
 }
 
+func TestAASReconciliationCompactsAllPositionedRowsAfterDeletion(t *testing.T) {
+	previous := reconciliationAAS("aas", "global")
+	firstSpecific := types.NewSpecificAssetID("serial", "one")
+	secondSpecific := types.NewSpecificAssetID("batch", "two")
+	secondSpecific.SetExternalSubjectID(types.NewReference(types.ReferenceTypesExternalReference, []types.IKey{
+		types.NewKey(types.KeyTypesGlobalReference, "removed-external-key"),
+		types.NewKey(types.KeyTypesFragmentReference, "surviving-external-key"),
+	}))
+	secondSpecific.SetSupplementalSemanticIDs([]types.IReference{
+		reconciliationGlobalReference("removed-specific-reference"),
+		types.NewReference(types.ReferenceTypesExternalReference, []types.IKey{
+			types.NewKey(types.KeyTypesGlobalReference, "removed-supplemental-key"),
+			types.NewKey(types.KeyTypesFragmentReference, "surviving-supplemental-key"),
+		}),
+	})
+	previous.AssetInformation().SetSpecificAssetIDs([]types.ISpecificAssetID{firstSpecific, secondSpecific})
+	removedReference := reconciliationSubmodelReference("removed")
+	survivingReference := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{
+		types.NewKey(types.KeyTypesAssetAdministrationShell, "aas"),
+		types.NewKey(types.KeyTypesSubmodel, "surviving"),
+	})
+	previous.SetSubmodels([]types.IReference{removedReference, survivingReference})
+
+	target, err := cloneAssetAdministrationShell(previous)
+	require.NoError(t, err)
+	targetSpecific := target.AssetInformation().SpecificAssetIDs()[1]
+	targetSpecific.SetExternalSubjectID(types.NewReference(types.ReferenceTypesExternalReference, []types.IKey{
+		types.NewKey(types.KeyTypesFragmentReference, "surviving-external-key"),
+	}))
+	targetSpecific.SetSupplementalSemanticIDs([]types.IReference{
+		types.NewReference(types.ReferenceTypesExternalReference, []types.IKey{
+			types.NewKey(types.KeyTypesFragmentReference, "surviving-supplemental-key"),
+		}),
+	})
+	target.AssetInformation().SetSpecificAssetIDs([]types.ISpecificAssetID{targetSpecific})
+	target.SetSubmodels([]types.IReference{types.NewReference(types.ReferenceTypesModelReference, []types.IKey{
+		types.NewKey(types.KeyTypesSubmodel, "surviving"),
+	})})
+
+	plan, err := buildAASReconciliationPlan(previous, target, aasReconciliationOptions{})
+	require.NoError(t, err)
+
+	require.Len(t, plan.SpecificUpdates, 1)
+	require.Equal(t, 0, plan.SpecificUpdates[0].Position)
+	require.Equal(t, "two", plan.SpecificUpdates[0].Value)
+	require.Equal(t, 0, plan.SpecificUpdates[0].ExternalSubjectID.Keys[0].Position)
+	require.Equal(t, "surviving-external-key", plan.SpecificUpdates[0].ExternalSubjectID.Keys[0].Value)
+	require.Len(t, plan.SpecificUpdates[0].SupplementalSemanticIDs, 1)
+	require.Equal(t, 0, plan.SpecificUpdates[0].SupplementalSemanticIDs[0].Position)
+	require.Equal(t, 0, plan.SpecificUpdates[0].SupplementalSemanticIDs[0].Keys[0].Position)
+	require.Equal(t, "surviving-supplemental-key", plan.SpecificUpdates[0].SupplementalSemanticIDs[0].Keys[0].Value)
+	require.Len(t, plan.SpecificDeletes, 1)
+	require.Equal(t, 1, plan.SpecificDeletes[0].MatchPosition)
+	require.Len(t, plan.ReferenceUpdates, 1)
+	require.Equal(t, 1, plan.ReferenceUpdates[0].MatchPosition)
+	require.Equal(t, 0, plan.ReferenceUpdates[0].Position)
+	require.Len(t, plan.ReferenceUpdates[0].Keys, 1)
+	require.Equal(t, 0, plan.ReferenceUpdates[0].Keys[0].Position)
+	require.Equal(t, "surviving", plan.ReferenceUpdates[0].Keys[0].Value)
+	require.Len(t, plan.ReferenceDeletes, 1)
+}
+
 func TestAASReconciliationPreservesUnchangedManagedThumbnail(t *testing.T) {
 	contentType := "image/png"
 	previous := reconciliationAAS("aas", "global")
@@ -243,28 +305,28 @@ func TestEffectiveAssetInformationPutPreservesOmittedPartialFields(t *testing.T)
 	submitted := types.NewAssetInformation(0)
 	submitted.SetDefaultThumbnail(types.NewResource(currentThumbnail.Path()))
 
-	target, err := buildEffectiveAssetInformationTarget(previous, submitted)
-	require.NoError(t, err)
-	plan, err := buildAASReconciliationPlan(previous, target, aasReconciliationOptions{})
+	target := buildEffectiveAssetInformation(previous.AssetInformation(), submitted)
+	plan, err := buildAssetInformationReconciliationPlan(previous.ID(), previous.AssetInformation(), submitted)
 	require.NoError(t, err)
 	require.False(t, plan.hasLiveMutation())
-	require.Equal(t, previous.AssetInformation().AssetKind(), target.AssetInformation().AssetKind())
-	require.Equal(t, previous.AssetInformation().GlobalAssetID(), target.AssetInformation().GlobalAssetID())
-	require.Equal(t, previous.AssetInformation().AssetType(), target.AssetInformation().AssetType())
-	require.Len(t, target.AssetInformation().SpecificAssetIDs(), 1)
-	require.Equal(t, &contentType, target.AssetInformation().DefaultThumbnail().ContentType())
+	require.Equal(t, previous.AssetInformation().AssetKind(), target.AssetKind())
+	require.Equal(t, previous.AssetInformation().GlobalAssetID(), target.GlobalAssetID())
+	require.Equal(t, previous.AssetInformation().AssetType(), target.AssetType())
+	require.Len(t, target.SpecificAssetIDs(), 1)
+	require.Equal(t, &contentType, target.DefaultThumbnail().ContentType())
 }
 
 func TestEffectiveAssetInformationPutClearsOmittedThumbnailOnly(t *testing.T) {
 	previous := reconciliationAAS("aas", "global")
 	previous.AssetInformation().SetDefaultThumbnail(types.NewResource("https://example.com/thumbnail.png"))
 
-	target, err := buildEffectiveAssetInformationTarget(previous, types.NewAssetInformation(0))
-	require.NoError(t, err)
-	plan, err := buildAASReconciliationPlan(previous, target, aasReconciliationOptions{})
+	submitted := types.NewAssetInformation(0)
+	target := buildEffectiveAssetInformation(previous.AssetInformation(), submitted)
+	plan, err := buildAssetInformationReconciliationPlan(previous.ID(), previous.AssetInformation(), submitted)
 	require.NoError(t, err)
 	require.True(t, plan.Metadata.ThumbnailChanged)
 	require.Nil(t, plan.Metadata.Thumbnail)
+	require.Nil(t, target.DefaultThumbnail())
 	require.False(t, plan.Metadata.AssetInformationChanged)
 	require.Empty(t, plan.SpecificUpdates)
 	require.Empty(t, plan.SpecificInserts)
@@ -408,7 +470,7 @@ func TestAssetInformationNoOpStillAppendsHistory(t *testing.T) {
 	globalAssetID := "urn:basyx:test:asset"
 	mock.ExpectQuery(`SELECT "id" FROM "aas".*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
-	expectExistingAASRead(mock, aasID, globalAssetID, "")
+	expectFocusedAssetInformationRead(mock, globalAssetID)
 	mock.ExpectQuery(`SELECT "id" FROM "aas" WHERE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
 	expectExistingAASRead(mock, aasID, globalAssetID, "")
@@ -430,6 +492,39 @@ func TestAssetInformationNoOpStillAppendsHistory(t *testing.T) {
 	))
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAssetInformationPutDoesNotLoadUnrelatedAASCollections(t *testing.T) {
+	previousHistoryConfig := history.ActiveConfig()
+	history.Configure(history.Config{Mode: history.ModeOff})
+	t.Cleanup(func() { history.Configure(previousHistoryConfig) })
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	tx := beginMockTransaction(t, db, mock)
+	aasID := "urn:basyx:test:asset-information-focused-read"
+	globalAssetID := "urn:basyx:test:asset"
+	mock.ExpectQuery(`SELECT "id" FROM "aas".*FOR UPDATE`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	expectFocusedAssetInformationRead(mock, globalAssetID)
+	mock.ExpectRollback()
+
+	assetInformation := types.NewAssetInformation(types.AssetKindInstance)
+	assetInformation.SetGlobalAssetID(&globalAssetID)
+	repository := &AssetAdministrationShellDatabase{}
+	require.NoError(t, repository.PutAssetInformationByAASIDInTransaction(
+		contextWithConfig(), tx, aasID, assetInformation,
+	))
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func expectFocusedAssetInformationRead(mock sqlmock.Sqlmock, globalAssetID string) {
+	mock.ExpectQuery(`SELECT .*FROM "asset_information" AS "asset_information"`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"asset_kind", "global_asset_id", "asset_type", "thumbnail_value", "thumbnail_content_type",
+		}).AddRow(int(types.AssetKindInstance), globalAssetID, nil, nil, nil))
 }
 
 func reconciliationAAS(id string, globalAssetID string) types.IAssetAdministrationShell {
