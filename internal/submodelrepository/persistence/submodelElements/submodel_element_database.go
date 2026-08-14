@@ -34,8 +34,10 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -630,7 +632,7 @@ func DeleteAllChildren(db *sql.DB, submodelId string, idShortPath string, tx *sq
 //
 //nolint:revive // cognitive-complexity is acceptable for performance-focused persistence orchestration
 func InsertSubmodelElements(db *sql.DB, submodelID string, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext) ([]int, error) {
-	return insertSubmodelElements(db, elements, tx, ctx, func(localTx *sql.Tx) (int, error) {
+	return insertSubmodelElements(common.ExecutePostgreSQLBatchInTransactionWithoutContext, db, elements, tx, ctx, nil, func(localTx *sql.Tx) (int, error) {
 		submodelDatabaseID, submodelDatabaseIDErr := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
 		if submodelDatabaseIDErr != nil {
 			if errors.Is(submodelDatabaseIDErr, sql.ErrNoRows) {
@@ -644,7 +646,7 @@ func InsertSubmodelElements(db *sql.DB, submodelID string, elements []types.ISub
 
 // InsertSubmodelElementsForSubmodelDatabaseID inserts submodel elements when the caller already knows the submodel database ID.
 func InsertSubmodelElementsForSubmodelDatabaseID(db *sql.DB, submodelDatabaseID int, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext) ([]int, error) {
-	return insertSubmodelElements(db, elements, tx, ctx, func(_ *sql.Tx) (int, error) {
+	return insertSubmodelElements(common.ExecutePostgreSQLBatchInTransactionWithoutContext, db, elements, tx, ctx, nil, func(_ *sql.Tx) (int, error) {
 		if submodelDatabaseID <= 0 {
 			return 0, common.NewInternalServerError("SMREPO-INSSME-SMDATABASEIDINVALID Submodel database ID must be positive")
 		}
@@ -652,7 +654,21 @@ func InsertSubmodelElementsForSubmodelDatabaseID(db *sql.DB, submodelDatabaseID 
 	})
 }
 
-func insertSubmodelElements(db *sql.DB, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext, resolveSubmodelDatabaseID func(*sql.Tx) (int, error)) ([]int, error) {
+// InsertSubmodelElementsForSubmodelDatabaseIDContext inserts elements using the
+// request context for the batched database write.
+func InsertSubmodelElementsForSubmodelDatabaseIDContext(requestCtx context.Context, db *sql.DB, submodelDatabaseID int, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext, batch *common.PostgreSQLBatch) ([]int, error) {
+	executeBatch := func(tx *sql.Tx, statements []common.PostgreSQLBatchStatement) error {
+		return common.ExecutePostgreSQLBatchInTransaction(requestCtx, tx, statements)
+	}
+	return insertSubmodelElements(executeBatch, db, elements, tx, ctx, batch, func(_ *sql.Tx) (int, error) {
+		if submodelDatabaseID <= 0 {
+			return 0, common.NewInternalServerError("SMREPO-INSSME-SMDATABASEIDINVALID Submodel database ID must be positive")
+		}
+		return submodelDatabaseID, nil
+	})
+}
+
+func insertSubmodelElements(executeBatch func(*sql.Tx, []common.PostgreSQLBatchStatement) error, db *sql.DB, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext, batch *common.PostgreSQLBatch, resolveSubmodelDatabaseID func(*sql.Tx) (int, error)) ([]int, error) {
 	// Handle empty elements slice
 	if len(elements) == 0 {
 		return []int{}, nil
@@ -668,12 +684,10 @@ func insertSubmodelElements(db *sql.DB, elements []types.ISubmodelElement, tx *s
 	if ownTransaction {
 		localTx, _, err = common.StartTransaction(db)
 		if err != nil {
-			return nil, common.NewInternalServerError("Failed to start transaction for batch insert: " + err.Error())
+			return nil, common.NewInternalServerError("SMREPO-INSSME-STARTTX failed to start insert transaction: " + err.Error())
 		}
 		defer func() {
-			if err != nil {
-				_ = localTx.Rollback()
-			}
+			_ = localTx.Rollback()
 		}()
 	} else {
 		localTx = tx
@@ -681,6 +695,9 @@ func insertSubmodelElements(db *sql.DB, elements []types.ISubmodelElement, tx *s
 
 	dialect := goqu.Dialect("postgres")
 	jsonLib := jsoniter.ConfigCompatibleWithStandardLibrary
+	if batch == nil {
+		batch = &common.PostgreSQLBatch{}
+	}
 
 	submodelDatabaseID, submodelDatabaseIDErr := resolveSubmodelDatabaseID(localTx)
 	if submodelDatabaseIDErr != nil {
@@ -694,39 +711,48 @@ func insertSubmodelElements(db *sql.DB, elements []types.ISubmodelElement, tx *s
 		return nil, err
 	}
 
-	insertBaseErr := insertBaseNodesDepthWise(localTx, dialect, int64(submodelDatabaseID), nodes)
+	insertBaseErr := insertBaseNodesDepthWise(localTx, batch, dialect, int64(submodelDatabaseID), nodes)
 	if insertBaseErr != nil {
 		err = insertBaseErr
 		return nil, err
 	}
 
-	payloadErr := insertPayloadAndSemanticReferences(localTx, dialect, nodes, jsonLib)
+	payloadErr := insertPayloadAndSemanticReferences(batch, dialect, nodes, jsonLib)
 	if payloadErr != nil {
 		err = payloadErr
 		return nil, err
 	}
 
-	typeRowsErr := insertTypeSpecificRows(localTx, dialect, nodes)
+	typeRowsErr := insertTypeSpecificRows(localTx, batch, dialect, nodes)
 	if typeRowsErr != nil {
 		err = typeRowsErr
 		return nil, err
 	}
 
-	mlpErr := insertMultiLanguagePropertyValues(localTx, dialect, nodes)
+	mlpErr := insertMultiLanguagePropertyValues(batch, dialect, nodes)
 	if mlpErr != nil {
 		err = mlpErr
 		return nil, err
 	}
 
-	mlpPayloadErr := insertMultiLanguagePropertyPayloadRows(localTx, dialect, nodes)
+	mlpPayloadErr := insertMultiLanguagePropertyPayloadRows(batch, dialect, nodes)
 	if mlpPayloadErr != nil {
 		err = mlpPayloadErr
 		return nil, err
 	}
 
-	propertyPayloadErr := insertPropertyPayloadRows(localTx, dialect, nodes)
+	propertyPayloadErr := insertPropertyPayloadRows(batch, dialect, nodes)
 	if propertyPayloadErr != nil {
 		err = propertyPayloadErr
+		return nil, err
+	}
+
+	if batchErr := executeBatch(localTx, batch.Statements()); batchErr != nil {
+		if mappedErr := mapConflictInsertError(batchErr); mappedErr != nil {
+			err = mappedErr
+		} else {
+			err = fmt.Errorf("%s %w", common.NewInternalServerError("SMREPO-INSSME-EXECBATCH"), batchErr)
+		}
 		return nil, err
 	}
 

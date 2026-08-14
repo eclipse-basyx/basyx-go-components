@@ -137,6 +137,25 @@ func CanSkipPostInsertReadback(ctx context.Context) bool {
 	return CanSkipCreateReadback(ctx)
 }
 
+// CanSkipDeleteReadback reports whether deletion needs no descriptor read for
+// authorization. History callers must check mutation recording separately.
+func CanSkipDeleteReadback(ctx context.Context) bool {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return true
+	}
+	if len(queryFilter.Filters) > 0 {
+		return false
+	}
+	if len(queryFilter.FormulasByRight) > 0 {
+		return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumDELETE)
+	}
+	if queryFilter.Formula == nil {
+		return true
+	}
+	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumDELETE)
+}
+
 // InsertAdministrationShellDescriptorTx performs the same insert as
 // InsertAdministrationShellDescriptor but uses the provided transaction. This allows
 // callers to compose multiple writes into a single atomic unit.
@@ -605,28 +624,14 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 		Select(common.ColDescriptorID).
 		Where(goqu.C(common.ColAASDescriptorID).Eq(descID))
 
-	childDelStr, childDelArgs, buildChildDelErr := d.
-		Delete(common.TblDescriptor).
-		Where(goqu.C(common.ColID).In(childDescriptorIDs)).
-		ToSQL()
-	if buildChildDelErr != nil {
-		return buildChildDelErr
+	batch := &common.PostgreSQLBatch{}
+	if err := batch.AppendDataset(d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).In(childDescriptorIDs))); err != nil {
+		return common.NewInternalServerError("AASDESC-DELETE-BUILDCHILDSQL " + err.Error())
 	}
-	if _, execErr := tx.ExecContext(ctx, childDelStr, childDelArgs...); execErr != nil {
-		return execErr
+	if err := batch.AppendDataset(d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).Eq(descID))); err != nil {
+		return common.NewInternalServerError("AASDESC-DELETE-BUILDPARENTSQL " + err.Error())
 	}
-
-	parentDelStr, parentDelArgs, buildParentDelErr := d.
-		Delete(common.TblDescriptor).
-		Where(goqu.C(common.ColID).Eq(descID)).
-		ToSQL()
-	if buildParentDelErr != nil {
-		return buildParentDelErr
-	}
-	if _, execErr := tx.ExecContext(ctx, parentDelStr, parentDelArgs...); execErr != nil {
-		return execErr
-	}
-	return nil
+	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
 }
 
 // ReplaceAdministrationShellDescriptor atomically replaces the descriptor with

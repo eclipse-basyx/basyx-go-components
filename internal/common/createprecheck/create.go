@@ -92,6 +92,13 @@ func EnsureVisibleDuplicate(
 	return common.NewErrConflict(conflictMessage)
 }
 
+// CanSkipExistenceCheck reports whether create authorization cannot hide an
+// existing resource. Callers may rely on the database uniqueness constraint in
+// this case and avoid a successful-create lookup.
+func CanSkipExistenceCheck(ctx context.Context) bool {
+	return canSkipDuplicateVisibilityRead(ctx)
+}
+
 func canSkipDuplicateVisibilityRead(ctx context.Context) bool {
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter == nil {

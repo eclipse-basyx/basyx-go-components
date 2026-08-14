@@ -48,9 +48,7 @@ func TestDeleteAssetAdministrationShellCleansThumbnailLargeObjectBeforeDelete(t 
 
 	mock.ExpectQuery(`SELECT .*FROM "aas".*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
-	mock.ExpectQuery(`SELECT COUNT\(\*\).*lo_unlink.*thumbnail_file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
-	mock.ExpectExec(`DELETE FROM "aas"`).
+	mock.ExpectExec(`(?s)SELECT COUNT\(\*\).*lo_unlink.*thumbnail_file_data.*DELETE FROM "aas"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectRollback()
 

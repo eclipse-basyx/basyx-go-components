@@ -54,35 +54,6 @@ func buildPageLimitPlusOne(limit int32) (uint, error) {
 	return uint(pageLimitPlusOne), nil
 }
 
-func buildAssetAdministrationShellQuery(dialect *goqu.DialectWrapper, aas types.IAssetAdministrationShell) (string, []any, error) {
-	return dialect.Insert("aas").Rows(goqu.Record{
-		"aas_id":   aas.ID(),
-		"id_short": aas.IDShort(),
-		"category": aas.Category(),
-	}).Returning(goqu.I("id")).ToSQL()
-}
-
-func buildAssetAdministrationShellPayloadQuery(dialect *goqu.DialectWrapper, aasDBID int64, descriptionJsonString *string, displayNameJsonString *string, administrativeInformationJsonString *string, edsJsonString *string, extensionJsonString *string, derivedFromJsonString *string) (string, []any, error) {
-	return dialect.Insert("aas_payload").Rows(goqu.Record{
-		"aas_id":                              aasDBID,
-		"description_payload":                 descriptionJsonString,
-		"displayname_payload":                 displayNameJsonString,
-		"administrative_information_payload":  administrativeInformationJsonString,
-		"embedded_data_specification_payload": edsJsonString,
-		"extensions_payload":                  extensionJsonString,
-		"derived_from_payload":                derivedFromJsonString,
-	}).ToSQL()
-}
-
-func buildAssetInformationQuery(dialect *goqu.DialectWrapper, aasDBID int64, asset_information types.IAssetInformation) (string, []any, error) {
-	return dialect.Insert("asset_information").Rows(goqu.Record{
-		"asset_information_id": aasDBID,
-		"asset_kind":           asset_information.AssetKind(),
-		"global_asset_id":      asset_information.GlobalAssetID(),
-		"asset_type":           asset_information.AssetType(),
-	}).ToSQL()
-}
-
 func buildGetAssetInformationReconciliationStateQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
 	return dialect.
 		From(goqu.T("asset_information").As("asset_information")).
@@ -331,7 +302,6 @@ func buildDeleteAssetAdministrationShellByDBIDQuery(dialect *goqu.DialectWrapper
 
 func buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
 	unlinkSubquery := dialect.From(goqu.T("thumbnail_file_data").As("tfd")).
-		Prepared(true).
 		Select(goqu.Func("lo_unlink", goqu.I("tfd.file_oid")).As("unlink_result")).
 		Where(
 			goqu.I("tfd.id").Eq(aasDBID),
@@ -339,7 +309,6 @@ func buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect *goqu.DialectWrappe
 		)
 
 	return dialect.From(unlinkSubquery.As("unlink_results")).
-		Prepared(true).
 		Select(goqu.COUNT("*")).
 		ToSQL()
 }

@@ -27,12 +27,13 @@ package persistence
 
 import (
 	"database/sql"
-	"strings"
+	"errors"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,62 +47,105 @@ func TestCreateAssetAdministrationShellPersistsDefaultThumbnail(t *testing.T) {
 		"https://example.com/ids/aas/default-thumbnail-create",
 		assetInformationWithDefaultThumbnail("https://example.com/thumb-create.png", "image/png"),
 	)
+	aas.AssetInformation().SetSpecificAssetIDs([]types.ISpecificAssetID{
+		types.NewSpecificAssetID("serialNumber", "123"),
+	})
+	aas.SetSubmodels([]types.IReference{types.NewReference(
+		types.ReferenceTypesModelReference,
+		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, "https://example.com/ids/sm/1")},
+	)})
 
 	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
-	mock.ExpectExec(`INSERT INTO "aas_payload"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`INSERT INTO "asset_information"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectInternalThumbnailCleanup(mock)
-	mock.ExpectExec(`INSERT INTO "thumbnail_file_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(17))
+	mock.ExpectExec(`(?s)INSERT INTO "aas_payload".*INSERT INTO "asset_information".*INSERT INTO "thumbnail_file_element".*INSERT INTO "specific_asset_id".*INSERT INTO "specific_asset_id_payload".*INSERT INTO "aas_submodel_reference".*INSERT INTO "aas_submodel_reference_key".*INSERT INTO "aas_submodel_reference_payload"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	repository := &AssetAdministrationShellDatabase{}
-	require.NoError(t, repository.createAssetAdministrationShellInTransaction(tx, aas))
+	require.NoError(t, repository.createAssetAdministrationShellInTransaction(t.Context(), tx, aas))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func expectInternalThumbnailCleanup(mock sqlmock.Sqlmock) {
-	mock.ExpectExec(`DELETE FROM "thumbnail_binary_reference"`).
-		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectQuery(`SELECT "file_oid" FROM "thumbnail_file_data"`).
-		WillReturnError(sql.ErrNoRows)
-	mock.ExpectExec(`DELETE FROM "thumbnail_file_data"`).
-		WillReturnResult(sqlmock.NewResult(0, 0))
+func TestCreateAssetAdministrationShellLargeDuplicateStopsAfterRootInsert(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	tx := beginMockTransaction(t, db, mock)
+	aas := types.NewAssetAdministrationShell(
+		"https://example.com/ids/aas/duplicate",
+		types.NewAssetInformation(types.AssetKindInstance),
+	)
+	references := make([]types.IReference, 1000)
+	for index := range references {
+		references[index] = types.NewReference(
+			types.ReferenceTypesModelReference,
+			[]types.IKey{types.NewKey(types.KeyTypesSubmodel, "https://example.com/ids/sm/duplicate")},
+		)
+	}
+	aas.SetSubmodels(references)
+
+	duplicateErr := &pgconn.PgError{Code: "23505", ConstraintName: "aas_aas_id_key"}
+	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).WillReturnError(duplicateErr)
+	mock.ExpectRollback()
+
+	repository := &AssetAdministrationShellDatabase{}
+	err = repository.createAssetAdministrationShellInTransaction(t.Context(), tx, aas)
+	require.Error(t, err)
+	require.True(t, common.IsErrConflict(err), "expected conflict error, got %v", err)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestBuildUpsertDefaultThumbnailQueryPreservesExistingContentTypeWhenUnset(t *testing.T) {
-	dialect := goquDialect()
-	thumbnail := types.NewResource("https://example.com/thumb.png")
-
-	upsertSQL, _, err := buildUpsertDefaultThumbnailQuery(
-		&dialect,
-		int64(42),
-		thumbnail,
-		thumbnail.Path(),
-	)
-
+func TestCreateAssetAdministrationShellRejectsKeylessReferenceBeforeInsert(t *testing.T) {
+	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	require.Contains(t, upsertSQL, `COALESCE("excluded"."content_type", "thumbnail_file_element"."content_type")`)
-	require.Contains(t, upsertSQL, `"file_name"=NULL`)
-	require.NotContains(t, strings.ToLower(upsertSQL), `"content_type"=null`)
+	defer func() { _ = db.Close() }()
+
+	tx := beginMockTransaction(t, db, mock)
+	aas := types.NewAssetAdministrationShell(
+		"https://example.com/ids/aas/keyless-reference",
+		types.NewAssetInformation(types.AssetKindInstance),
+	)
+	aas.SetSubmodels([]types.IReference{
+		types.NewReference(types.ReferenceTypesModelReference, []types.IKey{}),
+	})
+	mock.ExpectRollback()
+
+	repository := &AssetAdministrationShellDatabase{}
+	err = repository.createAssetAdministrationShellInTransaction(t.Context(), tx, aas)
+	require.Error(t, err)
+	require.True(t, common.IsErrBadRequest(err), "expected bad-request error, got %v", err)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestBuildUpsertDefaultThumbnailQueryClearsFileNameForExternalURL(t *testing.T) {
-	dialect := goquDialect()
-	assetInformation := assetInformationWithDefaultThumbnail("https://example.com/thumb-update.png", "image/png")
-	thumbnail := assetInformation.DefaultThumbnail()
+func TestCreateAssetAdministrationShellDependentConflictRemainsInternal(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
 
-	upsertSQL, _, err := buildUpsertDefaultThumbnailQuery(
-		&dialect,
-		int64(42),
-		thumbnail,
-		thumbnail.Path(),
+	tx := beginMockTransaction(t, db, mock)
+	aas := types.NewAssetAdministrationShell(
+		"https://example.com/ids/aas/dependent-conflict",
+		types.NewAssetInformation(types.AssetKindInstance),
 	)
 
-	require.NoError(t, err)
-	require.Contains(t, upsertSQL, `"file_name"=NULL`)
+	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(17))
+	dependentErr := &pgconn.PgError{Code: "23505"}
+	mock.ExpectExec(`(?s)INSERT INTO "aas_payload".*INSERT INTO "asset_information"`).
+		WillReturnError(dependentErr)
+	mock.ExpectRollback()
+
+	repository := &AssetAdministrationShellDatabase{}
+	err = repository.createAssetAdministrationShellInTransaction(t.Context(), tx, aas)
+	require.Error(t, err)
+	require.True(t, common.IsInternalServerError(err), "expected internal-server error, got %v", err)
+	require.False(t, common.IsErrConflict(err), "dependent conflict must not be mapped as an AAS identifier conflict")
+	var postgresErr *pgconn.PgError
+	require.True(t, errors.As(err, &postgresErr), "expected PostgreSQL cause, got %v", err)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func assetInformationWithDefaultThumbnail(path string, contentType string) types.IAssetInformation {
@@ -119,8 +163,4 @@ func beginMockTransaction(t *testing.T, db *sql.DB, mock sqlmock.Sqlmock) *sql.T
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	return tx
-}
-
-func goquDialect() goqu.DialectWrapper {
-	return goqu.Dialect("postgres")
 }

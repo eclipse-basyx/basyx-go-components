@@ -44,6 +44,7 @@ import (
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // CreateSubmodel creates a new submodel and performs an ABAC re-check before commit when ABAC is enabled.
@@ -98,7 +99,7 @@ func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Cont
 		return err
 	}
 
-	err := s.createSubmodelInTransaction(tx, submodel)
+	err := s.createSubmodelInTransaction(ctx, tx, submodel)
 	if err != nil {
 		return err
 	}
@@ -123,6 +124,9 @@ func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Cont
 }
 
 func (s *SubmodelDatabase) ensureVisibleSubmodelCreateDoesNotExist(ctx context.Context, tx *sql.Tx, submodelID string) error {
+	if createprecheck.CanSkipExistenceCheck(ctx) {
+		return nil
+	}
 	return createprecheck.EnsureVisibleCreate(
 		ctx,
 		func(context.Context) (bool, error) {
@@ -153,7 +157,7 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelCreateDoesNotExist(ctx context.C
 	)
 }
 
-func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel types.ISubmodel) error {
+func (s *SubmodelDatabase) createSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
 	ids, args, err := submodelqueries.BuildInsertSubmodelSQL(submodel)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-INSERTSQL " + err.Error())
@@ -185,13 +189,9 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-PAYLOADSQL " + err.Error())
 	}
-
-	if _, err := tx.Exec(ids, args...); err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECPAYLOADSQL " + err.Error())
-	}
-
-	if err := common.CreateContextReferences1ToMany(
-		tx,
+	metadataBatch := &common.PostgreSQLBatch{}
+	metadataBatch.AppendStatement(ids, args...)
+	if err = metadataBatch.AppendContextReferences(
 		submodelDBID,
 		submodel.SupplementalSemanticIDs(),
 		common.TblSubmodelSuppSemantic,
@@ -199,51 +199,56 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 	); err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SUPPSEM " + err.Error())
 	}
-
-	semanticID := submodel.SemanticID()
-	if semanticID != nil {
-		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferenceSQL(submodelDBID, semanticID)
-		if err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDREFSQL " + err.Error())
-		}
-
-		if _, err := tx.Exec(ids, args...); err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDREFSQL " + err.Error())
-		}
-
-		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferenceKeysSQL(submodelDBID, semanticID)
-		if err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDKEYSQL " + err.Error())
-		}
-
-		if ids != "" {
-			if _, err := tx.Exec(ids, args...); err != nil {
-				return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDKEYSQL " + err.Error())
-			}
-		}
-
-		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferencePayloadSQL(submodelDBID, semanticID)
-		if err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDPAYLOADSQL " + err.Error())
-		}
-
-		if _, err := tx.Exec(ids, args...); err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDPAYLOADSQL " + err.Error())
-		}
+	if err = appendSubmodelSemanticIDCreate(metadataBatch, submodelDBID, submodel.SemanticID()); err != nil {
+		return err
 	}
-
 	if len(submodel.SubmodelElements()) > 0 {
 		submodelDatabaseID, conversionErr := submodelDatabaseIDAsInt(submodelDBID)
 		if conversionErr != nil {
 			return conversionErr
 		}
 
-		_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseID(s.db, submodelDatabaseID, submodel.SubmodelElements(), tx, nil)
+		_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseIDContext(ctx, s.db, submodelDatabaseID, submodel.SubmodelElements(), tx, nil, metadataBatch)
 		if err != nil {
 			return err
 		}
+		return nil
 	}
 
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, metadataBatch.Statements()); err != nil {
+		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECMETADATABATCH " + err.Error())
+	}
+
+	return nil
+}
+
+func appendSubmodelSemanticIDCreate(batch *common.PostgreSQLBatch, submodelDBID int64, semanticID types.IReference) error {
+	if semanticID == nil {
+		return nil
+	}
+	builders := []struct {
+		code  string
+		build func() (string, []any, error)
+	}{
+		{"SMREPO-NEWSM-CREATE-SEMIDREFSQL", func() (string, []any, error) {
+			return submodelqueries.BuildInsertSubmodelSemanticIDReferenceSQL(submodelDBID, semanticID)
+		}},
+		{"SMREPO-NEWSM-CREATE-SEMIDKEYSQL", func() (string, []any, error) {
+			return submodelqueries.BuildInsertSubmodelSemanticIDReferenceKeysSQL(submodelDBID, semanticID)
+		}},
+		{"SMREPO-NEWSM-CREATE-SEMIDPAYLOADSQL", func() (string, []any, error) {
+			return submodelqueries.BuildInsertSubmodelSemanticIDReferencePayloadSQL(submodelDBID, semanticID)
+		}},
+	}
+	for _, builder := range builders {
+		query, args, err := builder.build()
+		if err != nil {
+			return common.NewInternalServerError(builder.code + " " + err.Error())
+		}
+		if query != "" {
+			batch.AppendStatement(query, args...)
+		}
+	}
 	return nil
 }
 
@@ -327,8 +332,8 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(ctx context.Context, submo
 	return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, history.ChangeUpdated)
 }
 
-func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(_ context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
-	_, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, true)
+func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(ctx context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
+	_, err := s.replaceSubmodelInTransaction(ctx, tx, submodelID, submodel, true)
 	if err != nil {
 		return err
 	}
@@ -480,7 +485,7 @@ func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.T
 	if err != nil {
 		return false, err
 	}
-	if err = s.createSubmodelInTransaction(tx, submodel); err != nil {
+	if err = s.createSubmodelInTransaction(ctx, tx, submodel); err != nil {
 		return false, err
 	}
 	recordHistory := history.MutationRecordingEnabled()
@@ -714,12 +719,7 @@ func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *
 		return err
 	}
 
-	err = cleanupSubmodelLargeObjects(tx, int64(submodelDatabaseID))
-	if err != nil {
-		return err
-	}
-
-	err = deleteSubmodelByDatabaseID(tx, int64(submodelDatabaseID))
+	err = cleanupAndDeleteSubmodelByDatabaseID(ctx, tx, int64(submodelDatabaseID))
 	if err != nil {
 		return err
 	}
@@ -727,7 +727,25 @@ func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *
 	return nil
 }
 
-func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID string, submodel types.ISubmodel, requireExisting bool) (bool, error) {
+func cleanupAndDeleteSubmodelByDatabaseID(ctx context.Context, tx *sql.Tx, submodelDatabaseID int64) error {
+	cleanupQuery, cleanupArgs, err := submodelqueries.BuildCleanupSubmodelLargeObjectsSQL(submodelDatabaseID)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-BUILDUNLINKQUERY " + err.Error())
+	}
+	deleteQuery, deleteArgs, err := submodelqueries.BuildDeleteSubmodelByDatabaseIDSQL(submodelDatabaseID)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-BUILDDELETESM " + err.Error())
+	}
+	batch := &common.PostgreSQLBatch{}
+	batch.AppendStatement(cleanupQuery, cleanupArgs...)
+	batch.AppendStatement(deleteQuery, deleteArgs...)
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-EXECBATCH " + err.Error())
+	}
+	return nil
+}
+
+func (s *SubmodelDatabase) replaceSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel, requireExisting bool) (bool, error) {
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -735,7 +753,7 @@ func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID s
 				return false, common.NewErrNotFound("SMREPO-UPDSM-NOTFOUND Submodel with ID '" + submodelID + "' not found")
 			}
 
-			if createErr := s.createSubmodelInTransaction(tx, submodel); createErr != nil {
+			if createErr := s.createSubmodelInTransaction(ctx, tx, submodel); createErr != nil {
 				return false, createErr
 			}
 			return false, nil
@@ -758,7 +776,7 @@ func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID s
 		return false, err
 	}
 
-	err = s.createSubmodelInTransaction(tx, submodel)
+	err = s.createSubmodelInTransaction(ctx, tx, submodel)
 	if err != nil {
 		return false, err
 	}
@@ -994,11 +1012,8 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 }
 
 func mapCreateSubmodelInsertError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	if common.IsPostgresUniqueViolation(err) {
+	var postgresErr *pgconn.PgError
+	if errors.As(err, &postgresErr) && postgresErr.Code == "23505" && postgresErr.ConstraintName == "submodel_submodel_identifier_key" {
 		return common.NewErrConflict("SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists")
 	}
 

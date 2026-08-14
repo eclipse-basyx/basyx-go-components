@@ -28,7 +28,9 @@ package common
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -113,5 +115,76 @@ func TestExecutePostgreSQLBatchInTransactionPreservesPostgresError(t *testing.T)
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestExecutePostgreSQLBatchInTransactionSplitsByStatementCountInOrder(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("BeginTx returned error: %v", err)
+	}
+
+	statements := make([]PostgreSQLBatchStatement, 0, postgreSQLBatchMaxStatements+1)
+	firstQueries := make([]string, 0, postgreSQLBatchMaxStatements)
+	for index := 0; index <= postgreSQLBatchMaxStatements; index++ {
+		query := fmt.Sprintf("SELECT %d", index)
+		statements = append(statements, PostgreSQLBatchStatement{SQL: query})
+		if index < postgreSQLBatchMaxStatements {
+			firstQueries = append(firstQueries, query)
+		}
+	}
+
+	mock.ExpectExec(regexp.QuoteMeta(strings.Join(firstQueries, postgreSQLBatchSeparator))).
+		WillReturnResult(sqlmock.NewResult(0, int64(postgreSQLBatchMaxStatements)))
+	mock.ExpectExec(regexp.QuoteMeta(statements[postgreSQLBatchMaxStatements].SQL)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	if err = ExecutePostgreSQLBatchInTransaction(context.Background(), tx, statements); err != nil {
+		t.Fatalf("ExecutePostgreSQLBatchInTransaction returned error: %v", err)
+	}
+
+	mock.ExpectRollback()
+	if err = tx.Rollback(); err != nil {
+		t.Fatalf("Rollback returned error: %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestExecutePostgreSQLBatchInTransactionSplitsByRenderedBytes(t *testing.T) {
+	t.Parallel()
+
+	firstQuery := strings.Repeat("a", postgreSQLBatchMaxBytes+1)
+	secondQuery := "SELECT 2"
+	statements := []PostgreSQLBatchStatement{
+		{SQL: firstQuery},
+		{SQL: secondQuery},
+	}
+
+	query, end := collectPostgreSQLBatchQuery(statements, 0)
+	if end != 1 {
+		t.Fatalf("first batch ended at %d, want 1", end)
+	}
+	if query != firstQuery {
+		t.Fatal("first batch did not preserve the oversized statement")
+	}
+
+	query, end = collectPostgreSQLBatchQuery(statements, end)
+	if end != len(statements) {
+		t.Fatalf("second batch ended at %d, want %d", end, len(statements))
+	}
+	if query != secondQuery {
+		t.Fatalf("second batch query %q, want %q", query, secondQuery)
 	}
 }

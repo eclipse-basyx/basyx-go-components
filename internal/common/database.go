@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	CURRENT_DATABASE_VERSION = "v1.1.13"
+	CURRENT_DATABASE_VERSION = "v1.1.14"
 	cleanSchemaState         = "clean"
 )
 

@@ -426,6 +426,9 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByID(
 	submodelID string,
 ) error {
 	return common.ExecuteInTransaction(p.writerDB, "SMREG-DELSMDESC-STARTTX", "SMREG-DELSMDESC-COMMITTX", func(tx *sql.Tx) error {
+		if !history.MutationRecordingEnabled() && descriptors.CanSkipDeleteReadback(ctx) {
+			return descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
+		}
 		previousSnapshot, err := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
 		if err != nil {
 			return err
@@ -450,6 +453,9 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByIDInTransaction(
 ) error {
 	if tx == nil {
 		return common.NewInternalServerError("SMREG-DELSMDESC-NILTX transaction must not be nil")
+	}
+	if !history.MutationRecordingEnabled() && descriptors.CanSkipDeleteReadback(ctx) {
+		return descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
 	}
 	previousSnapshot, err := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
 	if err != nil {

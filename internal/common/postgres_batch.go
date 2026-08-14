@@ -37,6 +37,12 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
+const (
+	postgreSQLBatchMaxStatements = 1000
+	postgreSQLBatchMaxBytes      = 4 * 1024 * 1024
+	postgreSQLBatchSeparator     = ";\n"
+)
+
 // PostgreSQLBatchStatement is one rendered PostgreSQL statement and the values
 // that must be passed when executing it with pgx batch support.
 type PostgreSQLBatchStatement struct {
@@ -90,6 +96,11 @@ func (b *PostgreSQLBatch) AppendDataset(dataset sqlDataset) error {
 	return nil
 }
 
+// AppendStatement appends an already rendered SQL statement to the batch.
+func (b *PostgreSQLBatch) AppendStatement(query string, args ...any) {
+	b.statements = append(b.statements, PostgreSQLBatchStatement{SQL: query, Args: args})
+}
+
 // Statements returns the statements collected in append order.
 //
 // Returns:
@@ -115,21 +126,72 @@ func ExecutePostgreSQLBatchInTransaction(
 	tx *sql.Tx,
 	statements []PostgreSQLBatchStatement,
 ) error {
+	return executePostgreSQLBatchInTransaction(&ctx, tx, statements)
+}
+
+// ExecutePostgreSQLBatchInTransactionWithoutContext executes rendered
+// statements for legacy callers whose API does not carry a request context.
+func ExecutePostgreSQLBatchInTransactionWithoutContext(
+	tx *sql.Tx,
+	statements []PostgreSQLBatchStatement,
+) error {
+	return executePostgreSQLBatchInTransaction(nil, tx, statements)
+}
+
+func executePostgreSQLBatchInTransaction(
+	ctx *context.Context,
+	tx *sql.Tx,
+	statements []PostgreSQLBatchStatement,
+) error {
 	if tx == nil {
 		return NewErrBadRequest("COMMON-PGBATCH-NILTX transaction must not be nil")
 	}
 	if len(statements) == 0 {
 		return NewErrBadRequest("COMMON-PGBATCH-EMPTY no statements supplied")
 	}
-
-	queries := make([]string, 0, len(statements))
 	for _, statement := range statements {
 		if len(statement.Args) != 0 {
 			return NewInternalServerError("COMMON-PGBATCH-PARAMS collected statement contains unresolved parameters")
 		}
-		queries = append(queries, statement.SQL)
 	}
-	if _, err := tx.ExecContext(ctx, strings.Join(queries, ";\n")); err != nil {
+
+	for start := 0; start < len(statements); {
+		query, end := collectPostgreSQLBatchQuery(statements, start)
+		if err := executePostgreSQLBatchQuery(ctx, tx, query); err != nil {
+			return err
+		}
+		start = end
+	}
+	return nil
+}
+
+func collectPostgreSQLBatchQuery(statements []PostgreSQLBatchStatement, start int) (string, int) {
+	queries := make([]string, 0, postgreSQLBatchMaxStatements)
+	queryBytes := 0
+	end := start
+	for end < len(statements) && len(queries) < postgreSQLBatchMaxStatements {
+		statementBytes := len(statements[end].SQL)
+		if len(queries) != 0 {
+			statementBytes += len(postgreSQLBatchSeparator)
+		}
+		if len(queries) != 0 && queryBytes+statementBytes > postgreSQLBatchMaxBytes {
+			break
+		}
+		queries = append(queries, statements[end].SQL)
+		queryBytes += statementBytes
+		end++
+	}
+	return strings.Join(queries, postgreSQLBatchSeparator), end
+}
+
+func executePostgreSQLBatchQuery(ctx *context.Context, tx *sql.Tx, query string) error {
+	var err error
+	if ctx == nil {
+		_, err = tx.Exec(query)
+	} else {
+		_, err = tx.ExecContext(*ctx, query)
+	}
+	if err != nil {
 		return internalServerErrorWithCause("COMMON-PGBATCH-EXEC", err)
 	}
 	return nil
