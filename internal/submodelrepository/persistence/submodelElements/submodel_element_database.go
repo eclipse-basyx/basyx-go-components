@@ -37,6 +37,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -683,12 +684,10 @@ func insertSubmodelElements(executeBatch func(*sql.Tx, []common.PostgreSQLBatchS
 	if ownTransaction {
 		localTx, _, err = common.StartTransaction(db)
 		if err != nil {
-			return nil, common.NewInternalServerError("Failed to start transaction for batch insert: " + err.Error())
+			return nil, common.NewInternalServerError("SMREPO-INSSME-STARTTX failed to start insert transaction: " + err.Error())
 		}
 		defer func() {
-			if err != nil {
-				_ = localTx.Rollback()
-			}
+			_ = localTx.Rollback()
 		}()
 	} else {
 		localTx = tx
@@ -750,9 +749,11 @@ func insertSubmodelElements(executeBatch func(*sql.Tx, []common.PostgreSQLBatchS
 
 	if batchErr := executeBatch(localTx, batch.Statements()); batchErr != nil {
 		if mappedErr := mapConflictInsertError(batchErr); mappedErr != nil {
-			return nil, mappedErr
+			err = mappedErr
+		} else {
+			err = fmt.Errorf("%s %w", common.NewInternalServerError("SMREPO-INSSME-EXECBATCH"), batchErr)
 		}
-		return nil, common.NewInternalServerError("SMREPO-INSSME-EXECBATCH " + batchErr.Error())
+		return nil, err
 	}
 
 	// Commit if we own the transaction

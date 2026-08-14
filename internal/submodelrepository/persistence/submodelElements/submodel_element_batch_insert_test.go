@@ -26,10 +26,13 @@
 package submodelelements
 
 import (
+	"errors"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,5 +66,65 @@ func TestInsertSubmodelElementsExecutesGraphAsSingleBatch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []int{101}, ids)
 	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestInsertSubmodelElementsRollsBackOwnedTransactionAfterConflict(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	property := types.NewProperty(types.DataTypeDefXSDString)
+	idShort := "temperature"
+	property.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*nextval.*generate_series`).
+		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(101))
+	mock.ExpectExec(`(?s)INSERT INTO "submodel_element".*INSERT INTO "property_element"`).
+		WillReturnError(&pgconn.PgError{Code: "23505", ConstraintName: "uq_sibling_idshort"})
+	mock.ExpectRollback()
+
+	_, err = InsertSubmodelElementsForSubmodelDatabaseID(
+		db,
+		42,
+		[]types.ISubmodelElement{property},
+		nil,
+		nil,
+	)
+	require.Error(t, err)
+	require.True(t, common.IsErrConflict(err), "expected conflict error, got %v", err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestInsertSubmodelElementsDependentConflictRemainsInternal(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	property := types.NewProperty(types.DataTypeDefXSDString)
+	idShort := "temperature"
+	property.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*nextval.*generate_series`).
+		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(101))
+	postgresErr := &pgconn.PgError{Code: "23505", ConstraintName: "property_element_pkey"}
+	mock.ExpectExec(`(?s)INSERT INTO "submodel_element".*INSERT INTO "property_element"`).
+		WillReturnError(postgresErr)
+	mock.ExpectRollback()
+
+	_, err = InsertSubmodelElementsForSubmodelDatabaseID(
+		db,
+		42,
+		[]types.ISubmodelElement{property},
+		nil,
+		nil,
+	)
+	require.Error(t, err)
+	require.True(t, common.IsInternalServerError(err), "expected internal-server error, got %v", err)
+	require.False(t, common.IsErrConflict(err), "dependent conflict must not be mapped as an SME conflict")
+	var unwrapped *pgconn.PgError
+	require.True(t, errors.As(err, &unwrapped), "expected PostgreSQL cause, got %v", err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

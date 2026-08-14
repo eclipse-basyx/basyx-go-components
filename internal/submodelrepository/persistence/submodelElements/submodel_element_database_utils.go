@@ -28,11 +28,13 @@ package submodelelements
 
 import (
 	"database/sql"
+	"errors"
 	"strconv"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/jackc/pgx/v5/pgconn"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -611,15 +613,20 @@ func appendRecordInsertChunked(batch *common.PostgreSQLBatch, dialect goqu.Diale
 }
 
 func mapConflictInsertError(err error) error {
-	if err == nil {
+	if !common.IsPostgresUniqueViolation(err) {
 		return nil
 	}
 
-	if common.IsPostgresUniqueViolation(err) {
+	var postgresErr *pgconn.PgError
+	if errors.As(err, &postgresErr) && isSubmodelElementSiblingConstraint(postgresErr.ConstraintName) {
 		return common.NewErrConflict("SMREPO-INSSME-CONFLICT Duplicate submodel element")
 	}
 
 	return nil
+}
+
+func isSubmodelElementSiblingConstraint(constraintName string) bool {
+	return constraintName == "uq_sibling_idshort" || constraintName == "uq_sibling_pos"
 }
 
 // getChildElements extracts child elements from container-type submodel elements.

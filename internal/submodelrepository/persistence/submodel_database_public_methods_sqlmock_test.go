@@ -325,7 +325,7 @@ func TestCreateSubmodelDuplicateIdentifierReturnsConflict(t *testing.T) {
 
 	mock.ExpectBegin()
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
-		WillReturnError(&pgconn.PgError{Code: "23505"})
+		WillReturnError(&pgconn.PgError{Code: "23505", ConstraintName: "submodel_submodel_identifier_key"})
 	mock.ExpectRollback()
 
 	err = sut.CreateSubmodel(contextWithABACDisabled(t), submodel)

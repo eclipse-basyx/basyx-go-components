@@ -27,10 +27,13 @@ package persistence
 
 import (
 	"database/sql"
+	"errors"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,11 +55,96 @@ func TestCreateAssetAdministrationShellPersistsDefaultThumbnail(t *testing.T) {
 		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, "https://example.com/ids/sm/1")},
 	)})
 
-	mock.ExpectExec(`(?s)INSERT INTO "aas".*INSERT INTO "aas_payload".*INSERT INTO "asset_information".*INSERT INTO "thumbnail_file_element".*INSERT INTO "specific_asset_id".*INSERT INTO "specific_asset_id_payload".*INSERT INTO "aas_submodel_reference".*INSERT INTO "aas_submodel_reference_key".*INSERT INTO "aas_submodel_reference_payload"`).
+	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(17))
+	mock.ExpectExec(`(?s)INSERT INTO "aas_payload".*INSERT INTO "asset_information".*INSERT INTO "thumbnail_file_element".*INSERT INTO "specific_asset_id".*INSERT INTO "specific_asset_id_payload".*INSERT INTO "aas_submodel_reference".*INSERT INTO "aas_submodel_reference_key".*INSERT INTO "aas_submodel_reference_payload"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	repository := &AssetAdministrationShellDatabase{}
 	require.NoError(t, repository.createAssetAdministrationShellInTransaction(t.Context(), tx, aas))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCreateAssetAdministrationShellLargeDuplicateStopsAfterRootInsert(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	tx := beginMockTransaction(t, db, mock)
+	aas := types.NewAssetAdministrationShell(
+		"https://example.com/ids/aas/duplicate",
+		types.NewAssetInformation(types.AssetKindInstance),
+	)
+	references := make([]types.IReference, 1000)
+	for index := range references {
+		references[index] = types.NewReference(
+			types.ReferenceTypesModelReference,
+			[]types.IKey{types.NewKey(types.KeyTypesSubmodel, "https://example.com/ids/sm/duplicate")},
+		)
+	}
+	aas.SetSubmodels(references)
+
+	duplicateErr := &pgconn.PgError{Code: "23505", ConstraintName: "aas_aas_id_key"}
+	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).WillReturnError(duplicateErr)
+	mock.ExpectRollback()
+
+	repository := &AssetAdministrationShellDatabase{}
+	err = repository.createAssetAdministrationShellInTransaction(t.Context(), tx, aas)
+	require.Error(t, err)
+	require.True(t, common.IsErrConflict(err), "expected conflict error, got %v", err)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCreateAssetAdministrationShellRejectsKeylessReferenceBeforeInsert(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	tx := beginMockTransaction(t, db, mock)
+	aas := types.NewAssetAdministrationShell(
+		"https://example.com/ids/aas/keyless-reference",
+		types.NewAssetInformation(types.AssetKindInstance),
+	)
+	aas.SetSubmodels([]types.IReference{
+		types.NewReference(types.ReferenceTypesModelReference, []types.IKey{}),
+	})
+	mock.ExpectRollback()
+
+	repository := &AssetAdministrationShellDatabase{}
+	err = repository.createAssetAdministrationShellInTransaction(t.Context(), tx, aas)
+	require.Error(t, err)
+	require.True(t, common.IsErrBadRequest(err), "expected bad-request error, got %v", err)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCreateAssetAdministrationShellDependentConflictRemainsInternal(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	tx := beginMockTransaction(t, db, mock)
+	aas := types.NewAssetAdministrationShell(
+		"https://example.com/ids/aas/dependent-conflict",
+		types.NewAssetInformation(types.AssetKindInstance),
+	)
+
+	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(17))
+	dependentErr := &pgconn.PgError{Code: "23505"}
+	mock.ExpectExec(`(?s)INSERT INTO "aas_payload".*INSERT INTO "asset_information"`).
+		WillReturnError(dependentErr)
+	mock.ExpectRollback()
+
+	repository := &AssetAdministrationShellDatabase{}
+	err = repository.createAssetAdministrationShellInTransaction(t.Context(), tx, aas)
+	require.Error(t, err)
+	require.True(t, common.IsInternalServerError(err), "expected internal-server error, got %v", err)
+	require.False(t, common.IsErrConflict(err), "dependent conflict must not be mapped as an AAS identifier conflict")
+	var postgresErr *pgconn.PgError
+	require.True(t, errors.As(err, &postgresErr), "expected PostgreSQL cause, got %v", err)
+	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

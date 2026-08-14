@@ -44,6 +44,7 @@ import (
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // CreateSubmodel creates a new submodel and performs an ABAC re-check before commit when ABAC is enabled.
@@ -1011,11 +1012,8 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 }
 
 func mapCreateSubmodelInsertError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	if common.IsPostgresUniqueViolation(err) {
+	var postgresErr *pgconn.PgError
+	if errors.As(err, &postgresErr) && postgresErr.Code == "23505" && postgresErr.ConstraintName == "submodel_submodel_identifier_key" {
 		return common.NewErrConflict("SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists")
 	}
 

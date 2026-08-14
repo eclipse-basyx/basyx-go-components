@@ -32,6 +32,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -53,6 +54,7 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // AssetAdministrationShellDatabase is the implementation of the AssetAdministrationShellRepositoryDatabase interface using PostgreSQL as the underlying database.
@@ -498,15 +500,15 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 // createAssetAdministrationShellInTransaction creates an AAS and all dependent records within an existing transaction.
 func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell) error {
 	dialect := goqu.Dialect("postgres")
-	batch := &common.PostgreSQLBatch{}
-	if err := batch.AppendDataset(dialect.Insert("aas").Rows(goqu.Record{
-		"aas_id":   aas.ID(),
-		"category": aas.Category(),
-		"id_short": aas.IDShort(),
-	})); err != nil {
-		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDINSERTSQL " + err.Error())
+	if err := validateAASCreateSubmodelReferences(aas.Submodels()); err != nil {
+		return err
 	}
-	aasDBID := common.PostgreSQLCurrentSequenceValue("aas", "id")
+	aasDBID, err := insertAASCreateRoot(ctx, tx, dialect, aas)
+	if err != nil {
+		return err
+	}
+
+	batch := &common.PostgreSQLBatch{}
 	jsonizedPayload, err := jsonizeAssetAdministrationShellPayload(aas)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-JSON " + err.Error())
@@ -541,10 +543,36 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 		return err
 	}
 	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		return fmt.Errorf("%s %w", common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECBATCH"), err)
+	}
+	return nil
+}
+
+func insertAASCreateRoot(ctx context.Context, tx *sql.Tx, dialect goqu.DialectWrapper, aas types.IAssetAdministrationShell) (int64, error) {
+	query, args, err := dialect.Insert("aas").Rows(goqu.Record{
+		"aas_id":   aas.ID(),
+		"category": aas.Category(),
+		"id_short": aas.IDShort(),
+	}).Returning(goqu.C("id")).Prepared(true).ToSQL()
+	if err != nil {
+		return 0, common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDINSERTSQL " + err.Error())
+	}
+
+	var aasDBID int64
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&aasDBID); err != nil {
 		if mappedErr := mapCreateAASInsertError(err); mappedErr != nil {
-			return mappedErr
+			return 0, mappedErr
 		}
-		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECBATCH " + err.Error())
+		return 0, fmt.Errorf("%s %w", common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECINSERT"), err)
+	}
+	return aasDBID, nil
+}
+
+func validateAASCreateSubmodelReferences(references []types.IReference) error {
+	for _, reference := range references {
+		if reference == nil || len(reference.Keys()) == 0 {
+			return common.NewErrBadRequest("AASREPO-NEWAAS-CREATE-SUBMODELREFNOKEYS reference must contain at least one key")
+		}
 	}
 	return nil
 }
@@ -584,9 +612,6 @@ func appendAASCreateSubmodelReferences(batch *common.PostgreSQLBatch, dialect go
 				"value":        key.Value(),
 			})
 		}
-		if len(keyRows) == 0 {
-			return common.NewErrBadRequest("AASREPO-NEWAAS-CREATE-SUBMODELREFNOKEYS reference must contain at least one key")
-		}
 		if err := batch.AppendDataset(dialect.Insert("aas_submodel_reference_key").Rows(keyRows)); err != nil {
 			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDSUBMODELREFKEYSSQL " + err.Error())
 		}
@@ -608,13 +633,10 @@ func appendAASCreateSubmodelReferences(batch *common.PostgreSQLBatch, dialect go
 	return nil
 }
 
-// mapCreateAASInsertError maps database uniqueness violations to domain-specific conflict errors.
+// mapCreateAASInsertError maps root AAS uniqueness violations to domain-specific conflict errors.
 func mapCreateAASInsertError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	if common.IsPostgresUniqueViolation(err) {
+	var postgresErr *pgconn.PgError
+	if errors.As(err, &postgresErr) && postgresErr.Code == "23505" && postgresErr.ConstraintName == "aas_aas_id_key" {
 		return common.NewErrConflict("AASREPO-NEWAAS-CONFLICT AAS with given id already exists")
 	}
 
