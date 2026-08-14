@@ -460,6 +460,9 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	aasIdentifier string,
 ) error {
 	return common.ExecuteInTransaction(p.writerDB, "AASREG-DELAASDESC-STARTTX", "AASREG-DELAASDESC-COMMIT", func(tx *sql.Tx) error {
+		if !history.MutationRecordingEnabled() && descriptors.CanSkipDeleteReadback(ctx) {
+			return descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+		}
 		previousSnapshot, err := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
 		if err != nil {
 			return err
@@ -556,6 +559,9 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 ) error {
 	if tx == nil {
 		return common.NewInternalServerError("AASREG-DELAASDESC-NILTX transaction must not be nil")
+	}
+	if !history.MutationRecordingEnabled() && descriptors.CanSkipDeleteReadback(ctx) {
+		return descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 	}
 
 	previousSnapshot, err := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)

@@ -51,9 +51,7 @@ func TestDeleteSubmodelSuccessCleansLargeObjectsAndDeletesSubmodel(t *testing.T)
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
 	expectSubmodelHistoryAppend(mock)
-	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
-	mock.ExpectExec(`DELETE FROM .*submodel`).
+	mock.ExpectExec(`(?s)SELECT COUNT\(\*\).*file_oid.*FROM .*submodel_element.*file_data.*DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
@@ -97,16 +95,14 @@ func TestDeleteSubmodelDeleteFailsRollsBack(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
 	expectSubmodelHistoryAppend(mock)
-	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
-	mock.ExpectExec(`DELETE FROM .*submodel`).
+	mock.ExpectExec(`(?s)SELECT COUNT\(\*\).*file_oid.*FROM .*submodel_element.*file_data.*DELETE FROM .*submodel`).
 		WillReturnError(errors.New("delete failed"))
 	mock.ExpectRollback()
 
 	err = sut.DeleteSubmodel(contextWithABACDisabled(t), submodelID)
 	require.Error(t, err)
 	require.True(t, common.IsInternalServerError(err))
-	require.Contains(t, err.Error(), "SMREPO-DELSM-DELETESM")
+	require.Contains(t, err.Error(), "SMREPO-DELSM-EXECBATCH")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -125,9 +121,7 @@ func TestDeleteSubmodelCommitFailsReturnsInternalError(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
 	expectSubmodelHistoryAppend(mock)
-	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
-	mock.ExpectExec(`DELETE FROM .*submodel`).
+	mock.ExpectExec(`(?s)SELECT COUNT\(\*\).*file_oid.*FROM .*submodel_element.*file_data.*DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit().WillReturnError(errors.New("commit failed"))
 
@@ -153,13 +147,13 @@ func TestDeleteSubmodelOrphanCleanupFailsRollsBack(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
 	expectSubmodelHistoryAppend(mock)
-	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
+	mock.ExpectExec(`(?s)SELECT COUNT\(\*\).*file_oid.*FROM .*submodel_element.*file_data.*DELETE FROM .*submodel`).
 		WillReturnError(errors.New("unlink failed"))
 	mock.ExpectRollback()
 
 	err = sut.DeleteSubmodel(contextWithABACDisabled(t), submodelID)
 	require.Error(t, err)
 	require.True(t, common.IsInternalServerError(err))
-	require.Contains(t, err.Error(), "SMREPO-DELSM-UNLINKLO")
+	require.Contains(t, err.Error(), "SMREPO-DELSM-EXECBATCH")
 	require.NoError(t, mock.ExpectationsWereMet())
 }

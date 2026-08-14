@@ -421,7 +421,6 @@ func BuildSubmodelElementPathExistsSQL(submodelDatabaseID int, idShortPath strin
 func BuildCleanupSubmodelLargeObjectsSQL(submodelDatabaseID int64) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
 	unlinkSubquery := dialect.From(goqu.T("submodel_element").As("sme")).
-		Prepared(true).
 		Join(goqu.T("file_data").As("fd"), goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
 		Select(goqu.Func("lo_unlink", goqu.I("fd.file_oid")).As("unlink_result")).
 		Where(
@@ -430,7 +429,6 @@ func BuildCleanupSubmodelLargeObjectsSQL(submodelDatabaseID int64) (string, []an
 		)
 
 	return dialect.From(unlinkSubquery.As("unlink_results")).
-		Prepared(true).
 		Select(goqu.COUNT("*")).
 		ToSQL()
 }

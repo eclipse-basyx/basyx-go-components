@@ -409,6 +409,9 @@ func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Co
 }
 
 func (s *AssetAdministrationShellDatabase) ensureVisibleAASCreateDoesNotExist(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+	if createprecheck.CanSkipExistenceCheck(ctx) {
+		return nil
+	}
 	return createprecheck.EnsureVisibleCreate(
 		ctx,
 		func(context.Context) (bool, error) {
@@ -468,7 +471,7 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 		return err
 	}
 
-	if err := s.createAssetAdministrationShellInTransaction(tx, aas); err != nil {
+	if err := s.createAssetAdministrationShellInTransaction(ctx, tx, aas); err != nil {
 		return err
 	}
 
@@ -493,97 +496,113 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 }
 
 // createAssetAdministrationShellInTransaction creates an AAS and all dependent records within an existing transaction.
-func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTransaction(tx *sql.Tx, aas types.IAssetAdministrationShell) error {
+func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell) error {
 	dialect := goqu.Dialect("postgres")
-
-	ids, args, err := buildAssetAdministrationShellQuery(&dialect, aas)
-	if err != nil {
+	batch := &common.PostgreSQLBatch{}
+	if err := batch.AppendDataset(dialect.Insert("aas").Rows(goqu.Record{
+		"aas_id":   aas.ID(),
+		"category": aas.Category(),
+		"id_short": aas.IDShort(),
+	})); err != nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDINSERTSQL " + err.Error())
 	}
-
-	var aasDBID int64
-	if err := tx.QueryRow(ids, args...).Scan(&aasDBID); err != nil {
-		if mappedErr := mapCreateAASInsertError(err); mappedErr != nil {
-			return mappedErr
-		}
-		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECINSERTSQL " + err.Error())
-	}
-
+	aasDBID := common.PostgreSQLCurrentSequenceValue("aas", "id")
 	jsonizedPayload, err := jsonizeAssetAdministrationShellPayload(aas)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-JSON " + err.Error())
 	}
-
-	ids, args, err = buildAssetAdministrationShellPayloadQuery(
-		&dialect,
-		aasDBID,
-		jsonizedPayload.description,
-		jsonizedPayload.displayName,
-		jsonizedPayload.administrativeInformation,
-		jsonizedPayload.embeddedDataSpecification,
-		jsonizedPayload.extensions,
-		jsonizedPayload.derivedFrom,
-	)
-	if err != nil {
+	if err = batch.AppendDataset(dialect.Insert("aas_payload").Rows(goqu.Record{
+		"aas_id":                              aasDBID,
+		"administrative_information_payload":  jsonizedPayload.administrativeInformation,
+		"derived_from_payload":                jsonizedPayload.derivedFrom,
+		"description_payload":                 jsonizedPayload.description,
+		"displayname_payload":                 jsonizedPayload.displayName,
+		"embedded_data_specification_payload": jsonizedPayload.embeddedDataSpecification,
+		"extensions_payload":                  jsonizedPayload.extensions,
+	})); err != nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDPAYLOADSQL " + err.Error())
 	}
-
-	if _, err := tx.Exec(ids, args...); err != nil {
-		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECPAYLOADSQL " + err.Error())
-	}
-
-	// asset information
-	ids, args, err = buildAssetInformationQuery(
-		&dialect,
-		aasDBID,
-		aas.AssetInformation(),
-	)
-	if err != nil {
+	assetInformation := aas.AssetInformation()
+	if err = batch.AppendDataset(dialect.Insert("asset_information").Rows(goqu.Record{
+		"asset_information_id": aasDBID,
+		"asset_kind":           assetInformation.AssetKind(),
+		"asset_type":           assetInformation.AssetType(),
+		"global_asset_id":      assetInformation.GlobalAssetID(),
+	})); err != nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDASSETINFORMATIONSQL " + err.Error())
 	}
-
-	if _, err := tx.Exec(ids, args...); err != nil {
-		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECASSETINFORMATIONSQL " + err.Error())
-	}
-
-	if err := upsertDefaultThumbnailForAssetInformation(tx, &dialect, aasDBID, aas.AssetInformation(), "AASREPO-NEWAAS-CREATE", false); err != nil {
+	if err = appendAASCreateThumbnail(batch, dialect, aasDBID, assetInformation); err != nil {
 		return err
 	}
-
-	// specific asset ids
-	err = common.CreateSpecificAssetIDForAssetInformation(tx, aasDBID, aas.AssetInformation().SpecificAssetIDs())
-	if err != nil {
+	if err = batch.AppendAssetInformationSpecificAssetIDs(aasDBID, assetInformation.SpecificAssetIDs()); err != nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-CREATESPECIFICASSETIDS " + err.Error())
 	}
+	if err = appendAASCreateSubmodelReferences(batch, dialect, aasDBID, aas.Submodels()); err != nil {
+		return err
+	}
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		if mappedErr := mapCreateAASInsertError(err); mappedErr != nil {
+			return mappedErr
+		}
+		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECBATCH " + err.Error())
+	}
+	return nil
+}
 
-	// submodel references
-	for position, submodelRef := range aas.Submodels() {
-		ids, args, err = buildAssetAdministrationShellSubmodelReferenceQuery(&dialect, aasDBID, position, submodelRef)
-		if err != nil {
+func appendAASCreateThumbnail(batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, aasDBID any, assetInformation types.IAssetInformation) error {
+	thumbnail, thumbnailPath := defaultThumbnailWithPath(assetInformation)
+	if thumbnail == nil {
+		return nil
+	}
+	if err := batch.AppendDataset(dialect.Insert("thumbnail_file_element").Rows(goqu.Record{
+		"content_type": thumbnail.ContentType(),
+		"file_name":    nil,
+		"id":           aasDBID,
+		"value":        thumbnailPath,
+	})); err != nil {
+		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDTHUMBNAILSQL " + err.Error())
+	}
+	return nil
+}
+
+func appendAASCreateSubmodelReferences(batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, aasDBID any, references []types.IReference) error {
+	for position, reference := range references {
+		if err := batch.AppendDataset(dialect.Insert("aas_submodel_reference").Rows(goqu.Record{
+			"aas_id":   aasDBID,
+			"position": position,
+			"type":     int(reference.Type()),
+		})); err != nil {
 			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDSUBMODELREFSQL " + err.Error())
 		}
-
-		var aasSubmodelReferenceDBID int64
-		if err := tx.QueryRow(ids, args...).Scan(&aasSubmodelReferenceDBID); err != nil {
-			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECSUBMODELREFSQL " + err.Error())
+		referenceID := common.PostgreSQLCurrentSequenceValue("aas_submodel_reference", "id")
+		keyRows := make([]goqu.Record, 0, len(reference.Keys()))
+		for keyPosition, key := range reference.Keys() {
+			keyRows = append(keyRows, goqu.Record{
+				"position":     keyPosition,
+				"reference_id": referenceID,
+				"type":         int(key.Type()),
+				"value":        key.Value(),
+			})
 		}
-
-		ids, args, err = buildAssetAdministrationShellSubmodelReferenceKeysQuery(&dialect, aasSubmodelReferenceDBID, submodelRef)
-		if err != nil {
+		if len(keyRows) == 0 {
+			return common.NewErrBadRequest("AASREPO-NEWAAS-CREATE-SUBMODELREFNOKEYS reference must contain at least one key")
+		}
+		if err := batch.AppendDataset(dialect.Insert("aas_submodel_reference_key").Rows(keyRows)); err != nil {
 			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDSUBMODELREFKEYSSQL " + err.Error())
 		}
-
-		if _, err := tx.Exec(ids, args...); err != nil {
-			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECSUBMODELREFKEYSSQL " + err.Error())
-		}
-
-		ids, args, err = buildAssetAdministrationShellSubmodelReferencePayloadQuery(&dialect, aasSubmodelReferenceDBID, submodelRef)
+		jsonable, err := jsonization.ToJsonable(reference)
 		if err != nil {
-			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDSUBMODELREFPAYLOADSSQL " + err.Error())
+			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDSUBMODELREFPAYLOAD " + err.Error())
 		}
-
-		if _, err := tx.Exec(ids, args...); err != nil {
-			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECSUBMODELREFPAYLOADSSQL " + err.Error())
+		payload, err := json.Marshal(jsonable)
+		if err != nil {
+			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-MARSHALSUBMODELREFPAYLOAD " + err.Error())
+		}
+		if err = batch.AppendDataset(dialect.Insert("aas_submodel_reference_payload").Rows(goqu.Record{
+			"parent_reference_payload": goqu.L("?::jsonb", string(payload)),
+			"reference_id":             referenceID,
+		})); err != nil {
+			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDSUBMODELREFPAYLOADSSQL " + err.Error())
 		}
 	}
 	return nil
@@ -1156,7 +1175,7 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 			return PutAssetAdministrationShellResult{}, reconciliationErr
 		}
 	} else {
-		if err := s.createAssetAdministrationShellInTransaction(tx, aas); err != nil {
+		if err := s.createAssetAdministrationShellInTransaction(ctx, tx, aas); err != nil {
 			return PutAssetAdministrationShellResult{}, err
 		}
 	}
@@ -1278,30 +1297,29 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 		return err
 	}
 
-	if err = cleanupThumbnailLargeObjectsByAASDBID(tx, &dialect, aasDBID, "AASREPO-DELAAS"); err != nil {
+	if err = cleanupAndDeleteAASByDatabaseID(ctx, tx, &dialect, aasDBID); err != nil {
 		return err
 	}
 
-	sqlQuery, args, buildErr := buildDeleteAssetAdministrationShellByDBIDQuery(&dialect, aasDBID)
-	if buildErr != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-BUILDSQL " + buildErr.Error())
-	}
-
-	result, execErr := tx.Exec(sqlQuery, args...)
-	if execErr != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-EXECSQL " + execErr.Error())
-	}
-
-	rowsAffected, rowsErr := result.RowsAffected()
-	if rowsErr != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-GETROWCOUNT " + rowsErr.Error())
-	}
-
-	if rowsAffected == 0 {
-		return common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-	}
-
 	return history.AppendVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeDeleted, previousSnapshot, map[string]any{"id": aasIdentifier}, true)
+}
+
+func cleanupAndDeleteAASByDatabaseID(ctx context.Context, tx *sql.Tx, dialect *goqu.DialectWrapper, aasDBID int64) error {
+	cleanupQuery, cleanupArgs, err := buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect, aasDBID)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-DELAAS-BUILDUNLINKLO " + err.Error())
+	}
+	deleteQuery, deleteArgs, err := buildDeleteAssetAdministrationShellByDBIDQuery(dialect, aasDBID)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-DELAAS-BUILDSQL " + err.Error())
+	}
+	batch := &common.PostgreSQLBatch{}
+	batch.AppendStatement(cleanupQuery, cleanupArgs...)
+	batch.AppendStatement(deleteQuery, deleteArgs...)
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		return common.NewInternalServerError("AASREPO-DELAAS-EXECBATCH " + err.Error())
+	}
+	return nil
 }
 
 func getAssetAdministrationShellDBIDForDelete(tx *sql.Tx, aasIdentifier string) (int64, error) {
@@ -1313,19 +1331,6 @@ func getAssetAdministrationShellDBIDForDelete(tx *sql.Tx, aasIdentifier string) 
 		return 0, common.NewInternalServerError("AASREPO-DELAAS-EXECSELECT " + scanErr.Error())
 	}
 	return aasDBID, nil
-}
-
-func cleanupThumbnailLargeObjectsByAASDBID(tx *sql.Tx, dialect *goqu.DialectWrapper, aasDBID int64, errorPrefix string) error {
-	query, args, buildErr := buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect, aasDBID)
-	if buildErr != nil {
-		return common.NewInternalServerError(errorPrefix + "-BUILDUNLINKLO " + buildErr.Error())
-	}
-
-	var unlinkedCount int64
-	if scanErr := tx.QueryRow(query, args...).Scan(&unlinkedCount); scanErr != nil {
-		return common.NewInternalServerError(errorPrefix + "-UNLINKLO " + scanErr.Error())
-	}
-	return nil
 }
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
@@ -1556,85 +1561,6 @@ func (s *AssetAdministrationShellDatabase) loadAssetInformationForReconciliation
 	return buildAssetInformationFromCoreRow(row, specificAssetIDs), nil
 }
 
-func upsertDefaultThumbnailForAssetInformation(
-	tx *sql.Tx,
-	dialect *goqu.DialectWrapper,
-	aasDBID int64,
-	assetInformation types.IAssetInformation,
-	errorPrefix string,
-	replaceExisting bool,
-) error {
-	thumbnail, thumbnailPath := defaultThumbnailWithPath(assetInformation)
-	if replaceExisting || thumbnail != nil {
-		if err := clearInternalThumbnailStorageTx(tx, aasDBID, errorPrefix); err != nil {
-			return err
-		}
-	}
-	if thumbnail == nil {
-		if !replaceExisting {
-			return nil
-		}
-		deleteSQL, deleteArgs, buildErr := dialect.Delete("thumbnail_file_element").
-			Where(goqu.C("id").Eq(aasDBID)).ToSQL()
-		if buildErr != nil {
-			return common.NewInternalServerError(errorPrefix + "-BUILDDELETETHUMBNAILSQL " + buildErr.Error())
-		}
-		if _, execErr := tx.Exec(deleteSQL, deleteArgs...); execErr != nil {
-			return common.NewInternalServerError(errorPrefix + "-EXECDELETETHUMBNAILSQL " + execErr.Error())
-		}
-		return nil
-	}
-
-	upsertSQL, upsertArgs, buildErr := buildUpsertDefaultThumbnailQuery(dialect, aasDBID, thumbnail, thumbnailPath)
-	if buildErr != nil {
-		return common.NewInternalServerError(errorPrefix + "-BUILDTHUMBNAILSQL " + buildErr.Error())
-	}
-
-	if _, execErr := tx.Exec(upsertSQL, upsertArgs...); execErr != nil {
-		return common.NewInternalServerError(errorPrefix + "-EXECTHUMBNAILSQL " + execErr.Error())
-	}
-
-	return nil
-}
-
-func clearInternalThumbnailStorageTx(tx *sql.Tx, aasDBID int64, errorPrefix string) error {
-	deleteReferenceSQL, deleteReferenceArgs, err := goqu.Delete(binarycontent.TableThumbnailReference).
-		Where(goqu.C("thumbnail_element_id").Eq(aasDBID)).ToSQL()
-	if err != nil {
-		return common.NewInternalServerError(errorPrefix + "-BUILDDELETETHUMBREF " + err.Error())
-	}
-	if _, err = tx.Exec(deleteReferenceSQL, deleteReferenceArgs...); err != nil {
-		return common.NewInternalServerError(errorPrefix + "-EXECDELETETHUMBREF " + err.Error())
-	}
-
-	selectLegacySQL, selectLegacyArgs, err := goqu.From("thumbnail_file_data").Select("file_oid").
-		Where(goqu.C("id").Eq(aasDBID)).ToSQL()
-	if err != nil {
-		return common.NewInternalServerError(errorPrefix + "-BUILDGETTHUMBLO " + err.Error())
-	}
-	var oid sql.NullInt64
-	if err = tx.QueryRow(selectLegacySQL, selectLegacyArgs...).Scan(&oid); err != nil && err != sql.ErrNoRows {
-		return common.NewInternalServerError(errorPrefix + "-EXECGETTHUMBLO " + err.Error())
-	}
-	if oid.Valid {
-		unlinkSQL, unlinkArgs, buildErr := goqu.Select(goqu.Func("lo_unlink", oid.Int64)).ToSQL()
-		if buildErr != nil {
-			return common.NewInternalServerError(errorPrefix + "-BUILDUNLINKTHUMBLO " + buildErr.Error())
-		}
-		if _, err = tx.Exec(unlinkSQL, unlinkArgs...); err != nil {
-			return common.NewInternalServerError(errorPrefix + "-EXECUNLINKTHUMBLO " + err.Error())
-		}
-	}
-	deleteLegacySQL, deleteLegacyArgs, err := goqu.Delete("thumbnail_file_data").Where(goqu.C("id").Eq(aasDBID)).ToSQL()
-	if err != nil {
-		return common.NewInternalServerError(errorPrefix + "-BUILDDELETETHUMBLO " + err.Error())
-	}
-	if _, err = tx.Exec(deleteLegacySQL, deleteLegacyArgs...); err != nil {
-		return common.NewInternalServerError(errorPrefix + "-EXECDELETETHUMBLO " + err.Error())
-	}
-	return nil
-}
-
 func defaultThumbnailWithPath(assetInformation types.IAssetInformation) (types.IResource, string) {
 	if assetInformation == nil || assetInformation.DefaultThumbnail() == nil {
 		return nil, ""
@@ -1651,29 +1577,6 @@ func defaultThumbnailWithPath(assetInformation types.IAssetInformation) (types.I
 	}
 
 	return thumbnail, thumbnailPath
-}
-
-func buildUpsertDefaultThumbnailQuery(
-	dialect *goqu.DialectWrapper,
-	aasDBID int64,
-	thumbnail types.IResource,
-	thumbnailPath string,
-) (string, []any, error) {
-	record := goqu.Record{
-		"id":           aasDBID,
-		"content_type": thumbnail.ContentType(),
-		"file_name":    nil,
-		"value":        thumbnailPath,
-	}
-
-	return dialect.Insert("thumbnail_file_element").
-		Rows(record).
-		OnConflict(goqu.DoUpdate("id", goqu.Record{
-			"content_type": goqu.COALESCE(goqu.I("excluded.content_type"), goqu.I("thumbnail_file_element.content_type")),
-			"file_name":    nil,
-			"value":        thumbnailPath,
-		})).
-		ToSQL()
 }
 
 func (s *AssetAdministrationShellDatabase) ensureAASVisibleAfterAssetInformationUpdate(

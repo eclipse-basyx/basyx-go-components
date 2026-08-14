@@ -104,3 +104,27 @@ func TestCanSkipCreateReadbackRequiresUnrestrictedCreateFormula(t *testing.T) {
 		})
 	}
 }
+
+func TestCanSkipDeleteReadbackRequiresUnrestrictedDeleteFormula(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	deny := false
+	restricted := auth.WithQueryFilter(t.Context(), &auth.QueryFilter{
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumDELETE: {Boolean: &deny},
+		},
+	})
+	unrestricted := auth.WithQueryFilter(t.Context(), &auth.QueryFilter{
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumDELETE: {Boolean: &allow},
+		},
+	})
+
+	if CanSkipDeleteReadback(restricted) {
+		t.Fatal("restricted delete must retain descriptor readback")
+	}
+	if !CanSkipDeleteReadback(unrestricted) {
+		t.Fatal("unrestricted delete should skip descriptor readback")
+	}
+}

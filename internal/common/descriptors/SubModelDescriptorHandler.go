@@ -842,22 +842,22 @@ func deleteSubmodelDescriptorByIDTx(
 		).
 		Limit(1)
 
-	sqlStr, args, buildErr := ds.ToSQL()
+	delSQL, delArgs, buildErr := d.Delete(common.TblDescriptor).
+		Where(goqu.C(common.ColID).In(ds)).
+		ToSQL()
 	if buildErr != nil {
-		return common.NewInternalServerError("Failed to build submodel lookup query. See server logs for details.")
+		return common.NewInternalServerError("SMDESC-DELETE-BUILDSQL " + buildErr.Error())
 	}
-	var descID int64
-	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return common.NewErrNotFound("Submodel Descriptor not found")
-		}
-		return common.NewInternalServerError("Failed to query submodel descriptor id. See server logs for details.")
+	result, err := tx.ExecContext(ctx, delSQL, delArgs...)
+	if err != nil {
+		return common.NewInternalServerError("SMDESC-DELETE-EXECSQL " + err.Error())
 	}
-
-	delSQL, delArgs, delErr := d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).Eq(descID)).ToSQL()
-	if delErr != nil {
-		return delErr
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return common.NewInternalServerError("SMDESC-DELETE-ROWSAFFECTED " + err.Error())
 	}
-	_, err := tx.Exec(delSQL, delArgs...)
-	return err
+	if deleted == 0 {
+		return common.NewErrNotFound("Submodel Descriptor not found")
+	}
+	return nil
 }

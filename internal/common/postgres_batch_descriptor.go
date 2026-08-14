@@ -171,11 +171,39 @@ func (b *PostgreSQLBatch) AppendSpecificAssetIDs(
 	aasRef any,
 	specificAssetIDs []types.ISpecificAssetID,
 ) error {
+	return b.appendSpecificAssetIDs(
+		descriptorID,
+		sql.NullInt64{},
+		aasRef,
+		specificAssetIDs,
+	)
+}
+
+// AppendAssetInformationSpecificAssetIDs appends specific asset IDs owned by
+// an AssetInformation row.
+func (b *PostgreSQLBatch) AppendAssetInformationSpecificAssetIDs(
+	assetInformationID any,
+	specificAssetIDs []types.ISpecificAssetID,
+) error {
+	return b.appendSpecificAssetIDs(
+		sql.NullInt64{},
+		assetInformationID,
+		sql.NullInt64{},
+		specificAssetIDs,
+	)
+}
+
+func (b *PostgreSQLBatch) appendSpecificAssetIDs(
+	descriptorID any,
+	assetInformationID any,
+	aasRef any,
+	specificAssetIDs []types.ISpecificAssetID,
+) error {
 	dialect := goqu.Dialect(Dialect)
 	for position, assetID := range specificAssetIDs {
 		if err := b.AppendDataset(dialect.Insert(TblSpecificAssetID).Rows(goqu.Record{
 			ColDescriptorID:       descriptorID,
-			ColAssetInformationID: sql.NullInt64{},
+			ColAssetInformationID: assetInformationID,
 			ColPosition:           position,
 			ColName:               assetID.Name(),
 			ColValue:              assetID.Value(),

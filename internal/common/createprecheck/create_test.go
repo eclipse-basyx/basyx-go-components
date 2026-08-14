@@ -143,6 +143,14 @@ func TestEnsureVisibleCreateAllowsMissingDescriptor(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestCanSkipExistenceCheckRequiresUnrestrictedCreate(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, CanSkipExistenceCheck(t.Context()))
+	ctx := auth.WithQueryFilter(t.Context(), limitedCreateQueryFilter())
+	require.False(t, CanSkipExistenceCheck(ctx))
+}
+
 func TestEnsureVisibleDuplicateAllowsMissingDescriptor(t *testing.T) {
 	t.Parallel()
 

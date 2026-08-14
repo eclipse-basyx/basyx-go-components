@@ -27,12 +27,10 @@ package persistence
 
 import (
 	"database/sql"
-	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/doug-martin/goqu/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,62 +44,20 @@ func TestCreateAssetAdministrationShellPersistsDefaultThumbnail(t *testing.T) {
 		"https://example.com/ids/aas/default-thumbnail-create",
 		assetInformationWithDefaultThumbnail("https://example.com/thumb-create.png", "image/png"),
 	)
+	aas.AssetInformation().SetSpecificAssetIDs([]types.ISpecificAssetID{
+		types.NewSpecificAssetID("serialNumber", "123"),
+	})
+	aas.SetSubmodels([]types.IReference{types.NewReference(
+		types.ReferenceTypesModelReference,
+		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, "https://example.com/ids/sm/1")},
+	)})
 
-	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
-	mock.ExpectExec(`INSERT INTO "aas_payload"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`INSERT INTO "asset_information"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectInternalThumbnailCleanup(mock)
-	mock.ExpectExec(`INSERT INTO "thumbnail_file_element"`).
+	mock.ExpectExec(`(?s)INSERT INTO "aas".*INSERT INTO "aas_payload".*INSERT INTO "asset_information".*INSERT INTO "thumbnail_file_element".*INSERT INTO "specific_asset_id".*INSERT INTO "specific_asset_id_payload".*INSERT INTO "aas_submodel_reference".*INSERT INTO "aas_submodel_reference_key".*INSERT INTO "aas_submodel_reference_payload"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	repository := &AssetAdministrationShellDatabase{}
-	require.NoError(t, repository.createAssetAdministrationShellInTransaction(tx, aas))
+	require.NoError(t, repository.createAssetAdministrationShellInTransaction(t.Context(), tx, aas))
 	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-func expectInternalThumbnailCleanup(mock sqlmock.Sqlmock) {
-	mock.ExpectExec(`DELETE FROM "thumbnail_binary_reference"`).
-		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectQuery(`SELECT "file_oid" FROM "thumbnail_file_data"`).
-		WillReturnError(sql.ErrNoRows)
-	mock.ExpectExec(`DELETE FROM "thumbnail_file_data"`).
-		WillReturnResult(sqlmock.NewResult(0, 0))
-}
-
-func TestBuildUpsertDefaultThumbnailQueryPreservesExistingContentTypeWhenUnset(t *testing.T) {
-	dialect := goquDialect()
-	thumbnail := types.NewResource("https://example.com/thumb.png")
-
-	upsertSQL, _, err := buildUpsertDefaultThumbnailQuery(
-		&dialect,
-		int64(42),
-		thumbnail,
-		thumbnail.Path(),
-	)
-
-	require.NoError(t, err)
-	require.Contains(t, upsertSQL, `COALESCE("excluded"."content_type", "thumbnail_file_element"."content_type")`)
-	require.Contains(t, upsertSQL, `"file_name"=NULL`)
-	require.NotContains(t, strings.ToLower(upsertSQL), `"content_type"=null`)
-}
-
-func TestBuildUpsertDefaultThumbnailQueryClearsFileNameForExternalURL(t *testing.T) {
-	dialect := goquDialect()
-	assetInformation := assetInformationWithDefaultThumbnail("https://example.com/thumb-update.png", "image/png")
-	thumbnail := assetInformation.DefaultThumbnail()
-
-	upsertSQL, _, err := buildUpsertDefaultThumbnailQuery(
-		&dialect,
-		int64(42),
-		thumbnail,
-		thumbnail.Path(),
-	)
-
-	require.NoError(t, err)
-	require.Contains(t, upsertSQL, `"file_name"=NULL`)
 }
 
 func assetInformationWithDefaultThumbnail(path string, contentType string) types.IAssetInformation {
@@ -119,8 +75,4 @@ func beginMockTransaction(t *testing.T, db *sql.DB, mock sqlmock.Sqlmock) *sql.T
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	return tx
-}
-
-func goquDialect() goqu.DialectWrapper {
-	return goqu.Dialect("postgres")
 }

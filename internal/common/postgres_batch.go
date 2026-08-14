@@ -90,6 +90,11 @@ func (b *PostgreSQLBatch) AppendDataset(dataset sqlDataset) error {
 	return nil
 }
 
+// AppendStatement appends an already rendered SQL statement to the batch.
+func (b *PostgreSQLBatch) AppendStatement(query string, args ...any) {
+	b.statements = append(b.statements, PostgreSQLBatchStatement{SQL: query, Args: args})
+}
+
 // Statements returns the statements collected in append order.
 //
 // Returns:
@@ -115,6 +120,23 @@ func ExecutePostgreSQLBatchInTransaction(
 	tx *sql.Tx,
 	statements []PostgreSQLBatchStatement,
 ) error {
+	return executePostgreSQLBatchInTransaction(&ctx, tx, statements)
+}
+
+// ExecutePostgreSQLBatchInTransactionWithoutContext executes rendered
+// statements for legacy callers whose API does not carry a request context.
+func ExecutePostgreSQLBatchInTransactionWithoutContext(
+	tx *sql.Tx,
+	statements []PostgreSQLBatchStatement,
+) error {
+	return executePostgreSQLBatchInTransaction(nil, tx, statements)
+}
+
+func executePostgreSQLBatchInTransaction(
+	ctx *context.Context,
+	tx *sql.Tx,
+	statements []PostgreSQLBatchStatement,
+) error {
 	if tx == nil {
 		return NewErrBadRequest("COMMON-PGBATCH-NILTX transaction must not be nil")
 	}
@@ -129,7 +151,14 @@ func ExecutePostgreSQLBatchInTransaction(
 		}
 		queries = append(queries, statement.SQL)
 	}
-	if _, err := tx.ExecContext(ctx, strings.Join(queries, ";\n")); err != nil {
+	query := strings.Join(queries, ";\n")
+	var err error
+	if ctx == nil {
+		_, err = tx.Exec(query)
+	} else {
+		_, err = tx.ExecContext(*ctx, query)
+	}
+	if err != nil {
 		return internalServerErrorWithCause("COMMON-PGBATCH-EXEC", err)
 	}
 	return nil

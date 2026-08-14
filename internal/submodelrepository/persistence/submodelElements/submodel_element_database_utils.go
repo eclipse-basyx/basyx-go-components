@@ -184,7 +184,7 @@ func buildIDShortPath(parentPath string, isFromList bool, position int, idShort 
 	return parentPath + "." + idShort
 }
 
-func insertBaseNodesDepthWise(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseID int64, nodes []*flattenedInsertNode) error {
+func insertBaseNodesDepthWise(tx *sql.Tx, batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, submodelDatabaseID int64, nodes []*flattenedInsertNode) error {
 	if len(nodes) == 0 {
 		return nil
 	}
@@ -219,8 +219,8 @@ func insertBaseNodesDepthWise(tx *sql.Tx, dialect goqu.DialectWrapper, submodelD
 		baseRows = append(baseRows, record)
 	}
 
-	insertErr := executeRecordInsertChunked(
-		tx,
+	insertErr := appendRecordInsertChunked(
+		batch,
 		dialect,
 		"submodel_element",
 		[]string{"id", "submodel_id", "parent_sme_id", "position", "id_short", "category", "model_type", "idshort_path", "root_sme_id", "depth"},
@@ -308,7 +308,7 @@ func resolveNodeHierarchyIDs(nodes []*flattenedInsertNode, node *flattenedInsert
 	return parentID, rootID, nil
 }
 
-func insertPayloadAndSemanticReferences(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode, jsonLib jsoniter.API) error {
+func insertPayloadAndSemanticReferences(batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode, jsonLib jsoniter.API) error {
 	payloadRows := make([]goqu.Record, 0, len(nodes))
 	for _, node := range nodes {
 		payloadRecord, hasPayload, payloadBuildErr := buildSubmodelElementPayloadRecord(int64(node.dbID), node.element, jsonLib)
@@ -322,8 +322,8 @@ func insertPayloadAndSemanticReferences(tx *sql.Tx, dialect goqu.DialectWrapper,
 	}
 
 	if len(payloadRows) > 0 {
-		if payloadInsertErr := executeRecordInsertChunked(
-			tx,
+		if payloadInsertErr := appendRecordInsertChunked(
+			batch,
 			dialect,
 			"submodel_element_payload",
 			[]string{"submodel_element_id", "description_payload", "displayname_payload", "embedded_data_specification_payload", "supplemental_semantic_ids_payload", "extensions_payload", "qualifiers_payload"},
@@ -334,16 +334,15 @@ func insertPayloadAndSemanticReferences(tx *sql.Tx, dialect goqu.DialectWrapper,
 		}
 	}
 
-	if err := insertSemanticReferencesBulk(tx, dialect, nodes); err != nil {
+	if err := insertSemanticReferencesBulk(batch, dialect, nodes); err != nil {
 		return err
 	}
-	return insertSupplementalSemanticReferences(tx, nodes)
+	return appendSupplementalSemanticReferences(batch, nodes)
 }
 
-func insertSupplementalSemanticReferences(tx *sql.Tx, nodes []*flattenedInsertNode) error {
+func appendSupplementalSemanticReferences(batch *common.PostgreSQLBatch, nodes []*flattenedInsertNode) error {
 	for _, node := range nodes {
-		if err := common.CreateContextReferences1ToMany(
-			tx,
+		if err := batch.AppendContextReferences(
 			int64(node.dbID),
 			node.element.SupplementalSemanticIDs(),
 			common.TblSubmodelElementSuppSemantic,
@@ -355,7 +354,7 @@ func insertSupplementalSemanticReferences(tx *sql.Tx, nodes []*flattenedInsertNo
 	return nil
 }
 
-func insertSemanticReferencesBulk(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
+func insertSemanticReferencesBulk(batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
 	referenceRows := make([]goqu.Record, 0, len(nodes))
 	payloadRows := make([]goqu.Record, 0, len(nodes))
 	keyRows := make([]goqu.Record, 0)
@@ -398,8 +397,8 @@ func insertSemanticReferencesBulk(tx *sql.Tx, dialect goqu.DialectWrapper, nodes
 		return nil
 	}
 
-	if err := executeRecordInsertChunked(
-		tx,
+	if err := appendRecordInsertChunked(
+		batch,
 		dialect,
 		"submodel_element_semantic_id_reference",
 		[]string{"id", "type"},
@@ -409,8 +408,8 @@ func insertSemanticReferencesBulk(tx *sql.Tx, dialect goqu.DialectWrapper, nodes
 		return err
 	}
 
-	if err := executeRecordInsertChunked(
-		tx,
+	if err := appendRecordInsertChunked(
+		batch,
 		dialect,
 		"submodel_element_semantic_id_reference_payload",
 		[]string{"reference_id", "parent_reference_payload"},
@@ -424,8 +423,8 @@ func insertSemanticReferencesBulk(tx *sql.Tx, dialect goqu.DialectWrapper, nodes
 		return nil
 	}
 
-	return executeRecordInsertChunked(
-		tx,
+	return appendRecordInsertChunked(
+		batch,
 		dialect,
 		"submodel_element_semantic_id_reference_key",
 		[]string{"reference_id", "position", "type", "value"},
@@ -434,7 +433,7 @@ func insertSemanticReferencesBulk(tx *sql.Tx, dialect goqu.DialectWrapper, nodes
 	)
 }
 
-func insertTypeSpecificRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
+func insertTypeSpecificRows(tx *sql.Tx, batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
 	typeSpecificRows := make(map[string][]goqu.Record)
 
 	for _, node := range nodes {
@@ -451,7 +450,7 @@ func insertTypeSpecificRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*fl
 		if len(rows) == 0 {
 			continue
 		}
-		if err := executeRecordInsertChunked(tx, dialect, tableName, nil, rows, "SMREPO-INSSME-INSTYPE"); err != nil {
+		if err := appendRecordInsertChunked(batch, dialect, tableName, nil, rows, "SMREPO-INSSME-INSTYPE"); err != nil {
 			return err
 		}
 	}
@@ -459,7 +458,7 @@ func insertTypeSpecificRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*fl
 	return nil
 }
 
-func insertMultiLanguagePropertyValues(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
+func insertMultiLanguagePropertyValues(batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
 	mlpRows := make([]goqu.Record, 0)
 	for _, node := range nodes {
 		if node.element.ModelType() != types.ModelTypeMultiLanguageProperty {
@@ -484,8 +483,8 @@ func insertMultiLanguagePropertyValues(tx *sql.Tx, dialect goqu.DialectWrapper, 
 		return nil
 	}
 
-	return executeRecordInsertChunked(
-		tx,
+	return appendRecordInsertChunked(
+		batch,
 		dialect,
 		"multilanguage_property_value",
 		[]string{"submodel_element_id", "language", "text"},
@@ -494,7 +493,7 @@ func insertMultiLanguagePropertyValues(tx *sql.Tx, dialect goqu.DialectWrapper, 
 	)
 }
 
-func insertMultiLanguagePropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
+func insertMultiLanguagePropertyPayloadRows(batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
 	mlpPayloadRows := make([]goqu.Record, 0)
 	for _, node := range nodes {
 		if node.element.ModelType() != types.ModelTypeMultiLanguageProperty {
@@ -525,8 +524,8 @@ func insertMultiLanguagePropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrap
 		return nil
 	}
 
-	return executeRecordInsertChunked(
-		tx,
+	return appendRecordInsertChunked(
+		batch,
 		dialect,
 		"multilanguage_property_payload",
 		[]string{"submodel_element_id", "value_id_payload"},
@@ -535,7 +534,7 @@ func insertMultiLanguagePropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrap
 	)
 }
 
-func insertPropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
+func insertPropertyPayloadRows(batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
 	propertyPayloadRows := make([]goqu.Record, 0)
 	for _, node := range nodes {
 		if node.element.ModelType() != types.ModelTypeProperty {
@@ -566,8 +565,8 @@ func insertPropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []
 		return nil
 	}
 
-	return executeRecordInsertChunked(
-		tx,
+	return appendRecordInsertChunked(
+		batch,
 		dialect,
 		"property_element_payload",
 		[]string{"property_element_id", "value_id_payload"},
@@ -576,7 +575,7 @@ func insertPropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []
 	)
 }
 
-func executeRecordInsertChunked(tx *sql.Tx, dialect goqu.DialectWrapper, tableName string, cols []string, rows []goqu.Record, errCode string) error {
+func appendRecordInsertChunked(batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, tableName string, cols []string, rows []goqu.Record, errCode string) error {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -603,15 +602,8 @@ func executeRecordInsertChunked(tx *sql.Tx, dialect goqu.DialectWrapper, tableNa
 		}
 		insert = insert.Rows(chunkRows...)
 
-		sqlQuery, args, buildErr := insert.ToSQL()
-		if buildErr != nil {
+		if buildErr := batch.AppendDataset(insert); buildErr != nil {
 			return common.NewInternalServerError(errCode + "-BUILDQ " + buildErr.Error())
-		}
-		if _, execErr := tx.Exec(sqlQuery, args...); execErr != nil {
-			if mappedErr := mapConflictInsertError(execErr); mappedErr != nil {
-				return mappedErr
-			}
-			return common.NewInternalServerError(errCode + "-EXECQ " + execErr.Error())
 		}
 	}
 
