@@ -420,16 +420,15 @@ func BuildSiblingIDShortCollisionPathSQL(submodelDatabaseID int, parentElementID
 func siblingIDShortCollisionDataset(submodelDatabaseID int, parentElementID *int, idShort string) *goqu.SelectDataset {
 	dialect := goqu.Dialect(common.Dialect)
 	query := dialect.From("submodel_element")
+	parentScopeID := 0
+	if parentElementID != nil {
+		parentScopeID = *parentElementID
+	}
 
 	whereExpressions := []goqu.Expression{
 		goqu.C("submodel_id").Eq(submodelDatabaseID),
+		goqu.C("parent_scope_id").Eq(parentScopeID),
 		goqu.C("id_short").Eq(idShort),
-	}
-
-	if parentElementID == nil {
-		whereExpressions = append(whereExpressions, goqu.C("parent_sme_id").IsNull())
-	} else {
-		whereExpressions = append(whereExpressions, goqu.C("parent_sme_id").Eq(*parentElementID))
 	}
 
 	return query.Where(whereExpressions...)

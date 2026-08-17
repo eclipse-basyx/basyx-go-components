@@ -28,6 +28,7 @@
 package submodel_repository_utils
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/doug-martin/goqu/v9"
@@ -68,12 +69,26 @@ func GetSubmodelDatabaseIDForUpdate(tx *sql.Tx, submodelID string) (int, error) 
 	return getSubmodelDatabaseID(tx, submodelID, true)
 }
 
+// GetSubmodelDatabaseIDForNoKeyUpdateContext resolves the internal database ID
+// and serializes mutations that do not change the Submodel identifier.
+func GetSubmodelDatabaseIDForNoKeyUpdateContext(ctx context.Context, tx *sql.Tx, submodelID string) (int, error) {
+	query, args, err := submodelDatabaseIDDataset(submodelID).
+		ForNoKeyUpdate(goqu.Wait).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	var databaseID int
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&databaseID); err != nil {
+		return 0, err
+	}
+	return databaseID, nil
+}
+
 func getSubmodelDatabaseID(db SubmodelIDQueryer, submodelID string, forUpdate bool) (int, error) {
 	var databaseID int
-	query := goqu.Dialect("postgres").Select("id").
-		From("submodel").
-		Where(goqu.I("submodel_identifier").Eq(submodelID)).
-		Prepared(true)
+	query := submodelDatabaseIDDataset(submodelID)
 	if forUpdate {
 		query = query.ForUpdate(goqu.Wait)
 	}
@@ -87,6 +102,13 @@ func getSubmodelDatabaseID(db SubmodelIDQueryer, submodelID string, forUpdate bo
 		return 0, err
 	}
 	return databaseID, nil
+}
+
+func submodelDatabaseIDDataset(submodelID string) *goqu.SelectDataset {
+	return goqu.Dialect("postgres").Select("id").
+		From("submodel").
+		Where(goqu.I("submodel_identifier").Eq(submodelID)).
+		Prepared(true)
 }
 
 // GetSubmodelDatabaseIDFromDB resolves the internal database ID of a Submodel by its identifier.

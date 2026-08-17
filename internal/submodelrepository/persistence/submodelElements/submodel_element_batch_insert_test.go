@@ -97,6 +97,34 @@ func TestInsertSubmodelElementsRollsBackOwnedTransactionAfterConflict(t *testing
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestInsertSubmodelElementsMapsPathConflict(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	property := types.NewProperty(types.DataTypeDefXSDString)
+	idShort := "temperature"
+	property.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*nextval.*generate_series`).
+		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(101))
+	mock.ExpectExec(`(?s)INSERT INTO "submodel_element".*INSERT INTO "property_element"`).
+		WillReturnError(&pgconn.PgError{Code: "23505", ConstraintName: "uq_sme_path"})
+	mock.ExpectRollback()
+
+	_, err = InsertSubmodelElementsForSubmodelDatabaseID(
+		db,
+		42,
+		[]types.ISubmodelElement{property},
+		nil,
+		nil,
+	)
+	require.Error(t, err)
+	require.True(t, common.IsErrConflict(err), "expected conflict error, got %v", err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestInsertSubmodelElementsDependentConflictRemainsInternal(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

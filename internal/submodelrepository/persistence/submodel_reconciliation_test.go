@@ -207,11 +207,11 @@ func TestSubmodelReconciliationMapsDeferredUniqueViolationToConflict(t *testing.
 	plan := submodelReconciliationPlan{
 		Inserts: []submodelelements.ReconciliationElementRow{{Path: "P"}},
 	}
-	mock.ExpectExec(regexp.QuoteMeta("SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos DEFERRED")).
+	mock.ExpectExec(regexp.QuoteMeta("SET CONSTRAINTS uq_sme_path, uq_sibling_idshort, uq_sibling_pos DEFERRED")).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(regexp.QuoteMeta("WITH reconciliation_plan")).
 		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 1, 0))
-	mock.ExpectExec(regexp.QuoteMeta("SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos IMMEDIATE")).
+	mock.ExpectExec(regexp.QuoteMeta("SET CONSTRAINTS uq_sme_path, uq_sibling_idshort, uq_sibling_pos IMMEDIATE")).
 		WillReturnError(&pgconn.PgError{Code: "23505"})
 
 	err = (&SubmodelDatabase{}).executeSubmodelReconciliationTx(t.Context(), tx, "sm", plan)

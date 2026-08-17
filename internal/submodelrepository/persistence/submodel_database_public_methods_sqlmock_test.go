@@ -620,12 +620,50 @@ func TestAddSubmodelElementSubmodelNotFoundRollsBack(t *testing.T) {
 	var elem types.ISubmodelElement
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT .*FROM .*submodel.*FOR NO KEY UPDATE`).WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 
 	err = sut.AddSubmodelElement(contextWithABACDisabled(t), "missing", elem)
 	require.Error(t, err)
 	require.True(t, common.IsErrNotFound(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAddTopLevelSubmodelElementLocksOnlyOwningSubmodel(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+	db.SetMaxOpenConns(1)
+
+	sut := &SubmodelDatabase{db: db}
+	element := types.NewProperty(types.DataTypeDefXSDString)
+	idShort := "Created"
+	element.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "submodel".*FOR NO KEY UPDATE`).
+		WithArgs("sm").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+	mock.ExpectQuery(`SELECT MAX\("position"\) FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(nil))
+	mock.ExpectQuery(`SELECT .*nextval.*generate_series`).
+		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(101))
+	mock.ExpectExec(`(?s)INSERT INTO "submodel_element".*INSERT INTO "property_element"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+
+	ctx, cancel := context.WithTimeout(contextWithABACDisabled(t), time.Second)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	insertedPath, err := sut.addTopLevelSubmodelElementInTransaction(ctx, tx, "sm", element)
+	require.NoError(t, err)
+	require.Equal(t, idShort, insertedPath)
+	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
