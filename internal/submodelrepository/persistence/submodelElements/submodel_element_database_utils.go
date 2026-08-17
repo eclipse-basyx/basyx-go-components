@@ -634,7 +634,7 @@ func mapConflictInsertError(err error) error {
 }
 
 func isSubmodelElementSiblingConstraint(constraintName string) bool {
-	return constraintName == "uq_sme_path" || constraintName == "uq_sibling_idshort" || constraintName == "uq_sibling_pos"
+	return constraintName == "uq_sibling_idshort" || constraintName == "uq_sibling_pos"
 }
 
 // getChildElements extracts child elements from container-type submodel elements.

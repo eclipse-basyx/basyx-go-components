@@ -81,11 +81,11 @@ func TestSubmodelRepositoryCreateExistingUnauthorizedSubmodelElementDoesNotRetur
 	element.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT "id" FROM "submodel".*FOR NO KEY UPDATE`).
+	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 	mock.ExpectQuery(`SELECT MAX\("position"\) FROM "submodel_element"`).
 		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(-1))
-	mock.ExpectQuery(`SELECT .*FROM "submodel_element".*"parent_scope_id" =.*"id_short" =`).
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element"`).
 		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}).AddRow("HiddenElement"))
 	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))

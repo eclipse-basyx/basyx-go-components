@@ -1003,7 +1003,7 @@ func deferSubmodelElementReconciliationConstraints(ctx context.Context, tx *sql.
 	if tx == nil {
 		return common.NewInternalServerError("SMREPO-RECON-DEFER-NILTX transaction must not be nil")
 	}
-	statement := goqu.L("SET CONSTRAINTS uq_sme_path, uq_sibling_idshort, uq_sibling_pos DEFERRED")
+	statement := goqu.L("SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos DEFERRED")
 	if _, err := tx.ExecContext(ctx, statement.Literal(), statement.Args()...); err != nil {
 		return common.NewInternalServerError("SMREPO-RECON-DEFER-EXEC " + err.Error())
 	}
@@ -1014,7 +1014,7 @@ func enforceSubmodelElementReconciliationConstraints(ctx context.Context, tx *sq
 	if tx == nil {
 		return common.NewInternalServerError("SMREPO-RECON-ENFORCE-NILTX transaction must not be nil")
 	}
-	statement := goqu.L("SET CONSTRAINTS uq_sme_path, uq_sibling_idshort, uq_sibling_pos IMMEDIATE")
+	statement := goqu.L("SET CONSTRAINTS uq_sibling_idshort, uq_sibling_pos IMMEDIATE")
 	if _, err := tx.ExecContext(ctx, statement.Literal(), statement.Args()...); err != nil {
 		return mapSubmodelReconciliationDatabaseError("SMREPO-RECON-ENFORCE", err)
 	}
