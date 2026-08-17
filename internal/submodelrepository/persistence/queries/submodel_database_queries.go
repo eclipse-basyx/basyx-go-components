@@ -294,10 +294,16 @@ func BuildTopLevelSubmodelElementMaxPositionSQL(submodelDatabaseID int) (string,
 }
 
 // BuildSubmodelElementParentForInsertSQL builds an indexed parent lookup that
-// locks only the target parent before the caller allocates a child position.
+// protects the owning submodel from replacement and locks the target parent
+// before the caller allocates a child position.
 func BuildSubmodelElementParentForInsertSQL(submodelID string, parentPath string) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
-	submodel := goqu.T("submodel").As("sm")
+	lockedSubmodel := dialect.
+		From(goqu.T("submodel").As("sm_lock")).
+		Select(goqu.I("sm_lock.id")).
+		Where(goqu.I("sm_lock.submodel_identifier").Eq(submodelID)).
+		ForKeyShare(goqu.Wait)
+	submodel := lockedSubmodel.As("sm")
 	parent := goqu.T("submodel_element").As("parent")
 
 	return dialect.
@@ -311,7 +317,6 @@ func BuildSubmodelElementParentForInsertSQL(submodelID string, parentPath string
 			goqu.L("COALESCE(?, -1) + 1", goqu.I("parent.depth")),
 		).
 		Where(
-			goqu.I("sm.submodel_identifier").Eq(submodelID),
 			goqu.I("parent.idshort_path").Eq(parentPath),
 		).
 		ForUpdate(goqu.Wait, goqu.T("parent")).

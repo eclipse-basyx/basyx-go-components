@@ -642,7 +642,7 @@ func TestAddSubmodelElementWithPathSubmodelNotFoundRollsBack(t *testing.T) {
 	var elem types.ISubmodelElement
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT .*FROM "submodel" AS "sm".*JOIN "submodel_element" AS "parent"`).
+	mock.ExpectQuery(`SELECT .*FROM \(SELECT .*FROM "submodel" AS "sm_lock".*FOR KEY SHARE.*\) AS "sm".*JOIN "submodel_element" AS "parent"`).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
@@ -669,7 +669,7 @@ func TestAddSubmodelElementWithPathInTransactionUsesOnlyTransactionConnection(t 
 	element.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT .*FROM "submodel" AS "sm".*JOIN "submodel_element" AS "parent".*FOR UPDATE OF "parent"`).
+	mock.ExpectQuery(`SELECT .*FROM \(SELECT .*FROM "submodel" AS "sm_lock".*FOR KEY SHARE.*\) AS "sm".*JOIN "submodel_element" AS "parent".*FOR UPDATE OF "parent"`).
 		WithArgs("sm", "container").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"submodel_id",
