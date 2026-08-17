@@ -27,6 +27,7 @@
 package persistence
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"os"
@@ -641,12 +642,58 @@ func TestAddSubmodelElementWithPathSubmodelNotFoundRollsBack(t *testing.T) {
 	var elem types.ISubmodelElement
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT .*FROM "submodel" AS "sm".*JOIN "submodel_element" AS "parent"`).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT .*FROM "submodel"`).WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 
 	err = sut.AddSubmodelElementWithPath(contextWithABACDisabled(t), "missing", "container", elem)
 	require.Error(t, err)
 	require.True(t, common.IsErrNotFound(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAddSubmodelElementWithPathInTransactionUsesOnlyTransactionConnection(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+	db.SetMaxOpenConns(1)
+
+	sut := &SubmodelDatabase{db: db}
+	element := types.NewProperty(types.DataTypeDefXSDString)
+	idShort := "Created"
+	element.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM "submodel" AS "sm".*JOIN "submodel_element" AS "parent".*FOR UPDATE OF "parent"`).
+		WithArgs("sm", "container").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"submodel_id",
+			"parent_id",
+			"root_sme_id",
+			"model_type",
+			"child_depth",
+		}).AddRow(42, 7, 7, types.ModelTypeSubmodelElementCollection, 2))
+	mock.ExpectQuery(`SELECT COALESCE.*MAX.*FROM "submodel_element" AS "child"`).
+		WithArgs(7).
+		WillReturnRows(sqlmock.NewRows([]string{"next_position"}).AddRow(3))
+	mock.ExpectQuery(`SELECT .*nextval.*generate_series`).
+		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(101))
+	mock.ExpectExec(`(?s)INSERT INTO "submodel_element".*INSERT INTO "property_element"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+
+	ctx, cancel := context.WithTimeout(contextWithABACDisabled(t), time.Second)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	err = sut.addSubmodelElementWithPathInTransaction(ctx, tx, "sm", "container", element)
+	require.NoError(t, err)
+	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

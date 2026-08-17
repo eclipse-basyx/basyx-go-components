@@ -454,6 +454,15 @@ func ValidateSchemaVersionByDSN(dsn string, expectedVersion string) error {
 
 func StartTransaction(db *sql.DB) (*sql.Tx, func(*error), error) {
 	tx, err := db.Begin()
+	return startedTransaction(tx, err)
+}
+
+func StartTransactionContext(ctx context.Context, db *sql.DB) (*sql.Tx, func(*error), error) {
+	tx, err := db.BeginTx(ctx, nil)
+	return startedTransaction(tx, err)
+}
+
+func startedTransaction(tx *sql.Tx, err error) (*sql.Tx, func(*error), error) {
 	if err != nil {
 		return nil, nil, err
 	}

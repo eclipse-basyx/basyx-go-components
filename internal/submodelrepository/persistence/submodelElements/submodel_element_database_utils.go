@@ -27,6 +27,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strconv"
@@ -46,6 +47,7 @@ type BatchInsertContext struct {
 	RootSmeID     int    // Database ID of the root submodel element (0 for top-level elements, will be set to own ID)
 	IsFromList    bool   // Whether elements are being inserted into a SubmodelElementList
 	StartPosition int    // Starting position for elements (used when adding to existing containers)
+	StartDepth    int    // Depth of inserted root elements (0 for top-level elements)
 }
 
 const insertSubmodelElementsBatchSize = 1000
@@ -87,6 +89,7 @@ func normalizeBatchInsertContext(ctx *BatchInsertContext) *BatchInsertContext {
 		RootSmeID:     0,
 		IsFromList:    false,
 		StartPosition: 0,
+		StartDepth:    0,
 	}
 }
 
@@ -97,7 +100,7 @@ func flattenSubmodelElementsForInsert(db *sql.DB, elements []types.ISubmodelElem
 			element:       element,
 			parentIndex:   -1,
 			parentDBID:    ctx.ParentID,
-			depth:         0,
+			depth:         ctx.StartDepth,
 			position:      ctx.StartPosition + i,
 			parentPath:    ctx.ParentPath,
 			isFromList:    ctx.IsFromList,
@@ -186,12 +189,12 @@ func buildIDShortPath(parentPath string, isFromList bool, position int, idShort 
 	return parentPath + "." + idShort
 }
 
-func insertBaseNodesDepthWise(tx *sql.Tx, batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, submodelDatabaseID int64, nodes []*flattenedInsertNode) error {
+func insertBaseNodesDepthWise(requestCtx *context.Context, tx *sql.Tx, batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, submodelDatabaseID int64, nodes []*flattenedInsertNode) error {
 	if len(nodes) == 0 {
 		return nil
 	}
 
-	if err := assignReservedNodeIDs(tx, nodes); err != nil {
+	if err := assignReservedNodeIDs(requestCtx, tx, nodes); err != nil {
 		return err
 	}
 
@@ -236,8 +239,8 @@ func insertBaseNodesDepthWise(tx *sql.Tx, batch *common.PostgreSQLBatch, dialect
 	return nil
 }
 
-func assignReservedNodeIDs(tx *sql.Tx, nodes []*flattenedInsertNode) error {
-	reservedIDs, err := reserveSubmodelElementIDs(tx, len(nodes))
+func assignReservedNodeIDs(requestCtx *context.Context, tx *sql.Tx, nodes []*flattenedInsertNode) error {
+	reservedIDs, err := reserveSubmodelElementIDs(requestCtx, tx, len(nodes))
 	if err != nil {
 		return err
 	}
@@ -252,7 +255,7 @@ func assignReservedNodeIDs(tx *sql.Tx, nodes []*flattenedInsertNode) error {
 	return nil
 }
 
-func reserveSubmodelElementIDs(tx *sql.Tx, count int) ([]int, error) {
+func reserveSubmodelElementIDs(requestCtx *context.Context, tx *sql.Tx, count int) ([]int, error) {
 	if tx == nil {
 		return nil, common.NewInternalServerError("SMREPO-INSSME-RESERVEID-NILTX transaction must not be nil")
 	}
@@ -265,7 +268,12 @@ func reserveSubmodelElementIDs(tx *sql.Tx, count int) ([]int, error) {
 		return nil, common.NewInternalServerError("SMREPO-INSSME-RESERVEID-BUILDSQL " + err.Error())
 	}
 
-	rows, err := tx.Query(query, args...)
+	var rows *sql.Rows
+	if requestCtx == nil {
+		rows, err = tx.Query(query, args...)
+	} else {
+		rows, err = tx.QueryContext(*requestCtx, query, args...)
+	}
 	if err != nil {
 		return nil, common.NewInternalServerError("SMREPO-INSSME-RESERVEID-EXECQUERY " + err.Error())
 	}

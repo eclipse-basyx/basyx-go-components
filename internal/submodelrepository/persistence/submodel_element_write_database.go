@@ -249,29 +249,13 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 	return tx.Commit()
 }
 
-func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodelDatabaseID int, parentPath string, submodelElement types.ISubmodelElement) error {
-	baseCrudHandler, err := submodelelements.NewPostgreSQLSMECrudHandler(s.db)
+func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
+	parent, err := s.lockSubmodelElementParentForInsert(ctx, tx, submodelID, parentPath)
 	if err != nil {
 		return err
 	}
-
-	parentElementID, err := baseCrudHandler.GetDatabaseID(submodelDatabaseID, parentPath)
-	if err != nil {
-		return err
-	}
-
-	rootSmeID, err := baseCrudHandler.GetRootSmeIDByElementID(parentElementID)
-	if err != nil {
-		return err
-	}
-
-	parentElement, err := submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.db, submodelID, parentPath, true, "")
-	if err != nil {
-		return err
-	}
-
 	isFromList := false
-	switch parentElement.ModelType() {
+	switch parent.modelType {
 	case types.ModelTypeSubmodelElementCollection, types.ModelTypeEntity, types.ModelTypeAnnotatedRelationshipElement:
 		isFromList = false
 	case types.ModelTypeSubmodelElementList:
@@ -280,17 +264,12 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 		return common.NewErrBadRequest("SMREPO-ADDSMEBYPATH-BADPARENT Parent element does not support child elements")
 	}
 
-	nextPosition, err := baseCrudHandler.GetNextPosition(parentElementID)
-	if err != nil {
-		return err
-	}
-
 	if err = s.ensureVisibleSubmodelElementCreateDoesNotExist(
 		ctx,
 		tx,
 		submodelID,
-		submodelDatabaseID,
-		&parentElementID,
+		parent.submodelDatabaseID,
+		&parent.elementID,
 		submodelElement,
 		"SMREPO-ADDSMEBYPATH-COLLISION Duplicate submodel element idShort",
 		"SMREPO-ADDSMEBYPATH-CHKDUP-ABACDENIED existing submodel element is not accessible under ABAC constraints",
@@ -298,18 +277,21 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 		return err
 	}
 
-	_, err = submodelelements.InsertSubmodelElements(
+	_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseIDContext(
+		ctx,
 		s.db,
-		submodelID,
+		parent.submodelDatabaseID,
 		[]types.ISubmodelElement{submodelElement},
 		tx,
 		&submodelelements.BatchInsertContext{
-			ParentID:      parentElementID,
+			ParentID:      parent.elementID,
 			ParentPath:    parentPath,
-			RootSmeID:     rootSmeID,
+			RootSmeID:     parent.rootSmeID,
 			IsFromList:    isFromList,
-			StartPosition: nextPosition,
+			StartPosition: parent.nextPosition,
+			StartDepth:    parent.childDepth,
 		},
+		nil,
 	)
 	if err != nil {
 		return err
@@ -318,28 +300,84 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 	return nil
 }
 
+type submodelElementInsertParent struct {
+	submodelDatabaseID int
+	elementID          int
+	rootSmeID          int
+	modelType          types.ModelType
+	nextPosition       int
+	childDepth         int
+}
+
+func (s *SubmodelDatabase) lockSubmodelElementParentForInsert(ctx context.Context, tx *sql.Tx, submodelID string, parentPath string) (submodelElementInsertParent, error) {
+	query, args, err := submodelqueries.BuildSubmodelElementParentForInsertSQL(submodelID, parentPath)
+	if err != nil {
+		return submodelElementInsertParent{}, common.NewInternalServerError("SMREPO-ADDSMEBYPATH-BUILDPARENTQ " + err.Error())
+	}
+
+	var parent submodelElementInsertParent
+	err = tx.QueryRowContext(ctx, query, args...).Scan(
+		&parent.submodelDatabaseID,
+		&parent.elementID,
+		&parent.rootSmeID,
+		&parent.modelType,
+		&parent.childDepth,
+	)
+	if err == nil {
+		parent.nextPosition, err = nextSubmodelElementPosition(ctx, tx, parent.elementID)
+		return parent, err
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return submodelElementInsertParent{}, common.NewInternalServerError("SMREPO-ADDSMEBYPATH-EXECPARENTQ " + err.Error())
+	}
+	return submodelElementInsertParent{}, submodelElementParentNotFoundError(ctx, tx, submodelID, parentPath)
+}
+
+func nextSubmodelElementPosition(ctx context.Context, tx *sql.Tx, parentElementID int) (int, error) {
+	query, args, err := submodelqueries.BuildSubmodelElementNextPositionSQL(parentElementID)
+	if err != nil {
+		return 0, common.NewInternalServerError("SMREPO-ADDSMEBYPATH-BUILDNEXTPOSQ " + err.Error())
+	}
+
+	var nextPosition int
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&nextPosition); err != nil {
+		return 0, common.NewInternalServerError("SMREPO-ADDSMEBYPATH-EXECNEXTPOSQ " + err.Error())
+	}
+	return nextPosition, nil
+}
+
+func submodelElementParentNotFoundError(ctx context.Context, tx *sql.Tx, submodelID string, parentPath string) error {
+	query, args, err := submodelqueries.SelectVisibleSubmodelDataset(submodelID).Prepared(true).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-ADDSMEBYPATH-BUILDSMEXISTSQ " + err.Error())
+	}
+
+	var submodelDatabaseID int
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&submodelDatabaseID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return common.NewErrNotFound("SMREPO-ADDSMEBYPATH-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+	}
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-ADDSMEBYPATH-EXECSMEXISTSQ " + err.Error())
+	}
+	return common.NewErrNotFound("SMREPO-ADDSMEBYPATH-PARENTNOTFOUND Submodel element with path '" + parentPath + "' not found")
+}
+
 // AddSubmodelElementWithPath adds a submodel element under an existing container path
 // while preserving ABAC visibility checks from ctx.
 func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
-	tx, cleanup, err := common.StartTransaction(s.db)
+	tx, cleanup, err := common.StartTransactionContext(ctx, s.db)
 	if err != nil {
-		return err
+		return common.NewInternalServerError("SMREPO-ADDSMEBYPATH-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
 
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("SMREPO-ADDSMEBYPATH-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
-		}
-		return err
-	}
 	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
 
-	err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, submodelDatabaseID, parentPath, submodelElement)
+	err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, parentPath, submodelElement)
 	if err != nil {
 		return err
 	}
@@ -418,7 +456,7 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 			return false, err
 		}
 	} else {
-		historyMutation, err = s.createSubmodelElementForPut(ctx, tx, submodelID, submodelDatabaseID, idShortPath, submodelElement)
+		historyMutation, err = s.createSubmodelElementForPut(ctx, tx, submodelID, idShortPath, submodelElement)
 		if err != nil {
 			return false, err
 		}
@@ -515,7 +553,6 @@ func (s *SubmodelDatabase) createSubmodelElementForPut(
 	ctx context.Context,
 	tx *sql.Tx,
 	submodelID string,
-	submodelDatabaseID int,
 	idShortPath string,
 	submodelElement types.ISubmodelElement,
 ) (submodelElementRootMutation, error) {
@@ -535,7 +572,7 @@ func (s *SubmodelDatabase) createSubmodelElementForPut(
 		return submodelElementRootMutation{currentPath: idShortPath}, nil
 	}
 
-	if err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, submodelDatabaseID, parentPath, submodelElement); err != nil {
+	if err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, parentPath, submodelElement); err != nil {
 		return submodelElementRootMutation{}, err
 	}
 	return submodelElementRootMutation{
@@ -796,6 +833,9 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateDoesNotExist(
 	conflictMessage string,
 	deniedMessage string,
 ) error {
+	if createprecheck.CanSkipExistenceCheck(ctx) {
+		return nil
+	}
 	idShortPtr := submodelElement.IDShort()
 	if idShortPtr == nil || *idShortPtr == "" {
 		return nil
@@ -804,8 +844,8 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateDoesNotExist(
 	duplicatePath := ""
 	return createprecheck.EnsureVisibleCreate(
 		ctx,
-		func(context.Context) (bool, error) {
-			path, exists, err := siblingIDShortCollisionPathInTx(tx, submodelDatabaseID, parentElementID, *idShortPtr)
+		func(readCtx context.Context) (bool, error) {
+			path, exists, err := siblingIDShortCollisionPathInTx(readCtx, tx, submodelDatabaseID, parentElementID, *idShortPtr)
 			if err != nil {
 				return false, err
 			}
@@ -833,14 +873,14 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateDoesNotExist(
 	)
 }
 
-func siblingIDShortCollisionPathInTx(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, idShort string) (string, bool, error) {
+func siblingIDShortCollisionPathInTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, parentElementID *int, idShort string) (string, bool, error) {
 	query, args, err := submodelqueries.BuildSiblingIDShortCollisionPathSQL(submodelDatabaseID, parentElementID, idShort)
 	if err != nil {
 		return "", false, common.NewInternalServerError("SMREPO-CHKSMEDUP-BUILDPATHQ " + err.Error())
 	}
 
 	var idShortPath string
-	err = tx.QueryRow(query, args...).Scan(&idShortPath)
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&idShortPath)
 	if err == nil {
 		return idShortPath, true, nil
 	}
