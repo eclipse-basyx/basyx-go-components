@@ -45,7 +45,7 @@ import (
 )
 
 func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (string, error) {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForNoKeyUpdateContext(ctx, tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return "", common.NewErrNotFound("SMREPO-ADDSME-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
@@ -59,7 +59,7 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.C
 	}
 
 	var maxPosition sql.NullInt64
-	err = tx.QueryRow(selectQuery, selectArgs...).Scan(&maxPosition)
+	err = tx.QueryRowContext(ctx, selectQuery, selectArgs...).Scan(&maxPosition)
 	if err != nil {
 		return "", err
 	}
@@ -82,14 +82,16 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.C
 		return "", err
 	}
 
-	_, err = submodelelements.InsertSubmodelElements(
+	_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseIDContext(
+		ctx,
 		s.db,
-		submodelID,
+		submodelDatabaseID,
 		[]types.ISubmodelElement{submodelElement},
 		tx,
 		&submodelelements.BatchInsertContext{
 			StartPosition: startPosition,
 		},
+		nil,
 	)
 	if err != nil {
 		return "", err
@@ -210,7 +212,7 @@ func (s *SubmodelDatabase) GetSubmodelElementReferences(ctx context.Context, sub
 
 // AddSubmodelElement adds a top-level submodel element and performs an ABAC re-check before commit when ABAC is enabled.
 func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID string, submodelElement types.ISubmodelElement) (err error) {
-	tx, cleanup, err := common.StartTransaction(s.db)
+	tx, cleanup, err := common.StartTransactionContext(ctx, s.db)
 	if err != nil {
 		return err
 	}
@@ -833,9 +835,6 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateDoesNotExist(
 	conflictMessage string,
 	deniedMessage string,
 ) error {
-	if createprecheck.CanSkipExistenceCheck(ctx) {
-		return nil
-	}
 	idShortPtr := submodelElement.IDShort()
 	if idShortPtr == nil || *idShortPtr == "" {
 		return nil
