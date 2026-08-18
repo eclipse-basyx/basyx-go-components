@@ -44,13 +44,16 @@ import (
 const composeFilePath = "./docker_compose/docker_compose.yml"
 
 var (
-	baseURL        = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
-	replicaBURL    = testenv.LocalURLFromEnv("BASYX_IT_API_B_PORT", 6005)
-	contextBaseURL = testenv.LocalURLFromEnv("BASYX_IT_CONTEXT_API_PORT", 6006) + "/external/aasx"
-	limitedBaseURL = testenv.LocalURLFromEnv("BASYX_IT_LIMITED_API_PORT", 6009)
-	composeProject string
-	composeEnv     []string
-	databaseDSN    = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
+	baseURL             = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+	replicaBURL         = testenv.LocalURLFromEnv("BASYX_IT_API_B_PORT", 6005)
+	contextBaseURL      = testenv.LocalURLFromEnv("BASYX_IT_CONTEXT_API_PORT", 6006) + "/external/aasx"
+	limitedBaseURL      = testenv.LocalURLFromEnv("BASYX_IT_LIMITED_API_PORT", 6009)
+	secureBaseURL       = testenv.LocalhostURLFromEnv("BASYX_IT_SECURITY_API_PORT", 6010)
+	secureReplicaBURL   = testenv.LocalhostURLFromEnv("BASYX_IT_SECURITY_API_B_PORT", 6011)
+	securityKeycloakURL = testenv.LocalhostURLFromEnv("BASYX_IT_KEYCLOAK_PORT", 8080) + "/realms/basyx/protocol/openid-connect/token"
+	composeProject      string
+	composeEnv          []string
+	databaseDSN         = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
 )
 
 func TestMain(m *testing.M) {
@@ -63,15 +66,24 @@ func TestMain(m *testing.M) {
 		{Name: "api-b", EnvVar: "BASYX_IT_API_B_PORT"},
 		{Name: "context-api", EnvVar: "BASYX_IT_CONTEXT_API_PORT"},
 		{Name: "limited-api", EnvVar: "BASYX_IT_LIMITED_API_PORT"},
+		{Name: "security-api", EnvVar: "BASYX_IT_SECURITY_API_PORT"},
+		{Name: "security-api-b", EnvVar: "BASYX_IT_SECURITY_API_B_PORT"},
+		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 	})
 	baseURL = runtime.LocalURL("api")
 	replicaBURL = runtime.LocalURL("api-b")
 	contextBaseURL = runtime.LocalURL("context-api") + "/external/aasx"
 	limitedBaseURL = runtime.LocalURL("limited-api")
+	secureBaseURL = runtime.LocalhostURL("security-api")
+	secureReplicaBURL = runtime.LocalhostURL("security-api-b")
+	securityKeycloakURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
 	databaseDSN = runtime.PostgresKeywordDSN("db", "basyxTestDB")
 	composeProject = runtime.ProjectName
-	composeEnv = runtime.Env()
+	securityEnv := testenv.PrepareSecurityEnvOrExit("security_env", map[string]string{
+		"http://localhost:8080": runtime.LocalhostURL("keycloak"),
+	})
+	composeEnv = runtime.EnvWith("BASYX_IT_SECURITY_ENV=" + securityEnv)
 
 	code := testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     composeFilePath,
@@ -85,6 +97,8 @@ func TestMain(m *testing.M) {
 				replicaBURL + "/health",
 				contextBaseURL + "/health",
 				limitedBaseURL + "/health",
+				secureBaseURL + "/health",
+				secureReplicaBURL + "/health",
 			} {
 				if err := testenv.WaitHealthyURL(healthURL, 2*time.Minute); err != nil {
 					return err
@@ -93,6 +107,7 @@ func TestMain(m *testing.M) {
 			return nil
 		},
 	})
+	_ = os.RemoveAll(securityEnv)
 	os.Exit(code)
 }
 

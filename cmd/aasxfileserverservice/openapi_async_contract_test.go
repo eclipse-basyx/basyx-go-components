@@ -26,12 +26,26 @@
 package main
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v3"
 )
+
+const generatedAASXAPIDirectory = "../../pkg/aasxfileserverapi/go"
+
+type generatedContractEvidence struct {
+	identifiers     map[string]struct{}
+	routes          map[string]struct{}
+	asyncUploadBody string
+}
 
 func TestOpenAPIContainsAASXFileServerSSP002Contract(t *testing.T) {
 	specificationBytes, err := os.ReadFile("openapi.yaml")
@@ -72,6 +86,90 @@ func TestOpenAPIContainsAASXFileServerSSP002Contract(t *testing.T) {
 	descriptionResponse := mapValue(t, mapValue(t, description, "responses"), "200")
 	descriptionExample := mapValue(t, mapValue(t, mapValue(t, descriptionResponse, "content"), "application/json"), "example")
 	require.ElementsMatch(t, profileIdentifiers, stringSlice(t, descriptionExample["profiles"]))
+}
+
+func TestGeneratedAASXAPIContainsSSP002Contract(t *testing.T) {
+	evidence := readGeneratedContractEvidence(t)
+	for _, identifier := range []string{
+		"PostAsyncAASXPackage",
+		"GetAasxAsyncStatus",
+		"GetAasxAsyncResult",
+		"OperationHandle",
+		"BaseOperationResult",
+	} {
+		_, found := evidence.identifiers[identifier]
+		require.Truef(t, found, "generated AASX API is missing %s", identifier)
+	}
+	for _, route := range []string{
+		"/packages-async",
+		"/packages-async/status/{handleId}",
+		"/packages-async/result/{handleId}",
+	} {
+		_, found := evidence.routes[route]
+		require.Truef(t, found, "generated AASX API is missing route %s", route)
+	}
+	require.NotEmpty(t, evidence.asyncUploadBody, "generated AASX API is missing the PostAsyncAASXPackage controller")
+	require.True(
+		t,
+		strings.Contains(evidence.asyncUploadBody, "readPackageUpload") || strings.Contains(evidence.asyncUploadBody, "ReadMultipartUpload"),
+		"PostAsyncAASXPackage must use the shared streaming multipart stager",
+	)
+	require.Contains(t, evidence.asyncUploadBody, "upload.File", "PostAsyncAASXPackage must hand only the staged upload to its service")
+	for _, forbidden := range []string{"io.ReadAll", "ParseMultipartForm", "ReadForm("} {
+		require.NotContainsf(t, evidence.asyncUploadBody, forbidden, "PostAsyncAASXPackage must not buffer multipart input with %s", forbidden)
+	}
+}
+
+func readGeneratedContractEvidence(t *testing.T) generatedContractEvidence {
+	t.Helper()
+	evidence := generatedContractEvidence{
+		identifiers: make(map[string]struct{}),
+		routes:      make(map[string]struct{}),
+	}
+	entries, err := os.ReadDir(generatedAASXAPIDirectory)
+	require.NoError(t, err)
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".go" || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		collectGeneratedContractEvidence(t, filepath.Join(generatedAASXAPIDirectory, entry.Name()), &evidence)
+	}
+	return evidence
+}
+
+func collectGeneratedContractEvidence(t *testing.T, path string, evidence *generatedContractEvidence) {
+	t.Helper()
+	//nolint:gosec // Paths come only from the fixed generated API directory enumerated by this test.
+	source, err := os.ReadFile(path)
+	require.NoError(t, err)
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, path, source, parser.SkipObjectResolution)
+	require.NoError(t, err)
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch value := node.(type) {
+		case *ast.Ident:
+			evidence.identifiers[value.Name] = struct{}{}
+		case *ast.BasicLit:
+			collectGeneratedRoute(value, evidence.routes)
+		case *ast.FuncDecl:
+			if value.Name.Name == "PostAsyncAASXPackage" && value.Body != nil {
+				start := fileSet.Position(value.Body.Pos()).Offset
+				end := fileSet.Position(value.Body.End()).Offset
+				evidence.asyncUploadBody = string(source[start:end])
+			}
+		}
+		return true
+	})
+}
+
+func collectGeneratedRoute(literal *ast.BasicLit, routes map[string]struct{}) {
+	if literal.Kind != token.STRING {
+		return
+	}
+	value, err := strconv.Unquote(literal.Value)
+	if err == nil && strings.HasPrefix(value, "/packages-async") {
+		routes[value] = struct{}{}
+	}
 }
 
 func responseSchemaRef(t *testing.T, response map[string]any) string {

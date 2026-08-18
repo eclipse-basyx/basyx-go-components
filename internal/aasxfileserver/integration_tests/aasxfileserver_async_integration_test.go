@@ -37,6 +37,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,10 +49,11 @@ import (
 )
 
 const (
-	ssp001Profile = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001"
-	ssp002Profile = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002"
-	validAASXPath = "../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx"
-	asyncDeadline = 45 * time.Second
+	ssp001Profile  = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001"
+	ssp002Profile  = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002"
+	validAASXPath  = "../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx"
+	asyncDeadline  = 45 * time.Second
+	acceptDeadline = 5 * time.Second
 )
 
 type operationHandle struct {
@@ -70,12 +72,25 @@ type asyncResponse struct {
 	body   []byte
 }
 
+type asyncRequestResult struct {
+	response asyncResponse
+	err      error
+}
+
 func TestAsyncUploadCompletesAfterRequestCleanupAndAcrossReplicas(t *testing.T) {
 	packagesBefore, status := listPackagesFrom(t, baseURL)
 	require.Equal(t, http.StatusOK, status)
+	db := openIntegrationDatabase(t)
+	largeObjectsBefore := countLargeObjects(t, db)
+	releasePersistence := blockPackagePersistence(t, db)
 
-	accepted := postAsyncFile(t, baseURL, validAASXPath)
+	requestResult := startAsyncFileRequest(t, baseURL, validAASXPath, nil, "")
+	accepted := awaitAcceptedRequest(t, requestResult, releasePersistence)
 	handle := assertAcceptedOperation(t, accepted, baseURL)
+	assertRunningStatus(t, replicaBURL, handle, "")
+	require.Equal(t, largeObjectsBefore+1, countLargeObjects(t, db), "accepted upload was not durably staged before returning 202")
+	releasePersistence()
+
 	result := awaitAsyncResult(t, replicaBURL, handle)
 	require.Equal(t, "Completed", result.ExecutionState)
 	require.True(t, result.Success)
@@ -84,8 +99,7 @@ func TestAsyncUploadCompletesAfterRequestCleanupAndAcrossReplicas(t *testing.T) 
 	require.Equal(t, http.StatusOK, status)
 	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
 	t.Cleanup(func() {
-		response := doAsyncRequest(t, http.MethodDelete, replicaBURL+"/packages/"+url.PathEscape(created.PackageId), nil, "")
-		require.Equal(t, http.StatusNoContent, response.status)
+		deletePackage(t, replicaBURL, created.PackageId, "")
 	})
 
 	download := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages/"+url.PathEscape(created.PackageId), nil, "")
@@ -94,6 +108,58 @@ func TestAsyncUploadCompletesAfterRequestCleanupAndAcrossReplicas(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, expected, download.body)
 	require.Equal(t, filepath.Base(validAASXPath), created.FileName)
+}
+
+func TestAsyncUploadPreservesAASIDsAndSupportsFiltering(t *testing.T) {
+	packagesBefore, status := listPackagesFrom(t, baseURL)
+	require.Equal(t, http.StatusOK, status)
+
+	aasIDOne := "urn:example:aas:async-one"
+	aasIDTwo := "https://example.com/aas/async-two"
+	accepted := postAsyncFileWithAASIDs(t, baseURL, validAASXPath, []string{
+		" " + aasIDOne + ", " + aasIDTwo + " ",
+		" , " + aasIDOne + ", , ",
+	})
+	handle := assertAcceptedOperation(t, accepted, baseURL)
+	result := awaitAsyncResult(t, replicaBURL, handle)
+	require.Equal(t, "Completed", result.ExecutionState)
+	require.True(t, result.Success)
+
+	packagesAfter, status := listPackagesFrom(t, replicaBURL)
+	require.Equal(t, http.StatusOK, status)
+	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
+	t.Cleanup(func() { deletePackage(t, replicaBURL, created.PackageId, "") })
+	require.Equal(t, []string{common.EncodeString(aasIDOne), common.EncodeString(aasIDTwo)}, created.AasIds)
+
+	for _, aasID := range []string{aasIDOne, aasIDTwo} {
+		filtered := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages?aasId="+url.QueryEscape(common.EncodeString(aasID)), nil, "")
+		require.Equal(t, http.StatusOK, filtered.status)
+		var result openapi.GetPackageDescriptionsResult
+		require.NoError(t, json.Unmarshal(filtered.body, &result))
+		require.Contains(t, collectPackageIDs(result.Result), created.PackageId)
+	}
+}
+
+func TestAsyncHandleRemainsOwnerScopedAcrossReplicas(t *testing.T) {
+	ownerAToken := accessToken(t, "usera")
+	ownerBToken := accessToken(t, "userb")
+	packagesBefore, status := listPackagesFrom(t, baseURL)
+	require.Equal(t, http.StatusOK, status)
+
+	accepted := postAsyncFileWithAuthorization(t, secureBaseURL, validAASXPath, ownerAToken)
+	handle := assertAcceptedOperation(t, accepted, secureBaseURL)
+	for _, endpoint := range []string{"status", "result"} {
+		response := doAuthorizedAsyncRequest(t, http.MethodGet, secureReplicaBURL+"/packages-async/"+endpoint+"/"+url.PathEscape(handle), nil, "", ownerBToken)
+		require.Equalf(t, http.StatusNotFound, response.status, "owner B %s response: %s", endpoint, response.body)
+	}
+
+	result := awaitAsyncResultWithAuthorization(t, secureReplicaBURL, handle, ownerAToken)
+	require.Equal(t, "Completed", result.ExecutionState)
+	require.True(t, result.Success)
+	packagesAfter, status := listPackagesFrom(t, replicaBURL)
+	require.Equal(t, http.StatusOK, status)
+	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
+	t.Cleanup(func() { deletePackage(t, replicaBURL, created.PackageId, "") })
 }
 
 func TestAsyncStatusAndResultContracts(t *testing.T) {
@@ -105,6 +171,8 @@ func TestAsyncStatusAndResultContracts(t *testing.T) {
 	})
 
 	t.Run("terminal status redirects without client auto follow", func(t *testing.T) {
+		packagesBefore, statusCode := listPackagesFrom(t, baseURL)
+		require.Equal(t, http.StatusOK, statusCode)
 		accepted := postAsyncFile(t, baseURL, validAASXPath)
 		handle := assertAcceptedOperation(t, accepted, baseURL)
 		statusResponse := awaitTerminalStatus(t, replicaBURL, handle)
@@ -115,6 +183,12 @@ func TestAsyncStatusAndResultContracts(t *testing.T) {
 		require.Equal(t, "application/json", mediaType(t, resultResponse.header.Get("Content-Type")))
 		result := decodeBaseOperationResult(t, resultResponse.body)
 		require.Contains(t, []string{"Completed", "Failed", "Canceled", "Timeout"}, result.ExecutionState)
+		if result.ExecutionState == "Completed" {
+			packagesAfter, packageStatus := listPackagesFrom(t, replicaBURL)
+			require.Equal(t, http.StatusOK, packageStatus)
+			created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
+			t.Cleanup(func() { deletePackage(t, replicaBURL, created.PackageId, "") })
+		}
 	})
 }
 
@@ -199,6 +273,8 @@ func TestAcceptedAsyncUploadReportsBackgroundPackageFailureAndCleansStaging(t *t
 }
 
 func TestAsyncLocationIncludesConfiguredContextPath(t *testing.T) {
+	packagesBefore, status := listPackagesFrom(t, baseURL)
+	require.Equal(t, http.StatusOK, status)
 	accepted := postAsyncFile(t, contextBaseURL, validAASXPath)
 	handle := assertAcceptedOperation(t, accepted, contextBaseURL)
 	location := accepted.header.Get("Location")
@@ -206,12 +282,24 @@ func TestAsyncLocationIncludesConfiguredContextPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "/external/aasx/packages-async/status/"+url.PathEscape(handle), parsed.Path)
 	require.NotContains(t, location, "aasx_fileserver_context_it")
+	result := awaitAsyncResult(t, contextBaseURL, handle)
+	require.Equal(t, "Completed", result.ExecutionState)
+	packagesAfter, status := listPackagesFrom(t, contextBaseURL)
+	require.Equal(t, http.StatusOK, status)
+	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
+	t.Cleanup(func() { deletePackage(t, contextBaseURL, created.PackageId, "") })
 }
 
 func TestAsyncTerminalRetentionStartsAtCompletionAndExpiresThroughCleanup(t *testing.T) {
+	packagesBefore, status := listPackagesFrom(t, baseURL)
+	require.Equal(t, http.StatusOK, status)
 	accepted := postAsyncFile(t, baseURL, validAASXPath)
 	handle := assertAcceptedOperation(t, accepted, baseURL)
 	_ = awaitAsyncResult(t, replicaBURL, handle)
+	packagesAfter, status := listPackagesFrom(t, replicaBURL)
+	require.Equal(t, http.StatusOK, status)
+	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
+	t.Cleanup(func() { deletePackage(t, replicaBURL, created.PackageId, "") })
 	retained := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+url.PathEscape(handle), nil, "")
 	require.Equal(t, http.StatusOK, retained.status)
 	require.Equal(t, "Completed", decodeBaseOperationResult(t, retained.body).ExecutionState)
@@ -238,17 +326,17 @@ func TestAsyncTerminalRetentionStartsAtCompletionAndExpiresThroughCleanup(t *tes
 }
 
 func TestRunningAsyncHandleDoesNotExpireAndResultIsNotAvailable(t *testing.T) {
-	accepted := postAsyncFile(t, baseURL, validAASXPath)
-	handle := assertAcceptedOperation(t, accepted, baseURL)
-	_ = awaitAsyncResult(t, replicaBURL, handle)
-
+	packagesBefore, status := listPackagesFrom(t, baseURL)
+	require.Equal(t, http.StatusOK, status)
 	db := openIntegrationDatabase(t)
-	query, args, err := goqu.Dialect("postgres").Update("async_job").Set(goqu.Record{
-		"execution_state":  "Running",
-		"terminal_at":      nil,
-		"expires_at":       time.Now().UTC().Add(-time.Second),
-		"lease_expires_at": time.Now().UTC().Add(time.Minute),
-	}).Where(goqu.C("handle_id").Eq(handle)).ToSQL()
+	releasePersistence := blockPackagePersistence(t, db)
+	requestResult := startAsyncFileRequest(t, baseURL, validAASXPath, nil, "")
+	accepted := awaitAcceptedRequest(t, requestResult, releasePersistence)
+	handle := assertAcceptedOperation(t, accepted, baseURL)
+
+	query, args, err := goqu.Dialect("postgres").Update("async_job").
+		Set(goqu.Record{"expires_at": time.Now().UTC().Add(-time.Second)}).
+		Where(goqu.C("handle_id").Eq(handle)).ToSQL()
 	require.NoError(t, err)
 	_, err = db.ExecContext(t.Context(), query, args...)
 	require.NoError(t, err)
@@ -261,6 +349,14 @@ func TestRunningAsyncHandleDoesNotExpireAndResultIsNotAvailable(t *testing.T) {
 
 	resultResponse := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+url.PathEscape(handle), nil, "")
 	require.Equal(t, http.StatusBadRequest, resultResponse.status)
+
+	releasePersistence()
+	result := awaitAsyncResult(t, replicaBURL, handle)
+	require.Equal(t, "Completed", result.ExecutionState)
+	packagesAfter, status := listPackagesFrom(t, replicaBURL)
+	require.Equal(t, http.StatusOK, status)
+	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
+	t.Cleanup(func() { deletePackage(t, replicaBURL, created.PackageId, "") })
 }
 
 func TestSuccessfulAsyncUploadRetainsOneReferencedLargeObjectUntilPackageDeletion(t *testing.T) {
@@ -290,17 +386,29 @@ func TestInterruptedAsyncWorkerRecoversAsFailureAcrossReplicas(t *testing.T) {
 	}
 
 	db := openIntegrationDatabase(t)
-	accepted := postAsyncFile(t, baseURL, validAASXPath)
+	largeObjectsBefore := countLargeObjects(t, db)
+	packagesBefore, status := listPackagesFrom(t, baseURL)
+	require.Equal(t, http.StatusOK, status)
+	releasePersistence := blockPackagePersistence(t, db)
+	requestResult := startAsyncFileRequest(t, baseURL, validAASXPath, nil, "")
+	accepted := awaitAcceptedRequest(t, requestResult, releasePersistence)
 	handle := assertAcceptedOperation(t, accepted, baseURL)
+	assertRunningStatus(t, replicaBURL, handle, "")
+	require.Equal(t, largeObjectsBefore+1, countLargeObjects(t, db), "running upload was not durably staged")
 
 	stopComposeService(t, "aasx_fileserver_it")
 	t.Cleanup(func() { startComposeService(t, "aasx_fileserver_it", baseURL+"/health") })
-	setHandleToAbandonedRunningState(t, db, handle)
+	releasePersistence()
+	expireHandleLease(t, db, handle)
 
 	result := awaitAsyncResult(t, replicaBURL, handle)
 	require.Equal(t, "Failed", result.ExecutionState)
 	require.False(t, result.Success)
 	require.NotEmpty(t, result.Messages)
+	packagesAfter, status := listPackagesFrom(t, replicaBURL)
+	require.Equal(t, http.StatusOK, status)
+	require.ElementsMatch(t, collectPackageIDs(packagesBefore.Result), collectPackageIDs(packagesAfter.Result))
+	require.Eventually(t, func() bool { return countLargeObjects(t, db) == largeObjectsBefore }, 5*time.Second, 50*time.Millisecond)
 }
 
 func TestDescriptionAdvertisesSynchronousAndAsynchronousProfiles(t *testing.T) {
@@ -332,20 +440,28 @@ func assertAcceptedOperation(t *testing.T, response asyncResponse, requestBaseUR
 }
 
 func awaitAsyncResult(t *testing.T, pollingBaseURL string, handle string) baseOperationResult {
+	return awaitAsyncResultWithAuthorization(t, pollingBaseURL, handle, "")
+}
+
+func awaitAsyncResultWithAuthorization(t *testing.T, pollingBaseURL string, handle string, token string) baseOperationResult {
 	t.Helper()
-	terminal := awaitTerminalStatus(t, pollingBaseURL, handle)
+	terminal := awaitTerminalStatusWithAuthorization(t, pollingBaseURL, handle, token)
 	resultURL := resolveLocation(t, pollingBaseURL, terminal.header.Get("Location"))
-	resultResponse := doAsyncRequest(t, http.MethodGet, resultURL, nil, "")
+	resultResponse := doAuthorizedAsyncRequest(t, http.MethodGet, resultURL, nil, "", token)
 	require.Equalf(t, http.StatusOK, resultResponse.status, "result response: %s", resultResponse.body)
 	require.Equal(t, "application/json", mediaType(t, resultResponse.header.Get("Content-Type")))
 	return decodeBaseOperationResult(t, resultResponse.body)
 }
 
 func awaitTerminalStatus(t *testing.T, pollingBaseURL string, handle string) asyncResponse {
+	return awaitTerminalStatusWithAuthorization(t, pollingBaseURL, handle, "")
+}
+
+func awaitTerminalStatusWithAuthorization(t *testing.T, pollingBaseURL string, handle string, token string) asyncResponse {
 	t.Helper()
 	deadline := time.Now().Add(asyncDeadline)
 	for time.Now().Before(deadline) {
-		response := doAsyncRequest(t, http.MethodGet, pollingBaseURL+"/packages-async/status/"+url.PathEscape(handle), nil, "")
+		response := doAuthorizedAsyncRequest(t, http.MethodGet, pollingBaseURL+"/packages-async/status/"+url.PathEscape(handle), nil, "", token)
 		switch response.status {
 		case http.StatusOK:
 			running := decodeBaseOperationResult(t, response.body)
@@ -364,15 +480,31 @@ func awaitTerminalStatus(t *testing.T, pollingBaseURL string, handle string) asy
 }
 
 func postAsyncFile(t *testing.T, serviceURL string, path string) asyncResponse {
+	return postAsyncFileWithOptions(t, serviceURL, path, nil, "")
+}
+
+func postAsyncFileWithAASIDs(t *testing.T, serviceURL string, path string, aasIDFields []string) asyncResponse {
+	return postAsyncFileWithOptions(t, serviceURL, path, aasIDFields, "")
+}
+
+func postAsyncFileWithAuthorization(t *testing.T, serviceURL string, path string, token string) asyncResponse {
+	return postAsyncFileWithOptions(t, serviceURL, path, nil, token)
+}
+
+func postAsyncFileWithOptions(t *testing.T, serviceURL string, path string, aasIDFields []string, token string) asyncResponse {
 	t.Helper()
 	file, err := os.Open(filepath.Clean(path))
 	require.NoError(t, err)
-	response := postAsyncReader(t, serviceURL, filepath.Base(path), file)
+	response := postAsyncReaderWithOptions(t, serviceURL, filepath.Base(path), file, aasIDFields, token)
 	require.NoError(t, file.Close())
 	return response
 }
 
 func postAsyncReader(t *testing.T, serviceURL string, filename string, content io.Reader) asyncResponse {
+	return postAsyncReaderWithOptions(t, serviceURL, filename, content, nil, "")
+}
+
+func postAsyncReaderWithOptions(t *testing.T, serviceURL string, filename string, content io.Reader, aasIDFields []string, token string) asyncResponse {
 	t.Helper()
 	reader, writer := io.Pipe()
 	multipartWriter := multipart.NewWriter(writer)
@@ -382,13 +514,18 @@ func postAsyncReader(t *testing.T, serviceURL string, filename string, content i
 		if err == nil {
 			_, err = io.Copy(part, content)
 		}
+		for _, aasIDField := range aasIDFields {
+			if err == nil {
+				err = multipartWriter.WriteField("aasIds", aasIDField)
+			}
+		}
 		if closeErr := multipartWriter.Close(); err == nil {
 			err = closeErr
 		}
 		_ = writer.CloseWithError(err)
 		writeDone <- err
 	}()
-	response := doAsyncRequest(t, http.MethodPost, serviceURL+"/packages-async", reader, multipartWriter.FormDataContentType())
+	response := doAuthorizedAsyncRequest(t, http.MethodPost, serviceURL+"/packages-async", reader, multipartWriter.FormDataContentType(), token)
 	writeErr := <-writeDone
 	if response.status == http.StatusAccepted {
 		require.NoError(t, writeErr)
@@ -396,20 +533,95 @@ func postAsyncReader(t *testing.T, serviceURL string, filename string, content i
 	return response
 }
 
-func doAsyncRequest(t *testing.T, method string, endpoint string, body io.Reader, contentType string) asyncResponse {
+func startAsyncFileRequest(t *testing.T, serviceURL string, path string, aasIDFields []string, token string) <-chan asyncRequestResult {
 	t.Helper()
-	response, err := executeAsyncRequest(method, endpoint, body, contentType)
+	payload, contentType := multipartFilePayload(t, path, aasIDFields)
+	result := make(chan asyncRequestResult, 1)
+	go func() {
+		response, err := executeAsyncAcceptanceRequest(
+			http.MethodPost,
+			serviceURL+"/packages-async",
+			bytes.NewReader(payload),
+			contentType,
+			token,
+		)
+		result <- asyncRequestResult{response: response, err: err}
+	}()
+	return result
+}
+
+func multipartFilePayload(t *testing.T, path string, aasIDFields []string) ([]byte, string) {
+	t.Helper()
+	file, err := os.Open(filepath.Clean(path))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, file.Close()) }()
+
+	var payload bytes.Buffer
+	writer := multipart.NewWriter(&payload)
+	part, err := writer.CreateFormFile("file", filepath.Base(path))
+	require.NoError(t, err)
+	_, err = io.Copy(part, file)
+	require.NoError(t, err)
+	for _, aasIDField := range aasIDFields {
+		require.NoError(t, writer.WriteField("aasIds", aasIDField))
+	}
+	require.NoError(t, writer.Close())
+	return payload.Bytes(), writer.FormDataContentType()
+}
+
+func awaitAcceptedRequest(t *testing.T, result <-chan asyncRequestResult, unblock func()) asyncResponse {
+	t.Helper()
+	timer := time.NewTimer(acceptDeadline)
+	defer timer.Stop()
+	select {
+	case requestResult := <-result:
+		require.NoError(t, requestResult.err)
+		return requestResult.response
+	case <-timer.C:
+		unblock()
+		select {
+		case delayedResult := <-result:
+			require.NoError(t, delayedResult.err)
+			t.Fatalf("POST /packages-async did not return before package processing was unblocked; delayed status: %d", delayedResult.response.status)
+		case <-time.After(acceptDeadline):
+			t.Fatal("POST /packages-async remained blocked after package processing was unblocked")
+		}
+	}
+	return asyncResponse{}
+}
+
+func doAsyncRequest(t *testing.T, method string, endpoint string, body io.Reader, contentType string) asyncResponse {
+	return doAuthorizedAsyncRequest(t, method, endpoint, body, contentType, "")
+}
+
+func doAuthorizedAsyncRequest(t *testing.T, method string, endpoint string, body io.Reader, contentType string, token string) asyncResponse {
+	t.Helper()
+	response, err := executeAsyncRequestWithAuthorization(method, endpoint, body, contentType, token)
 	require.NoError(t, err)
 	return response
 }
 
-func executeAsyncRequest(method string, endpoint string, body io.Reader, contentType string) (asyncResponse, error) {
+func executeAsyncRequestWithAuthorization(method string, endpoint string, body io.Reader, contentType string, token string) (asyncResponse, error) {
+	return executeAsyncHTTPRequest(method, endpoint, body, contentType, token, false)
+}
+
+func executeAsyncAcceptanceRequest(method string, endpoint string, body io.Reader, contentType string, token string) (asyncResponse, error) {
+	return executeAsyncHTTPRequest(method, endpoint, body, contentType, token, true)
+}
+
+func executeAsyncHTTPRequest(method string, endpoint string, body io.Reader, contentType string, token string, expectContinue bool) (asyncResponse, error) {
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
 		return asyncResponse{}, err
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	if expectContinue {
+		req.Header.Set("Expect", "100-continue")
 	}
 	client := &http.Client{
 		Timeout: asyncDeadline,
@@ -433,8 +645,35 @@ func listPackagesFrom(t *testing.T, serviceURL string) (openapi.GetPackageDescri
 	t.Helper()
 	response := doAsyncRequest(t, http.MethodGet, serviceURL+"/packages", nil, "")
 	var result openapi.GetPackageDescriptionsResult
+	if response.status != http.StatusOK {
+		return result, response.status
+	}
 	require.NoError(t, json.Unmarshal(response.body, &result))
 	return result, response.status
+}
+
+func deletePackage(t *testing.T, serviceURL string, packageID string, token string) {
+	t.Helper()
+	response := doAuthorizedAsyncRequest(t, http.MethodDelete, serviceURL+"/packages/"+url.PathEscape(packageID), nil, "", token)
+	require.Equalf(t, http.StatusNoContent, response.status, "delete response: %s", response.body)
+}
+
+func assertRunningStatus(t *testing.T, serviceURL string, handle string, token string) {
+	t.Helper()
+	response := doAuthorizedAsyncRequest(t, http.MethodGet, serviceURL+"/packages-async/status/"+url.PathEscape(handle), nil, "", token)
+	require.Equalf(t, http.StatusOK, response.status, "running status response: %s", response.body)
+	result := decodeBaseOperationResult(t, response.body)
+	require.Equal(t, "Running", result.ExecutionState)
+	require.True(t, result.Success)
+}
+
+func accessToken(t *testing.T, username string) string {
+	t.Helper()
+	provider := testenv.NewPasswordGrantTokenProvider(securityKeycloakURL, "basyx-ui", 10*time.Second)
+	token, err := provider.GetAccessToken(&testenv.TokenCredentials{User: username, Password: "pwd"})
+	require.NoError(t, err)
+	require.NotEmpty(t, token)
+	return token
 }
 
 func packageDifference(t *testing.T, before []openapi.PackageDescription, after []openapi.PackageDescription) openapi.PackageDescription {
@@ -508,24 +747,34 @@ func expireAsyncHandle(t *testing.T, db *sql.DB, handle string) {
 	require.NoError(t, err)
 }
 
-func setHandleToAbandonedRunningState(t *testing.T, db *sql.DB, handle string) {
+func expireHandleLease(t *testing.T, db *sql.DB, handle string) {
 	t.Helper()
-	query, args, err := goqu.Dialect("postgres").Update("async_job").Set(goqu.Record{
-		"execution_state":  "Running",
-		"worker_id":        "interrupted-worker",
-		"terminal_at":      nil,
-		"expires_at":       nil,
-		"lease_expires_at": time.Now().UTC().Add(-time.Second),
-		"result_payload":   nil,
-		"error_status":     nil,
-		"error_payload":    nil,
-	}).Where(goqu.C("handle_id").Eq(handle)).ToSQL()
+	query, args, err := goqu.Dialect("postgres").Update("async_job").
+		Set(goqu.Record{"lease_expires_at": time.Now().UTC().Add(-time.Second)}).
+		Where(goqu.C("handle_id").Eq(handle)).ToSQL()
 	require.NoError(t, err)
 	result, err := db.ExecContext(t.Context(), query, args...)
 	require.NoError(t, err)
 	rows, err := result.RowsAffected()
 	require.NoError(t, err)
 	require.EqualValues(t, 1, rows)
+}
+
+func blockPackagePersistence(t *testing.T, db *sql.DB) func() {
+	t.Helper()
+	tx, err := db.BeginTx(t.Context(), nil)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(t.Context(), "LOCK TABLE aasx_package IN ACCESS EXCLUSIVE MODE")
+	require.NoError(t, err)
+
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() {
+			_ = tx.Rollback()
+		})
+	}
+	t.Cleanup(release)
+	return release
 }
 
 func countLargeObjects(t *testing.T, db *sql.DB) int {
