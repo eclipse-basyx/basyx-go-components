@@ -26,9 +26,12 @@
 package main
 
 import (
+	"bytes"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -42,9 +45,16 @@ import (
 const generatedAASXAPIDirectory = "../../pkg/aasxfileserverapi/go"
 
 type generatedContractEvidence struct {
-	identifiers     map[string]struct{}
-	routes          map[string]struct{}
-	asyncUploadBody string
+	identifiers      map[string]struct{}
+	routes           map[string]struct{}
+	interfaceMethods map[string]map[string]string
+	structFields     map[string]map[string]generatedStructField
+	asyncUploadBody  string
+}
+
+type generatedStructField struct {
+	typeName string
+	tag      string
 }
 
 func TestOpenAPIContainsAASXFileServerSSP002Contract(t *testing.T) {
@@ -108,6 +118,32 @@ func TestGeneratedAASXAPIContainsSSP002Contract(t *testing.T) {
 		_, found := evidence.routes[route]
 		require.Truef(t, found, "generated AASX API is missing route %s", route)
 	}
+	require.Equal(t, map[string]string{
+		"PostAsyncAASXPackage": "func(http.ResponseWriter, *http.Request)",
+	}, evidence.interfaceMethods["AASXAsyncFileServerAPIAPIRouter"])
+	require.Equal(t, map[string]string{
+		"PostAsyncAASXPackage": "func(context.Context, StagedUpload, []string) (ImplResponse, error)",
+	}, evidence.interfaceMethods["AASXAsyncFileServerAPIAPIServicer"])
+	require.Equal(t, map[string]string{
+		"GetAasxAsyncStatus": "func(http.ResponseWriter, *http.Request)",
+	}, evidence.interfaceMethods["AASXAsyncFileServerStatusAPIAPIRouter"])
+	require.Equal(t, map[string]string{
+		"GetAasxAsyncStatus": "func(context.Context, string) (ImplResponse, error)",
+	}, evidence.interfaceMethods["AASXAsyncFileServerStatusAPIAPIServicer"])
+	require.Equal(t, map[string]string{
+		"GetAasxAsyncResult": "func(http.ResponseWriter, *http.Request)",
+	}, evidence.interfaceMethods["AASXAsyncFileServerResultAPIAPIRouter"])
+	require.Equal(t, map[string]string{
+		"GetAasxAsyncResult": "func(context.Context, string) (ImplResponse, error)",
+	}, evidence.interfaceMethods["AASXAsyncFileServerResultAPIAPIServicer"])
+	require.Equal(t, map[string]generatedStructField{
+		"HandleId": {typeName: "string", tag: `json:"handleId,omitempty"`},
+	}, evidence.structFields["OperationHandle"])
+	require.Equal(t, map[string]generatedStructField{
+		"Messages":       {typeName: "[]map[string]interface{}", tag: `json:"messages,omitempty"`},
+		"ExecutionState": {typeName: "ExecutionState", tag: `json:"executionState,omitempty"`},
+		"Success":        {typeName: "bool", tag: `json:"success,omitempty"`},
+	}, evidence.structFields["BaseOperationResult"])
 	require.NotEmpty(t, evidence.asyncUploadBody, "generated AASX API is missing the PostAsyncAASXPackage controller")
 	require.True(
 		t,
@@ -120,11 +156,75 @@ func TestGeneratedAASXAPIContainsSSP002Contract(t *testing.T) {
 	}
 }
 
+func TestAASXAsyncUploadPathDoesNotUseFullBufferAPIs(t *testing.T) {
+	forbidden := map[string]struct{}{
+		"bytes.Buffer":    {},
+		"bytes.NewBuffer": {},
+		"bytes.NewReader": {},
+		"io.ReadAll":      {},
+		"os.ReadFile":     {},
+	}
+	violations := make([]string, 0)
+	asyncImplementationFound := false
+	for _, root := range []string{generatedAASXAPIDirectory, "../../internal/aasxfileserver"} {
+		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+			require.NoError(t, walkErr)
+			if entry.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			fileSet := token.NewFileSet()
+			file, err := parser.ParseFile(fileSet, path, nil, parser.SkipObjectResolution)
+			require.NoError(t, err)
+			standardLibraryImports := make(map[string]string)
+			for _, imported := range file.Imports {
+				importPath, err := strconv.Unquote(imported.Path.Value)
+				require.NoError(t, err)
+				if importPath != "bytes" && importPath != "io" && importPath != "os" {
+					continue
+				}
+				alias := importPath
+				if imported.Name != nil {
+					alias = imported.Name.Name
+				}
+				standardLibraryImports[alias] = importPath
+			}
+			ast.Inspect(file, func(node ast.Node) bool {
+				if declaration, ok := node.(*ast.FuncDecl); ok && declaration.Name.Name == "PostAsyncAASXPackage" && root != generatedAASXAPIDirectory {
+					asyncImplementationFound = true
+				}
+				selector, ok := node.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				packageName, ok := selector.X.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				importPath, imported := standardLibraryImports[packageName.Name]
+				if !imported {
+					return true
+				}
+				name := importPath + "." + selector.Sel.Name
+				if _, blocked := forbidden[name]; blocked {
+					violations = append(violations, fileSet.Position(selector.Pos()).String()+": "+name)
+				}
+				return true
+			})
+			return nil
+		})
+		require.NoError(t, err)
+	}
+	require.True(t, asyncImplementationFound, "handwritten async upload implementation is missing")
+	require.Empty(t, violations, "async AASX production code must not use complete-file buffer APIs")
+}
+
 func readGeneratedContractEvidence(t *testing.T) generatedContractEvidence {
 	t.Helper()
 	evidence := generatedContractEvidence{
-		identifiers: make(map[string]struct{}),
-		routes:      make(map[string]struct{}),
+		identifiers:      make(map[string]struct{}),
+		routes:           make(map[string]struct{}),
+		interfaceMethods: make(map[string]map[string]string),
+		structFields:     make(map[string]map[string]generatedStructField),
 	}
 	entries, err := os.ReadDir(generatedAASXAPIDirectory)
 	require.NoError(t, err)
@@ -157,9 +257,48 @@ func collectGeneratedContractEvidence(t *testing.T, path string, evidence *gener
 				end := fileSet.Position(value.Body.End()).Offset
 				evidence.asyncUploadBody = string(source[start:end])
 			}
+		case *ast.TypeSpec:
+			collectGeneratedTypeEvidence(t, fileSet, value, evidence)
 		}
 		return true
 	})
+}
+
+func collectGeneratedTypeEvidence(t *testing.T, fileSet *token.FileSet, specification *ast.TypeSpec, evidence *generatedContractEvidence) {
+	t.Helper()
+	switch definition := specification.Type.(type) {
+	case *ast.InterfaceType:
+		methods := make(map[string]string)
+		for _, field := range definition.Methods.List {
+			if len(field.Names) != 1 {
+				continue
+			}
+			methods[field.Names[0].Name] = formatNode(t, fileSet, field.Type)
+		}
+		evidence.interfaceMethods[specification.Name.Name] = methods
+	case *ast.StructType:
+		fields := make(map[string]generatedStructField)
+		for _, field := range definition.Fields.List {
+			if len(field.Names) != 1 {
+				continue
+			}
+			tag := ""
+			if field.Tag != nil {
+				unquoted, err := strconv.Unquote(field.Tag.Value)
+				require.NoError(t, err)
+				tag = unquoted
+			}
+			fields[field.Names[0].Name] = generatedStructField{typeName: formatNode(t, fileSet, field.Type), tag: tag}
+		}
+		evidence.structFields[specification.Name.Name] = fields
+	}
+}
+
+func formatNode(t *testing.T, fileSet *token.FileSet, node ast.Node) string {
+	t.Helper()
+	var output bytes.Buffer
+	require.NoError(t, format.Node(&output, fileSet, node))
+	return output.String()
 }
 
 func collectGeneratedRoute(literal *ast.BasicLit, routes map[string]struct{}) {

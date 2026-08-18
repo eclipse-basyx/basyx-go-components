@@ -27,6 +27,8 @@ package persistence
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,6 +37,22 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
+
+const maximumPackageReadRequest = 512 * 1024
+
+var errPackageReadRequestTooLarge = errors.New("package reader requested a full-file-sized buffer")
+
+type guardedReadSeeker struct {
+	io.ReadSeeker
+	maximumReadRequest int
+}
+
+func (reader *guardedReadSeeker) Read(destination []byte) (int, error) {
+	if len(destination) > reader.maximumReadRequest {
+		return 0, errPackageReadRequestTooLarge
+	}
+	return reader.ReadSeeker.Read(destination)
+}
 
 func TestAASXFileServerReadPoolSelection(t *testing.T) {
 	writer, _, err := sqlmock.New()
@@ -78,6 +96,27 @@ func TestResolvePackageContentTypeRejectsMalformedAASX(t *testing.T) {
 	)
 	require.Error(t, err)
 	require.True(t, common.IsErrBadRequest(err), "expected bad request, got %v", err)
+}
+
+func TestResolvePackageContentTypeDoesNotReadAASXIntoOneBuffer(t *testing.T) {
+	t.Parallel()
+
+	filePath := filepath.Clean("../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx")
+	file, err := os.Open(filePath)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, file.Close()) }()
+	fileInfo, err := file.Stat()
+	require.NoError(t, err)
+	require.Greater(t, fileInfo.Size(), int64(maximumPackageReadRequest))
+
+	guardedPackage := &guardedReadSeeker{ReadSeeker: file, maximumReadRequest: maximumPackageReadRequest}
+	contentType, err := resolvePackageContentTypeForUpload(
+		guardedPackage,
+		filepath.Base(filePath),
+		common.AASXLimitsFromConfig(nil),
+	)
+	require.NoError(t, err)
+	require.Equal(t, "application/aasx+xml", contentType)
 }
 
 func TestNormalizeAASIDs(t *testing.T) {

@@ -81,14 +81,14 @@ func TestAsyncUploadCompletesAfterRequestCleanupAndAcrossReplicas(t *testing.T) 
 	packagesBefore, status := listPackagesFrom(t, baseURL)
 	require.Equal(t, http.StatusOK, status)
 	db := openIntegrationDatabase(t)
-	largeObjectsBefore := countLargeObjects(t, db)
+	largeObjectsBefore := largeObjectOIDs(t, db)
 	releasePersistence := blockPackagePersistence(t, db)
 
 	requestResult := startAsyncFileRequest(t, baseURL, validAASXPath, nil, "")
 	accepted := awaitAcceptedRequest(t, requestResult, releasePersistence)
 	handle := assertAcceptedOperation(t, accepted, baseURL)
 	assertRunningStatus(t, replicaBURL, handle, "")
-	require.Equal(t, largeObjectsBefore+1, countLargeObjects(t, db), "accepted upload was not durably staged before returning 202")
+	stagedOID := addedLargeObjectOID(t, largeObjectsBefore, largeObjectOIDs(t, db))
 	releasePersistence()
 
 	result := awaitAsyncResult(t, replicaBURL, handle)
@@ -98,6 +98,7 @@ func TestAsyncUploadCompletesAfterRequestCleanupAndAcrossReplicas(t *testing.T) 
 	packagesAfter, status := listPackagesFrom(t, replicaBURL)
 	require.Equal(t, http.StatusOK, status)
 	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
+	require.Equal(t, stagedOID, packageLargeObjectOID(t, db, created.PackageId), "package persistence copied the staged upload instead of promoting it")
 	t.Cleanup(func() {
 		deletePackage(t, replicaBURL, created.PackageId, "")
 	})
@@ -148,9 +149,18 @@ func TestAsyncHandleRemainsOwnerScopedAcrossReplicas(t *testing.T) {
 
 	accepted := postAsyncFileWithAuthorization(t, secureBaseURL, validAASXPath, ownerAToken)
 	handle := assertAcceptedOperation(t, accepted, secureBaseURL)
+	anonymousPost := doAsyncRequest(t, http.MethodPost, secureReplicaBURL+"/packages-async", nil, "")
+	require.Equalf(t, http.StatusUnauthorized, anonymousPost.status, "anonymous POST response: %s", anonymousPost.body)
 	for _, endpoint := range []string{"status", "result"} {
-		response := doAuthorizedAsyncRequest(t, http.MethodGet, secureReplicaBURL+"/packages-async/"+endpoint+"/"+url.PathEscape(handle), nil, "", ownerBToken)
-		require.Equalf(t, http.StatusNotFound, response.status, "owner B %s response: %s", endpoint, response.body)
+		knownURL := secureReplicaBURL + "/packages-async/" + endpoint + "/" + url.PathEscape(handle)
+		anonymous := doAsyncRequest(t, http.MethodGet, knownURL, nil, "")
+		require.Equalf(t, http.StatusUnauthorized, anonymous.status, "anonymous %s response: %s", endpoint, anonymous.body)
+
+		foreign := doAuthorizedAsyncRequest(t, http.MethodGet, knownURL, nil, "", ownerBToken)
+		unknown := doAuthorizedAsyncRequest(t, http.MethodGet, secureReplicaBURL+"/packages-async/"+endpoint+"/unknown-owner-handle", nil, "", ownerBToken)
+		require.Equalf(t, http.StatusNotFound, foreign.status, "owner B %s response: %s", endpoint, foreign.body)
+		require.Equalf(t, http.StatusNotFound, unknown.status, "unknown %s response: %s", endpoint, unknown.body)
+		require.Equal(t, normalizedErrorPayload(t, unknown.body), normalizedErrorPayload(t, foreign.body), "foreign handles must not be distinguishable from unknown handles")
 	}
 
 	result := awaitAsyncResultWithAuthorization(t, secureReplicaBURL, handle, ownerAToken)
@@ -700,6 +710,29 @@ func decodeBaseOperationResult(t *testing.T, body []byte) baseOperationResult {
 	return result
 }
 
+func normalizedErrorPayload(t *testing.T, body []byte) any {
+	t.Helper()
+	var payload any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	removeVolatileErrorFields(payload)
+	return payload
+}
+
+func removeVolatileErrorFields(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		delete(typed, "correlationId")
+		delete(typed, "timestamp")
+		for _, child := range typed {
+			removeVolatileErrorFields(child)
+		}
+	case []any:
+		for _, child := range typed {
+			removeVolatileErrorFields(child)
+		}
+	}
+}
+
 func assertHandleLocation(t *testing.T, location string, requestBaseURL string, pathPrefix string, handle string) {
 	t.Helper()
 	require.NotEmpty(t, location)
@@ -784,6 +817,53 @@ func countLargeObjects(t *testing.T, db *sql.DB) int {
 	var count int
 	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&count))
 	return count
+}
+
+func largeObjectOIDs(t *testing.T, db *sql.DB) []int64 {
+	t.Helper()
+	query, args, err := goqu.Dialect("postgres").From("pg_largeobject_metadata").
+		Select(goqu.C("oid")).Order(goqu.C("oid").Asc()).ToSQL()
+	require.NoError(t, err)
+	rows, err := db.QueryContext(t.Context(), query, args...)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, rows.Close()) }()
+
+	oids := make([]int64, 0)
+	for rows.Next() {
+		var oid int64
+		require.NoError(t, rows.Scan(&oid))
+		oids = append(oids, oid)
+	}
+	require.NoError(t, rows.Err())
+	return oids
+}
+
+func addedLargeObjectOID(t *testing.T, before []int64, after []int64) int64 {
+	t.Helper()
+	known := make(map[int64]struct{}, len(before))
+	for _, oid := range before {
+		known[oid] = struct{}{}
+	}
+	added := make([]int64, 0, 1)
+	for _, oid := range after {
+		if _, found := known[oid]; !found {
+			added = append(added, oid)
+		}
+	}
+	require.Len(t, added, 1, "accepted upload must create exactly one durable staged large object")
+	return added[0]
+}
+
+func packageLargeObjectOID(t *testing.T, db *sql.DB, encodedPackageID string) int64 {
+	t.Helper()
+	packageID, err := common.DecodeString(encodedPackageID)
+	require.NoError(t, err)
+	query, args, err := goqu.Dialect("postgres").From("aasx_package").
+		Select(goqu.C("file_oid")).Where(goqu.C("package_id").Eq(packageID)).ToSQL()
+	require.NoError(t, err)
+	var oid int64
+	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&oid))
+	return oid
 }
 
 func stopComposeService(t *testing.T, service string) {

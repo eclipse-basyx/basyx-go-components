@@ -80,9 +80,7 @@ func TestMain(m *testing.M) {
 	securityKeycloakURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
 	databaseDSN = runtime.PostgresKeywordDSN("db", "basyxTestDB")
 	composeProject = runtime.ProjectName
-	securityEnv := testenv.PrepareSecurityEnvOrExit("security_env", map[string]string{
-		"http://localhost:8080": runtime.LocalhostURL("keycloak"),
-	})
+	securityEnv := testenv.PrepareSecurityEnvOrExit("security_env", nil)
 	composeEnv = runtime.EnvWith("BASYX_IT_SECURITY_ENV=" + securityEnv)
 
 	code := testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
