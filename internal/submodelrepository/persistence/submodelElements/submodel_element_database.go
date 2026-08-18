@@ -632,7 +632,7 @@ func DeleteAllChildren(db *sql.DB, submodelId string, idShortPath string, tx *sq
 //
 //nolint:revive // cognitive-complexity is acceptable for performance-focused persistence orchestration
 func InsertSubmodelElements(db *sql.DB, submodelID string, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext) ([]int, error) {
-	return insertSubmodelElements(common.ExecutePostgreSQLBatchInTransactionWithoutContext, db, elements, tx, ctx, nil, func(localTx *sql.Tx) (int, error) {
+	return insertSubmodelElements(nil, common.ExecutePostgreSQLBatchInTransactionWithoutContext, db, elements, tx, ctx, nil, func(localTx *sql.Tx) (int, error) {
 		submodelDatabaseID, submodelDatabaseIDErr := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
 		if submodelDatabaseIDErr != nil {
 			if errors.Is(submodelDatabaseIDErr, sql.ErrNoRows) {
@@ -646,7 +646,7 @@ func InsertSubmodelElements(db *sql.DB, submodelID string, elements []types.ISub
 
 // InsertSubmodelElementsForSubmodelDatabaseID inserts submodel elements when the caller already knows the submodel database ID.
 func InsertSubmodelElementsForSubmodelDatabaseID(db *sql.DB, submodelDatabaseID int, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext) ([]int, error) {
-	return insertSubmodelElements(common.ExecutePostgreSQLBatchInTransactionWithoutContext, db, elements, tx, ctx, nil, func(_ *sql.Tx) (int, error) {
+	return insertSubmodelElements(nil, common.ExecutePostgreSQLBatchInTransactionWithoutContext, db, elements, tx, ctx, nil, func(_ *sql.Tx) (int, error) {
 		if submodelDatabaseID <= 0 {
 			return 0, common.NewInternalServerError("SMREPO-INSSME-SMDATABASEIDINVALID Submodel database ID must be positive")
 		}
@@ -660,7 +660,7 @@ func InsertSubmodelElementsForSubmodelDatabaseIDContext(requestCtx context.Conte
 	executeBatch := func(tx *sql.Tx, statements []common.PostgreSQLBatchStatement) error {
 		return common.ExecutePostgreSQLBatchInTransaction(requestCtx, tx, statements)
 	}
-	return insertSubmodelElements(executeBatch, db, elements, tx, ctx, batch, func(_ *sql.Tx) (int, error) {
+	return insertSubmodelElements(&requestCtx, executeBatch, db, elements, tx, ctx, batch, func(_ *sql.Tx) (int, error) {
 		if submodelDatabaseID <= 0 {
 			return 0, common.NewInternalServerError("SMREPO-INSSME-SMDATABASEIDINVALID Submodel database ID must be positive")
 		}
@@ -668,7 +668,7 @@ func InsertSubmodelElementsForSubmodelDatabaseIDContext(requestCtx context.Conte
 	})
 }
 
-func insertSubmodelElements(executeBatch func(*sql.Tx, []common.PostgreSQLBatchStatement) error, db *sql.DB, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext, batch *common.PostgreSQLBatch, resolveSubmodelDatabaseID func(*sql.Tx) (int, error)) ([]int, error) {
+func insertSubmodelElements(requestCtx *context.Context, executeBatch func(*sql.Tx, []common.PostgreSQLBatchStatement) error, db *sql.DB, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext, batch *common.PostgreSQLBatch, resolveSubmodelDatabaseID func(*sql.Tx) (int, error)) ([]int, error) {
 	// Handle empty elements slice
 	if len(elements) == 0 {
 		return []int{}, nil
@@ -711,7 +711,7 @@ func insertSubmodelElements(executeBatch func(*sql.Tx, []common.PostgreSQLBatchS
 		return nil, err
 	}
 
-	insertBaseErr := insertBaseNodesDepthWise(localTx, batch, dialect, int64(submodelDatabaseID), nodes)
+	insertBaseErr := insertBaseNodesDepthWise(requestCtx, localTx, batch, dialect, int64(submodelDatabaseID), nodes)
 	if insertBaseErr != nil {
 		err = insertBaseErr
 		return nil, err

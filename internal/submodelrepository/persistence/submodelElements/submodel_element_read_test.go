@@ -466,6 +466,63 @@ func TestAddSMEPathAncestorVisibilityQueryStartsAtTarget(t *testing.T) {
 	require.NotContains(t, sqlQuery, "visible_sme_ids")
 }
 
+func TestIsSubmodelElementPathAuthorizedUsesFormulaAndAncestorVisibility(t *testing.T) {
+	t.Parallel()
+
+	denied := false
+	formula := grammar.LogicalExpression{Boolean: &denied}
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Formula: &formula,
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumCREATE: formula,
+		},
+		Filters: auth.FragmentFilters{
+			"$sme": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &denied}, false),
+		},
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		mock.ExpectClose()
+		require.NoError(t, db.Close())
+	})
+
+	mock.ExpectQuery(`WITH RECURSIVE visible_sme_path_ancestors.*`).
+		WillReturnRows(sqlmock.NewRows([]string{"visible"}))
+
+	authorized, err := IsSubmodelElementPathAuthorized(ctx, db, 42, "Target.Child")
+	require.NoError(t, err)
+	require.False(t, authorized)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestIsSubmodelElementPathAuthorizedSkipsQueryWithoutConstraints(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		mock.ExpectClose()
+		require.NoError(t, db.Close())
+	})
+
+	baseCtx := contextWithABACDisabled(t)
+	contexts := []struct {
+		name string
+		ctx  context.Context
+	}{
+		{name: "no query filter", ctx: baseCtx},
+		{name: "empty query filter", ctx: auth.WithQueryFilter(baseCtx, &auth.QueryFilter{})},
+	}
+	for _, test := range contexts {
+		authorized, authorizationErr := IsSubmodelElementPathAuthorized(test.ctx, db, 42, "Target.Child")
+		require.NoError(t, authorizationErr, test.name)
+		require.True(t, authorized, test.name)
+	}
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetSubmodelElementByPathCombinesAuthorizationAndPayloadQuery(t *testing.T) {
 	t.Parallel()
 

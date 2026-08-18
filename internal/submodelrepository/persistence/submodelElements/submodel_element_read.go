@@ -107,6 +107,52 @@ func GetSubmodelElementByIDShortOrPathTx(ctx context.Context, tx *sql.Tx, submod
 	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, tx, submodelID, int64(submodelDatabaseID), idShortOrPath, level, includeBlobValue)
 }
 
+// IsSubmodelElementPathAuthorized checks the active formula and structural
+// fragment filters for a SubmodelElement path without loading its payload.
+func IsSubmodelElementPathAuthorized(ctx context.Context, db DBQueryer, submodelDatabaseID int64, idShortPath string) (bool, error) {
+	hasConstraints, err := hasSMEPathAuthorizationConstraints(ctx)
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-CHKSMEPATHAUTH-CONSTRAINTS " + err.Error())
+	}
+	if !hasConstraints {
+		return true, nil
+	}
+
+	query, err := buildSMEPathAuthorizationQuery(ctx, submodelDatabaseID, idShortPath)
+	if err != nil {
+		return false, err
+	}
+	sqlQuery, args, err := query.Prepared(true).ToSQL()
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-CHKSMEPATHAUTH-BUILDQ " + err.Error())
+	}
+
+	var visible int
+	err = db.QueryRowContext(ctx, sqlQuery, args...).Scan(&visible)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return false, common.NewInternalServerError("SMREPO-CHKSMEPATHAUTH-EXECQ " + err.Error())
+}
+
+func hasSMEPathAuthorizationConstraints(ctx context.Context) (bool, error) {
+	if auth.GetQueryFilter(ctx) == nil {
+		return false, nil
+	}
+	shouldEnforceFormula, err := auth.ShouldEnforceFormula(ctx)
+	if err != nil {
+		return false, err
+	}
+	_, rowFilterFragments, err := normalizeSMERowFilters(ctx)
+	if err != nil {
+		return false, err
+	}
+	return shouldEnforceFormula || len(rowFilterFragments) > 0, nil
+}
+
 func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db DBQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string, includeBlobValue bool) (types.ISubmodelElement, error) {
 	includeChildren := level != "core"
 	parsedRows, readRowsErr := readSubmodelElementRowsByPath(ctx, db, submodelDatabaseID, idShortOrPath, includeChildren, includeBlobValue)

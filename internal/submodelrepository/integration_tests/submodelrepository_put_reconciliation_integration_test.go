@@ -140,6 +140,67 @@ func TestConcurrentIdenticalPutSubmodelUpdatesExistingResource(t *testing.T) {
 	}
 }
 
+func TestConcurrentPostSubmodelElementsByPathAllocatesUniquePositions(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:concurrent-post-sme-%d", time.Now().UnixNano())
+	submodelEndpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)
+	payload := map[string]any{
+		"id": submodelID, "idShort": "ConcurrentPost", "modelType": "Submodel",
+		"submodelElements": []any{map[string]any{
+			"idShort": "Items", "modelType": "SubmodelElementCollection", "value": []any{},
+		}},
+	}
+	status, body := sendReconciliationRequest(t, http.MethodPost, submodelRepositoryBaseURL+"/submodels", payload)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _ = sendReconciliationRequestWithoutFailure(http.MethodDelete, submodelEndpoint, nil) })
+
+	const requestCount = 32
+	type result struct {
+		status int
+		body   []byte
+	}
+	results := make(chan result, requestCount)
+	start := make(chan struct{})
+	var waitGroup sync.WaitGroup
+	for index := range requestCount {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			<-start
+			childPayload := map[string]any{
+				"idShort":   fmt.Sprintf("Child%02d", index),
+				"modelType": "Property",
+				"valueType": "xs:string",
+				"value":     "created",
+			}
+			childEndpoint := submodelEndpoint + "/submodel-elements/Items"
+			childStatus, childBody := sendReconciliationRequestWithoutFailure(http.MethodPost, childEndpoint, childPayload)
+			results <- result{status: childStatus, body: childBody}
+		}()
+	}
+	close(start)
+	waitGroup.Wait()
+	close(results)
+	for postResult := range results {
+		require.Equal(t, http.StatusCreated, postResult.status, "response=%s", string(postResult.body))
+	}
+
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	rows := reconciliationAllElementRows(t, db, submodelID)
+	require.Len(t, rows, requestCount+1)
+	positions := make(map[int]struct{}, requestCount)
+	for index := range requestCount {
+		row, exists := rows[fmt.Sprintf("Items.Child%02d", index)]
+		require.True(t, exists)
+		positions[row.position] = struct{}{}
+	}
+	for position := range requestCount {
+		_, exists := positions[position]
+		require.True(t, exists, "missing position %d", position)
+	}
+}
+
 func TestPutSubmodelRejectsDuplicateSiblingPathsWithoutMutation(t *testing.T) {
 	submodelID := fmt.Sprintf("urn:basyx:integration:put-duplicate-path-%d", time.Now().UnixNano())
 	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(submodelID)

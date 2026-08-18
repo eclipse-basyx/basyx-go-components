@@ -293,6 +293,49 @@ func BuildTopLevelSubmodelElementMaxPositionSQL(submodelDatabaseID int) (string,
 		ToSQL()
 }
 
+// BuildSubmodelElementParentForInsertSQL builds an indexed parent lookup that
+// protects the owning submodel from replacement and locks the target parent
+// before the caller allocates a child position.
+func BuildSubmodelElementParentForInsertSQL(submodelID string, parentPath string) (string, []any, error) {
+	dialect := goqu.Dialect(common.Dialect)
+	lockedSubmodel := dialect.
+		From(goqu.T("submodel").As("sm_lock")).
+		Select(goqu.I("sm_lock.id")).
+		Where(goqu.I("sm_lock.submodel_identifier").Eq(submodelID)).
+		ForKeyShare(goqu.Wait)
+	submodel := lockedSubmodel.As("sm")
+	parent := goqu.T("submodel_element").As("parent")
+
+	return dialect.
+		From(submodel).
+		Join(parent, goqu.On(goqu.I("parent.submodel_id").Eq(goqu.I("sm.id")))).
+		Select(
+			goqu.I("sm.id"),
+			goqu.I("parent.id"),
+			goqu.COALESCE(goqu.I("parent.root_sme_id"), goqu.I("parent.id")),
+			goqu.I("parent.model_type"),
+			goqu.L("COALESCE(?, -1) + 1", goqu.I("parent.depth")),
+		).
+		Where(
+			goqu.I("parent.idshort_path").Eq(parentPath),
+		).
+		ForUpdate(goqu.Wait, goqu.T("parent")).
+		Prepared(true).
+		ToSQL()
+}
+
+// BuildSubmodelElementNextPositionSQL builds the indexed position lookup used
+// after the parent row has been locked in the current transaction.
+func BuildSubmodelElementNextPositionSQL(parentElementID int) (string, []any, error) {
+	dialect := goqu.Dialect(common.Dialect)
+	return dialect.
+		From(goqu.T("submodel_element").As("child")).
+		Select(goqu.L("COALESCE(MAX(?), -1) + 1", goqu.I("child.position"))).
+		Where(goqu.I("child.parent_sme_id").Eq(parentElementID)).
+		Prepared(true).
+		ToSQL()
+}
+
 // BuildFileAttachmentExistsSQL builds the file attachment existence query.
 func BuildFileAttachmentExistsSQL(submodelID string, idShortPath string) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
