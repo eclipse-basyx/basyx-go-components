@@ -45,11 +45,13 @@ import (
 const generatedAASXAPIDirectory = "../../pkg/aasxfileserverapi/go"
 
 type generatedContractEvidence struct {
-	identifiers      map[string]struct{}
-	routes           map[string]struct{}
-	interfaceMethods map[string]map[string]string
-	structFields     map[string]map[string]generatedStructField
-	asyncUploadBody  string
+	identifiers       map[string]struct{}
+	routes            map[string]struct{}
+	interfaceMethods  map[string]map[string]string
+	structFields      map[string]map[string]generatedStructField
+	definedTypes      map[string]string
+	typedStringValues map[string]map[string]struct{}
+	asyncUploadBody   string
 }
 
 type generatedStructField struct {
@@ -144,6 +146,15 @@ func TestGeneratedAASXAPIContainsSSP002Contract(t *testing.T) {
 		"ExecutionState": {typeName: "ExecutionState", tag: `json:"executionState,omitempty"`},
 		"Success":        {typeName: "bool", tag: `json:"success,omitempty"`},
 	}, evidence.structFields["BaseOperationResult"])
+	require.Equal(t, "string", evidence.definedTypes["ExecutionState"])
+	require.Equal(t, map[string]struct{}{
+		"Initiated": {},
+		"Running":   {},
+		"Completed": {},
+		"Canceled":  {},
+		"Failed":    {},
+		"Timeout":   {},
+	}, evidence.typedStringValues["ExecutionState"])
 	require.NotEmpty(t, evidence.asyncUploadBody, "generated AASX API is missing the PostAsyncAASXPackage controller")
 	require.True(
 		t,
@@ -221,10 +232,12 @@ func TestAASXAsyncUploadPathDoesNotUseFullBufferAPIs(t *testing.T) {
 func readGeneratedContractEvidence(t *testing.T) generatedContractEvidence {
 	t.Helper()
 	evidence := generatedContractEvidence{
-		identifiers:      make(map[string]struct{}),
-		routes:           make(map[string]struct{}),
-		interfaceMethods: make(map[string]map[string]string),
-		structFields:     make(map[string]map[string]generatedStructField),
+		identifiers:       make(map[string]struct{}),
+		routes:            make(map[string]struct{}),
+		interfaceMethods:  make(map[string]map[string]string),
+		structFields:      make(map[string]map[string]generatedStructField),
+		definedTypes:      make(map[string]string),
+		typedStringValues: make(map[string]map[string]struct{}),
 	}
 	entries, err := os.ReadDir(generatedAASXAPIDirectory)
 	require.NoError(t, err)
@@ -259,6 +272,8 @@ func collectGeneratedContractEvidence(t *testing.T, path string, evidence *gener
 			}
 		case *ast.TypeSpec:
 			collectGeneratedTypeEvidence(t, fileSet, value, evidence)
+		case *ast.ValueSpec:
+			collectGeneratedTypedStringValues(t, fileSet, value, evidence)
 		}
 		return true
 	})
@@ -291,6 +306,28 @@ func collectGeneratedTypeEvidence(t *testing.T, fileSet *token.FileSet, specific
 			fields[field.Names[0].Name] = generatedStructField{typeName: formatNode(t, fileSet, field.Type), tag: tag}
 		}
 		evidence.structFields[specification.Name.Name] = fields
+	default:
+		evidence.definedTypes[specification.Name.Name] = formatNode(t, fileSet, specification.Type)
+	}
+}
+
+func collectGeneratedTypedStringValues(t *testing.T, fileSet *token.FileSet, specification *ast.ValueSpec, evidence *generatedContractEvidence) {
+	t.Helper()
+	if specification.Type == nil {
+		return
+	}
+	typeName := formatNode(t, fileSet, specification.Type)
+	for _, value := range specification.Values {
+		literal, ok := value.(*ast.BasicLit)
+		if !ok || literal.Kind != token.STRING {
+			continue
+		}
+		unquoted, err := strconv.Unquote(literal.Value)
+		require.NoError(t, err)
+		if evidence.typedStringValues[typeName] == nil {
+			evidence.typedStringValues[typeName] = make(map[string]struct{})
+		}
+		evidence.typedStringValues[typeName][unquoted] = struct{}{}
 	}
 }
 

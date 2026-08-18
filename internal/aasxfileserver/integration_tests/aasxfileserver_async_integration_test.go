@@ -146,11 +146,20 @@ func TestAsyncHandleRemainsOwnerScopedAcrossReplicas(t *testing.T) {
 	ownerBToken := accessToken(t, "userb")
 	packagesBefore, status := listPackagesFrom(t, baseURL)
 	require.Equal(t, http.StatusOK, status)
+	db := openIntegrationDatabase(t)
+	asyncJobsBefore := countAsyncJobs(t, db)
+	largeObjectsBefore := countLargeObjects(t, db)
+
+	anonymousPost := postAsyncFile(t, secureReplicaBURL, validAASXPath)
+	require.Equalf(t, http.StatusUnauthorized, anonymousPost.status, "anonymous POST response: %s", anonymousPost.body)
+	require.Equal(t, asyncJobsBefore, countAsyncJobs(t, db), "anonymous upload created an async handle")
+	require.Equal(t, largeObjectsBefore, countLargeObjects(t, db), "anonymous upload created a staged large object")
+	packagesAfterAnonymousPost, status := listPackagesFrom(t, baseURL)
+	require.Equal(t, http.StatusOK, status)
+	require.ElementsMatch(t, collectPackageIDs(packagesBefore.Result), collectPackageIDs(packagesAfterAnonymousPost.Result))
 
 	accepted := postAsyncFileWithAuthorization(t, secureBaseURL, validAASXPath, ownerAToken)
 	handle := assertAcceptedOperation(t, accepted, secureBaseURL)
-	anonymousPost := doAsyncRequest(t, http.MethodPost, secureReplicaBURL+"/packages-async", nil, "")
-	require.Equalf(t, http.StatusUnauthorized, anonymousPost.status, "anonymous POST response: %s", anonymousPost.body)
 	for _, endpoint := range []string{"status", "result"} {
 		knownURL := secureReplicaBURL + "/packages-async/" + endpoint + "/" + url.PathEscape(handle)
 		anonymous := doAsyncRequest(t, http.MethodGet, knownURL, nil, "")
@@ -813,6 +822,15 @@ func blockPackagePersistence(t *testing.T, db *sql.DB) func() {
 func countLargeObjects(t *testing.T, db *sql.DB) int {
 	t.Helper()
 	query, args, err := goqu.Dialect("postgres").From("pg_largeobject_metadata").Select(goqu.COUNT("*")).ToSQL()
+	require.NoError(t, err)
+	var count int
+	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&count))
+	return count
+}
+
+func countAsyncJobs(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	query, args, err := goqu.Dialect("postgres").From("async_job").Select(goqu.COUNT("*")).ToSQL()
 	require.NoError(t, err)
 	var count int
 	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&count))
