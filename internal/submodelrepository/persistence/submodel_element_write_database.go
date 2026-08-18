@@ -256,6 +256,19 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 	if err != nil {
 		return err
 	}
+	parentAuthorized, err := submodelelements.IsSubmodelElementPathAuthorized(
+		ctx,
+		tx,
+		int64(parent.submodelDatabaseID),
+		parentPath,
+	)
+	if err != nil {
+		return err
+	}
+	if !parentAuthorized {
+		return newSubmodelElementParentNotFoundError(parentPath)
+	}
+
 	isFromList := false
 	switch parent.modelType {
 	case types.ModelTypeSubmodelElementCollection, types.ModelTypeEntity, types.ModelTypeAnnotatedRelationshipElement:
@@ -264,6 +277,10 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 		isFromList = true
 	default:
 		return common.NewErrBadRequest("SMREPO-ADDSMEBYPATH-BADPARENT Parent element does not support child elements")
+	}
+	parent.nextPosition, err = nextSubmodelElementPosition(ctx, tx, parent.elementID)
+	if err != nil {
+		return err
 	}
 
 	if err = s.ensureVisibleSubmodelElementCreateDoesNotExist(
@@ -326,8 +343,7 @@ func (s *SubmodelDatabase) lockSubmodelElementParentForInsert(ctx context.Contex
 		&parent.childDepth,
 	)
 	if err == nil {
-		parent.nextPosition, err = nextSubmodelElementPosition(ctx, tx, parent.elementID)
-		return parent, err
+		return parent, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return submodelElementInsertParent{}, common.NewInternalServerError("SMREPO-ADDSMEBYPATH-EXECPARENTQ " + err.Error())
@@ -362,6 +378,10 @@ func submodelElementParentNotFoundError(ctx context.Context, tx *sql.Tx, submode
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-ADDSMEBYPATH-EXECSMEXISTSQ " + err.Error())
 	}
+	return newSubmodelElementParentNotFoundError(parentPath)
+}
+
+func newSubmodelElementParentNotFoundError(parentPath string) error {
 	return common.NewErrNotFound("SMREPO-ADDSMEBYPATH-PARENTNOTFOUND Submodel element with path '" + parentPath + "' not found")
 }
 

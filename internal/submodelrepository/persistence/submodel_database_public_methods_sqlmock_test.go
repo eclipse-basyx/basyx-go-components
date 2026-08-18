@@ -683,6 +683,72 @@ func TestAddSubmodelElementWithPathSubmodelNotFoundRollsBack(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestAddSubmodelElementWithPathHiddenParentDoesNotLeakExistenceOrType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		parentExists bool
+		modelType    types.ModelType
+	}{
+		{
+			name:         "hidden supported parent",
+			parentExists: true,
+			modelType:    types.ModelTypeSubmodelElementCollection,
+		},
+		{
+			name:         "hidden unsupported parent",
+			parentExists: true,
+			modelType:    types.ModelTypeProperty,
+		},
+		{
+			name: "missing parent",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() {
+				_ = db.Close()
+			}()
+
+			sut := &SubmodelDatabase{db: db}
+			element := types.NewProperty(types.DataTypeDefXSDString)
+			idShort := "Created"
+			element.SetIDShort(&idShort)
+
+			mock.ExpectBegin()
+			parentQuery := mock.ExpectQuery(`SELECT .*FROM \(SELECT .*FROM "submodel" AS "sm_lock".*FOR KEY SHARE.*\) AS "sm".*JOIN "submodel_element" AS "parent".*FOR UPDATE OF "parent"`).
+				WithArgs("sm", "container")
+			if test.parentExists {
+				parentQuery.WillReturnRows(sqlmock.NewRows([]string{
+					"submodel_id",
+					"parent_id",
+					"root_sme_id",
+					"model_type",
+					"child_depth",
+				}).AddRow(42, 7, 7, test.modelType, 2))
+				mock.ExpectQuery(`WITH RECURSIVE .*FALSE`).
+					WillReturnRows(sqlmock.NewRows([]string{"visible"}))
+			} else {
+				parentQuery.WillReturnError(sql.ErrNoRows)
+				mock.ExpectQuery(`SELECT .*FROM "submodel"`).
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+			}
+			mock.ExpectRollback()
+
+			err = sut.AddSubmodelElementWithPath(contextWithRestrictedCreateSubmodel(t), "sm", "container", element)
+			require.EqualError(t, err, "404 Not Found: SMREPO-ADDSMEBYPATH-PARENTNOTFOUND Submodel element with path 'container' not found")
+			require.True(t, common.IsErrNotFound(err))
+			require.False(t, common.IsErrBadRequest(err))
+			require.False(t, common.IsErrConflict(err))
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
 func TestAddSubmodelElementWithPathUnrestrictedDuplicateReturnsConflict(t *testing.T) {
 	t.Parallel()
 
