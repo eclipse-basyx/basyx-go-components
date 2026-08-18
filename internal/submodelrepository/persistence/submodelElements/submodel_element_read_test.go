@@ -488,7 +488,7 @@ func TestIsSubmodelElementPathAuthorizedUsesFormulaAndAncestorVisibility(t *test
 		require.NoError(t, db.Close())
 	})
 
-	mock.ExpectQuery(`WITH RECURSIVE visible_sme_path_ancestors.*FALSE`).
+	mock.ExpectQuery(`WITH RECURSIVE visible_sme_path_ancestors.*`).
 		WillReturnRows(sqlmock.NewRows([]string{"visible"}))
 
 	authorized, err := IsSubmodelElementPathAuthorized(ctx, db, 42, "Target.Child")

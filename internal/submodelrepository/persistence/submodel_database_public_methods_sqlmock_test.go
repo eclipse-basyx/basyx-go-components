@@ -730,7 +730,8 @@ func TestAddSubmodelElementWithPathHiddenParentDoesNotLeakExistenceOrType(t *tes
 					"model_type",
 					"child_depth",
 				}).AddRow(42, 7, 7, test.modelType, 2))
-				mock.ExpectQuery(`WITH RECURSIVE .*FALSE`).
+				mock.ExpectQuery(`WITH RECURSIVE visible_sme_path_ancestors.*`).
+					WithArgs(42, "container", 42, 42, "container", false, 1).
 					WillReturnRows(sqlmock.NewRows([]string{"visible"}))
 			} else {
 				parentQuery.WillReturnError(sql.ErrNoRows)
