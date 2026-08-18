@@ -101,6 +101,17 @@
             ]
         },
         {
+            "name": "Launch AASX File Server Service",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/aasxfileserverservice",
+            "args": [
+                "-config",
+                "${workspaceFolder}/cmd/aasxfileserverservice/config.yaml"
+            ]
+        },
+        {
             "name": "Launch BaSyx Configuration Service",
             "type": "go",
             "request": "launch",

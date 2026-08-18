@@ -44,6 +44,65 @@ services:
       db_it:
         condition: service_healthy
 
+  aasx_fileserver_replica_b_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_READER_HOST=db_it
+      - POSTGRES_READER_PORT=5432
+      - POSTGRES_READER_USER=admin
+      - POSTGRES_READER_PASSWORD=admin123
+      - POSTGRES_READER_DBNAME=basyxTestDB
+      - POSTGRES_READER_OPTIONS=-c default_transaction_read_only=on
+    ports:
+      - "127.0.0.1:${BASYX_IT_API_B_PORT:-6005}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
+  aasx_fileserver_context_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - SERVER_CONTEXTPATH=/external/aasx
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+    ports:
+      - "127.0.0.1:${BASYX_IT_CONTEXT_API_PORT:-6006}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
+  aasx_fileserver_limited_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - GENERAL_UPLOADMAXSIZEBYTES=1024
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+    ports:
+      - "127.0.0.1:${BASYX_IT_LIMITED_API_PORT:-6009}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
   basyx_configuration:
     build:
       context: ../../../..
