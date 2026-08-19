@@ -44,7 +44,12 @@ const componentName = "AASXFS"
 
 // AASXFileServerAPIAPIService implements the generated AASX file server API service interface.
 type AASXFileServerAPIAPIService struct {
-	backend *persistence.AASXFileServerDatabase
+	backend        *persistence.AASXFileServerDatabase
+	packageCreator aasxPackageCreator
+}
+
+type aasxPackageCreator interface {
+	CreatePackage(context.Context, string, common.StagedUpload, []string, string) (*persistence.PackageRecord, error)
 }
 
 // NewAASXFileServerAPIAPIService constructs an AASX file server service.
@@ -55,7 +60,7 @@ type AASXFileServerAPIAPIService struct {
 // Returns:
 //   - *AASXFileServerAPIAPIService: Configured service instance.
 func NewAASXFileServerAPIAPIService(backend *persistence.AASXFileServerDatabase) *AASXFileServerAPIAPIService {
-	return &AASXFileServerAPIAPIService{backend: backend}
+	return &AASXFileServerAPIAPIService{backend: backend, packageCreator: backend}
 }
 
 // GetAllAASXPackageIds lists available package descriptors with optional AAS filter and paging.
@@ -128,7 +133,7 @@ func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file 
 	}
 
 	rawPackageID := generatePackageID()
-	record, err := s.backend.CreatePackage(ctx, rawPackageID, file, aasIDs, fileName)
+	record, err := s.packageCreator.CreatePackage(ctx, rawPackageID, file, aasIDs, fileName)
 	if err != nil {
 		if common.IsErrPayloadTooLarge(err) {
 			return newAPIErrorResponse(err, http.StatusRequestEntityTooLarge, operation, "PayloadTooLarge"), nil
