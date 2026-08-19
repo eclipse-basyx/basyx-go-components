@@ -124,7 +124,7 @@ func TestGeneratedAASXAPIContainsSSP002Contract(t *testing.T) {
 		"PostAsyncAASXPackage": "func(http.ResponseWriter, *http.Request)",
 	}, evidence.interfaceMethods["AASXAsyncFileServerAPIAPIRouter"])
 	require.Equal(t, map[string]string{
-		"PostAsyncAASXPackage": "func(context.Context, StagedUpload, []string) (ImplResponse, error)",
+		"PostAsyncAASXPackage": "func(context.Context, StagedUpload, []string, string) (ImplResponse, error)",
 	}, evidence.interfaceMethods["AASXAsyncFileServerAPIAPIServicer"])
 	require.Equal(t, map[string]string{
 		"GetAasxAsyncStatus": "func(http.ResponseWriter, *http.Request)",
@@ -162,6 +162,7 @@ func TestGeneratedAASXAPIContainsSSP002Contract(t *testing.T) {
 		"PostAsyncAASXPackage must use the shared streaming multipart stager",
 	)
 	require.Contains(t, evidence.asyncUploadBody, "upload.File", "PostAsyncAASXPackage must hand only the staged upload to its service")
+	require.Contains(t, evidence.asyncUploadBody, "uploadFileName(upload)", "PostAsyncAASXPackage must forward the multipart source filename to its service")
 	for _, forbidden := range []string{"io.ReadAll", "ParseMultipartForm", "ReadForm("} {
 		require.NotContainsf(t, evidence.asyncUploadBody, forbidden, "PostAsyncAASXPackage must not buffer multipart input with %s", forbidden)
 	}
