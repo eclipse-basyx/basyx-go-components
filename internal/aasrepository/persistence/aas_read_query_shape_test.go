@@ -27,6 +27,7 @@ package persistence
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -35,6 +36,8 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,6 +95,39 @@ func TestAASListMaterializationBatchUsesStableQueueOrder(t *testing.T) {
 	require.Contains(t, one[2].SQL, "specific_asset_id_supplemental_semantic_id_reference")
 }
 
+func TestAASListMaterializationBatchUsesExplicitParameterTypes(t *testing.T) {
+	t.Parallel()
+
+	deny := false
+	ctx := auth.WithQueryFilter(common.ContextWithConfig(t.Context(), &common.Config{}), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$aas#idShort": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
+		},
+	})
+	statements, err := buildAASListMaterializationStatements(ctx, aasListPage{databaseIDs: []int64{1}})
+	require.NoError(t, err)
+	require.Len(t, statements, 3)
+
+	booleanParameters := 0
+	for index, arg := range statements[0].Args {
+		if _, ok := arg.(bool); ok {
+			booleanParameters++
+			require.Contains(t, statements[0].SQL, fmt.Sprintf("$%d::boolean", index+1))
+		}
+	}
+	require.Positive(t, booleanParameters)
+
+	integerParameters := 0
+	for index, arg := range statements[2].Args {
+		switch arg.(type) {
+		case int, int8, int16, int32, int64:
+			integerParameters++
+			require.Contains(t, statements[2].SQL, fmt.Sprintf("$%d::integer", index+1))
+		}
+	}
+	require.Positive(t, integerParameters)
+}
+
 func TestAASListSaturatedPageQueuesCursorLast(t *testing.T) {
 	t.Parallel()
 
@@ -113,6 +149,7 @@ func TestAASIdentifierPageEmbedsInclusiveCursorValidation(t *testing.T) {
 	query, _, err := dataset.Prepared(true).ToSQL()
 	require.NoError(t, err)
 	require.Contains(t, query, `EXISTS((SELECT`)
+	require.Contains(t, query, `SELECT 1 FROM "aas" AS "cursor_aas"`)
 	require.Contains(t, query, `"aas"."aas_id" >=`)
 	require.Contains(t, query, `ORDER BY "aas"."aas_id" ASC`)
 }

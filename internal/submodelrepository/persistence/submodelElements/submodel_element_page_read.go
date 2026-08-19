@@ -203,7 +203,7 @@ func buildAllSubmodelElementPathsPageQuery(
 	if submodelCursor != "" && pathCursor != "" {
 		cursorPath, cursorID, hasCursorID := parseRootCursor(pathCursor)
 		cursorExists := dialect.From("authorized_submodel_paths").
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(
 				goqu.I("submodel_identifier").Eq(submodelCursor),
 				goqu.I("idshort_path").Eq(cursorPath),
@@ -471,6 +471,9 @@ func buildSelectedSubmodelElements(dialect goqu.DialectWrapper, level string) *g
 			goqu.I("selected_root.submodel_id").As("submodel_id"),
 			goqu.I("selected_root.root_rank").As("root_rank"),
 		)
+	if level != "core" {
+		children = children.Where(goqu.I("selected_sme.id").Neq(goqu.I("selected_root.root_id")))
+	}
 
 	return roots.UnionAll(children)
 }

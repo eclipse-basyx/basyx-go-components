@@ -134,3 +134,18 @@ func TestSubmodelDescriptorListSQLShapeIsStableAcrossPageSizes(t *testing.T) {
 	require.Contains(t, oneSQL, "submodel_descriptor_page")
 	require.Contains(t, oneSQL, `ORDER BY "submodel_descriptor_page"."id" ASC, "submodel_descriptor_page"."descriptor_id" ASC`)
 }
+
+func TestSubmodelDescriptorListCursorExistenceUsesSQLLiteral(t *testing.T) {
+	t.Parallel()
+
+	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
+	scope := submodelDescriptorListScope{
+		collectorRoot:  grammar.CollectorRootSMDesc,
+		fragmentPrefix: "$smdesc",
+	}
+	dataset, err := buildSubmodelDescriptorListQuery(ctx, 101, "urn:example:cursor", time.Time{}, time.Time{}, scope)
+	require.NoError(t, err)
+	query, _, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, query, `SELECT 1 FROM "authorized_submodel_descriptors"`)
+}

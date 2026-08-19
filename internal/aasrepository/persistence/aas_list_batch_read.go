@@ -502,7 +502,7 @@ func buildBatchedSpecificAssetIDBranches(
 		Join(externalReference, goqu.On(externalReference.Col("id").Eq(specific.Col("id")))).
 		LeftJoin(externalKey, goqu.On(externalKey.Col("reference_id").Eq(externalReference.Col("id")))).
 		LeftJoin(externalPayload, goqu.On(externalPayload.Col("reference_id").Eq(externalReference.Col("id")))).
-		Select(batchedSpecificAssetReferenceColumns(1, specific, externalReference, externalKey, externalPayload, goqu.V(0))...).
+		Select(batchedSpecificAssetReferenceColumns(1, specific, externalReference, externalKey, externalPayload, goqu.L("?::integer", 0))...).
 		Where(common.PostgreSQLBigIntArrayContains(specific.Col("asset_information_id"), aasDatabaseIDs))
 	for _, fragment := range []grammar.FragmentStringPattern{
 		"$aas#assetInformation.specificAssetIds[]",
@@ -545,7 +545,7 @@ func buildBatchedSpecificAssetIDCollector() (*grammar.ResolvedFieldPathCollector
 
 func batchedSpecificAssetBaseColumns(specific, payload expColumner) []interface{} {
 	return []interface{}{
-		goqu.V(0).As("row_kind"),
+		goqu.L("?::integer", 0).As("row_kind"),
 		specific.Col("asset_information_id").As("owner_id"),
 		specific.Col("id").As("specific_id"),
 		specific.Col("position").As("specific_position"),
@@ -576,7 +576,7 @@ func batchedSpecificAssetReferenceColumns(
 	referencePosition interface{},
 ) []interface{} {
 	return []interface{}{
-		goqu.V(kind).As("row_kind"),
+		goqu.L("?::integer", kind).As("row_kind"),
 		specific.Col("asset_information_id").As("owner_id"),
 		specific.Col("id").As("specific_id"),
 		specific.Col("position").As("specific_position"),

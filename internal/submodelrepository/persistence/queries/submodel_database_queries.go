@@ -160,7 +160,7 @@ func SelectSubmodelDataset(
 
 	if cursor != nil && *cursor != "" {
 		cursorExistsDS := dialect.From(goqu.T("submodel").As("s2")).
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(goqu.Ex{"s2.submodel_identifier": *cursor})
 
 		selectDS = selectDS.
@@ -209,7 +209,7 @@ func SelectSubmodelIdentifierDataset(
 	}
 	if cursor != "" {
 		cursorExistsDS := dialect.From(goqu.T("submodel").As("cursor_submodel")).
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(goqu.Ex{"cursor_submodel.submodel_identifier": cursor})
 		selectDS = selectDS.
 			Where(goqu.Func("EXISTS", cursorExistsDS)).
@@ -234,7 +234,7 @@ func ApplySubmodelSemanticIDFilter(selectDS *goqu.SelectDataset, semanticID stri
 	dialect := goqu.Dialect(common.Dialect)
 	semanticIDFilterDS := dialect.
 		From(goqu.T("submodel_semantic_id_reference_key").As("ssrk_filter")).
-		Select(goqu.V(1)).
+		Select(goqu.L("1")).
 		Where(goqu.I("ssrk_filter.reference_id").Eq(goqu.I("submodel.id"))).
 		Where(goqu.I("ssrk_filter.value").Eq(semanticID))
 	return selectDS.Where(goqu.Func("EXISTS", semanticIDFilterDS))
@@ -287,7 +287,7 @@ func BuildSubmodelCursorExistsSQL(cursor string) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
 	return dialect.
 		From(goqu.T("submodel").As("sm")).
-		Select(goqu.V(1)).
+		Select(goqu.L("1")).
 		Where(goqu.I("sm.submodel_identifier").Eq(cursor)).
 		Limit(1).
 		ToSQL()

@@ -1383,7 +1383,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences
 		if err := rows.Scan(&aasID); err != nil {
 			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-SCANROW " + err.Error())
 		}
-		if limit > 0 && int32(len(references)) == limit {
+		if limit > 0 && len(references) == int(limit) {
 			nextCursor = aasID
 			continue
 		}
@@ -2632,96 +2632,4 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	}
 
 	return result, nil
-}
-
-// readSpecificAssetIDsByAssetInformationIDs reads and enriches specificAssetIds in batch for multiple assetInformation records.
-func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationIDs(ctx context.Context, db aasDBQueryer, assetInformationIDs []int64) (map[int64][]types.ISpecificAssetID, error) {
-	out := make(map[int64][]types.ISpecificAssetID, len(assetInformationIDs))
-	if len(assetInformationIDs) == 0 {
-		return out, nil
-	}
-
-	dialect := goqu.Dialect("postgres")
-	queryDS := buildReadSpecificAssetIDsByAssetInformationIDsDataset(&dialect, assetInformationIDs)
-	collector, collectorErr := buildAASCollector()
-	if collectorErr != nil {
-		return nil, collectorErr
-	}
-	collector.AllowInlineAliases(
-		common.AliasSpecificAssetID,
-		common.AliasExternalSubjectReference,
-		common.AliasExternalSubjectReferenceKey,
-	)
-	collector.SetRootJoinKey(common.AliasSpecificAssetID, common.ColAssetInformationID)
-	queryDS, filterErr := auth.AddFilterQueryFromContext(ctx, queryDS, "$aas#assetInformation.specificAssetIds[]", collector)
-	if filterErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-ABACFILTERS " + filterErr.Error())
-	}
-
-	querySQL, queryArgs, buildErr := queryDS.Prepared(true).ToSQL()
-	if buildErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-BUILDSQL " + buildErr.Error())
-	}
-
-	rows, queryErr := db.QueryContext(ctx, querySQL, queryArgs...)
-	if queryErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-EXECSQL " + queryErr.Error())
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	type specificAssetRow struct {
-		assetInformationID int64
-		id                 int64
-		name               string
-		value              string
-		semanticIDPayload  []byte
-	}
-
-	rowData := make([]specificAssetRow, 0)
-	ids := make([]int64, 0)
-	for rows.Next() {
-		var row specificAssetRow
-		if scanErr := rows.Scan(&row.assetInformationID, &row.id, &row.name, &row.value, &row.semanticIDPayload); scanErr != nil {
-			return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-SCANROW " + scanErr.Error())
-		}
-		rowData = append(rowData, row)
-		ids = append(ids, row.id)
-	}
-	if rowsErr := rows.Err(); rowsErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-ITERROWS " + rowsErr.Error())
-	}
-
-	if len(rowData) == 0 {
-		return out, nil
-	}
-
-	externalSubjectByID, extErr := descriptors.ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(ctx, db, ids)
-	if extErr != nil {
-		return nil, extErr
-	}
-
-	supplementalByID, suppErr := descriptors.ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(ctx, db, ids)
-	if suppErr != nil {
-		return nil, suppErr
-	}
-
-	for _, row := range rowData {
-		specificAssetID := types.NewSpecificAssetID(row.name, row.value)
-
-		semanticID, hasSemanticID, parseErr := parseSpecificAssetIDSemanticIDPayload(row.semanticIDPayload)
-		if parseErr != nil {
-			return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-PARSESEMANTIC " + parseErr.Error())
-		}
-		if hasSemanticID {
-			specificAssetID.SetSemanticID(semanticID)
-		}
-
-		specificAssetID.SetExternalSubjectID(externalSubjectByID[row.id])
-		specificAssetID.SetSupplementalSemanticIDs(supplementalByID[row.id])
-		out[row.assetInformationID] = append(out[row.assetInformationID], specificAssetID)
-	}
-
-	return out, nil
 }

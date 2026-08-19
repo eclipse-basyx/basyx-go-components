@@ -196,7 +196,7 @@ func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int3
 		if err := rows.Scan(&identifier); err != nil {
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-SCANROW " + err.Error())
 		}
-		if pageLimit > 0 && int32(len(references)) == pageLimit {
+		if pageLimit > 0 && len(references) == int(pageLimit) {
 			nextCursor = identifier
 			continue
 		}
@@ -263,7 +263,7 @@ func (s *SubmodelDatabase) GetAllSubmodelPathsPage(
 	visibleSubmodels = submodelqueries.ApplySubmodelSemanticIDFilter(visibleSubmodels, semanticID)
 	if submodelCursor != "" {
 		cursorExists := dialect.From(goqu.T("submodel").As("cursor_submodel")).
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(goqu.I("cursor_submodel.submodel_identifier").Eq(submodelCursor))
 		visibleSubmodels = visibleSubmodels.Where(
 			goqu.Func("EXISTS", cursorExists),

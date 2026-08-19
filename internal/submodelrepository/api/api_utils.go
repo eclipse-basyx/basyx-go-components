@@ -249,33 +249,6 @@ func pruneElementToCore(element types.ISubmodelElement) {
 	}
 }
 
-func extractSubmodelIdentifierFromReference(reference types.IReference) (string, error) {
-	if reference == nil {
-		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-NILREFERENCE Submodel reference is nil")
-	}
-
-	keys := reference.Keys()
-	if len(keys) == 0 {
-		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-EMPTYKEYS Submodel reference contains no keys")
-	}
-
-	firstKey := keys[0]
-	if firstKey == nil {
-		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-NILKEY First reference key is nil")
-	}
-
-	if firstKey.Type() != types.KeyTypesSubmodel {
-		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-BADKEYTYPE First reference key is not of type Submodel")
-	}
-
-	submodelIdentifier := firstKey.Value()
-	if submodelIdentifier == "" {
-		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-EMPTYVALUE Submodel reference key value is empty")
-	}
-
-	return submodelIdentifier, nil
-}
-
 type allSubmodelsPathCursorState struct {
 	SubmodelCursor string `json:"submodelCursor,omitempty"`
 	PathCursor     string `json:"pathCursor,omitempty"`

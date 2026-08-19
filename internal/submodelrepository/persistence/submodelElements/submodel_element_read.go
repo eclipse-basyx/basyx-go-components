@@ -1632,7 +1632,9 @@ func scanLoadedSMERow(scanner sqlRowScanner, leadingTargets ...any) (loadedSMERo
 	var qualifiersPayload, semanticPayload []byte
 	var semanticVisible, valueVisible bool
 
-	targets := append(leadingTargets,
+	targets := make([]any, 0, len(leadingTargets)+20)
+	targets = append(targets, leadingTargets...)
+	targets = append(targets,
 		&dbID,
 		&parentID,
 		&rootID,

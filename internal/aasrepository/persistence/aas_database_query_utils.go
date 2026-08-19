@@ -178,7 +178,7 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 
 	if cursor != "" {
 		cursorExists := dialect.From(goqu.T("aas").As("cursor_aas")).
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
 		ds = ds.Where(
 			goqu.Func("EXISTS", cursorExists),
@@ -232,7 +232,7 @@ func buildGetAssetAdministrationShellIdentifiersDataset(
 	}
 	if cursor != "" {
 		cursorExists := dialect.From(goqu.T("aas").As("cursor_aas")).
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
 		ds = ds.Where(
 			goqu.Func("EXISTS", cursorExists),

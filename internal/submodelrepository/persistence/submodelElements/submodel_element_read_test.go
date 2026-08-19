@@ -621,6 +621,7 @@ func TestSubmodelElementPageQueryShapeIsIndependentOfPageSize(t *testing.T) {
 	require.Contains(t, oneQuery, "selected_submodel_elements")
 	require.Contains(t, oneQuery, "UNION ALL")
 	require.Contains(t, oneQuery, `"selected_sme"."root_sme_id"`)
+	require.Contains(t, oneQuery, `"selected_sme"."id" != "selected_root"."root_id"`)
 }
 
 func TestSubmodelElementCorePageSelectsOnlyRootsAndDirectChildren(t *testing.T) {
@@ -650,6 +651,7 @@ func TestAllSubmodelPathPageKeepsCompositeCursorAndStableOrder(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, query, "WITH RECURSIVE")
 	require.Contains(t, query, "authorized_submodel_paths")
+	require.Contains(t, query, `SELECT 1 FROM "authorized_submodel_paths"`)
 	require.Contains(t, query, `ORDER BY "authorized_path"."submodel_identifier" ASC, "authorized_path"."idshort_path" ASC, "authorized_path"."sme_id" ASC`)
 	require.Contains(t, query, `"authorized_path"."sme_id" >`)
 }

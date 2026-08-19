@@ -205,7 +205,7 @@ func buildSubmodelDescriptorListQuery(
 	}
 	if cursor != "" {
 		cursorExists := dialect.From(authorizedTable).
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(authorizedTable.Col(common.ColAASID).Eq(cursor))
 		page = page.Where(
 			goqu.Func("EXISTS", cursorExists),
