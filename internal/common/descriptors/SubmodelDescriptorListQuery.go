@@ -302,7 +302,7 @@ func buildAuthorizedSubmodelDescriptorRows(
 		query = query.Where(submodel.Col("administration_updated_at").Gte(updatedFrom.UTC()))
 	}
 
-	if maskRuntime != nil {
+	if maskRuntime != nil && scope.aasDescriptorID == nil {
 		query, err = maskRuntime.ApplyFilters(ctx, query, collector)
 		if err != nil {
 			return nil, nil, nil, err

@@ -173,3 +173,65 @@ func TestNestedSubmodelDescriptorListKeepsPayloadJoinOptional(t *testing.T) {
 	require.Contains(t, query, `LEFT JOIN "descriptor_payload" AS "submodel_descriptor_payload"`)
 	require.NotContains(t, query, `INNER JOIN "descriptor_payload" AS "submodel_descriptor_payload"`)
 }
+
+func TestNestedSubmodelDescriptorListDoesNotPromoteFieldMaskToRowFilter(t *testing.T) {
+	t.Parallel()
+
+	deny := false
+	supplementalField := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
+	supplementalValue := grammar.StandardString("WRITTEN_BY_X")
+	supplementalMatch := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &supplementalField},
+			{StrVal: &supplementalValue},
+		},
+	}
+	formulaField := grammar.ModelStringPattern("$smdesc#supplementalSemanticIds")
+	formula := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &formulaField},
+			{StrVal: &supplementalValue},
+		},
+	}
+	ctx := auth.WithQueryFilter(common.ContextWithConfig(t.Context(), &common.Config{}), &auth.QueryFilter{
+		Formula: &formula,
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumREAD: formula,
+		},
+		Filters: auth.FragmentFilters{
+			"$aasdesc#submodelDescriptors[].semanticId": auth.NewFragmentFilterPredicate(
+				grammar.LogicalExpression{Boolean: &deny},
+				false,
+			),
+			"$aasdesc#submodelDescriptors[].supplementalSemanticIds[]": auth.NewFragmentFilterPredicate(
+				supplementalMatch,
+				true,
+			),
+		},
+	})
+	aasDescriptorID := int64(42)
+	dataset, err := buildSubmodelDescriptorListQuery(
+		ctx,
+		101,
+		"",
+		time.Time{},
+		time.Time{},
+		submodelDescriptorListScope{
+			collectorRoot:   grammar.CollectorRootAASDesc,
+			fragmentPrefix:  "$aasdesc#submodelDescriptors[]",
+			aasDescriptorID: &aasDescriptorID,
+		},
+	)
+	require.NoError(t, err)
+	_, args, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+
+	falseArguments := 0
+	for _, argument := range args {
+		if value, ok := argument.(bool); ok && !value {
+			falseArguments++
+		}
+	}
+	require.Equal(t, 1, falseArguments)
+	require.Contains(t, args, "WRITTEN_BY_X")
+}
