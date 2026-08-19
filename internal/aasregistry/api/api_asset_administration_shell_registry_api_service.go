@@ -411,20 +411,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 		return *resp, err
 	}
 
-	// Check AAS existence
-	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, decodedAAS); chkErr != nil {
-		slog.ErrorContext(ctx, "Error in GetAllSubmodelDescriptorsThroughSuperpath: existence check failed", "error.code", "API-GETALLSUBMODELDESCRIPTORSTHROUGHSUPERPATH-CHECKEXISTS", "error", chkErr, "component", componentName, "decoded_aas", decodedAAS)
-		return common.NewErrorResponse(
-			chkErr, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "Unhandled-ExistenceCheck",
-		), chkErr
-	} else if !exists {
-		e := common.NewErrNotFound("AAS not found")
-		slog.ErrorContext(ctx, "Error in GetAllSubmodelDescriptorsThroughSuperpath: not found", "error.code", "API-GETALLSUBMODELDESCRIPTORSTHROUGHSUPERPATH-FIND", "error", e, "component", componentName, "decoded_aas", decodedAAS)
-		return common.NewErrorResponse(
-			e, http.StatusNotFound, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "NotFound",
-		), nil
-	}
-
 	// Decode cursor if provided
 	internalCursor, resp, err := decodeCursor(ctx, strings.TrimSpace(cursor), "GetAllSubmodelDescriptorsThroughSuperpath")
 	if resp != nil || err != nil {
@@ -435,6 +421,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 	smds, nextCursor, err := s.aasRegistryBackend.ListSubmodelDescriptorsForAAS(ctx, decodedAAS, limit, internalCursor)
 	if err != nil {
 		slog.ErrorContext(ctx, "Error in GetAllSubmodelDescriptorsThroughSuperpath: list failed", "error.code", "API-GETALLSUBMODELDESCRIPTORSTHROUGHSUPERPATH-EXECUTE", "error", err, "component", componentName, "decoded_aas", decodedAAS, "limit", limit, "internal_cursor", internalCursor)
+		if common.IsErrNotFound(err) {
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "NotFound",
+			), nil
+		}
 		if common.IsErrBadRequest(err) {
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "BadRequest",

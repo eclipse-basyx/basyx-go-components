@@ -606,6 +606,54 @@ func contextWithABACDisabled(t *testing.T) context.Context {
 	return cfgCtx
 }
 
+func TestSubmodelElementPageQueryShapeIsIndependentOfPageSize(t *testing.T) {
+	t.Parallel()
+
+	ctx := contextWithABACDisabled(t)
+	oneQuery, _, err := buildSubmodelElementPageQuery(ctx, []int64{1}, true, "deep")
+	require.NoError(t, err)
+	manyQuery, _, err := buildSubmodelElementPageQuery(ctx, []int64{1, 2, 3}, true, "deep")
+	require.NoError(t, err)
+
+	require.Equal(t, oneQuery, manyQuery)
+	require.Contains(t, oneQuery, "ROW_NUMBER() OVER (PARTITION BY")
+	require.Contains(t, oneQuery, "visible_submodel_roots")
+	require.Contains(t, oneQuery, "selected_submodel_elements")
+	require.Contains(t, oneQuery, "UNION ALL")
+	require.Contains(t, oneQuery, `"selected_sme"."root_sme_id"`)
+}
+
+func TestSubmodelElementCorePageSelectsOnlyRootsAndDirectChildren(t *testing.T) {
+	t.Parallel()
+
+	query, _, err := buildSubmodelElementPageQuery(contextWithABACDisabled(t), []int64{1}, false, "core")
+	require.NoError(t, err)
+	require.Contains(t, query, `"selected_sme"."parent_sme_id" = "selected_root"."root_id"`)
+}
+
+func TestAllSubmodelPathPageKeepsCompositeCursorAndStableOrder(t *testing.T) {
+	t.Parallel()
+
+	dialect := goqu.Dialect("postgres")
+	visibleSubmodels := dialect.From("submodel").Select(
+		goqu.I("id").As("submodel_id"),
+		goqu.I("submodel_identifier").As("submodel_identifier"),
+	)
+	query, _, err := buildAllSubmodelElementPathsPageQuery(
+		contextWithABACDisabled(t),
+		visibleSubmodels,
+		100,
+		"urn:example:sm",
+		"Collection.Property|42",
+		"deep",
+	)
+	require.NoError(t, err)
+	require.Contains(t, query, "WITH RECURSIVE")
+	require.Contains(t, query, "authorized_submodel_paths")
+	require.Contains(t, query, `ORDER BY "authorized_path"."submodel_identifier" ASC, "authorized_path"."idshort_path" ASC, "authorized_path"."sme_id" ASC`)
+	require.Contains(t, query, `"authorized_path"."sme_id" >`)
+}
+
 func TestNormalizeSMERowFiltersIgnoresOtherStructuralRoots(t *testing.T) {
 	t.Parallel()
 
