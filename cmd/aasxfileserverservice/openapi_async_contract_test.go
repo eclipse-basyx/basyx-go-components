@@ -32,6 +32,8 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -43,6 +45,36 @@ import (
 )
 
 const generatedAASXAPIDirectory = "../../pkg/aasxfileserverapi/go"
+
+func TestRequireAsyncAuthentication(t *testing.T) {
+	t.Parallel()
+
+	handler := requireAsyncAuthentication(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	tests := []struct {
+		name          string
+		path          string
+		authorization string
+		wantStatus    int
+	}{
+		{name: "anonymous async request", path: "/packages-async", wantStatus: http.StatusUnauthorized},
+		{name: "bearer async request", path: "/packages-async/status/handle", authorization: "Bearer token", wantStatus: http.StatusNoContent},
+		{name: "anonymous synchronous request", path: "/packages", wantStatus: http.StatusNoContent},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			request := httptest.NewRequest(http.MethodGet, test.path, nil)
+			request.Header.Set("Authorization", test.authorization)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			require.Equal(t, test.wantStatus, response.Code)
+		})
+	}
+}
 
 type generatedContractEvidence struct {
 	identifiers       map[string]struct{}

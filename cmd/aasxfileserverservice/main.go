@@ -29,15 +29,20 @@ package main
 import (
 	"context"
 	"embed"
+	"errors"
 	"flag"
 	"log/slog"
+	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	aasxapi "github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/api"
 	aasxpersistence "github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
@@ -96,12 +101,30 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	slog.InfoContext(ctx, "PostgreSQL connection established")
 
-	aasxSvc := aasxapi.NewAASXFileServerAPIAPIService(aasxDatabase)
+	asyncManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "AASXFS-UPLOAD", 15*time.Minute)
+	if err != nil {
+		return err
+	}
+	asyncUploads, err := aasxpersistence.NewAsyncUploadStore(sharedDB)
+	if err != nil {
+		return err
+	}
+	aasxSvc := aasxapi.NewAASXFileServerAPIAPIService(
+		aasxDatabase,
+		aasxapi.WithAsyncPackageUploads(asyncManager, asyncUploads),
+	)
 	aasxCtrl := openapi.NewAASXFileServerAPIAPIController(
 		aasxSvc,
 		"",
 		openapi.WithAASXFileServerUploadStager(binarycontent.NewStager(sharedDB), cfg.General.UploadMaxSizeBytes),
 	)
+	asyncUploadCtrl := openapi.NewAASXAsyncFileServerAPIAPIController(
+		aasxSvc,
+		"",
+		openapi.WithAASXAsyncFileServerUploadStager(binarycontent.NewStager(sharedDB), cfg.General.UploadMaxSizeBytes),
+	)
+	asyncStatusCtrl := openapi.NewAASXAsyncFileServerStatusAPIAPIController(aasxSvc, "")
+	asyncResultCtrl := openapi.NewAASXAsyncFileServerResultAPIAPIController(aasxSvc, "")
 
 	descSvc := aasxapi.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc, "")
@@ -111,7 +134,14 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASXFileServerService")
 
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasxfileserverservice")
+	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(
+		ctx,
+		cfg,
+		apiRouter,
+		sharedDB,
+		"aasxfileserverservice",
+		requireAsyncAuthentication,
+	)
 	if err != nil {
 		return err
 	}
@@ -122,6 +152,11 @@ func runServer(ctx context.Context, configPath string) error {
 
 	for _, rt := range aasxCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+	for _, controller := range []openapi.Router{asyncUploadCtrl, asyncStatusCtrl, asyncResultCtrl} {
+		for _, rt := range controller.Routes() {
+			apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		}
 	}
 
 	for _, rt := range descCtrl.Routes() {
@@ -134,6 +169,17 @@ func runServer(ctx context.Context, configPath string) error {
 	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 
 	return common.RunHTTPServer(ctx, "AASX", cfg.Server, r)
+}
+
+func requireAsyncAuthentication(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		authorization := strings.TrimSpace(request.Header.Get("Authorization"))
+		if strings.Contains(request.URL.Path, "/packages-async") && !strings.HasPrefix(authorization, "Bearer ") {
+			_ = common.WriteErrorResponse(writer, errors.New("access denied"), http.StatusUnauthorized, "Middleware", "Rules", "Denied")
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
 }
 
 func main() {

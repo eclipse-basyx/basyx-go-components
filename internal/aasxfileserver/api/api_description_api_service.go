@@ -46,6 +46,7 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (open
 	return openapi.Response(http.StatusOK, openapi.ServiceDescription{
 		Profiles: []string{
 			"https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002",
 		},
 	}), nil
 }

@@ -47,6 +47,16 @@ func newPostgresStore(db *sql.DB) *postgresStore {
 }
 
 func (s *postgresStore) Create(ctx context.Context, handleID string, record Record) error {
+	return s.create(ctx, s.db, handleID, record)
+}
+
+func (s *postgresStore) CreateTx(ctx context.Context, tx *sql.Tx, handleID string, record Record) error {
+	return s.create(ctx, tx, handleID, record)
+}
+
+func (s *postgresStore) create(ctx context.Context, executor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}, handleID string, record Record) error {
 	metadata, err := json.Marshal(record.Metadata)
 	if err != nil {
 		return fmt.Errorf("ASYNCJOB-PGCREATE-MARSHALMETADATA %w", err)
@@ -67,7 +77,7 @@ func (s *postgresStore) Create(ctx context.Context, handleID string, record Reco
 	if err != nil {
 		return fmt.Errorf("ASYNCJOB-PGCREATE-BUILDQUERY %w", err)
 	}
-	if _, err = s.db.ExecContext(ctx, query, args...); err != nil {
+	if _, err = executor.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("ASYNCJOB-PGCREATE-EXECQUERY %w", err)
 	}
 	return nil
@@ -122,6 +132,32 @@ func (s *postgresStore) Transition(
 	terminal Record,
 	expiresAt time.Time,
 ) (bool, error) {
+	return s.transition(ctx, s.db, handleID, managerKey, workerID, terminal, expiresAt)
+}
+
+func (s *postgresStore) TransitionTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	handleID string,
+	managerKey string,
+	workerID string,
+	terminal Record,
+	expiresAt time.Time,
+) (bool, error) {
+	return s.transition(ctx, tx, handleID, managerKey, workerID, terminal, expiresAt)
+}
+
+func (s *postgresStore) transition(
+	ctx context.Context,
+	executor interface {
+		ExecContext(context.Context, string, ...any) (sql.Result, error)
+	},
+	handleID string,
+	managerKey string,
+	workerID string,
+	terminal Record,
+	expiresAt time.Time,
+) (bool, error) {
 	bulkResult, err := marshalOptional(terminal.Result, terminal.HasResult)
 	if err != nil {
 		return false, fmt.Errorf("ASYNCJOB-PGTRANS-MARSHALRESULT %w", err)
@@ -157,7 +193,7 @@ func (s *postgresStore) Transition(
 	if err != nil {
 		return false, fmt.Errorf("ASYNCJOB-PGTRANS-BUILDQUERY %w", err)
 	}
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := executor.ExecContext(ctx, query, args...)
 	if err != nil {
 		return false, fmt.Errorf("ASYNCJOB-PGTRANS-EXECQUERY %w", err)
 	}

@@ -236,6 +236,14 @@ type transactionLargeObjectReader struct {
 	mu         sync.Mutex
 }
 
+// ReadSeekCloser combines the operations required for independently reopened
+// PostgreSQL large objects.
+type ReadSeekCloser interface {
+	io.Reader
+	io.Seeker
+	io.Closer
+}
+
 // OpenOID opens a PostgreSQL large object for bounded-memory response streaming.
 //
 // Parameters:
@@ -247,6 +255,11 @@ type transactionLargeObjectReader struct {
 //   - io.ReadCloser: Reader owning its database transaction; callers must close it.
 //   - error: Coded transaction or large-object open error.
 func OpenOID(ctx context.Context, db *sql.DB, oid int64) (io.ReadCloser, error) {
+	return OpenSeekableOID(ctx, db, oid)
+}
+
+// OpenSeekableOID opens a PostgreSQL large object for bounded-memory reads and seeks.
+func OpenSeekableOID(ctx context.Context, db *sql.DB, oid int64) (ReadSeekCloser, error) {
 	if db == nil {
 		return nil, common.NewInternalServerError("BINARYCONTENT-OPENOID-NILDB database handle is required")
 	}
@@ -259,7 +272,12 @@ func OpenOID(ctx context.Context, db *sql.DB, oid int64) (io.ReadCloser, error) 
 		_ = tx.Rollback()
 		return nil, err
 	}
-	return reader, nil
+	seekableReader, ok := reader.(ReadSeekCloser)
+	if !ok {
+		_ = reader.Close()
+		return nil, common.NewInternalServerError("BINARYCONTENT-OPENOID-NOTSEEKABLE large-object reader is not seekable")
+	}
+	return seekableReader, nil
 }
 
 // OpenOIDTx opens a large object and transfers transaction ownership to the reader.
@@ -297,6 +315,15 @@ func (reader *transactionLargeObjectReader) Read(destination []byte) (int, error
 		return 0, io.ErrClosedPipe
 	}
 	return reader.reader.Read(destination)
+}
+
+func (reader *transactionLargeObjectReader) Seek(offset int64, whence int) (int64, error) {
+	reader.mu.Lock()
+	defer reader.mu.Unlock()
+	if reader.closed {
+		return 0, io.ErrClosedPipe
+	}
+	return reader.reader.Seek(offset, whence)
 }
 
 func (reader *transactionLargeObjectReader) Close() error {

@@ -109,6 +109,11 @@ type recordStore interface {
 	DeleteExpired(context.Context, string, time.Time) (int64, error)
 }
 
+type transactionalRecordStore interface {
+	CreateTx(context.Context, *sql.Tx, string, Record) error
+	TransitionTx(context.Context, *sql.Tx, string, string, string, Record, time.Time) (bool, error)
+}
+
 // Manager coordinates asynchronous job lifecycles through a shared store.
 type Manager struct {
 	store               recordStore
@@ -210,7 +215,18 @@ func (m *Manager) Start(ctx context.Context, ownerKey string, options StartOptio
 	if err := m.cleanup(ctx, false); err != nil {
 		return "", fmt.Errorf("ASYNCJOB-START-CLEANUP %w", err)
 	}
+	return m.start(ctx, nil, ownerKey, options)
+}
 
+// StartTx persists a running job in the caller's transaction.
+func (m *Manager) StartTx(ctx context.Context, tx *sql.Tx, ownerKey string, options StartOptions) (string, error) {
+	if tx == nil {
+		return "", errors.New("ASYNCJOB-STARTTX-NILTX transaction must not be nil")
+	}
+	return m.start(ctx, tx, ownerKey, options)
+}
+
+func (m *Manager) start(ctx context.Context, tx *sql.Tx, ownerKey string, options StartOptions) (string, error) {
 	handle, err := newHandleID(m.prefix)
 	if err != nil {
 		return "", fmt.Errorf("ASYNCJOB-START-GENERATEHANDLE %w", err)
@@ -232,8 +248,16 @@ func (m *Manager) Start(ctx context.Context, ownerKey string, options StartOptio
 		LeaseExpiresAt:    now.Add(m.leaseDuration),
 		ExecutionDeadline: options.ExecutionDeadline.UTC(),
 	}
-	if err := m.store.Create(ctx, handle, record); err != nil {
-		return "", fmt.Errorf("ASYNCJOB-START-CREATE %w", err)
+	var createErr error
+	if tx == nil {
+		createErr = m.store.Create(ctx, handle, record)
+	} else if store, ok := m.store.(transactionalRecordStore); ok {
+		createErr = store.CreateTx(ctx, tx, handle, record)
+	} else {
+		createErr = errors.New("transactional asynchronous job storage is unavailable")
+	}
+	if createErr != nil {
+		return "", fmt.Errorf("ASYNCJOB-START-CREATE %w", createErr)
 	}
 	return handle, nil
 }
@@ -254,6 +278,26 @@ func (m *Manager) CompletePayload(ctx context.Context, handleID string, payload 
 		ExecutionState: executionStateCompleted,
 		Payload:        payload,
 	})
+}
+
+// CompletePayloadTx stores a successful terminal payload in the caller's transaction.
+func (m *Manager) CompletePayloadTx(ctx context.Context, tx *sql.Tx, handleID string, payload any) error {
+	if tx == nil {
+		return errors.New("ASYNCJOB-COMPLETETX-NILTX transaction must not be nil")
+	}
+	store, ok := m.store.(transactionalRecordStore)
+	if !ok {
+		return errors.New("ASYNCJOB-COMPLETETX-UNSUPPORTED transactional asynchronous job storage is unavailable")
+	}
+	terminal := Record{ExecutionState: executionStateCompleted, Payload: payload}
+	updated, err := store.TransitionTx(ctx, tx, handleID, m.prefix, m.workerID, terminal, time.Now().UTC().Add(m.ttl))
+	if err != nil {
+		return fmt.Errorf("ASYNCJOB-COMPLETETX-EXECUTE %w", err)
+	}
+	if !updated {
+		return fmt.Errorf("ASYNCJOB-COMPLETETX-REJECTED %w", errTransitionRejected)
+	}
+	return nil
 }
 
 // Fail stores a failed terminal response.

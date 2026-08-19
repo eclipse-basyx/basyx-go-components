@@ -208,6 +208,7 @@ func prepareMarkerFile(
 		return "", "", fmt.Errorf("AASEMV-MARKER-FILECHMOD: %w", err)
 	}
 	targetPath := filepath.Join(targetDir, targetName)
+	//nolint:gosec // targetDir is server-created and targetName comes from a fixture file's base name.
 	if err = os.WriteFile(targetPath, []byte(content), info.Mode().Perm()); err != nil {
 		_ = os.RemoveAll(targetDir)
 		return "", "", fmt.Errorf("AASEMV-MARKER-FILEWRITE: %w", err)

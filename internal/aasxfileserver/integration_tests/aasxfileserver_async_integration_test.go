@@ -688,11 +688,28 @@ func assertRunningStatus(t *testing.T, serviceURL string, handle string, token s
 
 func accessToken(t *testing.T, username string) string {
 	t.Helper()
-	provider := testenv.NewPasswordGrantTokenProvider(securityKeycloakURL, "basyx-ui", 10*time.Second)
-	token, err := provider.GetAccessToken(&testenv.TokenCredentials{User: username, Password: "pwd"})
+	form := url.Values{
+		"grant_type": {"password"},
+		"client_id":  {"basyx-ui"},
+		"username":   {username},
+		"password":   {"pwd"},
+	}
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, securityKeycloakURL, strings.NewReader(form.Encode()))
 	require.NoError(t, err)
-	require.NotEmpty(t, token)
-	return token
+	request.Host = "keycloak:8080"
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, response.Body.Close()) }()
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusOK, response.StatusCode, "token response: %s", body)
+	var tokenResponse struct {
+		AccessToken string `json:"access_token"`
+	}
+	require.NoError(t, json.Unmarshal(body, &tokenResponse))
+	require.NotEmpty(t, tokenResponse.AccessToken)
+	return tokenResponse.AccessToken
 }
 
 func packageDifference(t *testing.T, before []openapi.PackageDescription, after []openapi.PackageDescription) openapi.PackageDescription {
@@ -901,7 +918,7 @@ func runComposeServiceCommand(t *testing.T, action string, service string) {
 	require.NoError(t, err)
 	args := append([]string{}, baseArgs...)
 	args = append(args, "-f", composeFilePath, "-p", composeProject, action, service)
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 	defer cancel()
 	require.NoError(t, testenv.RunComposeWithEnv(ctx, engine, composeEnv, args...))
 }
