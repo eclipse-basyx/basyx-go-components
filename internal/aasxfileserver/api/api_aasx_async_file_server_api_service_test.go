@@ -47,7 +47,7 @@ import (
 var errAsyncPackageCreationIntercepted = errors.New("async package creation intercepted")
 
 type asyncPackagePoster interface {
-	PostAsyncAASXPackage(context.Context, openapi.StagedUpload, []string) (openapi.ImplResponse, error)
+	PostAsyncAASXPackage(context.Context, openapi.StagedUpload, []string, string) (openapi.ImplResponse, error)
 }
 
 type workerReadTrackingUpload struct {
@@ -79,9 +79,10 @@ func (upload *workerReadTrackingUpload) Close() error {
 }
 
 type packageCreatorSpy struct {
-	called         chan struct{}
-	callOnce       sync.Once
-	receivedUpload common.StagedUpload
+	called           chan struct{}
+	callOnce         sync.Once
+	receivedUpload   common.StagedUpload
+	receivedFileName string
 }
 
 func (creator *packageCreatorSpy) CreatePackage(
@@ -89,9 +90,10 @@ func (creator *packageCreatorSpy) CreatePackage(
 	_ string,
 	upload common.StagedUpload,
 	_ []string,
-	_ string,
+	fileName string,
 ) (*persistence.PackageRecord, error) {
 	creator.receivedUpload = upload
+	creator.receivedFileName = fileName
 	creator.callOnce.Do(func() { close(creator.called) })
 	return nil, errAsyncPackageCreationIntercepted
 }
@@ -115,7 +117,8 @@ func TestAsyncPackageWorkerHandsStagedUploadToPersistenceWithoutPreReading(t *te
 		size:       fileInfo.Size(),
 		closed:     make(chan struct{}),
 	}
-	response, err := asyncService.PostAsyncAASXPackage(t.Context(), upload, nil)
+	expectedFileName := filepath.Base(filePath)
+	response, err := asyncService.PostAsyncAASXPackage(t.Context(), upload, nil, expectedFileName)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusAccepted, response.Code)
 
@@ -125,6 +128,7 @@ func TestAsyncPackageWorkerHandsStagedUploadToPersistenceWithoutPreReading(t *te
 		t.Fatal("async worker did not hand the staged upload to persistence")
 	}
 	require.Same(t, upload, creator.receivedUpload, "async worker did not pass the original staged upload to package persistence")
+	require.Equal(t, expectedFileName, creator.receivedFileName, "async worker did not preserve the multipart source filename")
 	require.False(t, upload.readByWorker.Load(), "async worker read the staged package before persistence received it")
 	require.False(t, upload.promotedByWorker.Load(), "async worker promoted the staged package instead of passing it to persistence")
 	select {
