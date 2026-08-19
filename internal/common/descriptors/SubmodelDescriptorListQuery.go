@@ -282,7 +282,7 @@ func buildAuthorizedSubmodelDescriptorRows(
 			)
 	}
 	query = query.
-		InnerJoin(payload, goqu.On(payload.Col(common.ColDescriptorID).Eq(submodel.Col(common.ColDescriptorID)))).
+		LeftJoin(payload, goqu.On(payload.Col(common.ColDescriptorID).Eq(submodel.Col(common.ColDescriptorID)))).
 		LeftJoin(semanticReference, goqu.On(semanticReference.Col(common.ColID).Eq(submodel.Col(common.ColDescriptorID)))).
 		Select(columns...)
 	if scope.aasDescriptorID == nil {

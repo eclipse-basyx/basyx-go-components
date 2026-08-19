@@ -149,3 +149,27 @@ func TestSubmodelDescriptorListCursorExistenceUsesSQLLiteral(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, query, `SELECT 1 FROM "authorized_submodel_descriptors"`)
 }
+
+func TestNestedSubmodelDescriptorListKeepsPayloadJoinOptional(t *testing.T) {
+	t.Parallel()
+
+	aasDescriptorID := int64(42)
+	scope := submodelDescriptorListScope{
+		collectorRoot:   grammar.CollectorRootAASDesc,
+		fragmentPrefix:  "$aasdesc#submodelDescriptors[]",
+		aasDescriptorID: &aasDescriptorID,
+	}
+	dataset, err := buildSubmodelDescriptorListQuery(
+		common.ContextWithConfig(t.Context(), &common.Config{}),
+		101,
+		"",
+		time.Time{},
+		time.Time{},
+		scope,
+	)
+	require.NoError(t, err)
+	query, _, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, query, `LEFT JOIN "descriptor_payload" AS "submodel_descriptor_payload"`)
+	require.NotContains(t, query, `INNER JOIN "descriptor_payload" AS "submodel_descriptor_payload"`)
+}
