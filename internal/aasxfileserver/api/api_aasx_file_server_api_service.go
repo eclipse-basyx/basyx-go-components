@@ -182,13 +182,13 @@ func (s *AASXFileServerAPIAPIService) PostAsyncAASXPackage(ctx context.Context, 
 		return newAPIErrorResponse(errors.New("multipart form field 'file' is required"), http.StatusBadRequest, operation, "MissingFile"), nil
 	}
 
-	if s.asyncJobs == nil && s.asyncUploads == nil {
-		handleID := generatePackageID()
-		go s.processAsyncPackage(context.WithoutCancel(ctx), nil, handleID, file, aasIDs, fileName, func() {})
-		return openapi.Response(http.StatusAccepted, openapi.OperationHandle{HandleId: handleID}), nil
-	}
 	if s.asyncJobs == nil || s.asyncUploads == nil {
 		return newAPIErrorResponse(errors.New("asynchronous package persistence is not configured"), http.StatusInternalServerError, operation, "NotConfigured"), nil
+	}
+	releaseExecutionSlot, acquired := s.asyncJobs.TryAcquireExecutionSlot()
+	if !acquired {
+		capacityErr := errors.New("AASXFS-ASYNC-CAPACITY asynchronous execution capacity is exhausted")
+		return newAPIErrorResponse(capacityErr, http.StatusTooManyRequests, operation, "ExecutionCapacityExhausted"), nil
 	}
 
 	executionCtx, cancelExecution := s.asyncJobs.NewExecutionContext(ctx, asyncPackageExecutionTime)
@@ -205,11 +205,12 @@ func (s *AASXFileServerAPIAPIService) PostAsyncAASXPackage(ctx context.Context, 
 		successResult,
 	)
 	if err != nil {
+		releaseExecutionSlot()
 		cancelExecution()
 		return mapAsyncAcceptanceError(err, operation), nil
 	}
 
-	go s.processAsyncPackage(executionCtx, s.asyncJobs, handleID, durableUpload, aasIDs, fileName, cancelExecution)
+	go s.processAsyncPackage(executionCtx, s.asyncJobs, handleID, durableUpload, aasIDs, fileName, cancelExecution, releaseExecutionSlot)
 	return openapi.Response(http.StatusAccepted, openapi.OperationHandle{HandleId: handleID}), nil
 }
 
@@ -283,17 +284,16 @@ func (s *AASXFileServerAPIAPIService) processAsyncPackage(
 	aasIDs []string,
 	fileName string,
 	cancel context.CancelFunc,
+	releaseExecutionSlot func(),
 ) {
+	defer releaseExecutionSlot()
 	defer cancel()
 	defer func() { _ = file.Close() }()
-	stopHeartbeat := func() {}
-	if manager != nil {
-		stopHeartbeat = manager.KeepAlive(ctx, handleID)
-	}
+	stopHeartbeat := manager.KeepAlive(ctx, handleID)
 	defer stopHeartbeat()
 
 	_, err := s.packageCreator.CreatePackage(ctx, generatePackageID(), file, aasIDs, fileName)
-	if err == nil || manager == nil {
+	if err == nil {
 		return
 	}
 	if closeErr := file.Close(); closeErr != nil {

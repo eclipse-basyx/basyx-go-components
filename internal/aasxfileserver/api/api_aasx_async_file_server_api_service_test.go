@@ -33,6 +33,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -40,6 +41,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 	"github.com/stretchr/testify/require"
 )
@@ -109,8 +111,9 @@ func TestAsyncPackageWorkerHandsStagedUploadToPersistenceWithoutPreReading(t *te
 	creator := &packageCreatorSpy{called: make(chan struct{})}
 	service := NewAASXFileServerAPIAPIService(nil)
 	service.packageCreator = creator
-	asyncService, implemented := any(service).(asyncPackagePoster)
-	require.True(t, implemented, "AASX service must implement the generated async package API")
+	manager := asyncjob.NewManager("AASXFS-TEST", time.Minute)
+	handleID, err := manager.Start(t.Context(), "test-owner", asyncjob.StartOptions{JobKind: asyncPackageJobKind})
+	require.NoError(t, err)
 
 	upload := &workerReadTrackingUpload{
 		ReadSeeker: file,
@@ -118,9 +121,7 @@ func TestAsyncPackageWorkerHandsStagedUploadToPersistenceWithoutPreReading(t *te
 		closed:     make(chan struct{}),
 	}
 	expectedFileName := filepath.Base(filePath)
-	response, err := asyncService.PostAsyncAASXPackage(t.Context(), upload, nil, expectedFileName)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusAccepted, response.Code)
+	go service.processAsyncPackage(t.Context(), manager, handleID, upload, nil, expectedFileName, func() {}, func() {})
 
 	select {
 	case <-creator.called:
@@ -137,4 +138,72 @@ func TestAsyncPackageWorkerHandsStagedUploadToPersistenceWithoutPreReading(t *te
 		t.Fatal("async worker did not release the staged upload after persistence failed")
 	}
 	require.False(t, upload.readByWorker.Load(), "async worker read the staged package after persistence returned")
+}
+
+func TestPostAsyncAASXPackageFailsWhenPersistenceIsNotConfigured(t *testing.T) {
+	service := NewAASXFileServerAPIAPIService(nil)
+	asyncService, implemented := any(service).(asyncPackagePoster)
+	require.True(t, implemented, "AASX service must implement the generated async package API")
+
+	upload := newWorkerReadTrackingUpload()
+	defer func() { require.NoError(t, upload.Close()) }()
+	response, err := asyncService.PostAsyncAASXPackage(t.Context(), upload, nil, "package.aasx")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusInternalServerError, response.Code)
+}
+
+func TestPostAsyncAASXPackageRejectsExhaustedExecutionCapacity(t *testing.T) {
+	manager := asyncjob.NewManager("AASXFS-TEST", time.Minute)
+	releases := reserveAllExecutionSlots(manager)
+	defer releaseExecutionSlots(releases)
+	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
+
+	upload := newWorkerReadTrackingUpload()
+	defer func() { require.NoError(t, upload.Close()) }()
+	response, err := service.PostAsyncAASXPackage(t.Context(), upload, nil, "package.aasx")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusTooManyRequests, response.Code)
+}
+
+func TestPostAsyncAASXPackageReleasesCapacityAfterAcceptanceFailure(t *testing.T) {
+	manager := asyncjob.NewManager("AASXFS-TEST", time.Minute)
+	releases := reserveAllExecutionSlots(manager)
+	releases[len(releases)-1]()
+	releases = releases[:len(releases)-1]
+	defer releaseExecutionSlots(releases)
+	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
+
+	upload := newWorkerReadTrackingUpload()
+	defer func() { require.NoError(t, upload.Close()) }()
+	response, err := service.PostAsyncAASXPackage(t.Context(), upload, nil, "package.aasx")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusInternalServerError, response.Code)
+
+	release, acquired := manager.TryAcquireExecutionSlot()
+	require.True(t, acquired, "acceptance failure leaked its execution slot")
+	release()
+}
+
+func newWorkerReadTrackingUpload() *workerReadTrackingUpload {
+	return &workerReadTrackingUpload{
+		ReadSeeker: strings.NewReader(""),
+		closed:     make(chan struct{}),
+	}
+}
+
+func reserveAllExecutionSlots(manager *asyncjob.Manager) []func() {
+	releases := make([]func(), 0)
+	for {
+		release, acquired := manager.TryAcquireExecutionSlot()
+		if !acquired {
+			return releases
+		}
+		releases = append(releases, release)
+	}
+}
+
+func releaseExecutionSlots(releases []func()) {
+	for _, release := range releases {
+		release()
+	}
 }
