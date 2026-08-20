@@ -27,6 +27,10 @@ package persistence
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,6 +39,43 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
+
+const maximumPackageReadRequest = 512 * 1024
+
+var errPackageReadRequestTooLarge = errors.New("package reader requested a full-file-sized buffer")
+
+var errPromotionIntercepted = errors.New("staged upload promotion intercepted")
+
+type guardedReadSeeker struct {
+	io.ReadSeeker
+	maximumReadRequest int
+}
+
+type promotionTrackingUpload struct {
+	io.ReadSeeker
+	size     int64
+	promoted bool
+}
+
+func (upload *promotionTrackingUpload) Size() int64 {
+	return upload.size
+}
+
+func (upload *promotionTrackingUpload) Promote(context.Context, func(context.Context, *sql.Tx, int64, int64) error) error {
+	upload.promoted = true
+	return errPromotionIntercepted
+}
+
+func (*promotionTrackingUpload) Close() error {
+	return nil
+}
+
+func (reader *guardedReadSeeker) Read(destination []byte) (int, error) {
+	if len(destination) > reader.maximumReadRequest {
+		return 0, errPackageReadRequestTooLarge
+	}
+	return reader.ReadSeeker.Read(destination)
+}
 
 func TestAASXFileServerReadPoolSelection(t *testing.T) {
 	writer, _, err := sqlmock.New()
@@ -78,6 +119,44 @@ func TestResolvePackageContentTypeRejectsMalformedAASX(t *testing.T) {
 	)
 	require.Error(t, err)
 	require.True(t, common.IsErrBadRequest(err), "expected bad request, got %v", err)
+}
+
+func TestResolvePackageContentTypeDoesNotReadAASXIntoOneBuffer(t *testing.T) {
+	t.Parallel()
+
+	filePath := filepath.Clean("../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx")
+	file, err := os.Open(filePath)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, file.Close()) }()
+	fileInfo, err := file.Stat()
+	require.NoError(t, err)
+	require.Greater(t, fileInfo.Size(), int64(maximumPackageReadRequest))
+
+	guardedPackage := &guardedReadSeeker{ReadSeeker: file, maximumReadRequest: maximumPackageReadRequest}
+	contentType, err := resolvePackageContentTypeForUpload(
+		guardedPackage,
+		filepath.Base(filePath),
+		common.AASXLimitsFromConfig(nil),
+	)
+	require.NoError(t, err)
+	require.Equal(t, "application/aasx+xml", contentType)
+}
+
+func TestCreatePackageTransfersOriginalStagedUploadToPromotion(t *testing.T) {
+	t.Parallel()
+
+	filePath := filepath.Clean("../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx")
+	file, err := os.Open(filePath)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, file.Close()) }()
+	fileInfo, err := file.Stat()
+	require.NoError(t, err)
+
+	upload := &promotionTrackingUpload{ReadSeeker: file, size: fileInfo.Size()}
+	backend := &AASXFileServerDatabase{}
+	_, err = backend.CreatePackage(t.Context(), "ownership-transfer", upload, nil, filepath.Base(filePath))
+	require.ErrorIs(t, err, errPromotionIntercepted)
+	require.True(t, upload.promoted, "persistence replaced the caller's staged upload instead of promoting it")
 }
 
 func TestNormalizeAASIDs(t *testing.T) {

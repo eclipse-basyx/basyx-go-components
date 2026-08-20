@@ -28,23 +28,55 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 )
 
-const componentName = "AASXFS"
+const (
+	componentName                        = "AASXFS"
+	asyncPackageJobKind                  = "aasx-package-upload"
+	asyncPackageExecutionTime            = 15 * time.Minute
+	asyncPackageProcessingFailureMessage = "asynchronous package processing failed"
+	asyncPackageAcceptanceFailureMessage = "asynchronous package acceptance failed"
+	asyncPackageStateReadFailureMessage  = "asynchronous operation state could not be read"
+	packageIDRandomByteCount             = 24
+)
 
 // AASXFileServerAPIAPIService implements the generated AASX file server API service interface.
 type AASXFileServerAPIAPIService struct {
-	backend *persistence.AASXFileServerDatabase
+	backend        *persistence.AASXFileServerDatabase
+	packageCreator aasxPackageCreator
+	asyncJobs      *asyncjob.Manager
+	asyncUploads   *persistence.AsyncUploadStore
+}
+
+// AASXFileServerServiceOption configures optional service capabilities.
+type AASXFileServerServiceOption func(*AASXFileServerAPIAPIService)
+
+// WithAsyncPackageUploads enables PostgreSQL-backed SSP-002 processing.
+func WithAsyncPackageUploads(manager *asyncjob.Manager, uploads *persistence.AsyncUploadStore) AASXFileServerServiceOption {
+	return func(service *AASXFileServerAPIAPIService) {
+		service.asyncJobs = manager
+		service.asyncUploads = uploads
+	}
+}
+
+type aasxPackageCreator interface {
+	CreatePackage(context.Context, string, common.StagedUpload, []string, string) (*persistence.PackageRecord, error)
 }
 
 // NewAASXFileServerAPIAPIService constructs an AASX file server service.
@@ -54,8 +86,12 @@ type AASXFileServerAPIAPIService struct {
 //
 // Returns:
 //   - *AASXFileServerAPIAPIService: Configured service instance.
-func NewAASXFileServerAPIAPIService(backend *persistence.AASXFileServerDatabase) *AASXFileServerAPIAPIService {
-	return &AASXFileServerAPIAPIService{backend: backend}
+func NewAASXFileServerAPIAPIService(backend *persistence.AASXFileServerDatabase, options ...AASXFileServerServiceOption) *AASXFileServerAPIAPIService {
+	service := &AASXFileServerAPIAPIService{backend: backend, packageCreator: backend}
+	for _, option := range options {
+		option(service)
+	}
+	return service
 }
 
 // GetAllAASXPackageIds lists available package descriptors with optional AAS filter and paging.
@@ -127,8 +163,11 @@ func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file 
 		return newAPIErrorResponse(errors.New("multipart form field 'file' is required"), http.StatusBadRequest, operation, "MissingFile"), nil
 	}
 
-	rawPackageID := generatePackageID()
-	record, err := s.backend.CreatePackage(ctx, rawPackageID, file, aasIDs, fileName)
+	rawPackageID, err := generatePackageID()
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GeneratePackageId"), nil
+	}
+	record, err := s.packageCreator.CreatePackage(ctx, rawPackageID, file, aasIDs, fileName)
 	if err != nil {
 		if common.IsErrPayloadTooLarge(err) {
 			return newAPIErrorResponse(err, http.StatusRequestEntityTooLarge, operation, "PayloadTooLarge"), nil
@@ -143,6 +182,223 @@ func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file 
 	}
 
 	return openapi.Response(http.StatusCreated, toPackageDescription(*record)), nil
+}
+
+// PostAsyncAASXPackage durably accepts a staged package and processes it independently.
+func (s *AASXFileServerAPIAPIService) PostAsyncAASXPackage(ctx context.Context, file openapi.StagedUpload, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
+	const operation = "PostAsyncAASXPackage"
+	if file == nil {
+		return newAPIErrorResponse(errors.New("multipart form field 'file' is required"), http.StatusBadRequest, operation, "MissingFile"), nil
+	}
+
+	if s.asyncJobs == nil || s.asyncUploads == nil {
+		return newAPIErrorResponse(errors.New("asynchronous package persistence is not configured"), http.StatusInternalServerError, operation, "NotConfigured"), nil
+	}
+	releaseExecutionSlot, acquired := acquireAsyncExecutionSlot(ctx, s.asyncJobs)
+	if !acquired {
+		capacityErr := errors.New("AASXFS-ASYNC-CAPACITY asynchronous execution capacity is exhausted")
+		return newAPIErrorResponse(capacityErr, http.StatusTooManyRequests, operation, "ExecutionCapacityExhausted"), nil
+	}
+
+	executionCtx, cancelExecution := s.asyncJobs.NewExecutionContext(ctx, asyncPackageExecutionTime)
+	successResult := openapi.BaseOperationResult{
+		ExecutionState: openapi.EXECUTIONSTATE_COMPLETED,
+		Success:        true,
+	}
+	handleID, durableUpload, err := s.asyncUploads.Accept(
+		executionCtx,
+		s.asyncJobs,
+		file,
+		auth.OwnerKeyFromContext(ctx),
+		asyncjob.StartOptions{JobKind: asyncPackageJobKind, ExecutionDeadline: time.Now().UTC().Add(asyncPackageExecutionTime)},
+		successResult,
+	)
+	if err != nil {
+		releaseExecutionSlot()
+		cancelExecution()
+		return mapAsyncAcceptanceError(ctx, err, operation), nil
+	}
+
+	go s.processAsyncPackage(executionCtx, s.asyncJobs, handleID, durableUpload, aasIDs, fileName, cancelExecution, releaseExecutionSlot)
+	return openapi.Response(http.StatusAccepted, openapi.OperationHandle{HandleId: handleID}), nil
+}
+
+func acquireAsyncExecutionSlot(ctx context.Context, manager *asyncjob.Manager) (func(), bool) {
+	if executionSlot, found := asyncjob.ExecutionSlotLeaseFromContext(ctx); found {
+		return executionSlot.Claim()
+	}
+	return manager.TryAcquireExecutionSlot()
+}
+
+// GetAasxAsyncStatus returns a running result or redirects terminal operations.
+func (s *AASXFileServerAPIAPIService) GetAasxAsyncStatus(ctx context.Context, handleID string) (openapi.ImplResponse, error) {
+	const operation = "GetAasxAsyncStatus"
+	record, response, ok := s.asyncRecord(ctx, handleID, operation)
+	if !ok {
+		return response, nil
+	}
+	if record.ExecutionState == "Running" {
+		return openapi.Response(http.StatusOK, openapi.BaseOperationResult{
+			ExecutionState: openapi.EXECUTIONSTATE_RUNNING,
+			Success:        true,
+		}), nil
+	}
+	return openapi.Response(http.StatusFound, openapi.Redirect{
+		Location: "/packages-async/result/" + url.PathEscape(handleID),
+	}), nil
+}
+
+// GetAasxAsyncResult returns the retained terminal operation result.
+func (s *AASXFileServerAPIAPIService) GetAasxAsyncResult(ctx context.Context, handleID string) (openapi.ImplResponse, error) {
+	const operation = "GetAasxAsyncResult"
+	record, response, ok := s.asyncRecord(ctx, handleID, operation)
+	if !ok {
+		return response, nil
+	}
+	if record.ExecutionState == "Running" {
+		err := errors.New("operation is still running")
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "OperationStillRunning"), nil
+	}
+	if record.ExecutionState == "Completed" && record.Payload != nil {
+		return openapi.Response(http.StatusOK, record.Payload), nil
+	}
+	if record.ExecutionState == "Failed" {
+		if payload, found := record.ErrorBody.(map[string]any); found {
+			if _, hasState := payload["executionState"]; hasState {
+				return openapi.Response(http.StatusOK, payload), nil
+			}
+		}
+		return openapi.Response(http.StatusOK, failedOperationResult(fmt.Sprint(record.ErrorBody))), nil
+	}
+	return openapi.Response(http.StatusOK, openapi.BaseOperationResult{
+		ExecutionState: openapi.ExecutionState(record.ExecutionState),
+		Success:        record.ExecutionState == "Completed",
+	}), nil
+}
+
+func (s *AASXFileServerAPIAPIService) asyncRecord(ctx context.Context, handleID string, operation string) (asyncjob.Record, openapi.ImplResponse, bool) {
+	if s.asyncJobs == nil {
+		err := errors.New("asynchronous package persistence is not configured")
+		return asyncjob.Record{}, newAPIErrorResponse(err, http.StatusInternalServerError, operation, "NotConfigured"), false
+	}
+	record, found, err := s.asyncJobs.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
+	if err != nil {
+		response := asyncInternalErrorResponse(
+			ctx,
+			err,
+			operation,
+			"ReadHandle",
+			"AASXFS-ASYNCRECORD-READHANDLE",
+			asyncPackageStateReadFailureMessage,
+		)
+		return asyncjob.Record{}, response, false
+	}
+	if !found || record.JobKind != asyncPackageJobKind {
+		err = common.NewErrNotFound("operation handle")
+		return asyncjob.Record{}, newAPIErrorResponse(err, http.StatusNotFound, operation, "HandleNotFound"), false
+	}
+	return record, openapi.ImplResponse{}, true
+}
+
+func (s *AASXFileServerAPIAPIService) processAsyncPackage(
+	ctx context.Context,
+	manager *asyncjob.Manager,
+	handleID string,
+	file common.StagedUpload,
+	aasIDs []string,
+	fileName string,
+	cancel context.CancelFunc,
+	releaseExecutionSlot func(),
+) {
+	defer releaseExecutionSlot()
+	defer cancel()
+	defer func() { _ = file.Close() }()
+	stopHeartbeat := manager.KeepAlive(ctx, handleID)
+	defer stopHeartbeat()
+	defer func() {
+		if recover() == nil {
+			return
+		}
+		slog.ErrorContext(ctx, "asynchronous AASX worker panicked", "error.code", "AASXFS-ASYNCWORKER-PANIC", "async_job.handle_id", handleID)
+		persistAsyncPackageFailure(ctx, manager, handleID, file, asyncPackageProcessingFailureMessage)
+	}()
+
+	packageID, err := generatePackageID()
+	if err == nil {
+		_, err = s.packageCreator.CreatePackage(ctx, packageID, file, aasIDs, fileName)
+	}
+	if err == nil {
+		return
+	}
+	slog.ErrorContext(ctx, "asynchronous AASX package processing failed", "error.code", "AASXFS-ASYNCWORKER-PROCESSPACKAGE", "error", err, "async_job.handle_id", handleID)
+	persistAsyncPackageFailure(ctx, manager, handleID, file, clientVisibleAsyncPackageFailureMessage(err))
+}
+
+func clientVisibleAsyncPackageFailureMessage(err error) string {
+	if common.IsErrBadRequest(err) || common.IsErrPayloadTooLarge(err) {
+		return err.Error()
+	}
+	return asyncPackageProcessingFailureMessage
+}
+
+func persistAsyncPackageFailure(ctx context.Context, manager *asyncjob.Manager, handleID string, file common.StagedUpload, message string) {
+	if closeErr := file.Close(); closeErr != nil {
+		slog.ErrorContext(ctx, "asynchronous AASX staging cleanup failed", "error.code", "AASXFS-ASYNCWORKER-CLEANUP", "error", closeErr, "async_job.handle_id", handleID)
+	}
+	persistenceCtx, cancelPersistence := asyncjob.NewPersistenceContext(ctx)
+	defer cancelPersistence()
+	result := failedOperationResult(message)
+	if persistErr := manager.Fail(persistenceCtx, handleID, http.StatusInternalServerError, result); persistErr != nil {
+		slog.ErrorContext(persistenceCtx, "asynchronous AASX failure persistence failed", "error.code", "AASXFS-ASYNCWORKER-PERSISTFAILURE", "error", persistErr, "async_job.handle_id", handleID)
+	}
+}
+
+func failedOperationResult(message string) openapi.BaseOperationResult {
+	if strings.TrimSpace(message) == "" {
+		message = asyncPackageProcessingFailureMessage
+	}
+	return openapi.BaseOperationResult{
+		ExecutionState: openapi.EXECUTIONSTATE_FAILED,
+		Success:        false,
+		Messages: []map[string]any{{
+			"code":        "AASXFS-ASYNCWORKER-FAILED",
+			"messageType": "Error",
+			"text":        message,
+			"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		}},
+	}
+}
+
+func mapAsyncAcceptanceError(ctx context.Context, err error, operation string) openapi.ImplResponse {
+	switch {
+	case common.IsErrPayloadTooLarge(err):
+		return newAPIErrorResponse(err, http.StatusRequestEntityTooLarge, operation, "PayloadTooLarge")
+	case common.IsErrBadRequest(err):
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest")
+	case common.IsErrConflict(err):
+		return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict")
+	default:
+		return asyncInternalErrorResponse(
+			ctx,
+			err,
+			operation,
+			"DurableAcceptance",
+			"AASXFS-ASYNCACCEPT-PERSIST",
+			asyncPackageAcceptanceFailureMessage,
+		)
+	}
+}
+
+func asyncInternalErrorResponse(
+	ctx context.Context,
+	err error,
+	operation string,
+	info string,
+	errorCode string,
+	clientMessage string,
+) openapi.ImplResponse {
+	slog.ErrorContext(ctx, "asynchronous AASX API operation failed", "error.code", errorCode, "error", err)
+	return newAPIErrorResponse(common.NewInternalServerError(clientMessage), http.StatusInternalServerError, operation, info)
 }
 
 // GetAASXByPackageId returns a streamed package and its download metadata.
@@ -265,8 +521,12 @@ func toPackageDescription(record persistence.PackageRecord) openapi.PackageDescr
 	}
 }
 
-func generatePackageID() string {
-	return fmt.Sprintf("pkg-%d", time.Now().UnixNano())
+func generatePackageID() (string, error) {
+	randomBytes := make([]byte, packageIDRandomByteCount)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", fmt.Errorf("AASXFS-GENERATEPACKAGEID-READRANDOM %w", err)
+	}
+	return "pkg-" + base64.RawURLEncoding.EncodeToString(randomBytes), nil
 }
 
 func newAPIErrorResponse(err error, status int, operation string, info string) openapi.ImplResponse {

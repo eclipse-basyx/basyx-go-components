@@ -1,0 +1,148 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+package openapi
+
+import (
+	"errors"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+)
+
+// AASXAsyncFileServerAPIAPIController binds SSP-002 upload requests.
+type AASXAsyncFileServerAPIAPIController struct {
+	service               AASXAsyncFileServerAPIAPIServicer
+	errorHandler          ErrorHandler
+	contextPath           string
+	uploadStager          common.UploadStager
+	maxUploadSizeBytes    int64
+	executionSlotAcquirer func() (*asyncjob.ExecutionSlotLease, bool)
+}
+
+// WithAASXAsyncFileServerExecutionSlotAcquirer configures admission control for asynchronous workers.
+func WithAASXAsyncFileServerExecutionSlotAcquirer(acquirer func() (*asyncjob.ExecutionSlotLease, bool)) AASXAsyncFileServerAPIAPIOption {
+	return func(controller *AASXAsyncFileServerAPIAPIController) {
+		controller.executionSlotAcquirer = acquirer
+	}
+}
+
+// AASXAsyncFileServerAPIAPIOption configures the asynchronous upload controller.
+type AASXAsyncFileServerAPIAPIOption func(*AASXAsyncFileServerAPIAPIController)
+
+// WithAASXAsyncFileServerAPIAPIErrorHandler configures controller error handling.
+func WithAASXAsyncFileServerAPIAPIErrorHandler(handler ErrorHandler) AASXAsyncFileServerAPIAPIOption {
+	return func(controller *AASXAsyncFileServerAPIAPIController) { controller.errorHandler = handler }
+}
+
+// WithAASXAsyncFileServerUploadStager configures durable upload staging and its size limit.
+func WithAASXAsyncFileServerUploadStager(stager common.UploadStager, maxUploadSizeBytes int64) AASXAsyncFileServerAPIAPIOption {
+	return func(controller *AASXAsyncFileServerAPIAPIController) {
+		controller.uploadStager = stager
+		controller.maxUploadSizeBytes = maxUploadSizeBytes
+	}
+}
+
+// NewAASXAsyncFileServerAPIAPIController creates an asynchronous upload controller.
+func NewAASXAsyncFileServerAPIAPIController(service AASXAsyncFileServerAPIAPIServicer, contextPath string, options ...AASXAsyncFileServerAPIAPIOption) *AASXAsyncFileServerAPIAPIController {
+	controller := &AASXAsyncFileServerAPIAPIController{
+		service: service, errorHandler: DefaultErrorHandler, contextPath: normalizeContextPath(contextPath),
+	}
+	for _, option := range options {
+		option(controller)
+	}
+	return controller
+}
+
+// Routes returns the asynchronous upload routes exposed by the controller.
+func (controller *AASXAsyncFileServerAPIAPIController) Routes() Routes {
+	return Routes{
+		"PostAsyncAASXPackage": {
+			Method: strings.ToUpper("Post"), Pattern: controller.contextPath + "/packages-async", HandlerFunc: controller.PostAsyncAASXPackage,
+		},
+	}
+}
+
+// PostAsyncAASXPackage initiates an asynchronous upload of an AASX package.
+func (controller *AASXAsyncFileServerAPIAPIController) PostAsyncAASXPackage(writer http.ResponseWriter, request *http.Request) {
+	if controller.uploadStager == nil {
+		controller.errorHandler(writer, request, common.NewInternalServerError("AASXFILES-ASYNCUPLOAD-NOSTAGER upload stager is not configured"), nil)
+		return
+	}
+	if controller.executionSlotAcquirer == nil {
+		controller.errorHandler(writer, request, common.NewInternalServerError("AASXFILES-ASYNCUPLOAD-NOADMISSION execution slot admission is not configured"), nil)
+		return
+	}
+	executionSlot, acquired := controller.executionSlotAcquirer()
+	if !acquired {
+		capacityErr := errors.New("AASXFILES-ASYNCUPLOAD-CAPACITY asynchronous execution capacity is exhausted")
+		response := Response(http.StatusTooManyRequests, nil)
+		controller.errorHandler(writer, request, capacityErr, &response)
+		return
+	}
+	if executionSlot == nil {
+		controller.errorHandler(writer, request, common.NewInternalServerError("AASXFILES-ASYNCUPLOAD-NILADMISSION execution slot admission returned no lease"), nil)
+		return
+	}
+	defer executionSlot.ReleaseIfUnclaimed()
+	request = request.WithContext(asyncjob.WithExecutionSlotLease(request.Context(), executionSlot))
+
+	upload, err := common.ReadMultipartUpload(writer, request, controller.maxUploadSizeBytes, "file", controller.uploadStager)
+	if err != nil {
+		controller.errorHandler(writer, request, &ParsingError{Param: "file", Err: clientVisibleAsyncUploadError(request, err)}, nil)
+		return
+	}
+	defer func() { _ = upload.Close() }()
+
+	result, err := controller.service.PostAsyncAASXPackage(request.Context(), upload.File, uploadAASIDs(upload), uploadFileName(upload))
+	if err != nil {
+		controller.errorHandler(writer, request, err, &result)
+		return
+	}
+	if result.Code == http.StatusAccepted {
+		if handle, ok := result.Body.(OperationHandle); ok && handle.HandleId != "" {
+			location := "/packages-async/status/" + url.PathEscape(handle.HandleId)
+			writer.Header().Set("Location", common.ContextualizeAPIResourceLocation(request, location, "/packages-async"))
+		}
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, writer)
+}
+
+func clientVisibleAsyncUploadError(request *http.Request, err error) error {
+	switch {
+	case common.IsInternalServerError(err):
+		slog.ErrorContext(request.Context(), "asynchronous AASX upload staging failed", "error.code", "AASXFILES-ASYNCUPLOAD-STAGING", "error", err)
+		return common.NewInternalServerError("AASXFILES-ASYNCUPLOAD-STAGING asynchronous upload staging failed")
+	case common.IsErrServiceUnavailable(err):
+		slog.ErrorContext(request.Context(), "asynchronous AASX upload staging unavailable", "error.code", "AASXFILES-ASYNCUPLOAD-STAGINGUNAVAILABLE", "error", err)
+		return common.NewErrServiceUnavailable("AASXFILES-ASYNCUPLOAD-STAGINGUNAVAILABLE asynchronous upload staging is temporarily unavailable")
+	default:
+		return err
+	}
+}

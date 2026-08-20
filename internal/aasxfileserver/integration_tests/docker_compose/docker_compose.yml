@@ -44,6 +44,166 @@ services:
       db_it:
         condition: service_healthy
 
+  aasx_fileserver_replica_b_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_READER_HOST=db_it
+      - POSTGRES_READER_PORT=5432
+      - POSTGRES_READER_USER=admin
+      - POSTGRES_READER_PASSWORD=admin123
+      - POSTGRES_READER_DBNAME=basyxTestDB
+      - POSTGRES_READER_OPTIONS=-c default_transaction_read_only=on
+    ports:
+      - "127.0.0.1:${BASYX_IT_API_B_PORT:-6005}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
+  aasx_fileserver_context_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - SERVER_CONTEXTPATH=/external/aasx
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+    ports:
+      - "127.0.0.1:${BASYX_IT_CONTEXT_API_PORT:-6006}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
+  aasx_fileserver_limited_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - GENERAL_UPLOADMAXSIZEBYTES=1024
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+    ports:
+      - "127.0.0.1:${BASYX_IT_LIMITED_API_PORT:-6009}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
+  aasx_fileserver_saturated_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=2
+      - POSTGRES_MAXIDLECONNECTIONS=2
+    ports:
+      - "127.0.0.1:${BASYX_IT_SATURATED_API_PORT:-6013}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
+  aasx_fileserver_secure_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+    ports:
+      - "127.0.0.1:${BASYX_IT_SECURITY_API_PORT:-6010}:5004"
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak_healthcheck:
+        condition: service_completed_successfully
+
+  aasx_fileserver_secure_replica_b_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - ABAC_POLICYFILEIMPORT=never
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+    ports:
+      - "127.0.0.1:${BASYX_IT_SECURITY_API_B_PORT:-6011}:5004"
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    depends_on:
+      aasx_fileserver_secure_it:
+        condition: service_healthy
+
+  keycloak:
+    image: keycloak/keycloak:26.0.6
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db_it:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: keycloak
+      KC_HOSTNAME_PORT: "8080"
+      KC_HOSTNAME_URL: "http://keycloak:8080"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - "127.0.0.1:${BASYX_IT_KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ../../../aasregistry/security_tests/docker_compose/keycloak/realm:/opt/keycloak/data/import
+
+  keycloak_healthcheck:
+    image: curlimages/curl:latest
+    command: >
+      sh -c "
+        until curl -sf http://keycloak:9000/health/ready; do
+          sleep 5;
+        done"
+    depends_on:
+      - keycloak
+
   basyx_configuration:
     build:
       context: ../../../..

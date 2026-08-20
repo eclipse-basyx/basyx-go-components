@@ -36,8 +36,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 )
 
 type controllerMemoryStage struct{ *bytes.Reader }
@@ -63,6 +65,12 @@ type captureAASXFileServerService struct {
 	fileName string
 	aasIDs   []string
 	content  []byte
+}
+
+type rejectingAsyncAASXFileServerService struct{}
+
+func (*rejectingAsyncAASXFileServerService) PostAsyncAASXPackage(context.Context, StagedUpload, []string, string) (ImplResponse, error) {
+	panic("service must not be called when execution capacity is exhausted")
 }
 
 type trackingReadCloser struct {
@@ -196,6 +204,109 @@ func TestPostAASXPackageReportsStagingFailureAsInternalError(t *testing.T) {
 	controller.PostAASXPackage(response, request)
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status 500, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestPostAsyncAASXPackageRejectsBeforeStagingWhenCapacityIsExhausted(t *testing.T) {
+	manager, err := asyncjob.NewManagerWithExecutionCapacity("AASXFILES-TEST", time.Minute, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, acquired := manager.TryAcquireExecutionSlot()
+	if !acquired {
+		t.Fatal("failed to saturate execution capacity")
+	}
+	defer release()
+
+	stagerCalled := false
+	stager := func(context.Context, io.Reader, int64) (common.StagedUpload, error) {
+		stagerCalled = true
+		return nil, errors.New("unexpected staging call")
+	}
+	controller := NewAASXAsyncFileServerAPIAPIController(
+		&rejectingAsyncAASXFileServerService{},
+		"",
+		WithAASXAsyncFileServerUploadStager(stager, 4096),
+		WithAASXAsyncFileServerExecutionSlotAcquirer(manager.TryAcquireExecutionSlotLease),
+	)
+	request := httptest.NewRequest(http.MethodPost, "/packages-async", nil)
+	response := httptest.NewRecorder()
+	controller.PostAsyncAASXPackage(response, request)
+
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected status 429, got %d: %s", response.Code, response.Body.String())
+	}
+	if stagerCalled {
+		t.Fatal("multipart body was staged despite exhausted execution capacity")
+	}
+}
+
+func TestPostAsyncAASXPackageReleasesCapacityAfterParsingFailure(t *testing.T) {
+	manager, err := asyncjob.NewManagerWithExecutionCapacity("AASXFILES-TEST", time.Minute, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller := NewAASXAsyncFileServerAPIAPIController(
+		&rejectingAsyncAASXFileServerService{},
+		"",
+		WithAASXAsyncFileServerUploadStager(controllerMemoryStager, 4096),
+		WithAASXAsyncFileServerExecutionSlotAcquirer(manager.TryAcquireExecutionSlotLease),
+	)
+	request := httptest.NewRequest(http.MethodPost, "/packages-async", nil)
+	response := httptest.NewRecorder()
+	controller.PostAsyncAASXPackage(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", response.Code, response.Body.String())
+	}
+	release, acquired := manager.TryAcquireExecutionSlot()
+	if !acquired {
+		t.Fatal("multipart parsing failure leaked execution capacity")
+	}
+	release()
+}
+
+func TestPostAsyncAASXPackageSanitizesStagingFailure(t *testing.T) {
+	const sensitiveDetail = "sensitive database staging detail"
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "package.aasx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write([]byte("package")); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := asyncjob.NewManagerWithExecutionCapacity("AASXFILES-TEST", time.Minute, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedStager := func(context.Context, io.Reader, int64) (common.StagedUpload, error) {
+		return nil, common.NewInternalServerError(sensitiveDetail)
+	}
+	controller := NewAASXAsyncFileServerAPIAPIController(
+		&rejectingAsyncAASXFileServerService{},
+		"",
+		WithAASXAsyncFileServerUploadStager(failedStager, 4096),
+		WithAASXAsyncFileServerExecutionSlotAcquirer(manager.TryAcquireExecutionSlotLease),
+	)
+	request := httptest.NewRequest(http.MethodPost, "/packages-async", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response := httptest.NewRecorder()
+	controller.PostAsyncAASXPackage(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", response.Code, response.Body.String())
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte(sensitiveDetail)) {
+		t.Fatalf("response exposed internal staging detail: %s", response.Body.String())
+	}
+	if !bytes.Contains(response.Body.Bytes(), []byte("asynchronous upload staging failed")) {
+		t.Fatalf("response did not contain the generic staging failure: %s", response.Body.String())
 	}
 }
 

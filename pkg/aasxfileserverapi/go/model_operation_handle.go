@@ -23,30 +23,19 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package api
+package openapi
 
-import (
-	"context"
-	"net/http"
-
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
-)
-
-// DescriptionAPIAPIService provides the static self-description response.
-type DescriptionAPIAPIService struct{}
-
-// NewDescriptionAPIAPIService creates a new description service.
-func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
-	return &DescriptionAPIAPIService{}
+// OperationHandle identifies one accepted asynchronous operation.
+type OperationHandle struct {
+	HandleId string `json:"handleId,omitempty"`
 }
 
-// GetSelfDescription returns the supported profile for the AASX file server.
-func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (openapi.ImplResponse, error) {
-	_ = ctx
-	return openapi.Response(http.StatusOK, openapi.ServiceDescription{
-		Profiles: []string{
-			"https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001",
-			"https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002",
-		},
-	}), nil
+// AssertOperationHandleRequired validates required OperationHandle fields.
+func AssertOperationHandleRequired(OperationHandle) error {
+	return nil
+}
+
+// AssertOperationHandleConstraints validates OperationHandle constraints.
+func AssertOperationHandleConstraints(OperationHandle) error {
+	return nil
 }

@@ -41,6 +41,11 @@ type Router interface {
 	Routes() Routes
 }
 
+// Redirect signals the encoder to send an HTTP redirect without a JSON body.
+type Redirect struct {
+	Location string
+}
+
 const errMsgRequiredMissing = "required parameter is missing"
 const errMsgMinValueConstraint = "provided parameter is not respecting minimum value constraint"
 const errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
@@ -85,6 +90,24 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 
 	if i != nil {
 		switch d := i.(type) {
+		case Redirect:
+			wHeader.Set("Location", d.Location)
+			if status != nil {
+				w.WriteHeader(*status)
+			} else {
+				w.WriteHeader(http.StatusFound)
+			}
+			return nil
+		case *Redirect:
+			if d != nil {
+				wHeader.Set("Location", d.Location)
+				if status != nil {
+					w.WriteHeader(*status)
+				} else {
+					w.WriteHeader(http.StatusFound)
+				}
+				return nil
+			}
 		case FileDownload:
 			return writeFileDownload(w, status, d)
 		case *FileDownload:

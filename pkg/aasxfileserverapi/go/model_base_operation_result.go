@@ -23,30 +23,21 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package api
+package openapi
 
-import (
-	"context"
-	"net/http"
-
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
-)
-
-// DescriptionAPIAPIService provides the static self-description response.
-type DescriptionAPIAPIService struct{}
-
-// NewDescriptionAPIAPIService creates a new description service.
-func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
-	return &DescriptionAPIAPIService{}
+// BaseOperationResult represents the state and messages of an asynchronous operation.
+type BaseOperationResult struct {
+	Messages       []map[string]interface{} `json:"messages,omitempty"`
+	ExecutionState ExecutionState           `json:"executionState,omitempty"`
+	Success        bool                     `json:"success,omitempty"`
 }
 
-// GetSelfDescription returns the supported profile for the AASX file server.
-func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (openapi.ImplResponse, error) {
-	_ = ctx
-	return openapi.Response(http.StatusOK, openapi.ServiceDescription{
-		Profiles: []string{
-			"https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001",
-			"https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002",
-		},
-	}), nil
+// AssertBaseOperationResultRequired validates required BaseOperationResult fields.
+func AssertBaseOperationResultRequired(BaseOperationResult) error {
+	return nil
+}
+
+// AssertBaseOperationResultConstraints validates BaseOperationResult constraints.
+func AssertBaseOperationResultConstraints(BaseOperationResult) error {
+	return nil
 }

@@ -109,6 +109,13 @@ type recordStore interface {
 	DeleteExpired(context.Context, string, time.Time) (int64, error)
 }
 
+type transactionalRecordStore interface {
+	CreateTx(context.Context, *sql.Tx, string, Record) error
+	TransitionTx(context.Context, *sql.Tx, string, string, string, Record, time.Time) (bool, error)
+}
+
+type executionSlotLeaseContextKey struct{}
+
 // Manager coordinates asynchronous job lifecycles through a shared store.
 type Manager struct {
 	store               recordStore
@@ -123,9 +130,25 @@ type Manager struct {
 	lastCleanupAt       time.Time
 }
 
+// ExecutionSlotLease transfers one execution slot from request admission to a worker.
+type ExecutionSlotLease struct {
+	mu       sync.Mutex
+	release  func()
+	claimed  bool
+	released bool
+}
+
 // NewManager creates an in-memory manager intended for isolated tests.
 func NewManager(prefix string, ttl time.Duration) *Manager {
 	return newManager(context.TODO(), newMemoryStore(), prefix, ttl)
+}
+
+// NewManagerWithExecutionCapacity creates a capacity-constrained in-memory manager.
+func NewManagerWithExecutionCapacity(prefix string, ttl time.Duration, maximumConcurrentExecutions int) (*Manager, error) {
+	if maximumConcurrentExecutions <= 0 {
+		return nil, errors.New("ASYNCJOB-NEWMANAGER-INVALIDCAPACITY maximum concurrent executions must be greater than zero")
+	}
+	return newManagerWithExecutionCapacity(context.TODO(), newMemoryStore(), prefix, ttl, maximumConcurrentExecutions), nil
 }
 
 // NewPostgresManager creates a shared PostgreSQL-backed manager and starts maintenance.
@@ -135,6 +158,31 @@ func NewPostgresManager(
 	prefix string,
 	ttl time.Duration,
 ) (*Manager, error) {
+	return newPostgresManager(ctx, db, prefix, ttl, defaultMaximumConcurrentExecutions)
+}
+
+// NewPostgresManagerWithExecutionCapacity creates a shared PostgreSQL-backed
+// manager with the supplied local execution limit and starts maintenance.
+func NewPostgresManagerWithExecutionCapacity(
+	ctx context.Context,
+	db *sql.DB,
+	prefix string,
+	ttl time.Duration,
+	maximumConcurrentExecutions int,
+) (*Manager, error) {
+	if maximumConcurrentExecutions <= 0 {
+		return nil, errors.New("ASYNCJOB-NEWPOSTGRES-INVALIDCAPACITY maximum concurrent executions must be greater than zero")
+	}
+	return newPostgresManager(ctx, db, prefix, ttl, maximumConcurrentExecutions)
+}
+
+func newPostgresManager(
+	ctx context.Context,
+	db *sql.DB,
+	prefix string,
+	ttl time.Duration,
+	maximumConcurrentExecutions int,
+) (*Manager, error) {
 	if ctx == nil {
 		return nil, errors.New("ASYNCJOB-NEWPOSTGRES-NILCTX lifecycle context must not be nil")
 	}
@@ -142,7 +190,7 @@ func NewPostgresManager(
 		return nil, errors.New("ASYNCJOB-NEWPOSTGRES-NILDB database handle must not be nil")
 	}
 
-	manager := newManager(ctx, newPostgresStore(db), prefix, ttl)
+	manager := newManagerWithExecutionCapacity(ctx, newPostgresStore(db), prefix, ttl, maximumConcurrentExecutions)
 	if err := manager.maintain(ctx, true); err != nil {
 		return nil, fmt.Errorf("ASYNCJOB-NEWPOSTGRES-MAINTAIN %w", err)
 	}
@@ -151,6 +199,16 @@ func NewPostgresManager(
 }
 
 func newManager(lifecycleContext context.Context, store recordStore, prefix string, ttl time.Duration) *Manager {
+	return newManagerWithExecutionCapacity(lifecycleContext, store, prefix, ttl, defaultMaximumConcurrentExecutions)
+}
+
+func newManagerWithExecutionCapacity(
+	lifecycleContext context.Context,
+	store recordStore,
+	prefix string,
+	ttl time.Duration,
+	maximumConcurrentExecutions int,
+) *Manager {
 	if ttl <= 0 {
 		ttl = defaultRecordTTL
 	}
@@ -165,8 +223,65 @@ func newManager(lifecycleContext context.Context, store recordStore, prefix stri
 		leaseDuration:       defaultLeaseDuration,
 		maintenanceInterval: defaultMaintenanceInterval,
 		lifecycleContext:    lifecycleContext,
-		executionSlots:      make(chan struct{}, defaultMaximumConcurrentExecutions),
+		executionSlots:      make(chan struct{}, maximumConcurrentExecutions),
 	}
+}
+
+// TryAcquireExecutionSlotLease reserves capacity that can be handed to a worker.
+func (m *Manager) TryAcquireExecutionSlotLease() (*ExecutionSlotLease, bool) {
+	release, acquired := m.TryAcquireExecutionSlot()
+	if !acquired {
+		return nil, false
+	}
+	return &ExecutionSlotLease{release: release}, true
+}
+
+// Claim transfers responsibility for releasing the slot to the caller.
+func (lease *ExecutionSlotLease) Claim() (func(), bool) {
+	lease.mu.Lock()
+	defer lease.mu.Unlock()
+	if lease.claimed || lease.released {
+		return func() {}, false
+	}
+	lease.claimed = true
+	return lease.Release, true
+}
+
+// ReleaseIfUnclaimed releases request-owned capacity unless a worker claimed it.
+func (lease *ExecutionSlotLease) ReleaseIfUnclaimed() {
+	lease.mu.Lock()
+	if lease.claimed || lease.released {
+		lease.mu.Unlock()
+		return
+	}
+	lease.released = true
+	release := lease.release
+	lease.mu.Unlock()
+	release()
+}
+
+// Release returns claimed capacity and is safe to call more than once.
+func (lease *ExecutionSlotLease) Release() {
+	lease.mu.Lock()
+	if lease.released {
+		lease.mu.Unlock()
+		return
+	}
+	lease.released = true
+	release := lease.release
+	lease.mu.Unlock()
+	release()
+}
+
+// WithExecutionSlotLease attaches pre-staging execution capacity to a request.
+func WithExecutionSlotLease(ctx context.Context, lease *ExecutionSlotLease) context.Context {
+	return context.WithValue(ctx, executionSlotLeaseContextKey{}, lease)
+}
+
+// ExecutionSlotLeaseFromContext returns pre-staging execution capacity, if present.
+func ExecutionSlotLeaseFromContext(ctx context.Context) (*ExecutionSlotLease, bool) {
+	lease, ok := ctx.Value(executionSlotLeaseContextKey{}).(*ExecutionSlotLease)
+	return lease, ok && lease != nil
 }
 
 // NewExecutionContext creates a request-value-preserving context bounded by both
@@ -210,7 +325,18 @@ func (m *Manager) Start(ctx context.Context, ownerKey string, options StartOptio
 	if err := m.cleanup(ctx, false); err != nil {
 		return "", fmt.Errorf("ASYNCJOB-START-CLEANUP %w", err)
 	}
+	return m.start(ctx, nil, ownerKey, options)
+}
 
+// StartTx persists a running job in the caller's transaction.
+func (m *Manager) StartTx(ctx context.Context, tx *sql.Tx, ownerKey string, options StartOptions) (string, error) {
+	if tx == nil {
+		return "", errors.New("ASYNCJOB-STARTTX-NILTX transaction must not be nil")
+	}
+	return m.start(ctx, tx, ownerKey, options)
+}
+
+func (m *Manager) start(ctx context.Context, tx *sql.Tx, ownerKey string, options StartOptions) (string, error) {
 	handle, err := newHandleID(m.prefix)
 	if err != nil {
 		return "", fmt.Errorf("ASYNCJOB-START-GENERATEHANDLE %w", err)
@@ -232,8 +358,16 @@ func (m *Manager) Start(ctx context.Context, ownerKey string, options StartOptio
 		LeaseExpiresAt:    now.Add(m.leaseDuration),
 		ExecutionDeadline: options.ExecutionDeadline.UTC(),
 	}
-	if err := m.store.Create(ctx, handle, record); err != nil {
-		return "", fmt.Errorf("ASYNCJOB-START-CREATE %w", err)
+	var createErr error
+	if tx == nil {
+		createErr = m.store.Create(ctx, handle, record)
+	} else if store, ok := m.store.(transactionalRecordStore); ok {
+		createErr = store.CreateTx(ctx, tx, handle, record)
+	} else {
+		createErr = errors.New("transactional asynchronous job storage is unavailable")
+	}
+	if createErr != nil {
+		return "", fmt.Errorf("ASYNCJOB-START-CREATE %w", createErr)
 	}
 	return handle, nil
 }
@@ -254,6 +388,26 @@ func (m *Manager) CompletePayload(ctx context.Context, handleID string, payload 
 		ExecutionState: executionStateCompleted,
 		Payload:        payload,
 	})
+}
+
+// CompletePayloadTx stores a successful terminal payload in the caller's transaction.
+func (m *Manager) CompletePayloadTx(ctx context.Context, tx *sql.Tx, handleID string, payload any) error {
+	if tx == nil {
+		return errors.New("ASYNCJOB-COMPLETETX-NILTX transaction must not be nil")
+	}
+	store, ok := m.store.(transactionalRecordStore)
+	if !ok {
+		return errors.New("ASYNCJOB-COMPLETETX-UNSUPPORTED transactional asynchronous job storage is unavailable")
+	}
+	terminal := Record{ExecutionState: executionStateCompleted, Payload: payload}
+	updated, err := store.TransitionTx(ctx, tx, handleID, m.prefix, m.workerID, terminal, time.Now().UTC().Add(m.ttl))
+	if err != nil {
+		return fmt.Errorf("ASYNCJOB-COMPLETETX-EXECUTE %w", err)
+	}
+	if !updated {
+		return fmt.Errorf("ASYNCJOB-COMPLETETX-REJECTED %w", errTransitionRejected)
+	}
+	return nil
 }
 
 // Fail stores a failed terminal response.

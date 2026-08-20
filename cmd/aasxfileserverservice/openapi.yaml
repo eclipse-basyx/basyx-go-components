@@ -13,6 +13,9 @@ info:
     url: https://creativecommons.org/licenses/by/4.0/
   version: V3.2.0
   x-profile-identifier: https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001
+  x-profile-identifiers:
+    - https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001
+    - https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002
   termsOfService: https://github.com/admin-shell-io/aas-specs-metamodel
 servers:
 - url: 'https://admin-shell.io/api/v3'
@@ -220,6 +223,121 @@ paths:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
+  /packages-async:
+    post:
+      tags:
+        - AASX Async File Server API
+      summary: Initiates an asynchronous upload of an AASX package at the server.
+      operationId: PostAsyncAASXPackage
+      x-semanticIds:
+        - https://admin-shell.io/aas/API/PostAsyncAASXPackage/3/2
+      requestBody:
+        description: AASX package
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                aasIds:
+                  type: array
+                  items:
+                    type: string
+                file:
+                  type: string
+                  format: binary
+                  description: >-
+                    AASX package. A source filename, if supplied, is conveyed in the
+                    `filename` parameter of this part's `Content-Disposition` header.
+              required:
+                - file
+            encoding:
+              file:
+                contentType: application/asset-administration-shell-package
+        required: true
+      responses:
+        '202':
+          description: The server has accepted the request.
+          headers:
+            Location:
+              description: The URL where the client can request the current status of the operation.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationHandle'
+        '400':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
+        '401':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/unauthorized'
+        '403':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
+        '409':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/conflict'
+        '500':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
+        default:
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
+  /packages-async/status/{handleId}:
+    parameters:
+      - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/HandleId'
+    get:
+      tags:
+        - AASX Async File Server Status API
+      summary: Returns the status of an asynchronously invoked AASX operation.
+      operationId: GetAasxAsyncStatus
+      x-semanticIds:
+        - https://admin-shell.io/aas/API/GetAasxAsyncStatus/3/2
+      responses:
+        '200':
+          description: Operation result object containing information that the 'executionState' is still 'Running'
+          content:
+            application/json:
+              schema:
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/BaseOperationResult'
+        '302':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/found'
+        '400':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
+        '401':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/unauthorized'
+        '403':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
+        '404':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
+        '500':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
+        default:
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
+  /packages-async/result/{handleId}:
+    parameters:
+      - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/HandleId'
+    get:
+      tags:
+        - AASX Async File Server Result API
+      summary: Returns the result of an asynchronously invoked AASX operation.
+      operationId: GetAasxAsyncResult
+      x-semanticIds:
+        - https://admin-shell.io/aas/API/GetAasxAsyncResult/3/2
+      responses:
+        '200':
+          description: Operation result object
+          content:
+            application/json:
+              schema:
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/BaseOperationResult'
+        '400':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
+        '401':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/unauthorized'
+        '403':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
+        '404':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
+        '500':
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
+        default:
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
   /description:
     get:
       tags:
@@ -233,6 +351,10 @@ paths:
           description: Requested Description
           content:
             application/json:
+              example:
+                profiles:
+                  - https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001
+                  - https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002
               schema:
                 $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/ServiceDescription'
         '400':
