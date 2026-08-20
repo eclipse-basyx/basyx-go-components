@@ -111,6 +111,50 @@ func TestAsyncUploadCompletesAfterRequestCleanupAndAcrossReplicas(t *testing.T) 
 	require.Equal(t, filepath.Base(validAASXPath), created.FileName)
 }
 
+func TestAsyncCapacityRejectsBeforeStagingAndKeepsStatusResponsive(t *testing.T) {
+	packagesBefore, status := listPackagesFrom(t, saturatedBaseURL)
+	require.Equal(t, http.StatusOK, status)
+	db := openIntegrationDatabase(t)
+	releasePersistence := blockPackagePersistence(t, db)
+
+	requestResult := startAsyncFileRequest(t, saturatedBaseURL, validAASXPath, nil, "")
+	accepted := awaitAcceptedRequest(t, requestResult, releasePersistence)
+	handle := assertAcceptedOperation(t, accepted, saturatedBaseURL)
+	assertRunningStatus(t, saturatedBaseURL, handle, "")
+
+	requestBody, requestWriter := io.Pipe()
+	defer func() { _ = requestWriter.Close() }()
+	overloadResult := make(chan asyncRequestResult, 1)
+	go func() {
+		response, err := executeAsyncAcceptanceRequest(
+			http.MethodPost,
+			saturatedBaseURL+"/packages-async",
+			requestBody,
+			"multipart/form-data; boundary=capacity-test",
+			"",
+		)
+		overloadResult <- asyncRequestResult{response: response, err: err}
+	}()
+
+	select {
+	case result := <-overloadResult:
+		require.NoError(t, result.err)
+		require.Equalf(t, http.StatusTooManyRequests, result.response.status, "overload response: %s", result.response.body)
+	case <-time.After(acceptDeadline):
+		_ = requestWriter.Close()
+		t.Fatal("capacity rejection waited for the multipart request body")
+	}
+	assertRunningStatus(t, saturatedBaseURL, handle, "")
+
+	releasePersistence()
+	result := awaitAsyncResult(t, saturatedBaseURL, handle)
+	require.Equal(t, "Completed", result.ExecutionState)
+	packagesAfter, status := listPackagesFrom(t, saturatedBaseURL)
+	require.Equal(t, http.StatusOK, status)
+	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
+	t.Cleanup(func() { deletePackage(t, saturatedBaseURL, created.PackageId, "") })
+}
+
 func TestAsyncUploadPreservesAASIDsAndSupportsFiltering(t *testing.T) {
 	packagesBefore, status := listPackagesFrom(t, baseURL)
 	require.Equal(t, http.StatusOK, status)

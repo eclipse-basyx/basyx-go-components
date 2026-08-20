@@ -166,18 +166,19 @@ func TestPostAsyncAASXPackageRejectsExhaustedExecutionCapacity(t *testing.T) {
 }
 
 func TestPostAsyncAASXPackageReleasesCapacityAfterAcceptanceFailure(t *testing.T) {
-	manager := asyncjob.NewManager("AASXFS-TEST", time.Minute)
-	releases := reserveAllExecutionSlots(manager)
-	releases[len(releases)-1]()
-	releases = releases[:len(releases)-1]
-	defer releaseExecutionSlots(releases)
+	manager, err := asyncjob.NewManagerWithExecutionCapacity("AASXFS-TEST", time.Minute, 1)
+	require.NoError(t, err)
 	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
+	executionSlot, acquired := manager.TryAcquireExecutionSlotLease()
+	require.True(t, acquired)
+	requestContext := asyncjob.WithExecutionSlotLease(t.Context(), executionSlot)
 
 	upload := newWorkerReadTrackingUpload()
 	defer func() { require.NoError(t, upload.Close()) }()
-	response, err := service.PostAsyncAASXPackage(t.Context(), upload, nil, "package.aasx")
+	response, err := service.PostAsyncAASXPackage(requestContext, upload, nil, "package.aasx")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusInternalServerError, response.Code)
+	executionSlot.ReleaseIfUnclaimed()
 
 	release, acquired := manager.TryAcquireExecutionSlot()
 	require.True(t, acquired, "acceptance failure leaked its execution slot")

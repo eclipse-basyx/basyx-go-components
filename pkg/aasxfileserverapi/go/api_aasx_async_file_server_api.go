@@ -28,20 +28,29 @@
 package openapi
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 )
 
 // AASXAsyncFileServerAPIAPIController binds SSP-002 upload requests.
 type AASXAsyncFileServerAPIAPIController struct {
-	service            AASXAsyncFileServerAPIAPIServicer
-	errorHandler       ErrorHandler
-	contextPath        string
-	uploadStager       common.UploadStager
-	maxUploadSizeBytes int64
+	service               AASXAsyncFileServerAPIAPIServicer
+	errorHandler          ErrorHandler
+	contextPath           string
+	uploadStager          common.UploadStager
+	maxUploadSizeBytes    int64
+	executionSlotAcquirer func() (*asyncjob.ExecutionSlotLease, bool)
+}
+
+func WithAASXAsyncFileServerExecutionSlotAcquirer(acquirer func() (*asyncjob.ExecutionSlotLease, bool)) AASXAsyncFileServerAPIAPIOption {
+	return func(controller *AASXAsyncFileServerAPIAPIController) {
+		controller.executionSlotAcquirer = acquirer
+	}
 }
 
 type AASXAsyncFileServerAPIAPIOption func(*AASXAsyncFileServerAPIAPIController)
@@ -81,6 +90,24 @@ func (controller *AASXAsyncFileServerAPIAPIController) PostAsyncAASXPackage(writ
 		controller.errorHandler(writer, request, common.NewInternalServerError("AASXFILES-ASYNCUPLOAD-NOSTAGER upload stager is not configured"), nil)
 		return
 	}
+	if controller.executionSlotAcquirer == nil {
+		controller.errorHandler(writer, request, common.NewInternalServerError("AASXFILES-ASYNCUPLOAD-NOADMISSION execution slot admission is not configured"), nil)
+		return
+	}
+	executionSlot, acquired := controller.executionSlotAcquirer()
+	if !acquired {
+		capacityErr := errors.New("AASXFILES-ASYNCUPLOAD-CAPACITY asynchronous execution capacity is exhausted")
+		response := Response(http.StatusTooManyRequests, nil)
+		controller.errorHandler(writer, request, capacityErr, &response)
+		return
+	}
+	if executionSlot == nil {
+		controller.errorHandler(writer, request, common.NewInternalServerError("AASXFILES-ASYNCUPLOAD-NILADMISSION execution slot admission returned no lease"), nil)
+		return
+	}
+	defer executionSlot.ReleaseIfUnclaimed()
+	request = request.WithContext(asyncjob.WithExecutionSlotLease(request.Context(), executionSlot))
+
 	upload, err := common.ReadMultipartUpload(writer, request, controller.maxUploadSizeBytes, "file", controller.uploadStager)
 	if err != nil {
 		controller.errorHandler(writer, request, &ParsingError{Param: "file", Err: err}, nil)

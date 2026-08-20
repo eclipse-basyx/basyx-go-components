@@ -262,6 +262,19 @@ func TestAASXAsyncUploadPathDoesNotUseFullBufferAPIs(t *testing.T) {
 	require.Empty(t, violations, "async AASX production code must not use complete-file buffer APIs")
 }
 
+func TestAASXAsyncExecutionCapacityKeepsDatabaseHeadroom(t *testing.T) {
+	capacity, err := aasxAsyncExecutionCapacity(50)
+	require.NoError(t, err)
+	require.Equal(t, 40, capacity)
+
+	capacity, err = aasxAsyncExecutionCapacity(2)
+	require.NoError(t, err)
+	require.Equal(t, 1, capacity)
+
+	_, err = aasxAsyncExecutionCapacity(1)
+	require.Error(t, err)
+}
+
 func readGeneratedContractEvidence(t *testing.T) generatedContractEvidence {
 	t.Helper()
 	evidence := generatedContractEvidence{

@@ -185,7 +185,7 @@ func (s *AASXFileServerAPIAPIService) PostAsyncAASXPackage(ctx context.Context, 
 	if s.asyncJobs == nil || s.asyncUploads == nil {
 		return newAPIErrorResponse(errors.New("asynchronous package persistence is not configured"), http.StatusInternalServerError, operation, "NotConfigured"), nil
 	}
-	releaseExecutionSlot, acquired := s.asyncJobs.TryAcquireExecutionSlot()
+	releaseExecutionSlot, acquired := acquireAsyncExecutionSlot(ctx, s.asyncJobs)
 	if !acquired {
 		capacityErr := errors.New("AASXFS-ASYNC-CAPACITY asynchronous execution capacity is exhausted")
 		return newAPIErrorResponse(capacityErr, http.StatusTooManyRequests, operation, "ExecutionCapacityExhausted"), nil
@@ -212,6 +212,13 @@ func (s *AASXFileServerAPIAPIService) PostAsyncAASXPackage(ctx context.Context, 
 
 	go s.processAsyncPackage(executionCtx, s.asyncJobs, handleID, durableUpload, aasIDs, fileName, cancelExecution, releaseExecutionSlot)
 	return openapi.Response(http.StatusAccepted, openapi.OperationHandle{HandleId: handleID}), nil
+}
+
+func acquireAsyncExecutionSlot(ctx context.Context, manager *asyncjob.Manager) (func(), bool) {
+	if executionSlot, found := asyncjob.ExecutionSlotLeaseFromContext(ctx); found {
+		return executionSlot.Claim()
+	}
+	return manager.TryAcquireExecutionSlot()
 }
 
 // GetAasxAsyncStatus returns a running result or redirects terminal operations.

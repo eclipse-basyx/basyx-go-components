@@ -31,6 +31,7 @@ import (
 	"embed"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -52,6 +53,11 @@ import (
 
 //go:embed openapi.yaml
 var openapiSpec embed.FS
+
+const (
+	minimumAASXAsyncDatabaseHeadroom = 1
+	aasxAsyncDatabaseHeadroomDivisor = 5
+)
 
 func runServer(ctx context.Context, configPath string) error {
 	cfg, err := common.LoadConfig(configPath)
@@ -101,7 +107,17 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	slog.InfoContext(ctx, "PostgreSQL connection established")
 
-	asyncManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "AASXFS-UPLOAD", 15*time.Minute)
+	asyncExecutionCapacity, err := aasxAsyncExecutionCapacity(sharedDB.Stats().MaxOpenConnections)
+	if err != nil {
+		return err
+	}
+	asyncManager, err := asyncjob.NewPostgresManagerWithExecutionCapacity(
+		ctx,
+		sharedDB,
+		"AASXFS-UPLOAD",
+		15*time.Minute,
+		asyncExecutionCapacity,
+	)
 	if err != nil {
 		return err
 	}
@@ -122,6 +138,7 @@ func runServer(ctx context.Context, configPath string) error {
 		aasxSvc,
 		"",
 		openapi.WithAASXAsyncFileServerUploadStager(binarycontent.NewStager(sharedDB), cfg.General.UploadMaxSizeBytes),
+		openapi.WithAASXAsyncFileServerExecutionSlotAcquirer(asyncManager.TryAcquireExecutionSlotLease),
 	)
 	asyncStatusCtrl := openapi.NewAASXAsyncFileServerStatusAPIAPIController(aasxSvc, "")
 	asyncResultCtrl := openapi.NewAASXAsyncFileServerResultAPIAPIController(aasxSvc, "")
@@ -169,6 +186,17 @@ func runServer(ctx context.Context, configPath string) error {
 	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 
 	return common.RunHTTPServer(ctx, "AASX", cfg.Server, r)
+}
+
+func aasxAsyncExecutionCapacity(maximumOpenConnections int) (int, error) {
+	if maximumOpenConnections <= minimumAASXAsyncDatabaseHeadroom {
+		return 0, fmt.Errorf(
+			"AASXFILES-ASYNC-CAPACITY database pool requires more than %d open connection for asynchronous uploads",
+			minimumAASXAsyncDatabaseHeadroom,
+		)
+	}
+	databaseHeadroom := max(maximumOpenConnections/aasxAsyncDatabaseHeadroomDivisor, minimumAASXAsyncDatabaseHeadroom)
+	return maximumOpenConnections - databaseHeadroom, nil
 }
 
 func requireAsyncAuthentication(next http.Handler) http.Handler {
