@@ -28,6 +28,8 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -45,9 +47,11 @@ import (
 )
 
 const (
-	componentName             = "AASXFS"
-	asyncPackageJobKind       = "aasx-package-upload"
-	asyncPackageExecutionTime = 15 * time.Minute
+	componentName                        = "AASXFS"
+	asyncPackageJobKind                  = "aasx-package-upload"
+	asyncPackageExecutionTime            = 15 * time.Minute
+	asyncPackageProcessingFailureMessage = "asynchronous package processing failed"
+	packageIDRandomByteCount             = 24
 )
 
 // AASXFileServerAPIAPIService implements the generated AASX file server API service interface.
@@ -157,7 +161,10 @@ func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file 
 		return newAPIErrorResponse(errors.New("multipart form field 'file' is required"), http.StatusBadRequest, operation, "MissingFile"), nil
 	}
 
-	rawPackageID := generatePackageID()
+	rawPackageID, err := generatePackageID()
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GeneratePackageId"), nil
+	}
 	record, err := s.packageCreator.CreatePackage(ctx, rawPackageID, file, aasIDs, fileName)
 	if err != nil {
 		if common.IsErrPayloadTooLarge(err) {
@@ -298,17 +305,31 @@ func (s *AASXFileServerAPIAPIService) processAsyncPackage(
 	defer func() { _ = file.Close() }()
 	stopHeartbeat := manager.KeepAlive(ctx, handleID)
 	defer stopHeartbeat()
+	defer func() {
+		if recover() == nil {
+			return
+		}
+		slog.ErrorContext(ctx, "asynchronous AASX worker panicked", "error.code", "AASXFS-ASYNCWORKER-PANIC", "async_job.handle_id", handleID)
+		persistAsyncPackageFailure(ctx, manager, handleID, file, asyncPackageProcessingFailureMessage)
+	}()
 
-	_, err := s.packageCreator.CreatePackage(ctx, generatePackageID(), file, aasIDs, fileName)
+	packageID, err := generatePackageID()
+	if err == nil {
+		_, err = s.packageCreator.CreatePackage(ctx, packageID, file, aasIDs, fileName)
+	}
 	if err == nil {
 		return
 	}
+	persistAsyncPackageFailure(ctx, manager, handleID, file, err.Error())
+}
+
+func persistAsyncPackageFailure(ctx context.Context, manager *asyncjob.Manager, handleID string, file common.StagedUpload, message string) {
 	if closeErr := file.Close(); closeErr != nil {
 		slog.ErrorContext(ctx, "asynchronous AASX staging cleanup failed", "error.code", "AASXFS-ASYNCWORKER-CLEANUP", "error", closeErr, "async_job.handle_id", handleID)
 	}
 	persistenceCtx, cancelPersistence := asyncjob.NewPersistenceContext(ctx)
 	defer cancelPersistence()
-	result := failedOperationResult(err.Error())
+	result := failedOperationResult(message)
 	if persistErr := manager.Fail(persistenceCtx, handleID, http.StatusInternalServerError, result); persistErr != nil {
 		slog.ErrorContext(persistenceCtx, "asynchronous AASX failure persistence failed", "error.code", "AASXFS-ASYNCWORKER-PERSISTFAILURE", "error", persistErr, "async_job.handle_id", handleID)
 	}
@@ -316,7 +337,7 @@ func (s *AASXFileServerAPIAPIService) processAsyncPackage(
 
 func failedOperationResult(message string) openapi.BaseOperationResult {
 	if strings.TrimSpace(message) == "" {
-		message = "asynchronous package processing failed"
+		message = asyncPackageProcessingFailureMessage
 	}
 	return openapi.BaseOperationResult{
 		ExecutionState: openapi.EXECUTIONSTATE_FAILED,
@@ -463,8 +484,12 @@ func toPackageDescription(record persistence.PackageRecord) openapi.PackageDescr
 	}
 }
 
-func generatePackageID() string {
-	return fmt.Sprintf("pkg-%d", time.Now().UnixNano())
+func generatePackageID() (string, error) {
+	randomBytes := make([]byte, packageIDRandomByteCount)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", fmt.Errorf("AASXFS-GENERATEPACKAGEID-READRANDOM %w", err)
+	}
+	return "pkg-" + base64.RawURLEncoding.EncodeToString(randomBytes), nil
 }
 
 func newAPIErrorResponse(err error, status int, operation string, info string) openapi.ImplResponse {

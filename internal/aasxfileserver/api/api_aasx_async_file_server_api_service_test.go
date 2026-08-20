@@ -87,6 +87,18 @@ type packageCreatorSpy struct {
 	receivedFileName string
 }
 
+type panickingPackageCreator struct{}
+
+func (panickingPackageCreator) CreatePackage(
+	context.Context,
+	string,
+	common.StagedUpload,
+	[]string,
+	string,
+) (*persistence.PackageRecord, error) {
+	panic("sensitive parser panic")
+}
+
 func (creator *packageCreatorSpy) CreatePackage(
 	_ context.Context,
 	_ string,
@@ -138,6 +150,75 @@ func TestAsyncPackageWorkerHandsStagedUploadToPersistenceWithoutPreReading(t *te
 		t.Fatal("async worker did not release the staged upload after persistence failed")
 	}
 	require.False(t, upload.readByWorker.Load(), "async worker read the staged package after persistence returned")
+}
+
+func TestAsyncPackageWorkerRecoversPanicAndPersistsGenericFailure(t *testing.T) {
+	service := NewAASXFileServerAPIAPIService(nil)
+	service.packageCreator = panickingPackageCreator{}
+	manager := asyncjob.NewManager("AASXFS-TEST", time.Minute)
+	handleID, err := manager.Start(t.Context(), "test-owner", asyncjob.StartOptions{JobKind: asyncPackageJobKind})
+	require.NoError(t, err)
+	upload := newWorkerReadTrackingUpload()
+	cancelled := false
+	released := false
+
+	service.processAsyncPackage(
+		t.Context(),
+		manager,
+		handleID,
+		upload,
+		nil,
+		"package.aasx",
+		func() { cancelled = true },
+		func() { released = true },
+	)
+
+	record, found, err := manager.Get(t.Context(), handleID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "Failed", record.ExecutionState)
+	require.Equal(t, http.StatusInternalServerError, record.ErrorStatus)
+	result, ok := record.ErrorBody.(openapi.BaseOperationResult)
+	require.True(t, ok)
+	require.False(t, result.Success)
+	require.Equal(t, openapi.EXECUTIONSTATE_FAILED, result.ExecutionState)
+	require.Len(t, result.Messages, 1)
+	require.Equal(t, asyncPackageProcessingFailureMessage, result.Messages[0]["text"])
+	require.NotContains(t, result.Messages[0]["text"], "sensitive parser panic")
+	require.True(t, cancelled)
+	require.True(t, released)
+	select {
+	case <-upload.closed:
+	default:
+		t.Fatal("async worker did not close the staged upload after recovering a panic")
+	}
+}
+
+func TestGeneratePackageIDIsUniqueUnderConcurrency(t *testing.T) {
+	const generatedIDCount = 1_000
+	type generationResult struct {
+		packageID string
+		err       error
+	}
+	generatedIDs := make(chan generationResult, generatedIDCount)
+	for range generatedIDCount {
+		go func() {
+			packageID, err := generatePackageID()
+			generatedIDs <- generationResult{packageID: packageID, err: err}
+		}()
+	}
+
+	uniqueIDs := make(map[string]struct{}, generatedIDCount)
+	for range generatedIDCount {
+		result := <-generatedIDs
+		require.NoError(t, result.err)
+		packageID := result.packageID
+		require.True(t, strings.HasPrefix(packageID, "pkg-"))
+		_, duplicate := uniqueIDs[packageID]
+		require.Falsef(t, duplicate, "duplicate generated package ID: %s", packageID)
+		uniqueIDs[packageID] = struct{}{}
+	}
+	require.Len(t, uniqueIDs, generatedIDCount)
 }
 
 func TestPostAsyncAASXPackageFailsWhenPersistenceIsNotConfigured(t *testing.T) {

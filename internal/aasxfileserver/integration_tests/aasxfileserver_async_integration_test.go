@@ -742,18 +742,18 @@ func accessToken(t *testing.T, username string) string {
 	require.NoError(t, err)
 	request.Host = "keycloak:8080"
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request) // #nosec G704 -- the token endpoint is a fixed local integration-test URL.
 	require.NoError(t, err)
 	defer func() { require.NoError(t, response.Body.Close()) }()
 	body, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
 	require.Equalf(t, http.StatusOK, response.StatusCode, "token response: %s", body)
-	var tokenResponse struct {
-		AccessToken string `json:"access_token"`
-	}
+	var tokenResponse map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(body, &tokenResponse))
-	require.NotEmpty(t, tokenResponse.AccessToken)
-	return tokenResponse.AccessToken
+	var token string
+	require.NoError(t, json.Unmarshal(tokenResponse["access_token"], &token))
+	require.NotEmpty(t, token)
+	return token
 }
 
 func packageDifference(t *testing.T, before []openapi.PackageDescription, after []openapi.PackageDescription) openapi.PackageDescription {
