@@ -28,6 +28,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -39,6 +40,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
@@ -306,11 +308,39 @@ func TestPostAsyncAASXPackageReleasesCapacityAfterAcceptanceFailure(t *testing.T
 	response, err := service.PostAsyncAASXPackage(requestContext, upload, nil, "package.aasx")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusInternalServerError, response.Code)
+	responseBody, err := json.Marshal(response.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(responseBody), asyncPackageAcceptanceFailureMessage)
+	require.NotContains(t, string(responseBody), errAsyncPackageCreationIntercepted.Error())
 	executionSlot.ReleaseIfUnclaimed()
 
 	release, acquired := manager.TryAcquireExecutionSlot()
 	require.True(t, acquired, "acceptance failure leaked its execution slot")
 	release()
+}
+
+func TestAsyncStatusSanitizesPersistenceReadFailure(t *testing.T) {
+	const sensitiveDetail = "sensitive database connection detail"
+	database, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = database.Close() })
+	mock.ExpectExec(`UPDATE .*async_job`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`DELETE FROM .*async_job`).WillReturnResult(sqlmock.NewResult(0, 0))
+
+	manager, err := asyncjob.NewPostgresManager(t.Context(), database, "AASXFS-TEST", time.Minute)
+	require.NoError(t, err)
+	mock.ExpectQuery(`SELECT .*async_job`).WillReturnError(errors.New(sensitiveDetail))
+
+	service := NewAASXFileServerAPIAPIService(nil)
+	service.asyncJobs = manager
+	response, err := service.GetAasxAsyncStatus(t.Context(), "test-handle")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusInternalServerError, response.Code)
+	responseBody, err := json.Marshal(response.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(responseBody), asyncPackageStateReadFailureMessage)
+	require.NotContains(t, string(responseBody), sensitiveDetail)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func newWorkerReadTrackingUpload() *workerReadTrackingUpload {

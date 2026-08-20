@@ -98,7 +98,7 @@ func TestOpenAPIContainsAASXFileServerSSP002Contract(t *testing.T) {
 	var specification map[string]any
 	require.NoError(t, yaml.Unmarshal(specificationBytes, &specification))
 	info := mapValue(t, specification, "info")
-	require.NotContains(t, info, "x-profile-identifier")
+	require.Equal(t, "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001", info["x-profile-identifier"])
 	profileIdentifiers := stringSlice(t, info["x-profile-identifiers"])
 	require.Contains(t, profileIdentifiers, "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001")
 	require.Contains(t, profileIdentifiers, "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002")

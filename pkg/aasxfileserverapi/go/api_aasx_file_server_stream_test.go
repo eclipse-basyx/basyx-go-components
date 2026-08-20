@@ -266,6 +266,50 @@ func TestPostAsyncAASXPackageReleasesCapacityAfterParsingFailure(t *testing.T) {
 	release()
 }
 
+func TestPostAsyncAASXPackageSanitizesStagingFailure(t *testing.T) {
+	const sensitiveDetail = "sensitive database staging detail"
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "package.aasx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write([]byte("package")); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := asyncjob.NewManagerWithExecutionCapacity("AASXFILES-TEST", time.Minute, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedStager := func(context.Context, io.Reader, int64) (common.StagedUpload, error) {
+		return nil, common.NewInternalServerError(sensitiveDetail)
+	}
+	controller := NewAASXAsyncFileServerAPIAPIController(
+		&rejectingAsyncAASXFileServerService{},
+		"",
+		WithAASXAsyncFileServerUploadStager(failedStager, 4096),
+		WithAASXAsyncFileServerExecutionSlotAcquirer(manager.TryAcquireExecutionSlotLease),
+	)
+	request := httptest.NewRequest(http.MethodPost, "/packages-async", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response := httptest.NewRecorder()
+	controller.PostAsyncAASXPackage(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", response.Code, response.Body.String())
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte(sensitiveDetail)) {
+		t.Fatalf("response exposed internal staging detail: %s", response.Body.String())
+	}
+	if !bytes.Contains(response.Body.Bytes(), []byte("asynchronous upload staging failed")) {
+		t.Fatalf("response did not contain the generic staging failure: %s", response.Body.String())
+	}
+}
+
 func TestEncodeJSONResponseStreamsAndClosesDownload(t *testing.T) {
 	stream := &trackingReadCloser{Reader: bytes.NewReader(bytes.Repeat([]byte("chunk"), 20000))}
 	response := httptest.NewRecorder()

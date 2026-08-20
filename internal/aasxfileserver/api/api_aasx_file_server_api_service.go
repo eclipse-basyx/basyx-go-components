@@ -51,6 +51,8 @@ const (
 	asyncPackageJobKind                  = "aasx-package-upload"
 	asyncPackageExecutionTime            = 15 * time.Minute
 	asyncPackageProcessingFailureMessage = "asynchronous package processing failed"
+	asyncPackageAcceptanceFailureMessage = "asynchronous package acceptance failed"
+	asyncPackageStateReadFailureMessage  = "asynchronous operation state could not be read"
 	packageIDRandomByteCount             = 24
 )
 
@@ -214,7 +216,7 @@ func (s *AASXFileServerAPIAPIService) PostAsyncAASXPackage(ctx context.Context, 
 	if err != nil {
 		releaseExecutionSlot()
 		cancelExecution()
-		return mapAsyncAcceptanceError(err, operation), nil
+		return mapAsyncAcceptanceError(ctx, err, operation), nil
 	}
 
 	go s.processAsyncPackage(executionCtx, s.asyncJobs, handleID, durableUpload, aasIDs, fileName, cancelExecution, releaseExecutionSlot)
@@ -281,7 +283,15 @@ func (s *AASXFileServerAPIAPIService) asyncRecord(ctx context.Context, handleID 
 	}
 	record, found, err := s.asyncJobs.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
 	if err != nil {
-		return asyncjob.Record{}, newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ReadHandle"), false
+		response := asyncInternalErrorResponse(
+			ctx,
+			err,
+			operation,
+			"ReadHandle",
+			"AASXFS-ASYNCRECORD-READHANDLE",
+			asyncPackageStateReadFailureMessage,
+		)
+		return asyncjob.Record{}, response, false
 	}
 	if !found || record.JobKind != asyncPackageJobKind {
 		err = common.NewErrNotFound("operation handle")
@@ -359,7 +369,7 @@ func failedOperationResult(message string) openapi.BaseOperationResult {
 	}
 }
 
-func mapAsyncAcceptanceError(err error, operation string) openapi.ImplResponse {
+func mapAsyncAcceptanceError(ctx context.Context, err error, operation string) openapi.ImplResponse {
 	switch {
 	case common.IsErrPayloadTooLarge(err):
 		return newAPIErrorResponse(err, http.StatusRequestEntityTooLarge, operation, "PayloadTooLarge")
@@ -368,8 +378,27 @@ func mapAsyncAcceptanceError(err error, operation string) openapi.ImplResponse {
 	case common.IsErrConflict(err):
 		return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict")
 	default:
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DurableAcceptance")
+		return asyncInternalErrorResponse(
+			ctx,
+			err,
+			operation,
+			"DurableAcceptance",
+			"AASXFS-ASYNCACCEPT-PERSIST",
+			asyncPackageAcceptanceFailureMessage,
+		)
 	}
+}
+
+func asyncInternalErrorResponse(
+	ctx context.Context,
+	err error,
+	operation string,
+	info string,
+	errorCode string,
+	clientMessage string,
+) openapi.ImplResponse {
+	slog.ErrorContext(ctx, "asynchronous AASX API operation failed", "error.code", errorCode, "error", err)
+	return newAPIErrorResponse(common.NewInternalServerError(clientMessage), http.StatusInternalServerError, operation, info)
 }
 
 // GetAASXByPackageId returns a streamed package and its download metadata.

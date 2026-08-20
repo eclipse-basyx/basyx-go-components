@@ -29,6 +29,7 @@ package openapi
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -110,7 +111,7 @@ func (controller *AASXAsyncFileServerAPIAPIController) PostAsyncAASXPackage(writ
 
 	upload, err := common.ReadMultipartUpload(writer, request, controller.maxUploadSizeBytes, "file", controller.uploadStager)
 	if err != nil {
-		controller.errorHandler(writer, request, &ParsingError{Param: "file", Err: err}, nil)
+		controller.errorHandler(writer, request, &ParsingError{Param: "file", Err: clientVisibleAsyncUploadError(request, err)}, nil)
 		return
 	}
 	defer func() { _ = upload.Close() }()
@@ -127,4 +128,17 @@ func (controller *AASXAsyncFileServerAPIAPIController) PostAsyncAASXPackage(writ
 		}
 	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, writer)
+}
+
+func clientVisibleAsyncUploadError(request *http.Request, err error) error {
+	switch {
+	case common.IsInternalServerError(err):
+		slog.ErrorContext(request.Context(), "asynchronous AASX upload staging failed", "error.code", "AASXFILES-ASYNCUPLOAD-STAGING", "error", err)
+		return common.NewInternalServerError("AASXFILES-ASYNCUPLOAD-STAGING asynchronous upload staging failed")
+	case common.IsErrServiceUnavailable(err):
+		slog.ErrorContext(request.Context(), "asynchronous AASX upload staging unavailable", "error.code", "AASXFILES-ASYNCUPLOAD-STAGINGUNAVAILABLE", "error", err)
+		return common.NewErrServiceUnavailable("AASXFILES-ASYNCUPLOAD-STAGINGUNAVAILABLE asynchronous upload staging is temporarily unavailable")
+	default:
+		return err
+	}
 }
