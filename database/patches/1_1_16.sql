@@ -2,7 +2,7 @@
 -- Project        : Eclipse BaSyx
 -- Organization   : Fraunhofer IESE
 -- File Type      : SQL Patch Script
--- Patch Version  : 1.1.15
+-- Patch Version  : 1.1.16
 -- Metamodel Ver. : 3.2
 -- ----------------------------------------------------------------------------
 -- Description:
@@ -53,7 +53,7 @@ FOR EACH ROW
 EXECUTE FUNCTION cleanup_terminal_aasx_async_upload();
 
 UPDATE basyxsystem
-SET schema_version = 'v1.1.15',
+SET schema_version = 'v1.1.16',
     state = 'clean'
 WHERE identifier = (
   SELECT identifier
