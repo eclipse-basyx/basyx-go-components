@@ -27,6 +27,7 @@
 package persistence
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"os"
@@ -619,12 +620,42 @@ func TestAddSubmodelElementSubmodelNotFoundRollsBack(t *testing.T) {
 	var elem types.ISubmodelElement
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT .*FROM .*submodel.*FOR NO KEY UPDATE`).WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 
 	err = sut.AddSubmodelElement(contextWithABACDisabled(t), "missing", elem)
 	require.Error(t, err)
 	require.True(t, common.IsErrNotFound(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAddSubmodelElementUnrestrictedDuplicateReturnsConflict(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	element := types.NewProperty(types.DataTypeDefXSDString)
+	idShort := "Created"
+	element.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "submodel".*FOR NO KEY UPDATE`).
+		WithArgs("sm").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+	mock.ExpectQuery(`SELECT MAX\("position"\) FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(3))
+	mock.ExpectQuery(`SELECT "idshort_path" FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}).AddRow(idShort))
+	mock.ExpectRollback()
+
+	err = sut.AddSubmodelElement(contextWithABACDisabled(t), "sm", element)
+	require.Error(t, err)
+	require.Truef(t, common.IsErrConflict(err), "got %v", err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -641,12 +672,164 @@ func TestAddSubmodelElementWithPathSubmodelNotFoundRollsBack(t *testing.T) {
 	var elem types.ISubmodelElement
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT .*FROM \(SELECT .*FROM "submodel" AS "sm_lock".*FOR KEY SHARE.*\) AS "sm".*JOIN "submodel_element" AS "parent"`).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT .*FROM "submodel"`).WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 
 	err = sut.AddSubmodelElementWithPath(contextWithABACDisabled(t), "missing", "container", elem)
 	require.Error(t, err)
 	require.True(t, common.IsErrNotFound(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAddSubmodelElementWithPathHiddenParentDoesNotLeakExistenceOrType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		parentExists bool
+		modelType    types.ModelType
+	}{
+		{
+			name:         "hidden supported parent",
+			parentExists: true,
+			modelType:    types.ModelTypeSubmodelElementCollection,
+		},
+		{
+			name:         "hidden unsupported parent",
+			parentExists: true,
+			modelType:    types.ModelTypeProperty,
+		},
+		{
+			name: "missing parent",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() {
+				_ = db.Close()
+			}()
+
+			sut := &SubmodelDatabase{db: db}
+			element := types.NewProperty(types.DataTypeDefXSDString)
+			idShort := "Created"
+			element.SetIDShort(&idShort)
+
+			mock.ExpectBegin()
+			parentQuery := mock.ExpectQuery(`SELECT .*FROM \(SELECT .*FROM "submodel" AS "sm_lock".*FOR KEY SHARE.*\) AS "sm".*JOIN "submodel_element" AS "parent".*FOR UPDATE OF "parent"`).
+				WithArgs("sm", "container")
+			if test.parentExists {
+				parentQuery.WillReturnRows(sqlmock.NewRows([]string{
+					"submodel_id",
+					"parent_id",
+					"root_sme_id",
+					"model_type",
+					"child_depth",
+				}).AddRow(42, 7, 7, test.modelType, 2))
+				mock.ExpectQuery(`WITH RECURSIVE visible_sme_path_ancestors.*`).
+					WithArgs(42, "container", 42, 42, "container", false, 1).
+					WillReturnRows(sqlmock.NewRows([]string{"visible"}))
+			} else {
+				parentQuery.WillReturnError(sql.ErrNoRows)
+				mock.ExpectQuery(`SELECT .*FROM "submodel"`).
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+			}
+			mock.ExpectRollback()
+
+			err = sut.AddSubmodelElementWithPath(contextWithRestrictedCreateSubmodel(t), "sm", "container", element)
+			require.EqualError(t, err, "404 Not Found: SMREPO-ADDSMEBYPATH-PARENTNOTFOUND Submodel element with path 'container' not found")
+			require.True(t, common.IsErrNotFound(err))
+			require.False(t, common.IsErrBadRequest(err))
+			require.False(t, common.IsErrConflict(err))
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestAddSubmodelElementWithPathUnrestrictedDuplicateReturnsConflict(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	element := types.NewCapability()
+	idShort := "Created"
+	element.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM \(SELECT .*FROM "submodel" AS "sm_lock".*FOR KEY SHARE.*\) AS "sm".*JOIN "submodel_element" AS "parent".*FOR UPDATE OF "parent"`).
+		WithArgs("sm", "container").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"submodel_id",
+			"parent_id",
+			"root_sme_id",
+			"model_type",
+			"child_depth",
+		}).AddRow(42, 7, 7, types.ModelTypeSubmodelElementList, 2))
+	mock.ExpectQuery(`SELECT COALESCE.*MAX.*FROM "submodel_element" AS "child"`).
+		WithArgs(7).
+		WillReturnRows(sqlmock.NewRows([]string{"next_position"}).AddRow(3))
+	mock.ExpectQuery(`SELECT "idshort_path" FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}).AddRow("container[0]"))
+	mock.ExpectRollback()
+
+	err = sut.AddSubmodelElementWithPath(contextWithABACDisabled(t), "sm", "container", element)
+	require.Error(t, err)
+	require.Truef(t, common.IsErrConflict(err), "got %v", err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAddSubmodelElementWithPathInTransactionUsesOnlyTransactionConnection(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+	db.SetMaxOpenConns(1)
+
+	sut := &SubmodelDatabase{db: db}
+	element := types.NewProperty(types.DataTypeDefXSDString)
+	idShort := "Created"
+	element.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM \(SELECT .*FROM "submodel" AS "sm_lock".*FOR KEY SHARE.*\) AS "sm".*JOIN "submodel_element" AS "parent".*FOR UPDATE OF "parent"`).
+		WithArgs("sm", "container").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"submodel_id",
+			"parent_id",
+			"root_sme_id",
+			"model_type",
+			"child_depth",
+		}).AddRow(42, 7, 7, types.ModelTypeSubmodelElementCollection, 2))
+	mock.ExpectQuery(`SELECT COALESCE.*MAX.*FROM "submodel_element" AS "child"`).
+		WithArgs(7).
+		WillReturnRows(sqlmock.NewRows([]string{"next_position"}).AddRow(3))
+	mock.ExpectQuery(`SELECT "idshort_path" FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}))
+	mock.ExpectQuery(`SELECT .*nextval.*generate_series`).
+		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(101))
+	mock.ExpectExec(`(?s)INSERT INTO "submodel_element".*INSERT INTO "property_element"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+
+	ctx, cancel := context.WithTimeout(contextWithABACDisabled(t), time.Second)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	err = sut.addSubmodelElementWithPathInTransaction(ctx, tx, "sm", "container", element)
+	require.NoError(t, err)
+	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
