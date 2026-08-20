@@ -89,6 +89,10 @@ type packageCreatorSpy struct {
 
 type panickingPackageCreator struct{}
 
+type failingPackageCreator struct {
+	err error
+}
+
 func (panickingPackageCreator) CreatePackage(
 	context.Context,
 	string,
@@ -97,6 +101,16 @@ func (panickingPackageCreator) CreatePackage(
 	string,
 ) (*persistence.PackageRecord, error) {
 	panic("sensitive parser panic")
+}
+
+func (creator failingPackageCreator) CreatePackage(
+	context.Context,
+	string,
+	common.StagedUpload,
+	[]string,
+	string,
+) (*persistence.PackageRecord, error) {
+	return nil, creator.err
 }
 
 func (creator *packageCreatorSpy) CreatePackage(
@@ -194,6 +208,39 @@ func TestAsyncPackageWorkerRecoversPanicAndPersistsGenericFailure(t *testing.T) 
 	}
 }
 
+func TestAsyncPackageWorkerSanitizesClientVisibleFailures(t *testing.T) {
+	tests := []struct {
+		name            string
+		creationError   error
+		expectedMessage string
+	}{
+		{
+			name:            "internal error",
+			creationError:   common.NewInternalServerError("sensitive database detail"),
+			expectedMessage: asyncPackageProcessingFailureMessage,
+		},
+		{
+			name:            "invalid package",
+			creationError:   common.NewErrBadRequest("AASXFS-TEST-INVALID invalid AASX package"),
+			expectedMessage: "400 Bad Request: AASXFS-TEST-INVALID invalid AASX package",
+		},
+		{
+			name:            "package limit exceeded",
+			creationError:   common.NewErrPayloadTooLarge("AASXFS-TEST-LIMIT expanded package exceeds configured limit"),
+			expectedMessage: "413 Payload Too Large: AASXFS-TEST-LIMIT expanded package exceeds configured limit",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := runFailingAsyncPackageWorker(t, test.creationError)
+			require.Len(t, result.Messages, 1)
+			require.Equal(t, test.expectedMessage, result.Messages[0]["text"])
+			require.NotContains(t, result.Messages[0]["text"], "sensitive database detail")
+		})
+	}
+}
+
 func TestGeneratePackageIDIsUniqueUnderConcurrency(t *testing.T) {
 	const generatedIDCount = 1_000
 	type generationResult struct {
@@ -271,6 +318,34 @@ func newWorkerReadTrackingUpload() *workerReadTrackingUpload {
 		ReadSeeker: strings.NewReader(""),
 		closed:     make(chan struct{}),
 	}
+}
+
+func runFailingAsyncPackageWorker(t *testing.T, creationError error) openapi.BaseOperationResult {
+	t.Helper()
+	service := NewAASXFileServerAPIAPIService(nil)
+	service.packageCreator = failingPackageCreator{err: creationError}
+	manager := asyncjob.NewManager("AASXFS-TEST", time.Minute)
+	handleID, err := manager.Start(t.Context(), "test-owner", asyncjob.StartOptions{JobKind: asyncPackageJobKind})
+	require.NoError(t, err)
+
+	service.processAsyncPackage(
+		t.Context(),
+		manager,
+		handleID,
+		newWorkerReadTrackingUpload(),
+		nil,
+		"package.aasx",
+		func() {},
+		func() {},
+	)
+
+	record, found, err := manager.Get(t.Context(), handleID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "Failed", record.ExecutionState)
+	result, ok := record.ErrorBody.(openapi.BaseOperationResult)
+	require.True(t, ok)
+	return result
 }
 
 func reserveAllExecutionSlots(manager *asyncjob.Manager) []func() {

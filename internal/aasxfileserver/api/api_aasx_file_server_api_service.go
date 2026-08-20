@@ -320,7 +320,15 @@ func (s *AASXFileServerAPIAPIService) processAsyncPackage(
 	if err == nil {
 		return
 	}
-	persistAsyncPackageFailure(ctx, manager, handleID, file, err.Error())
+	slog.ErrorContext(ctx, "asynchronous AASX package processing failed", "error.code", "AASXFS-ASYNCWORKER-PROCESSPACKAGE", "error", err, "async_job.handle_id", handleID)
+	persistAsyncPackageFailure(ctx, manager, handleID, file, clientVisibleAsyncPackageFailureMessage(err))
+}
+
+func clientVisibleAsyncPackageFailureMessage(err error) string {
+	if common.IsErrBadRequest(err) || common.IsErrPayloadTooLarge(err) {
+		return err.Error()
+	}
+	return asyncPackageProcessingFailureMessage
 }
 
 func persistAsyncPackageFailure(ctx context.Context, manager *asyncjob.Manager, handleID string, file common.StagedUpload, message string) {
