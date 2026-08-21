@@ -343,6 +343,33 @@ func TestAsyncStatusSanitizesPersistenceReadFailure(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetAasxAsyncResultPreservesTypedFailure(t *testing.T) {
+	expected := failedOperationResult("package validation failed")
+	tests := []struct {
+		name    string
+		payload any
+	}{
+		{name: "value", payload: expected},
+		{name: "pointer", payload: &expected},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			manager := asyncjob.NewManager("AASXFS-TEST", time.Minute)
+			handleID, err := manager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: asyncPackageJobKind})
+			require.NoError(t, err)
+			require.NoError(t, manager.Fail(t.Context(), handleID, http.StatusInternalServerError, test.payload))
+			service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
+
+			response, err := service.GetAasxAsyncResult(t.Context(), handleID)
+
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, response.Code)
+			require.Equal(t, expected, response.Body)
+		})
+	}
+}
+
 func newWorkerReadTrackingUpload() *workerReadTrackingUpload {
 	return &workerReadTrackingUpload{
 		ReadSeeker: strings.NewReader(""),

@@ -263,7 +263,14 @@ func (s *AASXFileServerAPIAPIService) GetAasxAsyncResult(ctx context.Context, ha
 		return openapi.Response(http.StatusOK, record.Payload), nil
 	}
 	if record.ExecutionState == "Failed" {
-		if payload, found := record.ErrorBody.(map[string]any); found {
+		switch payload := record.ErrorBody.(type) {
+		case openapi.BaseOperationResult:
+			return openapi.Response(http.StatusOK, payload), nil
+		case *openapi.BaseOperationResult:
+			if payload != nil {
+				return openapi.Response(http.StatusOK, *payload), nil
+			}
+		case map[string]any:
 			if _, hasState := payload["executionState"]; hasState {
 				return openapi.Response(http.StatusOK, payload), nil
 			}
