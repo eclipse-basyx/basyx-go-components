@@ -68,9 +68,9 @@ func TestListSubmodelDescriptorsForAASReusesLookupSQLShape(t *testing.T) {
 	t.Parallel()
 
 	build := func(aasID string) string {
-		var query string
+		queries := make([]string, 0, 2)
 		db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
-			query = actual
+			queries = append(queries, actual)
 			return nil
 		})))
 		require.NoError(t, err)
@@ -78,13 +78,16 @@ func TestListSubmodelDescriptorsForAASReusesLookupSQLShape(t *testing.T) {
 
 		mock.ExpectQuery("AAS descriptor lookup").
 			WithArgs(aasID, sqlmock.AnyArg()).
-			WillReturnRows(sqlmock.NewRows([]string{"descriptor_id"}))
-		descriptors, cursor, err := ListSubmodelDescriptorsForAAS(context.Background(), db, aasID, 100, "")
+			WillReturnRows(sqlmock.NewRows([]string{"descriptor_id"}).AddRow(17))
+		mock.ExpectQuery("Submodel descriptor page").
+			WillReturnRows(sqlmock.NewRows([]string{"payload"}))
+		descriptors, cursor, err := ListSubmodelDescriptorsForAAS(contextWithABACDisabled(t), db, aasID, 100, "")
 		require.NoError(t, err)
 		require.Empty(t, descriptors)
 		require.Empty(t, cursor)
 		require.NoError(t, mock.ExpectationsWereMet())
-		return query
+		require.Len(t, queries, 2)
+		return queries[0]
 	}
 
 	firstQuery := build("urn:example:aas:first")

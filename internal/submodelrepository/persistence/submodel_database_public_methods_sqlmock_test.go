@@ -1149,22 +1149,9 @@ func TestGetSubmodelReferencesReturnsModelReferencesWithSingleSubmodelKey(t *tes
 
 	sut := &SubmodelDatabase{db: db}
 
-	rows := sqlmock.NewRows([]string{
-		"submodel_identifier",
-		"id_short",
-		"category",
-		"kind",
-		"description",
-		"display_name",
-		"administrative_information",
-		"embedded_data_specification",
-		"supplemental_semantic_ids",
-		"extensions",
-		"qualifiers",
-		"semantic_id",
-	}).
-		AddRow("sm-1", "idShort-1", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil).
-		AddRow("sm-2", "idShort-2", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	rows := sqlmock.NewRows([]string{"submodel_identifier"}).
+		AddRow("sm-1").
+		AddRow("sm-2")
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
@@ -1189,6 +1176,108 @@ func TestGetSubmodelReferencesReturnsModelReferencesWithSingleSubmodelKey(t *tes
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetSubmodelsWithElementsUsesTwoPageWideSelects(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{
+			"identifier",
+			"id_short",
+			"category",
+			"kind",
+			"description",
+			"display_name",
+			"administration",
+			"embedded_data_specifications",
+			"supplemental_semantic_ids",
+			"extensions",
+			"qualifiers",
+			"semantic_id",
+			"database_id",
+		}).AddRow("sm-1", "Short", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(7)),
+	)
+	mock.ExpectQuery("WITH").WillReturnRows(
+		sqlmock.NewRows([]string{
+			"submodel_id",
+			"id",
+			"parent_id",
+			"root_id",
+			"id_short",
+			"path",
+			"category",
+			"model_type",
+			"position",
+			"embedded",
+			"supplemental",
+			"extensions",
+			"display_name",
+			"description",
+			"value",
+			"semantic_referred",
+			"supplemental_referred",
+			"qualifiers",
+			"semantic",
+			"semantic_visible",
+			"value_visible",
+		}),
+	)
+	mock.ExpectCommit()
+
+	sut := &SubmodelDatabase{db: db}
+	result, cursor, err := sut.GetSubmodelsWithElementsByListFilters(
+		contextWithABACDisabled(t),
+		100,
+		"",
+		"",
+		"",
+		time.Time{},
+		time.Time{},
+		"deep",
+		true,
+	)
+	require.NoError(t, err)
+	require.Empty(t, cursor)
+	require.Len(t, result, 1)
+	require.Empty(t, result[0].SubmodelElements())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetAllSubmodelPathsPageUsesOneSetBasedSelect(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	mock.ExpectQuery("WITH RECURSIVE").WillReturnRows(
+		sqlmock.NewRows([]string{"submodel_identifier", "idshort_path", "sme_id"}).
+			AddRow("sm-1", "A", int64(1)).
+			AddRow("sm-1", "B", int64(2)),
+	)
+	mock.ExpectCommit()
+
+	sut := &SubmodelDatabase{db: db}
+	page, err := sut.GetAllSubmodelPathsPage(
+		contextWithABACDisabled(t),
+		1,
+		"",
+		"",
+		"",
+		"",
+		"deep",
+	)
+	require.NoError(t, err)
+	require.Equal(t, []string{"A"}, page.Paths)
+	require.Equal(t, "sm-1", page.NextSubmodelCursor)
+	require.Equal(t, "A|1", page.NextPathCursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetSubmodelReferencesReturnsBadRequestForEmptySubmodelIdentifier(t *testing.T) {
 	t.Parallel()
 
@@ -1200,21 +1289,7 @@ func TestGetSubmodelReferencesReturnsBadRequestForEmptySubmodelIdentifier(t *tes
 
 	sut := &SubmodelDatabase{db: db}
 
-	rows := sqlmock.NewRows([]string{
-		"submodel_identifier",
-		"id_short",
-		"category",
-		"kind",
-		"description",
-		"display_name",
-		"administrative_information",
-		"embedded_data_specification",
-		"supplemental_semantic_ids",
-		"extensions",
-		"qualifiers",
-		"semantic_id",
-	}).
-		AddRow("", "idShort-empty", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	rows := sqlmock.NewRows([]string{"submodel_identifier"}).AddRow("")
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
@@ -1239,24 +1314,10 @@ func TestGetSubmodelReferencesWithSemanticIDFilterReturnsMatchingReference(t *te
 
 	sut := &SubmodelDatabase{db: db}
 
-	rows := sqlmock.NewRows([]string{
-		"submodel_identifier",
-		"id_short",
-		"category",
-		"kind",
-		"description",
-		"display_name",
-		"administrative_information",
-		"embedded_data_specification",
-		"supplemental_semantic_ids",
-		"extensions",
-		"qualifiers",
-		"semantic_id",
-	}).
-		AddRow("sm-filtered-1", "idShort-filtered-1", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	rows := sqlmock.NewRows([]string{"submodel_identifier"}).AddRow("sm-filtered-1")
 
 	semanticID := "urn:semantic:id:test"
-	mock.ExpectQuery(`SELECT .*FROM .*submodel.*ssrk_filter.*` + semanticID).WillReturnRows(rows)
+	mock.ExpectQuery(`SELECT .*FROM .*submodel.*ssrk_filter`).WillReturnRows(rows)
 
 	references, cursor, err := sut.GetSubmodelReferences(contextWithABACDisabled(t), 10, "", "", semanticID)
 	require.NoError(t, err)

@@ -30,7 +30,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"sort"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -49,12 +48,10 @@ import (
 //     returned page.
 //
 // Implementation details:
-//   - The function resolves the internal AAS descriptor id, loads all submodel
-//     descriptors via ReadSubmodelDescriptorsByAASDescriptorIDs (which performs
-//     the necessary batched joins), and applies ordering/pagination in memory.
-//   - This keeps the code compact and avoids duplicating SQL join logic. If the
-//     number of submodels per AAS can be very large and DB-level pagination is
-//     required, push ORDER/LIMIT/GTE into SQL over the submodel tables.
+//   - The function resolves the internal AAS descriptor id and then selects the
+//     authorized child page before correlated child materialization.
+//   - Parent lookup and page materialization are executed by the caller in one
+//     read-only repeatable-read transaction.
 //
 // Parameters:
 //   - ctx: request context used for cancellation/deadlines
@@ -72,10 +69,6 @@ func ListSubmodelDescriptorsForAAS(
 	limit int32,
 	cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-
 	d := goqu.Dialect(common.Dialect)
 	aas := goqu.T(common.TblAASDescriptor).As("aas")
 
@@ -87,48 +80,17 @@ func ListSubmodelDescriptorsForAAS(
 
 	sqlStr, args, buildErr := ds.Prepared(true).ToSQL()
 	if buildErr != nil {
-		return nil, "", common.NewInternalServerError("Failed to build AAS lookup query. See server logs for details.")
+		return nil, "", common.NewInternalServerError("AASREG-LISTSMDESC-BUILDPARENT " + buildErr.Error())
 	}
 
 	var descID int64
 	if err := db.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return []model.SubmodelDescriptor{}, "", nil
+			return nil, "", common.NewErrNotFound("AAS Descriptor not found")
 		}
-		return nil, "", common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
+		return nil, "", common.NewInternalServerError("AASREG-LISTSMDESC-QUERYPARENT " + err.Error())
 	}
-
-	m, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{descID}, true)
-	if err != nil {
-		return nil, "", err
-	}
-	list := append([]model.SubmodelDescriptor{}, m[descID]...)
-
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].Id < list[j].Id
-	})
-
-	if cursor != "" {
-		lo, hi := 0, len(list)
-		for lo < hi {
-			mid := (lo + hi) / 2
-			if list[mid].Id < cursor {
-				lo = mid + 1
-			} else {
-				hi = mid
-			}
-		}
-		if lo == len(list) || list[lo].Id != cursor {
-			return []model.SubmodelDescriptor{}, "", nil
-		}
-		list = list[lo:]
-	}
-
-	list, nextCursor := applyCursorLimit(list, limit, func(r model.SubmodelDescriptor) string {
-		return r.Id
-	})
-
-	return list, nextCursor, nil
+	return listSubmodelDescriptorsForAASSingleStatement(ctx, db, descID, limit, cursor)
 }
 
 // InsertSubmodelDescriptorForAAS inserts a single SubmodelDescriptor under the
@@ -435,45 +397,7 @@ func ListSubmodelDescriptors(
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) ([]model.SubmodelDescriptor, string, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-	if cursor != "" {
-		cursorExists, cursorErr := existsSubmodelByID(ctx, db, cursor)
-		if cursorErr != nil {
-			return nil, "", common.NewInternalServerError("SMREG-LISTSMDS-CURSORCHECK " + cursorErr.Error())
-		}
-		if !cursorExists {
-			return []model.SubmodelDescriptor{}, "", nil
-		}
-	}
-
-	rows, nextCursor, err := listSubmodelDescriptorIDsWithoutAAS(ctx, db, limit, cursor, createdFrom, updatedFrom)
-	if err != nil {
-		return nil, "", err
-	}
-	if len(rows) == 0 {
-		return []model.SubmodelDescriptor{}, nextCursor, nil
-	}
-
-	descIDs := make([]int64, 0, len(rows))
-	for _, row := range rows {
-		descIDs = append(descIDs, row.DescID)
-	}
-
-	byDesc, err := ReadSubmodelDescriptorsByDescriptorIDs(ctx, db, descIDs)
-	if err != nil {
-		return nil, "", err
-	}
-
-	list := make([]model.SubmodelDescriptor, 0, len(descIDs))
-	for _, row := range rows {
-		if smdRows, ok := byDesc[row.DescID]; ok {
-			list = append(list, smdRows...)
-		}
-	}
-
-	return list, nextCursor, nil
+	return listSubmodelDescriptorsSingleStatement(ctx, db, limit, cursor, createdFrom, updatedFrom)
 }
 
 // InsertSubmodelDescriptor inserts a single SubmodelDescriptor that is not
@@ -699,86 +623,6 @@ func existsSubmodelByID(ctx context.Context, db DBQueryer, submodelID string) (b
 		return false, scanErr
 	}
 	return true, nil
-}
-
-type submodelDescriptorPageRow struct {
-	DescID     int64
-	SubmodelID string
-}
-
-func listSubmodelDescriptorIDsWithoutAAS(
-	ctx context.Context,
-	db DBQueryer,
-	limit int32,
-	cursor string,
-	createdFrom time.Time,
-	updatedFrom time.Time,
-) ([]submodelDescriptorPageRow, string, error) {
-	d := goqu.Dialect(common.Dialect)
-	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
-
-	ds := d.
-		From(smd).
-		Select(
-			smd.Col(common.ColDescriptorID),
-			smd.Col(common.ColAASID),
-		).
-		Where(smd.Col(common.ColAASDescriptorID).IsNull())
-
-	if cursor != "" {
-		ds = ds.Where(smd.Col(common.ColAASID).Gte(cursor))
-	}
-	switch {
-	case !createdFrom.IsZero() && !updatedFrom.IsZero():
-		ds = ds.Where(goqu.Or(
-			smd.Col("administration_created_at").Gte(createdFrom.UTC()),
-			smd.Col("administration_updated_at").Gte(updatedFrom.UTC()),
-		))
-	case !createdFrom.IsZero():
-		ds = ds.Where(smd.Col("administration_created_at").Gte(createdFrom.UTC()))
-	case !updatedFrom.IsZero():
-		ds = ds.Where(smd.Col("administration_updated_at").Gte(updatedFrom.UTC()))
-	}
-	if limit <= 0 {
-		return nil, "", common.NewErrBadRequest("Limit must be greater than 0")
-	}
-	peekLimit := int(limit) + 1
-
-	if peekLimit <= 1 {
-		return nil, "", common.NewErrBadRequest("Limit must be greater than 0")
-	}
-	ds = ds.Order(smd.Col(common.ColAASID).Asc()).Limit(uint(peekLimit))
-
-	sqlStr, args, buildErr := ds.Prepared(true).ToSQL()
-	if buildErr != nil {
-		return nil, "", common.NewInternalServerError("Failed to build submodel descriptor lookup query. See server logs for details.")
-	}
-
-	rows, err := db.QueryContext(ctx, sqlStr, args...)
-	if err != nil {
-		return nil, "", common.NewInternalServerError("Failed to query submodel descriptor ids. See server logs for details.")
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	pageRows := make([]submodelDescriptorPageRow, 0, peekLimit)
-	for rows.Next() {
-		var row submodelDescriptorPageRow
-		if scanErr := rows.Scan(&row.DescID, &row.SubmodelID); scanErr != nil {
-			return nil, "", common.NewInternalServerError("Failed to scan submodel descriptor ids. See server logs for details.")
-		}
-		pageRows = append(pageRows, row)
-	}
-	if rows.Err() != nil {
-		return nil, "", common.NewInternalServerError("Failed to iterate submodel descriptor ids. See server logs for details.")
-	}
-
-	pageRows, nextCursor := applyCursorLimit(pageRows, limit, func(r submodelDescriptorPageRow) string {
-		return r.SubmodelID
-	})
-
-	return pageRows, nextCursor, nil
 }
 
 func lookupSubmodelDescriptorID(ctx context.Context, db DBQueryer, submodelID string) (int64, error) {

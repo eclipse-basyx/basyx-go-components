@@ -35,7 +35,6 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
-	"golang.org/x/sync/errgroup"
 )
 
 // SubmodelRepositoryAPIAPIService is a service that implements the logic for the SubmodelRepositoryAPIAPIServicer
@@ -627,33 +626,25 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 		}
 	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, limit, decodedCursor, idShort, decodedSemanticID, createdFrom, updatedFrom)
+	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithElementsByListFilters(
+		ctx,
+		limit,
+		decodedCursor,
+		idShort,
+		decodedSemanticID,
+		createdFrom,
+		updatedFrom,
+		level,
+		normalizedExtent == extentWithBlobValue,
+	)
 	if err != nil {
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
-	}
-
-	eg, _ := errgroup.WithContext(ctx)
-	eg.SetLimit(8)
-
-	for index := range sms {
-		sm := sms[index]
-
-		eg.Go(func() error {
-			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(ctx, sm.ID(), nil, "", normalizedExtent == extentWithBlobValue, level)
-			if elementsErr != nil {
-				return elementsErr
+		if persistencepostgresql.IsSubmodelPageElementsError(err) {
+			if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+				return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 			}
-
-			sm.SetSubmodelElements(submodelElements)
-			return nil
-		})
-	}
-
-	if waitErr := eg.Wait(); waitErr != nil {
-		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
-			return newAPIErrorResponse(waitErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
 		}
-		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
 
 	converted := make([]map[string]any, 0, len(sms))
@@ -1103,43 +1094,34 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		}
 	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, limit, decodedCursor, idShort, decodedSemanticID, time.Time{}, time.Time{})
+	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithElementsByListFilters(
+		ctx,
+		limit,
+		decodedCursor,
+		idShort,
+		decodedSemanticID,
+		time.Time{},
+		time.Time{},
+		level,
+		normalizedExtent == extentWithBlobValue,
+	)
 	if err != nil {
+		if persistencepostgresql.IsSubmodelPageElementsError(err) {
+			if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+				return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+			}
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
+		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
 
 	valueOnlyResults := make([]map[string]any, len(sms))
-
-	eg, _ := errgroup.WithContext(ctx)
-	eg.SetLimit(8)
-
-	for index := range sms {
-		index := index
-		sm := sms[index]
-
-		eg.Go(func() error {
-			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(ctx, sm.ID(), nil, "", normalizedExtent == extentWithBlobValue, level)
-			if elementsErr != nil {
-				return elementsErr
-			}
-
-			sm.SetSubmodelElements(submodelElements)
-
-			valueOnly, convErr := gen.SubmodelToValueOnly(sm)
-			if convErr != nil {
-				return convErr
-			}
-
-			valueOnlyResults[index] = submodelValueToAnyMap(valueOnly)
-			return nil
-		})
-	}
-
-	if waitErr := eg.Wait(); waitErr != nil {
-		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
-			return newAPIErrorResponse(waitErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+	for index, sm := range sms {
+		valueOnly, convErr := gen.SubmodelToValueOnly(sm)
+		if convErr != nil {
+			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
 		}
-		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
+		valueOnlyResults[index] = submodelValueToAnyMap(valueOnly)
 	}
 
 	encodedNextCursor := ""
@@ -1252,110 +1234,43 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 		effectiveLimit = 100
 	}
 
-	resultPaths := make([]string, 0, effectiveLimit)
-	submodelCursor := cursorState.SubmodelCursor
-	pathCursor := cursorState.PathCursor
-	referencePageLimit := limit
-	if referencePageLimit == 0 {
-		referencePageLimit = 100
+	page, err := s.submodelBackend.GetAllSubmodelPathsPage(
+		ctx,
+		effectiveLimit,
+		cursorState.SubmodelCursor,
+		cursorState.PathCursor,
+		idShort,
+		decodedSemanticID,
+		level,
+	)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPathPage"), nil
 	}
 
-	for len(resultPaths) < effectiveLimit {
-		references, nextSubmodelCursor, err := s.submodelBackend.GetSubmodelReferences(ctx, referencePageLimit, submodelCursor, idShort, decodedSemanticID)
-		if err != nil {
-			if common.IsErrBadRequest(err) {
-				return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
-			}
-			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), nil
-		}
-
-		if len(references) == 0 {
-			res := gen.GetPathItemsResult{
-				PagingMetadata: gen.PagedResultPagingMetadata{
-					Cursor: "",
-				},
-				Result: resultPaths,
-			}
-			return gen.Response(http.StatusOK, res), nil
-		}
-
-		submodelIdentifiers := make([]string, 0, len(references))
-		for _, reference := range references {
-			submodelIdentifier, extractErr := extractSubmodelIdentifierFromReference(reference)
-			if extractErr != nil {
-				return newAPIErrorResponse(extractErr, http.StatusInternalServerError, operation, "ExtractSubmodelIdentifier"), nil
-			}
-			submodelIdentifiers = append(submodelIdentifiers, submodelIdentifier)
-		}
-
-		for submodelIndex, submodelIdentifier := range submodelIdentifiers {
-			remaining := effectiveLimit - len(resultPaths)
-
-			currentPathCursor := ""
-			if submodelIndex == 0 && pathCursor != "" && submodelIdentifier == submodelCursor {
-				currentPathCursor = pathCursor
-			}
-
-			paths, nextPathCursor, pathErr := s.submodelBackend.GetSubmodelElementPathPage(
-				ctx,
-				submodelIdentifier,
-				&remaining,
-				currentPathCursor,
-				level,
-			)
-			if pathErr != nil {
-				if common.IsErrNotFound(pathErr) || errors.Is(pathErr, sql.ErrNoRows) {
-					return newAPIErrorResponse(pathErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
-				}
-				if common.IsErrBadRequest(pathErr) {
-					return newAPIErrorResponse(pathErr, http.StatusBadRequest, operation, "BadRequest"), nil
-				}
-				return newAPIErrorResponse(pathErr, http.StatusInternalServerError, operation, "GetSubmodelElementPathPage"), nil
-			}
-
-			resultPaths = append(resultPaths, paths...)
-
-			if len(resultPaths) == effectiveLimit {
-				nextState := allSubmodelsPathCursorState{}
-				switch {
-				case nextPathCursor != "":
-					nextState.SubmodelCursor = submodelIdentifier
-					nextState.PathCursor = nextPathCursor
-				case submodelIndex+1 < len(submodelIdentifiers):
-					nextState.SubmodelCursor = submodelIdentifiers[submodelIndex+1]
-				default:
-					nextState.SubmodelCursor = nextSubmodelCursor
-				}
-
-				encodedCursorState, encodeCursorErr := encodeAllSubmodelsPathCursorState(nextState)
-				if encodeCursorErr != nil {
-					return newAPIErrorResponse(encodeCursorErr, http.StatusInternalServerError, operation, "EncodeCursor"), nil
-				}
-
-				res := gen.GetPathItemsResult{
-					PagingMetadata: gen.PagedResultPagingMetadata{
-						Cursor: common.EncodeString(encodedCursorState),
-					},
-					Result: resultPaths,
-				}
-
-				return gen.Response(http.StatusOK, res), nil
-			}
-		}
-
-		if nextSubmodelCursor == "" {
-			break
-		}
-
-		submodelCursor = nextSubmodelCursor
-		pathCursor = ""
+	nextState := allSubmodelsPathCursorState{
+		SubmodelCursor: page.NextSubmodelCursor,
+		PathCursor:     page.NextPathCursor,
+	}
+	encodedCursorState, err := encodeAllSubmodelsPathCursorState(nextState)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "EncodeCursor"), nil
+	}
+	encodedCursor := ""
+	if encodedCursorState != "" {
+		encodedCursor = common.EncodeString(encodedCursorState)
 	}
 
 	res := gen.GetPathItemsResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{
-			Cursor: "",
+			Cursor: encodedCursor,
 		},
-		Result: resultPaths,
+		Result: page.Paths,
 	}
 
 	return gen.Response(http.StatusOK, res), nil
@@ -2985,8 +2900,28 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 ) (gen.ImplResponse, error) {
 	querySelectionCtx := auth.MergeQueryFilter(ctx, query)
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(querySelectionCtx, limit, cursor, "", "", time.Time{}, time.Time{})
+	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithElementsByListFilters(
+		querySelectionCtx,
+		limit,
+		cursor,
+		"",
+		"",
+		time.Time{},
+		time.Time{},
+		"",
+		true,
+	)
 	if err != nil {
+		if persistencepostgresql.IsSubmodelPageElementsError(err) {
+			if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+				return common.NewErrorResponse(
+					err, http.StatusNotFound, "SMREPO", "QuerySubmodels", "SubmodelNotFound",
+				), nil
+			}
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "GetSubmodelElements",
+			), err
+		}
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(
@@ -2997,34 +2932,6 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 				err, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "InternalServerError",
 			), err
 		}
-	}
-
-	eg, _ := errgroup.WithContext(ctx)
-	eg.SetLimit(8)
-
-	for index := range sms {
-		sm := sms[index]
-		eg.Go(func() error {
-			elementQueryCtx := auth.MergeQueryFilter(ctx, query)
-			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(elementQueryCtx, sm.ID(), nil, "", true, "")
-			if elementsErr != nil {
-				return elementsErr
-			}
-
-			sm.SetSubmodelElements(submodelElements)
-			return nil
-		})
-	}
-
-	if waitErr := eg.Wait(); waitErr != nil {
-		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
-			return common.NewErrorResponse(
-				waitErr, http.StatusNotFound, "SMREPO", "QuerySubmodels", "SubmodelNotFound",
-			), nil
-		}
-		return common.NewErrorResponse(
-			waitErr, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "GetSubmodelElements",
-		), waitErr
 	}
 
 	converted := make([]map[string]any, 0, len(sms))
