@@ -33,6 +33,7 @@ import (
 	"flag"
 	"log/slog"
 	"net/http"
+	stdpprof "net/http/pprof"
 	"os"
 
 	"github.com/go-chi/chi/v5"
@@ -195,6 +196,7 @@ func runServer(ctx context.Context, configPath string) error {
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "SubmodelRepositoryService")
+	apiRouter.HandleFunc("/debug/pprof/profile", stdpprof.Profile)
 
 	// Apply OIDC + ABAC once for all repository endpoints
 	var claimsMiddleware []func(http.Handler) http.Handler

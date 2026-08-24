@@ -71,7 +71,7 @@ func GetSubmodelElementsBySubmodelDatabaseIDsTx(
 		return result, nil
 	}
 
-	query, args, err := buildSubmodelElementPageQuery(ctx, submodelDatabaseIDs, includeBlobValue, level)
+	query, args, err := buildSubmodelElementPageQuery(ctx, submodelDatabaseIDs, level)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +81,9 @@ func GetSubmodelElementsBySubmodelDatabaseIDsTx(
 	}
 	if len(loadedRows) == 0 {
 		return result, nil
+	}
+	if err := populateSubmodelElementPageValues(ctx, tx, loadedRows, includeBlobValue); err != nil {
+		return nil, err
 	}
 
 	forest, err := buildSubmodelElementForestFromRows(ctx, tx, loadedRows)
@@ -341,7 +344,6 @@ func buildVisiblePathSMEs(ctx context.Context, dialect goqu.DialectWrapper) (*go
 func buildSubmodelElementPageQuery(
 	ctx context.Context,
 	submodelDatabaseIDs []int64,
-	includeBlobValue bool,
 	level string,
 ) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
@@ -377,7 +379,7 @@ func buildSubmodelElementPageQuery(
 		return "", nil, common.NewInternalServerError("SMREPO-GETSMEPAGE-VALUEMASK " + err.Error())
 	}
 
-	inner := buildSubmodelElementPageInnerQuery(dialect, submodelDatabaseIDs, maskRuntime, includeBlobValue)
+	inner := buildSubmodelElementPageInnerQuery(dialect, submodelDatabaseIDs, maskRuntime)
 	inner, err = addSMERowFilterQueries(ctx, inner)
 	if err != nil {
 		return "", nil, common.NewInternalServerError("SMREPO-GETSMEPAGE-ROWFILTER " + err.Error())
@@ -446,13 +448,9 @@ func buildVisibleSubmodelRoots(
 }
 
 func buildSelectedSubmodelElements(dialect goqu.DialectWrapper, level string) *goqu.SelectDataset {
-	roots := dialect.From(goqu.T("submodel_element").As("selected_sme")).
-		Join(
-			goqu.T("selected_submodel_roots").As("selected_root"),
-			goqu.On(goqu.I("selected_sme.id").Eq(goqu.I("selected_root.root_id"))),
-		).
+	roots := dialect.From(goqu.T("selected_submodel_roots").As("selected_root")).
 		Select(
-			goqu.I("selected_sme.id").As("element_id"),
+			goqu.I("selected_root.root_id").As("element_id"),
 			goqu.I("selected_root.submodel_id").As("submodel_id"),
 			goqu.I("selected_root.root_rank").As("root_rank"),
 		)
@@ -464,7 +462,10 @@ func buildSelectedSubmodelElements(dialect goqu.DialectWrapper, level string) *g
 	children := dialect.From(goqu.T("submodel_element").As("selected_sme")).
 		Join(
 			goqu.T("selected_submodel_roots").As("selected_root"),
-			goqu.On(goqu.I(joinColumn).Eq(goqu.I("selected_root.root_id"))),
+			goqu.On(
+				goqu.I("selected_sme.submodel_id").Eq(goqu.I("selected_root.submodel_id")),
+				goqu.I(joinColumn).Eq(goqu.I("selected_root.root_id")),
+			),
 		).
 		Select(
 			goqu.I("selected_sme.id").As("element_id"),
@@ -482,9 +483,7 @@ func buildSubmodelElementPageInnerQuery(
 	dialect goqu.DialectWrapper,
 	submodelDatabaseIDs []int64,
 	maskRuntime *auth.SharedFragmentMaskRuntime,
-	includeBlobValue bool,
 ) *goqu.SelectDataset {
-	valueExpr := getSMEValueExpressionForRead(dialect, includeBlobValue)
 	projections := []interface{}{
 		goqu.I("selected_element.submodel_id").As("page_submodel_id"),
 		common.PostgreSQLBigIntArrayPosition(submodelDatabaseIDs, goqu.I("selected_element.submodel_id")).As("sort_submodel_order"),
@@ -502,7 +501,7 @@ func buildSubmodelElementPageInnerQuery(
 		goqu.L("COALESCE(sme_p.extensions_payload, '[]'::jsonb)").As("raw_extensions_payload"),
 		goqu.L("COALESCE(sme_p.displayname_payload, '[]'::jsonb)").As("raw_displayname_payload"),
 		goqu.L("COALESCE(sme_p.description_payload, '[]'::jsonb)").As("raw_description_payload"),
-		valueExpr.As("raw_value_payload"),
+		goqu.L("NULL::jsonb").As("raw_value_payload"),
 		goqu.L("'[]'::jsonb").As("raw_semantic_id_referred_payload"),
 		goqu.L("'[]'::jsonb").As("raw_supplemental_semantic_ids_referred_payload"),
 		goqu.L("COALESCE(sme_p.qualifiers_payload, '[]'::jsonb)").As("raw_qualifiers_payload"),
