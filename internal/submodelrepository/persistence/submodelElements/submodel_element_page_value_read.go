@@ -274,9 +274,8 @@ func buildMultiLanguagePropertyPageValues(dialect goqu.DialectWrapper, elementID
 		common.PostgreSQLTextLiteral("id"), goqu.I(valueAlias+".id"),
 	)
 	orderedValue := goqu.L(
-		"? ORDER BY ?, ?",
+		"? ORDER BY ?",
 		valueRow,
-		goqu.I(valueAlias+".language"),
 		goqu.I(valueAlias+".id"),
 	)
 	values := dialect.From(goqu.T("multilanguage_property_value").As(valueAlias)).

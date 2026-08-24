@@ -27,7 +27,6 @@ package builder
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -60,7 +59,7 @@ type submodelElementMetadata struct {
 }
 
 // BuildSubmodelElement constructs a SubmodelElement from the provided database row.
-func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.ISubmodelElement, *SubmodelElementBuilder, error) {
+func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelElement, *SubmodelElementBuilder, error) {
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 	var refMutex sync.RWMutex
 	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap, &refMutex)

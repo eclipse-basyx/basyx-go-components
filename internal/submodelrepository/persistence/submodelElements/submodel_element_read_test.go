@@ -658,6 +658,8 @@ func TestSubmodelElementPageValueQueryShapeIsIndependentOfPageSize(t *testing.T)
 	require.Contains(t, oneQuery, "UNION ALL")
 	require.Contains(t, oneQuery, `"property_element" AS "page_property"`)
 	require.Contains(t, oneQuery, `"multilanguage_property_value" AS "page_multilanguage_value"`)
+	require.Contains(t, oneQuery, `ORDER BY "page_multilanguage_value"."id"`)
+	require.NotContains(t, oneQuery, `ORDER BY "page_multilanguage_value"."language"`)
 	require.Contains(t, oneQuery, `"submodel_element_page_value"."element_id" = ANY($1::bigint[])`)
 	require.Contains(t, oneQuery, `COALESCE("submodel_element_page_value"."value_payload"::jsonb, '{}'::jsonb) - 'value'`)
 }

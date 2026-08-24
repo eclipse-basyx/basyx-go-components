@@ -1919,7 +1919,7 @@ func buildLoadedSubmodelElementNodes(ctx context.Context, db DBQueryer, parsedRo
 			return nil, nil, nil, common.NewInternalServerError(errorCodePrefix + "-NODBID Missing database id for submodel element")
 		}
 
-		element, _, buildErr := builders.BuildSubmodelElement(item.row, nil)
+		element, _, buildErr := builders.BuildSubmodelElement(item.row)
 		if buildErr != nil {
 			return nil, nil, nil, common.NewInternalServerError(errorCodePrefix + "-BUILDELEM " + buildErr.Error())
 		}
