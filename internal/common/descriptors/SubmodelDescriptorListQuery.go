@@ -310,7 +310,7 @@ func buildStandaloneSubmodelDescriptorListQuery(
 	rawPageTable := goqu.T(rawPageAlias)
 	authorizedTable := goqu.T(authorizedAlias)
 	authorized = authorized.Where(
-		goqu.I(common.AliasSubmodelDescriptor + "." + common.ColDescriptorID).Eq(
+		goqu.I(common.AliasSubmodelDescriptor + "." + common.ColDescriptorID).In(
 			dialect.From(rawPageTable).Select(rawPageTable.Col(common.ColDescriptorID)),
 		),
 	)

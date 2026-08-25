@@ -80,6 +80,8 @@ func TestListAssetAdministrationShellDescriptorsUsesBatchedPageQuery(t *testing.
 	require.Empty(t, cursor)
 	require.NotContains(t, query, "jsonb_build_object")
 	require.Contains(t, query, `FROM (SELECT`)
+	require.Contains(t, query, `INNER JOIN "descriptor_payload" AS "aas_descriptor_payload"`)
+	require.NotContains(t, query, `LEFT JOIN "descriptor_payload" AS "aas_descriptor_payload"`)
 	require.NoError(t, db.Close())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -221,7 +223,8 @@ func TestSubmodelDescriptorListSQLShapeIsStableAcrossPageSizes(t *testing.T) {
 	require.Contains(t, oneSQL, "raw_submodel_descriptor_page")
 	require.Contains(t, oneSQL, "authorized_submodel_descriptors")
 	require.Contains(t, oneSQL, `LEFT JOIN "authorized_submodel_descriptors"`)
-	require.Contains(t, oneSQL, `IN (SELECT "raw_submodel_descriptor_page"."descriptor_id"`)
+	require.Contains(t, oneSQL, `IN ((SELECT "raw_submodel_descriptor_page"."descriptor_id"`)
+	require.NotContains(t, oneSQL, `= (SELECT "raw_submodel_descriptor_page"."descriptor_id"`)
 	require.Contains(t, oneSQL, `ORDER BY "raw_submodel_descriptor_page"."id" ASC, "raw_submodel_descriptor_page"."descriptor_id" ASC`)
 }
 

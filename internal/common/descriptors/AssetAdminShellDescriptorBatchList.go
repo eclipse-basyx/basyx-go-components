@@ -153,7 +153,7 @@ func buildBatchedAASDescriptorPageQuery(
 	}
 	dataset := dialect.From(page.As(pageAlias)).
 		InnerJoin(aas, goqu.On(aas.Col(common.ColDescriptorID).Eq(pageTable.Col(common.ColDescriptorID)))).
-		LeftJoin(payload, goqu.On(payload.Col(common.ColDescriptorID).Eq(pageTable.Col(common.ColDescriptorID)))).
+		InnerJoin(payload, goqu.On(payload.Col(common.ColDescriptorID).Eq(pageTable.Col(common.ColDescriptorID)))).
 		Select(
 			aas.Col(common.ColDescriptorID),
 			aas.Col(common.ColAssetKind),
