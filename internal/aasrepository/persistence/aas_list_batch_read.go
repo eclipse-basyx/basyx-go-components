@@ -46,6 +46,13 @@ type aasListPage struct {
 	nextDatabaseID int64
 }
 
+type aasListMaterializationRows struct {
+	coreRows          map[int64]coreAssetAdministrationShellRow
+	submodelRows      []batchedReferenceScanRow
+	specificAssetRows []batchedSpecificAssetScanRow
+	nextCursor        string
+}
+
 type batchedReferenceKey struct {
 	kind int
 	id   int64
@@ -117,26 +124,38 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsPostgreSQ
 		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
 	}
 
-	var result []types.IAssetAdministrationShell
-	var nextCursor string
-	err := common.ExecutePostgreSQLReadTransaction(ctx, db, func(tx pgx.Tx) error {
-		pageQuery, pageArgs, err := buildAASListPageQuery(ctx, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
-		if err != nil {
-			return err
-		}
-		page, err := readAASListPage(ctx, tx, pageQuery, pageArgs, limit)
-		if err != nil {
-			return err
+	pageQuery, pageArgs, err := buildAASListPageQuery(ctx, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
+	if err != nil {
+		return nil, "", err
+	}
+
+	var page aasListPage
+	var materializationRows aasListMaterializationRows
+	err = common.ExecutePostgreSQLReadTransaction(ctx, db, func(tx pgx.Tx) error {
+		var readErr error
+		page, readErr = readAASListPage(ctx, tx, pageQuery, pageArgs, limit)
+		if readErr != nil {
+			return readErr
 		}
 		if len(page.databaseIDs) == 0 {
-			result = []types.IAssetAdministrationShell{}
 			return nil
 		}
 
-		result, nextCursor, err = s.readAASListMaterializationBatch(ctx, tx, page)
-		return err
+		materializationRows, readErr = readAASListMaterializationRows(ctx, tx, page)
+		return readErr
 	})
-	return result, nextCursor, err
+	if err != nil {
+		return nil, "", err
+	}
+	if len(page.databaseIDs) == 0 {
+		return []types.IAssetAdministrationShell{}, "", nil
+	}
+
+	result, err := materializeAASListRows(page.databaseIDs, materializationRows)
+	if err != nil {
+		return nil, "", err
+	}
+	return result, materializationRows.nextCursor, nil
 }
 
 func buildAASListPageQuery(
@@ -207,14 +226,14 @@ func readAASListPage(
 	return page, nil
 }
 
-func (s *AssetAdministrationShellDatabase) readAASListMaterializationBatch(
+func readAASListMaterializationRows(
 	ctx context.Context,
 	tx pgx.Tx,
 	page aasListPage,
-) ([]types.IAssetAdministrationShell, string, error) {
+) (aasListMaterializationRows, error) {
 	statements, err := buildAASListMaterializationStatements(ctx, page)
 	if err != nil {
-		return nil, "", err
+		return aasListMaterializationRows{}, err
 	}
 	batch := &pgx.Batch{}
 	for _, statement := range statements {
@@ -230,49 +249,70 @@ func (s *AssetAdministrationShellDatabase) readAASListMaterializationBatch(
 
 	coreRows, err := readBatchedAASCoreRows(results)
 	if err != nil {
-		return nil, "", err
+		return aasListMaterializationRows{}, err
 	}
-	submodelsByAASID, err := readBatchedAASSubmodelReferences(results, page.databaseIDs)
+	submodelRows, err := readBatchedAASSubmodelReferenceRows(results)
 	if err != nil {
-		return nil, "", err
+		return aasListMaterializationRows{}, err
 	}
-	specificByAASID, err := readBatchedSpecificAssetIDs(results, page.databaseIDs)
+	specificAssetRows, err := readBatchedSpecificAssetRows(results)
 	if err != nil {
-		return nil, "", err
+		return aasListMaterializationRows{}, err
 	}
 	nextCursor := ""
 	if page.nextDatabaseID != 0 {
 		rows, queryErr := results.Query()
 		if queryErr != nil {
-			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + queryErr.Error())
+			return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + queryErr.Error())
 		}
 		if !rows.Next() {
 			rowsErr := rows.Err()
 			rows.Close()
 			if rowsErr != nil {
-				return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + rowsErr.Error())
+				return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + rowsErr.Error())
 			}
-			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + sql.ErrNoRows.Error())
+			return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + sql.ErrNoRows.Error())
 		}
 		if scanErr := rows.Scan(&nextCursor); scanErr != nil {
 			rows.Close()
-			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + scanErr.Error())
+			return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + scanErr.Error())
 		}
 		rows.Close()
 		if rowsErr := rows.Err(); rowsErr != nil {
-			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + rowsErr.Error())
+			return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + rowsErr.Error())
 		}
 	}
 	if err := results.Close(); err != nil {
-		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-CLOSEBATCH " + err.Error())
+		return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-CLOSEBATCH " + err.Error())
 	}
 	closed = true
 
-	assembled, err := assembleAASListModels(page.databaseIDs, coreRows, submodelsByAASID, specificByAASID)
+	return aasListMaterializationRows{
+		coreRows:          coreRows,
+		submodelRows:      submodelRows,
+		specificAssetRows: specificAssetRows,
+		nextCursor:        nextCursor,
+	}, nil
+}
+
+func materializeAASListRows(
+	databaseIDs []int64,
+	rows aasListMaterializationRows,
+) ([]types.IAssetAdministrationShell, error) {
+	submodelsByAASID, err := buildBatchedReferences(
+		rows.submodelRows,
+		databaseIDs,
+		true,
+		"AASREPO-GETAASLIST-REFS",
+	)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return assembled, nextCursor, nil
+	specificByAASID, err := buildBatchedSpecificAssetIDs(rows.specificAssetRows, databaseIDs)
+	if err != nil {
+		return nil, err
+	}
+	return assembleAASListModels(databaseIDs, rows.coreRows, submodelsByAASID, specificByAASID)
 }
 
 func (s *AssetAdministrationShellDatabase) readAASListMaterializationSequential(
@@ -635,16 +675,13 @@ func scanAASCoreRows(rows pgxRows) (map[int64]coreAssetAdministrationShellRow, e
 	return coreRows, nil
 }
 
-func readBatchedAASSubmodelReferences(
-	results pgx.BatchResults,
-	ownerIDs []int64,
-) (map[int64][]types.IReference, error) {
+func readBatchedAASSubmodelReferenceRows(results pgx.BatchResults) ([]batchedReferenceScanRow, error) {
 	rows, err := results.Query()
 	if err != nil {
 		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-BATCHREFS " + err.Error())
 	}
 	defer rows.Close()
-	return scanBatchedReferences(rows, ownerIDs, true, "AASREPO-GETAASLIST-REFS")
+	return scanBatchedReferenceRows(rows, "AASREPO-GETAASLIST-REFS")
 }
 
 type pgxRows interface {
@@ -659,18 +696,39 @@ func scanBatchedReferences(
 	payloadContainsFullReference bool,
 	errorPrefix string,
 ) (map[int64][]types.IReference, error) {
-	state := newBatchedReferenceState()
+	rowsToBuild, err := scanBatchedReferenceRows(rows, errorPrefix)
+	if err != nil {
+		return nil, err
+	}
+	return buildBatchedReferences(rowsToBuild, ownerIDs, payloadContainsFullReference, errorPrefix)
+}
+
+func scanBatchedReferenceRows(rows pgxRows, errorPrefix string) ([]batchedReferenceScanRow, error) {
+	result := make([]batchedReferenceScanRow, 0)
 	for rows.Next() {
 		row, err := scanBatchedReferenceRow(rows)
 		if err != nil {
 			return nil, common.NewInternalServerError(errorPrefix + "-SCANROW " + err.Error())
 		}
-		if err := state.add(row, payloadContainsFullReference, errorPrefix); err != nil {
-			return nil, err
-		}
+		result = append(result, row)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, common.NewInternalServerError(errorPrefix + "-ROWSERR " + err.Error())
+	}
+	return result, nil
+}
+
+func buildBatchedReferences(
+	rows []batchedReferenceScanRow,
+	ownerIDs []int64,
+	payloadContainsFullReference bool,
+	errorPrefix string,
+) (map[int64][]types.IReference, error) {
+	state := newBatchedReferenceState()
+	for _, row := range rows {
+		if err := state.add(row, payloadContainsFullReference, errorPrefix); err != nil {
+			return nil, err
+		}
 	}
 	return state.build(ownerIDs), nil
 }
@@ -767,31 +825,47 @@ func (state *batchedReferenceState) build(ownerIDs []int64) map[int64][]types.IR
 	return out
 }
 
-func readBatchedSpecificAssetIDs(
-	results pgx.BatchResults,
-	ownerIDs []int64,
-) (map[int64][]types.ISpecificAssetID, error) {
+func readBatchedSpecificAssetRows(results pgx.BatchResults) ([]batchedSpecificAssetScanRow, error) {
 	rows, err := results.Query()
 	if err != nil {
 		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-BATCHSPECIFIC " + err.Error())
 	}
 	defer rows.Close()
-	return scanBatchedSpecificAssetIDs(rows, ownerIDs)
+	return scanBatchedSpecificAssetRows(rows)
 }
 
 func scanBatchedSpecificAssetIDs(rows pgxRows, ownerIDs []int64) (map[int64][]types.ISpecificAssetID, error) {
-	state := newBatchedSpecificAssetState()
+	rowsToBuild, err := scanBatchedSpecificAssetRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	return buildBatchedSpecificAssetIDs(rowsToBuild, ownerIDs)
+}
+
+func scanBatchedSpecificAssetRows(rows pgxRows) ([]batchedSpecificAssetScanRow, error) {
+	result := make([]batchedSpecificAssetScanRow, 0)
 	for rows.Next() {
 		row, err := scanBatchedSpecificAssetRow(rows)
 		if err != nil {
 			return nil, common.NewInternalServerError("AASREPO-GETAASLIST-SCANSPECIFIC " + err.Error())
 		}
-		if err := state.add(row); err != nil {
-			return nil, err
-		}
+		result = append(result, row)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-ROWSSPECIFIC " + err.Error())
+	}
+	return result, nil
+}
+
+func buildBatchedSpecificAssetIDs(
+	rows []batchedSpecificAssetScanRow,
+	ownerIDs []int64,
+) (map[int64][]types.ISpecificAssetID, error) {
+	state := newBatchedSpecificAssetState()
+	for _, row := range rows {
+		if err := state.add(row); err != nil {
+			return nil, err
+		}
 	}
 	return state.build(ownerIDs)
 }

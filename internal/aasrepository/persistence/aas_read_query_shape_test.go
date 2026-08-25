@@ -140,6 +140,81 @@ func TestAASListSaturatedPageQueuesCursorLast(t *testing.T) {
 	require.Contains(t, statements[3].SQL, `SELECT "aas_id" FROM "aas"`)
 }
 
+func TestAASListReferenceRowsDeferPayloadParsing(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{
+			"owner_id",
+			"reference_id",
+			"reference_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_payload",
+		}).AddRow(int64(7), int64(11), int64(types.ReferenceTypesModelReference), nil, nil, nil, []byte("{")),
+	)
+
+	sqlRows, err := db.Query("SELECT")
+	require.NoError(t, err)
+	defer func() { _ = sqlRows.Close() }()
+
+	rawRows, err := scanBatchedReferenceRows(sqlRows, "AASREPO-TEST")
+	require.NoError(t, err)
+	require.Len(t, rawRows, 1)
+	require.Equal(t, []byte("{"), rawRows[0].parentPayload)
+
+	_, err = buildBatchedReferences(rawRows, []int64{7}, true, "AASREPO-TEST")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASREPO-TEST-PARSEPARENT")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMaterializeAASListRowsBuildsShellsAfterCollection(t *testing.T) {
+	t.Parallel()
+
+	validInt64 := func(value int64) sql.NullInt64 {
+		return sql.NullInt64{Int64: value, Valid: true}
+	}
+	rows := aasListMaterializationRows{
+		coreRows: map[int64]coreAssetAdministrationShellRow{
+			7: {aasID: "aas-1"},
+		},
+		submodelRows: []batchedReferenceScanRow{
+			{
+				ownerID:       validInt64(7),
+				referenceID:   validInt64(11),
+				referenceType: validInt64(int64(types.ReferenceTypesModelReference)),
+				keyID:         validInt64(12),
+				keyType:       validInt64(int64(types.KeyTypesSubmodel)),
+				keyValue:      sql.NullString{String: "submodel-1", Valid: true},
+			},
+		},
+		specificAssetRows: []batchedSpecificAssetScanRow{
+			{
+				rowKind:    0,
+				ownerID:    validInt64(7),
+				specificID: validInt64(21),
+				name:       sql.NullString{String: "serial", Valid: true},
+				value:      sql.NullString{String: "4711", Valid: true},
+			},
+		},
+	}
+
+	result, err := materializeAASListRows([]int64{7}, rows)
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	require.Equal(t, "aas-1", result[0].ID())
+	require.Len(t, result[0].Submodels(), 1)
+	require.Equal(t, "submodel-1", result[0].Submodels()[0].Keys()[0].Value())
+	require.Len(t, result[0].AssetInformation().SpecificAssetIDs(), 1)
+	require.Equal(t, "serial", result[0].AssetInformation().SpecificAssetIDs()[0].Name())
+	require.Equal(t, "4711", result[0].AssetInformation().SpecificAssetIDs()[0].Value())
+}
+
 func TestAASIdentifierPageEmbedsInclusiveCursorValidation(t *testing.T) {
 	t.Parallel()
 
