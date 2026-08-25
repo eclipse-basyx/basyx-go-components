@@ -425,7 +425,6 @@ func loadSubmodelDescriptorLookupsParallel(
 		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
 			return ReadEndpointsByDescriptorIDs(gctx, db, ids, "submodel")
 		}, &lookups.endpointsByDesc)
-
 	}
 
 	if err := g.Wait(); err != nil {
