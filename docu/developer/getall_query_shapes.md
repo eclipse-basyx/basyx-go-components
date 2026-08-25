@@ -19,9 +19,9 @@ bounded.
 | AAS Repository, full, final page | page, core, Submodel references, Specific Asset IDs and their two reference reads | 4 | pgx: 2; `database/sql`: 4 |
 | AAS Repository, full, saturated page | final-page reads plus cursor lookup | 5 | pgx: 2; `database/sql`: 5 |
 | AAS Repository, reference | complete AAS materialization | 1 | 1 |
-| Submodel Registry, global Submodel Descriptors | cursor check, ID page, base row and four child lookups | 1 | 1 |
-| AAS Registry, nested Submodel Descriptors | parent lookup, unpaged base row and four child lookups | 2 | 2 |
-| AAS Registry, AAS Descriptors | 1 | unchanged: 1 | 1 |
+| Submodel Registry, global Submodel Descriptors | cursor check, ID page, base row and three child lookups | 1 | 1 |
+| AAS Registry, nested Submodel Descriptors | parent lookup, unpaged base row and three child lookups | 2 | 2 |
+| AAS Registry, AAS Descriptors | one correlated JSON materializer | 1 page read plus up to 8 fixed flat child reads; filtered requests retain the single-statement materializer | 1 to 9 |
 | Concept Description Repository, full and recent changes | 1 | unchanged: 1 | 1 |
 
 `N` is the number of Submodels returned on the page. The final shapes use array

@@ -39,8 +39,69 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestListAssetAdministrationShellDescriptorsUsesOneQuery(t *testing.T) {
-	assertAASDescriptorListUsesOneQuery(common.ContextWithConfig(t.Context(), &common.Config{}), t)
+func TestListAssetAdministrationShellDescriptorsUsesBatchedPageQuery(t *testing.T) {
+	t.Parallel()
+
+	var query string
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+		query = actual
+		return nil
+	})))
+	require.NoError(t, err)
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{
+		"descriptor_id",
+		"asset_kind",
+		"asset_type",
+		"global_asset_id",
+		"id_short",
+		"id",
+		"created_at",
+		"administration",
+		"display_name",
+		"description",
+		"extensions",
+	}))
+	mock.ExpectClose()
+
+	descriptors, cursor, err := ListAssetAdministrationShellDescriptors(
+		common.ContextWithConfig(t.Context(), &common.Config{}),
+		db,
+		100,
+		"",
+		model.AssetKind(""),
+		"",
+		"",
+		time.Time{},
+		time.Time{},
+	)
+
+	require.NoError(t, err)
+	require.Empty(t, descriptors)
+	require.Empty(t, cursor)
+	require.NotContains(t, query, "jsonb_build_object")
+	require.Contains(t, query, `FROM (SELECT`)
+	require.NoError(t, db.Close())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAssembleAASDescriptorListUsesPageExtensionPayload(t *testing.T) {
+	t.Parallel()
+
+	descriptor, err := assembleAASDescriptorListRow(
+		model.AssetAdministrationShellDescriptorRow{
+			DescID:                    7,
+			IDStr:                     "aas-1",
+			AdministrativeInfoPayload: []byte("null"),
+			DisplayNamePayload:        []byte("[]"),
+			DescriptionPayload:        []byte("[]"),
+			ExtensionsPayload:         []byte(`[{"name":"tag","valueType":"xs:string","value":"v1"}]`),
+		},
+		aasDescriptorListChildren{},
+	)
+
+	require.NoError(t, err)
+	require.Len(t, descriptor.Extensions, 1)
+	require.Equal(t, "tag", descriptor.Extensions[0].Name())
 }
 
 func TestListAssetAdministrationShellDescriptorsUsesOneQueryWithRestrictiveFragmentMask(t *testing.T) {
@@ -53,10 +114,10 @@ func TestListAssetAdministrationShellDescriptorsUsesOneQueryWithRestrictiveFragm
 			),
 		},
 	})
-	assertAASDescriptorListUsesOneQuery(ctx, t)
+	assertFilteredAASDescriptorListUsesOneQuery(ctx, t)
 }
 
-func assertAASDescriptorListUsesOneQuery(ctx context.Context, t *testing.T) {
+func assertFilteredAASDescriptorListUsesOneQuery(ctx context.Context, t *testing.T) {
 	t.Helper()
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

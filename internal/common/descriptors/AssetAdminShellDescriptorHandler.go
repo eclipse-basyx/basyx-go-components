@@ -775,6 +775,19 @@ func ListAssetAdministrationShellDescriptors(
 			slog.DebugContext(ctx, "AAS descriptor list completed", "duration", time.Since(start))
 		}(time.Now())
 	}
+	if !hasAASDescriptorFilters(ctx) {
+		return listAssetAdministrationShellDescriptorsBatched(
+			ctx,
+			db,
+			limit,
+			cursor,
+			assetKind,
+			assetType,
+			identifiable,
+			createdFrom,
+			updatedFrom,
+		)
+	}
 	return listAssetAdministrationShellDescriptorsSingleStatement(
 		ctx,
 		db,

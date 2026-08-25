@@ -27,11 +27,13 @@ package descriptors
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
@@ -138,6 +140,9 @@ func TestReadSubmodelDescriptorsByAASDescriptorIDsFilterCorrelation(t *testing.T
 				if !strings.Contains(actual, `EXISTS`) {
 					return fmt.Errorf("expected filter to use EXISTS, got: %s", actual)
 				}
+				if !strings.Contains(actual, `extensions_payload`) {
+					return fmt.Errorf("expected base row to include extension payload, got: %s", actual)
+				}
 				if !strings.Contains(actual, test.expectedCorrelation) {
 					return fmt.Errorf("expected correlation %q, got: %s", test.expectedCorrelation, actual)
 				}
@@ -159,6 +164,7 @@ func TestReadSubmodelDescriptorsByAASDescriptorIDsFilterCorrelation(t *testing.T
 					"c5",
 					"c6",
 					"c7",
+					"c8",
 				}))
 
 			descriptors, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{12}, false)
@@ -167,6 +173,31 @@ func TestReadSubmodelDescriptorsByAASDescriptorIDsFilterCorrelation(t *testing.T
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestAssembleSubmodelDescriptorsUsesBaseExtensionPayload(t *testing.T) {
+	t.Parallel()
+
+	out := map[int64][]model.SubmodelDescriptor{}
+	rows := map[int64][]model.SubmodelDescriptorRow{
+		7: {
+			{
+				SmdDescID:                 11,
+				ID:                        sql.NullString{String: "sm-1", Valid: true},
+				AdministrativeInfoPayload: []byte("null"),
+				DescriptionPayload:        []byte("[]"),
+				DisplayNamePayload:        []byte("[]"),
+				ExtensionsPayload:         []byte(`[{"name":"tag","valueType":"xs:string","value":"v1"}]`),
+			},
+		},
+	}
+
+	err := assembleSubmodelDescriptors(out, rows, newSubmodelDescriptorLookups())
+
+	require.NoError(t, err)
+	require.Len(t, out[7], 1)
+	require.Len(t, out[7][0].Extensions, 1)
+	require.Equal(t, "tag", out[7][0].Extensions[0].Name())
 }
 
 func TestReadSubmodelDescriptorEndpointsFilterCorrelation(t *testing.T) {
