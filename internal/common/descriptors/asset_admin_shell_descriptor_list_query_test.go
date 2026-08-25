@@ -90,9 +90,9 @@ func TestListSubmodelDescriptorsUsesOneQuery(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	mock.ExpectQuery("SELECT").WillReturnRows(
-		sqlmock.NewRows([]string{"descriptor"}).
-			AddRow([]byte(`{"id":"sm-1","endpoints":[]}`)).
-			AddRow([]byte(`{"id":"sm-2","endpoints":[]}`)),
+		sqlmock.NewRows([]string{"id", "descriptor"}).
+			AddRow("sm-1", []byte(`{"id":"sm-1","endpoints":[]}`)).
+			AddRow("sm-2", []byte(`{"id":"sm-2","endpoints":[]}`)),
 	)
 	mock.ExpectClose()
 
@@ -108,6 +108,33 @@ func TestListSubmodelDescriptorsUsesOneQuery(t *testing.T) {
 	require.Len(t, descriptors, 1)
 	require.Equal(t, "sm-1", descriptors[0].Id)
 	require.Equal(t, "sm-2", cursor)
+	require.NoError(t, db.Close())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestListSubmodelDescriptorsCalculatesCursorBeforeAuthorization(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"id", "descriptor"}).
+			AddRow("sm-denied", nil).
+			AddRow("sm-next", []byte(`{"id":"sm-next","endpoints":[]}`)),
+	)
+	mock.ExpectClose()
+
+	descriptors, cursor, err := ListSubmodelDescriptors(
+		common.ContextWithConfig(t.Context(), &common.Config{}),
+		db,
+		1,
+		"",
+		time.Time{},
+		time.Time{},
+	)
+	require.NoError(t, err)
+	require.Empty(t, descriptors)
+	require.Equal(t, "sm-next", cursor)
 	require.NoError(t, db.Close())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -130,9 +157,11 @@ func TestSubmodelDescriptorListSQLShapeIsStableAcrossPageSizes(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, oneSQL, manySQL)
+	require.Contains(t, oneSQL, "raw_submodel_descriptor_page")
 	require.Contains(t, oneSQL, "authorized_submodel_descriptors")
-	require.Contains(t, oneSQL, "submodel_descriptor_page")
-	require.Contains(t, oneSQL, `ORDER BY "submodel_descriptor_page"."id" ASC, "submodel_descriptor_page"."descriptor_id" ASC`)
+	require.Contains(t, oneSQL, `LEFT JOIN "authorized_submodel_descriptors"`)
+	require.Contains(t, oneSQL, `IN (SELECT "raw_submodel_descriptor_page"."descriptor_id"`)
+	require.Contains(t, oneSQL, `ORDER BY "raw_submodel_descriptor_page"."id" ASC, "raw_submodel_descriptor_page"."descriptor_id" ASC`)
 }
 
 func TestSubmodelDescriptorListCursorExistenceUsesSQLLiteral(t *testing.T) {
@@ -147,7 +176,8 @@ func TestSubmodelDescriptorListCursorExistenceUsesSQLLiteral(t *testing.T) {
 	require.NoError(t, err)
 	query, _, err := dataset.Prepared(true).ToSQL()
 	require.NoError(t, err)
-	require.Contains(t, query, `SELECT 1 FROM "authorized_submodel_descriptors"`)
+	require.Contains(t, query, `FROM "submodel_descriptor" AS "submodel_descriptor_cursor"`)
+	require.NotContains(t, query, `SELECT 1 FROM "authorized_submodel_descriptors"`)
 }
 
 func TestNestedSubmodelDescriptorListKeepsPayloadJoinOptional(t *testing.T) {
@@ -172,6 +202,8 @@ func TestNestedSubmodelDescriptorListKeepsPayloadJoinOptional(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, query, `LEFT JOIN "descriptor_payload" AS "submodel_descriptor_payload"`)
 	require.NotContains(t, query, `INNER JOIN "descriptor_payload" AS "submodel_descriptor_payload"`)
+	require.Contains(t, query, `FROM "authorized_submodel_descriptors"`)
+	require.NotContains(t, query, "raw_submodel_descriptor_page")
 }
 
 func TestNestedSubmodelDescriptorListDoesNotPromoteFieldMaskToRowFilter(t *testing.T) {

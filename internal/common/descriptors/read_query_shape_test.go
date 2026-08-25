@@ -80,7 +80,7 @@ func TestListSubmodelDescriptorsForAASReusesLookupSQLShape(t *testing.T) {
 			WithArgs(aasID, sqlmock.AnyArg()).
 			WillReturnRows(sqlmock.NewRows([]string{"descriptor_id"}).AddRow(17))
 		mock.ExpectQuery("Submodel descriptor page").
-			WillReturnRows(sqlmock.NewRows([]string{"payload"}))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "payload"}))
 		descriptors, cursor, err := ListSubmodelDescriptorsForAAS(contextWithABACDisabled(t), db, aasID, 100, "")
 		require.NoError(t, err)
 		require.Empty(t, descriptors)
