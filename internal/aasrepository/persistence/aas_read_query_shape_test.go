@@ -128,6 +128,39 @@ func TestAASListCombinedQueryReusesSQLShape(t *testing.T) {
 	)
 }
 
+func TestAASListCombinedQueryPreservesFormulaAndFragmentFilters(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	deny := false
+	formula := grammar.LogicalExpression{Boolean: &allow}
+	ctx := auth.WithQueryFilter(common.ContextWithConfig(t.Context(), &common.Config{}), &auth.QueryFilter{
+		Formula: &formula,
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumREAD: formula,
+		},
+		Filters: auth.FragmentFilters{
+			"$aas#idShort":     auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
+			"$aas#submodels[]": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
+			"$aas#assetInformation.specificAssetIds[]": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
+		},
+	})
+	query, args, err := buildAASListCombinedQuery(ctx, 100, "", "", nil, time.Time{}, time.Time{})
+	require.NoError(t, err)
+	require.Contains(t, query, `WITH aas_list_selected AS`)
+	require.Contains(t, query, `INNER JOIN "aas_list_page" AS "page"`)
+	require.NotContains(t, query, `ANY(`)
+
+	booleanParameters := 0
+	for index, arg := range args {
+		if _, ok := arg.(bool); ok {
+			booleanParameters++
+			require.Contains(t, query, fmt.Sprintf("$%d::boolean", index+1))
+		}
+	}
+	require.GreaterOrEqual(t, booleanParameters, 4)
+}
+
 func TestAASListMaterializationBatchUsesExplicitParameterTypes(t *testing.T) {
 	t.Parallel()
 
