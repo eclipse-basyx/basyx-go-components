@@ -852,7 +852,7 @@ func submodelReferenceExistsInAssetAdministrationShellInTransaction(
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) ([]types.IAssetAdministrationShell, string, error) {
 	readDB := s.readDB(ctx)
 	if common.SupportsPostgreSQLBatch(readDB) {
-		return s.getAssetAdministrationShellsPostgreSQLBatch(
+		return s.getAssetAdministrationShellsPostgreSQLCombined(
 			ctx,
 			readDB,
 			limit,

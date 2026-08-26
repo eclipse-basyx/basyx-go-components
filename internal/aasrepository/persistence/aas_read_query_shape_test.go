@@ -28,6 +28,7 @@ package persistence
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,6 +94,38 @@ func TestAASListMaterializationBatchUsesStableQueueOrder(t *testing.T) {
 	require.Contains(t, one[2].SQL, "UNION ALL")
 	require.Contains(t, one[2].SQL, "specific_asset_id_external_subject_id_reference")
 	require.Contains(t, one[2].SQL, "specific_asset_id_supplemental_semantic_id_reference")
+}
+
+func TestAASListCombinedQueryUsesOneSetBasedStatement(t *testing.T) {
+	t.Parallel()
+
+	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
+	query, args, err := buildAASListCombinedQuery(ctx, 100, "", "", nil, time.Time{}, time.Time{})
+	require.NoError(t, err)
+	require.NotEmpty(t, args)
+	require.NotContains(t, query, ";")
+	require.Contains(t, query, `WITH aas_list_selected AS`)
+	require.Contains(t, query, `aas_list_page AS`)
+	require.Contains(t, query, `FROM "aas_submodel_reference" AS "aas_submodel_reference"`)
+	require.Contains(t, query, `specific_asset_id_external_subject_id_reference`)
+	require.Contains(t, query, `specific_asset_id_supplemental_semantic_id_reference`)
+	require.Equal(t, 4, strings.Count(query, "UNION ALL"))
+}
+
+func TestAASListCombinedQueryReusesSQLShape(t *testing.T) {
+	t.Parallel()
+
+	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
+	build := func(cursor string, idShort string, createdFrom time.Time) string {
+		query, _, err := buildAASListCombinedQuery(ctx, 100, cursor, idShort, nil, createdFrom, time.Time{})
+		require.NoError(t, err)
+		return query
+	}
+	require.Equal(
+		t,
+		build("urn:example:aas:first", "first", time.Unix(1, 0)),
+		build("urn:example:aas:second", "second", time.Unix(2, 0)),
+	)
 }
 
 func TestAASListMaterializationBatchUsesExplicitParameterTypes(t *testing.T) {

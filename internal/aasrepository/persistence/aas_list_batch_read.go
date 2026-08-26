@@ -53,6 +53,51 @@ type aasListMaterializationRows struct {
 	nextCursor        string
 }
 
+const (
+	aasListCoreRow = iota
+	aasListSubmodelReferenceRow
+	aasListSpecificAssetIDRow
+)
+
+const (
+	aasListSelectedCTE = "aas_list_selected"
+	aasListPageCTE     = "aas_list_page"
+)
+
+type aasListCombinedScanRow struct {
+	rowKind                 int
+	nextCursor              sql.NullString
+	ownerID                 sql.NullInt64
+	aasID                   sql.NullString
+	idShort                 sql.NullString
+	category                sql.NullString
+	displayNamePayload      []byte
+	descriptionPayload      []byte
+	administrationPayload   []byte
+	edsPayload              []byte
+	extensionsPayload       []byte
+	derivedFromPayload      []byte
+	assetKind               sql.NullInt64
+	globalAssetID           sql.NullString
+	assetType               sql.NullString
+	thumbnailPath           sql.NullString
+	thumbnailContentType    sql.NullString
+	specificRowKind         sql.NullInt64
+	specificID              sql.NullInt64
+	specificPosition        sql.NullInt64
+	specificName            sql.NullString
+	specificValue           sql.NullString
+	specificSemanticPayload []byte
+	referenceID             sql.NullInt64
+	referencePosition       sql.NullInt64
+	referenceType           sql.NullInt64
+	keyID                   sql.NullInt64
+	keyPosition             sql.NullInt64
+	keyType                 sql.NullInt64
+	keyValue                sql.NullString
+	parentPayload           []byte
+}
+
 type batchedReferenceKey struct {
 	kind int
 	id   int64
@@ -110,7 +155,7 @@ type batchedSpecificAssetState struct {
 	seenReferences         map[int64]map[batchedReferenceKey]struct{}
 }
 
-func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsPostgreSQLBatch(
+func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsPostgreSQLCombined(
 	ctx context.Context,
 	db *sql.DB,
 	limit int32,
@@ -124,41 +169,33 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsPostgreSQ
 		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
 	}
 
-	pageQuery, pageArgs, err := buildAASListPageQuery(ctx, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
+	query, args, err := buildAASListCombinedQuery(ctx, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {
 		return nil, "", err
 	}
 
-	var page aasListPage
+	var databaseIDs []int64
 	var materializationRows aasListMaterializationRows
 	err = common.ExecutePostgreSQLReadTransaction(ctx, db, func(tx pgx.Tx) error {
 		var readErr error
-		page, readErr = readAASListPage(ctx, tx, pageQuery, pageArgs, limit)
-		if readErr != nil {
-			return readErr
-		}
-		if len(page.databaseIDs) == 0 {
-			return nil
-		}
-
-		materializationRows, readErr = readAASListMaterializationRows(ctx, tx, page)
+		databaseIDs, materializationRows, readErr = readAASListCombinedRows(ctx, tx, query, args)
 		return readErr
 	})
 	if err != nil {
 		return nil, "", err
 	}
-	if len(page.databaseIDs) == 0 {
+	if len(databaseIDs) == 0 {
 		return []types.IAssetAdministrationShell{}, "", nil
 	}
 
-	result, err := materializeAASListRows(page.databaseIDs, materializationRows)
+	result, err := materializeAASListRows(databaseIDs, materializationRows)
 	if err != nil {
 		return nil, "", err
 	}
 	return result, materializationRows.nextCursor, nil
 }
 
-func buildAASListPageQuery(
+func buildAASListCombinedQuery(
 	ctx context.Context,
 	limit int32,
 	cursor string,
@@ -168,131 +205,353 @@ func buildAASListPageQuery(
 	updatedFrom time.Time,
 ) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
+	selected, err := buildAASListSelectedDataset(ctx, dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
+	if err != nil {
+		return "", nil, err
+	}
+	page := buildAASListPageDataset(dialect, limit)
+	core, err := buildAASListCombinedCoreDataset(ctx, dialect, limit)
+	if err != nil {
+		return "", nil, err
+	}
+	references, err := buildAASListCombinedReferenceDataset(ctx, dialect)
+	if err != nil {
+		return "", nil, err
+	}
+	specificBase, specificExternal, specificSupplemental, err := buildAASListCombinedSpecificAssetIDBranches(ctx, dialect)
+	if err != nil {
+		return "", nil, err
+	}
+
+	combined := core.UnionAll(references).UnionAll(specificBase).UnionAll(specificExternal).UnionAll(specificSupplemental)
+	data := goqu.T("aas_list_rows")
+	query := dialect.From(combined.As("aas_list_rows"))
+	query = query.Select(combinedAASListOutputColumns(data)...).Order(
+		data.Col("owner_order").Asc(),
+		data.Col("row_kind_order").Asc(),
+		data.Col("child_position").Asc(),
+		data.Col("child_id").Asc(),
+		data.Col("child_kind").Asc(),
+		data.Col("nested_position").Asc(),
+		data.Col("nested_id").Asc(),
+		data.Col("key_position_order").Asc(),
+		data.Col("key_id_order").Asc(),
+	)
+	query = query.With(aasListSelectedCTE, selected).With(aasListPageCTE, page)
+	sqlQuery, args, err := query.Prepared(true).ToSQL()
+	if err != nil {
+		return "", nil, common.NewInternalServerError("AASREPO-GETAASLIST-BUILDCOMBINED " + err.Error())
+	}
+	return sqlQuery, args, nil
+}
+
+func buildAASListSelectedDataset(
+	ctx context.Context,
+	dialect goqu.DialectWrapper,
+	limit int32,
+	cursor string,
+	idShort string,
+	specificAssetIDs []types.ISpecificAssetID,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+) (*goqu.SelectDataset, error) {
 	dataset, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {
-		return "", nil, common.NewInternalServerError("AASREPO-GETAASLIST-BUILDPAGE " + err.Error())
+		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-BUILDPAGE " + err.Error())
 	}
 	collector, err := buildAASCollector()
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	shouldEnforce, err := shouldEnforceFormula(ctx, "AASREPO-GETAASLIST-SHOULDENFORCE")
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	if shouldEnforce {
 		dataset, err = auth.AddFormulaQueryFromContext(ctx, dataset, collector)
 		if err != nil {
-			return "", nil, common.NewInternalServerError("AASREPO-GETAASLIST-ABACFORMULA " + err.Error())
+			return nil, common.NewInternalServerError("AASREPO-GETAASLIST-ABACFORMULA " + err.Error())
 		}
 	}
-	query, args, err := dataset.Prepared(true).ToSQL()
-	if err != nil {
-		return "", nil, common.NewInternalServerError("AASREPO-GETAASLIST-BUILDPAGESQL " + err.Error())
-	}
-	return query, args, nil
+	return dataset.Select(
+		goqu.I("aas.id").As("database_id"),
+		goqu.I("aas.aas_id").As("aas_id"),
+		goqu.ROW_NUMBER().Over(goqu.W().OrderBy(goqu.I("aas.aas_id").Asc())).As("page_position"),
+	), nil
 }
 
-func readAASListPage(
+func buildAASListPageDataset(dialect goqu.DialectWrapper, limit int32) *goqu.SelectDataset {
+	selected := goqu.T(aasListSelectedCTE)
+	page := dialect.From(selected).Select(selected.Col("database_id"), selected.Col("page_position"))
+	if limit > 0 {
+		page = page.Where(selected.Col("page_position").Lte(limit))
+	}
+	return page
+}
+
+func buildAASListCombinedCoreDataset(
+	ctx context.Context,
+	dialect goqu.DialectWrapper,
+	limit int32,
+) (*goqu.SelectDataset, error) {
+	collector, err := buildAASCollector()
+	if err != nil {
+		return nil, err
+	}
+	coreExpressions, err := buildCoreAssetAdministrationShellSelectExpressions(ctx, collector, false)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-BUILDMASKS " + err.Error())
+	}
+
+	page := goqu.T(aasListPageCTE).As("page")
+	aas := goqu.T("aas").As("aas")
+	payload := goqu.T("aas_payload").As("ap")
+	assetInformation := goqu.T("asset_information").As("asset_information")
+	thumbnail := goqu.T("thumbnail_file_element").As("tfe")
+	dataset := dialect.From(page).
+		InnerJoin(aas, goqu.On(aas.Col("id").Eq(page.Col("database_id")))).
+		LeftJoin(payload, goqu.On(payload.Col("aas_id").Eq(aas.Col("id")))).
+		LeftJoin(assetInformation, goqu.On(assetInformation.Col("asset_information_id").Eq(aas.Col("id")))).
+		LeftJoin(thumbnail, goqu.On(thumbnail.Col("id").Eq(aas.Col("id"))))
+	columns := combinedAASListSortColumns(
+		page.Col("page_position"), aasListCoreRow,
+		goqu.L("0::bigint"), goqu.L("0::bigint"), goqu.L("0::bigint"),
+		goqu.L("0::bigint"), goqu.L("0::bigint"), goqu.L("0::bigint"), goqu.L("0::bigint"),
+	)
+	columns = append(columns, goqu.L("?::integer", aasListCoreRow).As("row_kind"), aasListNextCursorExpression(dialect, limit), aas.Col("id").As("owner_id"))
+	columns = append(columns, aliasAASListCoreExpressions(coreExpressions)...)
+	columns = append(columns, combinedAASListNullSpecificColumns()...)
+	columns = append(columns, combinedAASListNullReferenceColumns()...)
+	return dataset.Select(columns...), nil
+}
+
+func aliasAASListCoreExpressions(expressions []interface{}) []interface{} {
+	aliases := []string{
+		"aas_id", "id_short", "category", "display_name_payload", "description_payload",
+		"administration_payload", "eds_payload", "extensions_payload", "derived_from_payload",
+		"asset_kind", "global_asset_id", "asset_type", "thumbnail_path", "thumbnail_content_type",
+	}
+	aliased := make([]interface{}, 0, len(expressions))
+	for index, expression := range expressions {
+		aliased = append(aliased, goqu.L("?", expression).As(aliases[index]))
+	}
+	return aliased
+}
+
+func aasListNextCursorExpression(dialect goqu.DialectWrapper, limit int32) interface{} {
+	if limit <= 0 {
+		return goqu.L("NULL::text").As("next_cursor")
+	}
+	selected := goqu.T(aasListSelectedCTE)
+	return dialect.From(selected).
+		Select(selected.Col("aas_id")).
+		Where(selected.Col("page_position").Eq(int64(limit) + 1)).
+		Limit(1).
+		As("next_cursor")
+}
+
+func buildAASListCombinedReferenceDataset(
+	ctx context.Context,
+	dialect goqu.DialectWrapper,
+) (*goqu.SelectDataset, error) {
+	page := goqu.T(aasListPageCTE).As("page")
+	reference := goqu.T("aas_submodel_reference").As("aas_submodel_reference")
+	key := goqu.T("aas_submodel_reference_key").As("aas_submodel_reference_key")
+	payload := goqu.T("aas_submodel_reference_payload").As("aas_submodel_reference_payload")
+	dataset := dialect.From(reference).
+		InnerJoin(page, goqu.On(page.Col("database_id").Eq(reference.Col("aas_id")))).
+		LeftJoin(payload, goqu.On(payload.Col("reference_id").Eq(reference.Col("id")))).
+		LeftJoin(key, goqu.On(key.Col("reference_id").Eq(reference.Col("id"))))
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-REFCOLLECTOR " + err.Error())
+	}
+	collector.AllowInlineAliases("aas_submodel_reference", "aas_submodel_reference_key")
+	collector.SetRootJoinKey("aas_submodel_reference", "aas_id")
+	for _, fragment := range []grammar.FragmentStringPattern{"$aas#submodels[]", "$aas#submodels[].keys[]"} {
+		dataset, err = auth.AddCorrelatedFilterQueryFromContext(ctx, dataset, fragment, collector)
+		if err != nil {
+			return nil, common.NewInternalServerError("AASREPO-GETAASLIST-REFFILTER " + err.Error())
+		}
+	}
+	columns := combinedAASListSortColumns(
+		page.Col("page_position"), aasListSubmodelReferenceRow,
+		reference.Col("position"), reference.Col("id"), goqu.L("0::bigint"),
+		key.Col("position"), key.Col("id"), goqu.L("0::bigint"), goqu.L("0::bigint"),
+	)
+	columns = append(columns, goqu.L("?::integer", aasListSubmodelReferenceRow).As("row_kind"), goqu.L("NULL::text").As("next_cursor"), reference.Col("aas_id").As("owner_id"))
+	columns = append(columns, combinedAASListNullCoreColumns()...)
+	columns = append(columns, combinedAASListNullSpecificColumns()...)
+	columns = append(columns, combinedAASListReferenceColumns(reference, key, payload, goqu.L("NULL::integer"))...)
+	return dataset.Select(columns...), nil
+}
+
+func combinedAASListSortColumns(
+	ownerOrder interface{},
+	rowKind int,
+	childPosition interface{},
+	childID interface{},
+	childKind interface{},
+	nestedPosition interface{},
+	nestedID interface{},
+	keyPosition interface{},
+	keyID interface{},
+) []interface{} {
+	return []interface{}{
+		goqu.L("?::bigint", ownerOrder).As("owner_order"),
+		goqu.L("?::integer", rowKind).As("row_kind_order"),
+		goqu.L("?::bigint", childPosition).As("child_position"),
+		goqu.L("?::bigint", childID).As("child_id"),
+		goqu.L("?::bigint", childKind).As("child_kind"),
+		goqu.L("?::bigint", nestedPosition).As("nested_position"),
+		goqu.L("?::bigint", nestedID).As("nested_id"),
+		goqu.L("?::bigint", keyPosition).As("key_position_order"),
+		goqu.L("?::bigint", keyID).As("key_id_order"),
+	}
+}
+
+func combinedAASListOutputColumns(data expColumner) []interface{} {
+	return []interface{}{
+		data.Col("row_kind"), data.Col("next_cursor"), data.Col("owner_id"),
+		data.Col("aas_id"), data.Col("id_short"), data.Col("category"), data.Col("display_name_payload"),
+		data.Col("description_payload"), data.Col("administration_payload"), data.Col("eds_payload"),
+		data.Col("extensions_payload"), data.Col("derived_from_payload"), data.Col("asset_kind"),
+		data.Col("global_asset_id"), data.Col("asset_type"), data.Col("thumbnail_path"), data.Col("thumbnail_content_type"),
+		data.Col("specific_row_kind"), data.Col("specific_id"), data.Col("specific_position"), data.Col("specific_name"),
+		data.Col("specific_value"), data.Col("specific_semantic_payload"), data.Col("reference_id"),
+		data.Col("reference_position"), data.Col("reference_type"), data.Col("key_id"), data.Col("key_position"),
+		data.Col("key_type"), data.Col("key_value"), data.Col("parent_payload"),
+	}
+}
+
+func combinedAASListNullCoreColumns() []interface{} {
+	return []interface{}{
+		goqu.L("NULL::text").As("aas_id"), goqu.L("NULL::text").As("id_short"), goqu.L("NULL::text").As("category"),
+		goqu.L("NULL::jsonb").As("display_name_payload"), goqu.L("NULL::jsonb").As("description_payload"),
+		goqu.L("NULL::jsonb").As("administration_payload"), goqu.L("NULL::jsonb").As("eds_payload"),
+		goqu.L("NULL::jsonb").As("extensions_payload"), goqu.L("NULL::jsonb").As("derived_from_payload"),
+		goqu.L("NULL::integer").As("asset_kind"), goqu.L("NULL::text").As("global_asset_id"),
+		goqu.L("NULL::text").As("asset_type"), goqu.L("NULL::text").As("thumbnail_path"),
+		goqu.L("NULL::text").As("thumbnail_content_type"),
+	}
+}
+
+func combinedAASListNullSpecificColumns() []interface{} {
+	return []interface{}{
+		goqu.L("NULL::integer").As("specific_row_kind"), goqu.L("NULL::bigint").As("specific_id"),
+		goqu.L("NULL::integer").As("specific_position"), goqu.L("NULL::text").As("specific_name"),
+		goqu.L("NULL::text").As("specific_value"), goqu.L("NULL::jsonb").As("specific_semantic_payload"),
+	}
+}
+
+func combinedAASListNullReferenceColumns() []interface{} {
+	return []interface{}{
+		goqu.L("NULL::bigint").As("reference_id"), goqu.L("NULL::integer").As("reference_position"),
+		goqu.L("NULL::integer").As("reference_type"), goqu.L("NULL::bigint").As("key_id"),
+		goqu.L("NULL::integer").As("key_position"), goqu.L("NULL::integer").As("key_type"),
+		goqu.L("NULL::text").As("key_value"), goqu.L("NULL::jsonb").As("parent_payload"),
+	}
+}
+
+func combinedAASListReferenceColumns(reference, key, payload expColumner, referencePosition interface{}) []interface{} {
+	return []interface{}{
+		reference.Col("id").As("reference_id"), goqu.L("?::integer", referencePosition).As("reference_position"),
+		reference.Col("type").As("reference_type"), key.Col("id").As("key_id"), key.Col("position").As("key_position"),
+		key.Col("type").As("key_type"), key.Col("value").As("key_value"), payload.Col("parent_reference_payload").As("parent_payload"),
+	}
+}
+
+func readAASListCombinedRows(
 	ctx context.Context,
 	tx pgx.Tx,
 	query string,
 	args []any,
-	limit int32,
-) (aasListPage, error) {
+) ([]int64, aasListMaterializationRows, error) {
 	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
-		return aasListPage{}, common.NewInternalServerError("AASREPO-GETAASLIST-EXECPAGE " + err.Error())
+		return nil, aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-EXECCOMBINED " + err.Error())
 	}
 	defer rows.Close()
 
-	ids := make([]int64, 0, max(int(limit)+1, 1))
+	databaseIDs := make([]int64, 0)
+	materialization := aasListMaterializationRows{coreRows: make(map[int64]coreAssetAdministrationShellRow)}
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return aasListPage{}, common.NewInternalServerError("AASREPO-GETAASLIST-SCANPAGE " + err.Error())
+		var row aasListCombinedScanRow
+		if err := rows.Scan(row.destinations()...); err != nil {
+			return nil, aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-SCANCOMBINED " + err.Error())
 		}
-		ids = append(ids, id)
+		if err := row.addTo(&databaseIDs, &materialization); err != nil {
+			return nil, aasListMaterializationRows{}, err
+		}
 	}
 	if err := rows.Err(); err != nil {
-		return aasListPage{}, common.NewInternalServerError("AASREPO-GETAASLIST-ROWSPAGE " + err.Error())
+		return nil, aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-ROWSCOMBINED " + err.Error())
 	}
-
-	page := aasListPage{databaseIDs: ids}
-	if limit > 0 && len(ids) > int(limit) {
-		page.nextDatabaseID = ids[len(ids)-1]
-		page.databaseIDs = ids[:len(ids)-1]
-	}
-	return page, nil
+	return databaseIDs, materialization, nil
 }
 
-func readAASListMaterializationRows(
-	ctx context.Context,
-	tx pgx.Tx,
-	page aasListPage,
-) (aasListMaterializationRows, error) {
-	statements, err := buildAASListMaterializationStatements(ctx, page)
-	if err != nil {
-		return aasListMaterializationRows{}, err
+func (row *aasListCombinedScanRow) destinations() []any {
+	return []any{
+		&row.rowKind, &row.nextCursor, &row.ownerID, &row.aasID, &row.idShort, &row.category,
+		&row.displayNamePayload, &row.descriptionPayload, &row.administrationPayload, &row.edsPayload,
+		&row.extensionsPayload, &row.derivedFromPayload, &row.assetKind, &row.globalAssetID, &row.assetType,
+		&row.thumbnailPath, &row.thumbnailContentType, &row.specificRowKind, &row.specificID,
+		&row.specificPosition, &row.specificName, &row.specificValue, &row.specificSemanticPayload,
+		&row.referenceID, &row.referencePosition, &row.referenceType, &row.keyID, &row.keyPosition,
+		&row.keyType, &row.keyValue, &row.parentPayload,
 	}
-	batch := &pgx.Batch{}
-	for _, statement := range statements {
-		batch.Queue(statement.SQL, statement.Args...)
-	}
-	results := tx.SendBatch(ctx, batch)
-	closed := false
-	defer func() {
-		if !closed {
-			_ = results.Close()
-		}
-	}()
+}
 
-	coreRows, err := readBatchedAASCoreRows(results)
-	if err != nil {
-		return aasListMaterializationRows{}, err
+func (row *aasListCombinedScanRow) addTo(databaseIDs *[]int64, materialization *aasListMaterializationRows) error {
+	if !row.ownerID.Valid {
+		return common.NewInternalServerError("AASREPO-GETAASLIST-INVALIDCOMBINED missing owner id")
 	}
-	submodelRows, err := readBatchedAASSubmodelReferenceRows(results)
-	if err != nil {
-		return aasListMaterializationRows{}, err
+	if row.nextCursor.Valid {
+		materialization.nextCursor = row.nextCursor.String
 	}
-	specificAssetRows, err := readBatchedSpecificAssetRows(results)
-	if err != nil {
-		return aasListMaterializationRows{}, err
-	}
-	nextCursor := ""
-	if page.nextDatabaseID != 0 {
-		rows, queryErr := results.Query()
-		if queryErr != nil {
-			return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + queryErr.Error())
+	switch row.rowKind {
+	case aasListCoreRow:
+		if !row.aasID.Valid {
+			return common.NewInternalServerError("AASREPO-GETAASLIST-INVALIDCORE missing AAS identifier")
 		}
-		if !rows.Next() {
-			rowsErr := rows.Err()
-			rows.Close()
-			if rowsErr != nil {
-				return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + rowsErr.Error())
-			}
-			return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + sql.ErrNoRows.Error())
-		}
-		if scanErr := rows.Scan(&nextCursor); scanErr != nil {
-			rows.Close()
-			return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + scanErr.Error())
-		}
-		rows.Close()
-		if rowsErr := rows.Err(); rowsErr != nil {
-			return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + rowsErr.Error())
-		}
+		*databaseIDs = append(*databaseIDs, row.ownerID.Int64)
+		materialization.coreRows[row.ownerID.Int64] = row.coreRow()
+	case aasListSubmodelReferenceRow:
+		materialization.submodelRows = append(materialization.submodelRows, row.referenceRow())
+	case aasListSpecificAssetIDRow:
+		materialization.specificAssetRows = append(materialization.specificAssetRows, row.specificRow())
+	default:
+		return common.NewInternalServerError("AASREPO-GETAASLIST-INVALIDKIND unexpected combined row kind")
 	}
-	if err := results.Close(); err != nil {
-		return aasListMaterializationRows{}, common.NewInternalServerError("AASREPO-GETAASLIST-CLOSEBATCH " + err.Error())
-	}
-	closed = true
+	return nil
+}
 
-	return aasListMaterializationRows{
-		coreRows:          coreRows,
-		submodelRows:      submodelRows,
-		specificAssetRows: specificAssetRows,
-		nextCursor:        nextCursor,
-	}, nil
+func (row *aasListCombinedScanRow) coreRow() coreAssetAdministrationShellRow {
+	return coreAssetAdministrationShellRow{
+		aasID: row.aasID.String, idShort: row.idShort, category: row.category,
+		displayNamePayload: row.displayNamePayload, descriptionPayload: row.descriptionPayload,
+		administrationPayload: row.administrationPayload, edsPayload: row.edsPayload,
+		extensionsPayload: row.extensionsPayload, derivedFromPayload: row.derivedFromPayload,
+		assetKind: row.assetKind, globalAssetID: row.globalAssetID, assetType: row.assetType,
+		thumbnailPath: row.thumbnailPath, thumbnailContentType: row.thumbnailContentType,
+	}
+}
+
+func (row *aasListCombinedScanRow) referenceRow() batchedReferenceScanRow {
+	return batchedReferenceScanRow{
+		ownerID: row.ownerID, referenceID: row.referenceID, referenceType: row.referenceType,
+		keyID: row.keyID, keyType: row.keyType, keyValue: row.keyValue, parentPayload: row.parentPayload,
+	}
+}
+
+func (row *aasListCombinedScanRow) specificRow() batchedSpecificAssetScanRow {
+	return batchedSpecificAssetScanRow{
+		rowKind: int(row.specificRowKind.Int64), ownerID: row.ownerID, specificID: row.specificID,
+		specificPosition: row.specificPosition, name: row.specificName, value: row.specificValue,
+		semanticPayload: row.specificSemanticPayload, referenceID: row.referenceID,
+		referencePosition: row.referencePosition, referenceType: row.referenceType, keyID: row.keyID,
+		keyPosition: row.keyPosition, keyType: row.keyType, keyValue: row.keyValue, parentPayload: row.parentPayload,
+	}
 }
 
 func materializeAASListRows(
@@ -567,6 +826,112 @@ func buildBatchedSpecificAssetIDBranches(
 	return base, external, supplemental, nil
 }
 
+func buildAASListCombinedSpecificAssetIDBranches(
+	ctx context.Context,
+	dialect goqu.DialectWrapper,
+) (*goqu.SelectDataset, *goqu.SelectDataset, *goqu.SelectDataset, error) {
+	page := goqu.T(aasListPageCTE).As("page")
+	specific := goqu.T("specific_asset_id").As(common.AliasSpecificAssetID)
+	payload := goqu.T("specific_asset_id_payload").As("specific_asset_payload")
+	collector, err := buildBatchedSpecificAssetIDCollector()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	base := dialect.From(specific).
+		InnerJoin(page, goqu.On(page.Col("database_id").Eq(specific.Col("asset_information_id")))).
+		LeftJoin(payload, goqu.On(payload.Col("specific_asset_id").Eq(specific.Col("id"))))
+	base = base.Select(combinedAASListSpecificBaseColumns(page, specific, payload)...)
+	base, err = auth.AddFilterQueryFromContext(ctx, base, "$aas#assetInformation.specificAssetIds[]", collector)
+	if err != nil {
+		return nil, nil, nil, common.NewInternalServerError("AASREPO-GETAASLIST-SPECIFICFILTER " + err.Error())
+	}
+
+	externalReference := goqu.T("specific_asset_id_external_subject_id_reference").As(common.AliasExternalSubjectReference)
+	externalKey := goqu.T("specific_asset_id_external_subject_id_reference_key").As(common.AliasExternalSubjectReferenceKey)
+	externalPayload := goqu.T("specific_asset_id_external_subject_id_reference_payload").As("external_subject_payload")
+	external := dialect.From(specific).
+		InnerJoin(page, goqu.On(page.Col("database_id").Eq(specific.Col("asset_information_id")))).
+		Join(externalReference, goqu.On(externalReference.Col("id").Eq(specific.Col("id")))).
+		LeftJoin(externalKey, goqu.On(externalKey.Col("reference_id").Eq(externalReference.Col("id")))).
+		LeftJoin(externalPayload, goqu.On(externalPayload.Col("reference_id").Eq(externalReference.Col("id")))).
+		Select(combinedAASListSpecificReferenceColumns(
+			page, 1, specific, externalReference, externalKey, externalPayload, goqu.L("0::integer"),
+		)...)
+	for _, fragment := range []grammar.FragmentStringPattern{
+		"$aas#assetInformation.specificAssetIds[]",
+		"$aas#assetInformation.specificAssetIds[].externalSubjectId",
+		"$aas#assetInformation.specificAssetIds[].externalSubjectId.keys[]",
+	} {
+		external, err = auth.AddFilterQueryFromContext(ctx, external, fragment, collector)
+		if err != nil {
+			return nil, nil, nil, common.NewInternalServerError("AASREPO-GETAASLIST-EXTERNALFILTER " + err.Error())
+		}
+	}
+
+	supplementalReference := goqu.T("specific_asset_id_supplemental_semantic_id_reference").As("specific_asset_supplemental_semantic_id_reference")
+	supplementalKey := goqu.T("specific_asset_id_supplemental_semantic_id_reference_key").As("specific_asset_supplemental_semantic_id_reference_key")
+	supplementalPayload := goqu.T("specific_asset_id_supplemental_semantic_id_reference_payload").As("specific_asset_supplemental_semantic_id_reference_payload")
+	supplemental := dialect.From(specific).
+		InnerJoin(page, goqu.On(page.Col("database_id").Eq(specific.Col("asset_information_id")))).
+		Join(supplementalReference, goqu.On(supplementalReference.Col("specific_asset_id_id").Eq(specific.Col("id")))).
+		LeftJoin(supplementalKey, goqu.On(supplementalKey.Col("reference_id").Eq(supplementalReference.Col("id")))).
+		LeftJoin(supplementalPayload, goqu.On(supplementalPayload.Col("reference_id").Eq(supplementalReference.Col("id")))).
+		Select(combinedAASListSpecificReferenceColumns(
+			page, 2, specific, supplementalReference, supplementalKey, supplementalPayload, supplementalReference.Col("position"),
+		)...)
+	return base, external, supplemental, nil
+}
+
+func combinedAASListSpecificBaseColumns(page, specific, payload expColumner) []interface{} {
+	columns := combinedAASListSortColumns(
+		page.Col("page_position"), aasListSpecificAssetIDRow,
+		specific.Col("position"), specific.Col("id"), goqu.L("0::bigint"),
+		goqu.L("0::bigint"), goqu.L("0::bigint"), goqu.L("0::bigint"), goqu.L("0::bigint"),
+	)
+	columns = append(columns,
+		goqu.L("?::integer", aasListSpecificAssetIDRow).As("row_kind"),
+		goqu.L("NULL::text").As("next_cursor"),
+		specific.Col("asset_information_id").As("owner_id"),
+	)
+	columns = append(columns, combinedAASListNullCoreColumns()...)
+	columns = append(columns,
+		goqu.L("0::integer").As("specific_row_kind"), specific.Col("id").As("specific_id"),
+		specific.Col("position").As("specific_position"), specific.Col("name").As("specific_name"),
+		specific.Col("value").As("specific_value"), payload.Col("semantic_id_payload").As("specific_semantic_payload"),
+	)
+	columns = append(columns, combinedAASListNullReferenceColumns()...)
+	return columns
+}
+
+func combinedAASListSpecificReferenceColumns(
+	page expColumner,
+	kind int,
+	specific expColumner,
+	reference expColumner,
+	key expColumner,
+	payload expColumner,
+	referencePosition interface{},
+) []interface{} {
+	columns := combinedAASListSortColumns(
+		page.Col("page_position"), aasListSpecificAssetIDRow,
+		specific.Col("position"), specific.Col("id"), goqu.L("?::bigint", kind),
+		referencePosition, reference.Col("id"), key.Col("position"), key.Col("id"),
+	)
+	columns = append(columns,
+		goqu.L("?::integer", aasListSpecificAssetIDRow).As("row_kind"),
+		goqu.L("NULL::text").As("next_cursor"),
+		specific.Col("asset_information_id").As("owner_id"),
+	)
+	columns = append(columns, combinedAASListNullCoreColumns()...)
+	columns = append(columns,
+		goqu.L("?::integer", kind).As("specific_row_kind"), specific.Col("id").As("specific_id"),
+		specific.Col("position").As("specific_position"), goqu.L("NULL::text").As("specific_name"),
+		goqu.L("NULL::text").As("specific_value"), goqu.L("NULL::jsonb").As("specific_semantic_payload"),
+	)
+	columns = append(columns, combinedAASListReferenceColumns(reference, key, payload, referencePosition)...)
+	return columns
+}
+
 func buildBatchedSpecificAssetIDCollector() (*grammar.ResolvedFieldPathCollector, error) {
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
 	if err != nil {
@@ -634,15 +999,6 @@ func batchedSpecificAssetReferenceColumns(
 	}
 }
 
-func readBatchedAASCoreRows(results pgx.BatchResults) (map[int64]coreAssetAdministrationShellRow, error) {
-	rows, err := results.Query()
-	if err != nil {
-		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-BATCHCORE " + err.Error())
-	}
-	defer rows.Close()
-	return scanAASCoreRows(rows)
-}
-
 func scanAASCoreRows(rows pgxRows) (map[int64]coreAssetAdministrationShellRow, error) {
 	coreRows := make(map[int64]coreAssetAdministrationShellRow)
 	for rows.Next() {
@@ -673,15 +1029,6 @@ func scanAASCoreRows(rows pgxRows) (map[int64]coreAssetAdministrationShellRow, e
 		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-ROWSCORE " + err.Error())
 	}
 	return coreRows, nil
-}
-
-func readBatchedAASSubmodelReferenceRows(results pgx.BatchResults) ([]batchedReferenceScanRow, error) {
-	rows, err := results.Query()
-	if err != nil {
-		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-BATCHREFS " + err.Error())
-	}
-	defer rows.Close()
-	return scanBatchedReferenceRows(rows, "AASREPO-GETAASLIST-REFS")
 }
 
 type pgxRows interface {
@@ -823,15 +1170,6 @@ func (state *batchedReferenceState) build(ownerIDs []int64) map[int64][]types.IR
 		}
 	}
 	return out
-}
-
-func readBatchedSpecificAssetRows(results pgx.BatchResults) ([]batchedSpecificAssetScanRow, error) {
-	rows, err := results.Query()
-	if err != nil {
-		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-BATCHSPECIFIC " + err.Error())
-	}
-	defer rows.Close()
-	return scanBatchedSpecificAssetRows(rows)
 }
 
 func scanBatchedSpecificAssetIDs(rows pgxRows, ownerIDs []int64) (map[int64][]types.ISpecificAssetID, error) {
