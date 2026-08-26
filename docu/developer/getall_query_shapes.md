@@ -16,19 +16,20 @@ bounded.
 | Submodel Repository, metadata and recent changes | 1 primary read; up to 2 fixed restrictive-reference reads | unchanged | 1 to 3 |
 | Submodel Repository, reference | metadata materialization plus optional reference reads | 1 | 1 |
 | Submodel Repository, path | Submodel reference pages plus 2 or 3 reads for every visited Submodel | 1 | 1 |
-| AAS Repository, full, final page | page, core, Submodel references, Specific Asset IDs and their two reference reads | 4 | pgx: 2; `database/sql`: 4 |
-| AAS Repository, full, saturated page | final-page reads plus cursor lookup | 5 | pgx: 2; `database/sql`: 5 |
+| AAS Repository, full, final page | page, core, Submodel references, Specific Asset IDs and their two reference reads | PostgreSQL: 1; `database/sql`: 4 | PostgreSQL: 1; `database/sql`: 4 |
+| AAS Repository, full, saturated page | final-page reads plus cursor lookup | PostgreSQL: 1; `database/sql`: 5 | PostgreSQL: 1; `database/sql`: 5 |
 | AAS Repository, reference | complete AAS materialization | 1 | 1 |
 | Submodel Registry, global Submodel Descriptors | cursor check, ID page, base row and three child lookups | 1 | 1 |
 | AAS Registry, nested Submodel Descriptors | parent lookup, unpaged base row and three child lookups | 2 | 2 |
 | AAS Registry, AAS Descriptors | one correlated JSON materializer | 1 page read plus up to 8 fixed flat child reads; filtered requests retain the single-statement materializer | 1 to 9 |
 | Concept Description Repository, full and recent changes | 1 | unchanged: 1 | 1 |
 
-`N` is the number of Submodels returned on the page. The final shapes use array
-parameters, so the rendered SQL is identical for limits 1 and 100. The pgx AAS
-path sends core rows, Submodel references, the combined Specific Asset ID
-materializer, and the optional cursor lookup in queue order. The non-pgx path
-uses the same builders, scanners, ordering, and model assembler sequentially.
+`N` is the number of Submodels returned on the page. The Submodel shapes use
+array parameters, so the rendered SQL is identical for limits 1 and 100. The
+PostgreSQL AAS path uses one bounded page CTE and tagged `UNION ALL` branches for
+core rows, Submodel references, Specific Asset IDs, and the optional next cursor.
+The non-pgx path uses the shared builders, scanners, ordering, and model assembler
+sequentially.
 
 The Submodel full and value-only representations intentionally retain the
 existing maximum of 100 visible top-level SMEs per returned Submodel. That
