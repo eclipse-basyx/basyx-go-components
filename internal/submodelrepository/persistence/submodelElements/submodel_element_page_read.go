@@ -349,7 +349,7 @@ func buildSubmodelElementPageQuery(
 		return "", nil, err
 	}
 	selectedRoots := dialect.From("visible_submodel_roots").
-		Select("root_id", "submodel_id", "root_rank").
+		Select("root_id", "submodel_id", "root_rank", "model_type").
 		Where(goqu.I("root_rank").Lte(getAllSubmodelRootLimit))
 	selectedElements := buildSelectedSubmodelElements(dialect, level)
 	selectedElementValues := buildSubmodelElementPageValueDataset(dialect, includeBlobValue)
@@ -413,6 +413,7 @@ func buildVisibleSubmodelRoots(
 		Select(
 			goqu.I("sme.id").As("root_id"),
 			goqu.I("sme.submodel_id").As("submodel_id"),
+			goqu.I("sme.model_type").As("model_type"),
 			goqu.ROW_NUMBER().Over(
 				goqu.W().PartitionBy(goqu.I("sme.submodel_id")).OrderBy(
 					goqu.I("sme.idshort_path").Asc(),
@@ -452,6 +453,7 @@ func buildSelectedSubmodelElements(dialect goqu.DialectWrapper, level string) *g
 			goqu.I("selected_root.root_id").As("element_id"),
 			goqu.I("selected_root.submodel_id").As("submodel_id"),
 			goqu.I("selected_root.root_rank").As("root_rank"),
+			goqu.I("selected_root.model_type").As("model_type"),
 		)
 
 	joinColumn := "selected_sme.root_sme_id"
@@ -470,6 +472,7 @@ func buildSelectedSubmodelElements(dialect goqu.DialectWrapper, level string) *g
 			goqu.I("selected_sme.id").As("element_id"),
 			goqu.I("selected_root.submodel_id").As("submodel_id"),
 			goqu.I("selected_root.root_rank").As("root_rank"),
+			goqu.I("selected_sme.model_type").As("model_type"),
 		)
 	if level != "core" {
 		children = children.Where(goqu.I("selected_sme.id").Neq(goqu.I("selected_root.root_id")))

@@ -623,6 +623,8 @@ func TestSubmodelElementPageQueryShapeIsIndependentOfPageSize(t *testing.T) {
 	require.Contains(t, oneQuery, "submodel_element_page_values")
 	require.Contains(t, oneQuery, "UNION ALL")
 	require.Contains(t, oneQuery, `SELECT "selected_root"."root_id" AS "element_id"`)
+	require.Contains(t, oneQuery, `"selected_root"."model_type" AS "model_type"`)
+	require.Contains(t, oneQuery, `"selected_sme"."model_type" AS "model_type"`)
 	require.NotContains(t, oneQuery, `"selected_sme"."id" = "selected_root"."root_id"`)
 	require.Contains(t, oneQuery, `"selected_sme"."submodel_id" = "selected_root"."submodel_id"`)
 	require.Contains(t, oneQuery, `"selected_sme"."root_sme_id"`)
@@ -631,7 +633,7 @@ func TestSubmodelElementPageQueryShapeIsIndependentOfPageSize(t *testing.T) {
 	require.Contains(t, oneQuery, `"multilanguage_property_value" AS "page_multilanguage_value"`)
 	require.Contains(t, oneQuery, `ORDER BY "page_multilanguage_value"."id"`)
 	require.NotContains(t, oneQuery, `ORDER BY "page_multilanguage_value"."language"`)
-	require.Contains(t, oneQuery, `IN ((SELECT "element_id" FROM "selected_submodel_elements"))`)
+	require.Equal(t, 13, strings.Count(oneQuery, `"selected_value_element"."model_type" = $`))
 	require.Contains(t, oneQuery, `LEFT JOIN "submodel_element_page_values" AS "sme_value"`)
 	require.NotContains(t, oneQuery, `NULL::jsonb AS "raw_value_payload"`)
 }

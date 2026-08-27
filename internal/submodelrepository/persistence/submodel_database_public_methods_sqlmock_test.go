@@ -1239,7 +1239,7 @@ func TestGetSubmodelsWithElementsUsesTwoPageWideSelects(t *testing.T) {
 			[]byte("[]"),
 			[]byte("[]"),
 			[]byte("[]"),
-			nil,
+			[]byte(`{"value":"page-value","value_type":24,"value_id":[],"value_id_referred":[]}`),
 			[]byte("[]"),
 			[]byte("[]"),
 			[]byte("[]"),
@@ -1266,7 +1266,10 @@ func TestGetSubmodelsWithElementsUsesTwoPageWideSelects(t *testing.T) {
 	require.Empty(t, cursor)
 	require.Len(t, result, 1)
 	require.Len(t, result[0].SubmodelElements(), 1)
-	require.Equal(t, types.ModelTypeProperty, result[0].SubmodelElements()[0].ModelType())
+	property, ok := result[0].SubmodelElements()[0].(types.IProperty)
+	require.True(t, ok)
+	require.NotNil(t, property.Value())
+	require.Equal(t, "page-value", *property.Value())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

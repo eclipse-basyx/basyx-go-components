@@ -26,6 +26,7 @@
 package submodelelements
 
 import (
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -37,8 +38,7 @@ func buildSubmodelElementPageValueDataset(
 	dialect goqu.DialectWrapper,
 	includeBlobValue bool,
 ) *goqu.SelectDataset {
-	elementIDs := dialect.From("selected_submodel_elements").Select("element_id")
-	datasets := buildSubmodelElementPageValueDatasets(dialect, elementIDs, includeBlobValue)
+	datasets := buildSubmodelElementPageValueDatasets(dialect, includeBlobValue)
 	values := datasets[0]
 	for _, dataset := range datasets[1:] {
 		values = values.UnionAll(dataset)
@@ -48,23 +48,32 @@ func buildSubmodelElementPageValueDataset(
 
 func buildSubmodelElementPageValueDatasets(
 	dialect goqu.DialectWrapper,
-	elementIDs *goqu.SelectDataset,
 	includeBlobValue bool,
 ) []*goqu.SelectDataset {
 	return []*goqu.SelectDataset{
-		buildAnnotatedRelationshipPageValues(dialect, elementIDs),
-		buildBasicEventPageValues(dialect, elementIDs),
-		buildBlobPageValues(dialect, elementIDs, includeBlobValue),
-		buildEntityPageValues(dialect, elementIDs),
-		buildFilePageValues(dialect, elementIDs),
-		buildSubmodelElementListPageValues(dialect, elementIDs),
-		buildMultiLanguagePropertyPageValues(dialect, elementIDs),
-		buildOperationPageValues(dialect, elementIDs, includeBlobValue),
-		buildPropertyPageValues(dialect, elementIDs),
-		buildRangePageValues(dialect, elementIDs),
-		buildReferenceElementPageValues(dialect, elementIDs),
-		buildRelationshipElementPageValues(dialect, elementIDs),
+		buildAnnotatedRelationshipPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeAnnotatedRelationshipElement)),
+		buildBasicEventPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeBasicEventElement)),
+		buildBlobPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeBlob), includeBlobValue),
+		buildEntityPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeEntity)),
+		buildFilePageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeFile)),
+		buildSubmodelElementListPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeSubmodelElementList)),
+		buildMultiLanguagePropertyPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeMultiLanguageProperty)),
+		buildOperationPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeOperation), includeBlobValue),
+		buildPropertyPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeProperty)),
+		buildRangePageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeRange)),
+		buildReferenceElementPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeReferenceElement)),
+		buildRelationshipElementPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeRelationshipElement)),
 	}
+}
+
+func selectedSubmodelElementIDs(
+	dialect goqu.DialectWrapper,
+	modelType types.ModelType,
+) *goqu.SelectDataset {
+	selectedElements := goqu.T("selected_submodel_elements").As("selected_value_element")
+	return dialect.From(selectedElements).
+		Select(selectedElements.Col("element_id")).
+		Where(selectedElements.Col("model_type").Eq(int(modelType)))
 }
 
 func buildSimpleSubmodelElementPageValues(
