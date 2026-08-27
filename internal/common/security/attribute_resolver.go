@@ -72,7 +72,6 @@ func resolveGlobalToken(name string, globals GlobalAttributes) (any, bool) {
 }
 
 // resolveAttributeValue resolves a grammar.AttributeValue to a concrete literal using claims/globals.
-// It also normalizes common claim container shapes (e.g., single-element arrays from Keycloak).
 func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals GlobalAttributes) any {
 	m, ok := asStringMap(attr)
 	if !ok {
@@ -83,11 +82,11 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals G
 		if !exists {
 			return nil
 		}
-		normalized := normalizeClaimScalar(val)
-		if normalized == nil {
+		serialized, ok := serializeClaimValue(val)
+		if !ok {
 			return nil
 		}
-		return fmt.Sprint(normalized)
+		return serialized
 	}
 	if g := m["GLOBAL"]; g != "" {
 		if val, ok := resolveGlobalToken(g, globals); ok {
@@ -95,6 +94,24 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals G
 		}
 	}
 	return nil
+}
+
+// serializeClaimValue preserves string claims and represents every other JSON
+// claim value with its deterministic JSON encoding. Unsupported and null values
+// remain unresolved so authorization fails closed.
+func serializeClaimValue(value any) (string, bool) {
+	if value == nil {
+		return "", false
+	}
+	if stringValue, ok := value.(string); ok {
+		return stringValue, true
+	}
+
+	serialized, err := json.Marshal(value)
+	if err != nil || string(serialized) == "null" {
+		return "", false
+	}
+	return string(serialized), true
 }
 
 // normalizeClaimScalar unwraps common container formats so operators see a scalar.

@@ -21,6 +21,7 @@ These changes affect upgrades from `v1.0.9` to the next release.
 
 | Type | Change | Pull request | Security impact |
 | --- | --- | --- | --- |
+| High impact | ABAC `CLAIM` resolution no longer discards all but the first value of JWT arrays. String claims remain unchanged; numbers, booleans, arrays, and nested objects are exposed to formulas as deterministic JSON text. Policies that compare non-string claims may need to match the new complete JSON representation. | — | Authorization decisions involving non-string claims can change. Missing, `null`, and unsupported claim values remain unresolved and fail closed. |
 | Bugfix | ABAC rules containing only `UTCNOW`, `LOCALNOW`, or `CLIENTNOW` now require a `CLAIM`, or `GLOBAL=ANONYMOUS` for intentionally public access. | [#573](https://github.com/eclipse-basyx/basyx-go-components/pull/573) | More restrictive: existing time-only rules no longer grant access. |
 | Bugfix | `CLIENTNOW` is no longer generated or overwritten by the server and must come from the verified access token. Use `UTCNOW` or `LOCALNOW` when server time is intended. | [#573](https://github.com/eclipse-basyx/basyx-go-components/pull/573) | More restrictive: rules requiring `CLIENTNOW` no longer match without the token claim. |
 | Bugfix | `UTCNOW` and `LOCALNOW` now use the trusted server clock instead of same-named JWT claims. | [#573](https://github.com/eclipse-basyx/basyx-go-components/pull/573) | JWT values can no longer control server-time authorization decisions. |

@@ -26,8 +26,11 @@
 package auth
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 func TestResolveAttributeValue_MissingClaimReturnsNil(t *testing.T) {
@@ -40,13 +43,82 @@ func TestResolveAttributeValue_MissingClaimReturnsNil(t *testing.T) {
 	}
 }
 
-func TestResolveAttributeValue_ClaimArrayUnwrapsFirstElement(t *testing.T) {
-	attr := map[string]any{"CLAIM": "role"}
-	claims := Claims{"role": []any{"editor"}}
+func TestResolveAttributeValueSerializesCompleteClaimValue(t *testing.T) {
+	t.Parallel()
 
-	got := resolveAttributeValue(attr, claims, nil)
-	if got != "editor" {
-		t.Fatalf("expected editor, got %#v", got)
+	tests := []struct {
+		name  string
+		value any
+		want  any
+	}{
+		{name: "string", value: "editor", want: "editor"},
+		{name: "number", value: json.Number("42"), want: "42"},
+		{name: "boolean", value: true, want: "true"},
+		{name: "array", value: []any{"admin", "manager"}, want: `["admin","manager"]`},
+		{
+			name: "nested object",
+			value: map[string]any{
+				"roles": []any{"admin", "manager"},
+				"profile": map[string]any{
+					"department": "engineering",
+				},
+			},
+			want: `{"profile":{"department":"engineering"},"roles":["admin","manager"]}`,
+		},
+		{name: "empty array", value: []any{}, want: `[]`},
+		{name: "null", value: nil, want: nil},
+		{name: "unsupported", value: func() {}, want: nil},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := resolveAttributeValue(
+				map[string]any{"CLAIM": "claim"},
+				Claims{"claim": test.value},
+				nil,
+			)
+			if got != test.want {
+				t.Fatalf("resolveAttributeValue() = %#v, want %#v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestSerializedClaimArraySupportsQuotedContains(t *testing.T) {
+	t.Parallel()
+
+	claimAttribute := grammar.AttributeValue(map[string]any{"CLAIM": "role"})
+	quotedManager := grammar.StandardString(`"manager"`)
+	expression := grammar.LogicalExpression{
+		Contains: grammar.StringItems{
+			{Attribute: claimAttribute},
+			{StrVal: &quotedManager},
+		},
+	}
+
+	tests := []struct {
+		name  string
+		roles []any
+		want  grammar.SimplifyDecision
+	}{
+		{name: "second element matches", roles: []any{"admin", "manager"}, want: grammar.SimplifyTrue},
+		{name: "substring does not match", roles: []any{"supermanager"}, want: grammar.SimplifyFalse},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			resolver := func(attribute grammar.AttributeValue) any {
+				return resolveAttributeValue(attribute, Claims{"role": test.roles}, nil)
+			}
+			_, decision := expression.SimplifyForBackendFilter(resolver)
+			if decision != test.want {
+				t.Fatalf("SimplifyForBackendFilter() decision = %v, want %v", decision, test.want)
+			}
+		})
 	}
 }
 
