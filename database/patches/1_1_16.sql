@@ -31,9 +31,12 @@
 -- Metamodel Ver. : 3.2
 -- ----------------------------------------------------------------------------
 -- Description:
---   Keeps Submodel Element relationship estimates accurate on large, varied
---   datasets so point and page reads retain index-based query plans.
+--   Keeps Submodel Element relationship estimates accurate and provides the
+--   stable path order used by bounded cross-Submodel page reads.
 -- ============================================================================
+
+CREATE INDEX IF NOT EXISTS ix_sme_sub_path_id
+  ON submodel_element(submodel_id, idshort_path, id);
 
 ALTER TABLE submodel_element
   ALTER COLUMN submodel_id SET STATISTICS 1000,

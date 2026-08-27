@@ -1280,7 +1280,7 @@ func TestGetAllSubmodelPathsPageUsesOneSetBasedSelect(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	mock.ExpectBegin()
-	mock.ExpectQuery("WITH RECURSIVE").WillReturnRows(
+	mock.ExpectQuery(`LATERAL .*LIMIT ALL`).WillReturnRows(
 		sqlmock.NewRows([]string{"submodel_identifier", "idshort_path", "sme_id"}).
 			AddRow("sm-1", "A", int64(1)).
 			AddRow("sm-1", "B", int64(2)),

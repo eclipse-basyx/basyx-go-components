@@ -59,3 +59,38 @@ Repeat the matrix with authorization disabled and enabled, then with identifier,
 semantic, timestamp, query, and fragment-mask filters. Include empty, saturated,
 and final pages. Treat a changed status, response byte count, cursor sequence, or
 element ordering as a compatibility failure before comparing throughput.
+
+## Local validation of bounded path pagination
+
+The cross-Submodel path query was checked on PostgreSQL 15 with 20,000
+Submodels, matching payload rows, and 200,000 Submodel Elements. Each Submodel
+had one root and nine children. The checks used `EXPLAIN (ANALYZE, BUFFERS,
+SUMMARY)` with a 101-row database limit, which represents an API limit of 100
+plus the cursor look-ahead row.
+
+| Query shape | Rows produced by the candidate/recursive scan | Shared-buffer hits | Execution time |
+|---|---:|---:|---:|
+| Previous repository-wide recursive CTE | 200,000 | 10,051 plus temporary I/O | 363.586 ms |
+| Ordered lateral scan, no structural SME filter | 111 | 82 | 0.116 ms |
+| Ordered lateral scan, allow-all structural SME filter | 111 candidates; 111 candidate-local recursive scans | 916 | 11.309 ms |
+
+The fixed plans use `ix_sm_identifier` for Submodel order and
+`ix_sme_sub_path_id` for `(submodel_id, idshort_path, id)` order. PostgreSQL
+reports an incremental sort above nested loops and stops after the look-ahead
+row. With structural SME filtering, the recursive CTE is correlated to one
+candidate and walks only that candidate's ancestor chain; it is not
+materialized for every element in the repository before applying the page
+limit. These timings are local plan evidence rather than a cluster benchmark.
+
+The generated SQL shape is guarded by
+`TestAllSubmodelPathPageKeepsCompositeCursorAndStableOrder` and
+`TestAllSubmodelPathPageScopesStructuralRecursionToEachCandidate`.
+
+Validation run on 2026-08-27:
+
+| Command | Result |
+|---|---|
+| `go test ./internal/submodelrepository/persistence/submodelElements` | Pass |
+| `go test -v ./internal/submodelrepository/integration_tests` after `go clean -testcache` | Pass in 63.976 s |
+| `go vet ./...` | Pass |
+| `golangci-lint run` | Pass, 0 issues |

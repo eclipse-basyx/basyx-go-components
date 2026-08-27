@@ -182,34 +182,37 @@ func buildAllSubmodelElementPathsPageQuery(
 	level string,
 ) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
-	authorizedPaths, recursiveVisible, err := buildAuthorizedSubmodelPaths(ctx, dialect, level)
+	authorizedPaths, err := buildAuthorizedSubmodelPaths(ctx, dialect, visibleSubmodels, level, nil)
 	if err != nil {
 		return "", nil, err
 	}
 
-	query := dialect.From(goqu.T("authorized_submodel_paths").As("authorized_path")).
-		With("visible_submodels", visibleSubmodels).
+	query := dialect.From(authorizedPaths.As("authorized_path")).
 		Select(
 			goqu.I("authorized_path.submodel_identifier"),
 			goqu.I("authorized_path.idshort_path"),
 			goqu.I("authorized_path.sme_id"),
 		)
-	if recursiveVisible != nil {
-		query = query.WithRecursive("visible_path_smes(sme_id,submodel_id)", recursiveVisible)
-	}
-	query = query.With("authorized_submodel_paths", authorizedPaths)
 
 	if submodelCursor != "" && pathCursor != "" {
 		cursorPath, cursorID, hasCursorID := parseRootCursor(pathCursor)
-		cursorExists := dialect.From("authorized_submodel_paths").
-			Select(goqu.L("1")).
-			Where(
-				goqu.I("submodel_identifier").Eq(submodelCursor),
-				goqu.I("idshort_path").Eq(cursorPath),
-			)
-		if hasCursorID {
-			cursorExists = cursorExists.Where(goqu.I("sme_id").Eq(cursorID))
+		cursorBoundary := submodelPathCandidateBoundary{
+			submodelIdentifier: submodelCursor,
+			path:               cursorPath,
+			id:                 cursorID,
+			hasID:              hasCursorID,
 		}
+		authorizedCursor, cursorErr := buildAuthorizedSubmodelPaths(
+			ctx,
+			dialect,
+			visibleSubmodels,
+			level,
+			&cursorBoundary,
+		)
+		if cursorErr != nil {
+			return "", nil, cursorErr
+		}
+		cursorExists := dialect.From(authorizedCursor.As("authorized_cursor")).Select(goqu.L("1")).Limit(1)
 
 		var pathBoundary goqu.Expression = goqu.I("authorized_path.idshort_path").Gt(cursorPath)
 		if hasCursorID {
@@ -247,94 +250,137 @@ func buildAllSubmodelElementPathsPageQuery(
 	return sqlQuery, args, nil
 }
 
+type submodelPathCandidateBoundary struct {
+	submodelIdentifier string
+	path               string
+	id                 int64
+	hasID              bool
+}
+
 func buildAuthorizedSubmodelPaths(
 	ctx context.Context,
 	dialect goqu.DialectWrapper,
+	visibleSubmodels *goqu.SelectDataset,
 	level string,
-) (*goqu.SelectDataset, *goqu.SelectDataset, error) {
-	query := dialect.From(goqu.T("visible_submodels").As("visible_submodel")).
-		Join(
-			goqu.T("submodel_element").As("sme"),
-			goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("visible_submodel.submodel_id"))),
-		).
+	boundary *submodelPathCandidateBoundary,
+) (*goqu.SelectDataset, error) {
+	candidate := dialect.From(goqu.T("submodel_element").As("sme")).
 		Select(
-			goqu.I("visible_submodel.submodel_identifier"),
 			goqu.I("sme.idshort_path"),
 			goqu.I("sme.id").As("sme_id"),
+		).
+		Where(
+			goqu.I("sme.submodel_id").Eq(goqu.I("visible_submodel.submodel_id")),
 		)
+	if boundary != nil {
+		candidate = candidate.Where(
+			goqu.I("sme.idshort_path").Eq(boundary.path),
+		)
+		if boundary.hasID {
+			candidate = candidate.Where(goqu.I("sme.id").Eq(boundary.id))
+		}
+	}
 
-	var recursiveVisible *goqu.SelectDataset
 	var err error
 	if level == "core" {
-		query = query.Where(goqu.I("sme.parent_sme_id").IsNull())
-		query, err = addSMERowFilterQueries(ctx, query)
+		candidate = candidate.Where(goqu.I("sme.parent_sme_id").IsNull())
+		candidate, err = addSMERowFilterQueries(ctx, candidate)
 	} else {
-		recursiveVisible, err = buildVisiblePathSMEs(ctx, dialect)
-		query = query.Join(
-			goqu.T("visible_path_smes").As("visible_path_sme"),
-			goqu.On(goqu.I("visible_path_sme.sme_id").Eq(goqu.I("sme.id"))),
-		)
+		candidate, err = addCandidatePathAncestorVisibilityQuery(ctx, dialect, candidate)
 	}
 	if err != nil {
-		return nil, nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-ROWFILTER " + err.Error())
+		return nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-ROWFILTER " + err.Error())
 	}
 
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
 	if err != nil {
-		return nil, nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-BADCOLLECTOR " + err.Error())
+		return nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-BADCOLLECTOR " + err.Error())
 	}
 	shouldEnforce, err := auth.ShouldEnforceFormula(ctx)
 	if err != nil {
-		return nil, nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-SHOULDENFORCE " + err.Error())
+		return nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-SHOULDENFORCE " + err.Error())
 	}
 	if shouldEnforce {
-		query, err = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		candidate, err = auth.AddFormulaQueryFromContext(ctx, candidate, collector)
 		if err != nil {
-			return nil, nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-ABACFORMULA " + err.Error())
+			return nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-ABACFORMULA " + err.Error())
 		}
 	}
-	return query, recursiveVisible, nil
+	candidate = candidate.
+		Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc()).
+		// LIMIT ALL prevents PostgreSQL from flattening the ordered lateral scan.
+		LimitAll()
+
+	query := dialect.From(
+		visibleSubmodels.As("visible_submodel"),
+		goqu.Lateral(candidate.As("visible_sme")),
+	).Select(
+		goqu.I("visible_submodel.submodel_identifier"),
+		goqu.I("visible_sme.idshort_path"),
+		goqu.I("visible_sme.sme_id"),
+	)
+	if boundary != nil {
+		query = query.Where(goqu.I("visible_submodel.submodel_identifier").Eq(boundary.submodelIdentifier))
+	}
+	return query, nil
 }
 
-func buildVisiblePathSMEs(ctx context.Context, dialect goqu.DialectWrapper) (*goqu.SelectDataset, error) {
+func addCandidatePathAncestorVisibilityQuery(
+	ctx context.Context,
+	dialect goqu.DialectWrapper,
+	query *goqu.SelectDataset,
+) (*goqu.SelectDataset, error) {
 	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
+	if err != nil || len(fragments) == 0 {
+		return query, err
+	}
+
+	const (
+		ancestorCTE  = "visible_path_candidate_ancestors"
+		targetAlias  = "visible_path_candidate_target"
+		parentAlias  = "visible_path_candidate_parent"
+		currentAlias = "visible_path_candidate_current"
+	)
+	target := dialect.From(goqu.T("submodel_element").As(targetAlias)).
+		Select(
+			goqu.I(targetAlias+".id"),
+			goqu.I(targetAlias+".parent_sme_id"),
+			goqu.I(targetAlias+".submodel_id"),
+		).
+		Where(
+			goqu.I(targetAlias+".id").Eq(goqu.I("sme.id")),
+			goqu.I(targetAlias+".submodel_id").Eq(goqu.I("visible_submodel.submodel_id")),
+		)
+	target, err = addNormalizedSMERowFilterQueries(filterCtx, target, fragments, targetAlias)
 	if err != nil {
 		return nil, err
 	}
 
-	rootAlias := "visible_path_root"
-	rootQuery := dialect.From(goqu.T("visible_submodels").As("visible_submodel")).
+	parent := dialect.From(goqu.T("submodel_element").As(parentAlias)).
 		Join(
-			goqu.T("submodel_element").As(rootAlias),
-			goqu.On(goqu.I(rootAlias+".submodel_id").Eq(goqu.I("visible_submodel.submodel_id"))),
-		).
-		Select(goqu.I(rootAlias+".id"), goqu.I(rootAlias+".submodel_id")).
-		Where(goqu.I(rootAlias + ".parent_sme_id").IsNull())
-	if len(fragments) > 0 {
-		rootQuery, err = addNormalizedSMERowFilterQueries(filterCtx, rootQuery, fragments, rootAlias)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	childAlias := "visible_path_child"
-	parentAlias := "visible_path_parent"
-	childQuery := dialect.From(goqu.T("submodel_element").As(childAlias)).
-		Join(
-			goqu.T("visible_path_smes").As(parentAlias),
+			goqu.T(ancestorCTE).As(currentAlias),
 			goqu.On(
-				goqu.I(childAlias+".parent_sme_id").Eq(goqu.I(parentAlias+".sme_id")),
-				goqu.I(childAlias+".submodel_id").Eq(goqu.I(parentAlias+".submodel_id")),
+				goqu.I(parentAlias+".id").Eq(goqu.I(currentAlias+".parent_sme_id")),
+				goqu.I(parentAlias+".submodel_id").Eq(goqu.I(currentAlias+".submodel_id")),
 			),
 		).
-		Select(goqu.I(childAlias+".id"), goqu.I(childAlias+".submodel_id"))
-	if len(fragments) > 0 {
-		childQuery, err = addNormalizedSMERowFilterQueries(filterCtx, childQuery, fragments, childAlias)
-		if err != nil {
-			return nil, err
-		}
+		Select(
+			goqu.I(parentAlias+".id"),
+			goqu.I(parentAlias+".parent_sme_id"),
+			goqu.I(parentAlias+".submodel_id"),
+		)
+	parent, err = addNormalizedSMERowFilterQueries(filterCtx, parent, fragments, parentAlias)
+	if err != nil {
+		return nil, err
 	}
-	return rootQuery.UnionAll(childQuery), nil
+
+	ancestors := target.UnionAll(parent)
+	visibleRoot := dialect.From(goqu.T(ancestorCTE)).
+		WithRecursive(ancestorCTE+"(sme_id,parent_sme_id,submodel_id)", ancestors).
+		Select(goqu.L("1")).
+		Where(goqu.I(ancestorCTE + ".parent_sme_id").IsNull()).
+		Limit(1)
+	return query.Where(goqu.Func("EXISTS", visibleRoot)), nil
 }
 
 func buildSubmodelElementPageQuery(

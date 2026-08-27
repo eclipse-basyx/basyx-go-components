@@ -666,7 +666,7 @@ func TestAllSubmodelPathPageKeepsCompositeCursorAndStableOrder(t *testing.T) {
 		goqu.I("id").As("submodel_id"),
 		goqu.I("submodel_identifier").As("submodel_identifier"),
 	)
-	query, _, err := buildAllSubmodelElementPathsPageQuery(
+	query, args, err := buildAllSubmodelElementPathsPageQuery(
 		contextWithABACDisabled(t),
 		visibleSubmodels,
 		100,
@@ -675,11 +675,40 @@ func TestAllSubmodelPathPageKeepsCompositeCursorAndStableOrder(t *testing.T) {
 		"deep",
 	)
 	require.NoError(t, err)
-	require.Contains(t, query, "WITH RECURSIVE")
-	require.Contains(t, query, "authorized_submodel_paths")
-	require.Contains(t, query, `SELECT 1 FROM "authorized_submodel_paths"`)
+	require.NotContains(t, query, "WITH RECURSIVE")
+	require.NotContains(t, query, "visible_path_smes")
+	require.Contains(t, query, `FROM (SELECT "visible_submodel"."submodel_identifier"`)
+	require.Contains(t, query, `LATERAL (SELECT "sme"."idshort_path", "sme"."id" AS "sme_id"`)
+	require.Contains(t, query, `ORDER BY "sme"."idshort_path" ASC, "sme"."id" ASC LIMIT ALL`)
+	require.Contains(t, query, `AS "authorized_cursor"`)
 	require.Contains(t, query, `ORDER BY "authorized_path"."submodel_identifier" ASC, "authorized_path"."idshort_path" ASC, "authorized_path"."sme_id" ASC`)
 	require.Contains(t, query, `"authorized_path"."sme_id" >`)
+	require.Equal(t, int64(101), args[len(args)-1])
+}
+
+func TestAllSubmodelPathPageScopesStructuralRecursionToEachCandidate(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
+		},
+	})
+	dialect := goqu.Dialect("postgres")
+	visibleSubmodels := dialect.From("submodel").Select(
+		goqu.I("id").As("submodel_id"),
+		goqu.I("submodel_identifier").As("submodel_identifier"),
+	)
+	query, args, err := buildAllSubmodelElementPathsPageQuery(ctx, visibleSubmodels, 1, "", "", "deep")
+	require.NoError(t, err)
+	require.NotContains(t, query, "visible_path_smes")
+	require.Contains(t, query, `LATERAL (SELECT "sme"."idshort_path", "sme"."id" AS "sme_id"`)
+	require.Contains(t, query, `ORDER BY "sme"."idshort_path" ASC, "sme"."id" ASC LIMIT ALL`)
+	require.Contains(t, query, `WITH RECURSIVE visible_path_candidate_ancestors`)
+	require.Contains(t, query, `"visible_path_candidate_target"."id" = "sme"."id"`)
+	require.Contains(t, query, `"visible_path_candidate_parent"."id" = "visible_path_candidate_current"."parent_sme_id"`)
+	require.Equal(t, int64(2), args[len(args)-1])
 }
 
 func TestNormalizeSMERowFiltersIgnoresOtherStructuralRoots(t *testing.T) {
