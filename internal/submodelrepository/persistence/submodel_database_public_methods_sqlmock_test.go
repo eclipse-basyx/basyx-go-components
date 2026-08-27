@@ -1224,7 +1224,29 @@ func TestGetSubmodelsWithElementsUsesTwoPageWideSelects(t *testing.T) {
 			"semantic",
 			"semantic_visible",
 			"value_visible",
-		}),
+		}).AddRow(
+			int64(7),
+			int64(10),
+			nil,
+			nil,
+			"Property",
+			"Property",
+			nil,
+			int64(types.ModelTypeProperty),
+			0,
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte("[]"),
+			nil,
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic"}]}`),
+			true,
+			true,
+		),
 	)
 	mock.ExpectCommit()
 
@@ -1243,7 +1265,8 @@ func TestGetSubmodelsWithElementsUsesTwoPageWideSelects(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, cursor)
 	require.Len(t, result, 1)
-	require.Empty(t, result[0].SubmodelElements())
+	require.Len(t, result[0].SubmodelElements(), 1)
+	require.Equal(t, types.ModelTypeProperty, result[0].SubmodelElements()[0].ModelType())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

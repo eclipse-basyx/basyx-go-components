@@ -610,67 +610,46 @@ func TestSubmodelElementPageQueryShapeIsIndependentOfPageSize(t *testing.T) {
 	t.Parallel()
 
 	ctx := contextWithABACDisabled(t)
-	oneQuery, _, err := buildSubmodelElementPageQuery(ctx, []int64{1}, "deep")
+	oneQuery, oneArgs, err := buildSubmodelElementPageQuery(ctx, []int64{1}, false, "deep")
 	require.NoError(t, err)
-	manyQuery, _, err := buildSubmodelElementPageQuery(ctx, []int64{1, 2, 3}, "deep")
+	manyQuery, manyArgs, err := buildSubmodelElementPageQuery(ctx, []int64{1, 2, 3}, false, "deep")
 	require.NoError(t, err)
 
 	require.Equal(t, oneQuery, manyQuery)
+	require.Len(t, manyArgs, len(oneArgs))
 	require.Contains(t, oneQuery, "ROW_NUMBER() OVER (PARTITION BY")
 	require.Contains(t, oneQuery, "visible_submodel_roots")
 	require.Contains(t, oneQuery, "selected_submodel_elements")
+	require.Contains(t, oneQuery, "submodel_element_page_values")
 	require.Contains(t, oneQuery, "UNION ALL")
 	require.Contains(t, oneQuery, `SELECT "selected_root"."root_id" AS "element_id"`)
 	require.NotContains(t, oneQuery, `"selected_sme"."id" = "selected_root"."root_id"`)
 	require.Contains(t, oneQuery, `"selected_sme"."submodel_id" = "selected_root"."submodel_id"`)
 	require.Contains(t, oneQuery, `"selected_sme"."root_sme_id"`)
 	require.Contains(t, oneQuery, `"selected_sme"."id" != "selected_root"."root_id"`)
-	require.Contains(t, oneQuery, `NULL::jsonb AS "raw_value_payload"`)
-	require.NotContains(t, oneQuery, `"property_element"`)
+	require.Contains(t, oneQuery, `"property_element" AS "page_property"`)
+	require.Contains(t, oneQuery, `"multilanguage_property_value" AS "page_multilanguage_value"`)
+	require.Contains(t, oneQuery, `ORDER BY "page_multilanguage_value"."id"`)
+	require.NotContains(t, oneQuery, `ORDER BY "page_multilanguage_value"."language"`)
+	require.Contains(t, oneQuery, `IN ((SELECT "element_id" FROM "selected_submodel_elements"))`)
+	require.Contains(t, oneQuery, `LEFT JOIN "submodel_element_page_values" AS "sme_value"`)
+	require.NotContains(t, oneQuery, `NULL::jsonb AS "raw_value_payload"`)
 }
 
 func TestSubmodelElementCorePageSelectsOnlyRootsAndDirectChildren(t *testing.T) {
 	t.Parallel()
 
-	query, _, err := buildSubmodelElementPageQuery(contextWithABACDisabled(t), []int64{1}, "core")
+	query, _, err := buildSubmodelElementPageQuery(contextWithABACDisabled(t), []int64{1}, false, "core")
 	require.NoError(t, err)
 	require.Contains(t, query, `"selected_sme"."parent_sme_id" = "selected_root"."root_id"`)
 }
 
-func TestSubmodelElementPageValueQueryShapeIsIndependentOfPageSize(t *testing.T) {
+func TestSubmodelElementPageQueryHonorsBlobValueOption(t *testing.T) {
 	t.Parallel()
 
-	oneIDs := map[types.ModelType][]int64{
-		types.ModelTypeProperty:              {1},
-		types.ModelTypeMultiLanguageProperty: {2},
-	}
-	manyIDs := map[types.ModelType][]int64{
-		types.ModelTypeProperty:              {1, 3, 5},
-		types.ModelTypeMultiLanguageProperty: {2, 4},
-	}
-	oneQuery, oneArgs, err := buildSubmodelElementPageValueQuery(oneIDs, []int64{1}, false)
+	withoutValue, _, err := buildSubmodelElementPageQuery(contextWithABACDisabled(t), []int64{1}, false, "deep")
 	require.NoError(t, err)
-	manyQuery, manyArgs, err := buildSubmodelElementPageValueQuery(manyIDs, []int64{1, 2, 3}, false)
-	require.NoError(t, err)
-
-	require.Equal(t, oneQuery, manyQuery)
-	require.Len(t, manyArgs, len(oneArgs))
-	require.Contains(t, oneQuery, "UNION ALL")
-	require.Contains(t, oneQuery, `"property_element" AS "page_property"`)
-	require.Contains(t, oneQuery, `"multilanguage_property_value" AS "page_multilanguage_value"`)
-	require.Contains(t, oneQuery, `ORDER BY "page_multilanguage_value"."id"`)
-	require.NotContains(t, oneQuery, `ORDER BY "page_multilanguage_value"."language"`)
-	require.Contains(t, oneQuery, `"submodel_element_page_value"."element_id" = ANY($1::bigint[])`)
-	require.Contains(t, oneQuery, `COALESCE("submodel_element_page_value"."value_payload"::jsonb, '{}'::jsonb) - 'value'`)
-}
-
-func TestSubmodelElementPageValueQueryHonorsBlobValueOption(t *testing.T) {
-	t.Parallel()
-
-	ids := map[types.ModelType][]int64{types.ModelTypeBlob: {1}}
-	withoutValue, _, err := buildSubmodelElementPageValueQuery(ids, []int64{1}, false)
-	require.NoError(t, err)
-	withValue, _, err := buildSubmodelElementPageValueQuery(ids, []int64{1}, true)
+	withValue, _, err := buildSubmodelElementPageQuery(contextWithABACDisabled(t), []int64{1}, true, "deep")
 	require.NoError(t, err)
 
 	require.NotContains(t, withoutValue, `"page_blob"."value"`)
