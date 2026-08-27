@@ -23,8 +23,17 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
--- Keep Submodel Element relationship estimates accurate on large, varied
--- datasets so point and page reads retain index-based query plans.
+-- ============================================================================
+-- Project        : Eclipse BaSyx
+-- Organization   : Fraunhofer IESE
+-- File Type      : SQL Patch Script
+-- Patch Version  : 1.1.16
+-- Metamodel Ver. : 3.2
+-- ----------------------------------------------------------------------------
+-- Description:
+--   Keeps Submodel Element relationship estimates accurate on large, varied
+--   datasets so point and page reads retain index-based query plans.
+-- ============================================================================
 
 ALTER TABLE submodel_element
   ALTER COLUMN submodel_id SET STATISTICS 1000,
