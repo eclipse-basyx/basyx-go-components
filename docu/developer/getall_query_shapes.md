@@ -10,9 +10,9 @@ bounded.
 
 | Service and representation | Baseline | Final | Final database round trips |
 |---|---:|---:|---:|
-| Submodel Repository, full | `1 + 3N` primary reads | 2 primary reads; up to 6 fixed bulk reference fallbacks | 2 to 8 |
-| Submodel Repository, value-only | `1 + 3N` primary reads | 2 primary reads; up to 6 fixed bulk reference fallbacks | 2 to 8 |
-| Submodel Repository, query | `1 + 3N` primary reads | 2 primary reads; up to 6 fixed bulk reference fallbacks | 2 to 8 |
+| Submodel Repository, full | `1 + 3N` primary reads | 3 primary reads; up to 6 fixed bulk reference fallbacks | 3 to 9 |
+| Submodel Repository, value-only | `1 + 3N` primary reads | 3 primary reads; up to 6 fixed bulk reference fallbacks | 3 to 9 |
+| Submodel Repository, query | `1 + 3N` primary reads | 3 primary reads; up to 6 fixed bulk reference fallbacks | 3 to 9 |
 | Submodel Repository, metadata and recent changes | 1 primary read; up to 2 fixed restrictive-reference reads | unchanged | 1 to 3 |
 | Submodel Repository, reference | metadata materialization plus optional reference reads | 1 | 1 |
 | Submodel Repository, path | Submodel reference pages plus 2 or 3 reads for every visited Submodel | 1 | 1 |
@@ -26,7 +26,12 @@ bounded.
 
 `N` is the number of Submodels returned on the page. The Submodel shapes use
 array parameters, so the rendered SQL is identical for limits 1 and 100. The
-PostgreSQL AAS path uses one bounded page CTE and tagged `UNION ALL` branches for
+three Submodel page reads load metadata, the authorized element rows, and all
+typed element values. Keeping typed values in their own page-wide statement
+avoids an unsuitable PostgreSQL plan on large, varied datasets while retaining
+a constant statement count.
+
+The PostgreSQL AAS path uses one bounded page CTE and tagged `UNION ALL` branches for
 core rows, Submodel references, Specific Asset IDs, and the optional next cursor.
 The non-pgx path uses the shared builders, scanners, ordering, and model assembler
 sequentially.
