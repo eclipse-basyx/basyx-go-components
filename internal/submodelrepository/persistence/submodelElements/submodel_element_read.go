@@ -164,7 +164,7 @@ func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db D
 		return nil, common.NewErrNotFound("SubmodelElement with idShort or path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
 	}
 
-	rootElement, buildTreeErr := buildSubmodelElementTreeFromRows(db, parsedRows, submodelID, idShortOrPath)
+	rootElement, buildTreeErr := buildSubmodelElementTreeFromRows(ctx, db, parsedRows, submodelID, idShortOrPath)
 	if buildTreeErr != nil {
 		return nil, buildTreeErr
 	}
@@ -528,7 +528,7 @@ func GetSubmodelElementsByDatabaseIDTxInPersistenceOrder(ctx context.Context, tx
 	if err != nil {
 		return nil, err
 	}
-	forest, err := buildSubmodelElementForestFromRows(tx, rows)
+	forest, err := buildSubmodelElementForestFromRows(ctx, tx, rows)
 	if err != nil {
 		return nil, err
 	}
@@ -594,7 +594,7 @@ func getSubmodelElementsByDatabaseID(ctx context.Context, db DBQueryer, submodel
 		return nil, "", readRowsErr
 	}
 
-	forest, buildForestErr := buildSubmodelElementForestFromRows(db, parsedRows)
+	forest, buildForestErr := buildSubmodelElementForestFromRows(ctx, db, parsedRows)
 	if buildForestErr != nil {
 		return nil, "", buildForestErr
 	}
@@ -1591,75 +1591,11 @@ func executeLoadedSMERowQuery(
 
 	parsedRows := make([]loadedSMERow, 0, 32)
 	for rows.Next() {
-		var dbID sql.NullInt64
-		var parentID sql.NullInt64
-		var rootID sql.NullInt64
-		var idShort sql.NullString
-		var idShortPath string
-		var category sql.NullString
-		var modelType int64
-		var position int
-		var embeddedPayload []byte
-		var supplementalPayload []byte
-		var extensionsPayload []byte
-		var displayNamePayload []byte
-		var descriptionPayload []byte
-		var valuePayload []byte
-		var semanticIDReferredPayload []byte
-		var supplementalSemanticIDsReferredPayload []byte
-		var qualifiersPayload []byte
-		var semanticPayload []byte
-		var semanticVisible bool
-		var valueVisible bool
-
-		scanErr := rows.Scan(
-			&dbID,
-			&parentID,
-			&rootID,
-			&idShort,
-			&idShortPath,
-			&category,
-			&modelType,
-			&position,
-			&embeddedPayload,
-			&supplementalPayload,
-			&extensionsPayload,
-			&displayNamePayload,
-			&descriptionPayload,
-			&valuePayload,
-			&semanticIDReferredPayload,
-			&supplementalSemanticIDsReferredPayload,
-			&qualifiersPayload,
-			&semanticPayload,
-			&semanticVisible,
-			&valueVisible,
-		)
+		row, scanErr := scanLoadedSMERow(rows)
 		if scanErr != nil {
 			return nil, common.NewInternalServerError(errorCodePrefix + "-SCANROW " + scanErr.Error())
 		}
-
-		row := model.SubmodelElementRow{
-			DbID:                            dbID,
-			ParentID:                        parentID,
-			RootID:                          rootID,
-			IDShort:                         idShort,
-			IDShortPath:                     idShortPath,
-			Category:                        category,
-			ModelType:                       modelType,
-			Position:                        position,
-			EmbeddedDataSpecifications:      bytesToRawMessagePtr(embeddedPayload),
-			SupplementalSemanticIDs:         bytesToRawMessagePtr(supplementalPayload),
-			Extensions:                      bytesToRawMessagePtr(extensionsPayload),
-			DisplayNames:                    bytesToRawMessagePtr(displayNamePayload),
-			Descriptions:                    bytesToRawMessagePtr(descriptionPayload),
-			Value:                           bytesToRawMessagePtr(valuePayload),
-			SemanticID:                      nil,
-			SemanticIDReferred:              bytesToRawMessagePtr(semanticIDReferredPayload),
-			SupplementalSemanticIDsReferred: bytesToRawMessagePtr(supplementalSemanticIDsReferredPayload),
-			Qualifiers:                      bytesToRawMessagePtr([]byte("[]")),
-		}
-
-		parsedRows = append(parsedRows, loadedSMERow{row: row, semanticPayload: semanticPayload, qualifiers: qualifiersPayload, semanticVisible: semanticVisible, valueVisible: valueVisible})
+		parsedRows = append(parsedRows, row)
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-ROWSERR " + rowsErr.Error())
@@ -1678,6 +1614,79 @@ func executeLoadedSMERowQuery(
 	}
 
 	return parsedRows, nil
+}
+
+type sqlRowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanLoadedSMERow(scanner sqlRowScanner, leadingTargets ...any) (loadedSMERow, error) {
+	var dbID, parentID, rootID sql.NullInt64
+	var idShort, category sql.NullString
+	var idShortPath string
+	var modelType int64
+	var position int
+	var embeddedPayload, supplementalPayload, extensionsPayload []byte
+	var displayNamePayload, descriptionPayload, valuePayload []byte
+	var semanticIDReferredPayload, supplementalSemanticIDsReferredPayload []byte
+	var qualifiersPayload, semanticPayload []byte
+	var semanticVisible, valueVisible bool
+
+	targets := make([]any, 0, len(leadingTargets)+20)
+	targets = append(targets, leadingTargets...)
+	targets = append(targets,
+		&dbID,
+		&parentID,
+		&rootID,
+		&idShort,
+		&idShortPath,
+		&category,
+		&modelType,
+		&position,
+		&embeddedPayload,
+		&supplementalPayload,
+		&extensionsPayload,
+		&displayNamePayload,
+		&descriptionPayload,
+		&valuePayload,
+		&semanticIDReferredPayload,
+		&supplementalSemanticIDsReferredPayload,
+		&qualifiersPayload,
+		&semanticPayload,
+		&semanticVisible,
+		&valueVisible,
+	)
+	if err := scanner.Scan(targets...); err != nil {
+		return loadedSMERow{}, err
+	}
+
+	row := model.SubmodelElementRow{
+		DbID:                            dbID,
+		ParentID:                        parentID,
+		RootID:                          rootID,
+		IDShort:                         idShort,
+		IDShortPath:                     idShortPath,
+		Category:                        category,
+		ModelType:                       modelType,
+		Position:                        position,
+		EmbeddedDataSpecifications:      bytesToRawMessagePtr(embeddedPayload),
+		SupplementalSemanticIDs:         bytesToRawMessagePtr(supplementalPayload),
+		Extensions:                      bytesToRawMessagePtr(extensionsPayload),
+		DisplayNames:                    bytesToRawMessagePtr(displayNamePayload),
+		Descriptions:                    bytesToRawMessagePtr(descriptionPayload),
+		Value:                           bytesToRawMessagePtr(valuePayload),
+		SemanticIDReferred:              bytesToRawMessagePtr(semanticIDReferredPayload),
+		SupplementalSemanticIDsReferred: bytesToRawMessagePtr(supplementalSemanticIDsReferredPayload),
+		Qualifiers:                      bytesToRawMessagePtr([]byte("[]")),
+	}
+
+	return loadedSMERow{
+		row:             row,
+		semanticPayload: semanticPayload,
+		qualifiers:      qualifiersPayload,
+		semanticVisible: semanticVisible,
+		valueVisible:    valueVisible,
+	}, nil
 }
 
 func hasSMESemanticIDKeyFilter(ctx context.Context) bool {
@@ -1811,8 +1820,8 @@ type loadedSMENode struct {
 	valueVisible bool
 }
 
-func buildSubmodelElementTreeFromRows(db DBQueryer, parsedRows []loadedSMERow, submodelID string, idShortOrPath string) (types.ISubmodelElement, error) {
-	nodes, children, rootNodes, buildNodesErr := buildLoadedSubmodelElementNodes(db, parsedRows, "SMREPO-GETSMEBYPATH")
+func buildSubmodelElementTreeFromRows(ctx context.Context, db DBQueryer, parsedRows []loadedSMERow, submodelID string, idShortOrPath string) (types.ISubmodelElement, error) {
+	nodes, children, rootNodes, buildNodesErr := buildLoadedSubmodelElementNodes(ctx, db, parsedRows, "SMREPO-GETSMEBYPATH")
 	if buildNodesErr != nil {
 		return nil, buildNodesErr
 	}
@@ -1856,6 +1865,9 @@ func attachEntityChildrenByPathFallback(rootNodes []*loadedSMENode) {
 
 	sort.SliceStable(orphanStatements, func(i int, j int) bool {
 		if orphanStatements[i].position == orphanStatements[j].position {
+			if orphanStatements[i].path == orphanStatements[j].path {
+				return orphanStatements[i].id < orphanStatements[j].id
+			}
 			return orphanStatements[i].path < orphanStatements[j].path
 		}
 		return orphanStatements[i].position < orphanStatements[j].position
@@ -1878,8 +1890,8 @@ func isDirectEntityStatementPath(entityPath string, candidatePath string) bool {
 	return false
 }
 
-func buildSubmodelElementForestFromRows(db DBQueryer, parsedRows []loadedSMERow) (map[int64]types.ISubmodelElement, error) {
-	nodes, children, rootNodes, buildNodesErr := buildLoadedSubmodelElementNodes(db, parsedRows, "SMREPO-GETSMES-BUILDFOREST")
+func buildSubmodelElementForestFromRows(ctx context.Context, db DBQueryer, parsedRows []loadedSMERow) (map[int64]types.ISubmodelElement, error) {
+	nodes, children, rootNodes, buildNodesErr := buildLoadedSubmodelElementNodes(ctx, db, parsedRows, "SMREPO-GETSMES-BUILDFOREST")
 	if buildNodesErr != nil {
 		return nil, buildNodesErr
 	}
@@ -1894,7 +1906,7 @@ func buildSubmodelElementForestFromRows(db DBQueryer, parsedRows []loadedSMERow)
 	return result, nil
 }
 
-func buildLoadedSubmodelElementNodes(db DBQueryer, parsedRows []loadedSMERow, errorCodePrefix string) (map[int64]*loadedSMENode, map[int64][]*loadedSMENode, []*loadedSMENode, error) {
+func buildLoadedSubmodelElementNodes(ctx context.Context, db DBQueryer, parsedRows []loadedSMERow, errorCodePrefix string) (map[int64]*loadedSMENode, map[int64][]*loadedSMENode, []*loadedSMENode, error) {
 	nodes := make(map[int64]*loadedSMENode, len(parsedRows))
 	children := make(map[int64][]*loadedSMENode, len(parsedRows))
 	rootNodes := make([]*loadedSMENode, 0, 1)
@@ -1907,7 +1919,7 @@ func buildLoadedSubmodelElementNodes(db DBQueryer, parsedRows []loadedSMERow, er
 			return nil, nil, nil, common.NewInternalServerError(errorCodePrefix + "-NODBID Missing database id for submodel element")
 		}
 
-		element, _, buildErr := builders.BuildSubmodelElement(item.row, nil)
+		element, _, buildErr := builders.BuildSubmodelElement(item.row)
 		if buildErr != nil {
 			return nil, nil, nil, common.NewInternalServerError(errorCodePrefix + "-BUILDELEM " + buildErr.Error())
 		}
@@ -1943,6 +1955,7 @@ func buildLoadedSubmodelElementNodes(db DBQueryer, parsedRows []loadedSMERow, er
 
 	if len(missingSemanticReferenceIDs) > 0 {
 		fallbackSemanticIDs, fallbackErr := getReferencesFromKeyTables(
+			ctx,
 			db,
 			"submodel_element_semantic_id_reference",
 			"submodel_element_semantic_id_reference_key",
@@ -1993,6 +2006,9 @@ func attachLoadedSubmodelElementChildren(children map[int64][]*loadedSMENode, no
 
 		sort.SliceStable(kids, func(i int, j int) bool {
 			if kids[i].position == kids[j].position {
+				if kids[i].path == kids[j].path {
+					return kids[i].id < kids[j].id
+				}
 				return kids[i].path < kids[j].path
 			}
 			return kids[i].position < kids[j].position
@@ -2063,7 +2079,7 @@ func setEntityChildren(parent types.ISubmodelElement, kids []*loadedSMENode) {
 	p.SetStatements(statements)
 }
 
-func getReferencesFromKeyTables(db DBQueryer, referenceTable string, referenceKeyTable string, referenceIDs []int64, errorCodePrefix string) (map[int64]types.IReference, error) {
+func getReferencesFromKeyTables(ctx context.Context, db DBQueryer, referenceTable string, referenceKeyTable string, referenceIDs []int64, errorCodePrefix string) (map[int64]types.IReference, error) {
 	if len(referenceIDs) == 0 {
 		return map[int64]types.IReference{}, nil
 	}
@@ -2080,7 +2096,7 @@ func getReferencesFromKeyTables(db DBQueryer, referenceTable string, referenceKe
 		return nil, common.NewInternalServerError(errorCodePrefix + "-READTYPES-BUILDQ " + typeToSQLErr.Error())
 	}
 
-	typeRows, typeQueryErr := db.Query(typeQuery, typeArgs...)
+	typeRows, typeQueryErr := db.QueryContext(ctx, typeQuery, typeArgs...)
 	if typeQueryErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-READTYPES-EXECQ " + typeQueryErr.Error())
 	}
@@ -2115,7 +2131,7 @@ func getReferencesFromKeyTables(db DBQueryer, referenceTable string, referenceKe
 		return nil, common.NewInternalServerError(errorCodePrefix + "-READKEYS-BUILDQ " + keysToSQLErr.Error())
 	}
 
-	rows, queryErr := db.Query(keysQuery, keyArgs...)
+	rows, queryErr := db.QueryContext(ctx, keysQuery, keyArgs...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-READKEYS-EXECQ " + queryErr.Error())
 	}
