@@ -122,6 +122,60 @@ func TestSerializedClaimArraySupportsQuotedContains(t *testing.T) {
 	}
 }
 
+func TestSerializedClaimArraySupportsElementBoundaryRegex(t *testing.T) {
+	t.Parallel()
+
+	const rawExpression = `{
+		"$regex": [
+			{"$attribute": {"CLAIM": "role"}},
+			{"$strVal": "(^|\\[|,)\\s*\"manager\"\\s*(,|\\])"}
+		]
+	}`
+
+	var expression grammar.LogicalExpression
+	if err := json.Unmarshal([]byte(rawExpression), &expression); err != nil {
+		t.Fatalf("unmarshal regex expression: %v", err)
+	}
+
+	tests := []struct {
+		name  string
+		value any
+		want  grammar.SimplifyDecision
+	}{
+		{name: "only element matches", value: []any{"manager"}, want: grammar.SimplifyTrue},
+		{name: "first element matches", value: []any{"manager", "admin"}, want: grammar.SimplifyTrue},
+		{name: "middle element matches", value: []any{"admin", "manager", "reader"}, want: grammar.SimplifyTrue},
+		{
+			name: "deeply nested array element matches",
+			value: map[string]any{
+				"realm_access": map[string]any{
+					"roles": []any{"admin", "manager"},
+				},
+			},
+			want: grammar.SimplifyTrue,
+		},
+		{name: "missing element does not match", value: []any{"admin", "reader"}, want: grammar.SimplifyFalse},
+		{name: "substring does not match", value: []any{"supermanager"}, want: grammar.SimplifyFalse},
+		{name: "escaped suffix does not match", value: []any{`manager"`}, want: grammar.SimplifyFalse},
+		{name: "object key does not match", value: map[string]any{"manager": false}, want: grammar.SimplifyFalse},
+		{name: "empty array does not match", value: []any{}, want: grammar.SimplifyFalse},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			resolver := func(attribute grammar.AttributeValue) any {
+				return resolveAttributeValue(attribute, Claims{"role": test.value}, nil)
+			}
+			_, decision := expression.SimplifyForBackendFilter(resolver)
+			if decision != test.want {
+				t.Fatalf("SimplifyForBackendFilter() decision = %v, want %v", decision, test.want)
+			}
+		})
+	}
+}
+
 func TestGlobalAttributesForEvaluationProvidesServerTimeWithoutClaims(t *testing.T) {
 	currentTime := time.Date(2026, time.August, 5, 12, 30, 0, 0, time.FixedZone("UTC+2", 2*60*60))
 
