@@ -1176,7 +1176,7 @@ func TestGetSubmodelReferencesReturnsModelReferencesWithSingleSubmodelKey(t *tes
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetSubmodelsWithElementsUsesTwoPageWideSelects(t *testing.T) {
+func TestGetSubmodelsWithElementsUsesThreePageWideSelects(t *testing.T) {
 	t.Parallel()
 
 	db, mock, err := sqlmock.New()
@@ -1239,13 +1239,19 @@ func TestGetSubmodelsWithElementsUsesTwoPageWideSelects(t *testing.T) {
 			[]byte("[]"),
 			[]byte("[]"),
 			[]byte("[]"),
-			[]byte(`{"value":"page-value","value_type":24,"value_id":[],"value_id_referred":[]}`),
+			nil,
 			[]byte("[]"),
 			[]byte("[]"),
 			[]byte("[]"),
 			[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic"}]}`),
 			true,
 			true,
+		),
+	)
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"element_id", "value_payload"}).AddRow(
+			int64(10),
+			[]byte(`{"value":"page-value","value_type":24,"value_id":[],"value_id_referred":[]}`),
 		),
 	)
 	mock.ExpectCommit()

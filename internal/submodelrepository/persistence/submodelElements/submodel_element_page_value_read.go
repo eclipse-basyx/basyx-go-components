@@ -26,61 +26,153 @@
 package submodelelements
 
 import (
+	"context"
+
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-const submodelElementPageValuesCTE = "submodel_element_page_values"
+var submodelElementValueModelTypes = []types.ModelType{
+	types.ModelTypeAnnotatedRelationshipElement,
+	types.ModelTypeBasicEventElement,
+	types.ModelTypeBlob,
+	types.ModelTypeEntity,
+	types.ModelTypeFile,
+	types.ModelTypeSubmodelElementList,
+	types.ModelTypeMultiLanguageProperty,
+	types.ModelTypeOperation,
+	types.ModelTypeProperty,
+	types.ModelTypeRange,
+	types.ModelTypeReferenceElement,
+	types.ModelTypeRelationshipElement,
+}
 
-func buildSubmodelElementPageValueDataset(
-	dialect goqu.DialectWrapper,
+func populateSubmodelElementPageValues(
+	ctx context.Context,
+	db DBQueryer,
+	rows []loadedSMERow,
 	includeBlobValue bool,
-) *goqu.SelectDataset {
-	datasets := buildSubmodelElementPageValueDatasets(dialect, includeBlobValue)
+) error {
+	idsByModelType, visibleIDs := collectSubmodelElementPageValueIDs(rows)
+	if !hasSubmodelElementPageValueIDs(idsByModelType) {
+		return nil
+	}
+
+	query, args, err := buildSubmodelElementPageValueQuery(idsByModelType, visibleIDs, includeBlobValue)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-GETSMEPAGE-VALUES-BUILDQ " + err.Error())
+	}
+	valueRows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-GETSMEPAGE-VALUES-EXECQ " + err.Error())
+	}
+	defer func() { _ = valueRows.Close() }()
+
+	valuesByID := make(map[int64][]byte, len(rows))
+	for valueRows.Next() {
+		var elementID int64
+		var payload []byte
+		if err := valueRows.Scan(&elementID, &payload); err != nil {
+			return common.NewInternalServerError("SMREPO-GETSMEPAGE-VALUES-SCANROW " + err.Error())
+		}
+		valuesByID[elementID] = payload
+	}
+	if err := valueRows.Err(); err != nil {
+		return common.NewInternalServerError("SMREPO-GETSMEPAGE-VALUES-ROWSERR " + err.Error())
+	}
+
+	for index := range rows {
+		if !rows[index].row.DbID.Valid {
+			continue
+		}
+		payload, exists := valuesByID[rows[index].row.DbID.Int64]
+		if exists {
+			rows[index].row.Value = bytesToRawMessagePtr(payload)
+		}
+	}
+	return nil
+}
+
+func collectSubmodelElementPageValueIDs(rows []loadedSMERow) (map[types.ModelType][]int64, []int64) {
+	idsByModelType := make(map[types.ModelType][]int64, len(submodelElementValueModelTypes))
+	visibleIDs := make([]int64, 0, len(rows))
+	for _, item := range rows {
+		if !item.row.DbID.Valid {
+			continue
+		}
+		elementID := item.row.DbID.Int64
+		modelType := types.ModelType(item.row.ModelType)
+		idsByModelType[modelType] = append(idsByModelType[modelType], elementID)
+		if item.valueVisible {
+			visibleIDs = append(visibleIDs, elementID)
+		}
+	}
+	return idsByModelType, visibleIDs
+}
+
+func hasSubmodelElementPageValueIDs(idsByModelType map[types.ModelType][]int64) bool {
+	for _, modelType := range submodelElementValueModelTypes {
+		if len(idsByModelType[modelType]) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func buildSubmodelElementPageValueQuery(
+	idsByModelType map[types.ModelType][]int64,
+	visibleIDs []int64,
+	includeBlobValue bool,
+) (string, []any, error) {
+	dialect := goqu.Dialect(common.Dialect)
+	datasets := buildSubmodelElementPageValueDatasets(dialect, idsByModelType, includeBlobValue)
 	values := datasets[0]
 	for _, dataset := range datasets[1:] {
 		values = values.UnionAll(dataset)
 	}
-	return values
+
+	const valueAlias = "submodel_element_page_value"
+	value := goqu.T(valueAlias)
+	maskedValue := buildMaskedSMEValuePayloadExpr(valueAlias + ".value_payload")
+	query := dialect.From(values.As(valueAlias)).
+		Select(
+			value.Col("element_id"),
+			goqu.Case().
+				When(common.PostgreSQLBigIntArrayContains(value.Col("element_id"), visibleIDs), value.Col("value_payload")).
+				Else(maskedValue),
+		).
+		Prepared(true)
+	return query.ToSQL()
 }
 
 func buildSubmodelElementPageValueDatasets(
 	dialect goqu.DialectWrapper,
+	idsByModelType map[types.ModelType][]int64,
 	includeBlobValue bool,
 ) []*goqu.SelectDataset {
 	return []*goqu.SelectDataset{
-		buildAnnotatedRelationshipPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeAnnotatedRelationshipElement)),
-		buildBasicEventPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeBasicEventElement)),
-		buildBlobPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeBlob), includeBlobValue),
-		buildEntityPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeEntity)),
-		buildFilePageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeFile)),
-		buildSubmodelElementListPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeSubmodelElementList)),
-		buildMultiLanguagePropertyPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeMultiLanguageProperty)),
-		buildOperationPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeOperation), includeBlobValue),
-		buildPropertyPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeProperty)),
-		buildRangePageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeRange)),
-		buildReferenceElementPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeReferenceElement)),
-		buildRelationshipElementPageValues(dialect, selectedSubmodelElementIDs(dialect, types.ModelTypeRelationshipElement)),
+		buildAnnotatedRelationshipPageValues(dialect, idsByModelType[types.ModelTypeAnnotatedRelationshipElement]),
+		buildBasicEventPageValues(dialect, idsByModelType[types.ModelTypeBasicEventElement]),
+		buildBlobPageValues(dialect, idsByModelType[types.ModelTypeBlob], includeBlobValue),
+		buildEntityPageValues(dialect, idsByModelType[types.ModelTypeEntity]),
+		buildFilePageValues(dialect, idsByModelType[types.ModelTypeFile]),
+		buildSubmodelElementListPageValues(dialect, idsByModelType[types.ModelTypeSubmodelElementList]),
+		buildMultiLanguagePropertyPageValues(dialect, idsByModelType[types.ModelTypeMultiLanguageProperty]),
+		buildOperationPageValues(dialect, idsByModelType[types.ModelTypeOperation], includeBlobValue),
+		buildPropertyPageValues(dialect, idsByModelType[types.ModelTypeProperty]),
+		buildRangePageValues(dialect, idsByModelType[types.ModelTypeRange]),
+		buildReferenceElementPageValues(dialect, idsByModelType[types.ModelTypeReferenceElement]),
+		buildRelationshipElementPageValues(dialect, idsByModelType[types.ModelTypeRelationshipElement]),
 	}
-}
-
-func selectedSubmodelElementIDs(
-	dialect goqu.DialectWrapper,
-	modelType types.ModelType,
-) *goqu.SelectDataset {
-	selectedElements := goqu.T("selected_submodel_elements").As("selected_value_element")
-	return dialect.From(selectedElements).
-		Select(selectedElements.Col("element_id")).
-		Where(selectedElements.Col("model_type").Eq(int(modelType)))
 }
 
 func buildSimpleSubmodelElementPageValues(
 	dialect goqu.DialectWrapper,
 	table string,
 	alias string,
-	elementIDs *goqu.SelectDataset,
+	elementIDs []int64,
 	value exp.Expression,
 ) *goqu.SelectDataset {
 	source := goqu.T(table).As(alias)
@@ -89,10 +181,10 @@ func buildSimpleSubmodelElementPageValues(
 			source.Col("id").As("element_id"),
 			exp.NewAliasExpression(value, "value_payload"),
 		).
-		Where(source.Col("id").In(elementIDs))
+		Where(common.PostgreSQLBigIntArrayContains(source.Col("id"), elementIDs))
 }
 
-func buildAnnotatedRelationshipPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildAnnotatedRelationshipPageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const alias = "page_annotated_relationship"
 	source := goqu.T(alias)
 	value := goqu.Func("jsonb_build_object",
@@ -102,7 +194,7 @@ func buildAnnotatedRelationshipPageValues(dialect goqu.DialectWrapper, elementID
 	return buildSimpleSubmodelElementPageValues(dialect, "annotated_relationship_element", alias, elementIDs, value)
 }
 
-func buildBasicEventPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildBasicEventPageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const alias = "page_basic_event"
 	source := goqu.T(alias)
 	value := goqu.Func("jsonb_build_object",
@@ -118,7 +210,7 @@ func buildBasicEventPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.Sel
 	return buildSimpleSubmodelElementPageValues(dialect, "basic_event_element", alias, elementIDs, value)
 }
 
-func buildBlobPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset, includeBlobValue bool) *goqu.SelectDataset {
+func buildBlobPageValues(dialect goqu.DialectWrapper, elementIDs []int64, includeBlobValue bool) *goqu.SelectDataset {
 	const alias = "page_blob"
 	source := goqu.T(alias)
 	fields := []interface{}{
@@ -136,7 +228,7 @@ func buildBlobPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDat
 	)
 }
 
-func buildEntityPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildEntityPageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const alias = "page_entity"
 	source := goqu.T(alias)
 	value := goqu.Func("jsonb_build_object",
@@ -147,7 +239,7 @@ func buildEntityPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectD
 	return buildSimpleSubmodelElementPageValues(dialect, "entity_element", alias, elementIDs, value)
 }
 
-func buildFilePageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildFilePageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const alias = "page_file"
 	source := goqu.T(alias)
 	value := goqu.Func("jsonb_build_object",
@@ -157,7 +249,7 @@ func buildFilePageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDat
 	return buildSimpleSubmodelElementPageValues(dialect, "file_element", alias, elementIDs, value)
 }
 
-func buildSubmodelElementListPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildSubmodelElementListPageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const alias = "page_submodel_element_list"
 	source := goqu.T(alias)
 	value := goqu.Func("jsonb_build_object",
@@ -169,7 +261,7 @@ func buildSubmodelElementListPageValues(dialect goqu.DialectWrapper, elementIDs 
 	return buildSimpleSubmodelElementPageValues(dialect, "submodel_element_list", alias, elementIDs, value)
 }
 
-func buildMultiLanguagePropertyPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildMultiLanguagePropertyPageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const (
 		elementAlias = "page_multilanguage_element"
 		payloadAlias = "page_multilanguage_payload"
@@ -191,7 +283,7 @@ func buildMultiLanguagePropertyPageValues(dialect goqu.DialectWrapper, elementID
 			goqu.I(valueAlias+".submodel_element_id").As("element_id"),
 			goqu.Func("jsonb_agg", orderedValue).As("value_payload"),
 		).
-		Where(goqu.I(valueAlias + ".submodel_element_id").In(elementIDs)).
+		Where(common.PostgreSQLBigIntArrayContains(goqu.I(valueAlias+".submodel_element_id"), elementIDs)).
 		GroupBy(goqu.I(valueAlias + ".submodel_element_id"))
 
 	element := goqu.T("submodel_element").As(elementAlias)
@@ -210,10 +302,10 @@ func buildMultiLanguagePropertyPageValues(dialect goqu.DialectWrapper, elementID
 			element.Col("id").As("element_id"),
 			value.As("value_payload"),
 		).
-		Where(element.Col("id").In(elementIDs))
+		Where(common.PostgreSQLBigIntArrayContains(element.Col("id"), elementIDs))
 }
 
-func buildOperationPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset, includeBlobValue bool) *goqu.SelectDataset {
+func buildOperationPageValues(dialect goqu.DialectWrapper, elementIDs []int64, includeBlobValue bool) *goqu.SelectDataset {
 	const alias = "page_operation"
 	return buildSimpleSubmodelElementPageValues(
 		dialect,
@@ -224,7 +316,7 @@ func buildOperationPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.Sele
 	)
 }
 
-func buildPropertyPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildPropertyPageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const (
 		elementAlias = "page_property"
 		payloadAlias = "page_property_payload"
@@ -251,10 +343,10 @@ func buildPropertyPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.Selec
 			element.Col("id").As("element_id"),
 			value.As("value_payload"),
 		).
-		Where(element.Col("id").In(elementIDs))
+		Where(common.PostgreSQLBigIntArrayContains(element.Col("id"), elementIDs))
 }
 
-func buildRangePageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildRangePageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const alias = "page_range"
 	source := goqu.T(alias)
 	value := goqu.Func("jsonb_build_object",
@@ -277,7 +369,7 @@ func buildRangePageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDa
 	return buildSimpleSubmodelElementPageValues(dialect, "range_element", alias, elementIDs, value)
 }
 
-func buildReferenceElementPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildReferenceElementPageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const alias = "page_reference"
 	source := goqu.T(alias)
 	return buildSimpleSubmodelElementPageValues(
@@ -289,7 +381,7 @@ func buildReferenceElementPageValues(dialect goqu.DialectWrapper, elementIDs *go
 	)
 }
 
-func buildRelationshipElementPageValues(dialect goqu.DialectWrapper, elementIDs *goqu.SelectDataset) *goqu.SelectDataset {
+func buildRelationshipElementPageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu.SelectDataset {
 	const alias = "page_relationship"
 	source := goqu.T(alias)
 	value := goqu.Func("jsonb_build_object",
