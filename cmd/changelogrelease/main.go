@@ -187,7 +187,7 @@ func writeResult(result commandResult, stdout io.Writer) error {
 	if err := os.MkdirAll(filepath.Dir(cleanPath), 0o750); err != nil {
 		return fmt.Errorf("CHLOG-MAIN-CREATEDIR: failed to create output directory for %s: %w", cleanPath, err)
 	}
-	if err := os.WriteFile(cleanPath, result.content, 0o644); err != nil {
+	if err := os.WriteFile(cleanPath, result.content, 0o600); err != nil {
 		return fmt.Errorf("CHLOG-MAIN-WRITEFILE: failed to write %s: %w", cleanPath, err)
 	}
 	return nil

@@ -77,7 +77,7 @@ func TestRunPrepare(t *testing.T) {
 	}, &stdout, &stderr)
 	require.Equal(t, 0, exitCode, stderr.String())
 
-	prepared, err := os.ReadFile(outputPath)
+	prepared, err := os.ReadFile(outputPath) // #nosec G304 -- outputPath is created under t.TempDir by this test.
 	require.NoError(t, err)
 	require.Contains(t, string(prepared), "## v1.0.10")
 	require.Empty(t, stdout.String())
