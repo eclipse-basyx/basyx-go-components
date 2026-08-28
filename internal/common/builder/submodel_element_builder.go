@@ -26,7 +26,7 @@
 package builder
 
 import (
-	"database/sql"
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -39,7 +39,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
-	"golang.org/x/sync/errgroup"
 )
 
 // SubmodelElementBuilder encapsulates the database ID and the constructed SubmodelElement,
@@ -49,37 +48,18 @@ type SubmodelElementBuilder struct {
 	SubmodelElement types.ISubmodelElement
 }
 
-// Channels for parallel processing
-type semanticIDResult struct {
-	semanticID types.IReference
-}
-type descriptionResult struct {
-	descriptions []types.ILangStringTextType
-}
-type displayNameResult struct {
-	displayNames []types.ILangStringNameType
-}
-type embeddedDataSpecResult struct {
-	eds []types.IEmbeddedDataSpecification
-}
-type supplementalSemanticIDsResult struct {
-	supplementalSemanticIDs []types.IReference
-}
-type qualifiersResult struct {
-	qualifiers []types.IQualifier
-}
-type extensionsResult struct {
-	extensions []types.IExtension
+type submodelElementMetadata struct {
+	semanticID                 types.IReference
+	descriptions               []types.ILangStringTextType
+	displayNames               []types.ILangStringNameType
+	embeddedDataSpecifications []types.IEmbeddedDataSpecification
+	supplementalSemanticIDs    []types.IReference
+	qualifiers                 []types.IQualifier
+	extensions                 []types.IExtension
 }
 
 // BuildSubmodelElement constructs a SubmodelElement from the provided database row.
-// It parses the row data, builds the appropriate submodel element type, and sets common attributes
-// like IDShort, Category, and ModelType. It also handles parallel parsing of related data such as
-// semantic IDs, descriptions, and qualifiers. Returns the constructed SubmodelElement and a
-// SubmodelElementBuilder for further management.
-// nolint:revive // This method is already refactored and further changes would not improve readability.
-func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.ISubmodelElement, *SubmodelElementBuilder, error) {
-	var g errgroup.Group
+func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelElement, *SubmodelElementBuilder, error) {
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 	var refMutex sync.RWMutex
 	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap, &refMutex)
@@ -100,222 +80,190 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 		specificSME.SetCategory(&smeRow.Category.String)
 	}
 
-	semanticIDChan := make(chan semanticIDResult, 1)
-	descriptionChan := make(chan descriptionResult, 1)
-	displayNameChan := make(chan displayNameResult, 1)
-	embeddedDataSpecChan := make(chan embeddedDataSpecResult, 1)
-	supplementalSemanticIDsChan := make(chan supplementalSemanticIDsResult, 1)
-	qualifiersChan := make(chan qualifiersResult, 1)
-	extensionsChan := make(chan extensionsResult, 1)
-
-	// Parse SemanticID
-	g.Go(func() error {
-		semanticID, err := getSingleReference(smeRow.SemanticID, smeRow.SemanticIDReferred, refBuilderMap, &refMutex)
-		if err != nil {
-			return err
-		}
-		semanticIDChan <- semanticIDResult{semanticID: semanticID}
-		return nil
-	})
-
-	// Parse Descriptions
-	g.Go(func() error {
-		if smeRow.Descriptions != nil {
-			descriptions, err := ParseLangStringTextType(*smeRow.Descriptions)
-			if err != nil {
-				return err
-			}
-			descriptionChan <- descriptionResult{descriptions: descriptions}
-		} else {
-			descriptionChan <- descriptionResult{}
-		}
-		return nil
-	})
-
-	// Parse DisplayNames
-	g.Go(func() error {
-		if smeRow.DisplayNames != nil {
-			displayNames, err := ParseLangStringNameType(*smeRow.DisplayNames)
-			if err != nil {
-				return err
-			}
-			displayNameChan <- displayNameResult{displayNames: displayNames}
-		} else {
-			displayNameChan <- displayNameResult{}
-		}
-		return nil
-	})
-
-	// Parse EmbeddedDataSpecifications
-	g.Go(func() error {
-		if smeRow.EmbeddedDataSpecifications != nil {
-			var edsJsonable []map[string]any
-			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &edsJsonable)
-			var specs []types.IEmbeddedDataSpecification
-			for i, jsonable := range edsJsonable {
-				eds, err := jsonization.EmbeddedDataSpecificationFromJsonable(jsonable)
-				if err != nil {
-					// Log the problematic JSON for debugging
-					jsonBytes, _ := json.Marshal(jsonable)
-					slog.Error("embedded data specification conversion failed", "error.code", "COMMON-BUILDSME-CONVERTEDS", "id_short", smeRow.IDShort.String, "index", i, "error", err)
-					return fmt.Errorf("error converting jsonable to EmbeddedDataSpecification (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
-				}
-				specs = append(specs, eds)
-			}
-			if err != nil {
-				return fmt.Errorf("error unmarshaling embedded data specifications: %w", err)
-			}
-			embeddedDataSpecChan <- embeddedDataSpecResult{eds: specs}
-		} else {
-			embeddedDataSpecChan <- embeddedDataSpecResult{}
-		}
-		return nil
-	})
-
-	// Parse SupplementalSemanticIDs
-	g.Go(func() error {
-		if smeRow.SupplementalSemanticIDs != nil {
-			var supplementalSemanticIDsJsonable []map[string]any
-			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			err := json.Unmarshal(*smeRow.SupplementalSemanticIDs, &supplementalSemanticIDsJsonable)
-			if err != nil {
-				return fmt.Errorf("error unmarshaling supplemental semantic IDs: %w", err)
-			}
-			var supplementalSemanticIDs []types.Reference
-			for i, jsonable := range supplementalSemanticIDsJsonable {
-				ref, err := jsonization.ReferenceFromJsonable(jsonable)
-				if err != nil {
-					// Log the problematic JSON for debugging
-					jsonBytes, _ := json.Marshal(jsonable)
-					slog.Error("supplemental semantic ID conversion failed", "error.code", "COMMON-BUILDSME-CONVERTSUPPLEMENTALID", "id_short", smeRow.IDShort.String, "index", i, "error", err)
-					return fmt.Errorf("error converting jsonable to Reference (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
-				}
-				supplementalSemanticIDs = append(supplementalSemanticIDs, *ref.(*types.Reference))
-			}
-			iSupplementalSemanticIDs := make([]types.IReference, len(supplementalSemanticIDs))
-			for i, ref := range supplementalSemanticIDs {
-				iSupplementalSemanticIDs[i] = &ref
-			}
-			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{supplementalSemanticIDs: iSupplementalSemanticIDs}
-		} else {
-			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{}
-		}
-		return nil
-	})
-
-	// Parse Extensions
-	g.Go(func() error {
-		if smeRow.Extensions != nil {
-			var extensionsJsonable []map[string]any
-			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			err := json.Unmarshal(*smeRow.Extensions, &extensionsJsonable)
-			var extensions []types.IExtension
-			for i, jsonable := range extensionsJsonable {
-				ext, err := jsonization.ExtensionFromJsonable(jsonable)
-				if err != nil {
-					// Log the problematic JSON for debugging
-					jsonBytes, _ := json.Marshal(jsonable)
-					slog.Error("extension conversion failed", "error.code", "COMMON-BUILDSME-CONVERTEXTENSION", "id_short", smeRow.IDShort.String, "index", i, "error", err)
-					return fmt.Errorf("error converting jsonable to Extension (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
-				}
-				extensions = append(extensions, ext)
-			}
-			if err != nil {
-				return fmt.Errorf("error unmarshaling extensions: %w", err)
-			}
-			extensionsChan <- extensionsResult{extensions: extensions}
-		} else {
-			extensionsChan <- extensionsResult{}
-		}
-		return nil
-	})
-
-	// Parse Qualifiers
-	g.Go(func() error {
-		if smeRow.Qualifiers != nil {
-			builder := NewQualifiersBuilder()
-			qualifierRows, err := ParseQualifiersRow(*smeRow.Qualifiers)
-			if err != nil {
-				return err
-			}
-			for _, qualifierRow := range qualifierRows {
-				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position, qualifierRow.Kind)
-				if err != nil {
-					return err
-				}
-
-				_, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
-				if err != nil {
-					return err
-				}
-
-				_, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
-				if err != nil {
-					return err
-				}
-
-				_, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
-				if err != nil {
-					return err
-				}
-			}
-			qualifiersChan <- qualifiersResult{qualifiers: builder.Build()}
-		} else {
-			qualifiersChan <- qualifiersResult{}
-		}
-		return nil
-	})
-
-	// Wait for all goroutines to complete
-	if err := g.Wait(); err != nil {
+	metadata, err := parseSubmodelElementMetadata(smeRow, refBuilderMap, &refMutex)
+	if err != nil {
 		return nil, nil, err
 	}
+	applySubmodelElementMetadata(specificSME, metadata)
 
-	// Collect results from channels
-	semIDResult := <-semanticIDChan
-	if semIDResult.semanticID != nil {
-		specificSME.SetSemanticID(semIDResult.semanticID)
-	}
-
-	extResult := <-extensionsChan
-	if len(extResult.extensions) > 0 {
-		specificSME.SetExtensions(extResult.extensions)
-	}
-
-	descResult := <-descriptionChan
-	if len(descResult.descriptions) > 0 {
-		specificSME.SetDescription(descResult.descriptions)
-	}
-
-	displayResult := <-displayNameChan
-	if len(displayResult.displayNames) > 0 {
-		specificSME.SetDisplayName(displayResult.displayNames)
-	}
-
-	edsResult := <-embeddedDataSpecChan
-	if len(edsResult.eds) > 0 {
-		specificSME.SetEmbeddedDataSpecifications(edsResult.eds)
-	}
-
-	supplResult := <-supplementalSemanticIDsChan
-
-	qualResult := <-qualifiersChan
-	if len(qualResult.qualifiers) > 0 {
-		specificSME.SetQualifiers(qualResult.qualifiers)
-	}
-
-	// Build nested structure for references
 	for _, refBuilder := range refBuilderMap {
 		refBuilder.BuildNestedStructure()
 	}
 
-	// Set supplemental semantic IDs if present
-	if len(supplResult.supplementalSemanticIDs) > 0 {
-		specificSME.SetSupplementalSemanticIDs(supplResult.supplementalSemanticIDs)
-	}
-
 	return specificSME, &SubmodelElementBuilder{DatabaseID: int(smeRow.DbID.Int64), SubmodelElement: specificSME}, nil
+}
+
+func parseSubmodelElementMetadata(
+	smeRow model.SubmodelElementRow,
+	refBuilderMap map[int64]*ReferenceBuilder,
+	refMutex *sync.RWMutex,
+) (submodelElementMetadata, error) {
+	metadata := submodelElementMetadata{}
+	var err error
+	metadata.semanticID, err = getSingleReference(smeRow.SemanticID, smeRow.SemanticIDReferred, refBuilderMap, refMutex)
+	if err != nil {
+		return metadata, err
+	}
+	metadata.descriptions, err = parseSubmodelElementDescriptions(smeRow.Descriptions)
+	if err != nil {
+		return metadata, err
+	}
+	metadata.displayNames, err = parseSubmodelElementDisplayNames(smeRow.DisplayNames)
+	if err != nil {
+		return metadata, err
+	}
+	metadata.embeddedDataSpecifications, err = parseSubmodelElementEmbeddedDataSpecifications(smeRow)
+	if err != nil {
+		return metadata, err
+	}
+	metadata.supplementalSemanticIDs, err = parseSubmodelElementSupplementalSemanticIDs(smeRow)
+	if err != nil {
+		return metadata, err
+	}
+	metadata.extensions, err = parseSubmodelElementExtensions(smeRow)
+	if err != nil {
+		return metadata, err
+	}
+	metadata.qualifiers, err = parseSubmodelElementQualifiers(smeRow.Qualifiers)
+	return metadata, err
+}
+
+func applySubmodelElementMetadata(element types.ISubmodelElement, metadata submodelElementMetadata) {
+	if metadata.semanticID != nil {
+		element.SetSemanticID(metadata.semanticID)
+	}
+	if len(metadata.extensions) > 0 {
+		element.SetExtensions(metadata.extensions)
+	}
+	if len(metadata.descriptions) > 0 {
+		element.SetDescription(metadata.descriptions)
+	}
+	if len(metadata.displayNames) > 0 {
+		element.SetDisplayName(metadata.displayNames)
+	}
+	if len(metadata.embeddedDataSpecifications) > 0 {
+		element.SetEmbeddedDataSpecifications(metadata.embeddedDataSpecifications)
+	}
+	if len(metadata.qualifiers) > 0 {
+		element.SetQualifiers(metadata.qualifiers)
+	}
+	if len(metadata.supplementalSemanticIDs) > 0 {
+		element.SetSupplementalSemanticIDs(metadata.supplementalSemanticIDs)
+	}
+}
+
+func parseSubmodelElementDescriptions(payload *json.RawMessage) ([]types.ILangStringTextType, error) {
+	if !jsonArrayHasItems(payload) {
+		return nil, nil
+	}
+	return ParseLangStringTextType(*payload)
+}
+
+func parseSubmodelElementDisplayNames(payload *json.RawMessage) ([]types.ILangStringNameType, error) {
+	if !jsonArrayHasItems(payload) {
+		return nil, nil
+	}
+	return ParseLangStringNameType(*payload)
+}
+
+func parseSubmodelElementEmbeddedDataSpecifications(smeRow model.SubmodelElementRow) ([]types.IEmbeddedDataSpecification, error) {
+	if !jsonArrayHasItems(smeRow.EmbeddedDataSpecifications) {
+		return nil, nil
+	}
+	jsonAPI := jsoniter.ConfigCompatibleWithStandardLibrary
+	var jsonableValues []map[string]any
+	if err := jsonAPI.Unmarshal(*smeRow.EmbeddedDataSpecifications, &jsonableValues); err != nil {
+		return nil, fmt.Errorf("error unmarshaling embedded data specifications: %w", err)
+	}
+	result := make([]types.IEmbeddedDataSpecification, 0, len(jsonableValues))
+	for index, jsonableValue := range jsonableValues {
+		value, err := jsonization.EmbeddedDataSpecificationFromJsonable(jsonableValue)
+		if err != nil {
+			jsonBytes, _ := jsonAPI.Marshal(jsonableValue)
+			slog.Error("embedded data specification conversion failed", "error.code", "COMMON-BUILDSME-CONVERTEDS", "id_short", smeRow.IDShort.String, "index", index, "error", err)
+			return nil, fmt.Errorf("error converting jsonable to EmbeddedDataSpecification (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, index, string(jsonBytes), err)
+		}
+		result = append(result, value)
+	}
+	return result, nil
+}
+
+func parseSubmodelElementSupplementalSemanticIDs(smeRow model.SubmodelElementRow) ([]types.IReference, error) {
+	if !jsonArrayHasItems(smeRow.SupplementalSemanticIDs) {
+		return nil, nil
+	}
+	jsonAPI := jsoniter.ConfigCompatibleWithStandardLibrary
+	var jsonableValues []map[string]any
+	if err := jsonAPI.Unmarshal(*smeRow.SupplementalSemanticIDs, &jsonableValues); err != nil {
+		return nil, fmt.Errorf("error unmarshaling supplemental semantic IDs: %w", err)
+	}
+	result := make([]types.IReference, 0, len(jsonableValues))
+	for index, jsonableValue := range jsonableValues {
+		value, err := jsonization.ReferenceFromJsonable(jsonableValue)
+		if err != nil {
+			jsonBytes, _ := jsonAPI.Marshal(jsonableValue)
+			slog.Error("supplemental semantic ID conversion failed", "error.code", "COMMON-BUILDSME-CONVERTSUPPLEMENTALID", "id_short", smeRow.IDShort.String, "index", index, "error", err)
+			return nil, fmt.Errorf("error converting jsonable to Reference (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, index, string(jsonBytes), err)
+		}
+		result = append(result, value)
+	}
+	return result, nil
+}
+
+func parseSubmodelElementExtensions(smeRow model.SubmodelElementRow) ([]types.IExtension, error) {
+	if !jsonArrayHasItems(smeRow.Extensions) {
+		return nil, nil
+	}
+	jsonAPI := jsoniter.ConfigCompatibleWithStandardLibrary
+	var jsonableValues []map[string]any
+	if err := jsonAPI.Unmarshal(*smeRow.Extensions, &jsonableValues); err != nil {
+		return nil, fmt.Errorf("error unmarshaling extensions: %w", err)
+	}
+	result := make([]types.IExtension, 0, len(jsonableValues))
+	for index, jsonableValue := range jsonableValues {
+		value, err := jsonization.ExtensionFromJsonable(jsonableValue)
+		if err != nil {
+			jsonBytes, _ := jsonAPI.Marshal(jsonableValue)
+			slog.Error("extension conversion failed", "error.code", "COMMON-BUILDSME-CONVERTEXTENSION", "id_short", smeRow.IDShort.String, "index", index, "error", err)
+			return nil, fmt.Errorf("error converting jsonable to Extension (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, index, string(jsonBytes), err)
+		}
+		result = append(result, value)
+	}
+	return result, nil
+}
+
+func parseSubmodelElementQualifiers(payload *json.RawMessage) ([]types.IQualifier, error) {
+	if !jsonArrayHasItems(payload) {
+		return nil, nil
+	}
+	builder := NewQualifiersBuilder()
+	qualifierRows, err := ParseQualifiersRow(*payload)
+	if err != nil {
+		return nil, err
+	}
+	for _, qualifierRow := range qualifierRows {
+		if _, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position, qualifierRow.Kind); err != nil {
+			return nil, err
+		}
+		if _, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences); err != nil {
+			return nil, err
+		}
+		if _, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences); err != nil {
+			return nil, err
+		}
+		if _, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences); err != nil {
+			return nil, err
+		}
+	}
+	return builder.Build(), nil
+}
+
+func jsonArrayHasItems(payload *json.RawMessage) bool {
+	if payload == nil {
+		return false
+	}
+	trimmed := bytes.TrimSpace(*payload)
+	return len(trimmed) > 0 && !bytes.Equal(trimmed, []byte("[]")) && !bytes.Equal(trimmed, []byte("null"))
 }
 
 // getSubmodelElementObjectBasedOnModelType determines the specific SubmodelElement type

@@ -29,6 +29,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -44,6 +45,25 @@ import (
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 )
+
+type submodelPageElementsError struct {
+	err error
+}
+
+func (e submodelPageElementsError) Error() string {
+	return e.err.Error()
+}
+
+func (e submodelPageElementsError) Unwrap() error {
+	return e.err
+}
+
+// IsSubmodelPageElementsError reports whether a compound page read failed
+// while loading SME trees rather than while selecting Submodels.
+func IsSubmodelPageElementsError(err error) bool {
+	var target submodelPageElementsError
+	return errors.As(err, &target)
+}
 
 // GetSubmodelByID retrieves a submodel by identifier and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifier string, level string, metadataOnly bool, includeBlobValue bool) (types.ISubmodel, error) {
@@ -78,25 +98,116 @@ func (s *SubmodelDatabase) GetSubmodelsByListFilters(ctx context.Context, limit 
 	return s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, createdFrom, updatedFrom)
 }
 
+// GetSubmodelsWithElementsByListFilters reads a Submodel page and its element
+// trees from one stable snapshot without per-Submodel database calls.
+func (s *SubmodelDatabase) GetSubmodelsWithElementsByListFilters(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+	idShort string,
+	semanticID string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+	level string,
+	includeBlobValue bool,
+) ([]types.ISubmodel, string, error) {
+	var result []types.ISubmodel
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(
+		ctx,
+		s.readDB(ctx),
+		"SMREPO-GETSMSWITHELEMS-STARTTX",
+		"SMREPO-GETSMSWITHELEMS-COMMIT",
+		func(tx *sql.Tx) error {
+			databaseIDs := make([]int64, 0)
+			var txErr error
+			result, nextCursor, txErr = s.getSubmodelsWithOptionalFiltersWithQueryer(
+				ctx,
+				tx,
+				limit,
+				cursor,
+				"",
+				idShort,
+				semanticID,
+				createdFrom,
+				updatedFrom,
+				&databaseIDs,
+			)
+			if txErr != nil {
+				return txErr
+			}
+
+			elements, txErr := submodelelements.GetSubmodelElementsBySubmodelDatabaseIDsTx(
+				ctx,
+				tx,
+				databaseIDs,
+				includeBlobValue,
+				level,
+			)
+			if txErr != nil {
+				return submodelPageElementsError{err: txErr}
+			}
+			if len(result) != len(databaseIDs) {
+				return common.NewInternalServerError("SMREPO-GETSMSWITHELEMS-PAGEMISMATCH Submodel and database id counts differ")
+			}
+			for index, submodel := range result {
+				submodel.SetSubmodelElements(elements[databaseIDs[index]])
+			}
+			return nil
+		},
+	)
+	return result, nextCursor, err
+}
+
 // GetSubmodelReferences retrieves references and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, idShort string, semanticID string) ([]types.IReference, string, error) {
-	submodels, nextCursor, err := s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, time.Time{}, time.Time{})
-	if err != nil {
-		return nil, "", err
+	selectDS := submodelqueries.SelectSubmodelIdentifierDataset(idShort, limit, cursor)
+	selectDS = submodelqueries.ApplySubmodelSemanticIDFilter(selectDS, semanticID)
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter != nil && queryFilter.Formula != nil {
+		collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-BADCOLLECTOR " + err.Error())
+		}
+		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-ABACFORMULA " + err.Error())
+		}
 	}
 
-	references := make([]types.IReference, 0, len(submodels))
-	for _, submodel := range submodels {
-		if submodel == nil {
-			return nil, "", common.NewInternalServerError("SMREPO-GETSMREF-NILSUBMODEL loaded submodel is nil")
-		}
+	query, args, err := selectDS.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-BUILDQ " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-EXECQ " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
 
-		reference, referenceErr := buildSubmodelModelReference(submodel.ID())
+	pageLimit := limit
+	if pageLimit == 0 {
+		pageLimit = 100
+	}
+	references := make([]types.IReference, 0)
+	nextCursor := ""
+	for rows.Next() {
+		var identifier string
+		if err := rows.Scan(&identifier); err != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-SCANROW " + err.Error())
+		}
+		if pageLimit > 0 && len(references) == int(pageLimit) {
+			nextCursor = identifier
+			continue
+		}
+		reference, referenceErr := buildSubmodelModelReference(identifier)
 		if referenceErr != nil {
 			return nil, "", referenceErr
 		}
-
 		references = append(references, reference)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-ROWSERR " + err.Error())
 	}
 
 	return references, nextCursor, nil
@@ -123,6 +234,76 @@ func (s *SubmodelDatabase) GetSubmodelReference(ctx context.Context, submodelIde
 	}
 
 	return buildSubmodelModelReference(submodels[0].ID())
+}
+
+// GetAllSubmodelPathsPage reads a flattened path page across visible
+// Submodels in one statement and one stable snapshot.
+func (s *SubmodelDatabase) GetAllSubmodelPathsPage(
+	ctx context.Context,
+	limit int,
+	submodelCursor string,
+	pathCursor string,
+	idShort string,
+	semanticID string,
+	level string,
+) (submodelelements.SubmodelPathPage, error) {
+	if level != "" && level != "core" && level != "deep" {
+		return submodelelements.SubmodelPathPage{}, common.NewErrBadRequest("SMREPO-GETSMEPATHSPAGE-BADLEVEL level must be one of '', 'core', or 'deep'")
+	}
+	dialect := goqu.Dialect(common.Dialect)
+	visibleSubmodels := dialect.From("submodel").
+		Join(goqu.T("submodel_payload"), goqu.On(goqu.Ex{"submodel.id": goqu.I("submodel_payload.submodel_id")})).
+		Select(
+			goqu.I("submodel.id").As("submodel_id"),
+			goqu.I("submodel.submodel_identifier").As("submodel_identifier"),
+		)
+	if idShort != "" {
+		visibleSubmodels = visibleSubmodels.Where(goqu.Ex{"submodel.id_short": idShort})
+	}
+	visibleSubmodels = submodelqueries.ApplySubmodelSemanticIDFilter(visibleSubmodels, semanticID)
+	if submodelCursor != "" {
+		cursorExists := dialect.From(goqu.T("submodel").As("cursor_submodel")).
+			Select(goqu.L("1")).
+			Where(goqu.I("cursor_submodel.submodel_identifier").Eq(submodelCursor))
+		visibleSubmodels = visibleSubmodels.Where(
+			goqu.Func("EXISTS", cursorExists),
+			goqu.I("submodel.submodel_identifier").Gte(submodelCursor),
+		)
+	}
+
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter != nil && queryFilter.Formula != nil {
+		collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+		if err != nil {
+			return submodelelements.SubmodelPathPage{}, common.NewInternalServerError("SMREPO-GETALLSMPATH-BADCOLLECTOR " + err.Error())
+		}
+		visibleSubmodels, err = auth.AddFormulaQueryFromContext(ctx, visibleSubmodels, collector)
+		if err != nil {
+			return submodelelements.SubmodelPathPage{}, common.NewInternalServerError("SMREPO-GETALLSMPATH-ABACFORMULA " + err.Error())
+		}
+	}
+
+	var result submodelelements.SubmodelPathPage
+	err := common.ExecuteInReadTransaction(
+		ctx,
+		s.readDB(ctx),
+		"SMREPO-GETALLSMPATH-STARTTX",
+		"SMREPO-GETALLSMPATH-COMMIT",
+		func(tx *sql.Tx) error {
+			var txErr error
+			result, txErr = submodelelements.GetAllSubmodelElementPathsPageTx(
+				ctx,
+				tx,
+				visibleSubmodels,
+				limit,
+				submodelCursor,
+				pathCursor,
+				level,
+			)
+			return txErr
+		},
+	)
+	return result, err
 }
 
 func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string, level string, metadataOnly bool, includeBlobValue bool) (types.ISubmodel, error) {
@@ -235,21 +416,21 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
 	if !hasFragmentFilterPrefix(ctx, "$sm#semanticId.keys") &&
 		!hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds") {
-		return s.getSubmodelsWithOptionalFiltersWithQueryer(ctx, s.readDB(ctx), limit, cursor, submodelIdentifier, idShort, semanticID, createdFrom, updatedFrom)
+		return s.getSubmodelsWithOptionalFiltersWithQueryer(ctx, s.readDB(ctx), limit, cursor, submodelIdentifier, idShort, semanticID, createdFrom, updatedFrom, nil)
 	}
 
 	var result []types.ISubmodel
 	var nextCursor string
 	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMS-STARTTX", "SMREPO-GETSMS-COMMIT", func(tx *sql.Tx) error {
 		var txErr error
-		result, nextCursor, txErr = s.getSubmodelsWithOptionalFiltersWithQueryer(ctx, tx, limit, cursor, submodelIdentifier, idShort, semanticID, createdFrom, updatedFrom)
+		result, nextCursor, txErr = s.getSubmodelsWithOptionalFiltersWithQueryer(ctx, tx, limit, cursor, submodelIdentifier, idShort, semanticID, createdFrom, updatedFrom, nil)
 		return txErr
 	})
 	return result, nextCursor, err
 }
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
-func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx context.Context, db descriptors.DBQueryer, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
+func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx context.Context, db descriptors.DBQueryer, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time, databaseIDs *[]int64) ([]types.ISubmodel, string, error) {
 	var limitFilter *int32
 
 	if limit == 0 {
@@ -300,6 +481,10 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 	if filterReferenceRows {
 		additionalProjections = append(additionalProjections, goqu.I("submodel.id").As("reference_owner_id"))
 	}
+	if databaseIDs != nil {
+		additionalProjections = append(additionalProjections, goqu.I("submodel.id").As("page_submodel_id"))
+		*databaseIDs = (*databaseIDs)[:0]
+	}
 	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, idShortFilter, limitFilter, cursorFilter, createdFrom, updatedFrom, additionalProjections)
 	if err != nil {
 		return nil, "", err
@@ -328,6 +513,9 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 			outerProjections,
 			goqu.I(dataAlias+"."+semanticIDFlagAlias).As("semantic_id_visible"),
 		)
+	}
+	if databaseIDs != nil {
+		outerProjections = append(outerProjections, goqu.I(dataAlias+".page_submodel_id"))
 	}
 	query, args, err := submodelqueries.BuildSubmodelListSQLWithReferenceOwnerID(
 		selectDS,
@@ -381,6 +569,10 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		if filterSemanticIDKeys {
 			scanTargets = append(scanTargets, &referenceState.semanticIDVisible)
 		}
+		var submodelDatabaseID int64
+		if databaseIDs != nil {
+			scanTargets = append(scanTargets, &submodelDatabaseID)
+		}
 		if err := rows.Scan(scanTargets...); err != nil {
 			return nil, "", err
 		}
@@ -421,6 +613,9 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		}
 
 		submodels = append(submodels, submodel)
+		if databaseIDs != nil {
+			*databaseIDs = append(*databaseIDs, submodelDatabaseID)
+		}
 		if filterReferenceRows {
 			referenceStates = append(referenceStates, referenceState)
 		}
