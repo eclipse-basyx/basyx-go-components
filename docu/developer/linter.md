@@ -17,7 +17,7 @@ The repository script also runs `go vet ./...` after `golangci-lint`.
 To run the linter locally, ensure you have golangci-lint installed. You can install it via:
 ### General
 ```sh
-go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 ```
 ### macOS (Recommended)
 ```sh
