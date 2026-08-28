@@ -1,0 +1,38 @@
+name: Changelog Guard
+
+on:
+  pull_request:
+    paths:
+      - 'CHANGELOG.md'
+      - 'cmd/changelogrelease/**'
+      - 'internal/changelogrelease/**'
+      - '.github/workflows/changelog-guard.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: changelog-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate changelog structure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test changelog automation
+        run: go test -v ./internal/changelogrelease ./cmd/changelogrelease
+
+      - name: Validate changelog
+        run: go run ./cmd/changelogrelease validate --changelog CHANGELOG.md

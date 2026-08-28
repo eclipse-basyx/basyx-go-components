@@ -26,8 +26,54 @@ jobs:
             echo "should-run=false" >> "$GITHUB_OUTPUT"
           fi
 
-  build-and-push:
+  validate-changelog:
     needs: guard
+    if: ${{ needs.guard.outputs.should-run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build validated release description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          go run ./cmd/changelogrelease extract \
+            --version "${RELEASE_TAG}" \
+            --changelog CHANGELOG.md \
+            --output release-changelog.md
+
+          gh release view "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json body \
+            --jq '.body // ""' > existing-release-body.md
+
+          go run ./cmd/changelogrelease compose \
+            --body existing-release-body.md \
+            --changelog release-changelog.md \
+            --output release-body.md
+
+      - name: Upload validated release description
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-description
+          path: release-body.md
+          if-no-files-found: error
+          retention-days: 1
+
+  build-and-push:
+    needs: [guard, validate-changelog]
     if: ${{ needs.guard.outputs.should-run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -322,7 +368,7 @@ jobs:
           echo "Digest: ${{ steps.build.outputs.digest }}"
 
   attach-release-assets:
-    needs: [guard, build-and-push]
+    needs: [guard, validate-changelog, build-and-push]
     if: ${{ needs.guard.outputs.should-run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -335,6 +381,11 @@ jobs:
           pattern: release-sbom-*
           merge-multiple: true
           path: release-assets
+
+      - name: Download validated release description
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-description
 
       - name: Generate release supply-chain manifest
         run: |
@@ -351,6 +402,7 @@ jobs:
       - name: Attach SBOM and manifest assets to release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
+          body_path: release-body.md
           files: |
             release-assets/*.spdx.json
             release-assets/*.cdx.json
