@@ -40,6 +40,7 @@ See the [changelog](CHANGELOG.md) for release changes and upgrade considerations
   - [8. API Usage](#8-api-usage)
   - [9. Contribution Guidelines](#9-contribution-guidelines)
   - [10. Repository Automation](#10-repository-automation)
+    - [Create a Release](#create-a-release)
   - [11. Security \& Supply Chain Verification](#11-security--supply-chain-verification)
   - [12. Troubleshooting \& Error Reference](#12-troubleshooting--error-reference)
   - [13. Glossary of Terms \& Abbreviations](#13-glossary-of-terms--abbreviations)
@@ -345,12 +346,30 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - Run tests and linter before submitting
 - Cover new features with integration tests
 - Document public APIs in OpenAPI YAML files
+- Add a changelog fragment for every notable user-visible or security-related
+  change. Open a draft PR to obtain its number, install the CI version with
+  `go install github.com/miniscruff/changie@v1.26.0`, then run `changie new`.
+- Do not edit `CHANGELOG.md` directly. It is generated from the reviewed files
+  under `.changes/` during a release.
 
 ## 10. Repository Automation
 
 - CI/CD pipelines run tests and linter on each PR
 - Ensure your local environment matches CI versions (see [linter.md](docu/developer/linter.md))
 - Use provided tasks in VSCode or CLI for build/test/lint automation
+
+### Create a Release
+
+1. Open **Actions → Release → Run workflow**.
+2. Enter a new tag such as `v1.0.10`.
+
+The workflow batches the reviewed Changie fragments, commits the generated
+changelog to the current default branch, creates an annotated tag and a draft
+GitHub release, and starts the Docker/SBOM build and vulnerability scan. The
+draft is published automatically only after every release image is built,
+signed, attested, and its SBOM assets are attached. Rerunning the same version
+reconciles incomplete work without creating another release. Repository Actions
+must have permission to push the generated release commit to the default branch.
 
 ## 11. Security & Supply Chain Verification
 

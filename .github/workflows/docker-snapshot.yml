@@ -32,7 +32,7 @@ jobs:
     steps:
       - id: check
         run: |
-          if [[ "${GITHUB_REPOSITORY}" == "eclipse-basyx/basyx-go-components" && "${GITHUB_EVENT_REPOSITORY_FORK}" != "true" ]]; then
+          if [[ "${GITHUB_REPOSITORY}" == "eclipse-basyx/basyx-go-components" ]]; then
             echo "✅ Running in upstream repository"
             echo "should-run=true" >> "$GITHUB_OUTPUT"
           else
@@ -42,7 +42,7 @@ jobs:
 
   build-and-push:
     needs: guard
-    if: >
+    if: >-
       ${{
         needs.guard.outputs.should-run == 'true' &&
         (

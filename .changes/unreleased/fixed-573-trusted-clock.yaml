@@ -1,0 +1,7 @@
+kind: fixed
+body: "`UTCNOW` and `LOCALNOW` now use the trusted server clock instead of same-named JWT claims."
+time: 2026-08-29T08:00:02.000000000+02:00
+custom:
+  Impact: Low
+  PullRequest: 573
+  SecurityImpact: JWT values can no longer control server-time authorization decisions.
