@@ -18,6 +18,10 @@ policy, or deployment; otherwise use `Low`. Always describe the security
 consequence, or enter `None.` when there is none. `CHANGELOG.md` is generated
 during releases and must not be edited directly.
 
+Dependabot pull requests receive `no-changelog` by default. Remove that label
+and add a fragment before merging when a dependency update has a notable
+user-visible or security effect.
+
 ## Related Issue
 
 If this pull request is related to an existing issue, please link that issue using the format `#issue_number`.
