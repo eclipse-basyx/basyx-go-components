@@ -1,7 +1,0 @@
-kind: fixed
-body: ABAC rules containing only `UTCNOW`, `LOCALNOW`, or `CLIENTNOW` now require a `CLAIM`, or `GLOBAL=ANONYMOUS` for intentionally public access.
-time: 2026-08-29T08:00:00.000000000+02:00
-custom:
-  Impact: High
-  PullRequest: 573
-  SecurityImpact: "More restrictive: existing time-only rules no longer grant access."

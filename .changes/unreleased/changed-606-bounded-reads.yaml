@@ -1,7 +1,0 @@
-kind: changed
-body: "AAS Repository, Submodel Repository, and registry `getAll` endpoints now use bounded, set-based database reads whose query count is independent of the requested page size. Pagination, ordering, representations, and filters remain compatible."
-time: 2026-08-29T08:00:07.000000000+02:00
-custom:
-  Impact: Low
-  PullRequest: 606
-  SecurityImpact: Authorization behavior is unchanged; existing ABAC filters and fragment masks remain enforced.

@@ -1,7 +1,0 @@
-kind: changed
-body: "Existing AAS and Submodel `PUT` requests now reconcile only changed persisted rows, preserve unchanged persistence identities and managed binary references, and synchronize registries only when the derived descriptor content changes. Semantic no-op replacements skip the live-model write but still record the acknowledged update when history or WORM evidence is enabled."
-time: 2026-08-29T08:00:05.000000000+02:00
-custom:
-  Impact: Low
-  PullRequest: 591
-  SecurityImpact: Improves audit completeness for acknowledged no-op `PUT` requests; authorization semantics are unchanged.

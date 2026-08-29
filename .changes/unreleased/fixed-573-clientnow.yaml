@@ -1,7 +1,0 @@
-kind: fixed
-body: "`CLIENTNOW` is no longer generated or overwritten by the server and must come from the verified access token. Use `UTCNOW` or `LOCALNOW` when server time is intended."
-time: 2026-08-29T08:00:01.000000000+02:00
-custom:
-  Impact: High
-  PullRequest: 573
-  SecurityImpact: "More restrictive: rules requiring `CLIENTNOW` no longer match without the token claim."
