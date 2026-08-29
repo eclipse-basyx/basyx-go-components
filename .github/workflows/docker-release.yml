@@ -20,7 +20,8 @@ jobs:
     if: ${{ github.repository == 'eclipse-basyx/basyx-go-components' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # GitHub only exposes draft releases to tokens with push access.
+      contents: write
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
       release-tag: ${{ steps.check.outputs.release-tag }}
