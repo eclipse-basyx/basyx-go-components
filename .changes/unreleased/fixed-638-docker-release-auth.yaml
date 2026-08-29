@@ -1,0 +1,7 @@
+kind: fixed
+body: Docker release verification now authenticates every Docker Hub access and avoids redundant multi-platform registry reads that could trigger rate limits.
+time: 2026-08-29T17:13:50.000000000Z
+custom:
+  Impact: Low
+  PullRequest: 638
+  SecurityImpact: Docker Hub credentials remain limited to release jobs and are used only for registry operations; immutable digest, signature, attestation, and image-label verification remain enforced.
