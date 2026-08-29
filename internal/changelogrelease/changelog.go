@@ -469,7 +469,12 @@ func prepareLines(structure changelogStructure, previousTag string, version stri
 		"",
 		fmt.Sprintf("## %s", version),
 		"",
-		fmt.Sprintf("These changes affect upgrades from `%s` to `%s`.", previousTag, version),
+		fmt.Sprintf(
+			"Changes since [%s](https://github.com/eclipse-basyx/basyx-go-components/compare/%s...%s).",
+			previousTag,
+			previousTag,
+			version,
+		),
 		"",
 		tableHeader,
 		tableDelimiter,

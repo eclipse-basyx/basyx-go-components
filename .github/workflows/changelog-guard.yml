@@ -2,11 +2,15 @@ name: Changelog Guard
 
 on:
   pull_request:
+  push:
+    branches: [main]
     paths:
       - 'CHANGELOG.md'
       - 'cmd/changelogrelease/**'
       - 'internal/changelogrelease/**'
       - '.github/workflows/changelog-guard.yml'
+      - '.github/workflows/prepare-release.yml'
+      - '.github/workflows/docker-release.yml'
   workflow_dispatch:
 
 concurrency:

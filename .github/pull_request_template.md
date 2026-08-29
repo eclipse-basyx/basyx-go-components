@@ -4,6 +4,13 @@
 
 Please provide a brief summary of what you have changed in this pull request. Be clear and concise.
 
+## Changelog
+
+Select exactly one option:
+
+- [ ] I added every notable user-visible change to the `Unreleased` section of `CHANGELOG.md`.
+- [ ] This pull request does not require a changelog entry because it has no notable user-visible effect.
+
 ## Related Issue
 
 If this pull request is related to an existing issue, please link that issue using the format `#issue_number`.

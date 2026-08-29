@@ -98,7 +98,7 @@ func TestRunExtractToStandardOutput(t *testing.T) {
 
 ## v1.0.10
 
-These changes affect upgrades from ` + "`v1.0.9`" + ` to ` + "`v1.0.10`" + `.
+Changes since [v1.0.9](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.0.9...v1.0.10).
 
 | Type | Change | Pull request | Security impact |
 | --- | --- | --- | --- |

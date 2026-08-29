@@ -136,7 +136,7 @@ Introduction.
 
 ## v1.0.10
 
-These changes affect upgrades from ` + "`v1.0.9`" + ` to ` + "`v1.0.10`" + `.
+Changes since [v1.0.9](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.0.9...v1.0.10).
 
 | Type | Change | Pull request | Security impact |
 | --- | --- | --- | --- |
@@ -199,7 +199,7 @@ func TestExtract(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, `## Changelog
 
-These changes affect upgrades from `+"`v1.0.9`"+` to `+"`v1.0.10`"+`.
+Changes since [v1.0.9](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.0.9...v1.0.10).
 
 | Type | Change | Pull request | Security impact |
 | --- | --- | --- | --- |
@@ -219,6 +219,16 @@ func TestExtractRejectsMissingVersionOrEmptyRelease(t *testing.T) {
 func TestCompose(t *testing.T) {
 	existing := []byte("Introductory release notes.\n")
 	changelog := []byte("## Changelog\n\n| Type | Change |\n| --- | --- |\n| Bugfix | Fixed. |\n")
+	emptyBody, err := Compose(nil, changelog)
+	require.NoError(t, err)
+	require.Equal(t, `<!-- release-changelog:start -->
+## Changelog
+
+| Type | Change |
+| --- | --- |
+| Bugfix | Fixed. |
+<!-- release-changelog:end -->
+`, string(emptyBody))
 
 	composed, err := Compose(existing, changelog)
 	require.NoError(t, err)

@@ -3,9 +3,15 @@ name: Docker Release Build
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published release tag
+        required: true
+        type: string
 
 concurrency:
-  group: docker-release-${{ github.ref }}
+  group: docker-release-${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 permissions: {}
@@ -13,18 +19,50 @@ permissions: {}
 jobs:
   guard:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
+      release-tag: ${{ steps.check.outputs.release-tag }}
+      published-at: ${{ steps.check.outputs.published-at }}
     steps:
       - id: check
+        env:
+          EVENT_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ github.token }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
+          set -euo pipefail
           if [[ "${GITHUB_REPOSITORY}" == "eclipse-basyx/basyx-go-components" && "${GITHUB_EVENT_REPOSITORY_FORK}" != "true" ]]; then
             echo "✅ Running in upstream repository"
             echo "should-run=true" >> "$GITHUB_OUTPUT"
           else
             echo "⏭️ Skipping build — fork detected (${GITHUB_REPOSITORY})"
             echo "should-run=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          release_tag="${EVENT_RELEASE_TAG:-${INPUT_RELEASE_TAG}}"
+          if [ -z "${release_tag}" ]; then
+            echo "::error title=RELEASE-GUARD-RESOLVETAG::Release tag is missing."
+            exit 1
+          fi
+          if [ "${GITHUB_REF}" != "refs/tags/${release_tag}" ]; then
+            echo "::error title=RELEASE-GUARD-VALIDATEREF::Workflow must run from refs/tags/${release_tag}; found ${GITHUB_REF}."
+            exit 1
+          fi
+
+          published_at=$(gh release view "${release_tag}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json publishedAt \
+            --jq '.publishedAt')
+          if [ -z "${published_at}" ]; then
+            echo "::error title=RELEASE-GUARD-VALIDATERELEASE::Release ${release_tag} is not published."
+            exit 1
+          fi
+
+          echo "release-tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "published-at=${published_at}" >> "${GITHUB_OUTPUT}"
 
   validate-changelog:
     needs: guard
@@ -32,10 +70,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.guard.outputs.release-tag }}
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
@@ -46,7 +86,7 @@ jobs:
       - name: Build validated release description
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ needs.guard.outputs.release-tag }}
         run: |
           set -euo pipefail
           go run ./cmd/changelogrelease extract \
@@ -64,13 +104,9 @@ jobs:
             --changelog release-changelog.md \
             --output release-body.md
 
-      - name: Upload validated release description
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: release-description
-          path: release-body.md
-          if-no-files-found: error
-          retention-days: 1
+          gh release edit "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --notes-file release-body.md
 
   build-and-push:
     needs: [guard, validate-changelog]
@@ -113,6 +149,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.guard.outputs.release-tag }}
           fetch-depth: 0
 
       - name: Set up Docker Buildx
@@ -227,7 +264,7 @@ jobs:
             org.opencontainers.image.vendor=Eclipse BaSyx
             org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/README.md
-            org.opencontainers.image.created=${{ github.event.release.published_at }}
+            org.opencontainers.image.created=${{ needs.guard.outputs.published-at }}
 
       - name: Sign image digest (keyless)
         env:
@@ -382,16 +419,11 @@ jobs:
           merge-multiple: true
           path: release-assets
 
-      - name: Download validated release description
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: release-description
-
       - name: Generate release supply-chain manifest
         run: |
           set -euo pipefail
           jq -s \
-            --arg release "${{ github.ref_name }}" \
+            --arg release "${{ needs.guard.outputs.release-tag }}" \
             --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{
               release: $release,
@@ -402,7 +434,6 @@ jobs:
       - name: Attach SBOM and manifest assets to release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          body_path: release-body.md
           files: |
             release-assets/*.spdx.json
             release-assets/*.cdx.json
