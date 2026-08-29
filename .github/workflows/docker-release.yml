@@ -229,7 +229,7 @@ jobs:
           STAGING_TAG: ${{ steps.meta.outputs.staging-tag }}
         run: |
           set -euo pipefail
-          if digest=$(docker buildx imagetools inspect "${STAGING_TAG}" --format '{{ json .Manifest.Digest }}' 2>/dev/null | jq -r '.'); then
+          if digest=$(docker buildx imagetools inspect "${STAGING_TAG}" --raw 2>/dev/null | sha256sum | awk '{print "sha256:" $1}'); then
             if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
               echo "::error title=DOCKER-RELEASE-VALIDATESTAGE::Invalid digest ${digest} for ${STAGING_TAG}."
               exit 1
@@ -303,18 +303,20 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
-          docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json .Image }}' > /tmp/staged-images.json
+          docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" \
+            --format '{"images":{{ json .Image }},"provenance":{{ json .Provenance }},"sbom":{{ json .SBOM }}}' \
+            > /tmp/staged-inspection.json
           jq -e \
             --arg revision "${RELEASE_COMMIT}" \
             --arg service "${SERVICE}" \
             --arg version "${VERSION}" \
-            'to_entries as $images |
+            '.images | to_entries as $images |
              ($images | length) == 3 and
              all($images[];
                .value.config.Labels["org.opencontainers.image.revision"] == $revision and
                .value.config.Labels["org.opencontainers.image.title"] == $service and
                .value.config.Labels["org.opencontainers.image.version"] == $version)' \
-            /tmp/staged-images.json >/dev/null
+            /tmp/staged-inspection.json >/dev/null
 
       - name: Sign image digest (keyless)
         env:
@@ -324,20 +326,19 @@ jobs:
           cosign sign --yes "${IMAGE_DIGEST_REF}"
 
       - name: Extract BuildKit provenance and SBOM predicates
-        env:
-          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.subject.outputs.digest }}
         run: |
           set -euo pipefail
           mkdir -p predicates
-
-          # Multi-platform images expose per-platform data under .Provenance/.SBOM maps.
-          if ! docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json (index .Provenance "linux/amd64").SLSA }}' > predicates/provenance.buildkit.json 2>/dev/null; then
-            docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json .Provenance.SLSA }}' > predicates/provenance.buildkit.json
-          fi
-
-          if ! docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json (index .SBOM "linux/amd64").SPDX }}' > predicates/sbom.buildkit.spdx.json 2>/dev/null; then
-            docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json .SBOM.SPDX }}' > predicates/sbom.buildkit.spdx.json
-          fi
+          jq '
+            if .provenance["linux/amd64"] then .provenance["linux/amd64"].SLSA
+            else .provenance.SLSA
+            end
+          ' /tmp/staged-inspection.json > predicates/provenance.buildkit.json
+          jq '
+            if .sbom["linux/amd64"] then .sbom["linux/amd64"].SPDX
+            else .sbom.SPDX
+            end
+          ' /tmp/staged-inspection.json > predicates/sbom.buildkit.spdx.json
 
           jq -e 'type == "object" and length > 0' predicates/provenance.buildkit.json >/dev/null
           jq -e 'type == "object" and length > 0' predicates/sbom.buildkit.spdx.json >/dev/null
@@ -412,8 +413,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          syft "${IMAGE_DIGEST_REF}" -o "spdx-json=release-assets/${{ matrix.service.name }}-${{ steps.meta.outputs.version }}.spdx.json"
-          syft "${IMAGE_DIGEST_REF}" -o "cyclonedx-json=release-assets/${{ matrix.service.name }}-${{ steps.meta.outputs.version }}.cdx.json"
+          syft "${IMAGE_DIGEST_REF}" \
+            -o "spdx-json=release-assets/${{ matrix.service.name }}-${{ steps.meta.outputs.version }}.spdx.json" \
+            -o "cyclonedx-json=release-assets/${{ matrix.service.name }}-${{ steps.meta.outputs.version }}.cdx.json"
 
       - name: Write service release metadata
         run: |
@@ -547,6 +549,25 @@ jobs:
         run: |
           set -euo pipefail
           version=${RELEASE_TAG#v}
+
+          resolve_registry_digest() {
+            local reference=$1
+            local manifest_file
+            manifest_file=$(mktemp)
+            local attempt
+            for attempt in 1 2 3; do
+              if docker buildx imagetools inspect "${reference}" --raw > "${manifest_file}"; then
+                printf 'sha256:%s\n' "$(sha256sum "${manifest_file}" | cut -d ' ' -f 1)"
+                return 0
+              fi
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            echo "::error title=DOCKER-RELEASE-RESOLVEDIGEST::Unable to resolve ${reference}." >&2
+            return 1
+          }
+
           images=(
             eclipsebasyx/aasenvironment-go
             eclipsebasyx/aasregistry-go
@@ -601,7 +622,7 @@ jobs:
           for image in "${images[@]}"; do
             expected_digest=$(jq -r --arg image "${image}" '.services[] | select(.image == $image) | .digest' release-assets/release-supply-chain-manifest.json)
             staging_ref="${image}:release-${RELEASE_COMMIT}"
-            staging_digest=$(docker buildx imagetools inspect "${staging_ref}" --format '{{ json .Manifest.Digest }}' | jq -r '.')
+            staging_digest=$(resolve_registry_digest "${staging_ref}")
             if [ "${staging_digest}" != "${expected_digest}" ]; then
               echo "::error title=DOCKER-RELEASE-VALIDATESTAGE::${staging_ref} no longer matches its recorded digest."
               exit 1
@@ -617,24 +638,25 @@ jobs:
             major=${BASH_REMATCH[1]}
             minor=${BASH_REMATCH[2]}
             for image in "${images[@]}"; do
+              expected_digest=$(jq -r --arg image "${image}" '.services[] | select(.image == $image) | .digest' release-assets/release-supply-chain-manifest.json)
               docker buildx imagetools create \
                 --tag "${image}:${major}.${minor}" \
                 --tag "${image}:${major}" \
                 --tag "${image}:latest" \
-                "${image}:${version}"
+                "${image}@${expected_digest}"
             done
           fi
 
           for image in "${images[@]}"; do
             expected_digest=$(jq -r --arg image "${image}" '.services[] | select(.image == $image) | .digest' release-assets/release-supply-chain-manifest.json)
-            final_digest=$(docker buildx imagetools inspect "${image}:${version}" --format '{{ json .Manifest.Digest }}' | jq -r '.')
+            final_digest=$(resolve_registry_digest "${image}:${version}")
             if [ "${final_digest}" != "${expected_digest}" ]; then
               echo "::error title=DOCKER-RELEASE-VERIFYTAG::${image}:${version} does not match its recorded digest."
               exit 1
             fi
             if [ "${PRERELEASE}" != "true" ]; then
               for alias in "${major}.${minor}" "${major}" latest; do
-                alias_digest=$(docker buildx imagetools inspect "${image}:${alias}" --format '{{ json .Manifest.Digest }}' | jq -r '.')
+                alias_digest=$(resolve_registry_digest "${image}:${alias}")
                 if [ "${alias_digest}" != "${expected_digest}" ]; then
                   echo "::error title=DOCKER-RELEASE-VERIFYALIAS::${image}:${alias} does not match ${image}:${version}."
                   exit 1
@@ -678,6 +700,25 @@ jobs:
           RELEASE_TAG: ${{ needs.guard.outputs.release-tag }}
         run: |
           set -euo pipefail
+
+          resolve_registry_digest() {
+            local reference=$1
+            local manifest_file
+            manifest_file=$(mktemp)
+            local attempt
+            for attempt in 1 2 3; do
+              if docker buildx imagetools inspect "${reference}" --raw > "${manifest_file}"; then
+                printf 'sha256:%s\n' "$(sha256sum "${manifest_file}" | cut -d ' ' -f 1)"
+                return 0
+              fi
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            echo "::error title=DOCKER-RELEASE-RESOLVEDIGEST::Unable to resolve ${reference}." >&2
+            return 1
+          }
+
           release_json=$(gh release view "${RELEASE_TAG}" \
             --repo "${GITHUB_REPOSITORY}" \
             --json assets,isDraft)
@@ -712,14 +753,14 @@ jobs:
             "${RELEASE_TAG}"
           while IFS=$'\t' read -r image expected_digest predicate_type; do
             image_digest_ref="${image}@${expected_digest}"
-            actual_digest=$(docker buildx imagetools inspect "${image}:${version}" --format '{{ json .Manifest.Digest }}' | jq -r '.')
+            actual_digest=$(resolve_registry_digest "${image}:${version}")
             if [ "${actual_digest}" != "${expected_digest}" ]; then
               echo "::error title=DOCKER-RELEASE-VERIFYIMAGE::${image}:${version} does not match the release manifest."
               exit 1
             fi
             if [ "${PRERELEASE}" != "true" ]; then
               for alias in "${major}.${minor}" "${major}" latest; do
-                alias_digest=$(docker buildx imagetools inspect "${image}:${alias}" --format '{{ json .Manifest.Digest }}' | jq -r '.')
+                alias_digest=$(resolve_registry_digest "${image}:${alias}")
                 if [ "${alias_digest}" != "${expected_digest}" ]; then
                   echo "::error title=DOCKER-RELEASE-VERIFYALIAS::${image}:${alias} does not match ${image}:${version}."
                   exit 1
@@ -763,6 +804,12 @@ jobs:
         with:
           cosign-release: v2.4.1
 
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
       - name: Verify published release assets and images
         env:
           COSIGN_CERT_IDENTITY: https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/heads/main
@@ -772,6 +819,25 @@ jobs:
           RELEASE_TAG: ${{ needs.guard.outputs.release-tag }}
         run: |
           set -euo pipefail
+
+          resolve_registry_digest() {
+            local reference=$1
+            local manifest_file
+            manifest_file=$(mktemp)
+            local attempt
+            for attempt in 1 2 3; do
+              if docker buildx imagetools inspect "${reference}" --raw > "${manifest_file}"; then
+                printf 'sha256:%s\n' "$(sha256sum "${manifest_file}" | cut -d ' ' -f 1)"
+                return 0
+              fi
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            echo "::error title=DOCKER-RELEASE-RESOLVEDIGEST::Unable to resolve ${reference}." >&2
+            return 1
+          }
+
           temporary_directory=$(mktemp -d)
           gh release download "${RELEASE_TAG}" \
             --repo "${GITHUB_REPOSITORY}" \
@@ -804,14 +870,14 @@ jobs:
             minor=${BASH_REMATCH[2]}
           fi
           while IFS=$'\t' read -r service image expected_digest predicate_type; do
-            actual_digest=$(docker buildx imagetools inspect "${image}:${version}" --format '{{ json .Manifest.Digest }}' | jq -r '.')
+            actual_digest=$(resolve_registry_digest "${image}:${version}")
             if [ "${actual_digest}" != "${expected_digest}" ]; then
               echo "::error title=DOCKER-RELEASE-VERIFYPUBLISHED::${image}:${version} does not match the published manifest."
               exit 1
             fi
             if [ "${PRERELEASE}" != "true" ]; then
               for alias in "${major}.${minor}" "${major}" latest; do
-                alias_digest=$(docker buildx imagetools inspect "${image}:${alias}" --format '{{ json .Manifest.Digest }}' | jq -r '.')
+                alias_digest=$(resolve_registry_digest "${image}:${alias}")
                 if [ "${alias_digest}" != "${expected_digest}" ]; then
                   echo "::error title=DOCKER-RELEASE-VERIFYALIAS::${image}:${alias} does not match ${image}:${version}."
                   exit 1
