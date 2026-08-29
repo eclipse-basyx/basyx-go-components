@@ -1,0 +1,7 @@
+kind: changed
+body: "Anonymous time-based rules can grant access when `GLOBAL=ANONYMOUS` is explicitly configured."
+time: 2026-08-29T08:00:04.000000000+02:00
+custom:
+  Impact: Low
+  PullRequest: 573
+  SecurityImpact: "Potentially broader, but only for policies that explicitly allow anonymous access."

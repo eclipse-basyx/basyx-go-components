@@ -7,7 +7,3 @@ release is created.
 Each entry states whether users need to take action and records the security
 consequence separately. High-impact entries require an API, configuration,
 policy, or deployment update. Low-impact entries do not require migration.
-
-## v1.0.9 (2026-08-04)
-
-See the [v1.0.9 GitHub release](https://github.com/eclipse-basyx/basyx-go-components/releases/tag/v1.0.9).

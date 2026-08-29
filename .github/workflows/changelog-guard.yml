@@ -2,15 +2,20 @@ name: Changelog Guard
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   push:
     branches: [main]
     paths:
+      - '.changie.yaml'
+      - '.changes/**'
       - 'CHANGELOG.md'
-      - 'cmd/changelogrelease/**'
-      - 'internal/changelogrelease/**'
+      - '.github/pull_request_template.md'
       - '.github/workflows/changelog-guard.yml'
       - '.github/workflows/prepare-release.yml'
       - '.github/workflows/docker-release.yml'
+      - '.github/scripts/install-changie.sh'
+      - '.github/scripts/validate-changie-fragments.rb'
+      - '.github/scripts/validate-release-manifest.sh'
   workflow_dispatch:
 
 concurrency:
@@ -22,21 +27,97 @@ permissions:
 
 jobs:
   validate:
-    name: Validate changelog structure
+    name: Validate changelog fragments
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version-file: go.mod
-          cache: true
+          fetch-depth: 0
 
-      - name: Test changelog automation
-        run: go test -v ./internal/changelogrelease ./cmd/changelogrelease
+      - name: Install Changie
+        run: bash .github/scripts/install-changie.sh
 
-      - name: Validate changelog
-        run: go run ./cmd/changelogrelease validate --changelog CHANGELOG.md
+      - name: Require a fragment or an explicit exception
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          changed_files=$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/files" \
+            --jq '.[] | [.filename, .status] | @tsv')
+          has_fragment=false
+          if awk -F '\t' '
+            $2 != "removed" && $1 ~ /^\.changes\/unreleased\/[^/]+\.ya?ml$/ { found=1 }
+            END { exit !found }
+          ' <<< "${changed_files}"; then
+            has_fragment=true
+          fi
+          no_changelog=$(jq -r 'any(.pull_request.labels[]?; .name == "no-changelog")' "${GITHUB_EVENT_PATH}")
+
+          base_sha=$(jq -r '.pull_request.base.sha' "${GITHUB_EVENT_PATH}")
+          if git cat-file -e "${base_sha}:.changie.yaml" 2>/dev/null; then
+            if awk -F '\t' '
+              $1 ~ /^(CHANGELOG\.md|\.changes\/v[^/]+\.md)$/ { found=1 }
+              END { exit !found }
+            ' <<< "${changed_files}"; then
+              echo "::error title=CHLOG-GUARD-PROTECTGENERATED::Do not edit generated changelog files in contributor pull requests; add an unreleased fragment instead."
+              exit 1
+            fi
+            if [ "${has_fragment}" = "true" ]; then
+              matching_fragment=false
+              while IFS=$'\t' read -r fragment status; do
+                if [ "${status}" != "added" ] || [[ ! "${fragment}" =~ ^\.changes/unreleased/[^/]+\.ya?ml$ ]]; then
+                  continue
+                fi
+                fragment_pull_request=$(ruby -ryaml -rdate -e '
+                  begin
+                    fragment = YAML.safe_load(File.read(ARGV.fetch(0)), permitted_classes: [Date, Time], aliases: false)
+                    print fragment.dig("custom", "PullRequest")
+                  rescue Psych::Exception => error
+                    warn "::error title=CHLOG-GUARD-VALIDATEFRAGMENT::#{ARGV.fetch(0)}: #{error.message}"
+                    exit 1
+                  end
+                ' "${fragment}")
+                if [ "${fragment_pull_request}" = "${PULL_REQUEST_NUMBER}" ]; then
+                  matching_fragment=true
+                  break
+                fi
+              done <<< "${changed_files}"
+              if [ "${matching_fragment}" != "true" ]; then
+                echo "::error title=CHLOG-GUARD-MATCHPULLREQUEST::At least one added fragment must name pull request ${PULL_REQUEST_NUMBER}."
+                exit 1
+              fi
+            fi
+          fi
+
+          if [ "${has_fragment}" = "${no_changelog}" ]; then
+            echo "::error title=CHLOG-GUARD-REQUIREENTRY::Add a .changes/unreleased fragment or ask a reviewer to apply the no-changelog label, but not both."
+            exit 1
+          fi
+
+      - name: Validate fragment fields
+        run: ruby .github/scripts/validate-changie-fragments.rb
+
+      - name: Validate and preview unreleased fragments
+        run: |
+          set -euo pipefail
+          if find .changes/unreleased -type f \( -name '*.yaml' -o -name '*.yml' \) -print -quit | grep -q .; then
+            changie batch patch --dry-run --allow-no-changes=false > /tmp/changie-preview.md
+            if grep -Fq '<no value>' /tmp/changie-preview.md; then
+              echo "::error title=CHLOG-GUARD-VALIDATEFRAGMENT::A Changie fragment is missing a required value."
+              exit 1
+            fi
+          fi
+
+      - name: Verify generated changelog
+        run: |
+          set -euo pipefail
+          changie merge --dry-run > /tmp/CHANGELOG.md
+          diff --unified CHANGELOG.md /tmp/CHANGELOG.md

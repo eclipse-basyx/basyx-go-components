@@ -4,219 +4,216 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release tag in vX.Y.Z SemVer format
+        description: Docker-compatible SemVer tag in vX.Y.Z or vX.Y.Z-suffix format
         required: true
         type: string
-  pull_request:
-    types: [closed]
 
 concurrency:
-  group: release-${{ inputs.version || github.event.pull_request.number || github.run_id }}
+  group: release
   cancel-in-progress: false
 
 permissions: {}
 
 jobs:
   prepare:
-    name: Create release pull request
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: Prepare draft release
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       actions: write
       contents: write
-      pull-requests: write
+    outputs:
+      release-tag: ${{ steps.release.outputs.release-tag }}
     steps:
-      - name: Checkout default branch
+      - name: Checkout current default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-        with:
-          go-version-file: go.mod
-          cache: true
+      - name: Install Changie
+        run: bash .github/scripts/install-changie.sh
 
-      - name: Prepare and validate versioned changelog
-        env:
-          RELEASE_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          branch="release/prepare-${RELEASE_VERSION}"
+      - name: Validate changelog fragments
+        run: ruby .github/scripts/validate-changie-fragments.rb
 
-          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
-            echo "::error title=CHLOG-WORKFLOW-CHECKBRANCH::Remote branch ${branch} already exists."
-            exit 1
-          fi
-
-          go test -count=1 ./internal/changelogrelease ./cmd/changelogrelease
-          go run ./cmd/changelogrelease prepare \
-            --version "${RELEASE_VERSION}" \
-            --changelog CHANGELOG.md \
-            --output prepared/CHANGELOG.md
-
-          diff_status=0
-          git diff --no-index --no-ext-diff -- CHANGELOG.md prepared/CHANGELOG.md > prepared/CHANGELOG.diff || diff_status=$?
-          if [ "${diff_status}" -gt 1 ]; then
-            echo "::error title=CHLOG-WORKFLOW-GENDIFF::Failed to generate the changelog preview."
-            exit "${diff_status}"
-          fi
-
-          cp prepared/CHANGELOG.md CHANGELOG.md
-          go run ./cmd/changelogrelease validate --changelog CHANGELOG.md
-          if git diff --quiet -- CHANGELOG.md; then
-            echo "::error title=CHLOG-WORKFLOW-VALIDATECHANGE::Prepared changelog contains no changes."
-            exit 1
-          fi
-
-          {
-            echo "## Release ${RELEASE_VERSION}"
-            echo
-            echo "A pull request will be opened. Merging it publishes the GitHub release and starts the Docker release build."
-            echo
-            echo '```diff'
-            cat prepared/CHANGELOG.diff
-            echo '```'
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch --create "${branch}"
-          git add CHANGELOG.md
-          git commit --message "Prepare ${RELEASE_VERSION} changelog"
-          git push origin "HEAD:refs/heads/${branch}"
-
-      - name: Open release pull request
+      - name: Prepare or resume release commit
+        id: release
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          branch="release/prepare-${RELEASE_VERSION}"
-          pr_url=$(gh pr create \
-            --base "${DEFAULT_BRANCH}" \
-            --head "${branch}" \
-            --title "Release ${RELEASE_VERSION}" \
-            --body "Versions the current Unreleased changelog section for ${RELEASE_VERSION}. Merging this pull request automatically creates the tag and GitHub release, adds the changelog to the release description, and starts the Docker release build.")
-
-          gh workflow run changelog-guard.yml --ref "${branch}"
-          echo "Release pull request: ${pr_url}" >> "${GITHUB_STEP_SUMMARY}"
-
-  publish:
-    name: Publish merged release
-    if: >-
-      ${{
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.merged == true &&
-        github.event.pull_request.user.login == 'github-actions[bot]' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        startsWith(github.event.pull_request.head.ref, 'release/prepare-v')
-      }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      actions: write
-      contents: write
-      pull-requests: read
-    steps:
-      - name: Verify release pull request scope
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          mapfile -t changed_files < <(
-            gh api --paginate \
-              "repos/${GITHUB_REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/files" \
-              --jq '.[].filename'
-          )
-          if [ "${#changed_files[@]}" -ne 1 ] || [ "${changed_files[0]}" != "CHANGELOG.md" ]; then
-            echo "::error title=CHLOG-PUBLISH-VALIDATESCOPE::Release pull request must change only CHANGELOG.md."
-            printf 'Changed file: %s\n' "${changed_files[@]}"
+          if [ "${GITHUB_REF}" != "refs/heads/${DEFAULT_BRANCH}" ]; then
+            echo "::error title=RELEASE-PREP-VALIDATEREF::Run the Release workflow from the current default branch ${DEFAULT_BRANCH}."
+            exit 1
+          fi
+          if [[ ! "${RELEASE_VERSION}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error title=RELEASE-PREP-VALIDATEVERSION::Version must use vX.Y.Z or vX.Y.Z-suffix without leading zeroes."
             exit 1
           fi
 
-      - name: Checkout merged release commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-          fetch-depth: 0
+          git fetch --force origin \
+            "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}" \
+            "+refs/tags/*:refs/tags/*"
+          base_commit=$(git rev-parse HEAD)
+          version_file=".changes/${RELEASE_VERSION}.md"
+          is_prerelease=false
+          if [[ "${RELEASE_VERSION}" == *-* ]]; then
+            is_prerelease=true
+          fi
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-        with:
-          go-version-file: go.mod
-          cache: true
+          version_check=$(mktemp -d)
+          mkdir -p "${version_check}/.changes/unreleased"
+          {
+            echo 'changesDir: .changes'
+            echo 'unreleasedDir: unreleased'
+            echo 'changelogPath: CHANGELOG.md'
+            echo 'versionExt: md'
+          } > "${version_check}/.changie.yaml"
+          : > "${version_check}/CHANGELOG.md"
+          while IFS= read -r tag; do
+            if [[ "${tag}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+              if [ "${is_prerelease}" = "true" ] || [[ "${tag}" != *-* ]]; then
+                : > "${version_check}/.changes/${tag}.md"
+              fi
+            fi
+          done < <(git tag --list)
+          : > "${version_check}/.changes/${RELEASE_VERSION}.md"
+          newest_version=$(cd "${version_check}" && changie latest)
+          if [ "${newest_version}" != "${RELEASE_VERSION}" ]; then
+            echo "::error title=RELEASE-PREP-COMPAREVERSION::${RELEASE_VERSION} is not newer than existing release tag ${newest_version}."
+            exit 1
+          fi
 
-      - name: Validate and render release notes
-        env:
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          set -euo pipefail
-          release_version="${HEAD_BRANCH#release/prepare-}"
-          go run ./cmd/changelogrelease extract \
-            --version "${release_version}" \
-            --changelog CHANGELOG.md \
-            --output release-notes.md
-          go run ./cmd/changelogrelease compose \
-            --body /dev/null \
-            --changelog release-notes.md \
-            --output release-body.md
-          echo "RELEASE_VERSION=${release_version}" >> "${GITHUB_ENV}"
+          if [ -f "${version_file}" ]; then
+            release_commit=$(git log --diff-filter=A --format=%H -1 -- "${version_file}")
+            if [ -z "${release_commit}" ]; then
+              echo "::error title=RELEASE-PREP-FINDCOMMIT::Could not identify the commit that added ${version_file}."
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "${release_commit}" "origin/${DEFAULT_BRANCH}"; then
+              echo "::error title=RELEASE-PREP-VALIDATECOMMIT::Existing release commit is not on ${DEFAULT_BRANCH}."
+              exit 1
+            fi
+            echo "Resuming ${RELEASE_VERSION} from ${release_commit}."
+          else
+            if git show-ref --verify --quiet "refs/tags/${RELEASE_VERSION}"; then
+              echo "::error title=RELEASE-PREP-VALIDATESTATE::Tag ${RELEASE_VERSION} exists without ${version_file} on ${DEFAULT_BRANCH}."
+              exit 1
+            fi
+            changie batch "${RELEASE_VERSION}" --allow-no-changes=false
+            changie merge
+            if grep -Fq '<no value>' "${version_file}"; then
+              echo "::error title=RELEASE-PREP-VALIDATEFRAGMENTS::Release notes contain an incomplete Changie fragment."
+              exit 1
+            fi
 
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
-        run: |
-          set -euo pipefail
-          if git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_VERSION}" >/dev/null 2>&1; then
+            while IFS= read -r changed_file; do
+              case "${changed_file}" in
+                CHANGELOG.md|"${version_file}"|.changes/unreleased/*) ;;
+                *)
+                  echo "::error title=RELEASE-PREP-VALIDATESCOPE::Unexpected generated file ${changed_file}."
+                  exit 1
+                  ;;
+              esac
+            done < <(git status --short | sed -E 's/^.. //')
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add CHANGELOG.md .changes
+            git commit --message "chore(release): prepare ${RELEASE_VERSION}"
+            release_commit=$(git rev-parse HEAD)
+
             git fetch --force origin \
-              "refs/tags/${RELEASE_VERSION}:refs/tags/${RELEASE_VERSION}"
+              "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+            current_default=$(git rev-parse "origin/${DEFAULT_BRANCH}")
+            if [ "${current_default}" != "${base_commit}" ]; then
+              echo "::error title=RELEASE-PREP-VALIDATEFRESHNESS::${DEFAULT_BRANCH} advanced during release preparation; rerun the workflow."
+              exit 1
+            fi
+            git push origin "HEAD:refs/heads/${DEFAULT_BRANCH}"
+          fi
+
+          if git show-ref --verify --quiet "refs/tags/${RELEASE_VERSION}"; then
             tag_commit=$(git rev-list --max-count=1 "${RELEASE_VERSION}")
-            if [ "${tag_commit}" != "${RELEASE_COMMIT}" ]; then
-              echo "::error title=CHLOG-PUBLISH-VALIDATETAG::Tag ${RELEASE_VERSION} points to ${tag_commit}, expected ${RELEASE_COMMIT}."
+            if [ "${tag_commit}" != "${release_commit}" ]; then
+              echo "::error title=RELEASE-PREP-VALIDATETAG::Tag ${RELEASE_VERSION} points to ${tag_commit}, expected ${release_commit}."
               exit 1
             fi
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag --annotate \
-              --message "Release ${RELEASE_VERSION}" \
-              "${RELEASE_VERSION}" \
-              "${RELEASE_COMMIT}"
+            git tag --annotate --message "Release ${RELEASE_VERSION}" "${RELEASE_VERSION}" "${release_commit}"
             git push origin "refs/tags/${RELEASE_VERSION}"
           fi
 
-          if gh release view "${RELEASE_VERSION}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            echo "GitHub release ${RELEASE_VERSION} already exists; keeping it unchanged."
-          else
-            release_arguments=(
-              "${RELEASE_VERSION}"
-              --repo "${GITHUB_REPOSITORY}"
-              --title "${RELEASE_VERSION}"
-              --notes-file release-body.md
-              --verify-tag
-            )
-            if [[ "${RELEASE_VERSION}" == *-* ]]; then
-              release_arguments+=(--prerelease)
-            fi
-            gh release create "${release_arguments[@]}"
-          fi
+          echo "release-tag=${RELEASE_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "release-commit=${release_commit}" >> "${GITHUB_OUTPUT}"
 
-      - name: Start release workflows
+      - name: Create or reconcile draft release
+        id: draft
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
         run: |
           set -euo pipefail
-          gh workflow run docker-release.yml \
+          version_file=".changes/${RELEASE_TAG}.md"
+          if release_json=$(gh release view "${RELEASE_TAG}" \
             --repo "${GITHUB_REPOSITORY}" \
-            --ref "${RELEASE_VERSION}" \
-            --field "release_tag=${RELEASE_VERSION}"
-          gh workflow run vuln-scan.yml \
+            --json isDraft,isPrerelease 2>/dev/null); then
+            is_draft=$(jq -r '.isDraft' <<< "${release_json}")
+            if [ "${is_draft}" != "true" ]; then
+              echo "release-published=true" >> "${GITHUB_OUTPUT}"
+              echo "Release ${RELEASE_TAG} is already published."
+              exit 0
+            fi
+            edit_arguments=("${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --draft --title "${RELEASE_TAG}" --notes-file "${version_file}")
+            if [[ "${RELEASE_TAG}" == *-* ]]; then
+              edit_arguments+=(--prerelease)
+            else
+              edit_arguments+=(--prerelease=false)
+            fi
+            gh release edit "${edit_arguments[@]}"
+          else
+            create_arguments=("${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --draft --title "${RELEASE_TAG}" --notes-file "${version_file}" --verify-tag)
+            if [[ "${RELEASE_TAG}" == *-* ]]; then
+              create_arguments+=(--prerelease)
+            fi
+            gh release create "${create_arguments[@]}"
+          fi
+          echo "release-published=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Start missing vulnerability scan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release-commit }}
+          RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
+        run: |
+          set -euo pipefail
+          runs=$(gh run list \
             --repo "${GITHUB_REPOSITORY}" \
-            --ref "${RELEASE_VERSION}"
-          echo "Published ${RELEASE_VERSION} and started its Docker release build and vulnerability scan." >> "${GITHUB_STEP_SUMMARY}"
+            --workflow vuln-scan.yml \
+            --commit "${RELEASE_COMMIT}" \
+            --event workflow_dispatch \
+            --limit 20 \
+            --json status,conclusion)
+          if ! jq -e 'any(.[]; .status != "completed" or .conclusion == "success")' <<< "${runs}" >/dev/null; then
+            gh workflow run vuln-scan.yml \
+              --repo "${GITHUB_REPOSITORY}" \
+              --ref "${RELEASE_TAG}"
+          fi
+          echo "Prepared ${RELEASE_TAG}; the Docker publisher will keep the release draft until every image and asset is complete." >> "${GITHUB_STEP_SUMMARY}"
+
+  publish:
+    name: Build artifacts and publish release
+    needs: prepare
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/docker-release.yml
+    with:
+      release_tag: ${{ needs.prepare.outputs.release-tag }}
+    secrets:
+      DOCKER_HUB_USER: ${{ secrets.DOCKER_HUB_USER }}
+      DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}

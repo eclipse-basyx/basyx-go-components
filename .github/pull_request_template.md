@@ -8,8 +8,15 @@ Please provide a brief summary of what you have changed in this pull request. Be
 
 Select exactly one option:
 
-- [ ] I added every notable user-visible change to the `Unreleased` section of `CHANGELOG.md`.
-- [ ] This pull request does not require a changelog entry because it has no notable user-visible effect.
+- [ ] I added a Changie fragment under `.changes/unreleased` for every notable user-visible or security-related change.
+- [ ] This pull request has no notable user-visible or security effect; a reviewer may apply the `no-changelog` label.
+
+Open this pull request as a draft to obtain its number, then create fragments
+interactively with Changie v1.26.0 by running `changie new`. Classify the user
+impact as `High` when users must update an API integration, configuration,
+policy, or deployment; otherwise use `Low`. Always describe the security
+consequence, or enter `None.` when there is none. `CHANGELOG.md` is generated
+during releases and must not be edited directly.
 
 ## Related Issue
 

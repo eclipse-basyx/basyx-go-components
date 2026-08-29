@@ -51,4 +51,3 @@ updates:
       release-signing-actions:
         patterns:
           - "sigstore/cosign-installer"
-          - "softprops/action-gh-release"
