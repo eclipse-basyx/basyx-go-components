@@ -177,7 +177,13 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 	}
 
 	if cursor != "" {
-		ds = ds.Where(goqu.I("aas.aas_id").Gte(cursor))
+		cursorExists := dialect.From(goqu.T("aas").As("cursor_aas")).
+			Select(goqu.L("1")).
+			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
+		ds = ds.Where(
+			goqu.Func("EXISTS", cursorExists),
+			goqu.I("aas.aas_id").Gte(cursor),
+		)
 	}
 
 	if idShort != "" {
@@ -199,6 +205,46 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 		ds = ds.Where(buildSpecificAssetIDFilterExpression(dialect, specificAssetID))
 	}
 
+	return ds, nil
+}
+
+func buildGetAssetAdministrationShellIdentifiersDataset(
+	dialect *goqu.DialectWrapper,
+	limit int32,
+	cursor string,
+	idShort string,
+	specificAssetIDs []types.ISpecificAssetID,
+) (*goqu.SelectDataset, error) {
+	ds := dialect.
+		From(goqu.T("aas").As("aas")).
+		LeftJoin(
+			goqu.T("asset_information").As("asset_information"),
+			goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id"))),
+		).
+		Select(goqu.I("aas.aas_id")).
+		Order(goqu.I("aas.aas_id").Asc())
+	if limit > 0 {
+		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
+		if err != nil {
+			return nil, err
+		}
+		ds = ds.Limit(pageLimitPlusOne)
+	}
+	if cursor != "" {
+		cursorExists := dialect.From(goqu.T("aas").As("cursor_aas")).
+			Select(goqu.L("1")).
+			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
+		ds = ds.Where(
+			goqu.Func("EXISTS", cursorExists),
+			goqu.I("aas.aas_id").Gte(cursor),
+		)
+	}
+	if idShort != "" {
+		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
+	}
+	for _, specificAssetID := range uniqueSpecificAssetIDs(specificAssetIDs) {
+		ds = ds.Where(buildSpecificAssetIDFilterExpression(dialect, specificAssetID))
+	}
 	return ds, nil
 }
 

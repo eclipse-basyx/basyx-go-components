@@ -1,0 +1,7 @@
+kind: changed
+body: ABAC `CLAIM` resolution no longer discards all but the first value of JWT arrays. String claims remain unchanged; numbers, booleans, arrays, and nested objects are exposed to formulas as deterministic JSON text. Policies that compare non-string claims may need to match the new complete JSON representation.
+time: 2026-08-27T09:00:46.000000000Z
+custom:
+  Impact: High
+  PullRequest: 616
+  SecurityImpact: Authorization decisions involving non-string claims can change. Missing, `null`, and unsupported claim values remain unresolved and fail closed.

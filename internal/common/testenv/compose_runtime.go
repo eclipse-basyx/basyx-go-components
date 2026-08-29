@@ -470,6 +470,7 @@ func copySecurityEnv(srcDir string, targetDir string, replacements map[string]st
 		for oldValue, newValue := range replacements {
 			content = strings.ReplaceAll(content, oldValue, newValue)
 		}
+		//nolint:gosec // Taint comes from fixture content; WalkDir confines the destination to the fixture directory.
 		if err := os.WriteFile(targetPath, []byte(content), info.Mode().Perm()); err != nil {
 			return fmt.Errorf("TESTENV-SECURITYENV-WRITE: %w", err)
 		}

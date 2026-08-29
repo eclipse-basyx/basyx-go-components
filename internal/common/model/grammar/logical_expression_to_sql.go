@@ -2195,7 +2195,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 
 	// Handle boolean literal
 	if le.Boolean != nil {
-		return goqu.L("?", *le.Boolean), nil, nil
+		return goqu.L("?::boolean", *le.Boolean), nil, nil
 	}
 
 	return nil, nil, fmt.Errorf("logical expression has no valid operation")
@@ -2272,7 +2272,7 @@ func evaluateMatchExpressions(match []MatchExpression) (exp.Expression, []Resolv
 
 func evaluateMatchExpressionSQL(me MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
 	if me.Boolean != nil {
-		return goqu.L("?", *me.Boolean), nil, nil
+		return goqu.L("?::boolean", *me.Boolean), nil, nil
 	}
 	if len(me.Eq) > 0 {
 		return evaluateMatchComparison(me.Eq, "$eq")
