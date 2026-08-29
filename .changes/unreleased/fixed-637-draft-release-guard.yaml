@@ -1,0 +1,7 @@
+kind: fixed
+body: The release workflow can inspect its newly created draft release and continue directly into artifact publication.
+time: 2026-08-29T16:09:52.000000000Z
+custom:
+  Impact: Low
+  PullRequest: 637
+  SecurityImpact: The guard receives contents write permission only because GitHub requires push access to view drafts; its operations remain read-only.
