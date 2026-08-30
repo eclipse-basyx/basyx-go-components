@@ -69,8 +69,8 @@ func insertSubmodelDescriptorAtPositionTx(
 	value model.SubmodelDescriptor,
 	position int,
 ) (int64, error) {
-	if len(value.Endpoints) == 0 {
-		return 0, common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
+	if err := validateSubmodelDescriptorEndpoints(value); err != nil {
+		return 0, err
 	}
 
 	descriptionPayload, err := buildLangStringTextPayload(value.Description)
@@ -153,6 +153,13 @@ func insertSubmodelDescriptorAtPositionTx(
 		return 0, err
 	}
 	return descriptorID, nil
+}
+
+func validateSubmodelDescriptorEndpoints(value model.SubmodelDescriptor) error {
+	if len(value.Endpoints) == 0 {
+		return common.NewErrBadRequest("SMDESC-VALIDATE-ENDPOINTS Submodel Descriptor needs at least 1 Endpoint.")
+	}
+	return nil
 }
 
 func getNextSubmodelDescriptorPosition(tx *sql.Tx, aasDescriptorID int64) (int, error) {

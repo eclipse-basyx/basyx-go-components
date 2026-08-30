@@ -83,7 +83,7 @@ func LockAdministrationShellDescriptorForUpdateTx(ctx context.Context, tx *sql.T
 	}
 	descriptorID, found, err := selectAASDescriptorIDForUpdateTx(ctx, tx, aasID)
 	if err != nil {
-		return 0, err
+		return 0, common.NewInternalServerError("AASDESC-UPDATE-LOCK-SELECT " + err.Error())
 	}
 	if !found {
 		return 0, common.NewErrNotFound("AAS Descriptor not found")
@@ -146,7 +146,7 @@ func LockSubmodelDescriptorForAASUpdateTx(
 		).
 		Order(submodelDescriptor.Col(common.ColPosition).Asc()).
 		Limit(1).
-		ForUpdate(goqu.Wait).
+		ForUpdate(goqu.Wait, goqu.I("smd")).
 		Prepared(true).
 		ToSQL()
 	if err != nil {
@@ -221,6 +221,9 @@ func UpdateSubmodelDescriptorTx(
 ) (bool, error) {
 	if previous.Id != next.Id {
 		return false, common.NewErrBadRequest("SMDESC-UPDATE-IDMISMATCH descriptor ids do not match")
+	}
+	if err := validateSubmodelDescriptorEndpoints(next); err != nil {
+		return false, err
 	}
 	plan, err := buildSubmodelDescriptorUpdatePlan(previous, next)
 	if err != nil {

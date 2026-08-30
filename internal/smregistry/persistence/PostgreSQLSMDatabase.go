@@ -147,6 +147,10 @@ func loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx context.Context, 
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodelDescriptor, submodelID); err != nil {
 		return nil, err
 	}
+	return loadSubmodelDescriptorHistorySnapshotAfterMutationLockTx(ctx, tx, submodelID)
+}
+
+func loadSubmodelDescriptorHistorySnapshotAfterMutationLockTx(ctx context.Context, tx *sql.Tx, submodelID string) (map[string]any, error) {
 	descriptor, err := descriptors.GetSubmodelDescriptorByID(auth.ContextWithoutQueryFilter(ctx), tx, submodelID)
 	if err != nil {
 		return nil, err
@@ -307,6 +311,36 @@ func loadSubmodelDescriptorForUpdateTx(
 	return descriptors.GetSubmodelDescriptorByID(auth.ContextWithoutQueryFilter(ctx), tx, submodelID)
 }
 
+func loadAuthorizedSubmodelDescriptorEvidenceSnapshotTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	allowNotFound bool,
+) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodelDescriptor, submodelID); err != nil {
+		return nil, err
+	}
+	if !descriptors.CanSkipUpdateReadback(ctx) {
+		if _, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID); err != nil {
+			if allowNotFound && common.IsErrNotFound(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+	}
+	snapshot, err := loadSubmodelDescriptorHistorySnapshotAfterMutationLockTx(ctx, tx, submodelID)
+	if err != nil {
+		if allowNotFound && common.IsErrNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return snapshot, nil
+}
+
 // ReplaceSubmodelDescriptor replaces a global Submodel Descriptor (no AAS association).
 func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 	ctx context.Context,
@@ -314,7 +348,7 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.writerDB, "SMREG-REPLACESMDESC-STARTTX", "SMREG-REPLACESMDESC-COMMITTX", func(tx *sql.Tx) error {
-		previousSnapshot, snapshotErr := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodel.Id)
+		previousSnapshot, snapshotErr := loadAuthorizedSubmodelDescriptorEvidenceSnapshotTx(ctx, tx, submodel.Id, false)
 		if snapshotErr != nil {
 			return snapshotErr
 		}
@@ -365,8 +399,8 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 		return common.NewInternalServerError("SMREG-UPSERTSMDESC-NILTX transaction must not be nil")
 	}
 
-	previousSnapshot, err := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodel.Id)
-	if err != nil && !common.IsErrNotFound(err) {
+	previousSnapshot, err := loadAuthorizedSubmodelDescriptorEvidenceSnapshotTx(ctx, tx, submodel.Id, true)
+	if err != nil {
 		return err
 	}
 	if err := lockSubmodelDescriptorUpsertTx(ctx, tx, submodel.Id); err != nil {

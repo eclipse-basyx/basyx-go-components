@@ -157,6 +157,10 @@ func loadDescriptorHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.
 	if err := history.LockMutationTx(ctx, tx, history.TableDescriptor, aasID); err != nil {
 		return nil, err
 	}
+	return loadDescriptorHistorySnapshotAfterMutationLockTx(ctx, tx, aasID)
+}
+
+func loadDescriptorHistorySnapshotAfterMutationLockTx(ctx context.Context, tx *sql.Tx, aasID string) (map[string]any, error) {
 	descriptor, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ContextWithoutQueryFilter(ctx), tx, aasID)
 	if err != nil {
 		return nil, err
@@ -490,6 +494,57 @@ func loadAASDescriptorForUpdateTx(
 	return descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ContextWithoutQueryFilter(ctx), tx, aasID)
 }
 
+func loadAuthorizedAASDescriptorEvidenceSnapshotTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasID string,
+	allowNotFound bool,
+) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableDescriptor, aasID); err != nil {
+		return nil, err
+	}
+	if !descriptors.CanSkipUpdateReadback(ctx) {
+		if _, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID); err != nil {
+			if allowNotFound && common.IsErrNotFound(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+	}
+	snapshot, err := loadDescriptorHistorySnapshotAfterMutationLockTx(ctx, tx, aasID)
+	if err != nil {
+		if allowNotFound && common.IsErrNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return snapshot, nil
+}
+
+func loadAuthorizedEmbeddedDescriptorEvidenceSnapshotTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasID string,
+	submodelID string,
+	canSkipAuthorization bool,
+) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableDescriptor, aasID); err != nil {
+		return nil, err
+	}
+	if !canSkipAuthorization {
+		if _, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodelID); err != nil {
+			return nil, err
+		}
+	}
+	return loadDescriptorHistorySnapshotAfterMutationLockTx(ctx, tx, aasID)
+}
+
 // ReplaceAdministrationShellDescriptor replaces an existing AAS descriptor
 // with the given value and reports whether it existed.
 func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
@@ -498,7 +553,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 ) (model.AssetAdministrationShellDescriptor, error) {
 	var result model.AssetAdministrationShellDescriptor
 	err := common.ExecuteInTransaction(p.writerDB, "AASREG-REPLACEAASDESC-STARTTX", "AASREG-REPLACEAASDESC-COMMIT", func(tx *sql.Tx) error {
-		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasd.Id)
+		previousSnapshot, snapshotErr := loadAuthorizedAASDescriptorEvidenceSnapshotTx(ctx, tx, aasd.Id, false)
 		if snapshotErr != nil {
 			return snapshotErr
 		}
@@ -551,8 +606,8 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 		return common.NewInternalServerError("AASREG-UPSERTAASDESC-NILTX transaction must not be nil")
 	}
 
-	previousSnapshot, err := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasd.Id)
-	if err != nil && !common.IsErrNotFound(err) {
+	previousSnapshot, err := loadAuthorizedAASDescriptorEvidenceSnapshotTx(ctx, tx, aasd.Id, true)
+	if err != nil {
 		return err
 	}
 	created := false
@@ -738,6 +793,9 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 		if snapshotErr != nil {
 			return snapshotErr
 		}
+		if _, lockErr := descriptors.LockAdministrationShellDescriptorForUpdateTx(ctx, tx, aasID); lockErr != nil {
+			return lockErr
+		}
 		stored, err := descriptors.InsertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
 		if err != nil {
 			return err
@@ -776,9 +834,14 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.writerDB, "AASREG-REPLACESMDESCFORAAS-STARTTX", "AASREG-REPLACESMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
-		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasID)
+		previousSnapshot, snapshotErr := loadAuthorizedEmbeddedDescriptorEvidenceSnapshotTx(
+			ctx, tx, aasID, submodel.Id, descriptors.CanSkipUpdateReadback(ctx),
+		)
 		if snapshotErr != nil {
 			return snapshotErr
+		}
+		if _, lockErr := descriptors.LockAdministrationShellDescriptorForUpdateTx(ctx, tx, aasID); lockErr != nil {
+			return lockErr
 		}
 		descriptorID, position, err := descriptors.LockSubmodelDescriptorForAASUpdateTx(ctx, tx, aasID, submodel.Id)
 		if err != nil {
@@ -840,9 +903,14 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteSubmodelDescriptorForAASByID(
 	submodelID string,
 ) error {
 	return common.ExecuteInTransaction(p.writerDB, "AASREG-DELSMDESCFORAAS-STARTTX", "AASREG-DELSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
-		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasID)
+		previousSnapshot, snapshotErr := loadAuthorizedEmbeddedDescriptorEvidenceSnapshotTx(
+			ctx, tx, aasID, submodelID, descriptors.CanSkipDeleteReadback(ctx),
+		)
 		if snapshotErr != nil {
 			return snapshotErr
+		}
+		if _, lockErr := descriptors.LockAdministrationShellDescriptorForUpdateTx(ctx, tx, aasID); lockErr != nil {
+			return lockErr
 		}
 		if _, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodelID); err != nil {
 			return err

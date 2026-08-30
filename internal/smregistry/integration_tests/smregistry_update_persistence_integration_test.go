@@ -81,6 +81,12 @@ func TestSubmodelDescriptorPutPreservesUnchangedRows(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	before := readSubmodelDescriptorPersistenceState(t, db, submodelID)
 
+	invalidPayload := payload("invalid")
+	invalidPayload["endpoints"] = []any{}
+	status, body, _ = doRequest(t, smNoRedirectClient, http.MethodPut, endpoint, invalidPayload)
+	require.Equal(t, http.StatusBadRequest, status, "response=%s", string(body))
+	require.Equal(t, before, readSubmodelDescriptorPersistenceState(t, db, submodelID))
+
 	time.Sleep(20 * time.Millisecond)
 	status, body, _ = doRequest(t, smNoRedirectClient, http.MethodPut, endpoint, payload("after"))
 	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))

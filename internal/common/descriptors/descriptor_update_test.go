@@ -28,10 +28,45 @@ package descriptors
 import (
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/stretchr/testify/require"
 )
+
+func TestUpdateSubmodelDescriptorTxRejectsEmptyEndpointsBeforeDatabaseWork(t *testing.T) {
+	previous := testSubmodelDescriptor("sm-1", "original")
+	next := previous
+	next.Endpoints = nil
+
+	changed, err := UpdateSubmodelDescriptorTx(t.Context(), nil, 1, previous, next, 0, false)
+
+	require.Error(t, err)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "SMDESC-VALIDATE-ENDPOINTS")
+	require.False(t, changed)
+}
+
+func TestLockSubmodelDescriptorForAASUpdateTxLocksOnlySubmodelDescriptor(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	mock.ExpectQuery(`FOR UPDATE OF "smd"`).
+		WillReturnRows(sqlmock.NewRows([]string{"descriptor_id", "position"}).AddRow(int64(42), 3))
+	mock.ExpectRollback()
+
+	descriptorID, position, err := LockSubmodelDescriptorForAASUpdateTx(t.Context(), tx, "aas-1", "sm-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(42), descriptorID)
+	require.Equal(t, 3, position)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 
 func TestBuildAdministrationShellDescriptorUpdatePlan(t *testing.T) {
 	base := testAdministrationShellDescriptor()
