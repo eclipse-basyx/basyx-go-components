@@ -508,11 +508,22 @@ func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.T
 	return false, nil
 }
 
-func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submitted types.ISubmodel) (PutSubmodelResult, error) {
+func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submitted types.ISubmodel) (result PutSubmodelResult, err error) {
 	readCtx, shouldEnforce, err := selectPutFormulaContext(ctx, true)
 	if err != nil {
 		return PutSubmodelResult{}, err
 	}
+	restorePlanCacheMode, err := forceGenericPlanForSubmodelPutTx(ctx, tx)
+	if err != nil {
+		return PutSubmodelResult{}, err
+	}
+	defer func() {
+		if restoreErr := restorePlanCacheMode(); err == nil && restoreErr != nil {
+			result = PutSubmodelResult{}
+			err = restoreErr
+		}
+	}()
+
 	previous, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
 	if err != nil {
 		return PutSubmodelResult{}, mapPutReadbackError(err, shouldEnforce, true)
@@ -549,6 +560,61 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 		return PutSubmodelResult{}, err
 	}
 	return PutSubmodelResult{IsUpdate: true, Changed: true, Previous: previous}, nil
+}
+
+func forceGenericPlanForSubmodelPutTx(ctx context.Context, tx *sql.Tx) (func() error, error) {
+	previousMode, err := currentPostgreSQLPlanCacheModeTx(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	const genericPlanMode = "force_generic_plan"
+	if previousMode == genericPlanMode {
+		return func() error { return nil }, nil
+	}
+	if err = setPostgreSQLPlanCacheModeTx(ctx, tx, genericPlanMode); err != nil {
+		return nil, err
+	}
+	return func() error {
+		return setPostgreSQLPlanCacheModeTx(ctx, tx, previousMode)
+	}, nil
+}
+
+func currentPostgreSQLPlanCacheModeTx(ctx context.Context, tx *sql.Tx) (string, error) {
+	query := goqu.Dialect("postgres").Select(
+		goqu.Func("current_setting", common.PostgreSQLTextLiteral("plan_cache_mode")),
+	)
+	sqlQuery, args, err := query.Prepared(true).ToSQL()
+	if err != nil {
+		return "", common.NewInternalServerError("SMREPO-PUTSM-GETPLANMODE-BUILDQ " + err.Error())
+	}
+	var mode string
+	if err = tx.QueryRowContext(ctx, sqlQuery, args...).Scan(&mode); err != nil {
+		return "", common.NewInternalServerError("SMREPO-PUTSM-GETPLANMODE-EXECQ " + err.Error())
+	}
+	return mode, nil
+}
+
+func setPostgreSQLPlanCacheModeTx(ctx context.Context, tx *sql.Tx, mode string) error {
+	query := goqu.Dialect("postgres").Select(
+		goqu.Func(
+			"set_config",
+			common.PostgreSQLTextLiteral("plan_cache_mode"),
+			common.PostgreSQLTextLiteral(mode),
+			goqu.L("TRUE"),
+		),
+	)
+	sqlQuery, args, err := query.Prepared(true).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PUTSM-SETPLANMODE-BUILDQ " + err.Error())
+	}
+	var configuredMode string
+	if err = tx.QueryRowContext(ctx, sqlQuery, args...).Scan(&configuredMode); err != nil {
+		return common.NewInternalServerError("SMREPO-PUTSM-SETPLANMODE-EXECQ " + err.Error())
+	}
+	if configuredMode != mode {
+		return common.NewInternalServerError("SMREPO-PUTSM-SETPLANMODE-MISMATCH expected " + mode + " but PostgreSQL returned " + configuredMode)
+	}
+	return nil
 }
 
 func (s *SubmodelDatabase) appendAcknowledgedSubmodelPutHistoryTx(
