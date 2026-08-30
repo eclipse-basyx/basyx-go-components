@@ -1,0 +1,7 @@
+kind: fixed
+body: Submodel POST operations persist complete SubmodelElement graphs through one reusable PostgreSQL statement instead of payload-shaped statement batches.
+time: 2026-08-30T19:49:00.000000+02:00
+custom:
+    Impact: Low
+    PullRequest: 643
+    SecurityImpact: Authorization, transaction boundaries, and persisted Submodel semantics are unchanged.
