@@ -1,7 +1,7 @@
 kind: fixed
-body: Concept Description PUT operations update existing rows in place instead of deleting and recreating them.
+body: Concept Description PUT operations update existing rows in place and reject mismatching path and body identifiers.
 time: 2026-08-30T17:00:00.000000+02:00
 custom:
     Impact: Low
     PullRequest: 642
-    SecurityImpact: Existing pre-update and post-update ABAC checks remain unchanged.
+    SecurityImpact: Prevents PUT authorization and history from being split across different Concept Description identifiers.

@@ -90,6 +90,138 @@ func TestConceptDescriptionPutUpdatesExistingRowInPlace(t *testing.T) {
 	require.Equal(t, "AfterUpdate", after.data["idShort"])
 }
 
+func TestConceptDescriptionPutRejectsPathAndBodyIdentifierMismatch(t *testing.T) {
+	endpoint := conceptDescriptionRepositoryBaseURL + "/concept-descriptions"
+	existingID := fmt.Sprintf("urn:example:cd:mismatch-existing:%d", time.Now().UnixNano())
+	updateBodyID := existingID + ":moved"
+	missingPathID := existingID + ":missing"
+	createBodyID := existingID + ":created-elsewhere"
+	for _, id := range []string{existingID, updateBodyID, missingPathID, createBodyID} {
+		t.Cleanup(func() { cleanupConceptDescription(t, endpoint, id) })
+	}
+
+	status, body, err := requestJSON(
+		http.MethodPost,
+		endpoint,
+		conceptDescriptionUpdatePayload(existingID, "BeforeMismatch", "2030-01-02T03:04:06Z", false),
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+
+	status, body, err = requestJSON(
+		http.MethodPut,
+		endpoint+"/"+base64.RawURLEncoding.EncodeToString([]byte(existingID)),
+		conceptDescriptionUpdatePayload(updateBodyID, "MovedByUpdate", "2030-01-02T03:04:07Z", false),
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, status, "response=%s", string(body))
+
+	status, body, err = requestJSON(
+		http.MethodGet,
+		endpoint+"/"+base64.RawURLEncoding.EncodeToString([]byte(existingID)),
+		nil,
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+
+	status, body, err = requestJSON(
+		http.MethodPut,
+		endpoint+"/"+base64.RawURLEncoding.EncodeToString([]byte(missingPathID)),
+		conceptDescriptionUpdatePayload(createBodyID, "MovedByCreate", "2030-01-02T03:04:07Z", false),
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, status, "response=%s", string(body))
+
+	for _, id := range []string{updateBodyID, missingPathID, createBodyID} {
+		status, body, err = requestJSON(
+			http.MethodGet,
+			endpoint+"/"+base64.RawURLEncoding.EncodeToString([]byte(id)),
+			nil,
+		)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNotFound, status, "id=%s response=%s", id, string(body))
+	}
+}
+
+func TestConceptDescriptionPutRecreatesResourceDeletedDuringExistenceCheck(t *testing.T) {
+	conceptDescriptionID := fmt.Sprintf("urn:example:cd:concurrent-delete:%d", time.Now().UnixNano())
+	endpoint := conceptDescriptionRepositoryBaseURL + "/concept-descriptions"
+	t.Cleanup(func() { cleanupConceptDescription(t, endpoint, conceptDescriptionID) })
+
+	status, body, err := requestJSON(
+		http.MethodPost,
+		endpoint,
+		conceptDescriptionUpdatePayload(conceptDescriptionID, "BeforeConcurrentDelete", "2030-01-02T03:04:06Z", false),
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+
+	db, err := sql.Open("pgx", conceptDescriptionRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	deleteTx, err := db.BeginTx(t.Context(), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = deleteTx.Rollback() })
+
+	backendPIDQuery, _, err := goqu.Select(goqu.Func("pg_backend_pid")).ToSQL()
+	require.NoError(t, err)
+	var deleteBackendPID int
+	require.NoError(t, deleteTx.QueryRowContext(t.Context(), backendPIDQuery).Scan(&deleteBackendPID))
+
+	deleteQuery, deleteArgs, err := goqu.Dialect("postgres").
+		Delete("concept_description").
+		Where(goqu.C("id").Eq(conceptDescriptionID)).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+	deleteResult, err := deleteTx.ExecContext(t.Context(), deleteQuery, deleteArgs...)
+	require.NoError(t, err)
+	deletedRows, err := deleteResult.RowsAffected()
+	require.NoError(t, err)
+	require.EqualValues(t, 1, deletedRows)
+
+	type putResult struct {
+		status int
+		body   []byte
+		err    error
+	}
+	putResultChannel := make(chan putResult, 1)
+	go func() {
+		putStatus, putBody, putErr := requestJSON(
+			http.MethodPut,
+			endpoint+"/"+base64.RawURLEncoding.EncodeToString([]byte(conceptDescriptionID)),
+			conceptDescriptionUpdatePayload(conceptDescriptionID, "AfterConcurrentDelete", "2030-01-02T03:04:07Z", false),
+		)
+		putResultChannel <- putResult{status: putStatus, body: putBody, err: putErr}
+	}()
+
+	blockedQuery, blockedArgs, err := goqu.Dialect("postgres").
+		From("pg_stat_activity").
+		Select(goqu.COUNT("*")).
+		Where(goqu.L("? = ANY(pg_blocking_pids(pid))", deleteBackendPID)).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		var blockedCount int
+		queryErr := db.QueryRowContext(t.Context(), blockedQuery, blockedArgs...).Scan(&blockedCount)
+		return queryErr == nil && blockedCount > 0
+	}, 5*time.Second, 20*time.Millisecond)
+
+	require.NoError(t, deleteTx.Commit())
+
+	select {
+	case result := <-putResultChannel:
+		require.NoError(t, result.err)
+		require.Equal(t, http.StatusCreated, result.status, "response=%s", string(result.body))
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for PUT after concurrent delete committed")
+	}
+
+	after := readConceptDescriptionPersistenceState(t, db, conceptDescriptionID)
+	require.Equal(t, "AfterConcurrentDelete", after.idShort.String)
+}
+
 func conceptDescriptionUpdatePayload(
 	id string,
 	idShort string,

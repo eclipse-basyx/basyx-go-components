@@ -249,7 +249,6 @@ func (b *ConceptDescriptionBackend) updateConceptDescriptionInTx(
 	updateQuery, args, err := goqu.Dialect("postgres").
 		Update("concept_description").
 		Set(goqu.Record{
-			"id":       cd.ID(),
 			"id_short": cd.IDShort(),
 			"data":     goqu.L("?::jsonb", conceptDescriptionString),
 		}).
@@ -294,20 +293,23 @@ func (b *ConceptDescriptionBackend) deleteConceptDescriptionInTx(ctx context.Con
 	return rowsAffected > 0, nil
 }
 
-func conceptDescriptionExistsInTx(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
+func queryConceptDescriptionExistenceInTx(ctx context.Context, tx *sql.Tx, id string, forUpdate bool) (bool, error) {
 	dialect := goqu.Dialect("postgres")
-	query, args, err := dialect.From("concept_description").
+	query := dialect.From("concept_description").
 		Select(goqu.L("1")).
 		Where(goqu.Ex{"id": id}).
 		Limit(1).
-		Prepared(true).
-		ToSQL()
+		Prepared(true)
+	if forUpdate {
+		query = query.ForUpdate(goqu.Wait)
+	}
+	querySQL, args, err := query.ToSQL()
 	if err != nil {
 		return false, common.NewInternalServerError("CDREPO-CDEXIST-BUILDSQL " + err.Error())
 	}
 
 	var existsMarker int
-	scanErr := tx.QueryRowContext(ctx, query, args...).Scan(&existsMarker)
+	scanErr := tx.QueryRowContext(ctx, querySQL, args...).Scan(&existsMarker)
 	if scanErr == nil {
 		return true, nil
 	}
@@ -316,6 +318,14 @@ func conceptDescriptionExistsInTx(ctx context.Context, tx *sql.Tx, id string) (b
 	}
 
 	return false, common.NewInternalServerError("CDREPO-CDEXIST-EXECSQL " + scanErr.Error())
+}
+
+func conceptDescriptionExistsInTx(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
+	return queryConceptDescriptionExistenceInTx(ctx, tx, id, false)
+}
+
+func lockConceptDescriptionForUpdateInTx(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
+	return queryConceptDescriptionExistenceInTx(ctx, tx, id, true)
 }
 
 func (b *ConceptDescriptionBackend) checkConceptDescriptionVisibilityInTx(ctx context.Context, tx *sql.Tx, id string) (bool, bool, error) {
@@ -636,6 +646,10 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 
 // PutConceptDescription creates or replaces the concept description with the given identifier and reports whether an existing row was replaced.
 func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, id string, cd types.IConceptDescription) (bool, error) {
+	if id != cd.ID() {
+		return false, common.NewErrBadRequest("CDREPO-PUTCD-IDMISMATCH Concept Description ID in path and body do not match")
+	}
+
 	tx, cleanup, err := common.StartTransaction(b.db)
 	if err != nil {
 		return false, common.NewInternalServerError("CDREPO-PUTCD-STARTTX " + err.Error())
@@ -645,7 +659,7 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		return false, err
 	}
 
-	existingExists, existsErr := conceptDescriptionExistsInTx(ctx, tx, id)
+	existingExists, existsErr := lockConceptDescriptionForUpdateInTx(ctx, tx, id)
 	if existsErr != nil {
 		return false, existsErr
 	}
