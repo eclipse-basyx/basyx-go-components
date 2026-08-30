@@ -213,7 +213,7 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(ctx context.Context, tx *
 	if err != nil {
 		return err
 	}
-	if _, err = executeSubmodelReconciliationStatement(ctx, tx, submodel.ID(), plan); err != nil {
+	if _, err = executeSubmodelCreateStatement(ctx, tx, submodel.ID(), plan); err != nil {
 		return err
 	}
 

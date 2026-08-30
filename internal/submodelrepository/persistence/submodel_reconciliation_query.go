@@ -81,6 +81,28 @@ func (b *reconciliationQueryBuilder) build(planJSON []byte, submodelID string) (
 	return final.Prepared(true).ToSQL()
 }
 
+func (b *reconciliationQueryBuilder) buildCreate(planJSON []byte, submodelID string) (string, []any, error) {
+	b.addInputs(planJSON, submodelID)
+	b.add("allocated_insert_rows", b.dialect.From(goqu.T("insert_rows").As("i")).Select(
+		goqu.Func("nextval", goqu.Func("pg_get_serial_sequence", common.PostgreSQLTextLiteral("submodel_element"), common.PostgreSQLTextLiteral("id"))).As("id"),
+		goqu.I("i.row"),
+	))
+	b.add("resolved_insert_rows", resolvedCreateInsertRows(b.dialect))
+	b.addCreateElementBaseCTEs()
+	b.addCreateElementReferenceCTEs()
+	b.addCreateTypeSpecificCTEs()
+
+	final := b.dialect.Select(
+		goqu.L("0").As("updated_count"),
+		goqu.L("(SELECT COUNT(*) FROM inserted_element_rows)").As("inserted_count"),
+		goqu.L("0").As("deleted_count"),
+	)
+	for _, cte := range b.ctes {
+		final = final.With(cte.name, cte.query)
+	}
+	return final.Prepared(true).ToSQL()
+}
+
 func (b *reconciliationQueryBuilder) addInputs(planJSON []byte, submodelID string) {
 	b.add("reconciliation_plan", b.dialect.Select(goqu.L("?::jsonb", string(planJSON)).As("data")))
 	b.add("target_submodel", b.dialect.From("submodel").
@@ -215,6 +237,25 @@ func resolvedInsertRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 			goqu.Case().When(jsonText("i.row", "parentPath").Eq(common.PostgreSQLTextLiteral("")), goqu.L("NULL")).
 				Else(goqu.Func("COALESCE", goqu.I("new_parent.id"), goqu.I("old_parent.id"))).As("parent_id"),
 			goqu.Func("COALESCE", goqu.I("new_root.id"), goqu.I("old_root.id"), goqu.I("i.id")).As("root_id"),
+		)
+}
+
+func resolvedCreateInsertRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	i := goqu.T("allocated_insert_rows").As("i")
+	return dialect.From(i).
+		CrossJoin(goqu.T("target_submodel").As("sm")).
+		LeftJoin(goqu.T("allocated_insert_rows").As("parent"), goqu.On(
+			jsonText("parent.row", "path").Eq(jsonText("i.row", "parentPath")),
+		)).
+		LeftJoin(goqu.T("allocated_insert_rows").As("root"), goqu.On(
+			jsonText("root.row", "path").Eq(jsonText("i.row", "rootPath")),
+		)).
+		Select(
+			goqu.I("i.id"),
+			goqu.I("i.row"),
+			goqu.Case().When(jsonText("i.row", "parentPath").Eq(common.PostgreSQLTextLiteral("")), goqu.L("NULL")).
+				Else(goqu.I("parent.id")).As("parent_id"),
+			goqu.Func("COALESCE", goqu.I("root.id"), goqu.I("i.id")).As("root_id"),
 		)
 }
 
@@ -506,6 +547,37 @@ func (b *reconciliationQueryBuilder) addElementBaseCTEs() {
 	b.add("upserted_element_payloads", upsertElementPayloads(b.dialect))
 }
 
+func (b *reconciliationQueryBuilder) addCreateElementBaseCTEs() {
+	b.add("inserted_element_rows", insertCreatedElementBaseRows(b.dialect))
+	b.add("affected_element_rows", createdElementRows(b.dialect))
+	b.add("upserted_element_payloads", upsertElementPayloads(b.dialect))
+}
+
+func insertCreatedElementBaseRows(dialect goqu.DialectWrapper) *goqu.InsertDataset {
+	source := dialect.From(goqu.T("resolved_insert_rows").As("i"), goqu.T("target_submodel").As("sm")).Select(
+		goqu.I("i.id"),
+		goqu.I("sm.id"),
+		goqu.I("i.parent_id"),
+		jsonInt("i.row", "position"),
+		jsonText("i.row", "idShort"),
+		jsonText("i.row", "category"),
+		jsonInt("i.row", "modelType"),
+		jsonText("i.row", "path"),
+		goqu.I("i.root_id"),
+		jsonInt("i.row", "depth"),
+	)
+	return dialect.Insert("submodel_element").
+		Cols("id", "submodel_id", "parent_sme_id", "position", "id_short", "category", "model_type", "idshort_path", "root_sme_id", "depth").
+		FromQuery(source).
+		Returning("id", "idshort_path")
+}
+
+func createdElementRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("resolved_insert_rows").As("source")).
+		Join(goqu.T("inserted_element_rows").As("inserted"), goqu.On(goqu.I("inserted.id").Eq(goqu.I("source.id")))).
+		Select(goqu.I("source.id"), goqu.I("source.row"))
+}
+
 func updateElementBaseRows(dialect goqu.DialectWrapper) *goqu.UpdateDataset {
 	return dialect.Update(goqu.T("submodel_element").As("sme")).Set(goqu.Record{
 		"position": jsonInt("u.row", "position"),
@@ -591,6 +663,98 @@ func (b *reconciliationQueryBuilder) addElementReferenceCTEs() {
 	b.add("inserted_element_supplemental_payloads", insertElementSupplementalPayloads(b.dialect))
 	b.add("deleted_element_supplemental_keys", deleteElementSupplementalKeys(b.dialect))
 	b.add("inserted_element_supplemental_keys", insertElementSupplementalKeys(b.dialect))
+}
+
+func (b *reconciliationQueryBuilder) addCreateElementReferenceCTEs() {
+	b.add("inserted_element_semantic_ids", insertCreatedElementSemanticBase(b.dialect))
+	b.add("inserted_element_semantic_payloads", insertCreatedElementSemanticPayloads(b.dialect))
+	b.add("inserted_element_semantic_keys", insertCreatedElementSemanticKeys(b.dialect))
+	b.add("element_supplemental_rows", createdElementSupplementalRows(b.dialect))
+	b.add("inserted_element_supplemental", insertCreatedElementSupplementalBase(b.dialect))
+	b.add("inserted_element_supplemental_payloads", insertCreatedElementSupplementalPayloads(b.dialect))
+	b.add("inserted_element_supplemental_keys", insertCreatedElementSupplementalKeys(b.dialect))
+}
+
+func insertCreatedElementSemanticBase(dialect goqu.DialectWrapper) *goqu.InsertDataset {
+	source := dialect.From(goqu.T("affected_element_rows").As("a")).Select(
+		goqu.I("a.id"), jsonNestedInt("a.row", "semanticId", "type"),
+	).Where(
+		goqu.L("a.row -> 'semanticId' IS NOT NULL"),
+		goqu.L("a.row -> 'semanticId' <> 'null'::jsonb"),
+	)
+	return dialect.Insert("submodel_element_semantic_id_reference").
+		Cols("id", "type").
+		FromQuery(source).
+		Returning("id")
+}
+
+func insertCreatedElementSemanticPayloads(dialect goqu.DialectWrapper) *goqu.InsertDataset {
+	source := dialect.From(goqu.T("affected_element_rows").As("a")).
+		Join(goqu.T("inserted_element_semantic_ids").As("inserted"), goqu.On(goqu.I("inserted.id").Eq(goqu.I("a.id")))).
+		Select(goqu.I("a.id"), jsonNestedObject("a.row", "semanticId", "payload"))
+	return dialect.Insert("submodel_element_semantic_id_reference_payload").
+		Cols("reference_id", "parent_reference_payload").
+		FromQuery(source).
+		Returning("reference_id")
+}
+
+func insertCreatedElementSemanticKeys(dialect goqu.DialectWrapper) *goqu.InsertDataset {
+	source := dialect.From(goqu.T("affected_element_rows").As("a")).
+		Join(goqu.T("inserted_element_semantic_ids").As("inserted"), goqu.On(goqu.I("inserted.id").Eq(goqu.I("a.id")))).
+		CrossJoin(goqu.L("jsonb_array_elements(COALESCE(a.row -> 'semanticId' -> 'keys', '[]'::jsonb))").As("key")).
+		Select(goqu.I("a.id"), jsonInt("key", "position"), jsonInt("key", "type"), jsonText("key", "value"))
+	return dialect.Insert("submodel_element_semantic_id_reference_key").
+		Cols("reference_id", "position", "type", "value").
+		FromQuery(source).
+		Returning("reference_id")
+}
+
+func createdElementSupplementalRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(
+		goqu.T("affected_element_rows").As("a"),
+		goqu.L("jsonb_array_elements(COALESCE(a.row -> 'supplementalSemanticIds', '[]'::jsonb))").As("ref"),
+	).Select(
+		goqu.I("a.id").As("owner_id"),
+		goqu.I("ref").As("row"),
+	)
+}
+
+func insertCreatedElementSupplementalBase(dialect goqu.DialectWrapper) *goqu.InsertDataset {
+	source := dialect.From("element_supplemental_rows").
+		Select("owner_id", jsonInt("row", "position"), jsonInt("row", "type"))
+	return dialect.Insert("submodel_element_supplemental_semantic_id_reference").
+		Cols("submodel_element_id", "position", "type").
+		FromQuery(source).
+		Returning("id", "submodel_element_id", "position")
+}
+
+func insertCreatedElementSupplementalPayloads(dialect goqu.DialectWrapper) *goqu.InsertDataset {
+	source := dialect.From(goqu.T("element_supplemental_rows").As("source")).
+		Join(goqu.T("inserted_element_supplemental").As("inserted"), goqu.On(
+			goqu.I("inserted.submodel_element_id").Eq(goqu.I("source.owner_id")),
+			goqu.I("inserted.position").Eq(jsonInt("source.row", "position")),
+		)).Select(goqu.I("inserted.id"), jsonObject("source.row", "payload"))
+	return dialect.Insert("submodel_element_supplemental_semantic_id_reference_payload").
+		Cols("reference_id", "parent_reference_payload").
+		FromQuery(source).
+		Returning("reference_id")
+}
+
+func insertCreatedElementSupplementalKeys(dialect goqu.DialectWrapper) *goqu.InsertDataset {
+	source := dialect.From(
+		goqu.T("element_supplemental_rows").As("source"),
+		goqu.T("inserted_element_supplemental").As("inserted"),
+		goqu.L("jsonb_array_elements(COALESCE(source.row -> 'keys', '[]'::jsonb))").As("key"),
+	).Select(
+		goqu.I("inserted.id"), jsonInt("key", "position"), jsonInt("key", "type"), jsonText("key", "value"),
+	).Where(
+		goqu.I("inserted.submodel_element_id").Eq(goqu.I("source.owner_id")),
+		goqu.I("inserted.position").Eq(jsonInt("source.row", "position")),
+	)
+	return dialect.Insert("submodel_element_supplemental_semantic_id_reference_key").
+		Cols("reference_id", "position", "type", "value").
+		FromQuery(source).
+		Returning("reference_id")
 }
 
 func insertElementSemanticBase(dialect goqu.DialectWrapper) *goqu.InsertDataset {
@@ -784,6 +948,16 @@ func (b *reconciliationQueryBuilder) addTypeSpecificCTEs() {
 	b.add("inserted_managed_file_transfers", insertManagedFileTransfers(b.dialect))
 }
 
+func (b *reconciliationQueryBuilder) addCreateTypeSpecificCTEs() {
+	b.add("managed_file_transfers", managedFileTransfers(b.dialect))
+	for _, spec := range reconciliationTypeSpecs() {
+		b.add("inserted_"+spec.table, buildTypeInsert(b.dialect, spec))
+	}
+	b.add("inserted_multilanguage_values", insertCreatedMultilanguageValues(b.dialect))
+	b.add("inserted_multilanguage_payloads", insertCreatedValueIDPayload(b.dialect, "multilanguage_property_payload", "submodel_element_id", types.ModelTypeMultiLanguageProperty))
+	b.add("inserted_property_payloads", insertCreatedValueIDPayload(b.dialect, "property_element_payload", "property_element_id", types.ModelTypeProperty))
+}
+
 type reconciliationTypeSpec struct {
 	table   string
 	columns []reconciliationTypeColumn
@@ -829,6 +1003,18 @@ func reconciliationTypeSpecs() []reconciliationTypeSpec {
 }
 
 func buildTypeUpsert(dialect goqu.DialectWrapper, spec reconciliationTypeSpec) *goqu.InsertDataset {
+	insert := buildTypeInsert(dialect, spec)
+	if len(spec.columns) == 0 {
+		return insert.OnConflict(goqu.DoNothing())
+	}
+	updateColumns := make([]string, 0, len(spec.columns))
+	for _, column := range spec.columns {
+		updateColumns = append(updateColumns, column.name)
+	}
+	return insert.OnConflict(goqu.DoUpdate("id", excludedRecord(updateColumns...)))
+}
+
+func buildTypeInsert(dialect goqu.DialectWrapper, spec reconciliationTypeSpec) *goqu.InsertDataset {
 	alias := "a.row"
 	projections := []interface{}{goqu.I("a.id")}
 	columns := []string{"id"}
@@ -841,17 +1027,38 @@ func buildTypeUpsert(dialect goqu.DialectWrapper, spec reconciliationTypeSpec) *
 			jsonChange("a.row", "typeData"),
 			jsonText("a.row", "typeTable").Eq(common.PostgreSQLTextLiteral(spec.table)),
 		)
-	insert := dialect.Insert(spec.table).Cols(stringInterfaces(columns)...).FromQuery(source)
-	if len(spec.columns) > 0 {
-		updateColumns := make([]string, 0, len(spec.columns))
-		for _, column := range spec.columns {
-			updateColumns = append(updateColumns, column.name)
-		}
-		insert = insert.OnConflict(goqu.DoUpdate("id", excludedRecord(updateColumns...)))
-	} else {
-		insert = insert.OnConflict(goqu.DoNothing())
-	}
-	return insert.Returning("id")
+	return dialect.Insert(spec.table).Cols(stringInterfaces(columns)...).FromQuery(source).Returning("id")
+}
+
+func insertCreatedMultilanguageValues(dialect goqu.DialectWrapper) *goqu.InsertDataset {
+	source := dialect.From(
+		goqu.T("affected_element_rows").As("a"),
+		goqu.L("jsonb_array_elements(COALESCE(a.row -> 'languageValues', '[]'::jsonb))").As("value"),
+	).Select(goqu.I("a.id"), jsonText("value", "language"), jsonText("value", "text")).
+		Where(jsonInt("a.row", "modelType").Eq(integerLiteral(int64(types.ModelTypeMultiLanguageProperty))))
+	return dialect.Insert("multilanguage_property_value").
+		Cols("submodel_element_id", "language", "text").
+		FromQuery(source).
+		Returning("submodel_element_id")
+}
+
+func insertCreatedValueIDPayload(
+	dialect goqu.DialectWrapper,
+	table string,
+	ownerColumn string,
+	modelType types.ModelType,
+) *goqu.InsertDataset {
+	source := dialect.From(goqu.T("affected_element_rows").As("a")).
+		Select(goqu.I("a.id"), jsonObject("a.row", "valueId")).
+		Where(
+			jsonInt("a.row", "modelType").Eq(integerLiteral(int64(modelType))),
+			goqu.L("a.row -> 'valueId' IS NOT NULL"),
+			goqu.L("a.row -> 'valueId' <> 'null'::jsonb"),
+		)
+	return dialect.Insert(table).
+		Cols(ownerColumn, "value_id_payload").
+		FromQuery(source).
+		Returning(ownerColumn)
 }
 
 func deleteAffectedRows(dialect goqu.DialectWrapper, table string, ownerColumn string, typeTable string) *goqu.DeleteDataset {
@@ -1049,6 +1256,30 @@ func executeSubmodelReconciliationStatement(
 	if result.UpdatedElements != len(plan.Updates) || result.InsertedElements != len(plan.Inserts) ||
 		result.DeletedElements != plan.ExpectedDeletedElements {
 		return reconciliationMutationResult{}, common.NewInternalServerError("SMREPO-RECON-COUNT affected element count does not match reconciliation plan")
+	}
+	return result, nil
+}
+
+func executeSubmodelCreateStatement(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	plan submodelReconciliationPlan,
+) (reconciliationMutationResult, error) {
+	planJSON, err := plan.marshal()
+	if err != nil {
+		return reconciliationMutationResult{}, err
+	}
+	query, args, err := newReconciliationQueryBuilder().buildCreate(planJSON, submodelID)
+	if err != nil {
+		return reconciliationMutationResult{}, common.NewInternalServerError("SMREPO-CREATE-BUILD " + err.Error())
+	}
+	var result reconciliationMutationResult
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&result.UpdatedElements, &result.InsertedElements, &result.DeletedElements); err != nil {
+		return reconciliationMutationResult{}, mapSubmodelReconciliationDatabaseError("SMREPO-CREATE", err)
+	}
+	if result.InsertedElements != len(plan.Inserts) {
+		return reconciliationMutationResult{}, common.NewInternalServerError("SMREPO-CREATE-COUNT affected element count does not match create plan")
 	}
 	return result, nil
 }
