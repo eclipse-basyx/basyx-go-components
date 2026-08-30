@@ -156,20 +156,6 @@ func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 	}, nil
 }
 
-func (s *SubmodelDatabase) buildSubmodelElementCreatePlan(
-	elements []types.ISubmodelElement,
-) (submodelReconciliationPlan, error) {
-	rows, err := submodelelements.BuildReconciliationElementRows(s.db, elements)
-	if err != nil {
-		return submodelReconciliationPlan{}, err
-	}
-	_, inserts, _, err := reconcileSubmodelElementRows(nil, rows)
-	if err != nil {
-		return submodelReconciliationPlan{}, err
-	}
-	return submodelReconciliationPlan{Inserts: inserts}, nil
-}
-
 type reconciliationSiblingPosition struct {
 	parentPath string
 	position   int

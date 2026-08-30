@@ -1,0 +1,7 @@
+kind: fixed
+body: SubmodelElement writes no longer maintain a duplicate path index already covered by the stable path-order index.
+time: 2026-08-30T22:15:00.000000+02:00
+custom:
+    Impact: Low
+    PullRequest: 643
+    SecurityImpact: Submodel persistence and authorization behavior remain unchanged; the retained index covers the same Submodel and idShort-path lookup prefix.

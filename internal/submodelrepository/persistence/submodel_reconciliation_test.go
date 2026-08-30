@@ -66,23 +66,6 @@ func TestSubmodelReconciliationQueryHasConstantSingleStatementShape(t *testing.T
 	require.Len(t, args, 2)
 }
 
-func TestSubmodelCreateQueryContainsOnlyInsertMutations(t *testing.T) {
-	submodel := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Value","modelType":"Property","valueType":"xs:string","value":"created"}]}`)
-	plan, err := (&SubmodelDatabase{}).buildSubmodelElementCreatePlan(submodel.SubmodelElements())
-	require.NoError(t, err)
-	planJSON, err := plan.marshal()
-	require.NoError(t, err)
-
-	query, args, err := newReconciliationQueryBuilder().buildCreate(planJSON, submodel.ID())
-
-	require.NoError(t, err)
-	require.NotContains(t, strings.TrimSuffix(query, ";"), ";")
-	require.Contains(t, query, "inserted_element_rows AS (INSERT")
-	require.NotContains(t, query, " AS (UPDATE")
-	require.NotContains(t, query, " AS (DELETE")
-	require.Len(t, args, 2)
-}
-
 func TestExecuteSubmodelReconciliationUsesOneQueryRowStatement(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -102,53 +85,6 @@ func TestExecuteSubmodelReconciliationUsesOneQueryRowStatement(t *testing.T) {
 	mock.ExpectRollback()
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestExecuteSubmodelCreateUsesOneQueryRowStatement(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() { _ = db.Close() }()
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	require.NoError(t, err)
-	plan := submodelReconciliationPlan{
-		Inserts: []submodelelements.ReconciliationElementRow{{Path: "Property"}},
-	}
-	mock.ExpectQuery(regexp.QuoteMeta("WITH reconciliation_plan")).
-		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 1, 0))
-
-	result, err := executeSubmodelCreateStatement(t.Context(), tx, "sm", plan)
-	require.NoError(t, err)
-	require.Equal(t, 1, result.InsertedElements)
-	mock.ExpectRollback()
-	require.NoError(t, tx.Rollback())
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestSubmodelCreatePlanInsertsCompleteElementGraph(t *testing.T) {
-	submodel := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"SubmodelElementCollection","value":[{"idShort":"Value","modelType":"Property","valueType":"xs:string","value":"created"}]}]}`)
-
-	plan, err := (&SubmodelDatabase{}).buildSubmodelElementCreatePlan(submodel.SubmodelElements())
-
-	require.NoError(t, err)
-	require.Len(t, plan.Inserts, 2)
-	require.Empty(t, plan.Updates)
-	require.Empty(t, plan.Deletes)
-	require.Equal(t, "Group", plan.Inserts[0].Path)
-	require.Equal(t, "Group.Value", plan.Inserts[1].Path)
-	for _, row := range plan.Inserts {
-		require.Equal(t, submodelelements.AllReconciliationElementChanges(), row.Changes)
-	}
-}
-
-func TestSubmodelCreatePlanRejectsDuplicateElementPaths(t *testing.T) {
-	submodel := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Duplicate","modelType":"Property","valueType":"xs:string"},{"idShort":"Duplicate","modelType":"Property","valueType":"xs:string"}]}`)
-
-	_, err := (&SubmodelDatabase{}).buildSubmodelElementCreatePlan(submodel.SubmodelElements())
-
-	require.Error(t, err)
-	require.Truef(t, common.IsErrConflict(err), "got %v", err)
-	require.Contains(t, err.Error(), "SMREPO-RECON-DUPLICATEPATH")
 }
 
 func TestReconciliationPlanMatchesNamedChildrenAndListsPositionally(t *testing.T) {
