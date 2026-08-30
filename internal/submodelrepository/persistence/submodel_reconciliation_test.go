@@ -87,6 +87,32 @@ func TestExecuteSubmodelReconciliationUsesOneQueryRowStatement(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestSubmodelCreatePlanInsertsCompleteElementGraph(t *testing.T) {
+	submodel := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"SubmodelElementCollection","value":[{"idShort":"Value","modelType":"Property","valueType":"xs:string","value":"created"}]}]}`)
+
+	plan, err := (&SubmodelDatabase{}).buildSubmodelElementCreatePlan(submodel.SubmodelElements())
+
+	require.NoError(t, err)
+	require.Len(t, plan.Inserts, 2)
+	require.Empty(t, plan.Updates)
+	require.Empty(t, plan.Deletes)
+	require.Equal(t, "Group", plan.Inserts[0].Path)
+	require.Equal(t, "Group.Value", plan.Inserts[1].Path)
+	for _, row := range plan.Inserts {
+		require.Equal(t, submodelelements.AllReconciliationElementChanges(), row.Changes)
+	}
+}
+
+func TestSubmodelCreatePlanRejectsDuplicateElementPaths(t *testing.T) {
+	submodel := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Duplicate","modelType":"Property","valueType":"xs:string"},{"idShort":"Duplicate","modelType":"Property","valueType":"xs:string"}]}`)
+
+	_, err := (&SubmodelDatabase{}).buildSubmodelElementCreatePlan(submodel.SubmodelElements())
+
+	require.Error(t, err)
+	require.Truef(t, common.IsErrConflict(err), "got %v", err)
+	require.Contains(t, err.Error(), "SMREPO-RECON-DUPLICATEPATH")
+}
+
 func TestReconciliationPlanMatchesNamedChildrenAndListsPositionally(t *testing.T) {
 	oldNamed := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"A","modelType":"Property","valueType":"xs:string","value":"a"},{"idShort":"B","modelType":"Property","valueType":"xs:string","value":"b"}]}`)
 	newNamed := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"B","modelType":"Property","valueType":"xs:string","value":"b"},{"idShort":"A","modelType":"Property","valueType":"xs:string","value":"a"}]}`)
