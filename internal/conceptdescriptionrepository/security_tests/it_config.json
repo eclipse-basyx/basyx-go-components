@@ -163,6 +163,14 @@
     "expectedStatus": 201
   },
   {
+    "context": "PUT editor-allowed concept description with mismatched body identifier - editor rejected",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "PUT",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOnBvc3QtYWxsb3dlZA",
+    "data": "postBody/cdEditorAllowedMismatchedID.json",
+    "expectedStatus": 400
+  },
+  {
     "context": "POST editor-denied concept description - editor",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",

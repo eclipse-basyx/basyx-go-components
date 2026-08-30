@@ -1,0 +1,7 @@
+kind: fixed
+body: Concept Description PUT operations update existing rows in place and reject mismatching path and body identifiers.
+time: 2026-08-30T17:00:00.000000+02:00
+custom:
+    Impact: Low
+    PullRequest: 642
+    SecurityImpact: Prevents PUT authorization and history from being split across different Concept Description identifiers.
