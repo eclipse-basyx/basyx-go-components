@@ -250,10 +250,8 @@ func TestPutSubmodelNoOpUpdateAppendsHistoryWithoutLiveMutation(t *testing.T) {
 	require.NoError(t, err)
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
-	expectForceGenericSubmodelPutPlan(mock)
 	expectBareSubmodelStateLoad(mock, "sm-existing", "smexisting")
 	expectSubmodelHistoryAppend(mock)
-	expectRestoreSubmodelPutPlan(mock)
 	mock.ExpectRollback()
 
 	result, err := sut.PutSubmodelInTransactionWithResult(contextWithABACDisabled(t), tx, "sm-existing", submodel)
@@ -280,13 +278,11 @@ func TestPutSubmodelChangedUpdateExecutesReconciliationAndHistory(t *testing.T) 
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
-	expectForceGenericSubmodelPutPlan(mock)
 	expectBareSubmodelStateLoad(mock, "sm-existing", "old")
 	mock.ExpectQuery(`WITH reconciliation_plan`).
 		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 0, 0))
 	expectBareSubmodelStateLoad(mock, "sm-existing", "new")
 	expectSubmodelHistoryAppend(mock)
-	expectRestoreSubmodelPutPlan(mock)
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
@@ -305,10 +301,8 @@ func TestPutSubmodelUpdateFormulaDenialRollsBackBeforeDiff(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
-	expectForceGenericSubmodelPutPlan(mock)
 	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
 		WillReturnRows(sqlmock.NewRows(submodelStateColumns()))
-	expectRestoreSubmodelPutPlan(mock)
 	mock.ExpectRollback()
 
 	_, err = sut.PutSubmodel(contextWithUpdateFormula(t, false), "sm-existing", submodel)
@@ -329,11 +323,9 @@ func TestPutSubmodelPostUpdateFormulaDenialRollsBack(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
-	expectForceGenericSubmodelPutPlan(mock)
 	expectBareSubmodelStateLoad(mock, "sm-existing", idShort)
 	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
 		WillReturnRows(sqlmock.NewRows(submodelStateColumns()))
-	expectRestoreSubmodelPutPlan(mock)
 	mock.ExpectRollback()
 
 	_, err = sut.PutSubmodel(contextWithUpdateFormula(t, true), "sm-existing", submodel)
@@ -559,7 +551,9 @@ func expectCreatedPutSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID strin
 
 func expectBareSubmodelStateLoad(mock sqlmock.Sqlmock, submodelID string, idShort string) {
 	expectSubmodelMetadataStateLoad(mock, submodelID, idShort, nil, nil, nil, nil, nil, nil, nil, nil)
+	expectForceGenericSubmodelPutPlan(mock)
 	expectEmptyRootSubmodelElementsLoad(mock)
+	expectRestoreSubmodelPutPlan(mock)
 }
 
 func expectSubmodelStateLoad(mock sqlmock.Sqlmock, submodelID string, idShort string, payloads ...any) {

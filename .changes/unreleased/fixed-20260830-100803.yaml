@@ -1,5 +1,5 @@
 kind: fixed
-body: Existing Submodel PUT requests reuse generic PostgreSQL plans for their stable reconciliation queries, avoiding repeated planning overhead on large databases.
+body: Existing Submodel PUT requests reuse generic PostgreSQL plans while loading persisted SubmodelElement state, avoiding repeated planning overhead on large databases.
 time: 2026-08-30T10:08:03.897453+02:00
 custom:
     Impact: Low

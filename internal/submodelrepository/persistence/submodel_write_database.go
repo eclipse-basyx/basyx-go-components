@@ -508,23 +508,12 @@ func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.T
 	return false, nil
 }
 
-func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submitted types.ISubmodel) (result PutSubmodelResult, err error) {
+func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submitted types.ISubmodel) (PutSubmodelResult, error) {
 	readCtx, shouldEnforce, err := selectPutFormulaContext(ctx, true)
 	if err != nil {
 		return PutSubmodelResult{}, err
 	}
-	restorePlanCacheMode, err := forceGenericPlanForSubmodelPutTx(ctx, tx)
-	if err != nil {
-		return PutSubmodelResult{}, err
-	}
-	defer func() {
-		if restoreErr := restorePlanCacheMode(); err == nil && restoreErr != nil {
-			result = PutSubmodelResult{}
-			err = restoreErr
-		}
-	}()
-
-	previous, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
+	previous, err := s.readExistingPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
 	if err != nil {
 		return PutSubmodelResult{}, mapPutReadbackError(err, shouldEnforce, true)
 	}
@@ -535,7 +524,7 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 	if !plan.hasLiveMutation() {
 		persisted := previous
 		if shouldEnforce {
-			persisted, err = s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
+			persisted, err = s.readExistingPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
 			if err != nil {
 				return PutSubmodelResult{}, mapPutReadbackError(err, true, false)
 			}
@@ -552,7 +541,7 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 	if !shouldEnforce && !recordHistory {
 		return PutSubmodelResult{IsUpdate: true, Changed: true, Previous: previous}, nil
 	}
-	persisted, err := s.readPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
+	persisted, err := s.readExistingPutSubmodelStateTx(readCtx, tx, submodelDatabaseID, submitted.ID())
 	if err != nil {
 		return PutSubmodelResult{}, mapPutReadbackError(err, shouldEnforce, false)
 	}
@@ -673,6 +662,24 @@ func selectPutFormulaContext(ctx context.Context, exists bool) (context.Context,
 }
 
 func (s *SubmodelDatabase) readPutSubmodelStateTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submodelID string) (types.ISubmodel, error) {
+	return s.readPutSubmodelStateWithElementsTx(
+		ctx, tx, submodelDatabaseID, submodelID, readPutSubmodelElementsTx,
+	)
+}
+
+func (s *SubmodelDatabase) readExistingPutSubmodelStateTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, submodelID string) (types.ISubmodel, error) {
+	return s.readPutSubmodelStateWithElementsTx(
+		ctx, tx, submodelDatabaseID, submodelID, readPutSubmodelElementsWithGenericPlanTx,
+	)
+}
+
+func (s *SubmodelDatabase) readPutSubmodelStateWithElementsTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelDatabaseID int,
+	submodelID string,
+	readElements func(context.Context, *sql.Tx, int) ([]types.ISubmodelElement, error),
+) (types.ISubmodel, error) {
 	metadataCtx, err := contextWithoutFragmentFilters(ctx)
 	if err != nil {
 		return nil, err
@@ -681,14 +688,33 @@ func (s *SubmodelDatabase) readPutSubmodelStateTx(ctx context.Context, tx *sql.T
 	if err != nil {
 		return nil, err
 	}
-	elements, err := submodelelements.GetSubmodelElementsByDatabaseIDTxInPersistenceOrder(
-		auth.ContextWithoutQueryFilter(ctx), tx, submodelDatabaseID, true,
-	)
+	elements, err := readElements(ctx, tx, submodelDatabaseID)
 	if err != nil {
 		return nil, err
 	}
 	submodel.SetSubmodelElements(elements)
 	return submodel, nil
+}
+
+func readPutSubmodelElementsTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int) ([]types.ISubmodelElement, error) {
+	return submodelelements.GetSubmodelElementsByDatabaseIDTxInPersistenceOrder(
+		auth.ContextWithoutQueryFilter(ctx), tx, submodelDatabaseID, true,
+	)
+}
+
+func readPutSubmodelElementsWithGenericPlanTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int) (elements []types.ISubmodelElement, err error) {
+	restorePlanCacheMode, err := forceGenericPlanForSubmodelPutTx(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if restoreErr := restorePlanCacheMode(); err == nil && restoreErr != nil {
+			elements = nil
+			err = restoreErr
+		}
+	}()
+
+	return readPutSubmodelElementsTx(ctx, tx, submodelDatabaseID)
 }
 
 func contextWithoutFragmentFilters(ctx context.Context) (context.Context, error) {
