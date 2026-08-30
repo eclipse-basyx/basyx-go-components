@@ -147,6 +147,10 @@ func loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx context.Context, 
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodelDescriptor, submodelID); err != nil {
 		return nil, err
 	}
+	return loadSubmodelDescriptorHistorySnapshotAfterMutationLockTx(ctx, tx, submodelID)
+}
+
+func loadSubmodelDescriptorHistorySnapshotAfterMutationLockTx(ctx context.Context, tx *sql.Tx, submodelID string) (map[string]any, error) {
 	descriptor, err := descriptors.GetSubmodelDescriptorByID(auth.ContextWithoutQueryFilter(ctx), tx, submodelID)
 	if err != nil {
 		return nil, err
@@ -295,6 +299,48 @@ func mapBulkInsertSubmodelDescriptorError(err error) error {
 	return err
 }
 
+func loadSubmodelDescriptorForUpdateTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+) (model.SubmodelDescriptor, error) {
+	descriptor, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID)
+	if err != nil || descriptors.CanSkipUpdateReadback(ctx) {
+		return descriptor, err
+	}
+	return descriptors.GetSubmodelDescriptorByID(auth.ContextWithoutQueryFilter(ctx), tx, submodelID)
+}
+
+func loadAuthorizedSubmodelDescriptorEvidenceSnapshotTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	allowNotFound bool,
+) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodelDescriptor, submodelID); err != nil {
+		return nil, err
+	}
+	if !descriptors.CanSkipUpdateReadback(ctx) {
+		if _, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID); err != nil {
+			if allowNotFound && common.IsErrNotFound(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+	}
+	snapshot, err := loadSubmodelDescriptorHistorySnapshotAfterMutationLockTx(ctx, tx, submodelID)
+	if err != nil {
+		if allowNotFound && common.IsErrNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return snapshot, nil
+}
+
 // ReplaceSubmodelDescriptor replaces a global Submodel Descriptor (no AAS association).
 func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 	ctx context.Context,
@@ -302,22 +348,36 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.writerDB, "SMREG-REPLACESMDESC-STARTTX", "SMREG-REPLACESMDESC-COMMITTX", func(tx *sql.Tx) error {
-		previousSnapshot, snapshotErr := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodel.Id)
+		previousSnapshot, snapshotErr := loadAuthorizedSubmodelDescriptorEvidenceSnapshotTx(ctx, tx, submodel.Id, false)
 		if snapshotErr != nil {
 			return snapshotErr
 		}
-		if _, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id); err != nil {
-			return err
-		}
-		if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
-			return err
-		}
-		stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+		descriptorID, err := descriptors.LockGlobalSubmodelDescriptorForUpdateTx(ctx, tx, submodel.Id)
 		if err != nil {
 			return err
 		}
-		if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, history.ChangeUpdated, false); err != nil {
+		previous, err := loadSubmodelDescriptorForUpdateTx(ctx, tx, submodel.Id)
+		if err != nil {
 			return err
+		}
+		changed, err := descriptors.UpdateSubmodelDescriptorTx(ctx, tx, descriptorID, previous, submodel, 0, false)
+		if err != nil {
+			return err
+		}
+		stored := previous
+		if changed {
+			stored = submodel
+			if !descriptors.CanSkipUpdateReadback(ctx) || history.MutationRecordingEnabled() {
+				stored, err = descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if history.MutationRecordingEnabled() {
+			if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, history.ChangeUpdated, false); err != nil {
+				return err
+			}
 		}
 		result = stored
 		return nil
@@ -339,8 +399,8 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 		return common.NewInternalServerError("SMREG-UPSERTSMDESC-NILTX transaction must not be nil")
 	}
 
-	previousSnapshot, err := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodel.Id)
-	if err != nil && !common.IsErrNotFound(err) {
+	previousSnapshot, err := loadAuthorizedSubmodelDescriptorEvidenceSnapshotTx(ctx, tx, submodel.Id, true)
+	if err != nil {
 		return err
 	}
 	if err := lockSubmodelDescriptorUpsertTx(ctx, tx, submodel.Id); err != nil {
@@ -348,29 +408,51 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 	}
 
 	created := false
-	_, err = descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
-	if err != nil && !common.IsErrNotFound(err) {
-		return err
-	}
-	if common.IsErrNotFound(err) {
+	var stored model.SubmodelDescriptor
+	descriptorID, lockErr := descriptors.LockGlobalSubmodelDescriptorForUpdateTx(ctx, tx, submodel.Id)
+	switch {
+	case lockErr == nil:
+		previous, getErr := loadSubmodelDescriptorForUpdateTx(ctx, tx, submodel.Id)
+		if getErr != nil {
+			return getErr
+		}
+		changed, updateErr := descriptors.UpdateSubmodelDescriptorTx(ctx, tx, descriptorID, previous, submodel, 0, false)
+		if updateErr != nil {
+			return updateErr
+		}
+		stored = previous
+		if changed {
+			stored = submodel
+		}
+	case common.IsErrNotFound(lockErr):
 		created = true
+		var insertErr error
+		stored, insertErr = descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+		if insertErr != nil {
+			return insertErr
+		}
+	default:
+		return lockErr
 	}
 
-	if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
-		if !common.IsErrNotFound(err) {
+	canSkipReadback := descriptors.CanSkipUpdateReadback(ctx)
+	if created {
+		canSkipReadback = descriptors.CanSkipCreateReadback(ctx)
+	}
+	if !canSkipReadback || history.MutationRecordingEnabled() {
+		stored, err = descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
+		if err != nil {
 			return err
 		}
-	}
-
-	stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
-	if err != nil {
-		return err
 	}
 	changeType := history.ChangeUpdated
 	if created {
 		changeType = history.ChangeCreated
 	}
-	return appendSubmodelDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, changeType, false)
+	if history.MutationRecordingEnabled() {
+		return appendSubmodelDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, changeType, false)
+	}
+	return nil
 }
 
 func lockSubmodelDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, submodelID string) error {
