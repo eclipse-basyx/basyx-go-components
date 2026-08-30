@@ -1,0 +1,7 @@
+kind: fixed
+body: Concept Description PUT operations update existing rows in place instead of deleting and recreating them.
+time: 2026-08-30T17:00:00.000000+02:00
+custom:
+    Impact: Low
+    PullRequest: 0
+    SecurityImpact: Existing pre-update and post-update ABAC checks remain unchanged.

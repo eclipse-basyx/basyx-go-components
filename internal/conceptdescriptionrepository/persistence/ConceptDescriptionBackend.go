@@ -235,6 +235,46 @@ func (b *ConceptDescriptionBackend) createConceptDescriptionInTx(ctx context.Con
 	return nil
 }
 
+func (b *ConceptDescriptionBackend) updateConceptDescriptionInTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	id string,
+	cd types.IConceptDescription,
+) error {
+	conceptDescriptionString, err := conceptDescriptionToJSONString(cd)
+	if err != nil {
+		return err
+	}
+
+	updateQuery, args, err := goqu.Dialect("postgres").
+		Update("concept_description").
+		Set(goqu.Record{
+			"id":       cd.ID(),
+			"id_short": cd.IDShort(),
+			"data":     goqu.L("?::jsonb", conceptDescriptionString),
+		}).
+		Where(goqu.C("id").Eq(id)).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("CDREPO-PUTCD-BUILDUPDATE " + err.Error())
+	}
+
+	result, err := tx.ExecContext(ctx, updateQuery, args...)
+	if err != nil {
+		return common.NewInternalServerError("CDREPO-PUTCD-EXECUPDATE " + err.Error())
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return common.NewInternalServerError("CDREPO-PUTCD-UPDATECOUNT " + err.Error())
+	}
+	if rowsAffected != 1 {
+		return common.NewInternalServerError("CDREPO-PUTCD-UPDATEMISSING existing concept description disappeared during update")
+	}
+
+	return nil
+}
+
 func (b *ConceptDescriptionBackend) deleteConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
 	delQuery, args, err := goqu.Delete("concept_description").Where(goqu.Ex{"id": id}).ToSQL()
 	if err != nil {
@@ -634,15 +674,15 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		}
 	}
 
-	isUpdate := false
-	if existingExists {
-		if isUpdate, err = b.deleteConceptDescriptionInTx(ctx, tx, id); err != nil {
+	isUpdate := existingExists
+	if isUpdate {
+		if err = b.updateConceptDescriptionInTx(ctx, tx, id, cd); err != nil {
 			return false, err
 		}
-	}
-
-	if err = b.createConceptDescriptionInTx(ctx, tx, cd); err != nil {
-		return false, err
+	} else {
+		if err = b.createConceptDescriptionInTx(ctx, tx, cd); err != nil {
+			return false, err
+		}
 	}
 
 	if shouldEnforceFormula {
