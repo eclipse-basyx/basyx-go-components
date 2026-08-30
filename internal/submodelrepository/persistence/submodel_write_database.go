@@ -202,21 +202,19 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(ctx context.Context, tx *
 	if err = appendSubmodelSemanticIDCreate(metadataBatch, submodelDBID, submodel.SemanticID()); err != nil {
 		return err
 	}
-	if len(submodel.SubmodelElements()) > 0 {
-		submodelDatabaseID, conversionErr := submodelDatabaseIDAsInt(submodelDBID)
-		if conversionErr != nil {
-			return conversionErr
-		}
-
-		_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseIDContext(ctx, s.db, submodelDatabaseID, submodel.SubmodelElements(), tx, nil, metadataBatch)
-		if err != nil {
-			return err
-		}
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, metadataBatch.Statements()); err != nil {
+		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECMETADATABATCH " + err.Error())
+	}
+	if len(submodel.SubmodelElements()) == 0 {
 		return nil
 	}
 
-	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, metadataBatch.Statements()); err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECMETADATABATCH " + err.Error())
+	plan, err := s.buildSubmodelElementCreatePlan(submodel.SubmodelElements())
+	if err != nil {
+		return err
+	}
+	if _, err = executeSubmodelReconciliationStatement(ctx, tx, submodel.ID(), plan); err != nil {
+		return err
 	}
 
 	return nil
@@ -250,13 +248,6 @@ func appendSubmodelSemanticIDCreate(batch *common.PostgreSQLBatch, submodelDBID 
 		}
 	}
 	return nil
-}
-
-func submodelDatabaseIDAsInt(submodelDBID int64) (int, error) {
-	if submodelDBID <= 0 || submodelDBID > int64(int(^uint(0)>>1)) {
-		return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATESM-SMDATABASEIDRANGE Submodel database ID is outside the supported integer range")
-	}
-	return int(submodelDBID), nil
 }
 
 func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix string) error {
