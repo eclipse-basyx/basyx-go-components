@@ -478,6 +478,18 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	})
 }
 
+func loadAASDescriptorForUpdateTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasID string,
+) (model.AssetAdministrationShellDescriptor, error) {
+	descriptor, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
+	if err != nil || descriptors.CanSkipUpdateReadback(ctx) {
+		return descriptor, err
+	}
+	return descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ContextWithoutQueryFilter(ctx), tx, aasID)
+}
+
 // ReplaceAdministrationShellDescriptor replaces an existing AAS descriptor
 // with the given value and reports whether it existed.
 func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
@@ -490,26 +502,34 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 		if snapshotErr != nil {
 			return snapshotErr
 		}
-		if _, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
-			return err
-		}
-		createdAt, err := descriptors.GetAASDescriptorCreatedAtByIDTx(ctx, tx, aasd.Id)
+		descriptorID, err := descriptors.LockAdministrationShellDescriptorForUpdateTx(ctx, tx, aasd.Id)
 		if err != nil {
 			return err
 		}
-		aasd.CreatedAt = &createdAt
-		if err := descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
-			return err
-		}
-		if err := descriptors.InsertAdministrationShellDescriptorTx(descriptors.WithAllowAASDescriptorCreatedAtOverride(ctx), tx, aasd); err != nil {
-			return err
-		}
-		stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+		previous, err := loadAASDescriptorForUpdateTx(ctx, tx, aasd.Id)
 		if err != nil {
 			return err
 		}
-		if err := appendDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, history.ChangeUpdated, false); err != nil {
+		changed, err := descriptors.UpdateAdministrationShellDescriptorTx(ctx, tx, descriptorID, previous, aasd)
+		if err != nil {
 			return err
+		}
+
+		stored := previous
+		if changed {
+			aasd.CreatedAt = previous.CreatedAt
+			stored = aasd
+			if !descriptors.CanSkipUpdateReadback(ctx) || history.MutationRecordingEnabled() {
+				stored, err = descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if history.MutationRecordingEnabled() {
+			if err = appendDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, history.ChangeUpdated, false); err != nil {
+				return err
+			}
 		}
 		result = stored
 		return nil
@@ -535,19 +555,53 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 	if err != nil && !common.IsErrNotFound(err) {
 		return err
 	}
-	created, err := descriptors.UpsertAdministrationShellDescriptorTx(ctx, tx, aasd)
-	if err != nil {
-		return err
+	created := false
+	stored := aasd
+	descriptorID, lockErr := descriptors.LockAdministrationShellDescriptorForUpdateTx(ctx, tx, aasd.Id)
+	switch {
+	case lockErr == nil:
+		previous, getErr := loadAASDescriptorForUpdateTx(ctx, tx, aasd.Id)
+		if getErr != nil {
+			return getErr
+		}
+		changed, updateErr := descriptors.UpdateAdministrationShellDescriptorTx(ctx, tx, descriptorID, previous, aasd)
+		if updateErr != nil {
+			return updateErr
+		}
+		stored = previous
+		if changed {
+			aasd.CreatedAt = previous.CreatedAt
+			stored = aasd
+		}
+	case common.IsErrNotFound(lockErr):
+		created = true
+		if insertErr := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); insertErr != nil {
+			return insertErr
+		}
+	default:
+		return lockErr
 	}
 
-	stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
-	if err != nil {
-		return err
+	canSkipReadback := descriptors.CanSkipUpdateReadback(ctx)
+	if created {
+		canSkipReadback = descriptors.CanSkipCreateReadback(ctx)
+	}
+	if !canSkipReadback || history.MutationRecordingEnabled() {
+		stored, err = descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+		if err != nil {
+			return err
+		}
 	}
 	if created {
-		return appendDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false)
+		if history.MutationRecordingEnabled() {
+			return appendDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false)
+		}
+		return nil
 	}
-	return appendDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, history.ChangeUpdated, false)
+	if history.MutationRecordingEnabled() {
+		return appendDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, history.ChangeUpdated, false)
+	}
+	return nil
 }
 
 // DeleteAssetAdministrationShellDescriptorByIDInTransaction deletes an AAS
@@ -700,6 +754,19 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 	return result, nil
 }
 
+func loadEmbeddedSubmodelDescriptorForUpdateTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasID string,
+	submodelID string,
+) (model.SubmodelDescriptor, error) {
+	descriptor, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodelID)
+	if err != nil || descriptors.CanSkipUpdateReadback(ctx) {
+		return descriptor, err
+	}
+	return descriptors.GetSubmodelDescriptorForAASByID(auth.ContextWithoutQueryFilter(ctx), tx, aasID, submodelID)
+}
+
 // ReplaceSubmodelDescriptorForAAS replaces a submodel descriptor for the given
 // AAS ID and reports whether it existed.
 func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
@@ -713,18 +780,32 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 		if snapshotErr != nil {
 			return snapshotErr
 		}
-		if _, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodel.Id); err != nil {
-			return err
-		}
-		if err := descriptors.DeleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodel.Id); err != nil {
-			return err
-		}
-		stored, err := descriptors.InsertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
+		descriptorID, position, err := descriptors.LockSubmodelDescriptorForAASUpdateTx(ctx, tx, aasID, submodel.Id)
 		if err != nil {
 			return err
 		}
-		if err := p.appendReplacedSubmodelDescriptorHistoryTx(ctx, tx, aasID, previousSnapshot, stored); err != nil {
+		previous, err := loadEmbeddedSubmodelDescriptorForUpdateTx(ctx, tx, aasID, submodel.Id)
+		if err != nil {
 			return err
+		}
+		changed, err := descriptors.UpdateSubmodelDescriptorTx(ctx, tx, descriptorID, previous, submodel, position, false)
+		if err != nil {
+			return err
+		}
+		stored := previous
+		if changed {
+			stored = submodel
+			if !descriptors.CanSkipUpdateReadback(ctx) || history.MutationRecordingEnabled() {
+				stored, err = descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodel.Id)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if history.MutationRecordingEnabled() {
+			if err = p.appendReplacedSubmodelDescriptorHistoryTx(ctx, tx, aasID, previousSnapshot, stored); err != nil {
+				return err
+			}
 		}
 		result = stored
 		return nil

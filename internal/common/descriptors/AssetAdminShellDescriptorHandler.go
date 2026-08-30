@@ -156,6 +156,25 @@ func CanSkipDeleteReadback(ctx context.Context) bool {
 	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumDELETE)
 }
 
+// CanSkipUpdateReadback reports whether the request context has no restrictive
+// update formula or fragment filter that requires post-update authorization.
+func CanSkipUpdateReadback(ctx context.Context) bool {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return true
+	}
+	if len(queryFilter.Filters) > 0 {
+		return false
+	}
+	if len(queryFilter.FormulasByRight) > 0 {
+		return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumUPDATE)
+	}
+	if queryFilter.Formula == nil {
+		return true
+	}
+	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumUPDATE)
+}
+
 // InsertAdministrationShellDescriptorTx performs the same insert as
 // InsertAdministrationShellDescriptor but uses the provided transaction. This allows
 // callers to compose multiple writes into a single atomic unit.

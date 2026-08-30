@@ -50,100 +50,109 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 			startPosition = nextPosition
 		}
 
-		d := goqu.Dialect(common.Dialect)
 		for i, val := range submodelDescriptors {
-			var err error
 			position := i
 			if useAppendPosition {
 				position = startPosition + i
 			}
-
-			descriptionPayload, err := buildLangStringTextPayload(val.Description)
-			if err != nil {
-				return common.NewInternalServerError("SMDESC-INSERT-DESCRIPTIONPAYLOAD")
-			}
-			displayNamePayload, err := buildLangStringNamePayload(val.DisplayName)
-			if err != nil {
-				return common.NewInternalServerError("SMDESC-INSERT-DISPLAYNAMEPAYLOAD")
-			}
-			administrationPayload, err := buildAdministrativeInfoPayload(val.Administration)
-			if err != nil {
-				return common.NewInternalServerError("SMDESC-INSERT-ADMINPAYLOAD")
-			}
-			extensionsPayload, err := buildExtensionsPayload(val.Extensions)
-			if err != nil {
-				return common.NewInternalServerError("SMDESC-INSERT-EXTENSIONPAYLOAD")
-			}
-
-			sqlStr, args, err := d.
-				Insert(common.TblDescriptor).
-				Returning(common.TDescriptor.Col(common.ColID)).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-			var submodelDescriptorID int64
-			if err = tx.QueryRow(sqlStr, args...).Scan(&submodelDescriptorID); err != nil {
-				return err
-			}
-
-			sqlStr, args, err = d.
-				Insert(common.TblSubmodelDescriptor).
-				Rows(goqu.Record{
-					common.ColDescriptorID:    submodelDescriptorID,
-					common.ColPosition:        position,
-					common.ColAASDescriptorID: aasDescriptorID,
-					common.ColIDShort:         val.IdShort,
-					common.ColAASID:           val.Id,
-				}).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-			if _, err = tx.Exec(sqlStr, args...); err != nil {
-				return err
-			}
-
-			if err = common.CreateContextReference(
-				tx,
-				submodelDescriptorID,
-				val.SemanticId,
-				"submodel_descriptor_semantic_id_reference",
-				"submodel_descriptor_semantic_id_reference_key",
-			); err != nil {
-				return err
-			}
-
-			sqlStr, args, err = d.
-				Insert(common.TblDescriptorPayload).
-				Rows(goqu.Record{
-					common.ColDescriptorID:              submodelDescriptorID,
-					common.ColDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
-					common.ColDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
-					common.ColAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
-					common.ColExtensionsPayload:         goqu.L("?::jsonb", string(extensionsPayload)),
-				}).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-			if _, err = tx.Exec(sqlStr, args...); err != nil {
-				return err
-			}
-
-			if err = createsubModelDescriptorSupplementalSemantic(tx, submodelDescriptorID, val.SupplementalSemanticId); err != nil {
-				return err
-			}
-
-			if len(val.Endpoints) == 0 {
-				return common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
-			}
-			if err = CreateEndpoints(tx, submodelDescriptorID, val.Endpoints); err != nil {
+			if _, err := insertSubmodelDescriptorAtPositionTx(tx, aasDescriptorID, val, position); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func insertSubmodelDescriptorAtPositionTx(
+	tx *sql.Tx,
+	aasDescriptorID sql.NullInt64,
+	value model.SubmodelDescriptor,
+	position int,
+) (int64, error) {
+	if len(value.Endpoints) == 0 {
+		return 0, common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
+	}
+
+	descriptionPayload, err := buildLangStringTextPayload(value.Description)
+	if err != nil {
+		return 0, common.NewInternalServerError("SMDESC-INSERT-DESCRIPTIONPAYLOAD")
+	}
+	displayNamePayload, err := buildLangStringNamePayload(value.DisplayName)
+	if err != nil {
+		return 0, common.NewInternalServerError("SMDESC-INSERT-DISPLAYNAMEPAYLOAD")
+	}
+	administrationPayload, err := buildAdministrativeInfoPayload(value.Administration)
+	if err != nil {
+		return 0, common.NewInternalServerError("SMDESC-INSERT-ADMINPAYLOAD")
+	}
+	extensionsPayload, err := buildExtensionsPayload(value.Extensions)
+	if err != nil {
+		return 0, common.NewInternalServerError("SMDESC-INSERT-EXTENSIONPAYLOAD")
+	}
+
+	d := goqu.Dialect(common.Dialect)
+	sqlStr, args, err := d.
+		Insert(common.TblDescriptor).
+		Returning(common.TDescriptor.Col(common.ColID)).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	var descriptorID int64
+	if err = tx.QueryRow(sqlStr, args...).Scan(&descriptorID); err != nil {
+		return 0, err
+	}
+
+	sqlStr, args, err = d.
+		Insert(common.TblSubmodelDescriptor).
+		Rows(goqu.Record{
+			common.ColDescriptorID:    descriptorID,
+			common.ColPosition:        position,
+			common.ColAASDescriptorID: aasDescriptorID,
+			common.ColIDShort:         value.IdShort,
+			common.ColAASID:           value.Id,
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	if _, err = tx.Exec(sqlStr, args...); err != nil {
+		return 0, err
+	}
+
+	if err = common.CreateContextReference(
+		tx,
+		descriptorID,
+		value.SemanticId,
+		"submodel_descriptor_semantic_id_reference",
+		"submodel_descriptor_semantic_id_reference_key",
+	); err != nil {
+		return 0, err
+	}
+
+	sqlStr, args, err = d.
+		Insert(common.TblDescriptorPayload).
+		Rows(goqu.Record{
+			common.ColDescriptorID:              descriptorID,
+			common.ColDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
+			common.ColDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
+			common.ColAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
+			common.ColExtensionsPayload:         goqu.L("?::jsonb", string(extensionsPayload)),
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	if _, err = tx.Exec(sqlStr, args...); err != nil {
+		return 0, err
+	}
+	if err = createsubModelDescriptorSupplementalSemantic(tx, descriptorID, value.SupplementalSemanticId); err != nil {
+		return 0, err
+	}
+	if err = CreateEndpoints(tx, descriptorID, value.Endpoints); err != nil {
+		return 0, err
+	}
+	return descriptorID, nil
 }
 
 func getNextSubmodelDescriptorPosition(tx *sql.Tx, aasDescriptorID int64) (int, error) {
