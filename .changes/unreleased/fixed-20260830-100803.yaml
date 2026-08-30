@@ -1,0 +1,7 @@
+kind: fixed
+body: Existing Submodel PUT requests reuse generic PostgreSQL plans while loading persisted SubmodelElement state, avoiding repeated planning overhead on large databases.
+time: 2026-08-30T10:08:03.897453+02:00
+custom:
+    Impact: Low
+    PullRequest: 640
+    SecurityImpact: Authorization and transaction isolation remain unchanged; persisted replacement semantics are unchanged.
