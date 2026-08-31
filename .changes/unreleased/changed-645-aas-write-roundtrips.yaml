@@ -1,5 +1,5 @@
 kind: changed
-body: AAS create and delete operations use one PostgreSQL execution for their core persistence work, reducing writer connection occupation under concurrent load.
+body: AAS create and delete operations avoid separate root and lookup executions for batches within the existing size limits, reducing writer connection occupation under concurrent load.
 time: 2026-08-31T11:00:00.000000+02:00
 custom:
   Impact: Low
