@@ -55,9 +55,7 @@ func TestCreateAssetAdministrationShellPersistsDefaultThumbnail(t *testing.T) {
 		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, "https://example.com/ids/sm/1")},
 	)})
 
-	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(17))
-	mock.ExpectExec(`(?s)INSERT INTO "aas_payload".*INSERT INTO "asset_information".*INSERT INTO "thumbnail_file_element".*INSERT INTO "specific_asset_id".*INSERT INTO "specific_asset_id_payload".*INSERT INTO "aas_submodel_reference".*INSERT INTO "aas_submodel_reference_key".*INSERT INTO "aas_submodel_reference_payload"`).
+	mock.ExpectExec(`(?s)INSERT INTO "aas".*INSERT INTO "aas_payload".*currval.*INSERT INTO "asset_information".*INSERT INTO "thumbnail_file_element".*INSERT INTO "specific_asset_id".*INSERT INTO "specific_asset_id_payload".*INSERT INTO "aas_submodel_reference".*INSERT INTO "aas_submodel_reference_key".*INSERT INTO "aas_submodel_reference_payload"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	repository := &AssetAdministrationShellDatabase{}
@@ -85,7 +83,7 @@ func TestCreateAssetAdministrationShellLargeDuplicateStopsAfterRootInsert(t *tes
 	aas.SetSubmodels(references)
 
 	duplicateErr := &pgconn.PgError{Code: "23505", ConstraintName: "aas_aas_id_key"}
-	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).WillReturnError(duplicateErr)
+	mock.ExpectExec(`(?s)^INSERT INTO "aas"`).WillReturnError(duplicateErr)
 	mock.ExpectRollback()
 
 	repository := &AssetAdministrationShellDatabase{}
@@ -130,10 +128,8 @@ func TestCreateAssetAdministrationShellDependentConflictRemainsInternal(t *testi
 		types.NewAssetInformation(types.AssetKindInstance),
 	)
 
-	mock.ExpectQuery(`INSERT INTO "aas".*RETURNING "id"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(17))
 	dependentErr := &pgconn.PgError{Code: "23505"}
-	mock.ExpectExec(`(?s)INSERT INTO "aas_payload".*INSERT INTO "asset_information"`).
+	mock.ExpectExec(`(?s)INSERT INTO "aas".*INSERT INTO "aas_payload".*INSERT INTO "asset_information"`).
 		WillReturnError(dependentErr)
 	mock.ExpectRollback()
 
