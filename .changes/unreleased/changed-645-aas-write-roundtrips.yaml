@@ -1,0 +1,7 @@
+kind: changed
+body: AAS create and delete operations use one PostgreSQL execution for their core persistence work, reducing writer connection occupation under concurrent load.
+time: 2026-08-31T11:00:00.000000+02:00
+custom:
+  Impact: Low
+  PullRequest: 645
+  SecurityImpact: Existing duplicate visibility, ABAC, history, row-locking, not-found, and managed-thumbnail cleanup behavior remains unchanged.
