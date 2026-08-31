@@ -324,13 +324,26 @@ type HistoryIntegrityAnchorConfig struct {
 	Provider string `mapstructure:"provider" yaml:"provider" json:"provider"` // none today; immudb/Rekor/Trillian later
 }
 
-// EventingConfig reserves future-compatible eventing configuration.
+// EventingConfig configures CloudEvents feed and reserves future sinks/outbox options.
 type EventingConfig struct {
-	Enabled       bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Format        string   `mapstructure:"format" yaml:"format" json:"format"`
-	Sinks         []string `mapstructure:"sinks" yaml:"sinks" json:"sinks"`
-	OutboxEnabled bool     `mapstructure:"outboxEnabled" yaml:"outboxEnabled" json:"outboxEnabled"`
-	TopicPrefix   string   `mapstructure:"topicPrefix" yaml:"topicPrefix" json:"topicPrefix"`
+	Enabled       bool            `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Format        string          `mapstructure:"format" yaml:"format" json:"format"`
+	Sinks         []string        `mapstructure:"sinks" yaml:"sinks" json:"sinks"`
+	OutboxEnabled bool            `mapstructure:"outboxEnabled" yaml:"outboxEnabled" json:"outboxEnabled"`
+	TopicPrefix   string          `mapstructure:"topicPrefix" yaml:"topicPrefix" json:"topicPrefix"`
+	Feed          EventFeedConfig `mapstructure:"feed" yaml:"feed" json:"feed"`
+}
+
+// EventFeedConfig configures the REST Event Feed module.
+type EventFeedConfig struct {
+	MaxAgeDays           int    `mapstructure:"maxAgeDays" yaml:"maxAgeDays" json:"maxAgeDays"`
+	HardDeleteGraceDays  int    `mapstructure:"hardDeleteGraceDays" yaml:"hardDeleteGraceDays" json:"hardDeleteGraceDays"`
+	MaxPageSize          int    `mapstructure:"maxPageSize" yaml:"maxPageSize" json:"maxPageSize"`
+	SourceBaseURL        string `mapstructure:"sourceBaseUrl" yaml:"sourceBaseUrl" json:"sourceBaseUrl"`
+	SchemaBaseURL        string `mapstructure:"schemaBaseUrl" yaml:"schemaBaseUrl" json:"schemaBaseUrl"`
+	PublicAccess         bool   `mapstructure:"publicAccess" yaml:"publicAccess" json:"publicAccess"`
+	BearerAuth           bool   `mapstructure:"bearerAuth" yaml:"bearerAuth" json:"bearerAuth"`
+	CleanupIntervalHours int    `mapstructure:"cleanupIntervalHours" yaml:"cleanupIntervalHours" json:"cleanupIntervalHours"`
 }
 
 // SwaggerConfig contains Swagger/OpenAPI documentation configuration parameters.
@@ -926,6 +939,18 @@ func applyEventingEnvOverrides(cfg *Config) {
 	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_TOPIC_PREFIX"); ok {
 		cfg.Eventing.TopicPrefix = value
 	}
+	applyIntEnv("BASYX_EVENTING_FEED_MAX_AGE_DAYS", func(value int) { cfg.Eventing.Feed.MaxAgeDays = value })
+	applyIntEnv("BASYX_EVENTING_FEED_HARD_DELETE_GRACE_DAYS", func(value int) { cfg.Eventing.Feed.HardDeleteGraceDays = value })
+	applyIntEnv("BASYX_EVENTING_FEED_MAX_PAGE_SIZE", func(value int) { cfg.Eventing.Feed.MaxPageSize = value })
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_FEED_SOURCE_BASE_URL"); ok {
+		cfg.Eventing.Feed.SourceBaseURL = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_FEED_SCHEMA_BASE_URL"); ok {
+		cfg.Eventing.Feed.SchemaBaseURL = value
+	}
+	applyBoolEnv("BASYX_EVENTING_FEED_PUBLIC_ACCESS", func(value bool) { cfg.Eventing.Feed.PublicAccess = value })
+	applyBoolEnv("BASYX_EVENTING_FEED_BEARER_AUTH", func(value bool) { cfg.Eventing.Feed.BearerAuth = value })
+	applyIntEnv("BASYX_EVENTING_FEED_CLEANUP_INTERVAL_HOURS", func(value int) { cfg.Eventing.Feed.CleanupIntervalHours = value })
 }
 
 func validateHistoryAndEventingConfig(cfg *Config) error {
@@ -1032,10 +1057,59 @@ func validateIntegrityAnchorConfig(cfg HistoryIntegrityAnchorConfig) error {
 }
 
 func validateEventingConfig(cfg EventingConfig) error {
-	if cfg.Enabled || cfg.OutboxEnabled || len(cfg.Sinks) > 0 {
-		return fmt.Errorf("CONFIG-EVENTING-NOTIMPLEMENTED eventing publishing and outbox processing are not implemented yet")
+	// MQTT/Kafka sinks and outbox are still out of scope.
+	if cfg.OutboxEnabled || len(cfg.Sinks) > 0 {
+		return fmt.Errorf("CONFIG-EVENTING-SINKS-NOTIMPLEMENTED eventing sinks/outbox (MQTT/Kafka) are not implemented yet")
+	}
+	if !cfg.Enabled {
+		return nil
+	}
+	format := strings.ToLower(strings.TrimSpace(cfg.Format))
+	if format != "" && format != "cloudevents" {
+		return fmt.Errorf("CONFIG-EVENTING-FORMAT unsupported eventing.format %q (supported: cloudevents)", cfg.Format)
+	}
+	if cfg.Feed.MaxPageSize < 0 {
+		return fmt.Errorf("CONFIG-EVENTING-FEED-MAXPAGESIZE eventing.feed.maxPageSize must not be negative")
+	}
+	if cfg.Feed.MaxAgeDays < 0 {
+		return fmt.Errorf("CONFIG-EVENTING-FEED-MAXAGE eventing.feed.maxAgeDays must not be negative")
+	}
+	if cfg.Feed.HardDeleteGraceDays < 0 {
+		return fmt.Errorf("CONFIG-EVENTING-FEED-HARDDELETE eventing.feed.hardDeleteGraceDays must not be negative")
 	}
 	return nil
+}
+
+// EventFeedRuntimeConfig maps service configuration to the eventfeed module config.
+func EventFeedRuntimeConfig(cfg EventingConfig) (maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours int, sourceBaseURL, schemaBaseURL string, publicAccess, bearerAuth, enabled bool) {
+	maxAgeDays = cfg.Feed.MaxAgeDays
+	if maxAgeDays <= 0 {
+		maxAgeDays = 30
+	}
+	hardDeleteGraceDays = cfg.Feed.HardDeleteGraceDays
+	if hardDeleteGraceDays < 0 {
+		hardDeleteGraceDays = 10
+	}
+	if cfg.Feed.HardDeleteGraceDays == 0 {
+		hardDeleteGraceDays = 10
+	}
+	maxPageSize = cfg.Feed.MaxPageSize
+	if maxPageSize <= 0 {
+		maxPageSize = 100
+	}
+	cleanupHours = cfg.Feed.CleanupIntervalHours
+	if cleanupHours <= 0 {
+		cleanupHours = 24
+	}
+	sourceBaseURL = strings.TrimSpace(cfg.Feed.SourceBaseURL)
+	if sourceBaseURL == "" {
+		sourceBaseURL = "http://localhost"
+	}
+	schemaBaseURL = strings.TrimSpace(cfg.Feed.SchemaBaseURL)
+	if schemaBaseURL == "" {
+		schemaBaseURL = "https://admin-shell.io/events/schemas"
+	}
+	return maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours, sourceBaseURL, schemaBaseURL, cfg.Feed.PublicAccess, cfg.Feed.BearerAuth, cfg.Enabled
 }
 
 func normalizeProvider(provider string) string {
@@ -1259,12 +1333,20 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("history.evidence.signing.required", DefaultConfig.HistoryEvidenceSigningRequired)
 	v.SetDefault("history.integrityAnchor.provider", DefaultConfig.HistoryIntegrityAnchorProvider)
 
-	// Eventing placeholders
+	// Eventing / Event Feed
 	v.SetDefault("eventing.enabled", false)
 	v.SetDefault("eventing.format", "cloudevents")
 	v.SetDefault("eventing.sinks", []string{})
 	v.SetDefault("eventing.outboxEnabled", false)
 	v.SetDefault("eventing.topicPrefix", "basyx")
+	v.SetDefault("eventing.feed.maxAgeDays", 30)
+	v.SetDefault("eventing.feed.hardDeleteGraceDays", 10)
+	v.SetDefault("eventing.feed.maxPageSize", 100)
+	v.SetDefault("eventing.feed.sourceBaseUrl", "http://localhost")
+	v.SetDefault("eventing.feed.schemaBaseUrl", "https://admin-shell.io/events/schemas")
+	v.SetDefault("eventing.feed.publicAccess", false)
+	v.SetDefault("eventing.feed.bearerAuth", false)
+	v.SetDefault("eventing.feed.cleanupIntervalHours", 24)
 
 	// Swagger defaults
 	v.SetDefault("swagger.enabled", DefaultConfig.SwaggerEnabled)

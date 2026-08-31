@@ -30,6 +30,7 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -48,6 +49,7 @@ type AssetAdministrationShellRepositoryAPIAPIService struct {
 	submodelAPI                     *submodelapi.SubmodelRepositoryAPIAPIService
 	lifecycleContext                context.Context
 	asyncJobManager                 *asyncjob.Manager
+	eventFeed                       *eventfeed.Module
 }
 
 const componentName = "AASREPO"
@@ -75,6 +77,25 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(
 		lifecycleContext:                ctx,
 		asyncJobManager:                 asyncJobManager,
 	}
+}
+
+// SetEventFeed attaches an optional Event Feed module for create/update hooks.
+func (s *AssetAdministrationShellRepositoryAPIAPIService) SetEventFeed(module *eventfeed.Module) {
+	if s == nil {
+		return
+	}
+	s.eventFeed = module
+	if s.submodelAPI != nil {
+		s.submodelAPI.SetEventFeed(module)
+	}
+}
+
+// EventFeedModule returns the attached Event Feed module, if any.
+func (s *AssetAdministrationShellRepositoryAPIAPIService) EventFeedModule() *eventfeed.Module {
+	if s == nil {
+		return nil
+	}
+	return s.eventFeed
 }
 
 func newAPIErrorResponse(err error, status int, operation string, info string) gen.ImplResponse {
@@ -197,6 +218,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateAssetAdministrationShell"), nil
 	}
+
+	publishAASEvent(ctx, s.eventFeed, true, aas)
 
 	aasJsonable, err := jsonization.ToJsonable(aas)
 	if err != nil {
@@ -441,6 +464,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 		return newAPIErrorResponse(putErr, http.StatusInternalServerError, operation, "PutAssetAdministrationShellByID"), nil
 	}
 
+	publishAASEvent(ctx, s.eventFeed, !isUpdate, assetAdministrationShell)
+
 	if isUpdate {
 		return gen.Response(http.StatusNoContent, nil), nil
 	}
@@ -463,6 +488,17 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
+	aas, getErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
+	if getErr != nil {
+		if common.IsErrDenied(getErr) {
+			return newAPIErrorResponse(getErr, http.StatusForbidden, operation, "Forbidden"), nil
+		}
+		if common.IsErrNotFound(getErr) {
+			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
+	}
+
 	err := s.assetAdministrationShellBackend.DeleteAssetAdministrationShellByID(ctx, decodedIdentifier)
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -473,6 +509,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteAssetAdministrationShellByID"), nil
 	}
+
+	publishAASDeletedEvent(ctx, s.eventFeed, aas)
 
 	return gen.Response(http.StatusNoContent, nil), nil
 }
@@ -712,6 +750,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceA
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodelReferenceInAssetAdministrationShell"), nil
 	}
 
+	if updatedAAS, getErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAssetAdministrationShellIdentifier); getErr == nil {
+		publishAASEvent(ctx, s.eventFeed, false, updatedAAS)
+	}
+
 	referenceJsonable, err := jsonization.ToJsonable(reference)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidReferenceData"), nil
@@ -811,6 +853,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 
 	var isUpdate bool
 	var referenceCreateAASNotFound bool
+	var aasReferenceAdded bool
 	submodelReference := types.NewReference(
 		types.ReferenceTypesModelReference,
 		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, decodedSubmodelIdentifier)},
@@ -825,6 +868,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 				referenceCreateAASNotFound = isCreateSubmodelReferenceAASNotFoundErr(createReferenceErr)
 				return createReferenceErr
 			}
+			aasReferenceAdded = createReferenceErr == nil
 
 			updated, putErr := s.submodelBackend.PutSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier, submodel)
 			if putErr != nil {
@@ -851,6 +895,14 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 			return newAPIErrorResponse(txErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
 		return newAPIErrorResponse(txErr, http.StatusInternalServerError, operation, "PutSubmodel"), nil
+	}
+
+	publishSubmodelEvent(ctx, s.eventFeed, !isUpdate, submodel, globalAssetIDsForSubmodel(ctx, s.assetAdministrationShellBackend, decodedSubmodelIdentifier))
+
+	if aasReferenceAdded {
+		if updatedAAS, getErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier); getErr == nil {
+			publishAASEvent(ctx, s.eventFeed, false, updatedAAS)
+		}
 	}
 
 	if isUpdate {
@@ -899,6 +951,22 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
+	submodel, submodelLookupErr := s.submodelBackend.GetSubmodelByID(ctx, decodedSubmodelIdentifier, "core", true, false)
+	if submodelLookupErr != nil {
+		if common.IsErrDenied(submodelLookupErr) {
+			return newAPIErrorResponse(submodelLookupErr, http.StatusForbidden, operation, "Forbidden"), nil
+		}
+		if common.IsErrNotFound(submodelLookupErr) || errors.Is(submodelLookupErr, sql.ErrNoRows) {
+			return newAPIErrorResponse(submodelLookupErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(submodelLookupErr) {
+			return newAPIErrorResponse(submodelLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(submodelLookupErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
+	}
+
+	globalAssetIDs := globalAssetIDsForSubmodel(ctx, s.assetAdministrationShellBackend, decodedSubmodelIdentifier)
+
 	deleteErr := s.assetAdministrationShellBackend.ExecuteInTransaction(
 		"AASREPO-DELSMBYID-STARTTX",
 		"AASREPO-DELSMBYID-COMMIT",
@@ -926,6 +994,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		}
 		return newAPIErrorResponse(deleteErr, http.StatusInternalServerError, operation, "DeleteSubmodel"), nil
 	}
+
+	publishSubmodelDeletedEvent(ctx, s.eventFeed, submodel, globalAssetIDs)
 
 	return gen.Response(http.StatusNoContent, nil), nil
 }

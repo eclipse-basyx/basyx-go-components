@@ -30,6 +30,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -46,6 +47,7 @@ type SubmodelRepositoryAPIAPIService struct {
 	asyncJobLifecycleContext context.Context
 	asyncResultRetention     time.Duration
 	asyncDelegationSlots     chan struct{}
+	eventFeed                *eventfeed.Module
 }
 
 const componentName = "SMREPO"
@@ -88,6 +90,22 @@ func NewSubmodelRepositoryAPIAPIService(
 		asyncResultRetention:     asyncResultRetention,
 		asyncDelegationSlots:     make(chan struct{}, maximumConcurrentDelegations),
 	}
+}
+
+// SetEventFeed attaches an optional Event Feed module for create/update hooks.
+func (s *SubmodelRepositoryAPIAPIService) SetEventFeed(module *eventfeed.Module) {
+	if s == nil {
+		return
+	}
+	s.eventFeed = module
+}
+
+// EventFeedModule returns the attached Event Feed module, if any.
+func (s *SubmodelRepositoryAPIAPIService) EventFeedModule() *eventfeed.Module {
+	if s == nil {
+		return nil
+	}
+	return s.eventFeed
 }
 
 func (s *SubmodelRepositoryAPIAPIService) tryAcquireAsyncDelegationSlot() bool {
@@ -931,6 +949,20 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
+	submodel, getErr := s.submodelBackend.GetSubmodelByID(ctx, decodedSubmodelIdentifier, "core", true, false)
+	if getErr != nil {
+		if common.IsErrDenied(getErr) {
+			return newAPIErrorResponse(getErr, http.StatusForbidden, operation, "Denied"), nil
+		}
+		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
+			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(getErr) {
+			return newAPIErrorResponse(getErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
+	}
+
 	err := s.submodelBackend.DeleteSubmodel(ctx, decodedSubmodelIdentifier)
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -944,6 +976,8 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
+
+	publishSubmodelDeletedEvent(ctx, s.eventFeed, s.submodelBackend, submodel)
 
 	return gen.Response(http.StatusNoContent, nil), nil
 }
@@ -982,6 +1016,8 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), nil
 	}
+
+	publishSubmodelEvent(ctx, s.eventFeed, s.submodelBackend, true, submodel)
 
 	submodelJsonable, err := jsonization.ToJsonable(submodel)
 	if err != nil {
@@ -1307,6 +1343,8 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
+
+	publishSubmodelEvent(ctx, s.eventFeed, s.submodelBackend, !isUpdate, submodel)
 
 	if isUpdate {
 		return gen.Response(http.StatusNoContent, nil), nil

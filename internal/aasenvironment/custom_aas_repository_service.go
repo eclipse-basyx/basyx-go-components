@@ -129,6 +129,8 @@ func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Co
 		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "CreateAssetAdministrationShell"), nil
 	}
 
+	publishAASFeedEvent(ctx, s.AssetAdministrationShellRepositoryAPIAPIService, true, aas)
+
 	aasJSON, jsonErr := jsonization.ToJsonable(aas)
 	if jsonErr != nil {
 		return newAASRepoErrorResponse(jsonErr, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
@@ -187,6 +189,8 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "PutAssetAdministrationShellByID"), nil
 	}
 
+	publishAASFeedEvent(ctx, s.AssetAdministrationShellRepositoryAPIAPIService, !isUpdate, assetAdministrationShell)
+
 	if isUpdate {
 		return commonmodel.Response(http.StatusNoContent, nil), nil
 	}
@@ -214,6 +218,17 @@ func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx cont
 		return newAASRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
+	aas, getErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
+	if getErr != nil {
+		if common.IsErrDenied(getErr) {
+			return newAASRepoErrorResponse(getErr, http.StatusForbidden, operation, "Forbidden"), nil
+		}
+		if common.IsErrNotFound(getErr) {
+			return newAASRepoErrorResponse(getErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		return newAASRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
+	}
+
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if deleteErr := s.persistence.AASRepository.DeleteAssetAdministrationShellByIDInTransaction(ctx, tx, decodedIdentifier); deleteErr != nil {
 			return deleteErr
@@ -231,6 +246,8 @@ func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx cont
 		}
 		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "DeleteAssetAdministrationShellByID"), nil
 	}
+
+	publishAASDeletedModuleEvent(ctx, s.EventFeedModule(), aas)
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
 }
@@ -465,6 +482,8 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "PutSubmodel"), nil
 	}
 
+	publishSubmodelModuleEvent(ctx, s.EventFeedModule(), !isUpdate, submodel, globalAssetIDsForSubmodel(ctx, s.persistence, decodedSubmodelIdentifier))
+
 	if isUpdate {
 		return commonmodel.Response(http.StatusNoContent, nil), nil
 	}
@@ -565,6 +584,22 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 		return newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
+	submodel, submodelLookupErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, decodedSubmodelIdentifier, "core", true, false)
+	if submodelLookupErr != nil {
+		if common.IsErrDenied(submodelLookupErr) {
+			return newAASRepoErrorResponse(submodelLookupErr, http.StatusForbidden, operation, "Forbidden"), nil
+		}
+		if common.IsErrNotFound(submodelLookupErr) || errors.Is(submodelLookupErr, sql.ErrNoRows) {
+			return newAASRepoErrorResponse(submodelLookupErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(submodelLookupErr) {
+			return newAASRepoErrorResponse(submodelLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAASRepoErrorResponse(submodelLookupErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
+	}
+
+	globalAssetIDs := globalAssetIDsForSubmodel(ctx, s.persistence, decodedSubmodelIdentifier)
+
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if checkErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier); checkErr != nil {
 			return checkErr
@@ -612,6 +647,8 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 		}
 		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "DeleteSubmodel"), nil
 	}
+
+	publishSubmodelDeletedModuleEvent(ctx, s.EventFeedModule(), submodel, globalAssetIDs)
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
 }

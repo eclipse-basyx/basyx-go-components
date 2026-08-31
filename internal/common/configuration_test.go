@@ -1239,8 +1239,12 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 			}},
 		},
 		{
-			name:   "eventing",
-			config: Config{History: HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}, Eventing: EventingConfig{Enabled: true}},
+			name:   "eventing sinks",
+			config: Config{History: HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}, Eventing: EventingConfig{Enabled: true, Sinks: []string{"mqtt"}}},
+		},
+		{
+			name:   "eventing outbox",
+			config: Config{History: HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}, Eventing: EventingConfig{Enabled: true, OutboxEnabled: true}},
 		},
 	}
 
@@ -1250,5 +1254,15 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 				t.Fatal("expected unsupported configuration error")
 			}
 		})
+	}
+}
+
+func TestValidateEventingConfigAcceptsEventFeed(t *testing.T) {
+	cfg := Config{
+		History:  HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"},
+		Eventing: EventingConfig{Enabled: true, Format: "cloudevents", Feed: EventFeedConfig{MaxAgeDays: 30, MaxPageSize: 100}},
+	}
+	if err := validateHistoryAndEventingConfig(&cfg); err != nil {
+		t.Fatalf("expected event feed configuration to be accepted, got %v", err)
 	}
 }

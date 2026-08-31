@@ -45,6 +45,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -187,6 +188,13 @@ func runServer(ctx context.Context, configPath string) error {
 		ConceptDescriptionRepository: cdrPersistence,
 		Discovery:                    discoveryPersistence,
 	}
+	eventFeedModule, err := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg.Eventing))
+	if err != nil {
+		return err
+	}
+	defer eventFeedModule.Stop()
+	eventFeedModule.StartRetentionLoop(ctx)
+
 	customAASRegistry := aasenvironment.NewCustomAASRegistryService(
 		aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*aasRegistryPersistence),
 		persistence,
@@ -200,11 +208,13 @@ func runServer(ctx context.Context, configPath string) error {
 		persistence,
 		registrySyncConfig,
 	)
+	customAASRepository.SetEventFeed(eventFeedModule)
 	customSMRepository := aasenvironment.NewCustomSubmodelRepositoryService(
 		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelRepositoryPersistence, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)
+	customSMRepository.SetEventFeed(eventFeedModule)
 	customCDRepository := aasenvironment.NewCustomConceptDescriptionRepositoryService(
 		cdrapi.NewConceptDescriptionRepositoryAPIAPIService(cdrPersistence),
 		persistence,
@@ -284,6 +294,8 @@ func runServer(ctx context.Context, configPath string) error {
 	versioningGuard.Cover(http.MethodDelete, "/bulk/submodel-descriptors")
 	aasBulkHandler.RegisterRoutes(apiRouter, true)
 	smBulkHandler.RegisterRoutes(apiRouter, false)
+
+	eventFeedModule.RegisterRoutes(apiRouter)
 
 	r.Mount(base, apiRouter)
 

@@ -74,6 +74,22 @@ general:
 #   privateKeyPath: "./rsa-key.pem"
 #   certificateChainPath: "./rsa-cert.pem"
 
+# Event Feed (CloudEvents REST). Requires DB schema >= v1.2.0 (feed_events).
+# Set enabled: true for local manual testing.
+eventing:
+  enabled: true
+  format: cloudevents
+  # sinks / outboxEnabled are reserved (MQTT/Kafka) and must stay empty/false.
+  feed:
+    maxAgeDays: 30
+    hardDeleteGraceDays: 10
+    maxPageSize: 100
+    sourceBaseUrl: "http://localhost:5004"
+    schemaBaseUrl: "https://admin-shell.io/events/schemas"
+    publicAccess: true
+    bearerAuth: false
+    cleanupIntervalHours: 24
+
 # swagger:
 #   enabled: true
 #   contactName: "Eclipse BaSyx"
