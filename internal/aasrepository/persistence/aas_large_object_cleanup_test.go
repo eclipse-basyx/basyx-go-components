@@ -46,14 +46,32 @@ func TestDeleteAssetAdministrationShellCleansThumbnailLargeObjectBeforeDelete(t 
 	repository := &AssetAdministrationShellDatabase{}
 	aasID := "https://example.com/ids/aas/delete-cleanup"
 
-	mock.ExpectQuery(`SELECT .*FROM "aas".*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
-	mock.ExpectExec(`(?s)SELECT COUNT\(\*\).*lo_unlink.*thumbnail_file_data.*DELETE FROM "aas"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`(?s)WITH target_aas AS .*thumbnail_file_data.*FOR UPDATE OF "a".*, deleted_aas AS \(DELETE FROM "aas".*unlinked_large_objects AS .*lo_unlink.*SELECT .*deleted_count.*unlinked_count`).
+		WillReturnRows(sqlmock.NewRows([]string{"deleted_count", "unlinked_count"}).AddRow(int64(1), int64(1)))
 	mock.ExpectRollback()
 
 	err = repository.DeleteAssetAdministrationShellByIDInTransaction(contextWithConfig(), tx, aasID)
 	require.NoError(t, err)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeleteAssetAdministrationShellReturnsNotFoundFromCombinedQuery(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	tx := beginMockTransaction(t, db, mock)
+	repository := &AssetAdministrationShellDatabase{}
+	aasID := "https://example.com/ids/aas/delete-missing"
+
+	mock.ExpectQuery(`(?s)WITH target_aas AS .*DELETE FROM "aas"`).
+		WillReturnRows(sqlmock.NewRows([]string{"deleted_count", "unlinked_count"}).AddRow(int64(0), int64(0)))
+	mock.ExpectRollback()
+
+	err = repository.DeleteAssetAdministrationShellByIDInTransaction(contextWithConfig(), tx, aasID)
+	require.Error(t, err)
+	require.True(t, common.IsErrNotFound(err), "expected not-found error, got %v", err)
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }

@@ -503,12 +503,13 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 	if err := validateAASCreateSubmodelReferences(aas.Submodels()); err != nil {
 		return err
 	}
-	aasDBID, err := insertAASCreateRoot(ctx, tx, dialect, aas)
-	if err != nil {
-		return err
-	}
 
 	batch := &common.PostgreSQLBatch{}
+	if err := appendAASCreateRoot(batch, dialect, aas); err != nil {
+		return err
+	}
+	aasDBID := common.PostgreSQLCurrentSequenceValue("aas", "id")
+
 	jsonizedPayload, err := jsonizeAssetAdministrationShellPayload(aas)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-JSON " + err.Error())
@@ -543,29 +544,23 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 		return err
 	}
 	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		if mappedErr := mapCreateAASInsertError(err); mappedErr != nil {
+			return mappedErr
+		}
 		return fmt.Errorf("%s %w", common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECBATCH"), err)
 	}
 	return nil
 }
 
-func insertAASCreateRoot(ctx context.Context, tx *sql.Tx, dialect goqu.DialectWrapper, aas types.IAssetAdministrationShell) (int64, error) {
-	query, args, err := dialect.Insert("aas").Rows(goqu.Record{
+func appendAASCreateRoot(batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, aas types.IAssetAdministrationShell) error {
+	if err := batch.AppendDataset(dialect.Insert("aas").Rows(goqu.Record{
 		"aas_id":   aas.ID(),
 		"category": aas.Category(),
 		"id_short": aas.IDShort(),
-	}).Returning(goqu.C("id")).Prepared(true).ToSQL()
-	if err != nil {
-		return 0, common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDINSERTSQL " + err.Error())
+	})); err != nil {
+		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDINSERTSQL " + err.Error())
 	}
-
-	var aasDBID int64
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&aasDBID); err != nil {
-		if mappedErr := mapCreateAASInsertError(err); mappedErr != nil {
-			return 0, mappedErr
-		}
-		return 0, fmt.Errorf("%s %w", common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECINSERT"), err)
-	}
-	return aasDBID, nil
+	return nil
 }
 
 func validateAASCreateSubmodelReferences(references []types.IReference) error {
@@ -1296,50 +1291,34 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 		}
 	}
 
-	dialect := goqu.Dialect("postgres")
-	aasDBID, err := getAssetAdministrationShellDBIDForDelete(tx, aasIdentifier)
-	if err != nil {
-		return err
-	}
 	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
 	if err != nil {
 		return err
 	}
 
-	if err = cleanupAndDeleteAASByDatabaseID(ctx, tx, &dialect, aasDBID); err != nil {
+	dialect := goqu.Dialect("postgres")
+	deleted, err := cleanupAndDeleteAASByIdentifier(ctx, tx, &dialect, aasIdentifier)
+	if err != nil {
 		return err
+	}
+	if !deleted {
+		return common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 	}
 
 	return history.AppendVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeDeleted, previousSnapshot, map[string]any{"id": aasIdentifier}, true)
 }
 
-func cleanupAndDeleteAASByDatabaseID(ctx context.Context, tx *sql.Tx, dialect *goqu.DialectWrapper, aasDBID int64) error {
-	cleanupQuery, cleanupArgs, err := buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect, aasDBID)
+func cleanupAndDeleteAASByIdentifier(ctx context.Context, tx *sql.Tx, dialect *goqu.DialectWrapper, aasIdentifier string) (bool, error) {
+	query, args, err := buildCleanupAndDeleteAssetAdministrationShellQuery(dialect, aasIdentifier)
 	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-BUILDUNLINKLO " + err.Error())
+		return false, common.NewInternalServerError("AASREPO-DELAAS-BUILDSQL " + err.Error())
 	}
-	deleteQuery, deleteArgs, err := buildDeleteAssetAdministrationShellByDBIDQuery(dialect, aasDBID)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-BUILDSQL " + err.Error())
+	var deletedCount int64
+	var unlinkedCount int64
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&deletedCount, &unlinkedCount); err != nil {
+		return false, common.NewInternalServerError("AASREPO-DELAAS-EXECQUERY " + err.Error())
 	}
-	batch := &common.PostgreSQLBatch{}
-	batch.AppendStatement(cleanupQuery, cleanupArgs...)
-	batch.AppendStatement(deleteQuery, deleteArgs...)
-	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-EXECBATCH " + err.Error())
-	}
-	return nil
-}
-
-func getAssetAdministrationShellDBIDForDelete(tx *sql.Tx, aasIdentifier string) (int64, error) {
-	aasDBID, scanErr := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
-	if scanErr != nil {
-		if scanErr == sql.ErrNoRows {
-			return 0, common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		return 0, common.NewInternalServerError("AASREPO-DELAAS-EXECSELECT " + scanErr.Error())
-	}
-	return aasDBID, nil
+	return deletedCount == 1, nil
 }
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
