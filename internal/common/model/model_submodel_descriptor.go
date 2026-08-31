@@ -196,6 +196,14 @@ func (obj *SubmodelDescriptor) UnmarshalJSON(data []byte) error {
 	return obj.unmarshalJSON(data, true)
 }
 
+// DecodeStoredSubmodelDescriptor decodes a descriptor read from trusted
+// persistence without applying request-body semantic verification.
+func DecodeStoredSubmodelDescriptor(data []byte) (SubmodelDescriptor, error) {
+	var descriptor SubmodelDescriptor
+	err := descriptor.unmarshalJSON(data, false)
+	return descriptor, err
+}
+
 func (obj *SubmodelDescriptor) unmarshalJSON(data []byte, verifySemantic bool) error {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	var jsonable map[string]any

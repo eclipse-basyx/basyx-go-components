@@ -1,11 +1,11 @@
-FROM golang:1.26.6-alpine AS builder
+FROM golang:1.27.0-alpine AS builder
 
 WORKDIR /src
 COPY go.mod ./
 COPY main.go ./
 RUN go build -o delegated-operation-service ./main.go
 
-FROM alpine:3.22
+FROM alpine:3.24
 
 WORKDIR /app
 COPY --from=builder /src/delegated-operation-service ./delegated-operation-service

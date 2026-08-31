@@ -561,84 +561,17 @@ func buildSubmodelDescriptorArraySubquery(
 	if err != nil {
 		return nil, err
 	}
-	semanticReferenceCollector, err := newAASDescriptorJSONCollector(
-		dataAlias,
-		common.ColAASDescriptorID,
-		common.AliasSubmodelDescriptorSemanticIDReference,
-		common.AliasSubmodelDescriptorSemanticIDReferenceKey,
-	)
-	if err != nil {
-		return nil, err
-	}
-	semanticReference, err := buildReferenceObjectSubquery(
+	submodelJSON, err := buildSubmodelDescriptorJSON(
 		ctx,
 		dialect,
-		submodelDescriptorSemanticReferenceTable,
-		common.AliasSubmodelDescriptorSemanticIDReference,
-		common.AliasSubmodelDescriptorSemanticIDReferenceKey,
-		common.ColID,
-		data.Col(common.ColDescriptorID),
-		"$aasdesc#submodelDescriptors[].semanticId.keys[]",
-		semanticReferenceCollector,
-	)
-	if err != nil {
-		return nil, err
-	}
-	supplementalReferenceCollector, err := newAASDescriptorJSONCollector(
 		dataAlias,
-		common.ColAASDescriptorID,
-		supplementalReferenceAlias,
-		supplementalKeyAlias,
+		data,
+		maskedExpressions,
+		submodelDescriptorListScope{
+			collectorRoot:  grammar.CollectorRootAASDesc,
+			fragmentPrefix: "$aasdesc#submodelDescriptors[]",
+		},
 	)
-	if err != nil {
-		return nil, err
-	}
-	supplementalReferences, err := buildReferenceArraySubquery(
-		ctx,
-		dialect,
-		common.TblSubmodelDescriptorSuppSemantic,
-		supplementalReferenceAlias,
-		supplementalKeyAlias,
-		common.ColDescriptorID,
-		data.Col(common.ColDescriptorID),
-		"$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
-		"$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
-		supplementalReferenceCollector,
-	)
-	if err != nil {
-		return nil, err
-	}
-	endpointCollector, err := newAASDescriptorJSONCollector(
-		dataAlias,
-		common.ColAASDescriptorID,
-		common.AliasSubmodelDescriptorEndpoint,
-	)
-	if err != nil {
-		return nil, err
-	}
-	endpoints, err := buildEndpointArraySubquery(
-		ctx,
-		dialect,
-		common.TblAASDescriptorEndpoint,
-		common.AliasSubmodelDescriptorEndpoint,
-		data.Col(common.ColDescriptorID),
-		"$aasdesc#submodelDescriptors[].endpoints[]",
-		endpointCollector,
-	)
-	if err != nil {
-		return nil, err
-	}
-	submodelJSON, err := buildMaskedJSONObject(ctx, nil, []descriptorJSONField{
-		{name: "id", value: data.Col(common.ColAASID)},
-		{name: "idShort", value: maskedExpressions[0]},
-		{name: "administration", value: emptyJSONToNull(data.Col(common.ColAdministrativeInfoPayload))},
-		{name: "displayName", value: data.Col(common.ColDisplayNamePayload)},
-		{name: "description", value: data.Col(common.ColDescriptionPayload)},
-		{name: "extensions", value: data.Col(common.ColExtensionsPayload)},
-		{name: "semanticId", value: goqu.Case().When(goqu.L("? IS NOT NULL", maskedExpressions[1]), semanticReference).Else(nil)},
-		{name: "supplementalSemanticIds", value: supplementalReferences},
-		{name: "endpoints", value: endpoints},
-	})
 	if err != nil {
 		return nil, err
 	}

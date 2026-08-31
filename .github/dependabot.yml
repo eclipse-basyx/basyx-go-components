@@ -7,6 +7,10 @@ updates:
     open-pull-requests-limit: 10
     cooldown:
       default-days: 1
+    labels:
+      - "dependencies"
+      - "go"
+      - "no-changelog"
   - package-ecosystem: "docker"
     directories:
       - "/cmd/*"
@@ -15,6 +19,10 @@ updates:
     open-pull-requests-limit: 10
     cooldown:
       default-days: 1
+    labels:
+      - "dependencies"
+      - "docker"
+      - "no-changelog"
     groups:
       golang-base-images:
         group-by: dependency-name
@@ -31,6 +39,10 @@ updates:
     open-pull-requests-limit: 10
     cooldown:
       default-days: 1
+    labels:
+      - "dependencies"
+      - "github_actions"
+      - "no-changelog"
     groups:
       ci-core-actions:
         patterns:
@@ -51,4 +63,3 @@ updates:
       release-signing-actions:
         patterns:
           - "sigstore/cosign-installer"
-          - "softprops/action-gh-release"

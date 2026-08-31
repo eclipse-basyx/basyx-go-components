@@ -1,0 +1,7 @@
+kind: changed
+body: ABAC claims are no longer serialized to JSON text. `CLAIM` selects a top-level scalar or string array, while `CLAIMPATH` selects a nested value using an RFC 6901 JSON Pointer. Scalar comparisons continue to use `$eq`; exact string-array membership uses `$in` with the scalar first. Policies using `$contains`, `$regex`, or `$eq` with actual array or object claims must migrate; those operators continue to work with scalar string claims. Single-item arrays also require `$in`.
+time: 2026-08-27T09:00:46.000000000Z
+custom:
+  Impact: High
+  PullRequest: 616
+  SecurityImpact: Eliminates substring and nested-path claim confusion. Missing, `null`, empty, object, mixed-array, and unsupported claim values fail closed.

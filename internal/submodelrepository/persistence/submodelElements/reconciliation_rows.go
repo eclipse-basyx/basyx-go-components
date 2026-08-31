@@ -367,7 +367,7 @@ func reconciliationRecordValue(value any) any {
 		return typed.Float64
 	}
 	reflected := reflect.ValueOf(value)
-	if reflected.IsValid() && reflected.Kind() == reflect.Ptr {
+	if reflected.IsValid() && reflected.Kind() == reflect.Pointer {
 		if reflected.IsNil() {
 			return nil
 		}

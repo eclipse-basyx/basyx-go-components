@@ -573,6 +573,7 @@ type SubmodelDescriptorRow struct {
 	AdministrativeInfoPayload json.RawMessage
 	DescriptionPayload        json.RawMessage
 	DisplayNamePayload        json.RawMessage
+	ExtensionsPayload         json.RawMessage
 }
 
 // CompanyDescriptorRow represents a single SQL result row for a
