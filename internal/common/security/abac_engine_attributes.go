@@ -52,7 +52,14 @@ func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
 			}
 		case grammar.ATTRCLAIM:
 			hasSubjectAttribute = true
-			if _, ok := claims[it.Value]; !ok {
+			value, ok := claims[it.Value]
+			if !ok || !claimAttributeAvailable(value) {
+				return false
+			}
+		case grammar.ATTRCLAIMPATH:
+			hasSubjectAttribute = true
+			value, ok, err := jsonPointerValue(claims, it.Value)
+			if err != nil || !ok || !claimAttributeAvailable(value) {
 				return false
 			}
 		default:
@@ -61,4 +68,13 @@ func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
 	}
 
 	return hasSubjectAttribute
+}
+
+func claimAttributeAvailable(value any) bool {
+	normalized, ok := normalizeClaimValue(value)
+	if !ok {
+		return false
+	}
+	text, isString := normalized.(string)
+	return !isString || text != ""
 }

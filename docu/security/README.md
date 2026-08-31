@@ -180,7 +180,13 @@ Example trustlist entry:
 
 `list` mappings merge and deduplicate scalar strings and string arrays from all configured sources. `scalar` mappings use the first present primitive source and accept an array only when it has exactly one item. Tokens with invalid mapped claim shapes are rejected with `401`.
 
-For mixed delegated and app-only tokens from one issuer, avoid mandatory trustlist `scopes` when app-only tokens do not carry delegated scopes. Express the alternatives in ABAC using existing Part 4 operators and mapped scalar claims. The current grammar has no exact list-membership operator, so do not use substring checks for multi-value role authorization.
+For exact role or entitlement checks, select a top-level claim with `CLAIM` or a nested claim with `CLAIMPATH`. `CLAIMPATH` uses an RFC 6901 JSON Pointer. Compare scalar claims with `$eq`; test exact membership in a string-array claim with `$in`, with the scalar first:
+
+```json
+{ "$in": [{ "$strVal": "admin" }, { "$attribute": { "CLAIMPATH": "/realm_access/roles" } }] }
+```
+
+BaSyx does not serialize arrays or objects into JSON text. `$contains` and `$regex` retain string semantics and must not be used for list membership. The example above cannot be satisfied by `administrator`, escaped delimiter text, or an `admin` value under an unrelated path. Single-item arrays are still arrays and require `$in`. For mixed delegated and app-only tokens from one issuer, avoid mandatory trustlist `scopes` when app-only tokens do not carry delegated scopes; direct `CLAIMPATH` access requires no trustlist mapping.
 
 ## ABAC authorization
 
@@ -191,7 +197,7 @@ Evaluation gates:
    - Rights within one mapping entry are combined using logical OR (example: `PUT -> [CREATE, UPDATE]` means either right is sufficient).
    - Multiple matching mapping entries are also OR alternatives.
 2. Check rights in rule ACLs.
-3. Check attribute requirements (CLAIM presence or GLOBAL=ANONYMOUS).
+3. Check attribute requirements (`CLAIM` or `CLAIMPATH` has a usable value, or `GLOBAL=ANONYMOUS`).
 4. Match object routes and descriptor objects.
 5. Evaluate formula and simplify using claims and globals.
 
@@ -199,6 +205,7 @@ Outcomes:
 - No match -> deny.
 - Fully decidable true -> allow.
 - Residual conditions -> allow + QueryFilter for downstream enforcement.
+- Invalid or unresolved claim operations -> deny. Invalid is preserved through logical operators, so `$not` cannot turn it into an allow.
 
 Relevant code:
 - [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go)
@@ -375,7 +382,7 @@ Registry-specific operation semantics:
 ## Access model structure (high level)
 
 Access rules define:
-- DEFATTRIBUTES: reusable attribute sets (CLAIM, GLOBAL, or REFERENCE).
+- DEFATTRIBUTES: reusable attribute sets (`CLAIM`, `CLAIMPATH`, `GLOBAL`, or `REFERENCE`).
 - DEFOBJECTS: reusable route or descriptor object sets.
 - DEFACLS: reusable rights and attribute bindings.
 - DEFFORMULAS: reusable boolean expressions.
@@ -383,8 +390,8 @@ Access rules define:
 
 Attribute satisfaction follows these rules:
 
-- An attribute list must contain at least one subject attribute: `CLAIM` or `GLOBAL=ANONYMOUS`.
-- Every declared `CLAIM` must be present. `GLOBAL=ANONYMOUS` does not compensate for a missing claim.
+- An attribute list must contain at least one subject attribute: `CLAIM`, `CLAIMPATH`, or `GLOBAL=ANONYMOUS`.
+- Every declared `CLAIM` or `CLAIMPATH` must resolve to a usable non-`null` value. `GLOBAL=ANONYMOUS` does not compensate for a missing or unusable claim.
 - Date-time globals are optional at this gate and are resolved during formula evaluation.
 - `GLOBAL=UTCNOW` and `GLOBAL=LOCALNOW` come from the server's trusted clock and are available to authenticated and anonymous requests.
 - `GLOBAL=CLIENTNOW` comes from the verified access-token claim with the same name. It is unavailable when that claim or access token is absent.

@@ -80,10 +80,11 @@ Key types:
 ### 2) Simplify the logical expression
 
 - Simplification partially evaluates the expression using a resolver and leaves backend-only parts intact.
-- A tri-state decision is produced:
+- A four-state decision is produced:
   - SimplifyTrue: expression becomes a boolean true literal.
   - SimplifyFalse: expression becomes a boolean false literal.
   - SimplifyUndecided: expression still depends on backend fields.
+  - SimplifyInvalid: evaluation failed; authorization must fail closed.
 
 Implicit casts:
 - Simplification can insert implicit casts when field types and literal types differ.
@@ -96,9 +97,11 @@ Key functions:
 
 ### 3) Resolve attributes
 
-- Attribute values (for example, CLAIM or GLOBAL) are resolved by a caller-provided resolver.
-- If an attribute cannot be resolved, it remains undecidable and is preserved for backend evaluation.
-- In ABAC, attributes are resolved from claims and time globals.
+- Attribute values (for example, `CLAIM`, `CLAIMPATH`, or `GLOBAL`) are resolved by a caller-provided resolver.
+- An unavailable or unusable attribute is invalid, not backend-undecided. Invalid remains absorbing through `$not`, `$and`, `$or`, and `$match`.
+- `CLAIM` selects a top-level JWT claim. `CLAIMPATH` selects a nested claim with an RFC 6901 JSON Pointer.
+- `$eq` compares scalar values. `$in` tests whether its scalar string first operand exactly equals an element of its string-array-valued second operand. `$in` is resolved before SQL and is not a field-list query operator.
+- Arrays and objects are never converted to JSON text for `$contains` or `$regex`.
 
 Key references:
 - AttributeResolver usage in [internal/common/model/grammar/logical_expression_simplify_backend.go](../../internal/common/model/grammar/logical_expression_simplify_backend.go)
@@ -221,7 +224,7 @@ This is controlled by `SimplifyOptions.EnableImplicitCasts` in
 
 ### Attribute resolution
 
-Attribute references are resolved to concrete scalars via a resolver function:
+Attribute references are resolved to concrete scalar or string-array values via a resolver function:
 
 $$
           resolve(\$\text{attribute}(k)) \rightarrow v \quad \text{or} \quad \varnothing
@@ -245,8 +248,13 @@ Which simplifies to:
 { "$boolean": true }
 ```
 
-If $v$ is available, the attribute node is replaced with the literal $v$ during
-simplification; otherwise it remains unresolved and the expression is undecidable.
+For an exact nested role membership check:
+
+```json
+{ "$in": [ { "$strVal": "admin" }, { "$attribute": { "CLAIMPATH": "/realm_access/roles" } } ] }
+```
+
+If $v$ is a scalar, the attribute node is replaced with the corresponding literal during simplification. String arrays remain typed and are accepted only by `$in`. Missing, `null`, object, empty-array, mixed-array, or unsupported values make the expression invalid and false; logical negation cannot invert that result to true.
 
 ### Rule combination into QueryFilter (ABAC)
 

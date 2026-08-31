@@ -259,7 +259,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 
 		adapted, decision := combinedLE.SimplifyForBackendFilterWithOptions(resolver, opts)
-		if decision == grammar.SimplifyFalse {
+		if decision == grammar.SimplifyFalse || decision == grammar.SimplifyInvalid {
 			continue
 		}
 		if r.id != "" {
@@ -316,7 +316,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 		simplifiedRight, rightDecision := combinedRight.SimplifyForBackendFilterWithOptions(resolver, opts)
 		switch rightDecision {
-		case grammar.SimplifyFalse:
+		case grammar.SimplifyFalse, grammar.SimplifyInvalid:
 			combinedByRight[right] = boolExpression(false)
 		case grammar.SimplifyTrue:
 			combinedByRight[right] = boolExpression(true)
@@ -327,7 +327,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 
 	hasFormula := true
 	switch decision {
-	case grammar.SimplifyFalse:
+	case grammar.SimplifyFalse, grammar.SimplifyInvalid:
 		return AuthorizationEvaluation{Reason: DecisionNoMatch}
 	case grammar.SimplifyTrue:
 		hasFormula = false

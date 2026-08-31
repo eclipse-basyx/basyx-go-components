@@ -2,8 +2,8 @@
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
       { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
-      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
-      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+      { "name": "role_attr", "attributes": [ { "CLAIMPATH": "/role" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIMPATH": "/role" }, { "CLAIM": "clear" } ] }
     ],
 
     "DEFOBJECTS": [
@@ -26,16 +26,16 @@
       { "name": "always_true", "formula": { "$boolean": true } },
       { "name": "always_false", "formula": { "$boolean": false } },
       { "name": "data_provider_read_formula", "formula":
-        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "view_digital_twin"} ] }
+        { "$in": [ { "$strVal": "view_digital_twin" }, { "$attribute": { "CLAIMPATH": "/role" } } ] }
       },
       { "name": "data_provider_create_formula", "formula":
-        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "add_digital_twin"} ] }
+        { "$in": [ { "$strVal": "add_digital_twin" }, { "$attribute": { "CLAIMPATH": "/role" } } ] }
       },
       { "name": "data_provider_update_formula", "formula":
-        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "update_digital_twin"} ] }
+        { "$in": [ { "$strVal": "update_digital_twin" }, { "$attribute": { "CLAIMPATH": "/role" } } ] }
       },
       { "name": "data_provider_delete_formula", "formula":
-        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "delete_digital_twin"} ] }
+        { "$in": [ { "$strVal": "delete_digital_twin" }, { "$attribute": { "CLAIMPATH": "/role" } } ] }
       },
       { "name": "enforce_publicreadable_write_rule", "formula":
         {

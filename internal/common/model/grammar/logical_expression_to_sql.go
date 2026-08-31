@@ -2062,6 +2062,9 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	if len(le.Ne) > 0 {
 		return le.evaluateComparison(le.Ne, "$ne", collector)
 	}
+	if len(le.In) > 0 {
+		return le.evaluateComparison(le.In, "$in", collector)
+	}
 	if len(le.Gt) > 0 {
 		return le.evaluateComparison(le.Gt, "$gt", collector)
 	}
@@ -2279,6 +2282,9 @@ func evaluateMatchExpressionSQL(me MatchExpression) (exp.Expression, []ResolvedF
 	}
 	if len(me.Ne) > 0 {
 		return evaluateMatchComparison(me.Ne, "$ne")
+	}
+	if len(me.In) > 0 {
+		return evaluateMatchComparison(me.In, "$in")
 	}
 	if len(me.Gt) > 0 {
 		return evaluateMatchComparison(me.Gt, "$gt")

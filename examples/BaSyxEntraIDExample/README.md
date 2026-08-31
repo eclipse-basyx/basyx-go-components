@@ -54,29 +54,25 @@ the access rules before using the example as a production authorization model.
 Application permissions are emitted in Entra ID's `roles` claim rather than the
 delegated `scp` claim. When one issuer must accept both delegated and app-only
 tokens, remove mandatory `scopes` from the trustlist and express the alternatives
-in ABAC. For an app registration that emits exactly one role per token, add a
-scalar mapping:
+in ABAC. Select the array claim directly with `CLAIMPATH`; no trustlist mapping is
+required:
 
 ```json
 {
   "issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0",
-  "audience": "<basyx-api-client-id>",
-  "claimMappings": [
-    { "target": "role", "mode": "scalar", "sources": ["/roles"] }
-  ]
+  "audience": "<basyx-api-client-id>"
 }
 ```
 
-The mapped claim is available as `basyx.role` after JWT verification and can be
-checked with the existing Part 4 `$eq` operator:
+Use `$in` for exact string-array membership:
 
 ```json
-{ "$eq": [{ "$attribute": { "CLAIM": "basyx.role" } }, { "$strVal": "admin" }] }
+{ "$in": [{ "$strVal": "basyx.admin" }, { "$attribute": { "CLAIMPATH": "/roles" } }] }
 ```
 
-Scalar mappings reject arrays with more than one item. Multi-value app-role
-authorization needs a policy design that does not rely on substring matching;
-the current grammar has no exact list-membership operator.
+`administrator` does not satisfy `admin`, and a value at another JSON path is not
+considered. `$contains` and `$regex` remain string operators and must not be used
+for role-array membership.
 
 The access-token version is selected by the API app registration, independently
 of the authorization endpoint version. Without `"requestedAccessTokenVersion":

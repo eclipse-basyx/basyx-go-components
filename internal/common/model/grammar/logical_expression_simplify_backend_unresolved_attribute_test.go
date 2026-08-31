@@ -38,8 +38,8 @@ func TestSimplifyForBackendFilter_UnresolvedAttributeStringComparison_FailsClose
 	}
 
 	simplified, decision := le.SimplifyForBackendFilter(func(AttributeValue) any { return nil })
-	if decision != SimplifyFalse {
-		t.Fatalf("expected SimplifyFalse, got %v", decision)
+	if decision != SimplifyInvalid {
+		t.Fatalf("expected SimplifyInvalid, got %v", decision)
 	}
 	if simplified.Boolean == nil || *simplified.Boolean {
 		t.Fatalf("expected boolean false, got %#v", simplified.Boolean)
@@ -57,8 +57,8 @@ func TestSimplifyForBackendFilter_UnresolvedAttributeNumCast_FailsClosed(t *test
 	}
 
 	simplified, decision := le.SimplifyForBackendFilter(func(AttributeValue) any { return nil })
-	if decision != SimplifyFalse {
-		t.Fatalf("expected SimplifyFalse, got %v", decision)
+	if decision != SimplifyInvalid {
+		t.Fatalf("expected SimplifyInvalid, got %v", decision)
 	}
 	if simplified.Boolean == nil || *simplified.Boolean {
 		t.Fatalf("expected boolean false, got %#v", simplified.Boolean)

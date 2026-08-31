@@ -100,15 +100,44 @@ func TestOIDCSignedJWTProviders(t *testing.T) {
 		assertStatus(t, scpRegistryURL+"/shell-descriptors", "opaque-token", http.StatusUnauthorized)
 	})
 
-	t.Run("mapped app role", func(t *testing.T) {
+	t.Run("nested multi-value app role", func(t *testing.T) {
 		assertStatus(t, rolesRegistryURL+"/shell-descriptors", signedToken(t, map[string]any{
-			"roles": []string{"admin"},
+			"realm_access": map[string]any{"roles": []string{"reader", "admin"}},
 		}), http.StatusOK)
 	})
 
-	t.Run("mapped app role uses exact scalar equality", func(t *testing.T) {
+	t.Run("scalar role is not an array", func(t *testing.T) {
 		assertStatus(t, rolesRegistryURL+"/shell-descriptors", signedToken(t, map[string]any{
-			"roles": []string{"administrator"},
+			"realm_access": map[string]any{"roles": "admin"},
+		}), http.StatusForbidden)
+	})
+
+	t.Run("missing nested role", func(t *testing.T) {
+		assertStatus(t, rolesRegistryURL+"/shell-descriptors", signedToken(t, nil), http.StatusForbidden)
+	})
+
+	t.Run("null nested role", func(t *testing.T) {
+		assertStatus(t, rolesRegistryURL+"/shell-descriptors", signedToken(t, map[string]any{
+			"realm_access": map[string]any{"roles": nil},
+		}), http.StatusForbidden)
+	})
+
+	t.Run("substring-confusable role", func(t *testing.T) {
+		assertStatus(t, rolesRegistryURL+"/shell-descriptors", signedToken(t, map[string]any{
+			"realm_access": map[string]any{"roles": []string{"administrator"}},
+		}), http.StatusForbidden)
+	})
+
+	t.Run("escaped delimiter role", func(t *testing.T) {
+		assertStatus(t, rolesRegistryURL+"/shell-descriptors", signedToken(t, map[string]any{
+			"realm_access": map[string]any{"roles": []string{`x","admin`}},
+		}), http.StatusForbidden)
+	})
+
+	t.Run("same role at unrelated path", func(t *testing.T) {
+		assertStatus(t, rolesRegistryURL+"/shell-descriptors", signedToken(t, map[string]any{
+			"realm_access": map[string]any{"roles": []string{"reader"}},
+			"profile":      map[string]any{"tags": []string{"admin"}},
 		}), http.StatusForbidden)
 	})
 }
@@ -260,11 +289,6 @@ func writeSecurityEnvironment(issuerURL string) (string, error) {
 		"roles-trustlist.json": []map[string]any{{
 			"issuer":   issuerURL,
 			"audience": oidcTestAudience,
-			"claimMappings": []map[string]any{{
-				"target":  "role",
-				"mode":    "scalar",
-				"sources": []string{"/roles"},
-			}},
 		}},
 		"scp-access-rules.json":   delegatedAccessRules,
 		"roles-access-rules.json": rolesAccessRules,
@@ -319,7 +343,7 @@ const rolesAccessRules = `{
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
       { "name": "anonymous", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
-      { "name": "role", "attributes": [ { "CLAIM": "basyx.role" } ] }
+      { "name": "role", "attributes": [ { "CLAIMPATH": "/realm_access/roles" } ] }
     ],
     "DEFOBJECTS": [
       { "name": "health", "objects": [ { "ROUTE": "/health" } ] },
@@ -334,7 +358,7 @@ const rolesAccessRules = `{
       {
         "USEACL": "read-shells",
         "USEOBJECTS": [ "shells" ],
-        "FORMULA": { "$eq": [ { "$attribute": { "CLAIM": "basyx.role" } }, { "$strVal": "admin" } ] }
+        "FORMULA": { "$in": [ { "$strVal": "admin" }, { "$attribute": { "CLAIMPATH": "/realm_access/roles" } } ] }
       }
     ]
   }

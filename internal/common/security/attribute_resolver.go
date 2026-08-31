@@ -29,11 +29,11 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	jsoniter "github.com/json-iterator/go"
 )
 
 func globalAttributesForEvaluation(configured GlobalAttributes, claims Claims, currentTime time.Time) GlobalAttributes {
@@ -82,11 +82,22 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals G
 		if !exists {
 			return nil
 		}
-		serialized, ok := serializeClaimValue(val)
+		normalized, ok := normalizeClaimValue(val)
 		if !ok {
 			return nil
 		}
-		return serialized
+		return normalized
+	}
+	if pointer := m["CLAIMPATH"]; pointer != "" {
+		val, exists, err := jsonPointerValue(claims, pointer)
+		if err != nil || !exists {
+			return nil
+		}
+		normalized, ok := normalizeClaimValue(val)
+		if !ok {
+			return nil
+		}
+		return normalized
 	}
 	if g := m["GLOBAL"]; g != "" {
 		if val, ok := resolveGlobalToken(g, globals); ok {
@@ -96,22 +107,45 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals G
 	return nil
 }
 
-// serializeClaimValue preserves string claims and represents every other JSON
-// claim value with its deterministic JSON encoding. Unsupported and null values
-// remain unresolved so authorization fails closed.
-func serializeClaimValue(value any) (string, bool) {
-	if value == nil {
-		return "", false
+func normalizeClaimValue(value any) (any, bool) {
+	switch claim := value.(type) {
+	case nil:
+		return nil, false
+	case string:
+		return claim, true
+	case json.Number:
+		return claim.String(), true
+	case bool:
+		return strconv.FormatBool(claim), true
+	case float64:
+		return strconv.FormatFloat(claim, 'g', -1, 64), true
+	case float32:
+		return strconv.FormatFloat(float64(claim), 'g', -1, 32), true
+	case int:
+		return strconv.Itoa(claim), true
+	case int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprint(claim), true
+	case []string:
+		if len(claim) == 0 {
+			return nil, false
+		}
+		return claim, true
+	case []any:
+		values := make([]string, len(claim))
+		for index, item := range claim {
+			text, ok := item.(string)
+			if !ok {
+				return nil, false
+			}
+			values[index] = text
+		}
+		if len(values) == 0 {
+			return nil, false
+		}
+		return values, true
+	default:
+		return nil, false
 	}
-	if stringValue, ok := value.(string); ok {
-		return stringValue, true
-	}
-
-	serialized, err := json.Marshal(value)
-	if err != nil || string(serialized) == "null" {
-		return "", false
-	}
-	return string(serialized), true
 }
 
 // normalizeClaimScalar unwraps common container formats so operators see a scalar.
@@ -149,8 +183,7 @@ func asStringMap(v any) (map[string]string, bool) {
 			return nil, false
 		}
 		var m map[string]any
-		var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
-		if err := jsonMarshaller.Unmarshal(b, &m); err != nil {
+		if err := json.Unmarshal(b, &m); err != nil {
 			return nil, false
 		}
 		out := make(map[string]string, len(m))

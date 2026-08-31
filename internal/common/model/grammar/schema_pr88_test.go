@@ -111,6 +111,18 @@ func TestAttributeItemUnmarshalAcceptsReferenceIdentifier(t *testing.T) {
 	}
 }
 
+func TestAttributeItemUnmarshalAcceptsClaimPath(t *testing.T) {
+	t.Parallel()
+
+	var attr AttributeItem
+	if err := json.Unmarshal([]byte(`{"CLAIMPATH":"/realm_access/roles"}`), &attr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if attr.Kind != ATTRCLAIMPATH || attr.Value != "/realm_access/roles" {
+		t.Fatalf("unexpected claim path: %#v", attr)
+	}
+}
+
 func TestLogicalExpressionUnmarshalPR88OperatorRules(t *testing.T) {
 	t.Parallel()
 
@@ -136,6 +148,10 @@ func TestLogicalExpressionUnmarshalPR88OperatorRules(t *testing.T) {
 		{
 			name:    "raw field string comparison allowed",
 			payload: `{"$eq":[{"$field":"$aasdesc#id"},{"$strVal":"urn:aas:demo"}]}`,
+		},
+		{
+			name:    "claim path string array membership allowed",
+			payload: `{"$in":[{"$strVal":"admin"},{"$attribute":{"CLAIMPATH":"/realm_access/roles"}}]}`,
 		},
 		{
 			name:    "raw field numeric comparison allowed",

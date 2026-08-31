@@ -27,6 +27,7 @@ package auth
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func TestResolveAttributeValue_MissingClaimReturnsNil(t *testing.T) {
 	}
 }
 
-func TestResolveAttributeValueSerializesCompleteClaimValue(t *testing.T) {
+func TestResolveAttributeValueAcceptsScalarAndStringArrayClaims(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -54,7 +55,8 @@ func TestResolveAttributeValueSerializesCompleteClaimValue(t *testing.T) {
 		{name: "string", value: "editor", want: "editor"},
 		{name: "number", value: json.Number("42"), want: "42"},
 		{name: "boolean", value: true, want: "true"},
-		{name: "array", value: []any{"admin", "manager"}, want: `["admin","manager"]`},
+		{name: "single-item array", value: []any{"admin"}, want: []string{"admin"}},
+		{name: "multi-item array", value: []any{"admin", "manager"}, want: []string{"admin", "manager"}},
 		{
 			name: "nested object",
 			value: map[string]any{
@@ -63,9 +65,9 @@ func TestResolveAttributeValueSerializesCompleteClaimValue(t *testing.T) {
 					"department": "engineering",
 				},
 			},
-			want: `{"profile":{"department":"engineering"},"roles":["admin","manager"]}`,
+			want: nil,
 		},
-		{name: "empty array", value: []any{}, want: `[]`},
+		{name: "empty array", value: []any{}, want: nil},
 		{name: "null", value: nil, want: nil},
 		{name: "unsupported", value: func() {}, want: nil},
 	}
@@ -79,40 +81,62 @@ func TestResolveAttributeValueSerializesCompleteClaimValue(t *testing.T) {
 				Claims{"claim": test.value},
 				nil,
 			)
-			if got != test.want {
+			if !reflect.DeepEqual(got, test.want) {
 				t.Fatalf("resolveAttributeValue() = %#v, want %#v", got, test.want)
 			}
 		})
 	}
 }
 
-func TestSerializedClaimArraySupportsQuotedContains(t *testing.T) {
+func TestResolveAttributeValueClaimPathSelectsOnlyRequestedValue(t *testing.T) {
 	t.Parallel()
 
-	claimAttribute := grammar.AttributeValue(map[string]any{"CLAIM": "role"})
-	quotedManager := grammar.StandardString(`"manager"`)
-	expression := grammar.LogicalExpression{
-		Contains: grammar.StringItems{
-			{Attribute: claimAttribute},
-			{StrVal: &quotedManager},
-		},
+	claims := Claims{
+		"realm_access": map[string]any{"roles": []any{"reader", "admin"}},
+		"profile":      map[string]any{"tags": []any{"admin"}},
 	}
+	got := resolveAttributeValue(map[string]any{"CLAIMPATH": "/realm_access/roles"}, claims, nil)
+	if want := []string{"reader", "admin"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("resolveAttributeValue() = %#v, want %#v", got, want)
+	}
+}
+
+func TestResolveAttributeValueClaimPathSupportsJSONPointerEscapes(t *testing.T) {
+	t.Parallel()
+
+	claims := Claims{"realm/access": map[string]any{"role~name": "admin"}}
+	got := resolveAttributeValue(map[string]any{"CLAIMPATH": "/realm~1access/role~0name"}, claims, nil)
+	if got != "admin" {
+		t.Fatalf("resolveAttributeValue() = %#v, want admin", got)
+	}
+}
+
+func TestStringArrayClaimUsesInForExactMembership(t *testing.T) {
+	t.Parallel()
 
 	tests := []struct {
 		name  string
 		roles []any
 		want  grammar.SimplifyDecision
 	}{
-		{name: "second element matches", roles: []any{"admin", "manager"}, want: grammar.SimplifyTrue},
-		{name: "substring does not match", roles: []any{"supermanager"}, want: grammar.SimplifyFalse},
+		{name: "exact member", roles: []any{"reader", "admin"}, want: grammar.SimplifyTrue},
+		{name: "substring", roles: []any{"administrator"}, want: grammar.SimplifyFalse},
+		{name: "escaped delimiter", roles: []any{`x","admin`}, want: grammar.SimplifyFalse},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
+			expression := grammar.LogicalExpression{In: []grammar.Value{
+				{StrVal: stringValue("admin")},
+				{Attribute: map[string]any{"CLAIMPATH": "/realm_access/roles"}},
+			}}
 			resolver := func(attribute grammar.AttributeValue) any {
-				return resolveAttributeValue(attribute, Claims{"role": test.roles}, nil)
+				return resolveAttributeValue(attribute, Claims{
+					"realm_access": map[string]any{"roles": test.roles},
+					"profile":      map[string]any{"tags": []any{"admin"}},
+				}, nil)
 			}
 			_, decision := expression.SimplifyForBackendFilter(resolver)
 			if decision != test.want {
@@ -122,58 +146,40 @@ func TestSerializedClaimArraySupportsQuotedContains(t *testing.T) {
 	}
 }
 
-func TestSerializedClaimArraySupportsElementBoundaryRegex(t *testing.T) {
+func TestEqualityAndStringOperatorsRejectArrayClaims(t *testing.T) {
 	t.Parallel()
 
-	const rawExpression = `{
-		"$regex": [
-			{"$attribute": {"CLAIM": "role"}},
-			{"$strVal": "(^|\\[|,)\\s*\"manager\"\\s*(,|\\])"}
-		]
-	}`
-
-	var expression grammar.LogicalExpression
-	if err := json.Unmarshal([]byte(rawExpression), &expression); err != nil {
-		t.Fatalf("unmarshal regex expression: %v", err)
-	}
-
 	tests := []struct {
-		name  string
-		value any
-		want  grammar.SimplifyDecision
+		name       string
+		expression string
 	}{
-		{name: "only element matches", value: []any{"manager"}, want: grammar.SimplifyTrue},
-		{name: "first element matches", value: []any{"manager", "admin"}, want: grammar.SimplifyTrue},
-		{name: "middle element matches", value: []any{"admin", "manager", "reader"}, want: grammar.SimplifyTrue},
-		{
-			name: "deeply nested array element matches",
-			value: map[string]any{
-				"realm_access": map[string]any{
-					"roles": []any{"admin", "manager"},
-				},
-			},
-			want: grammar.SimplifyTrue,
-		},
-		{name: "missing element does not match", value: []any{"admin", "reader"}, want: grammar.SimplifyFalse},
-		{name: "substring does not match", value: []any{"supermanager"}, want: grammar.SimplifyFalse},
-		{name: "escaped suffix does not match", value: []any{`manager"`}, want: grammar.SimplifyFalse},
-		{name: "object key does not match", value: map[string]any{"manager": false}, want: grammar.SimplifyFalse},
-		{name: "empty array does not match", value: []any{}, want: grammar.SimplifyFalse},
+		{name: "equality", expression: `{"$eq":[{"$attribute":{"CLAIM":"roles"}},{"$strVal":"admin"}]}`},
+		{name: "contains", expression: `{"$contains":[{"$attribute":{"CLAIM":"roles"}},{"$strVal":"admin"}]}`},
+		{name: "regex", expression: `{"$regex":[{"$attribute":{"CLAIM":"roles"}},{"$strVal":"admin"}]}`},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
+			var expression grammar.LogicalExpression
+			if err := json.Unmarshal([]byte(test.expression), &expression); err != nil {
+				t.Fatalf("unmarshal expression: %v", err)
+			}
 			resolver := func(attribute grammar.AttributeValue) any {
-				return resolveAttributeValue(attribute, Claims{"role": test.value}, nil)
+				return resolveAttributeValue(attribute, Claims{"roles": []any{"reader", "admin"}}, nil)
 			}
 			_, decision := expression.SimplifyForBackendFilter(resolver)
-			if decision != test.want {
-				t.Fatalf("SimplifyForBackendFilter() decision = %v, want %v", decision, test.want)
+			if decision != grammar.SimplifyInvalid {
+				t.Fatalf("SimplifyForBackendFilter() decision = %v, want %v", decision, grammar.SimplifyInvalid)
 			}
 		})
 	}
+}
+
+func stringValue(value string) *grammar.StandardString {
+	pattern := grammar.StandardString(value)
+	return &pattern
 }
 
 func TestGlobalAttributesForEvaluationProvidesServerTimeWithoutClaims(t *testing.T) {

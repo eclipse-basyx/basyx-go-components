@@ -578,6 +578,8 @@ components:
           $ref: '#/components/schemas/comparisonItems'
         $ne:
           $ref: '#/components/schemas/comparisonItems'
+        $in:
+          $ref: '#/components/schemas/comparisonItems'
         $gt:
           $ref: '#/components/schemas/comparisonItems'
         $ge:
@@ -608,6 +610,8 @@ components:
             - $eq
         - required:
             - $ne
+        - required:
+            - $in
         - required:
             - $gt
         - required:
@@ -641,6 +645,8 @@ components:
           $ref: '#/components/schemas/comparisonItems'
         $ne:
           $ref: '#/components/schemas/comparisonItems'
+        $in:
+          $ref: '#/components/schemas/comparisonItems'
         $gt:
           $ref: '#/components/schemas/comparisonItems'
         $ge:
@@ -664,6 +670,8 @@ components:
             - $eq
         - required:
             - $ne
+        - required:
+            - $in
         - required:
             - $gt
         - required:

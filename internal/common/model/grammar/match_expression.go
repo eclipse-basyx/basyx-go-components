@@ -71,6 +71,9 @@ type MatchExpression struct {
 	// Gt corresponds to the JSON schema field "$gt".
 	Gt ComparisonItems `json:"$gt,omitempty" yaml:"$gt,omitempty" mapstructure:"$gt,omitempty"`
 
+	// In corresponds to the JSON schema field "$in".
+	In ComparisonItems `json:"$in,omitempty" yaml:"$in,omitempty" mapstructure:"$in,omitempty"`
+
 	// Le corresponds to the JSON schema field "$le".
 	Le ComparisonItems `json:"$le,omitempty" yaml:"$le,omitempty" mapstructure:"$le,omitempty"`
 
@@ -122,6 +125,9 @@ func (j *MatchExpression) UnmarshalJSON(value []byte) error {
 	if err := validateComparisonItems(plain.Ne, "$ne"); err != nil {
 		return err
 	}
+	if err := validateInItems(plain.In); err != nil {
+		return err
+	}
 	if err := validateOrderedComparisonItems(plain.Gt, "$gt"); err != nil {
 		return err
 	}
@@ -163,6 +169,11 @@ func AssertMatchExpressionRequired(obj MatchExpression) error {
 		}
 	}
 	for _, el := range obj.Ne {
+		if err := AssertValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.In {
 		if err := AssertValueRequired(el); err != nil {
 			return err
 		}
@@ -223,6 +234,11 @@ func AssertMatchExpressionConstraints(obj MatchExpression) error {
 		}
 	}
 	for _, el := range obj.Ne {
+		if err := AssertValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.In {
 		if err := AssertValueConstraints(el); err != nil {
 			return err
 		}
