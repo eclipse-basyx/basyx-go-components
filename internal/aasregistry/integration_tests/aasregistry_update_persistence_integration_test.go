@@ -89,6 +89,46 @@ func TestAASDescriptorPutPreservesUnchangedRows(t *testing.T) {
 	require.Equal(t, afterChange, afterNoOp)
 }
 
+func TestAASDescriptorPostPreservesEmbeddedSubmodelAdministrationTimestamps(t *testing.T) {
+	aasID := fmt.Sprintf("urn:example:aas:nested-administration:%d", time.Now().UnixNano())
+	submodelID := fmt.Sprintf("urn:example:submodel:nested-administration:%d", time.Now().UnixNano())
+	t.Cleanup(func() { cleanupAASDescriptor(t, aasRegistryBaseURL, aasID) })
+	createdAt := "2030-01-02T03:04:05Z"
+	updatedAt := "2030-01-02T03:04:06Z"
+	payload := fmt.Sprintf(
+		`{"id":"%s","endpoints":[{"interface":"AAS-3.0","protocolInformation":{"href":"https://example.com/aas","endpointProtocol":"https"}}],"submodelDescriptors":[{"id":"%s","administration":{"createdAt":"%s","updatedAt":"%s"},"endpoints":[{"interface":"SUBMODEL-3.0","protocolInformation":{"href":"https://example.com/submodels","endpointProtocol":"https"}}]}]}`,
+		aasID,
+		submodelID,
+		createdAt,
+		updatedAt,
+	)
+
+	_, status, _, err := postJSONResponse(aasRegistryBaseURL+"/shell-descriptors", payload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status)
+
+	db, err := sql.Open("pgx", aasRegistryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	query, args, err := goqu.Dialect(common.Dialect).
+		From(common.TblSubmodelDescriptor).
+		Select("administration_created_at", "administration_updated_at").
+		Where(goqu.C(common.ColAASID).Eq(submodelID)).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+
+	var storedCreatedAt time.Time
+	var storedUpdatedAt time.Time
+	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&storedCreatedAt, &storedUpdatedAt))
+	expectedCreatedAt, err := time.Parse(time.RFC3339, createdAt)
+	require.NoError(t, err)
+	expectedUpdatedAt, err := time.Parse(time.RFC3339, updatedAt)
+	require.NoError(t, err)
+	require.True(t, expectedCreatedAt.Equal(storedCreatedAt))
+	require.True(t, expectedUpdatedAt.Equal(storedUpdatedAt))
+}
+
 func readAASDescriptorPersistenceState(t *testing.T, db *sql.DB, aasID string) aasDescriptorPersistenceState {
 	t.Helper()
 	aas := goqu.T(common.TblAASDescriptor).As("aas")

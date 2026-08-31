@@ -102,6 +102,51 @@ func TestSubmodelRepositoryCreateExistingUnauthorizedSubmodelElementDoesNotRetur
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestAddSubmodelElementWithPathExistingUnauthorizedElementDoesNotReturnConflict(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	element := types.NewProperty(types.DataTypeDefXSDString)
+	idShort := "HiddenElement"
+	element.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM \(SELECT .*FROM "submodel" AS "sm_lock".*FOR KEY SHARE.*\) AS "sm".*JOIN "submodel_element" AS "parent".*FOR UPDATE OF "parent"`).
+		WithArgs("sm", "container").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"submodel_id",
+			"parent_id",
+			"root_sme_id",
+			"model_type",
+			"child_depth",
+		}).AddRow(42, 7, 7, types.ModelTypeSubmodelElementCollection, 2))
+	mock.ExpectQuery(`WITH RECURSIVE visible_sme_path_ancestors.*`).
+		WithArgs(42, "container", 42, 42, "container", false, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"visible"}).AddRow(7))
+	mock.ExpectQuery(`WITH child_insert_state AS .*MAX.*FROM "submodel_element" AS "child".*"collision_path".*SELECT "next_position", "collision_path", CASE.*nextval.*first_node_id`).
+		WithArgs(7, 42, 7, "HiddenElement", 1, "submodel_element", "id").
+		WillReturnRows(sqlmock.NewRows([]string{"next_position", "collision_path", "first_node_id"}).AddRow(3, "container.HiddenElement", nil))
+	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+	mock.ExpectQuery(`SELECT "sme"\."id" FROM "submodel_element" AS "sme"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(8))
+	mock.ExpectQuery(`SELECT "sme"\."id" FROM "submodel_element" AS "sme".*FALSE`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectRollback()
+
+	err = sut.AddSubmodelElementWithPath(contextWithRestrictedCreateSubmodel(t), "sm", "container", element)
+	require.Error(t, err)
+	require.Truef(t, common.IsErrDenied(err), "got %v", err)
+	require.False(t, common.IsErrConflict(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func contextWithRestrictedCreateSubmodel(t *testing.T) context.Context {
 	t.Helper()
 

@@ -69,6 +69,45 @@ func TestInsertSubmodelElementsExecutesGraphAsSingleBatch(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestInsertSubmodelElementsUsesPreallocatedFirstNodeID(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+
+	property := types.NewProperty(types.DataTypeDefXSDString)
+	propertyIDShort := "temperature"
+	property.SetIDShort(&propertyIDShort)
+	collection := types.NewSubmodelElementCollection()
+	collectionIDShort := "measurements"
+	collection.SetIDShort(&collectionIDShort)
+	collection.SetValue([]types.ISubmodelElement{property})
+
+	mock.ExpectQuery(`SELECT .*nextval.*generate_series`).
+		WithArgs().
+		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(102))
+	mock.ExpectExec(`(?s)INSERT INTO "submodel_element".*(?:INSERT INTO "property_element".*INSERT INTO "submodel_element_collection"|INSERT INTO "submodel_element_collection".*INSERT INTO "property_element")`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+
+	ids, err := InsertSubmodelElementsForSubmodelDatabaseIDContext(
+		t.Context(),
+		db,
+		42,
+		[]types.ISubmodelElement{collection},
+		tx,
+		&BatchInsertContext{FirstNodeID: 101},
+		nil,
+	)
+	require.NoError(t, err)
+	require.Equal(t, []int{101}, ids)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestInsertSubmodelElementsRollsBackOwnedTransactionAfterConflict(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
