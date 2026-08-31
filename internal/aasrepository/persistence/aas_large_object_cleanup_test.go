@@ -76,6 +76,32 @@ func TestDeleteAssetAdministrationShellReturnsNotFoundFromCombinedQuery(t *testi
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestLoadAASDeleteEvidenceSnapshotLocksRowBeforeRead(t *testing.T) {
+	previousHistoryConfig := history.ActiveConfig()
+	history.Configure(history.Config{Mode: history.ModeOff, EvidenceEnabled: true})
+	t.Cleanup(func() { history.Configure(previousHistoryConfig) })
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	tx := beginMockTransaction(t, db, mock)
+	repository := &AssetAdministrationShellDatabase{}
+	aasID := "https://example.com/ids/aas/delete-evidence-lock"
+	globalAssetID := "https://example.com/global-assets/delete-evidence-lock"
+
+	mock.ExpectQuery(`SELECT .*FROM "aas".*FOR UPDATE`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	expectExistingAASRead(mock, aasID, globalAssetID, "locked-snapshot")
+	mock.ExpectRollback()
+
+	snapshot, err := repository.loadAASDeleteHistorySnapshotTx(t.Context(), tx, aasID)
+	require.NoError(t, err)
+	require.Equal(t, "locked-snapshot", snapshot["category"])
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestPutAssetAdministrationShellReconcilesExistingRootWithoutReplacement(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

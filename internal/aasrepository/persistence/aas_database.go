@@ -1291,7 +1291,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 		}
 	}
 
-	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	previousSnapshot, err := s.loadAASDeleteHistorySnapshotTx(ctx, tx, aasIdentifier)
 	if err != nil {
 		return err
 	}
@@ -1306,6 +1306,20 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 	}
 
 	return history.AppendVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeDeleted, previousSnapshot, map[string]any{"id": aasIdentifier}, true)
+}
+
+func (s *AssetAdministrationShellDatabase) loadAASDeleteHistorySnapshotTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		return nil, common.NewInternalServerError("AASREPO-DELAAS-LOCKAAS " + err.Error())
+	}
+	return s.loadAASHistorySnapshotByDBIDBeforeMutationTx(ctx, tx, aasDBID)
 }
 
 func cleanupAndDeleteAASByIdentifier(ctx context.Context, tx *sql.Tx, dialect *goqu.DialectWrapper, aasIdentifier string) (bool, error) {
