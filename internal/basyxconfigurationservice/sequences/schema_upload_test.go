@@ -34,6 +34,7 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 func TestSchemaUploadGetDescription(t *testing.T) {
@@ -73,6 +74,7 @@ func TestSchemaUploadExecuteReturnsReadFileError(t *testing.T) {
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectCurrentSchemaVersion(mock, initialSchemaVersion)
 
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
 		WithArgs(schemaAdvisoryLockID).
@@ -108,6 +110,7 @@ func TestSchemaUploadExecuteSuccess(t *testing.T) {
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectCurrentSchemaVersion(mock, initialSchemaVersion)
 
 	mock.ExpectExec(regexp.QuoteMeta(schema)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -150,6 +153,7 @@ func TestSchemaUploadExecuteLoadsBaseSchemaFromDirectory(t *testing.T) {
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectCurrentSchemaVersion(mock, initialSchemaVersion)
 
 	mock.ExpectExec(regexp.QuoteMeta(schemaSQL)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -212,6 +216,7 @@ func TestSchemaUploadExecuteReturnsSchemaExecutionError(t *testing.T) {
 	schemaErr := errors.New("invalid schema")
 
 	expectSchemaAdvisoryLock(mock)
+	expectCurrentSchemaVersion(mock, initialSchemaVersion)
 	mock.ExpectExec(regexp.QuoteMeta(schema)).
 		WillReturnError(schemaErr)
 	expectSchemaAdvisoryUnlock(mock)
@@ -241,6 +246,7 @@ func TestSchemaUploadExecuteAppliesRc01CompatibilityAndRetriesOnce(t *testing.T)
 	step, mock := newSchemaUploadTestStep(t, schemaPath)
 
 	expectSchemaAdvisoryLock(mock)
+	expectCurrentSchemaVersion(mock, "v1.0.1")
 	mock.ExpectExec(regexp.QuoteMeta(schema)).
 		WillReturnError(newRc01PgError())
 	mock.ExpectExec(regexp.QuoteMeta(compatibilitySQL)).
@@ -269,6 +275,7 @@ func TestSchemaUploadExecuteReturnsErrorAfterFailedRc01Retry(t *testing.T) {
 	retryErr := newRc01PgError()
 
 	expectSchemaAdvisoryLock(mock)
+	expectCurrentSchemaVersion(mock, "v1.0.1")
 	mock.ExpectExec(regexp.QuoteMeta(schema)).
 		WillReturnError(newRc01PgError())
 	mock.ExpectExec(regexp.QuoteMeta(compatibilitySQL)).
@@ -289,6 +296,87 @@ func TestSchemaUploadExecuteReturnsErrorAfterFailedRc01Retry(t *testing.T) {
 	}
 	if !errors.Is(execErr, retryErr) {
 		t.Fatalf("expected retry failure cause, got: %v", execErr)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestSchemaUploadExecuteSkipsBaselineForInitializedDatabase(t *testing.T) {
+	testCases := []struct {
+		name    string
+		version string
+	}{
+		{name: "cutoff version", version: baselineUploadCutoffVersion},
+		{name: "current dirty version awaiting patch retry", version: common.CURRENT_DATABASE_VERSION},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			schema := "CREATE INDEX IF NOT EXISTS index_removed_by_patch ON test_table (id);"
+			step, mock := newSchemaUploadTestStep(t, writeTempSchema(t, schema))
+
+			expectSchemaAdvisoryLock(mock)
+			expectCurrentSchemaVersion(mock, tc.version)
+			expectSchemaAdvisoryUnlock(mock)
+
+			statusCode, execErr := step.Execute(3)
+			if execErr != nil {
+				t.Fatalf("unexpected error: %v", execErr)
+			}
+			if statusCode != 0 {
+				t.Fatalf("expected status code 0, got %d", statusCode)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("baseline schema must not execute: %v", err)
+			}
+		})
+	}
+}
+
+func TestSchemaUploadExecuteReturnsVersionReadError(t *testing.T) {
+	step, mock := newSchemaUploadTestStep(t, "/not/read/schema.sql")
+	versionErr := errors.New("version unavailable")
+
+	expectSchemaAdvisoryLock(mock)
+	mock.ExpectQuery(regexp.QuoteMeta(schemaVersionQuery)).
+		WillReturnError(versionErr)
+	expectSchemaAdvisoryUnlock(mock)
+
+	statusCode, execErr := step.Execute(3)
+	if execErr == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if statusCode != 1 {
+		t.Fatalf("expected status code 1, got %d", statusCode)
+	}
+	if !strings.Contains(execErr.Error(), "BASYXCFG-SCHEMA-READVERSION") {
+		t.Fatalf("unexpected error: %v", execErr)
+	}
+	if !errors.Is(execErr, versionErr) {
+		t.Fatalf("expected version read cause, got: %v", execErr)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestSchemaUploadExecuteReturnsInvalidVersionError(t *testing.T) {
+	step, mock := newSchemaUploadTestStep(t, "/not/read/schema.sql")
+
+	expectSchemaAdvisoryLock(mock)
+	expectCurrentSchemaVersion(mock, "invalid")
+	expectSchemaAdvisoryUnlock(mock)
+
+	statusCode, execErr := step.Execute(3)
+	if execErr == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if statusCode != 1 {
+		t.Fatalf("expected status code 1, got %d", statusCode)
+	}
+	if !strings.Contains(execErr.Error(), "BASYXCFG-SCHEMA-VERSIONCOMPARE") {
+		t.Fatalf("unexpected error: %v", execErr)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet SQL expectations: %v", err)
@@ -330,6 +418,13 @@ func expectSchemaAdvisoryLock(mock sqlmock.Sqlmock) {
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+}
+
+const schemaVersionQuery = `SELECT "schema_version" FROM "basyxsystem" ORDER BY "identifier" ASC LIMIT 1`
+
+func expectCurrentSchemaVersion(mock sqlmock.Sqlmock, version string) {
+	mock.ExpectQuery(regexp.QuoteMeta(schemaVersionQuery)).
+		WillReturnRows(sqlmock.NewRows([]string{"schema_version"}).AddRow(version))
 }
 
 func expectSchemaAdvisoryUnlock(mock sqlmock.Sqlmock) {
