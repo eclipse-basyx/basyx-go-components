@@ -439,6 +439,7 @@
     "email" : "usera@mail.com",
     "emailVerified" : false,
     "attributes" : {
+      "clear" : [ "0" ],
       "role" : [ "viewer" ]
     },
     "createdTimestamp" : 1763553182453,

@@ -515,20 +515,14 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 		invalid, decision := invalidLogicalExpression()
 		return &invalid, decision
 	}
-	isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
+	isStringOp := isStringComparisonOperator(op)
 	if !isStringOp {
 		left, right = convertEnumLiteralIfNeeded(left, right)
 	}
-	var comparisonType ComparisonKind
-	if isStringOp {
-		comparisonType = KindString
-	} else {
-		var err error
-		comparisonType, err = left.IsComparableTo(right)
-		if err != nil {
-			invalid, decision := invalidLogicalExpression()
-			return &invalid, decision
-		}
+	comparisonType, err := comparisonKind(left, right, isStringOp)
+	if err != nil {
+		invalid, decision := invalidLogicalExpression()
+		return &invalid, decision
 	}
 
 	if opts.EnableImplicitCasts {
@@ -536,31 +530,7 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 		right = WrapCastAroundField(right, comparisonType)
 	}
 
-	out := LogicalExpression{}
-	switch op {
-	case "$eq":
-		out.Eq = []Value{left, right}
-	case "$ne":
-		out.Ne = []Value{left, right}
-	case "$in":
-		out.In = []Value{left, right}
-	case "$gt":
-		out.Gt = []Value{left, right}
-	case "$ge":
-		out.Ge = []Value{left, right}
-	case "$lt":
-		out.Lt = []Value{left, right}
-	case "$le":
-		out.Le = []Value{left, right}
-	case "$regex":
-		out.Regex = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-	case "$contains":
-		out.Contains = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-	case "$starts-with":
-		out.StartsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-	case "$ends-with":
-		out.EndsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-	}
+	out := comparisonExpression(op, left, right)
 
 	if isLiteral(left) && isLiteral(right) ||
 		(!valueContainsField(left) && !valueContainsField(right) && (valueContainsAttribute(left) || valueContainsAttribute(right))) {
@@ -576,6 +546,51 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 	}
 
 	return &out, SimplifyUndecided
+}
+
+func isStringComparisonOperator(op string) bool {
+	return op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
+}
+
+func comparisonKind(left, right Value, stringOperator bool) (ComparisonKind, error) {
+	if stringOperator {
+		return KindString, nil
+	}
+	return left.IsComparableTo(right)
+}
+
+func comparisonExpression(op string, left, right Value) LogicalExpression {
+	values := []Value{left, right}
+	switch op {
+	case "$eq":
+		return LogicalExpression{Eq: values}
+	case "$ne":
+		return LogicalExpression{Ne: values}
+	case "$in":
+		return LogicalExpression{In: values}
+	case "$gt":
+		return LogicalExpression{Gt: values}
+	case "$ge":
+		return LogicalExpression{Ge: values}
+	case "$lt":
+		return LogicalExpression{Lt: values}
+	case "$le":
+		return LogicalExpression{Le: values}
+	case "$regex":
+		return LogicalExpression{Regex: stringComparisonValues(left, right)}
+	case "$contains":
+		return LogicalExpression{Contains: stringComparisonValues(left, right)}
+	case "$starts-with":
+		return LogicalExpression{StartsWith: stringComparisonValues(left, right)}
+	case "$ends-with":
+		return LogicalExpression{EndsWith: stringComparisonValues(left, right)}
+	default:
+		return LogicalExpression{}
+	}
+}
+
+func stringComparisonValues(left, right Value) []StringValue {
+	return []StringValue{valueToStringValue(left), valueToStringValue(right)}
 }
 
 func evalComparisonOnly(le LogicalExpression, resolve AttributeResolver) (bool, bool) {
