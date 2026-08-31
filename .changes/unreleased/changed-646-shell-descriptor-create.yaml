@@ -1,7 +1,0 @@
-kind: changed
-body: Shell descriptor creates avoid rewriting newly inserted embedded Submodel descriptors while synchronizing administration timestamps.
-time: 2026-08-31T13:30:00.000000+02:00
-custom:
-  Impact: Low
-  PullRequest: 646
-  SecurityImpact: Descriptor validation, authorization, history, and stored graph semantics remain unchanged.

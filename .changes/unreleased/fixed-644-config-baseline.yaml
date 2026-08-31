@@ -1,7 +1,0 @@
-kind: fixed
-body: The configuration service skips the baseline schema for initialized databases, preventing later configuration runs from recreating objects removed by versioned patches.
-time: 2026-08-31T09:24:33+02:00
-custom:
-  Impact: Low
-  PullRequest: 644
-  SecurityImpact: None.
