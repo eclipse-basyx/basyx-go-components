@@ -36,10 +36,9 @@ var filterableFields = map[string]string{
 	"event.type":       "event_type",
 	"event.subject":    "subject",
 	"event.source":     "source",
-	"event.dataschema": "dataschema", // resolved to full/compact column at query time
+	"event.dataschema": "dataschema",
 }
 
-// comparison is one RSQL atomic predicate.
 type comparison struct {
 	Field    string
 	Operator string
@@ -47,7 +46,6 @@ type comparison struct {
 }
 
 type parsedFilter struct {
-	// AND-combined comparisons (supports "and" / ";")
 	Comparisons []comparison
 }
 
@@ -67,7 +65,6 @@ func parseFilterParam(raw string) (*parsedFilter, error) {
 }
 
 func parseRSQL(expr string) (*parsedFilter, error) {
-	// Split on top-level AND separators only (v1 does not require OR).
 	parts := splitRSQLAnd(expr)
 	out := &parsedFilter{Comparisons: make([]comparison, 0, len(parts))}
 	for _, part := range parts {
@@ -88,7 +85,6 @@ func parseRSQL(expr string) (*parsedFilter, error) {
 }
 
 func splitRSQLAnd(expr string) []string {
-	// Prefer explicit " and ", also accept ";"
 	if strings.Contains(strings.ToLower(expr), " and ") {
 		lower := strings.ToLower(expr)
 		var parts []string

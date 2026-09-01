@@ -28,6 +28,7 @@ package eventfeed
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -38,20 +39,20 @@ const (
 	schemaAASCompact      = "metamodel-aasChangeEventCompact.v1.schema.json"
 	schemaSubmodelFull    = "metamodel-submodelChangeEvent.v1.schema.json"
 	schemaSubmodelCompact = "metamodel-submodelChangeEventCompact.v1.schema.json"
+	schemaPCNFull         = "pcnNotificationEvent.v1.schema.json"
+	schemaPCNCompact      = "pcnNotificationEventCompact.v1.schema.json"
 
 	sourceSuffixAsset    = "/lookup/shells"
 	sourceSuffixAAS      = "/shells"
 	sourceSuffixSubmodel = "/submodels"
 )
 
-// Builder assembles FeedEvent envelopes for repository write hooks.
 type Builder struct {
 	sourceBaseURL string
 	schemaBaseURL string
 	now           func() time.Time
 }
 
-// NewBuilder creates a CloudEvents feed builder.
 func NewBuilder(cfg Config) *Builder {
 	return &Builder{
 		sourceBaseURL: trimTrailingSlash(cfg.SourceBaseURL),
@@ -60,93 +61,74 @@ func NewBuilder(cfg Config) *Builder {
 	}
 }
 
-// AssetCreated builds an asset.created feed event.
-func (b *Builder) AssetCreated(globalAssetID string, aasID string, submodelIDs []string) (FeedEvent, error) {
-	return b.assetEvent(TypeAssetCreated, globalAssetID, aasID, submodelIDs)
+func (b *Builder) AssetCreated(globalAssetID string, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
+	return b.assetEvent(TypeAssetCreated, globalAssetID, aasID, submodelSemanticIDs)
 }
 
-// AssetUpdated builds an asset.updated feed event.
-func (b *Builder) AssetUpdated(globalAssetID string, aasID string, submodelIDs []string) (FeedEvent, error) {
-	return b.assetEvent(TypeAssetUpdated, globalAssetID, aasID, submodelIDs)
+func (b *Builder) AssetUpdated(globalAssetID string, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
+	return b.assetEvent(TypeAssetUpdated, globalAssetID, aasID, submodelSemanticIDs)
 }
 
-// AssetDeleted builds an asset.deleted feed event.
-func (b *Builder) AssetDeleted(globalAssetID string, aasID string, submodelIDs []string) (FeedEvent, error) {
-	return b.assetEvent(TypeAssetDeleted, globalAssetID, aasID, submodelIDs)
+func (b *Builder) AssetDeleted(globalAssetID string, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
+	return b.assetEvent(TypeAssetDeleted, globalAssetID, aasID, submodelSemanticIDs)
 }
 
-// AASCreated builds an aas.created feed event.
-func (b *Builder) AASCreated(aasID, globalAssetID string, submodelIDs []string) (FeedEvent, error) {
-	return b.aasEvent(TypeAASCreated, aasID, globalAssetID, submodelIDs)
+func (b *Builder) AASCreated(aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
+	return b.aasEvent(TypeAASCreated, aasID, globalAssetID, submodelSemanticIDs)
 }
 
-// AASUpdated builds an aas.updated feed event.
-func (b *Builder) AASUpdated(aasID, globalAssetID string, submodelIDs []string) (FeedEvent, error) {
-	return b.aasEvent(TypeAASUpdated, aasID, globalAssetID, submodelIDs)
+func (b *Builder) AASUpdated(aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
+	return b.aasEvent(TypeAASUpdated, aasID, globalAssetID, submodelSemanticIDs)
 }
 
-// AASDeleted builds an aas.deleted feed event.
-func (b *Builder) AASDeleted(aasID, globalAssetID string, submodelIDs []string) (FeedEvent, error) {
-	return b.aasEvent(TypeAASDeleted, aasID, globalAssetID, submodelIDs)
+func (b *Builder) AASDeleted(aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
+	return b.aasEvent(TypeAASDeleted, aasID, globalAssetID, submodelSemanticIDs)
 }
 
-// SubmodelCreated builds a submodel.created feed event.
 func (b *Builder) SubmodelCreated(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelCreated, submodelID, semanticID, globalAssetIDs)
 }
 
-// SubmodelUpdated builds a submodel.updated feed event.
 func (b *Builder) SubmodelUpdated(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelUpdated, submodelID, semanticID, globalAssetIDs)
 }
 
-// SubmodelDeleted builds a submodel.deleted feed event.
 func (b *Builder) SubmodelDeleted(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelDeleted, submodelID, semanticID, globalAssetIDs)
 }
 
-// PCN builds an io.admin-shell.pcn.v1 feed event for Product Change Notifications.
-// recordIDShorts lists idShort values of Records entries referenced by the event.
-func (b *Builder) PCN(submodelID, semanticID string, recordIDShorts []string) (FeedEvent, error) {
-	if semanticID == "" {
-		semanticID = SemanticIDPCN
-	}
-	semRef := externalReference(semanticID)
-	recordValues := make([]any, 0, len(recordIDShorts))
-	for _, idShort := range recordIDShorts {
-		if idShort == "" {
-			continue
-		}
-		recordValues = append(recordValues, map[string]any{"idShort": idShort})
-	}
+// PCN builds an io.admin-shell.pcn.v1 feed event for a single changed Product Change Notification record. record is the record's Value-Only representation.
+func (b *Builder) PCN(submodelID string, globalAssetIDs []string, record any) (FeedEvent, error) {
+	ids := normalizeGlobalAssetIDs(globalAssetIDs)
 	full := map[string]any{
-		"semanticId": semRef,
-		"submodelElements": []any{
-			map[string]any{
-				"idShort": "Records",
-				"value":   recordValues,
-			},
-		},
+		"submodelId":     submodelID,
+		"globalAssetIds": ids,
+		"record":         record,
 	}
 	compact := map[string]any{
-		"submodelId": submodelID,
-		"semanticId": semRef,
+		"submodelId":     submodelID,
+		"globalAssetIds": ids,
 	}
-	return b.build(TypePCN, submodelID, sourceSuffixSubmodel, schemaSubmodelFull, schemaSubmodelCompact, full, compact)
+	return b.build(TypePCN, submodelID, sourceSuffixSubmodel, schemaPCNFull, schemaPCNCompact, full, compact)
 }
 
-// IsPCNSemanticID reports whether semanticID identifies a PCN submodel.
 func IsPCNSemanticID(semanticID string) bool {
-	return semanticID == SemanticIDPCN
+	return irdiCode(semanticID) == irdiCode(SemanticIDPCN)
 }
 
-func (b *Builder) assetEvent(eventType, globalAssetID, aasID string, submodelIDs []string) (FeedEvent, error) {
+// irdiCode extracts the code segment of an ECLASS IRDI (the part between the
+// two "#" separators). It returns "" if semanticID is not in that form.
+func irdiCode(semanticID string) string {
+	parts := strings.Split(semanticID, "#")
+	if len(parts) != 3 {
+		return ""
+	}
+	return parts[1]
+}
+
+func (b *Builder) assetEvent(eventType, globalAssetID, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
 	if globalAssetID == "" {
 		globalAssetID = aasID
-	}
-	submodelRefs := make([]any, 0, len(submodelIDs))
-	for _, id := range submodelIDs {
-		submodelRefs = append(submodelRefs, modelReference("Submodel", id))
 	}
 	aasRefs := []any{}
 	if aasID != "" {
@@ -154,22 +136,18 @@ func (b *Builder) assetEvent(eventType, globalAssetID, aasID string, submodelIDs
 	}
 	full := map[string]any{
 		"globalAssetId": globalAssetID,
-		"submodels":     submodelRefs,
+		"submodels":     referredSemanticIDs(submodelSemanticIDs),
 		"aasRefs":       aasRefs,
 	}
 	compact := map[string]any{"globalAssetId": globalAssetID}
 	return b.build(eventType, globalAssetID, sourceSuffixAsset, schemaAssetFull, schemaAssetCompact, full, compact)
 }
 
-func (b *Builder) aasEvent(eventType, aasID, globalAssetID string, submodelIDs []string) (FeedEvent, error) {
-	submodelRefs := make([]any, 0, len(submodelIDs))
-	for _, id := range submodelIDs {
-		submodelRefs = append(submodelRefs, modelReference("Submodel", id))
-	}
+func (b *Builder) aasEvent(eventType, aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
 	full := map[string]any{
 		"aasId":         aasID,
 		"globalAssetId": globalAssetID,
-		"submodels":     submodelRefs,
+		"submodels":     referredSemanticIDs(submodelSemanticIDs),
 	}
 	compact := map[string]any{"aasId": aasID}
 	return b.build(eventType, aasID, sourceSuffixAAS, schemaAASFull, schemaAASCompact, full, compact)
@@ -225,6 +203,17 @@ func normalizeGlobalAssetIDs(ids []string) []string {
 	return out
 }
 
+func referredSemanticIDs(semanticIDs []string) []any {
+	out := make([]any, 0, len(semanticIDs))
+	for _, semanticID := range semanticIDs {
+		if semanticID == "" {
+			continue
+		}
+		out = append(out, map[string]any{"referredSemanticId": externalReference(semanticID)})
+	}
+	return out
+}
+
 func modelReference(keyType, value string) map[string]any {
 	return map[string]any{
 		"type": "ModelReference",
@@ -271,6 +260,8 @@ func schemaPairForType(eventType, schemaBase string) (full, compact string) {
 		return base + "/" + schemaAssetFull, base + "/" + schemaAssetCompact
 	case TypeAASCreated, TypeAASUpdated, TypeAASDeleted:
 		return base + "/" + schemaAASFull, base + "/" + schemaAASCompact
+	case TypePCN:
+		return base + "/" + schemaPCNFull, base + "/" + schemaPCNCompact
 	default:
 		return base + "/" + schemaSubmodelFull, base + "/" + schemaSubmodelCompact
 	}

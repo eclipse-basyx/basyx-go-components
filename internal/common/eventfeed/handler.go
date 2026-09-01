@@ -39,12 +39,6 @@ import (
 
 const httpComponent = "EVENTFEED"
 
-// RegisterRoutes mounts Event Feed HTTP endpoints on the given router.
-// Paths follow the AAS API base used by BaSyx Go components:
-//   - GET /events
-//
-// Callers must register these routes on the protected API router so OIDC/ABAC
-// middleware applies consistently with the rest of the service surface.
 func RegisterRoutes(r chi.Router, svc *Service) {
 	if r == nil || svc == nil || !svc.cfg.Enabled {
 		return

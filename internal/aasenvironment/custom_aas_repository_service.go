@@ -129,7 +129,7 @@ func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Co
 		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "CreateAssetAdministrationShell"), nil
 	}
 
-	publishAASFeedEvent(ctx, s.AssetAdministrationShellRepositoryAPIAPIService, true, aas)
+	publishAASFeedEvent(ctx, s.AssetAdministrationShellRepositoryAPIAPIService, s.persistence.SubmodelRepository, true, aas)
 
 	aasJSON, jsonErr := jsonization.ToJsonable(aas)
 	if jsonErr != nil {
@@ -189,7 +189,7 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "PutAssetAdministrationShellByID"), nil
 	}
 
-	publishAASFeedEvent(ctx, s.AssetAdministrationShellRepositoryAPIAPIService, !isUpdate, assetAdministrationShell)
+	publishAASFeedEvent(ctx, s.AssetAdministrationShellRepositoryAPIAPIService, s.persistence.SubmodelRepository, !isUpdate, assetAdministrationShell)
 
 	if isUpdate {
 		return commonmodel.Response(http.StatusNoContent, nil), nil
@@ -247,7 +247,7 @@ func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx cont
 		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "DeleteAssetAdministrationShellByID"), nil
 	}
 
-	publishAASDeletedModuleEvent(ctx, s.EventFeedModule(), aas)
+	publishAASDeletedModuleEvent(ctx, s.EventFeedModule(), s.persistence.SubmodelRepository, aas)
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
 }
@@ -465,7 +465,7 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		return newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
-	isUpdate, err := s.putSubmodelAndSyncDescriptors(ctx, decodedAASIdentifier, decodedSubmodelIdentifier, submodel)
+	isUpdate, previousSubmodel, err := s.putSubmodelAndSyncDescriptors(ctx, decodedAASIdentifier, decodedSubmodelIdentifier, submodel)
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAASRepoErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
@@ -482,7 +482,7 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "PutSubmodel"), nil
 	}
 
-	publishSubmodelModuleEvent(ctx, s.EventFeedModule(), !isUpdate, submodel, globalAssetIDsForSubmodel(ctx, s.persistence, decodedSubmodelIdentifier))
+	publishSubmodelModuleEvent(ctx, s.EventFeedModule(), !isUpdate, submodel, previousSubmodel, globalAssetIDsForSubmodel(ctx, s.persistence, decodedSubmodelIdentifier))
 
 	if isUpdate {
 		return commonmodel.Response(http.StatusNoContent, nil), nil
@@ -501,8 +501,9 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 	aasIdentifier string,
 	submodelIdentifier string,
 	submodel types.ISubmodel,
-) (bool, error) {
+) (bool, types.ISubmodel, error) {
 	isUpdate := false
+	var previousSubmodel types.ISubmodel
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		submodelReference := types.NewReference(
 			types.ReferenceTypesModelReference,
@@ -519,6 +520,7 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 			return putErr
 		}
 		isUpdate = putResult.IsUpdate
+		previousSubmodel = putResult.Previous
 		if !putResult.Changed && !referenceCreated {
 			return nil
 		}
@@ -547,7 +549,7 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 			aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertEmbeddedOperation), tx, aasDescriptor,
 		)
 	})
-	return isUpdate, err
+	return isUpdate, previousSubmodel, err
 }
 
 // DeleteSubmodelByIdAasRepository deletes a submodel through the superpath and synchronizes descriptors.

@@ -150,7 +150,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), nil
 	}
 
-	publishSubmodelFeedEvent(ctx, s.SubmodelRepositoryAPIAPIService, true, submodel, globalAssetIDsForSubmodel(ctx, s.persistence, submodel.ID()))
+	publishSubmodelFeedEvent(ctx, s.SubmodelRepositoryAPIAPIService, true, submodel, nil, globalAssetIDsForSubmodel(ctx, s.persistence, submodel.ID()))
 
 	submodelJSON, jsonErr := jsonization.ToJsonable(submodel)
 	if jsonErr != nil {
@@ -179,12 +179,14 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 	}
 
 	isUpdate := false
+	var previousSubmodel types.ISubmodel
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		putResult, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransactionWithResult(ctx, tx, decodedIdentifier, submodel)
 		if putErr != nil {
 			return putErr
 		}
 		isUpdate = putResult.IsUpdate
+		previousSubmodel = putResult.Previous
 		if !putResult.Changed {
 			return nil
 		}
@@ -220,7 +222,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
-	publishSubmodelFeedEvent(ctx, s.SubmodelRepositoryAPIAPIService, !isUpdate, submodel, globalAssetIDsForSubmodel(ctx, s.persistence, submodel.ID()))
+	publishSubmodelFeedEvent(ctx, s.SubmodelRepositoryAPIAPIService, !isUpdate, submodel, previousSubmodel, globalAssetIDsForSubmodel(ctx, s.persistence, submodel.ID()))
 
 	if isUpdate {
 		return commonmodel.Response(http.StatusNoContent, nil), nil

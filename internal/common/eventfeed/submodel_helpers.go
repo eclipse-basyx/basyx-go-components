@@ -25,9 +25,11 @@
 
 package eventfeed
 
-import "github.com/FriedJannik/aas-go-sdk/types"
+import (
+	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+)
 
-// SemanticIDFromSubmodel returns the last key value of the submodel semanticId.
 func SemanticIDFromSubmodel(submodel types.ISubmodel) string {
 	if submodel == nil {
 		return ""
@@ -43,8 +45,7 @@ func SemanticIDFromSubmodel(submodel types.ISubmodel) string {
 	return keys[len(keys)-1].Value()
 }
 
-// PCNRecordIDShortsFromSubmodel extracts idShort values under the PCN Records element.
-func PCNRecordIDShortsFromSubmodel(submodel types.ISubmodel) []string {
+func pcnRecordElements(submodel types.ISubmodel) []types.ISubmodelElement {
 	if submodel == nil {
 		return nil
 	}
@@ -52,25 +53,57 @@ func PCNRecordIDShortsFromSubmodel(submodel types.ISubmodel) []string {
 		if el == nil || el.IDShort() == nil || *el.IDShort() != "Records" {
 			continue
 		}
-		var children []types.ISubmodelElement
 		switch typed := el.(type) {
 		case types.ISubmodelElementCollection:
-			children = typed.Value()
+			return typed.Value()
 		case types.ISubmodelElementList:
-			children = typed.Value()
+			return typed.Value()
 		default:
-			continue
+			return nil
 		}
-		out := make([]string, 0, len(children))
-		for _, child := range children {
-			if child == nil || child.IDShort() == nil {
-				continue
-			}
-			if idShort := *child.IDShort(); idShort != "" {
-				out = append(out, idShort)
-			}
-		}
-		return out
 	}
 	return nil
+}
+
+func PCNNewRecordValuesFromSubmodel(previous, submodel types.ISubmodel) []model.SubmodelElementValue {
+	currentRecords := pcnRecordElements(submodel)
+	if len(currentRecords) == 0 {
+		return nil
+	}
+
+	var previousIDShorts map[string]struct{}
+	var previousCount int
+	if previous != nil {
+		previousRecords := pcnRecordElements(previous)
+		previousCount = len(previousRecords)
+		previousIDShorts = make(map[string]struct{}, previousCount)
+		for _, r := range previousRecords {
+			if r == nil || r.IDShort() == nil || *r.IDShort() == "" {
+				continue
+			}
+			previousIDShorts[*r.IDShort()] = struct{}{}
+		}
+	}
+
+	values := make([]model.SubmodelElementValue, 0, len(currentRecords))
+	for i, record := range currentRecords {
+		if record == nil {
+			continue
+		}
+		if previous != nil {
+			if idShort := record.IDShort(); idShort != nil && *idShort != "" {
+				if _, exists := previousIDShorts[*idShort]; exists {
+					continue
+				}
+			} else if i < previousCount {
+				continue
+			}
+		}
+		value, err := model.SubmodelElementToValueOnly(record)
+		if err != nil || value == nil {
+			continue
+		}
+		values = append(values, value)
+	}
+	return values
 }

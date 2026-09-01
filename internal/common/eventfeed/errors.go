@@ -27,7 +27,6 @@ package eventfeed
 
 import "fmt"
 
-// QueryError is a client-facing validation error (HTTP 400).
 type QueryError struct {
 	Code    string
 	Message string
@@ -47,7 +46,6 @@ func newQueryError(code, message string) *QueryError {
 	return &QueryError{Code: code, Message: message}
 }
 
-// IsQueryError reports whether err is a feed query validation error.
 func IsQueryError(err error) bool {
 	_, ok := err.(*QueryError)
 	return ok

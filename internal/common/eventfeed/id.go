@@ -36,7 +36,6 @@ import (
 
 var idCounter atomic.Uint64
 
-// newEventID returns a time-ordered UUIDv7-style identifier.
 func newEventID(now time.Time) string {
 	var b [16]byte
 	ms := uint64(now.UTC().UnixMilli())

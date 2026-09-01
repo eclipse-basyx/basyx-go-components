@@ -31,29 +31,30 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
+	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
 
-func publishAASEvent(ctx context.Context, module *eventfeed.Module, created bool, aas types.IAssetAdministrationShell) {
+func publishAASEvent(ctx context.Context, module *eventfeed.Module, submodelBackend *submodelpersistence.SubmodelDatabase, created bool, aas types.IAssetAdministrationShell) {
 	if module == nil || !module.Enabled() || aas == nil {
 		return
 	}
-	aasID, globalAssetID, submodelIDs := aasFeedFields(aas)
+	aasID, globalAssetID, submodelSemanticIDs := aasFeedFields(ctx, submodelBackend, aas)
 	if created {
-		module.PublishAASCreated(ctx, aasID, globalAssetID, submodelIDs)
+		module.PublishAASCreated(ctx, aasID, globalAssetID, submodelSemanticIDs)
 		return
 	}
-	module.PublishAASUpdated(ctx, aasID, globalAssetID, submodelIDs)
+	module.PublishAASUpdated(ctx, aasID, globalAssetID, submodelSemanticIDs)
 }
 
-func publishAASDeletedEvent(ctx context.Context, module *eventfeed.Module, aas types.IAssetAdministrationShell) {
+func publishAASDeletedEvent(ctx context.Context, module *eventfeed.Module, submodelBackend *submodelpersistence.SubmodelDatabase, aas types.IAssetAdministrationShell) {
 	if module == nil || !module.Enabled() || aas == nil {
 		return
 	}
-	aasID, globalAssetID, submodelIDs := aasFeedFields(aas)
-	module.PublishAASDeleted(ctx, aasID, globalAssetID, submodelIDs)
+	aasID, globalAssetID, submodelSemanticIDs := aasFeedFields(ctx, submodelBackend, aas)
+	module.PublishAASDeleted(ctx, aasID, globalAssetID, submodelSemanticIDs)
 }
 
-func publishSubmodelEvent(ctx context.Context, module *eventfeed.Module, created bool, submodel types.ISubmodel, globalAssetIDs []string) {
+func publishSubmodelEvent(ctx context.Context, module *eventfeed.Module, created bool, submodel types.ISubmodel, previous types.ISubmodel, globalAssetIDs []string) {
 	if module == nil || !module.Enabled() || submodel == nil {
 		return
 	}
@@ -64,7 +65,7 @@ func publishSubmodelEvent(ctx context.Context, module *eventfeed.Module, created
 		module.PublishSubmodelUpdated(ctx, submodel.ID(), semanticID, globalAssetIDs)
 	}
 	if eventfeed.IsPCNSemanticID(semanticID) {
-		module.PublishPCN(ctx, submodel.ID(), semanticID, eventfeed.PCNRecordIDShortsFromSubmodel(submodel))
+		module.PublishPCN(ctx, previous, submodel, globalAssetIDs)
 	}
 }
 
@@ -109,15 +110,35 @@ func globalAssetIDsForSubmodel(ctx context.Context, backend *persistencepostgres
 	return globalAssetIDs
 }
 
-func aasFeedFields(aas types.IAssetAdministrationShell) (aasID, globalAssetID string, submodelIDs []string) {
+func aasFeedFields(ctx context.Context, submodelBackend *submodelpersistence.SubmodelDatabase, aas types.IAssetAdministrationShell) (aasID, globalAssetID string, submodelSemanticIDs []string) {
 	aasID = aas.ID()
 	if info := aas.AssetInformation(); info != nil {
 		if gid := info.GlobalAssetID(); gid != nil {
 			globalAssetID = *gid
 		}
 	}
-	submodelIDs = referenceValues(aas.Submodels())
-	return aasID, globalAssetID, submodelIDs
+	submodelSemanticIDs = submodelSemanticIDsFromReferences(ctx, submodelBackend, aas.Submodels())
+	return aasID, globalAssetID, submodelSemanticIDs
+}
+
+// submodelSemanticIDsFromReferences resolves the semanticId of every submodel referenced by
+// an Asset Administration Shell, for embedding as referredSemanticId in AAS/asset feed events.
+func submodelSemanticIDsFromReferences(ctx context.Context, backend *submodelpersistence.SubmodelDatabase, refs []types.IReference) []string {
+	submodelIDs := referenceValues(refs)
+	if backend == nil || len(submodelIDs) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(submodelIDs))
+	for _, submodelID := range submodelIDs {
+		submodel, err := backend.GetSubmodelByID(ctx, submodelID, "core", true, false)
+		if err != nil || submodel == nil {
+			continue
+		}
+		if semanticID := eventfeed.SemanticIDFromSubmodel(submodel); semanticID != "" {
+			out = append(out, semanticID)
+		}
+	}
+	return out
 }
 
 func referenceValues(refs []types.IReference) []string {

@@ -33,7 +33,7 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
 
-func publishSubmodelEvent(ctx context.Context, module *eventfeed.Module, backend persistencepostgresql.SubmodelDatabase, created bool, submodel types.ISubmodel) {
+func publishSubmodelEvent(ctx context.Context, module *eventfeed.Module, backend persistencepostgresql.SubmodelDatabase, created bool, submodel types.ISubmodel, previous types.ISubmodel) {
 	if module == nil || !module.Enabled() || submodel == nil {
 		return
 	}
@@ -45,7 +45,7 @@ func publishSubmodelEvent(ctx context.Context, module *eventfeed.Module, backend
 		module.PublishSubmodelUpdated(ctx, submodel.ID(), semanticID, globalAssetIDs)
 	}
 	if eventfeed.IsPCNSemanticID(semanticID) {
-		module.PublishPCN(ctx, submodel.ID(), semanticID, eventfeed.PCNRecordIDShortsFromSubmodel(submodel))
+		module.PublishPCN(ctx, previous, submodel, globalAssetIDs)
 	}
 }
 

@@ -83,7 +83,6 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// MaxAgePeriod returns an ISO-8601 period approximation for capabilities (days).
 func (c Config) MaxAgePeriod() string {
 	days := int(c.MaxAge.Hours() / 24)
 	if days < 1 {

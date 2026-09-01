@@ -34,7 +34,6 @@ import (
 	"time"
 )
 
-// Service implements feed read/write use cases.
 type Service struct {
 	repo   *Repository
 	cfg    Config
@@ -43,7 +42,6 @@ type Service struct {
 	logger *slog.Logger
 }
 
-// NewService creates an Event Feed service.
 func NewService(repo *Repository, cfg Config) *Service {
 	return &Service{
 		repo:   repo,
@@ -54,13 +52,10 @@ func NewService(repo *Repository, cfg Config) *Service {
 	}
 }
 
-// Builder returns the CloudEvents builder used by write hooks.
 func (s *Service) Builder() *Builder {
 	return s.build
 }
 
-// Write persists a feed event. Failures are logged and never returned as fatal
-// to callers that use Publish* helpers; Write itself returns the error.
 func (s *Service) Write(ctx context.Context, event FeedEvent) error {
 	if s == nil || s.repo == nil {
 		return nil
@@ -68,7 +63,6 @@ func (s *Service) Write(ctx context.Context, event FeedEvent) error {
 	return s.repo.Save(ctx, event)
 }
 
-// PublishBestEffort writes an event and logs failures without failing the caller.
 func (s *Service) PublishBestEffort(ctx context.Context, event FeedEvent, err error) {
 	if err != nil {
 		s.logger.WarnContext(ctx, "event feed build failed", "error.code", "EVENTFEED-PUBLISH-BUILD", "error", err)
@@ -82,7 +76,6 @@ func (s *Service) PublishBestEffort(ctx context.Context, event FeedEvent, err er
 	}
 }
 
-// Read returns one page of the event feed.
 func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, error) {
 	if err := s.validateQuery(query); err != nil {
 		return FeedResponse{}, err
@@ -127,7 +120,6 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 	}, nil
 }
 
-// Capabilities returns the discovery document.
 func (s *Service) Capabilities() CapabilitiesResponse {
 	eventTypes := make(map[string]EventTypeCapabilities, len(allEventTypes()))
 	for _, t := range allEventTypes() {
@@ -159,7 +151,6 @@ func (s *Service) Capabilities() CapabilitiesResponse {
 	}
 }
 
-// RunRetention deletes events older than maxAge + hardDeleteGrace.
 func (s *Service) RunRetention(ctx context.Context) (int64, error) {
 	cutoff := s.now().Add(-(s.cfg.MaxAge + s.cfg.HardDeleteGrace))
 	n, err := s.repo.DeleteOlderThan(ctx, cutoff)

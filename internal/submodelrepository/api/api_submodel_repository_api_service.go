@@ -1017,7 +1017,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), nil
 	}
 
-	publishSubmodelEvent(ctx, s.eventFeed, s.submodelBackend, true, submodel)
+	publishSubmodelEvent(ctx, s.eventFeed, s.submodelBackend, true, submodel, nil)
 
 	submodelJsonable, err := jsonization.ToJsonable(submodel)
 	if err != nil {
@@ -1327,7 +1327,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 		return newAPIErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
 	}
 
-	isUpdate, err := s.submodelBackend.PutSubmodel(ctx, decodedIdentifier, submodel)
+	putResult, err := s.submodelBackend.PutSubmodelWithResult(ctx, decodedIdentifier, submodel)
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
@@ -1344,9 +1344,9 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
-	publishSubmodelEvent(ctx, s.eventFeed, s.submodelBackend, !isUpdate, submodel)
+	publishSubmodelEvent(ctx, s.eventFeed, s.submodelBackend, !putResult.IsUpdate, submodel, putResult.Previous)
 
-	if isUpdate {
+	if putResult.IsUpdate {
 		return gen.Response(http.StatusNoContent, nil), nil
 	}
 

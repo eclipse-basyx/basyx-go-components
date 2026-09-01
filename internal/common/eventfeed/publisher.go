@@ -31,17 +31,16 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/go-chi/chi/v5"
 )
 
-// Module wires Event Feed persistence, HTTP routes and optional retention.
 type Module struct {
 	Service *Service
 	cfg     Config
 	stop    chan struct{}
 }
 
-// NewModule constructs the Event Feed module when enabled.
 func NewModule(db *sql.DB, cfg Config) (*Module, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -54,12 +53,10 @@ func NewModule(db *sql.DB, cfg Config) (*Module, error) {
 	return &Module{Service: svc, cfg: cfg, stop: make(chan struct{})}, nil
 }
 
-// Enabled reports whether the feed is active.
 func (m *Module) Enabled() bool {
 	return m != nil && m.cfg.Enabled && m.Service != nil
 }
 
-// RegisterRoutes mounts feed endpoints when enabled.
 func (m *Module) RegisterRoutes(r chi.Router) {
 	if m == nil || !m.Enabled() {
 		return
@@ -67,7 +64,6 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	RegisterRoutes(r, m.Service)
 }
 
-// StartRetentionLoop periodically hard-deletes expired events.
 func (m *Module) StartRetentionLoop(ctx context.Context) {
 	if m == nil || !m.Enabled() {
 		return
@@ -95,7 +91,6 @@ func (m *Module) StartRetentionLoop(ctx context.Context) {
 	}()
 }
 
-// Stop stops background loops.
 func (m *Module) Stop() {
 	if m == nil || m.stop == nil {
 		return
@@ -107,7 +102,6 @@ func (m *Module) Stop() {
 	}
 }
 
-// PublishAASCreated emits aas.created (+ asset.created when globalAssetId is set).
 func (m *Module) PublishAASCreated(ctx context.Context, aasID, globalAssetID string, submodelIDs []string) {
 	if !m.Enabled() {
 		return
@@ -120,7 +114,6 @@ func (m *Module) PublishAASCreated(ctx context.Context, aasID, globalAssetID str
 	}
 }
 
-// PublishAASUpdated emits aas.updated (+ asset.updated when globalAssetId is set).
 func (m *Module) PublishAASUpdated(ctx context.Context, aasID, globalAssetID string, submodelIDs []string) {
 	if !m.Enabled() {
 		return
@@ -133,7 +126,6 @@ func (m *Module) PublishAASUpdated(ctx context.Context, aasID, globalAssetID str
 	}
 }
 
-// PublishAASDeleted emits aas.deleted (+ asset.deleted when globalAssetId is set).
 func (m *Module) PublishAASDeleted(ctx context.Context, aasID, globalAssetID string, submodelIDs []string) {
 	if !m.Enabled() {
 		return
@@ -146,7 +138,6 @@ func (m *Module) PublishAASDeleted(ctx context.Context, aasID, globalAssetID str
 	}
 }
 
-// PublishSubmodelCreated emits submodel.created.
 func (m *Module) PublishSubmodelCreated(ctx context.Context, submodelID, semanticID string, globalAssetIDs []string) {
 	if !m.Enabled() {
 		return
@@ -155,7 +146,6 @@ func (m *Module) PublishSubmodelCreated(ctx context.Context, submodelID, semanti
 	m.Service.PublishBestEffort(ctx, ev, err)
 }
 
-// PublishSubmodelUpdated emits submodel.updated.
 func (m *Module) PublishSubmodelUpdated(ctx context.Context, submodelID, semanticID string, globalAssetIDs []string) {
 	if !m.Enabled() {
 		return
@@ -164,7 +154,6 @@ func (m *Module) PublishSubmodelUpdated(ctx context.Context, submodelID, semanti
 	m.Service.PublishBestEffort(ctx, ev, err)
 }
 
-// PublishSubmodelDeleted emits submodel.deleted.
 func (m *Module) PublishSubmodelDeleted(ctx context.Context, submodelID, semanticID string, globalAssetIDs []string) {
 	if !m.Enabled() {
 		return
@@ -173,11 +162,12 @@ func (m *Module) PublishSubmodelDeleted(ctx context.Context, submodelID, semanti
 	m.Service.PublishBestEffort(ctx, ev, err)
 }
 
-// PublishPCN emits io.admin-shell.pcn.v1 for Product Change Notification changes.
-func (m *Module) PublishPCN(ctx context.Context, submodelID, semanticID string, recordIDShorts []string) {
-	if !m.Enabled() {
+func (m *Module) PublishPCN(ctx context.Context, previous, submodel types.ISubmodel, globalAssetIDs []string) {
+	if !m.Enabled() || submodel == nil {
 		return
 	}
-	ev, err := m.Service.Builder().PCN(submodelID, semanticID, recordIDShorts)
-	m.Service.PublishBestEffort(ctx, ev, err)
+	for _, record := range PCNNewRecordValuesFromSubmodel(previous, submodel) {
+		ev, err := m.Service.Builder().PCN(submodel.ID(), globalAssetIDs, record)
+		m.Service.PublishBestEffort(ctx, ev, err)
+	}
 }

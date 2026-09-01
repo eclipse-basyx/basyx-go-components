@@ -63,6 +63,32 @@ func TestBuilderAASCreatedPayloads(t *testing.T) {
 	if full["aasId"] != "aas-1" || full["globalAssetId"] != "asset-1" {
 		t.Fatalf("full payload=%v", full)
 	}
+	submodels, ok := full["submodels"].([]any)
+	if !ok || len(submodels) != 2 {
+		t.Fatalf("submodels=%v", full["submodels"])
+	}
+	firstSubmodel, ok := submodels[0].(map[string]any)
+	if !ok {
+		t.Fatalf("submodels[0]=%v", submodels[0])
+	}
+	referredSemanticID, ok := firstSubmodel["referredSemanticId"].(map[string]any)
+	if !ok {
+		t.Fatalf("referredSemanticId=%v", firstSubmodel["referredSemanticId"])
+	}
+	if referredSemanticID["type"] != "ExternalReference" {
+		t.Fatalf("referredSemanticId type=%v", referredSemanticID["type"])
+	}
+	keys, ok := referredSemanticID["keys"].([]any)
+	if !ok || len(keys) != 1 {
+		t.Fatalf("referredSemanticId keys=%v", referredSemanticID["keys"])
+	}
+	key, ok := keys[0].(map[string]any)
+	if !ok || key["type"] != "GlobalReference" || key["value"] != "sm-1" {
+		t.Fatalf("referredSemanticId key=%v", keys[0])
+	}
+	if _, hasSubmodelId := firstSubmodel["submodelId"]; hasSubmodelId {
+		t.Fatalf("submodels entry must not expose submodelId: %v", firstSubmodel)
+	}
 	var compact map[string]any
 	if err := json.Unmarshal([]byte(ev.DataCompact), &compact); err != nil {
 		t.Fatalf("compact json: %v", err)
@@ -121,7 +147,7 @@ func TestBuilderDeletedAndPCN(t *testing.T) {
 		t.Fatalf("type=%s", smDel.Type)
 	}
 
-	pcn, err := b.PCN("sm-pcn", SemanticIDPCN, []string{"Records[0]", "Records[2]"})
+	pcn, err := b.PCN("sm-pcn", []string{"asset-1"}, map[string]any{"ManufacturerChangeID": "CN123456"})
 	if err != nil {
 		t.Fatalf("pcn: %v", err)
 	}
@@ -132,11 +158,24 @@ func TestBuilderDeletedAndPCN(t *testing.T) {
 	if err := json.Unmarshal([]byte(pcn.DataFull), &full); err != nil {
 		t.Fatalf("json: %v", err)
 	}
-	elements, ok := full["submodelElements"].([]any)
-	if !ok || len(elements) != 1 {
-		t.Fatalf("submodelElements=%v", full["submodelElements"])
+	if full["submodelId"] != "sm-pcn" {
+		t.Fatalf("submodelId=%v", full["submodelId"])
+	}
+	globalAssetIDs, ok := full["globalAssetIds"].([]any)
+	if !ok || len(globalAssetIDs) != 1 || globalAssetIDs[0] != "asset-1" {
+		t.Fatalf("globalAssetIds=%v", full["globalAssetIds"])
+	}
+	record, ok := full["record"].(map[string]any)
+	if !ok || record["ManufacturerChangeID"] != "CN123456" {
+		t.Fatalf("record=%v", full["record"])
 	}
 	if !IsPCNSemanticID(SemanticIDPCN) || IsPCNSemanticID("other") {
 		t.Fatalf("IsPCNSemanticID mismatch")
+	}
+	if !IsPCNSemanticID("0173-1#01-AHE582#005") {
+		t.Fatalf("IsPCNSemanticID should ignore version segment")
+	}
+	if IsPCNSemanticID("0173-1#01-AHE581#003") {
+		t.Fatalf("IsPCNSemanticID should not match a different irdi code")
 	}
 }

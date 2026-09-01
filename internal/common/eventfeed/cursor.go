@@ -51,7 +51,6 @@ func decodeCursor(cursor string) (cursorData, error) {
 	}
 	bytes, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil {
-		// Accept standard encoding with padding as a convenience.
 		bytes, err = base64.URLEncoding.DecodeString(raw)
 		if err != nil {
 			return cursorData{}, fmt.Errorf("EVENTFEED-CURSOR-BASE64 Cursor is not valid Base64: %s", cursor)

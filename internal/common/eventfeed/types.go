@@ -51,7 +51,7 @@ const (
 	APIVersion             = "1.0"
 
 	// SemanticIDPCN is the IDTA Product Change Notifications submodel semantic id.
-	SemanticIDPCN = "0173-10029#01-XFB001#001"
+	SemanticIDPCN = "0173-1#01-AHE582#003"
 )
 
 // FeedEvent is a persisted CloudEvents feed record with both presentation variants.
