@@ -35,12 +35,14 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Module owns the event feed service and its retention lifecycle.
 type Module struct {
 	Service *Service
 	cfg     Config
 	stop    chan struct{}
 }
 
+// NewModule creates an event feed module from cfg.
 func NewModule(db *sql.DB, cfg Config) (*Module, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -53,10 +55,12 @@ func NewModule(db *sql.DB, cfg Config) (*Module, error) {
 	return &Module{Service: svc, cfg: cfg, stop: make(chan struct{})}, nil
 }
 
+// Enabled reports whether the module is configured and ready to publish events.
 func (m *Module) Enabled() bool {
 	return m != nil && m.cfg.Enabled && m.Service != nil
 }
 
+// RegisterRoutes registers the module's HTTP endpoints on r.
 func (m *Module) RegisterRoutes(r chi.Router) {
 	if m == nil || !m.Enabled() {
 		return
@@ -64,6 +68,7 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	RegisterRoutes(r, m.Service)
 }
 
+// StartRetentionLoop starts periodic cleanup of expired events.
 func (m *Module) StartRetentionLoop(ctx context.Context) {
 	if m == nil || !m.Enabled() {
 		return
@@ -91,6 +96,7 @@ func (m *Module) StartRetentionLoop(ctx context.Context) {
 	}()
 }
 
+// Stop terminates the retention loop.
 func (m *Module) Stop() {
 	if m == nil || m.stop == nil {
 		return
@@ -102,6 +108,7 @@ func (m *Module) Stop() {
 	}
 }
 
+// PublishAASCreated publishes events for a newly created Asset Administration Shell and its asset.
 func (m *Module) PublishAASCreated(ctx context.Context, aasID, globalAssetID string, submodelIDs []string) {
 	if !m.Enabled() {
 		return
@@ -114,6 +121,7 @@ func (m *Module) PublishAASCreated(ctx context.Context, aasID, globalAssetID str
 	}
 }
 
+// PublishAASUpdated publishes events for an updated Asset Administration Shell and its asset.
 func (m *Module) PublishAASUpdated(ctx context.Context, aasID, globalAssetID string, submodelIDs []string) {
 	if !m.Enabled() {
 		return
@@ -126,6 +134,7 @@ func (m *Module) PublishAASUpdated(ctx context.Context, aasID, globalAssetID str
 	}
 }
 
+// PublishAASDeleted publishes events for a deleted Asset Administration Shell and its asset.
 func (m *Module) PublishAASDeleted(ctx context.Context, aasID, globalAssetID string, submodelIDs []string) {
 	if !m.Enabled() {
 		return
@@ -138,6 +147,7 @@ func (m *Module) PublishAASDeleted(ctx context.Context, aasID, globalAssetID str
 	}
 }
 
+// PublishSubmodelCreated publishes an event for a newly created submodel.
 func (m *Module) PublishSubmodelCreated(ctx context.Context, submodelID, semanticID string, globalAssetIDs []string) {
 	if !m.Enabled() {
 		return
@@ -146,6 +156,7 @@ func (m *Module) PublishSubmodelCreated(ctx context.Context, submodelID, semanti
 	m.Service.PublishBestEffort(ctx, ev, err)
 }
 
+// PublishSubmodelUpdated publishes an event for an updated submodel.
 func (m *Module) PublishSubmodelUpdated(ctx context.Context, submodelID, semanticID string, globalAssetIDs []string) {
 	if !m.Enabled() {
 		return
@@ -154,6 +165,7 @@ func (m *Module) PublishSubmodelUpdated(ctx context.Context, submodelID, semanti
 	m.Service.PublishBestEffort(ctx, ev, err)
 }
 
+// PublishSubmodelDeleted publishes an event for a deleted submodel.
 func (m *Module) PublishSubmodelDeleted(ctx context.Context, submodelID, semanticID string, globalAssetIDs []string) {
 	if !m.Enabled() {
 		return
@@ -162,6 +174,7 @@ func (m *Module) PublishSubmodelDeleted(ctx context.Context, submodelID, semanti
 	m.Service.PublishBestEffort(ctx, ev, err)
 }
 
+// PublishPCN publishes events for newly added Product Change Notification records.
 func (m *Module) PublishPCN(ctx context.Context, previous, submodel types.ISubmodel, globalAssetIDs []string) {
 	if !m.Enabled() || submodel == nil {
 		return

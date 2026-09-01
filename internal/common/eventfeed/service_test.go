@@ -84,7 +84,7 @@ func TestReadWithSQLMock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	cfg := DefaultConfig()
 	cfg.Enabled = true
@@ -137,7 +137,7 @@ func TestHTTPHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	cfg := DefaultConfig()
 	cfg.Enabled = true
@@ -211,7 +211,7 @@ func TestSaveAndRetentionSQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	cfg := DefaultConfig()
 	cfg.Enabled = true

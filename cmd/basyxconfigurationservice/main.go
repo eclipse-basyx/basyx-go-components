@@ -99,6 +99,7 @@ func main() {
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_14.sql"), "v1.1.14"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_15.sql"), "v1.1.15"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_16.sql"), "v1.1.16"))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_17.sql"), "v1.1.17"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_2_0.sql"), common.CURRENT_DATABASE_VERSION))
 
 	if err = schemInit.Execute(); err != nil {

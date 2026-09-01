@@ -27,6 +27,7 @@ package eventfeed
 
 import "fmt"
 
+// QueryError describes an invalid event feed query.
 type QueryError struct {
 	Code    string
 	Message string
@@ -46,6 +47,7 @@ func newQueryError(code, message string) *QueryError {
 	return &QueryError{Code: code, Message: message}
 }
 
+// IsQueryError reports whether err is a QueryError.
 func IsQueryError(err error) bool {
 	_, ok := err.(*QueryError)
 	return ok

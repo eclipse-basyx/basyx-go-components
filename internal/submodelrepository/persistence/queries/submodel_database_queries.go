@@ -359,14 +359,46 @@ func BuildSubmodelElementParentForInsertSQL(submodelID string, parentPath string
 		ToSQL()
 }
 
-// BuildSubmodelElementNextPositionSQL builds the indexed position lookup used
-// after the parent row has been locked in the current transaction.
-func BuildSubmodelElementNextPositionSQL(parentElementID int) (string, []any, error) {
+// BuildSubmodelElementChildInsertStateSQL builds the state lookup used after
+// the parent row has been locked in the current transaction.
+func BuildSubmodelElementChildInsertStateSQL(submodelDatabaseID int, parentElementID int, idShort string) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
-	return dialect.
+	nextPosition := dialect.
 		From(goqu.T("submodel_element").As("child")).
 		Select(goqu.L("COALESCE(MAX(?), -1) + 1", goqu.I("child.position"))).
-		Where(goqu.I("child.parent_sme_id").Eq(parentElementID)).
+		Where(goqu.I("child.parent_sme_id").Eq(parentElementID))
+	collisionPath := dialect.
+		From(goqu.T("submodel_element").As("sibling")).
+		Select(goqu.I("sibling.idshort_path")).
+		Where(
+			goqu.I("sibling.submodel_id").Eq(submodelDatabaseID),
+			goqu.I("sibling.parent_sme_id").Eq(parentElementID),
+			goqu.I("sibling.id_short").Eq(idShort),
+		).
+		Limit(1)
+	collisionProjection := goqu.L("NULL").As("collision_path")
+	if idShort != "" {
+		collisionProjection = goqu.L("(?)", collisionPath).As("collision_path")
+	}
+	insertState := dialect.Select(
+		goqu.L("(?)", nextPosition).As("next_position"),
+		collisionProjection,
+	)
+
+	return dialect.
+		From("child_insert_state").
+		Select(
+			"next_position",
+			"collision_path",
+			goqu.Case().
+				When(
+					goqu.C("collision_path").IsNull(),
+					goqu.Func("nextval", goqu.Func("pg_get_serial_sequence", "submodel_element", "id")),
+				).
+				Else(goqu.L("NULL")).
+				As("first_node_id"),
+		).
+		With("child_insert_state", insertState).
 		Prepared(true).
 		ToSQL()
 }

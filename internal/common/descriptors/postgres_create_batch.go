@@ -107,6 +107,9 @@ func appendSubmodelDescriptors(
 			return err
 		}
 		descriptorID := common.PostgreSQLCurrentSequenceValue(common.TblDescriptor, common.ColID)
+		if err := appendDescriptorPayload(batch, descriptorID, descriptor.Description, descriptor.DisplayName, descriptor.Administration, descriptor.Extensions); err != nil {
+			return err
+		}
 		if err := batch.AppendDataset(goqu.Insert(common.TblSubmodelDescriptor).Rows(goqu.Record{
 			common.ColDescriptorID:    descriptorID,
 			common.ColPosition:        position,
@@ -122,9 +125,6 @@ func appendSubmodelDescriptors(
 			"submodel_descriptor_semantic_id_reference",
 			"submodel_descriptor_semantic_id_reference_key",
 		); err != nil {
-			return err
-		}
-		if err := appendDescriptorPayload(batch, descriptorID, descriptor.Description, descriptor.DisplayName, descriptor.Administration, descriptor.Extensions); err != nil {
 			return err
 		}
 		if err := batch.AppendContextReferences(

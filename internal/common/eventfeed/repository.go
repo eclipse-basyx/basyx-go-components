@@ -35,6 +35,7 @@ import (
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 )
 
+// Repository persists and queries event feed records.
 type Repository struct {
 	db      *sql.DB
 	dialect goqu.DialectWrapper
@@ -42,6 +43,7 @@ type Repository struct {
 	now     func() time.Time
 }
 
+// NewRepository creates an event feed repository backed by db.
 func NewRepository(db *sql.DB, maxAge time.Duration) *Repository {
 	return &Repository{
 		db:      db,
@@ -51,6 +53,7 @@ func NewRepository(db *sql.DB, maxAge time.Duration) *Repository {
 	}
 }
 
+// Save persists event.
 func (r *Repository) Save(ctx context.Context, event FeedEvent) error {
 	query, args, err := r.dialect.Insert("feed_events").Rows(goqu.Record{
 		"id":                 event.ID,
@@ -72,6 +75,7 @@ func (r *Repository) Save(ctx context.Context, event FeedEvent) error {
 	return nil
 }
 
+// FindByID finds an event by its identifier.
 func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, error) {
 	query, args, err := r.dialect.From("feed_events").
 		Select("id", "event_type", "subject", "source", "time",
@@ -95,6 +99,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, 
 	return e, true, nil
 }
 
+// FindPage returns one ordered page of retained events.
 func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation Presentation) ([]FeedEvent, error) {
 	ds := r.dialect.From("feed_events").
 		Select("id", "event_type", "subject", "source", "time",
@@ -135,7 +140,7 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 	if err != nil {
 		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-QUERY: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	events := make([]FeedEvent, 0, q.Limit+1)
 	for rows.Next() {
@@ -154,6 +159,7 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 	return events, nil
 }
 
+// DeleteOlderThan deletes events created before cutoff.
 func (r *Repository) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
 	query, args, err := r.dialect.Delete("feed_events").
 		Where(goqu.C("time").Lt(cutoff.UTC())).

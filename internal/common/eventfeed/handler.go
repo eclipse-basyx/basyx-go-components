@@ -39,6 +39,7 @@ import (
 
 const httpComponent = "EVENTFEED"
 
+// RegisterRoutes registers the enabled event feed endpoints on r.
 func RegisterRoutes(r chi.Router, svc *Service) {
 	if r == nil || svc == nil || !svc.cfg.Enabled {
 		return

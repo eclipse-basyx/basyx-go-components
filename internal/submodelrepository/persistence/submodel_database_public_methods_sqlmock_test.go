@@ -774,11 +774,9 @@ func TestAddSubmodelElementWithPathUnrestrictedDuplicateReturnsConflict(t *testi
 			"model_type",
 			"child_depth",
 		}).AddRow(42, 7, 7, types.ModelTypeSubmodelElementList, 2))
-	mock.ExpectQuery(`SELECT COALESCE.*MAX.*FROM "submodel_element" AS "child"`).
-		WithArgs(7).
-		WillReturnRows(sqlmock.NewRows([]string{"next_position"}).AddRow(3))
-	mock.ExpectQuery(`SELECT "idshort_path" FROM "submodel_element"`).
-		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}).AddRow("container[0]"))
+	mock.ExpectQuery(`WITH child_insert_state AS .*MAX.*FROM "submodel_element" AS "child".*"collision_path".*SELECT "next_position", "collision_path", CASE.*nextval.*first_node_id`).
+		WithArgs(7, 42, 7, "Created", 1, "submodel_element", "id").
+		WillReturnRows(sqlmock.NewRows([]string{"next_position", "collision_path", "first_node_id"}).AddRow(3, "container[0]", nil))
 	mock.ExpectRollback()
 
 	err = sut.AddSubmodelElementWithPath(contextWithABACDisabled(t), "sm", "container", element)
@@ -812,13 +810,9 @@ func TestAddSubmodelElementWithPathInTransactionUsesOnlyTransactionConnection(t 
 			"model_type",
 			"child_depth",
 		}).AddRow(42, 7, 7, types.ModelTypeSubmodelElementCollection, 2))
-	mock.ExpectQuery(`SELECT COALESCE.*MAX.*FROM "submodel_element" AS "child"`).
-		WithArgs(7).
-		WillReturnRows(sqlmock.NewRows([]string{"next_position"}).AddRow(3))
-	mock.ExpectQuery(`SELECT "idshort_path" FROM "submodel_element"`).
-		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}))
-	mock.ExpectQuery(`SELECT .*nextval.*generate_series`).
-		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(101))
+	mock.ExpectQuery(`WITH child_insert_state AS .*MAX.*FROM "submodel_element" AS "child".*"collision_path".*SELECT "next_position", "collision_path", CASE.*nextval.*first_node_id`).
+		WithArgs(7, 42, 7, "Created", 1, "submodel_element", "id").
+		WillReturnRows(sqlmock.NewRows([]string{"next_position", "collision_path", "first_node_id"}).AddRow(3, nil, 101))
 	mock.ExpectExec(`(?s)INSERT INTO "submodel_element".*INSERT INTO "property_element"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectRollback()

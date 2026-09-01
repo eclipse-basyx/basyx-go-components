@@ -33,8 +33,9 @@ import (
 )
 
 const (
-	schemaFilePath       = "/app/base.sql"
-	schemaAdvisoryLockID = int64(860424611912345001)
+	schemaFilePath              = "/app/base.sql"
+	schemaAdvisoryLockID        = int64(860424611912345001)
+	baselineUploadCutoffVersion = "v1.0.2"
 )
 
 // SchemaUpload uploads the SQL schema to the configured PostgreSQL database.
@@ -60,6 +61,25 @@ func (su *SchemaUpload) Execute(stepIndex int) (int, error) {
 	defer func() {
 		_, _ = su.ctx.DB.Exec("SELECT pg_advisory_unlock($1)", schemaAdvisoryLockID)
 	}()
+
+	currentVersion, err := readCurrentSchemaVersion(su.ctx.DB)
+	if err != nil {
+		return 1, fmt.Errorf("BASYXCFG-SCHEMA-READVERSION: %w", err)
+	}
+
+	versionComparison, err := compareSemanticVersions(currentVersion, baselineUploadCutoffVersion)
+	if err != nil {
+		return 1, fmt.Errorf("BASYXCFG-SCHEMA-VERSIONCOMPARE: %w", err)
+	}
+	if versionComparison >= 0 {
+		slog.Info(
+			"schema upload skipped",
+			"step", stepIndex,
+			"database.version", currentVersion,
+			"schema.cutoff.version", baselineUploadCutoffVersion,
+		)
+		return 0, nil
+	}
 
 	schemaToLoad, err := su.resolveSchemaPath()
 	if err != nil {

@@ -30,6 +30,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+// SemanticIDFromSubmodel returns the final semantic-reference key of submodel.
 func SemanticIDFromSubmodel(submodel types.ISubmodel) string {
 	if submodel == nil {
 		return ""
@@ -54,9 +55,9 @@ func pcnRecordElements(submodel types.ISubmodel) []types.ISubmodelElement {
 			continue
 		}
 		switch typed := el.(type) {
-		case types.ISubmodelElementCollection:
-			return typed.Value()
 		case types.ISubmodelElementList:
+			return typed.Value()
+		case types.ISubmodelElementCollection:
 			return typed.Value()
 		default:
 			return nil
@@ -65,6 +66,7 @@ func pcnRecordElements(submodel types.ISubmodel) []types.ISubmodelElement {
 	return nil
 }
 
+// PCNNewRecordValuesFromSubmodel returns value-only PCN records added since previous.
 func PCNNewRecordValuesFromSubmodel(previous, submodel types.ISubmodel) []model.SubmodelElementValue {
 	currentRecords := pcnRecordElements(submodel)
 	if len(currentRecords) == 0 {

@@ -23,6 +23,7 @@
  * SPDX-License-Identifier: MIT
  ******************************************************************************/
 
+// Package eventfeed implements the CloudEvents event feed API.
 package eventfeed
 
 import (
@@ -47,12 +48,14 @@ const (
 	sourceSuffixSubmodel = "/submodels"
 )
 
+// Builder creates event feed records from repository changes.
 type Builder struct {
 	sourceBaseURL string
 	schemaBaseURL string
 	now           func() time.Time
 }
 
+// NewBuilder creates a Builder from the supplied event feed configuration.
 func NewBuilder(cfg Config) *Builder {
 	return &Builder{
 		sourceBaseURL: trimTrailingSlash(cfg.SourceBaseURL),
@@ -61,38 +64,47 @@ func NewBuilder(cfg Config) *Builder {
 	}
 }
 
+// AssetCreated builds an asset-created event.
 func (b *Builder) AssetCreated(globalAssetID string, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
 	return b.assetEvent(TypeAssetCreated, globalAssetID, aasID, submodelSemanticIDs)
 }
 
+// AssetUpdated builds an asset-updated event.
 func (b *Builder) AssetUpdated(globalAssetID string, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
 	return b.assetEvent(TypeAssetUpdated, globalAssetID, aasID, submodelSemanticIDs)
 }
 
+// AssetDeleted builds an asset-deleted event.
 func (b *Builder) AssetDeleted(globalAssetID string, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
 	return b.assetEvent(TypeAssetDeleted, globalAssetID, aasID, submodelSemanticIDs)
 }
 
+// AASCreated builds an Asset Administration Shell-created event.
 func (b *Builder) AASCreated(aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
 	return b.aasEvent(TypeAASCreated, aasID, globalAssetID, submodelSemanticIDs)
 }
 
+// AASUpdated builds an Asset Administration Shell-updated event.
 func (b *Builder) AASUpdated(aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
 	return b.aasEvent(TypeAASUpdated, aasID, globalAssetID, submodelSemanticIDs)
 }
 
+// AASDeleted builds an Asset Administration Shell-deleted event.
 func (b *Builder) AASDeleted(aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
 	return b.aasEvent(TypeAASDeleted, aasID, globalAssetID, submodelSemanticIDs)
 }
 
+// SubmodelCreated builds a submodel-created event.
 func (b *Builder) SubmodelCreated(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelCreated, submodelID, semanticID, globalAssetIDs)
 }
 
+// SubmodelUpdated builds a submodel-updated event.
 func (b *Builder) SubmodelUpdated(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelUpdated, submodelID, semanticID, globalAssetIDs)
 }
 
+// SubmodelDeleted builds a submodel-deleted event.
 func (b *Builder) SubmodelDeleted(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelDeleted, submodelID, semanticID, globalAssetIDs)
 }
@@ -112,6 +124,7 @@ func (b *Builder) PCN(submodelID string, globalAssetIDs []string, record any) (F
 	return b.build(TypePCN, submodelID, sourceSuffixSubmodel, schemaPCNFull, schemaPCNCompact, full, compact)
 }
 
+// IsPCNSemanticID reports whether semanticID identifies a Product Change Notifications submodel.
 func IsPCNSemanticID(semanticID string) bool {
 	return irdiCode(semanticID) == irdiCode(SemanticIDPCN)
 }

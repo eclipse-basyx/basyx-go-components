@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package api tests the Asset Administration Shell repository API service.
 package api
 
 import (

@@ -85,3 +85,48 @@ func TestBuildAdministrationShellDescriptorCreateBatchCollectsCompleteGraph(t *t
 		}
 	}
 }
+
+func TestBuildAdministrationShellDescriptorCreateBatchInsertsNestedPayloadBeforeParent(t *testing.T) {
+	t.Parallel()
+
+	descriptor := model.AssetAdministrationShellDescriptor{
+		Id: "urn:example:aas:1",
+		SubmodelDescriptors: []model.SubmodelDescriptor{{
+			Id: "urn:example:submodel:1",
+			Endpoints: []model.Endpoint{{
+				Interface: "SUBMODEL-3.0",
+				ProtocolInformation: model.ProtocolInformation{
+					Href: "https://example.com/submodels/1",
+				},
+			}},
+		}},
+	}
+
+	batch, err := BuildAdministrationShellDescriptorCreateBatch(context.Background(), descriptor)
+	if err != nil {
+		t.Fatalf("BuildAdministrationShellDescriptorCreateBatch returned error: %v", err)
+	}
+
+	nestedDescriptorIndex := -1
+	nestedPayloadIndex := -1
+	nestedParentIndex := -1
+	for index, statement := range batch.Statements() {
+		switch {
+		case statement.SQL == `INSERT INTO "descriptor" DEFAULT VALUES`:
+			nestedDescriptorIndex = index
+		case nestedDescriptorIndex >= 0 && strings.HasPrefix(statement.SQL, `INSERT INTO "descriptor_payload"`):
+			nestedPayloadIndex = index
+		case strings.HasPrefix(statement.SQL, `INSERT INTO "submodel_descriptor"`):
+			nestedParentIndex = index
+		}
+	}
+
+	if nestedDescriptorIndex < 0 || nestedPayloadIndex <= nestedDescriptorIndex || nestedParentIndex <= nestedPayloadIndex {
+		t.Fatalf(
+			"expected nested descriptor, payload, and parent insertion order, got descriptor=%d payload=%d parent=%d",
+			nestedDescriptorIndex,
+			nestedPayloadIndex,
+			nestedParentIndex,
+		)
+	}
+}

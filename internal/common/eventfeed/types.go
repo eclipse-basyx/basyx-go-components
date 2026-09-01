@@ -31,7 +31,9 @@ import "time"
 type Presentation string
 
 const (
-	PresentationFull    Presentation = "FULL"
+	// PresentationFull returns the full event data representation.
+	PresentationFull Presentation = "FULL"
+	// PresentationCompact returns the compact event data representation.
 	PresentationCompact Presentation = "COMPACT"
 )
 

@@ -34,6 +34,7 @@ import (
 	"time"
 )
 
+// Service provides event feed publishing, querying, and retention operations.
 type Service struct {
 	repo   *Repository
 	cfg    Config
@@ -42,6 +43,7 @@ type Service struct {
 	logger *slog.Logger
 }
 
+// NewService creates an event feed service.
 func NewService(repo *Repository, cfg Config) *Service {
 	return &Service{
 		repo:   repo,
@@ -52,6 +54,7 @@ func NewService(repo *Repository, cfg Config) *Service {
 	}
 }
 
+// Builder returns the service's configured event builder.
 func (s *Service) Builder() *Builder {
 	return s.build
 }
@@ -63,6 +66,7 @@ func (s *Service) Write(ctx context.Context, event FeedEvent) error {
 	return s.repo.Save(ctx, event)
 }
 
+// PublishBestEffort writes event and logs build or persistence failures.
 func (s *Service) PublishBestEffort(ctx context.Context, event FeedEvent, err error) {
 	if err != nil {
 		s.logger.WarnContext(ctx, "event feed build failed", "error.code", "EVENTFEED-PUBLISH-BUILD", "error", err)
@@ -120,6 +124,7 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 	}, nil
 }
 
+// Capabilities returns the event feed capabilities advertised to clients.
 func (s *Service) Capabilities() CapabilitiesResponse {
 	eventTypes := make(map[string]EventTypeCapabilities, len(allEventTypes()))
 	for _, t := range allEventTypes() {
@@ -151,6 +156,7 @@ func (s *Service) Capabilities() CapabilitiesResponse {
 	}
 }
 
+// RunRetention deletes events beyond the configured retention window.
 func (s *Service) RunRetention(ctx context.Context) (int64, error) {
 	cutoff := s.now().Add(-(s.cfg.MaxAge + s.cfg.HardDeleteGrace))
 	n, err := s.repo.DeleteOlderThan(ctx, cutoff)

@@ -39,12 +39,9 @@ var idCounter atomic.Uint64
 func newEventID(now time.Time) string {
 	var b [16]byte
 	ms := uint64(now.UTC().UnixMilli())
-	b[0] = byte(ms >> 40)
-	b[1] = byte(ms >> 32)
-	b[2] = byte(ms >> 24)
-	b[3] = byte(ms >> 16)
-	b[4] = byte(ms >> 8)
-	b[5] = byte(ms)
+	var timestamp [8]byte
+	binary.BigEndian.PutUint64(timestamp[:], ms)
+	copy(b[:6], timestamp[2:])
 
 	seq := idCounter.Add(1)
 	binary.BigEndian.PutUint16(b[6:8], uint16(seq&0x0fff)|0x7000)
