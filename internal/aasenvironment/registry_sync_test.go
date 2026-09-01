@@ -119,7 +119,7 @@ func TestRegistrySyncConfigBuildsDeterministicEndpoints(t *testing.T) {
 		},
 	}
 
-	aasEndpoints := config.buildAASDescriptorEndpoints("urn:example:aas:001")
+	aasEndpoints := config.AASDescriptorEndpoints("urn:example:aas:001")
 	require.Len(t, aasEndpoints, 2)
 	require.Equal(t, "AAS-3.0", aasEndpoints[0].Interface)
 	require.Equal(t, "AAS-3.0", aasEndpoints[1].Interface)
@@ -127,7 +127,7 @@ func TestRegistrySyncConfigBuildsDeterministicEndpoints(t *testing.T) {
 	require.Equal(t, "https://internal.example/api/v3/shells/dXJuOmV4YW1wbGU6YWFzOjAwMQ", aasEndpoints[1].ProtocolInformation.Href)
 	require.Equal(t, "https", aasEndpoints[0].ProtocolInformation.EndpointProtocol)
 
-	submodelEndpoints := config.buildSubmodelDescriptorEndpoints("urn:example:sm:001")
+	submodelEndpoints := config.SubmodelDescriptorEndpoints("urn:example:sm:001")
 	require.Len(t, submodelEndpoints, 2)
 	require.Equal(t, "SUBMODEL-3.0", submodelEndpoints[0].Interface)
 	require.Equal(t, "SUBMODEL-3.0", submodelEndpoints[1].Interface)
@@ -270,7 +270,7 @@ func TestSubmodelDescriptorComparisonIgnoresElementChanges(t *testing.T) {
 	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
 	require.True(t, equal)
-	_, descriptorChanged, err := config.changedSubmodelDescriptor(previous, submitted)
+	_, descriptorChanged, err := config.ChangedSubmodelDescriptor(previous, submitted)
 	require.NoError(t, err)
 	require.False(t, descriptorChanged)
 
@@ -298,7 +298,7 @@ func TestAASDescriptorComparisonIgnoresNonDescriptorMetadata(t *testing.T) {
 	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
 	require.True(t, equal)
-	_, descriptorChanged, err := config.changedAASDescriptor(previous, submitted)
+	_, descriptorChanged, err := config.ChangedAASDescriptor(previous, submitted)
 	require.NoError(t, err)
 	require.False(t, descriptorChanged)
 
@@ -327,7 +327,14 @@ func TestBuildEmbeddedSubmodelDescriptorsSkipsNilReferencesAndKeys(t *testing.T)
 		),
 	}
 
-	descriptors := config.buildEmbeddedSubmodelDescriptors(references)
+	aas := types.NewAssetAdministrationShell(
+		"urn:example:aas:nil-guard",
+		types.NewAssetInformation(types.AssetKindInstance),
+	)
+	aas.SetSubmodels(references)
+	aasDescriptor, err := config.BuildAASDescriptor(aas)
+	require.NoError(t, err)
+	descriptors := aasDescriptor.SubmodelDescriptors
 	require.Len(t, descriptors, 1)
 	require.Equal(t, "urn:example:sm:nil-guard", descriptors[0].Id)
 	require.Len(t, descriptors[0].Endpoints, 1)

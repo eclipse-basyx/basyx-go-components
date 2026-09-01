@@ -38,10 +38,11 @@ import (
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
@@ -60,9 +61,21 @@ const (
 type DPPRepositoryService struct {
 	aasRepo            *aasrepositorydb.AssetAdministrationShellDatabase
 	submodelRepo       *submodelrepositorydb.SubmodelDatabase
-	aasRegistry        *aasregistrydb.PostgreSQLAASRegistryDatabase
-	submodelRegistry   *smregistrydb.PostgreSQLSMDatabase
-	registrySyncConfig aasenvironment.RegistrySyncConfig
+	aasRegistry        aasRegistryPersistence
+	submodelRegistry   submodelRegistryPersistence
+	registrySyncConfig registrysync.Config
+}
+
+type aasRegistryPersistence interface {
+	InsertAdministrationShellDescriptorInTransaction(context.Context, *sql.Tx, commonmodel.AssetAdministrationShellDescriptor) error
+	UpsertAdministrationShellDescriptorInTransaction(context.Context, *sql.Tx, commonmodel.AssetAdministrationShellDescriptor) error
+	DeleteAssetAdministrationShellDescriptorByIDInTransaction(context.Context, *sql.Tx, string) error
+}
+
+type submodelRegistryPersistence interface {
+	InsertSubmodelDescriptorInTransaction(context.Context, *sql.Tx, commonmodel.SubmodelDescriptor) (commonmodel.SubmodelDescriptor, error)
+	UpsertSubmodelDescriptorInTransaction(context.Context, *sql.Tx, commonmodel.SubmodelDescriptor) error
+	DeleteSubmodelDescriptorByIDInTransaction(context.Context, *sql.Tx, string) error
 }
 
 // NewDPPRepositoryService creates a DPP repository service backed by AAS and submodel repositories.
@@ -78,12 +91,41 @@ func NewDPPRepositoryService(aasRepo *aasrepositorydb.AssetAdministrationShellDa
 }
 
 // NewDPPRepositoryServiceWithRegistrySync creates a DPP repository service with atomic registry synchronization.
+//
+// Parameters:
+//   - aasRepo: Persistence repository for Asset Administration Shell records
+//   - submodelRepo: Persistence repository for DPP metadata and content submodels
+//   - aasRegistry: Optional AAS registry persistence dependency, required when enabled
+//   - submodelRegistry: Optional Submodel registry persistence dependency, required when enabled
+//   - registrySyncConfig: Validated descriptor synchronization configuration
+//
+// Returns:
+//   - *DPPRepositoryService: Configured DPP repository service
+//   - error: Configuration error when an enabled registry dependency is missing
 func NewDPPRepositoryServiceWithRegistrySync(
 	aasRepo *aasrepositorydb.AssetAdministrationShellDatabase,
 	submodelRepo *submodelrepositorydb.SubmodelDatabase,
 	aasRegistry *aasregistrydb.PostgreSQLAASRegistryDatabase,
 	submodelRegistry *smregistrydb.PostgreSQLSMDatabase,
-	registrySyncConfig aasenvironment.RegistrySyncConfig,
+	registrySyncConfig registrysync.Config,
+) (*DPPRepositoryService, error) {
+	if registrySyncConfig.AASRegistryIntegration && aasRegistry == nil {
+		return nil, common.NewInternalServerError("DPP-REGSYNC-NILAASREGISTRY AAS registry backend must not be nil")
+	}
+	if registrySyncConfig.SubmodelRegistryIntegration && submodelRegistry == nil {
+		return nil, common.NewInternalServerError("DPP-REGSYNC-NILSMREGISTRY Submodel registry backend must not be nil")
+	}
+	return newDPPRepositoryServiceWithRegistrySync(
+		aasRepo, submodelRepo, aasRegistry, submodelRegistry, registrySyncConfig,
+	)
+}
+
+func newDPPRepositoryServiceWithRegistrySync(
+	aasRepo *aasrepositorydb.AssetAdministrationShellDatabase,
+	submodelRepo *submodelrepositorydb.SubmodelDatabase,
+	aasRegistry aasRegistryPersistence,
+	submodelRegistry submodelRegistryPersistence,
+	registrySyncConfig registrysync.Config,
 ) (*DPPRepositoryService, error) {
 	if registrySyncConfig.AASRegistryIntegration && aasRegistry == nil {
 		return nil, common.NewInternalServerError("DPP-REGSYNC-NILAASREGISTRY AAS registry backend must not be nil")
@@ -108,7 +150,7 @@ func (s *DPPRepositoryService) syncCreatedDescriptors(ctx context.Context, tx *s
 				return fmt.Errorf("DPP-REGSYNC-CREATE-BUILDSMDESC build submodel descriptor %s: %w", submodel.ID(), err)
 			}
 			if _, err = s.submodelRegistry.InsertSubmodelDescriptorInTransaction(
-				aasenvironment.WithSubmodelRegistrySyncUpsertAudit(ctx), tx, descriptor,
+				registrysync.WithSubmodelRegistrySyncUpsertAudit(ctx), tx, descriptor,
 			); err != nil {
 				return fmt.Errorf("DPP-REGSYNC-CREATE-INSERTSMDESC insert submodel descriptor %s: %w", submodel.ID(), err)
 			}
@@ -122,7 +164,7 @@ func (s *DPPRepositoryService) syncCreatedDescriptors(ctx context.Context, tx *s
 		return fmt.Errorf("DPP-REGSYNC-CREATE-BUILDAASDESC build AAS descriptor: %w", err)
 	}
 	if err = s.aasRegistry.InsertAdministrationShellDescriptorInTransaction(
-		aasenvironment.WithAASRegistrySyncUpsertAudit(ctx), tx, descriptor,
+		registrysync.WithAASRegistrySyncUpsertAudit(ctx), tx, descriptor,
 	); err != nil {
 		return fmt.Errorf("DPP-REGSYNC-CREATE-INSERTAASDESC insert AAS descriptor: %w", err)
 	}
@@ -142,7 +184,7 @@ func (s *DPPRepositoryService) syncUpdatedDescriptors(
 		}
 		for _, submodelID := range staleSubmodelIDs {
 			err := s.submodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
-				aasenvironment.WithSubmodelRegistrySyncDeleteAudit(ctx), tx, submodelID,
+				registrysync.WithSubmodelRegistrySyncDeleteAudit(ctx), tx, submodelID,
 			)
 			if err != nil && !common.IsErrNotFound(err) {
 				return fmt.Errorf("DPP-REGSYNC-UPDATE-DELETESMDESC delete stale submodel descriptor %s: %w", submodelID, err)
@@ -157,7 +199,7 @@ func (s *DPPRepositoryService) syncUpdatedDescriptors(
 		return fmt.Errorf("DPP-REGSYNC-UPDATE-BUILDAASDESC build AAS descriptor: %w", err)
 	}
 	if err = s.aasRegistry.UpsertAdministrationShellDescriptorInTransaction(
-		aasenvironment.WithAASRegistrySyncUpsertAudit(ctx), tx, descriptor,
+		registrysync.WithAASRegistrySyncUpsertAudit(ctx), tx, descriptor,
 	); err != nil {
 		return fmt.Errorf("DPP-REGSYNC-UPDATE-UPSERTAASDESC upsert AAS descriptor: %w", err)
 	}
@@ -171,7 +213,7 @@ func (s *DPPRepositoryService) upsertSubmodelDescriptors(ctx context.Context, tx
 			return fmt.Errorf("DPP-REGSYNC-UPDATE-BUILDSMDESC build submodel descriptor %s: %w", submodel.ID(), err)
 		}
 		if err = s.submodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			aasenvironment.WithSubmodelRegistrySyncUpsertAudit(ctx), tx, descriptor,
+			registrysync.WithSubmodelRegistrySyncUpsertAudit(ctx), tx, descriptor,
 		); err != nil {
 			return fmt.Errorf("DPP-REGSYNC-UPDATE-UPSERTSMDESC upsert submodel descriptor %s: %w", submodel.ID(), err)
 		}
@@ -179,22 +221,45 @@ func (s *DPPRepositoryService) upsertSubmodelDescriptors(ctx context.Context, tx
 	return nil
 }
 
-func (s *DPPRepositoryService) deleteDescriptors(ctx context.Context, tx *sql.Tx, dppID string, submodels []types.ISubmodel) error {
-	if s.registrySyncConfig.SubmodelRegistryIntegration {
-		for _, submodel := range submodels {
-			err := s.submodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
-				aasenvironment.WithSubmodelRegistrySyncDeleteAudit(ctx), tx, submodel.ID(),
-			)
-			if err != nil && !common.IsErrNotFound(err) {
-				return fmt.Errorf("DPP-REGSYNC-DELETE-DELETESMDESC delete submodel descriptor %s: %w", submodel.ID(), err)
-			}
+func (s *DPPRepositoryService) deleteDPPResourcesInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	dppID string,
+	submodels []types.ISubmodel,
+) error {
+	for _, submodel := range submodels {
+		if err := s.submodelRepo.DeleteSubmodelInTransaction(ctx, tx, submodel.ID()); err != nil {
+			return fmt.Errorf("DPP-DELDPP-DELETESUBMODEL delete submodel %s: %w", submodel.ID(), err)
+		}
+		if err := s.deleteSubmodelDescriptorIfEnabled(ctx, tx, submodel.ID()); err != nil {
+			return err
 		}
 	}
+	if err := s.aasRepo.DeleteAssetAdministrationShellByIDInTransaction(ctx, tx, dppID); err != nil {
+		return fmt.Errorf("DPP-DELDPP-DELETEAAS delete AAS: %w", err)
+	}
+	return s.deleteAASDescriptorIfEnabled(ctx, tx, dppID)
+}
+
+func (s *DPPRepositoryService) deleteSubmodelDescriptorIfEnabled(ctx context.Context, tx *sql.Tx, submodelID string) error {
+	if !s.registrySyncConfig.SubmodelRegistryIntegration {
+		return nil
+	}
+	err := s.submodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
+		registrysync.WithSubmodelRegistrySyncDeleteAudit(ctx), tx, submodelID,
+	)
+	if err != nil && !common.IsErrNotFound(err) {
+		return fmt.Errorf("DPP-REGSYNC-DELETE-DELETESMDESC delete submodel descriptor %s: %w", submodelID, err)
+	}
+	return nil
+}
+
+func (s *DPPRepositoryService) deleteAASDescriptorIfEnabled(ctx context.Context, tx *sql.Tx, dppID string) error {
 	if !s.registrySyncConfig.AASRegistryIntegration {
 		return nil
 	}
 	err := s.aasRegistry.DeleteAssetAdministrationShellDescriptorByIDInTransaction(
-		aasenvironment.WithAASRegistrySyncDeleteAudit(ctx), tx, dppID,
+		registrysync.WithAASRegistrySyncDeleteAudit(ctx), tx, dppID,
 	)
 	if err != nil && !common.IsErrNotFound(err) {
 		return fmt.Errorf("DPP-REGSYNC-DELETE-DELETEAASDESC delete AAS descriptor: %w", err)
@@ -258,68 +323,15 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
-	currentResolved, err := s.resolveSubmodels(ctx, dppID, time.Time{})
+	resolved, currentContent, current, err := s.loadDPPUpdateState(ctx, dppID)
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
-	currentContentSubmodels, err := selectedResolvedContentSubmodels(currentResolved)
+	update, err := s.prepareDPPUpdate(ctx, dppID, patch, resolved, currentContent, current)
 	if err != nil {
-		return mapPersistenceError(err, http.StatusInternalServerError), nil
+		return mapPersistenceError(err, http.StatusBadRequest), nil
 	}
-	current, err := s.composeDPP(ctx, dppID, REPRESENTATION_COMPRESSED, time.Time{})
-	if err != nil {
-		return mapPersistenceError(err, http.StatusNotFound), nil
-	}
-	mergedAny := applyMergePatch(current, patch)
-	merged := dppObjectFromAny(mergedAny)
-	if merged == nil {
-		return errorResponse(http.StatusBadRequest, errors.New("DPP-UPDDPP-MERGE merged DPP must be a JSON object")), nil
-	}
-	updatedAt, err := nextDPPUpdateTimestamp(time.Now().UTC(), current, currentContentSubmodels)
-	if err != nil {
-		return errorResponse(http.StatusInternalServerError, err), nil
-	}
-	merged[headerDigitalProductPassportID] = dppID
-	merged[headerLastUpdate] = updatedAt.Format(time.RFC3339Nano)
-
-	raw, err := json.Marshal(merged)
-	if err != nil {
-		return errorResponse(http.StatusInternalServerError, fmt.Errorf("DPP-UPDDPP-MARSHAL marshal merged DPP: %w", err)), nil
-	}
-	_, header, err := decodeDPPDocument(raw, true)
-	if err != nil {
-		return errorResponse(http.StatusBadRequest, err), nil
-	}
-
-	sections := contentSections(merged)
-	submodels, refs, err := s.buildSubmodels(header, sections, currentResolved.metadata.ID())
-	if err != nil {
-		return errorResponse(http.StatusBadRequest, err), nil
-	}
-	applyDPPUpdateAdministration(submodels, currentResolved.metadata, currentContentSubmodels, header.LastUpdate)
-	if err = s.preserveManagedAttachments(ctx, submodels, currentContentSubmodels); err != nil {
-		return errorResponse(http.StatusInternalServerError, err), nil
-	}
-	refs = appendUnselectedContentSubmodelReferences(refs, currentResolved, currentContentSubmodels)
-	aas := buildAAS(header, refs)
-	staleSubmodelIDs := staleContentSubmodelIDs(currentContentSubmodels, submodels)
-
-	err = s.aasRepo.ExecuteInTransaction("DPP-UPDDPP-STARTTX", "DPP-UPDDPP-COMMITTX", func(tx *sql.Tx) error {
-		if _, err := s.aasRepo.PutAssetAdministrationShellByIDInTransaction(ctx, tx, dppID, aas); err != nil {
-			return fmt.Errorf("DPP-UPDDPP-PUTAAS put AAS: %w", err)
-		}
-		for _, submodel := range submodels {
-			if _, err := s.submodelRepo.PutSubmodelInTransaction(ctx, tx, submodel.ID(), submodel); err != nil {
-				return fmt.Errorf("DPP-UPDDPP-PUTSUBMODEL put submodel %s: %w", submodel.ID(), err)
-			}
-		}
-		for _, submodelID := range staleSubmodelIDs {
-			if err := s.submodelRepo.DeleteSubmodelInTransaction(ctx, tx, submodelID); err != nil {
-				return fmt.Errorf("DPP-UPDDPP-DELETESUBMODEL delete stale submodel %s: %w", submodelID, err)
-			}
-		}
-		return s.syncUpdatedDescriptors(ctx, tx, aas, submodels, staleSubmodelIDs)
-	})
+	err = s.persistDPPUpdate(ctx, dppID, update)
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
 	}
@@ -329,6 +341,102 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
 	return Response(http.StatusOK, updated), nil
+}
+
+type preparedDPPUpdate struct {
+	aas              types.IAssetAdministrationShell
+	submodels        []types.ISubmodel
+	staleSubmodelIDs []string
+}
+
+func (s *DPPRepositoryService) prepareDPPUpdate(
+	ctx context.Context,
+	dppID string,
+	patch dppDocument,
+	resolved resolvedDPP,
+	currentContent []types.ISubmodel,
+	current dppDocument,
+) (preparedDPPUpdate, error) {
+	merged, header, err := mergeDPPUpdateDocument(dppID, current, currentContent, patch)
+	if err != nil {
+		return preparedDPPUpdate{}, err
+	}
+	submodels, refs, err := s.buildSubmodels(header, contentSections(merged), resolved.metadata.ID())
+	if err != nil {
+		return preparedDPPUpdate{}, err
+	}
+	applyDPPUpdateAdministration(submodels, resolved.metadata, currentContent, header.LastUpdate)
+	if err = s.preserveManagedAttachments(ctx, submodels, currentContent); err != nil {
+		return preparedDPPUpdate{}, err
+	}
+	refs = appendUnselectedContentSubmodelReferences(refs, resolved, currentContent)
+	return preparedDPPUpdate{
+		aas:              buildAAS(header, refs),
+		submodels:        submodels,
+		staleSubmodelIDs: staleContentSubmodelIDs(currentContent, submodels),
+	}, nil
+}
+
+func (s *DPPRepositoryService) loadDPPUpdateState(
+	ctx context.Context,
+	dppID string,
+) (resolvedDPP, []types.ISubmodel, dppDocument, error) {
+	resolved, err := s.resolveSubmodels(ctx, dppID, time.Time{})
+	if err != nil {
+		return resolvedDPP{}, nil, nil, err
+	}
+	currentContent, err := selectedResolvedContentSubmodels(resolved)
+	if err != nil {
+		return resolvedDPP{}, nil, nil, fmt.Errorf(
+			"DPP-UPDDPP-SELECTCONTENT %w",
+			common.NewInternalServerError(err.Error()),
+		)
+	}
+	current, err := s.composeDPP(ctx, dppID, REPRESENTATION_COMPRESSED, time.Time{})
+	return resolved, currentContent, current, err
+}
+
+func mergeDPPUpdateDocument(
+	dppID string,
+	current dppDocument,
+	currentContent []types.ISubmodel,
+	patch dppDocument,
+) (dppDocument, dppHeader, error) {
+	merged := dppObjectFromAny(applyMergePatch(current, patch))
+	if merged == nil {
+		return nil, dppHeader{}, errors.New("DPP-UPDDPP-MERGE merged DPP must be a JSON object")
+	}
+	updatedAt, err := nextDPPUpdateTimestamp(time.Now().UTC(), current, currentContent)
+	if err != nil {
+		return nil, dppHeader{}, err
+	}
+	merged[headerDigitalProductPassportID] = dppID
+	merged[headerLastUpdate] = updatedAt.Format(time.RFC3339Nano)
+	raw, err := json.Marshal(merged)
+	if err != nil {
+		return nil, dppHeader{}, fmt.Errorf("DPP-UPDDPP-MARSHAL marshal merged DPP: %w", err)
+	}
+	_, header, err := decodeDPPDocument(raw, true)
+	return merged, header, err
+}
+
+func (s *DPPRepositoryService) persistDPPUpdate(ctx context.Context, dppID string, update preparedDPPUpdate) error {
+	return s.aasRepo.ExecuteInTransaction("DPP-UPDDPP-STARTTX", "DPP-UPDDPP-COMMITTX", func(tx *sql.Tx) error {
+		if _, err := s.aasRepo.PutAssetAdministrationShellByIDInTransaction(ctx, tx, dppID, update.aas); err != nil {
+			return fmt.Errorf("DPP-UPDDPP-PUTAAS put AAS: %w", err)
+		}
+		for _, submodel := range update.submodels {
+			if _, err := s.submodelRepo.PutSubmodelInTransaction(ctx, tx, submodel.ID(), submodel); err != nil {
+				return fmt.Errorf("DPP-UPDDPP-PUTSUBMODEL put submodel %s: %w", submodel.ID(), err)
+			}
+		}
+		for _, submodelID := range update.staleSubmodelIDs {
+			if err := s.submodelRepo.DeleteSubmodelInTransaction(ctx, tx, submodelID); err != nil {
+				return fmt.Errorf("DPP-UPDDPP-DELETESUBMODEL delete stale submodel %s: %w", submodelID, err)
+			}
+		}
+		return s.syncUpdatedDescriptors(ctx, tx, update.aas, update.submodels, update.staleSubmodelIDs)
+	})
 }
 
 func staleContentSubmodelIDs(currentContent []types.ISubmodel, replacement []types.ISubmodel) []string {
@@ -564,18 +672,7 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 	}
 
 	err = s.aasRepo.ExecuteInTransaction("DPP-DELDPP-STARTTX", "DPP-DELDPP-COMMITTX", func(tx *sql.Tx) error {
-		if err := s.deleteDescriptors(ctx, tx, dppID, resolved.submodels); err != nil {
-			return err
-		}
-		for _, submodel := range resolved.submodels {
-			if err := s.submodelRepo.DeleteSubmodelInTransaction(ctx, tx, submodel.ID()); err != nil {
-				return fmt.Errorf("DPP-DELDPP-DELETESUBMODEL delete submodel %s: %w", submodel.ID(), err)
-			}
-		}
-		if err := s.aasRepo.DeleteAssetAdministrationShellByIDInTransaction(ctx, tx, dppID); err != nil {
-			return fmt.Errorf("DPP-DELDPP-DELETEAAS delete AAS: %w", err)
-		}
-		return nil
+		return s.deleteDPPResourcesInTransaction(ctx, tx, dppID, resolved.submodels)
 	})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
@@ -941,36 +1038,52 @@ func composeResolvedDPPWithContext(
 		return nil, err
 	}
 	if representation == REPRESENTATION_FULL {
-		elements := make([]map[string]any, 0, len(contentSubmodels))
-		for _, submodel := range contentSubmodels {
-			serializationContext, err := loadDPPSerializationContext(contextLoader, submodel)
-			if err != nil {
-				return nil, err
-			}
-			content, err := fullContentWithContext(submodel, serializationContext)
-			if err != nil {
-				return nil, err
-			}
-			element, ok := content.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("DPP-COMPOSE-FULLTYPE full content for %s is not a DataElement object", submodel.ID())
-			}
-			elements = append(elements, element)
-		}
-		doc["elements"] = elements
-		return doc, nil
+		return composeFullResolvedDPP(doc, contentSubmodels, contextLoader)
 	}
+	return composeCompressedResolvedDPP(doc, specificationSet, contentSubmodels, contextLoader)
+}
+
+func composeFullResolvedDPP(
+	doc dppDocument,
+	contentSubmodels []types.ISubmodel,
+	contextLoader dppSerializationContextLoader,
+) (dppDocument, error) {
+	elements := make([]map[string]any, 0, len(contentSubmodels))
 	for _, submodel := range contentSubmodels {
 		serializationContext, err := loadDPPSerializationContext(contextLoader, submodel)
 		if err != nil {
 			return nil, err
 		}
-		sectionName := compressedContentSectionName(submodel, specificationSet)
+		content, err := fullContentWithContext(submodel, serializationContext)
+		if err != nil {
+			return nil, err
+		}
+		element, ok := content.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("DPP-COMPOSE-FULLTYPE full content for %s is not a DataElement object", submodel.ID())
+		}
+		elements = append(elements, element)
+	}
+	doc["elements"] = elements
+	return doc, nil
+}
+
+func composeCompressedResolvedDPP(
+	doc dppDocument,
+	specificationSet map[string]struct{},
+	contentSubmodels []types.ISubmodel,
+	contextLoader dppSerializationContextLoader,
+) (dppDocument, error) {
+	for _, submodel := range contentSubmodels {
+		serializationContext, err := loadDPPSerializationContext(contextLoader, submodel)
+		if err != nil {
+			return nil, err
+		}
 		content, err := compressedContentWithContext(submodel, serializationContext)
 		if err != nil {
 			return nil, err
 		}
-		doc[sectionName] = content
+		doc[compressedContentSectionName(submodel, specificationSet)] = content
 	}
 	return doc, nil
 }

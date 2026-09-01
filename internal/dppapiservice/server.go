@@ -33,12 +33,12 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	dppapi "github.com/eclipse-basyx/basyx-go-components/pkg/dppapiservice/go"
@@ -63,6 +63,20 @@ func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, 
 }
 
 // NewHTTPHandlerWithRegistrySync assembles the DPP API handler with atomic descriptor synchronization.
+//
+// Parameters:
+//   - ctx: Request-independent context used for security setup
+//   - cfg: Runtime configuration for routing, security, CORS, and context path
+//   - openapiSpec: Filesystem containing the OpenAPI specification used for Swagger UI
+//   - aasRepo: Asset Administration Shell repository persistence dependency
+//   - submodelRepo: Submodel repository persistence dependency
+//   - aasRegistry: Optional AAS registry persistence dependency, required when enabled
+//   - submodelRegistry: Optional Submodel registry persistence dependency, required when enabled
+//   - registrySyncConfig: Validated descriptor synchronization configuration
+//
+// Returns:
+//   - http.Handler: Configured root HTTP handler for the DPP API service
+//   - error: Setup error if synchronization, security, or router assembly fails
 func NewHTTPHandlerWithRegistrySync(
 	ctx context.Context,
 	cfg *common.Config,
@@ -71,7 +85,7 @@ func NewHTTPHandlerWithRegistrySync(
 	submodelRepo *submodelrepositorydb.SubmodelDatabase,
 	aasRegistry *aasregistrydb.PostgreSQLAASRegistryDatabase,
 	submodelRegistry *smregistrydb.PostgreSQLSMDatabase,
-	registrySyncConfig aasenvironment.RegistrySyncConfig,
+	registrySyncConfig registrysync.Config,
 ) (http.Handler, error) {
 	dppService, err := dppapi.NewDPPRepositoryServiceWithRegistrySync(
 		aasRepo, submodelRepo, aasRegistry, submodelRegistry, registrySyncConfig,

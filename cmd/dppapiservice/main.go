@@ -34,13 +34,13 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/dppapiservice"
+	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
@@ -88,7 +88,7 @@ func runServer(ctx context.Context, configPath string) error {
 	if err != nil {
 		return err
 	}
-	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
+	registrySyncConfig, err := registrysync.NewConfig(
 		cfg.General.AASRegistryIntegration,
 		cfg.General.SubmodelRegistryIntegration,
 		cfg.General.ExternalURL,

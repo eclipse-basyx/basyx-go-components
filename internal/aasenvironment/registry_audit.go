@@ -29,6 +29,7 @@ import (
 	"context"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 )
 
 const (
@@ -89,46 +90,9 @@ func ContextWithAASPreconfigurationAudit(ctx context.Context) context.Context {
 }
 
 func aasRegistryAddAuditMetadataIfNotAvailable(ctx context.Context, operation string) context.Context {
-	if contextHasAuditMetadata(ctx) {
-		return ctx
-	}
-	return history.ContextWithAuditOperation(ctx, operation, aasRegistrySyncEndpoint)
-}
-
-// WithAASRegistrySyncUpsertAudit attributes an internal AAS descriptor upsert.
-func WithAASRegistrySyncUpsertAudit(ctx context.Context) context.Context {
-	return aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertOperation)
-}
-
-// WithAASRegistrySyncDeleteAudit attributes an internal AAS descriptor deletion.
-func WithAASRegistrySyncDeleteAudit(ctx context.Context) context.Context {
-	return aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncDeleteOperation)
+	return registrysync.WithAASRegistryAudit(ctx, operation)
 }
 
 func submodelRegistryAddAuditMetadataIfNotAvailable(ctx context.Context, operation string) context.Context {
-	if contextHasAuditMetadata(ctx) {
-		return ctx
-	}
-	return history.ContextWithAuditOperation(ctx, operation, submodelRegistrySyncEndpoint)
-}
-
-// WithSubmodelRegistrySyncUpsertAudit attributes an internal Submodel descriptor upsert.
-func WithSubmodelRegistrySyncUpsertAudit(ctx context.Context) context.Context {
-	return submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation)
-}
-
-// WithSubmodelRegistrySyncDeleteAudit attributes an internal Submodel descriptor deletion.
-func WithSubmodelRegistrySyncDeleteAudit(ctx context.Context) context.Context {
-	return submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncDeleteOperation)
-}
-
-func contextHasAuditMetadata(ctx context.Context) bool {
-	audit := history.FromContext(ctx)
-	return audit.ActorSubject == aasPreconfigurationActorSubject &&
-		audit.ActorIssuer == aasPreconfigurationActorIssuer &&
-		audit.ClientID == aasPreconfigurationClientID &&
-		audit.AuthorizationResult == history.AuthorizationResultSystemInternal &&
-		audit.Operation == aasPreconfigurationOperation &&
-		audit.Endpoint == aasPreconfigurationEndpoint &&
-		audit.HTTPMethod == history.AuditHTTPMethodSystem
+	return registrysync.WithSubmodelRegistryAudit(ctx, operation)
 }

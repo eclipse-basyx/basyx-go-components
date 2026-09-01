@@ -132,7 +132,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPSectionPathEquals(t, createdVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
 	assertDPPSectionPathEquals(t, createdVersionBody, lifecycleTechnicalDataSpec, "manual.url", "https://example.test/manual.pdf")
 
-	technicalDataSubmodelID := submodelIDBySemanticID(t, databasePort, lifecycleTechnicalDataSpec)
+	technicalDataSubmodelID := submodelIDBySemanticID(t, databasePort, dppID, lifecycleTechnicalDataSpec)
 	attachmentURL := fmt.Sprintf(
 		"%s/submodels/%s/submodel-elements/manual/attachment", aasBaseURL, common.EncodeString(technicalDataSubmodelID),
 	)
@@ -237,7 +237,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPSectionArrayValue(t, readAfterElementUpdate, lifecycleTechnicalDataSpec, "serialNumbers", 0, "SN-UPDATED")
 	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4200.5")
 
-	carbonFootprintSubmodelID := submodelIDBySemanticID(t, databasePort, lifecycleCarbonFootprintSpec)
+	carbonFootprintSubmodelID := submodelIDBySemanticID(t, databasePort, dppID, lifecycleCarbonFootprintSpec)
 	doJSON(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, map[string]any{
 		lifecycleCarbonFootprintSpec: nil,
 	}, http.StatusOK)
@@ -567,29 +567,61 @@ func assertRegistrySynchronization(t *testing.T, client *http.Client, aasBaseURL
 	t.Fatalf("discovery links = %#v, want globalAssetId %q", links, productID)
 }
 
-func submodelIDBySemanticID(t *testing.T, databasePort int, semanticID string) string {
+func submodelIDBySemanticID(t *testing.T, databasePort int, dppID string, semanticID string) string {
 	t.Helper()
 	db := openDPPIntegrationDatabase(t, databasePort)
 	defer func() { _ = db.Close() }()
 
 	query, args, err := goqu.Dialect("postgres").
-		From(goqu.T("submodel").As("sm")).
+		From(goqu.T("aas").As("aas")).
+		Join(
+			goqu.T("aas_submodel_reference").As("submodel_reference"),
+			goqu.On(goqu.I("submodel_reference.aas_id").Eq(goqu.I("aas.id"))),
+		).
+		Join(
+			goqu.T("aas_submodel_reference_key").As("submodel_reference_key"),
+			goqu.On(goqu.I("submodel_reference_key.reference_id").Eq(goqu.I("submodel_reference.id"))),
+		).
+		Join(
+			goqu.T("submodel").As("sm"),
+			goqu.On(goqu.I("sm.submodel_identifier").Eq(goqu.I("submodel_reference_key.value"))),
+		).
 		Join(
 			goqu.T("submodel_semantic_id_reference_key").As("semantic_key"),
 			goqu.On(goqu.I("semantic_key.reference_id").Eq(goqu.I("sm.id"))),
 		).
 		Select(goqu.I("sm.submodel_identifier")).
-		Where(goqu.I("semantic_key.value").Eq(semanticID)).
-		Limit(1).
+		Distinct().
+		Where(
+			goqu.I("aas.aas_id").Eq(dppID),
+			goqu.I("semantic_key.value").Eq(semanticID),
+		).
+		Order(goqu.I("sm.submodel_identifier").Asc()).
 		ToSQL()
 	if err != nil {
 		t.Fatalf("build semantic submodel query: %v", err)
 	}
-	var submodelID string
-	if err = db.QueryRowContext(t.Context(), query, args...).Scan(&submodelID); err != nil {
-		t.Fatalf("read submodel for semantic ID %q: %v", semanticID, err)
+	rows, err := db.QueryContext(t.Context(), query, args...)
+	if err != nil {
+		t.Fatalf("read submodel for DPP %q and semantic ID %q: %v", dppID, semanticID, err)
 	}
-	return submodelID
+	defer func() { _ = rows.Close() }()
+
+	submodelIDs := make([]string, 0, 1)
+	for rows.Next() {
+		var submodelID string
+		if err = rows.Scan(&submodelID); err != nil {
+			t.Fatalf("scan submodel for DPP %q and semantic ID %q: %v", dppID, semanticID, err)
+		}
+		submodelIDs = append(submodelIDs, submodelID)
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatalf("iterate submodels for DPP %q and semantic ID %q: %v", dppID, semanticID, err)
+	}
+	if len(submodelIDs) != 1 {
+		t.Fatalf("submodels for DPP %q and semantic ID %q = %v, want exactly one", dppID, semanticID, submodelIDs)
+	}
+	return submodelIDs[0]
 }
 
 func uploadAttachment(t *testing.T, client *http.Client, attachmentURL string, fileName string, payload []byte) {

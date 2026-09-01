@@ -187,7 +187,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 			return nil
 		}
 
-		descriptor, descriptorChanged, descriptorErr := s.syncConfig.changedSubmodelDescriptor(putResult.Previous, submodel)
+		descriptor, descriptorChanged, descriptorErr := s.syncConfig.ChangedSubmodelDescriptor(putResult.Previous, submodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -553,7 +553,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 		}
 
 		if len(aasDescriptor.Endpoints) == 0 {
-			aasDescriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpoints(aasID)
+			aasDescriptor.Endpoints = s.syncConfig.AASDescriptorEndpoints(aasID)
 		}
 
 		if upsertErr := s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(

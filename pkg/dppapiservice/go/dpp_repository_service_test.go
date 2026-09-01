@@ -27,12 +27,17 @@
 package dppapi
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 )
 
@@ -54,7 +59,7 @@ func TestNewDPPRepositoryServiceWithRegistrySyncFlagCombinations(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service, err := NewDPPRepositoryServiceWithRegistrySync(nil, nil, test.aasRegistry, test.smRegistry, aasenvironment.RegistrySyncConfig{
+			service, err := NewDPPRepositoryServiceWithRegistrySync(nil, nil, test.aasRegistry, test.smRegistry, registrysync.Config{
 				AASRegistryIntegration:      test.aasEnabled,
 				SubmodelRegistryIntegration: test.smEnabled,
 			})
@@ -68,6 +73,123 @@ func TestNewDPPRepositoryServiceWithRegistrySyncFlagCombinations(t *testing.T) {
 				t.Fatalf("NewDPPRepositoryServiceWithRegistrySync() error = %v, want %s", err, test.wantCode)
 			}
 		})
+	}
+}
+
+func TestRegistrySynchronizationFlagCombinations(t *testing.T) {
+	for combination := 0; combination < 8; combination++ {
+		aasEnabled := combination&1 != 0
+		submodelEnabled := combination&2 != 0
+		discoveryEnabled := combination&4 != 0
+		t.Run(fmt.Sprintf("aas=%t/submodel=%t/discovery=%t", aasEnabled, submodelEnabled, discoveryEnabled), func(t *testing.T) {
+			aasRegistry := &recordingAASRegistry{}
+			submodelRegistry := &recordingSubmodelRegistry{}
+			service, err := newDPPRepositoryServiceWithRegistrySync(nil, nil, aasRegistry, submodelRegistry, registrysync.Config{
+				AASRegistryIntegration:      aasEnabled,
+				SubmodelRegistryIntegration: submodelEnabled,
+				ExternalBaseURLs:            []string{"https://aas.example.test"},
+			})
+			if err != nil {
+				t.Fatalf("newDPPRepositoryServiceWithRegistrySync() error = %v", err)
+			}
+
+			ctx := common.ContextWithConfig(t.Context(), &common.Config{
+				General: common.GeneralConfig{DiscoveryIntegration: discoveryEnabled},
+			})
+			submodel := types.NewSubmodel("urn:example:submodel")
+			aas := types.NewAssetAdministrationShell(
+				"urn:example:aas",
+				types.NewAssetInformation(types.AssetKindInstance),
+			)
+			aas.SetSubmodels([]types.IReference{submodelReference(submodel.ID())})
+
+			if err = service.syncCreatedDescriptors(ctx, nil, aas, []types.ISubmodel{submodel}); err != nil {
+				t.Fatalf("syncCreatedDescriptors() error = %v", err)
+			}
+			if err = service.syncUpdatedDescriptors(ctx, nil, aas, []types.ISubmodel{submodel}, []string{"urn:example:stale"}); err != nil {
+				t.Fatalf("syncUpdatedDescriptors() error = %v", err)
+			}
+			if err = service.deleteSubmodelDescriptorIfEnabled(ctx, nil, submodel.ID()); err != nil {
+				t.Fatalf("deleteSubmodelDescriptorIfEnabled() error = %v", err)
+			}
+			if err = service.deleteAASDescriptorIfEnabled(ctx, nil, aas.ID()); err != nil {
+				t.Fatalf("deleteAASDescriptorIfEnabled() error = %v", err)
+			}
+
+			assertRegistryCalls(t, "AAS", aasRegistry.calls, aasEnabled, 3)
+			assertRegistryCalls(t, "Submodel", submodelRegistry.calls, submodelEnabled, 4)
+			for _, observed := range append(aasRegistry.discoverySettings, submodelRegistry.discoverySettings...) {
+				if observed != discoveryEnabled {
+					t.Fatalf("registry context discoveryIntegration = %t, want %t", observed, discoveryEnabled)
+				}
+			}
+		})
+	}
+}
+
+type recordingAASRegistry struct {
+	calls             int
+	discoverySettings []bool
+}
+
+func (r *recordingAASRegistry) InsertAdministrationShellDescriptorInTransaction(ctx context.Context, _ *sql.Tx, _ commonmodel.AssetAdministrationShellDescriptor) error {
+	r.record(ctx)
+	return nil
+}
+
+func (r *recordingAASRegistry) UpsertAdministrationShellDescriptorInTransaction(ctx context.Context, _ *sql.Tx, _ commonmodel.AssetAdministrationShellDescriptor) error {
+	r.record(ctx)
+	return nil
+}
+
+func (r *recordingAASRegistry) DeleteAssetAdministrationShellDescriptorByIDInTransaction(ctx context.Context, _ *sql.Tx, _ string) error {
+	r.record(ctx)
+	return nil
+}
+
+func (r *recordingAASRegistry) record(ctx context.Context) {
+	r.calls++
+	r.discoverySettings = append(r.discoverySettings, discoveryIntegrationFromContext(ctx))
+}
+
+type recordingSubmodelRegistry struct {
+	calls             int
+	discoverySettings []bool
+}
+
+func (r *recordingSubmodelRegistry) InsertSubmodelDescriptorInTransaction(ctx context.Context, _ *sql.Tx, descriptor commonmodel.SubmodelDescriptor) (commonmodel.SubmodelDescriptor, error) {
+	r.record(ctx)
+	return descriptor, nil
+}
+
+func (r *recordingSubmodelRegistry) UpsertSubmodelDescriptorInTransaction(ctx context.Context, _ *sql.Tx, _ commonmodel.SubmodelDescriptor) error {
+	r.record(ctx)
+	return nil
+}
+
+func (r *recordingSubmodelRegistry) DeleteSubmodelDescriptorByIDInTransaction(ctx context.Context, _ *sql.Tx, _ string) error {
+	r.record(ctx)
+	return nil
+}
+
+func (r *recordingSubmodelRegistry) record(ctx context.Context) {
+	r.calls++
+	r.discoverySettings = append(r.discoverySettings, discoveryIntegrationFromContext(ctx))
+}
+
+func discoveryIntegrationFromContext(ctx context.Context) bool {
+	cfg, ok := common.ConfigFromContext(ctx)
+	return ok && cfg.General.DiscoveryIntegration
+}
+
+func assertRegistryCalls(t *testing.T, registry string, calls int, enabled bool, enabledCalls int) {
+	t.Helper()
+	want := 0
+	if enabled {
+		want = enabledCalls
+	}
+	if calls != want {
+		t.Fatalf("%s registry calls = %d, want %d", registry, calls, want)
 	}
 }
 

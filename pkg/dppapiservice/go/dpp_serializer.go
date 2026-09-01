@@ -29,7 +29,9 @@ package dppapi
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -263,8 +265,10 @@ func relatedResourceURL(file *types.File, idShortPath string, serializationConte
 		return value, nil
 	}
 	if serializationContext.externalBaseURL == "" {
-		return "", common.NewInternalServerError(
-			"DPP-FILEURL-MISSINGEXTERNALURL managed attachment requires a valid general.externalUrl",
+		return "", newDPPHTTPError(
+			http.StatusInternalServerError,
+			"DPP-FILEURL-MISSINGEXTERNALURL",
+			"managed attachment requires a valid general.externalUrl",
 		)
 	}
 	return fmt.Sprintf(
@@ -279,7 +283,16 @@ func (c dppSerializationContext) isManagedAttachment(idShortPath string, value s
 	if _, managed := c.managedAttachmentPaths[idShortPath]; managed {
 		return true
 	}
-	return c.managedPathHistoryLookup && strings.HasPrefix(value, "/aasx/files/")
+	return c.managedPathHistoryLookup && isHistoricalManagedAttachmentValue(value)
+}
+
+func isHistoricalManagedAttachmentValue(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if strings.HasPrefix(trimmed, "/aasx/files/") {
+		return true
+	}
+	oid, err := strconv.ParseInt(trimmed, 10, 64)
+	return err == nil && oid > 0
 }
 
 func isExternalResourceURL(value string) bool {

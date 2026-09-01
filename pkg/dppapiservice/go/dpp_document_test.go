@@ -28,6 +28,7 @@ package dppapi
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -428,6 +429,14 @@ func TestRelatedResourceURLRequiresExternalURLForManagedAttachment(t *testing.T)
 	if err == nil || !strings.Contains(err.Error(), "DPP-FILEURL-MISSINGEXTERNALURL") {
 		t.Fatalf("relatedResourceURL() error = %v, want coded missing external URL error", err)
 	}
+	response := mapPersistenceError(err, http.StatusNotFound)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("mapPersistenceError() status = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+	result := response.Body.(Result)
+	if result.Messages[0].Code != "DPP-FILEURL-MISSINGEXTERNALURL" {
+		t.Fatalf("mapPersistenceError() code = %q, want DPP-FILEURL-MISSINGEXTERNALURL", result.Messages[0].Code)
+	}
 }
 
 func TestHistoricalRelatedResourceURLUsesManagedPathMarker(t *testing.T) {
@@ -445,6 +454,25 @@ func TestHistoricalRelatedResourceURLUsesManagedPathMarker(t *testing.T) {
 		t.Fatalf("relatedResourceURL() error = %v", err)
 	}
 	want := "https://aas.example.test/submodels/c3VibW9kZWwvaWQ/submodel-elements/documents%5B0%5D.manual/attachment"
+	if got != want {
+		t.Fatalf("relatedResourceURL() = %q, want %q", got, want)
+	}
+}
+
+func TestHistoricalRelatedResourceURLUsesLegacyOIDMarker(t *testing.T) {
+	file := types.NewFile()
+	legacyOID := "16384"
+	file.SetValue(&legacyOID)
+
+	got, err := relatedResourceURL(file, "documents.manual", dppSerializationContext{
+		submodelID:               "submodel/id",
+		externalBaseURL:          "https://aas.example.test",
+		managedPathHistoryLookup: true,
+	})
+	if err != nil {
+		t.Fatalf("relatedResourceURL() error = %v", err)
+	}
+	want := "https://aas.example.test/submodels/c3VibW9kZWwvaWQ/submodel-elements/documents.manual/attachment"
 	if got != want {
 		t.Fatalf("relatedResourceURL() = %q, want %q", got, want)
 	}

@@ -163,7 +163,7 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 			return nil
 		}
 
-		descriptor, descriptorChanged, descriptorErr := s.syncConfig.changedAASDescriptor(putResult.Previous, assetAdministrationShell)
+		descriptor, descriptorChanged, descriptorErr := s.syncConfig.ChangedAASDescriptor(putResult.Previous, assetAdministrationShell)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -504,7 +504,7 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 			return nil
 		}
 
-		submodelDescriptor, descriptorChanged, descriptorErr := s.syncConfig.changedSubmodelDescriptor(putResult.Previous, submodel)
+		submodelDescriptor, descriptorChanged, descriptorErr := s.syncConfig.ChangedSubmodelDescriptor(putResult.Previous, submodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -871,7 +871,7 @@ func (s *CustomAASRepositoryService) buildSubmodelDescriptorForReference(ctx con
 
 	return commonmodel.SubmodelDescriptor{
 		Id:        submodelID,
-		Endpoints: s.syncConfig.buildSubmodelDescriptorEndpoints(submodelID),
+		Endpoints: s.syncConfig.SubmodelDescriptorEndpoints(submodelID),
 	}, true, nil
 }
 
@@ -886,7 +886,7 @@ func (s *CustomAASRepositoryService) ensureAASDescriptorForSubmodelSyncInTransac
 	descriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, aasID)
 	if getDescriptorErr == nil {
 		if len(descriptor.Endpoints) == 0 {
-			descriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpoints(aasID)
+			descriptor.Endpoints = s.syncConfig.AASDescriptorEndpoints(aasID)
 		}
 		return descriptor, true, nil
 	}
@@ -896,7 +896,7 @@ func (s *CustomAASRepositoryService) ensureAASDescriptorForSubmodelSyncInTransac
 
 	descriptor = commonmodel.AssetAdministrationShellDescriptor{
 		Id:        aasID,
-		Endpoints: s.syncConfig.buildAASDescriptorEndpoints(aasID),
+		Endpoints: s.syncConfig.AASDescriptorEndpoints(aasID),
 	}
 	if fallbackIDShort != "" {
 		descriptor.IdShort = fallbackIDShort
