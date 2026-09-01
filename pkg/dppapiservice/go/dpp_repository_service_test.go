@@ -27,10 +27,49 @@
 package dppapi
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
+	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 )
+
+func TestNewDPPRepositoryServiceWithRegistrySyncFlagCombinations(t *testing.T) {
+	tests := []struct {
+		name        string
+		aasEnabled  bool
+		smEnabled   bool
+		aasRegistry *aasregistrydb.PostgreSQLAASRegistryDatabase
+		smRegistry  *smregistrydb.PostgreSQLSMDatabase
+		wantCode    string
+	}{
+		{name: "disabled"},
+		{name: "AAS only", aasEnabled: true, aasRegistry: &aasregistrydb.PostgreSQLAASRegistryDatabase{}},
+		{name: "Submodel only", smEnabled: true, smRegistry: &smregistrydb.PostgreSQLSMDatabase{}},
+		{name: "both", aasEnabled: true, smEnabled: true, aasRegistry: &aasregistrydb.PostgreSQLAASRegistryDatabase{}, smRegistry: &smregistrydb.PostgreSQLSMDatabase{}},
+		{name: "missing AAS dependency", aasEnabled: true, wantCode: "DPP-REGSYNC-NILAASREGISTRY"},
+		{name: "missing Submodel dependency", smEnabled: true, wantCode: "DPP-REGSYNC-NILSMREGISTRY"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service, err := NewDPPRepositoryServiceWithRegistrySync(nil, nil, test.aasRegistry, test.smRegistry, aasenvironment.RegistrySyncConfig{
+				AASRegistryIntegration:      test.aasEnabled,
+				SubmodelRegistryIntegration: test.smEnabled,
+			})
+			if test.wantCode == "" {
+				if err != nil || service == nil {
+					t.Fatalf("NewDPPRepositoryServiceWithRegistrySync() service = %v, error = %v", service, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.wantCode) {
+				t.Fatalf("NewDPPRepositoryServiceWithRegistrySync() error = %v, want %s", err, test.wantCode)
+			}
+		})
+	}
+}
 
 func TestElementResponseSupportsScalarSubmodelElementListItems(t *testing.T) {
 	item := scalarProperty("", "A", types.DataTypeDefXSDString)
@@ -56,4 +95,49 @@ func TestElementResponseSupportsScalarSubmodelElementListItems(t *testing.T) {
 	if fullElement["elementId"] != "energyClasses0" {
 		t.Fatalf("elementResponse() full elementId = %#v, want energyClasses0", fullElement["elementId"])
 	}
+}
+
+func TestPreserveManagedFileValuesRestoresRepositoryPathOnDPPUpdate(t *testing.T) {
+	managedPath := "/aasx/files/token/manual.pdf"
+	currentFile := testFileElement("manual", managedPath)
+	current := types.NewSubmodel("submodel/id")
+	current.SetSubmodelElements([]types.ISubmodelElement{currentFile})
+
+	attachmentURL := "https://aas.example.test/submodels/c3VibW9kZWwvaWQ/submodel-elements/manual/attachment"
+	replacementFile := testFileElement("manual", attachmentURL)
+	replacement := types.NewSubmodel("submodel/id")
+	replacement.SetSubmodelElements([]types.ISubmodelElement{replacementFile})
+
+	preserveManagedFileValues(current, replacement, dppSerializationContext{
+		submodelID:             current.ID(),
+		externalBaseURL:        "https://aas.example.test",
+		managedAttachmentPaths: map[string]struct{}{"manual": {}},
+	})
+	if got := dereferenceString(replacementFile.Value()); got != managedPath {
+		t.Fatalf("replacement File value = %q, want managed path %q", got, managedPath)
+	}
+}
+
+func TestPreserveManagedFileValuesKeepsChangedExternalURL(t *testing.T) {
+	current := types.NewSubmodel("submodel/id")
+	current.SetSubmodelElements([]types.ISubmodelElement{testFileElement("manual", "/aasx/files/token/manual.pdf")})
+	replacementFile := testFileElement("manual", "https://files.example.test/replacement.pdf")
+	replacement := types.NewSubmodel("submodel/id")
+	replacement.SetSubmodelElements([]types.ISubmodelElement{replacementFile})
+
+	preserveManagedFileValues(current, replacement, dppSerializationContext{
+		submodelID:             current.ID(),
+		externalBaseURL:        "https://aas.example.test",
+		managedAttachmentPaths: map[string]struct{}{"manual": {}},
+	})
+	if got := dereferenceString(replacementFile.Value()); got != "https://files.example.test/replacement.pdf" {
+		t.Fatalf("replacement File value = %q, want changed external URL", got)
+	}
+}
+
+func testFileElement(idShort string, value string) *types.File {
+	file := types.NewFile()
+	file.SetIDShort(&idShort)
+	file.SetValue(&value)
+	return file
 }

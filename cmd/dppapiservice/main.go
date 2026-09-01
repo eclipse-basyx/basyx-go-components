@@ -34,11 +34,14 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/dppapiservice"
+	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
 
@@ -85,8 +88,35 @@ func runServer(ctx context.Context, configPath string) error {
 	if err != nil {
 		return err
 	}
+	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
+		cfg.General.AASRegistryIntegration,
+		cfg.General.SubmodelRegistryIntegration,
+		cfg.General.ExternalURL,
+	)
+	if err != nil {
+		return err
+	}
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromPools(
+		pools.Writer, pools.Reader, cfg.Server.CacheEnabled,
+	)
+	if err != nil {
+		return err
+	}
+	submodelRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromPools(pools.Writer, pools.Reader)
+	if err != nil {
+		return err
+	}
 
-	router, err := dppapiservice.NewHTTPHandler(ctx, cfg, openapiSpec, aasRepositoryPersistence, submodelRepositoryPersistence)
+	router, err := dppapiservice.NewHTTPHandlerWithRegistrySync(
+		ctx,
+		cfg,
+		openapiSpec,
+		aasRepositoryPersistence,
+		submodelRepositoryPersistence,
+		aasRegistryPersistence,
+		submodelRegistryPersistence,
+		registrySyncConfig,
+	)
 	if err != nil {
 		return err
 	}

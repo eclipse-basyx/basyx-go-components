@@ -358,6 +358,98 @@ func TestCompressedContentEnrichesRelatedResourceMetadata(t *testing.T) {
 	assertMapValue(t, manualValue, "language", "en-GB")
 }
 
+func TestManagedAttachmentURLInCompressedAndFullRepresentations(t *testing.T) {
+	manual := types.NewFile()
+	manualIDShort := "manual"
+	managedPath := "/aasx/files/token/manual.pdf"
+	contentType := "application/pdf"
+	manual.SetIDShort(&manualIDShort)
+	manual.SetValue(&managedPath)
+	manual.SetContentType(&contentType)
+
+	documentation := types.NewSubmodelElementCollection()
+	documentationIDShort := "documentation"
+	documentation.SetIDShort(&documentationIDShort)
+	documentation.SetValue([]types.ISubmodelElement{manual})
+
+	submodel := types.NewSubmodel("submodel/id")
+	submodel.SetSubmodelElements([]types.ISubmodelElement{documentation})
+	serializationContext := dppSerializationContext{
+		submodelID:             submodel.ID(),
+		externalBaseURL:        "https://aas.example.test/base",
+		managedAttachmentPaths: map[string]struct{}{"documentation.manual": {}},
+	}
+	wantURL := "https://aas.example.test/base/submodels/c3VibW9kZWwvaWQ/submodel-elements/documentation.manual/attachment"
+
+	compressed, err := compressedContentWithContext(submodel, serializationContext)
+	if err != nil {
+		t.Fatalf("compressedContentWithContext() error = %v", err)
+	}
+	compressedManual := compressed.(map[string]any)["documentation"].(map[string]any)["manual"].(map[string]any)
+	assertMapValue(t, compressedManual, "url", wantURL)
+
+	full, err := fullContentWithContext(submodel, serializationContext)
+	if err != nil {
+		t.Fatalf("fullContentWithContext() error = %v", err)
+	}
+	root := full.(map[string]any)
+	documentationElement := root["elements"].([]map[string]any)[0]
+	fullManual := documentationElement["elements"].([]map[string]any)[0]
+	assertMapValue(t, fullManual, "url", wantURL)
+}
+
+func TestRelatedResourceURLPreservesExternalHTTPURLs(t *testing.T) {
+	file := types.NewFile()
+	value := "https://files.example.test/manual.pdf?version=2"
+	file.SetValue(&value)
+
+	got, err := relatedResourceURL(file, "manual", dppSerializationContext{
+		submodelID:             "submodel-id",
+		externalBaseURL:        "https://aas.example.test",
+		managedAttachmentPaths: map[string]struct{}{"manual": {}},
+	})
+	if err != nil {
+		t.Fatalf("relatedResourceURL() error = %v", err)
+	}
+	if got != value {
+		t.Fatalf("relatedResourceURL() = %q, want %q", got, value)
+	}
+}
+
+func TestRelatedResourceURLRequiresExternalURLForManagedAttachment(t *testing.T) {
+	file := types.NewFile()
+	value := "/aasx/files/token/manual.pdf"
+	file.SetValue(&value)
+
+	_, err := relatedResourceURL(file, "manual", dppSerializationContext{
+		submodelID:             "submodel-id",
+		managedAttachmentPaths: map[string]struct{}{"manual": {}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "DPP-FILEURL-MISSINGEXTERNALURL") {
+		t.Fatalf("relatedResourceURL() error = %v, want coded missing external URL error", err)
+	}
+}
+
+func TestHistoricalRelatedResourceURLUsesManagedPathMarker(t *testing.T) {
+	file := types.NewFile()
+	value := "/aasx/files/token/manual.pdf"
+	file.SetValue(&value)
+
+	got, err := relatedResourceURL(file, "documents[0].manual", dppSerializationContext{
+		submodelID:               "submodel/id",
+		externalBaseURL:          "https://aas.example.test",
+		managedAttachmentPaths:   map[string]struct{}{},
+		managedPathHistoryLookup: true,
+	})
+	if err != nil {
+		t.Fatalf("relatedResourceURL() error = %v", err)
+	}
+	want := "https://aas.example.test/submodels/c3VibW9kZWwvaWQ/submodel-elements/documents%5B0%5D.manual/attachment"
+	if got != want {
+		t.Fatalf("relatedResourceURL() = %q, want %q", got, want)
+	}
+}
+
 func assertMapValue(t *testing.T, value map[string]any, key string, expected any) {
 	t.Helper()
 	if value[key] != expected {

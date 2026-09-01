@@ -63,6 +63,32 @@ func (s *SubmodelDatabase) FileAttachmentExists(submodelID string, idShortPath s
 	return fileOID.Valid, nil
 }
 
+// ManagedFileAttachmentPaths returns all canonical idShort paths backed by managed attachment bytes.
+func (s *SubmodelDatabase) ManagedFileAttachmentPaths(ctx context.Context, submodelID string) (map[string]struct{}, error) {
+	query, args, err := submodelqueries.BuildManagedFileAttachmentPathsSQL(submodelID)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-BUILDSQL " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-QUERY " + err.Error())
+	}
+	defer rows.Close()
+
+	paths := make(map[string]struct{})
+	for rows.Next() {
+		var path string
+		if err = rows.Scan(&path); err != nil {
+			return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-SCAN " + err.Error())
+		}
+		paths[path] = struct{}{}
+	}
+	if err = rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-ITERATE " + err.Error())
+	}
+	return paths, nil
+}
+
 // UploadFileAttachment uploads attachment content for a File submodel element.
 func (s *SubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)

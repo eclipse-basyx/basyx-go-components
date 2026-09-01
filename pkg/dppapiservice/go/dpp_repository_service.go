@@ -38,8 +38,11 @@ import (
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
 
@@ -55,8 +58,11 @@ const (
 //   - aasRepo: Persistence repository for Asset Administration Shell records
 //   - submodelRepo: Persistence repository for DPP metadata and content submodels
 type DPPRepositoryService struct {
-	aasRepo      *aasrepositorydb.AssetAdministrationShellDatabase
-	submodelRepo *submodelrepositorydb.SubmodelDatabase
+	aasRepo            *aasrepositorydb.AssetAdministrationShellDatabase
+	submodelRepo       *submodelrepositorydb.SubmodelDatabase
+	aasRegistry        *aasregistrydb.PostgreSQLAASRegistryDatabase
+	submodelRegistry   *smregistrydb.PostgreSQLSMDatabase
+	registrySyncConfig aasenvironment.RegistrySyncConfig
 }
 
 // NewDPPRepositoryService creates a DPP repository service backed by AAS and submodel repositories.
@@ -69,6 +75,131 @@ type DPPRepositoryService struct {
 //   - *DPPRepositoryService: Configured DPP repository service
 func NewDPPRepositoryService(aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) *DPPRepositoryService {
 	return &DPPRepositoryService{aasRepo: aasRepo, submodelRepo: submodelRepo}
+}
+
+// NewDPPRepositoryServiceWithRegistrySync creates a DPP repository service with atomic registry synchronization.
+func NewDPPRepositoryServiceWithRegistrySync(
+	aasRepo *aasrepositorydb.AssetAdministrationShellDatabase,
+	submodelRepo *submodelrepositorydb.SubmodelDatabase,
+	aasRegistry *aasregistrydb.PostgreSQLAASRegistryDatabase,
+	submodelRegistry *smregistrydb.PostgreSQLSMDatabase,
+	registrySyncConfig aasenvironment.RegistrySyncConfig,
+) (*DPPRepositoryService, error) {
+	if registrySyncConfig.AASRegistryIntegration && aasRegistry == nil {
+		return nil, common.NewInternalServerError("DPP-REGSYNC-NILAASREGISTRY AAS registry backend must not be nil")
+	}
+	if registrySyncConfig.SubmodelRegistryIntegration && submodelRegistry == nil {
+		return nil, common.NewInternalServerError("DPP-REGSYNC-NILSMREGISTRY Submodel registry backend must not be nil")
+	}
+	return &DPPRepositoryService{
+		aasRepo:            aasRepo,
+		submodelRepo:       submodelRepo,
+		aasRegistry:        aasRegistry,
+		submodelRegistry:   submodelRegistry,
+		registrySyncConfig: registrySyncConfig,
+	}, nil
+}
+
+func (s *DPPRepositoryService) syncCreatedDescriptors(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell, submodels []types.ISubmodel) error {
+	if s.registrySyncConfig.SubmodelRegistryIntegration {
+		for _, submodel := range submodels {
+			descriptor, err := s.registrySyncConfig.BuildSubmodelDescriptor(submodel)
+			if err != nil {
+				return fmt.Errorf("DPP-REGSYNC-CREATE-BUILDSMDESC build submodel descriptor %s: %w", submodel.ID(), err)
+			}
+			if _, err = s.submodelRegistry.InsertSubmodelDescriptorInTransaction(
+				aasenvironment.WithSubmodelRegistrySyncUpsertAudit(ctx), tx, descriptor,
+			); err != nil {
+				return fmt.Errorf("DPP-REGSYNC-CREATE-INSERTSMDESC insert submodel descriptor %s: %w", submodel.ID(), err)
+			}
+		}
+	}
+	if !s.registrySyncConfig.AASRegistryIntegration {
+		return nil
+	}
+	descriptor, err := s.registrySyncConfig.BuildAASDescriptor(aas)
+	if err != nil {
+		return fmt.Errorf("DPP-REGSYNC-CREATE-BUILDAASDESC build AAS descriptor: %w", err)
+	}
+	if err = s.aasRegistry.InsertAdministrationShellDescriptorInTransaction(
+		aasenvironment.WithAASRegistrySyncUpsertAudit(ctx), tx, descriptor,
+	); err != nil {
+		return fmt.Errorf("DPP-REGSYNC-CREATE-INSERTAASDESC insert AAS descriptor: %w", err)
+	}
+	return nil
+}
+
+func (s *DPPRepositoryService) syncUpdatedDescriptors(
+	ctx context.Context,
+	tx *sql.Tx,
+	aas types.IAssetAdministrationShell,
+	submodels []types.ISubmodel,
+	staleSubmodelIDs []string,
+) error {
+	if s.registrySyncConfig.SubmodelRegistryIntegration {
+		if err := s.upsertSubmodelDescriptors(ctx, tx, submodels); err != nil {
+			return err
+		}
+		for _, submodelID := range staleSubmodelIDs {
+			err := s.submodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
+				aasenvironment.WithSubmodelRegistrySyncDeleteAudit(ctx), tx, submodelID,
+			)
+			if err != nil && !common.IsErrNotFound(err) {
+				return fmt.Errorf("DPP-REGSYNC-UPDATE-DELETESMDESC delete stale submodel descriptor %s: %w", submodelID, err)
+			}
+		}
+	}
+	if !s.registrySyncConfig.AASRegistryIntegration {
+		return nil
+	}
+	descriptor, err := s.registrySyncConfig.BuildAASDescriptor(aas)
+	if err != nil {
+		return fmt.Errorf("DPP-REGSYNC-UPDATE-BUILDAASDESC build AAS descriptor: %w", err)
+	}
+	if err = s.aasRegistry.UpsertAdministrationShellDescriptorInTransaction(
+		aasenvironment.WithAASRegistrySyncUpsertAudit(ctx), tx, descriptor,
+	); err != nil {
+		return fmt.Errorf("DPP-REGSYNC-UPDATE-UPSERTAASDESC upsert AAS descriptor: %w", err)
+	}
+	return nil
+}
+
+func (s *DPPRepositoryService) upsertSubmodelDescriptors(ctx context.Context, tx *sql.Tx, submodels []types.ISubmodel) error {
+	for _, submodel := range submodels {
+		descriptor, err := s.registrySyncConfig.BuildSubmodelDescriptor(submodel)
+		if err != nil {
+			return fmt.Errorf("DPP-REGSYNC-UPDATE-BUILDSMDESC build submodel descriptor %s: %w", submodel.ID(), err)
+		}
+		if err = s.submodelRegistry.UpsertSubmodelDescriptorInTransaction(
+			aasenvironment.WithSubmodelRegistrySyncUpsertAudit(ctx), tx, descriptor,
+		); err != nil {
+			return fmt.Errorf("DPP-REGSYNC-UPDATE-UPSERTSMDESC upsert submodel descriptor %s: %w", submodel.ID(), err)
+		}
+	}
+	return nil
+}
+
+func (s *DPPRepositoryService) deleteDescriptors(ctx context.Context, tx *sql.Tx, dppID string, submodels []types.ISubmodel) error {
+	if s.registrySyncConfig.SubmodelRegistryIntegration {
+		for _, submodel := range submodels {
+			err := s.submodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
+				aasenvironment.WithSubmodelRegistrySyncDeleteAudit(ctx), tx, submodel.ID(),
+			)
+			if err != nil && !common.IsErrNotFound(err) {
+				return fmt.Errorf("DPP-REGSYNC-DELETE-DELETESMDESC delete submodel descriptor %s: %w", submodel.ID(), err)
+			}
+		}
+	}
+	if !s.registrySyncConfig.AASRegistryIntegration {
+		return nil
+	}
+	err := s.aasRegistry.DeleteAssetAdministrationShellDescriptorByIDInTransaction(
+		aasenvironment.WithAASRegistrySyncDeleteAudit(ctx), tx, dppID,
+	)
+	if err != nil && !common.IsErrNotFound(err) {
+		return fmt.Errorf("DPP-REGSYNC-DELETE-DELETEAASDESC delete AAS descriptor: %w", err)
+	}
+	return nil
 }
 
 // CreateDPPFromJSON creates a DPP from a compressed JSON document.
@@ -102,7 +233,7 @@ func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byt
 				return fmt.Errorf("DPP-CREATEDPP-CREATESUBMODEL create submodel %s: %w", submodel.ID(), err)
 			}
 		}
-		return nil
+		return s.syncCreatedDescriptors(ctx, tx, aas, submodels)
 	})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
@@ -166,6 +297,9 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
 	applyDPPUpdateAdministration(submodels, currentResolved.metadata, currentContentSubmodels, header.LastUpdate)
+	if err = s.preserveManagedAttachments(ctx, submodels, currentContentSubmodels); err != nil {
+		return errorResponse(http.StatusInternalServerError, err), nil
+	}
 	refs = appendUnselectedContentSubmodelReferences(refs, currentResolved, currentContentSubmodels)
 	aas := buildAAS(header, refs)
 	staleSubmodelIDs := staleContentSubmodelIDs(currentContentSubmodels, submodels)
@@ -184,7 +318,7 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 				return fmt.Errorf("DPP-UPDDPP-DELETESUBMODEL delete stale submodel %s: %w", submodelID, err)
 			}
 		}
-		return nil
+		return s.syncUpdatedDescriptors(ctx, tx, aas, submodels, staleSubmodelIDs)
 	})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
@@ -235,22 +369,106 @@ func appendUnselectedContentSubmodelReferences(refs []types.IReference, resolved
 }
 
 func applyDPPUpdateAdministration(replacements []types.ISubmodel, currentMetadata types.ISubmodel, currentContent []types.ISubmodel, timestamp time.Time) {
-	currentByID := make(map[string]types.ISubmodel, len(currentContent)+1)
-	currentByID[currentMetadata.ID()] = currentMetadata
-	currentBySemanticID := make(map[string]types.ISubmodel, len(currentContent))
-	for _, submodel := range currentContent {
+	currentByID, currentBySemanticID := indexCurrentDPPSubmodels(currentMetadata, currentContent)
+
+	for _, replacement := range replacements {
+		current := matchingCurrentDPPSubmodel(replacement, currentByID, currentBySemanticID)
+		replacement.SetAdministration(updatedDPPAdministration(current, timestamp))
+	}
+}
+
+func indexCurrentDPPSubmodels(
+	metadata types.ISubmodel,
+	content []types.ISubmodel,
+) (map[string]types.ISubmodel, map[string]types.ISubmodel) {
+	currentByID := make(map[string]types.ISubmodel, len(content)+1)
+	if metadata != nil {
+		currentByID[metadata.ID()] = metadata
+	}
+	currentBySemanticID := make(map[string]types.ISubmodel, len(content))
+	for _, submodel := range content {
 		currentByID[submodel.ID()] = submodel
 		if semanticID := referenceToString(submodel.SemanticID()); semanticID != "" {
 			currentBySemanticID[semanticID] = submodel
 		}
 	}
+	return currentByID, currentBySemanticID
+}
 
+func matchingCurrentDPPSubmodel(
+	replacement types.ISubmodel,
+	currentByID map[string]types.ISubmodel,
+	currentBySemanticID map[string]types.ISubmodel,
+) types.ISubmodel {
+	if current := currentByID[replacement.ID()]; current != nil {
+		return current
+	}
+	return currentBySemanticID[referenceToString(replacement.SemanticID())]
+}
+
+func (s *DPPRepositoryService) preserveManagedAttachments(
+	ctx context.Context,
+	replacements []types.ISubmodel,
+	currentContent []types.ISubmodel,
+) error {
+	currentByID, currentBySemanticID := indexCurrentDPPSubmodels(nil, currentContent)
 	for _, replacement := range replacements {
-		current := currentByID[replacement.ID()]
+		current := matchingCurrentDPPSubmodel(replacement, currentByID, currentBySemanticID)
 		if current == nil {
-			current = currentBySemanticID[referenceToString(replacement.SemanticID())]
+			continue
 		}
-		replacement.SetAdministration(updatedDPPAdministration(current, timestamp))
+		serializationContext, err := s.serializationContext(ctx, current.ID(), false)
+		if err != nil {
+			return fmt.Errorf("DPP-UPDDPP-PRESERVEFILES-LOADPATHS load managed attachment paths: %w", err)
+		}
+		preserveManagedFileValues(current, replacement, serializationContext)
+	}
+	return nil
+}
+
+func preserveManagedFileValues(current types.ISubmodel, replacement types.ISubmodel, serializationContext dppSerializationContext) {
+	currentFiles := make(map[string]*types.File)
+	replacementFiles := make(map[string]*types.File)
+	collectFilesByPath(current.SubmodelElements(), "", currentFiles)
+	collectFilesByPath(replacement.SubmodelElements(), "", replacementFiles)
+	preserveManagedFiles(currentFiles, replacementFiles, serializationContext)
+}
+
+func preserveManagedFiles(
+	currentFiles map[string]*types.File,
+	replacementFiles map[string]*types.File,
+	serializationContext dppSerializationContext,
+) {
+	for path := range serializationContext.managedAttachmentPaths {
+		currentFile := currentFiles[path]
+		replacementFile := replacementFiles[path]
+		if currentFile == nil || replacementFile == nil {
+			continue
+		}
+		expectedURL, err := relatedResourceURL(currentFile, path, serializationContext)
+		if err == nil && dereferenceString(replacementFile.Value()) == expectedURL {
+			replacementFile.SetValue(currentFile.Value())
+		}
+	}
+}
+
+func collectFilesByPath(elements []types.ISubmodelElement, parentPath string, files map[string]*types.File) {
+	for _, element := range elements {
+		path := nestedIDShortPath(parentPath, idShortValue(element))
+		collectFileByPath(element, path, files)
+	}
+}
+
+func collectFileByPath(element types.ISubmodelElement, path string, files map[string]*types.File) {
+	switch typed := element.(type) {
+	case *types.File:
+		files[path] = typed
+	case *types.SubmodelElementCollection:
+		collectFilesByPath(typed.Value(), path, files)
+	case *types.SubmodelElementList:
+		for index, child := range typed.Value() {
+			collectFileByPath(child, fmt.Sprintf("%s[%d]", path, index), files)
+		}
 	}
 }
 
@@ -346,6 +564,9 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 	}
 
 	err = s.aasRepo.ExecuteInTransaction("DPP-DELDPP-STARTTX", "DPP-DELDPP-COMMITTX", func(tx *sql.Tx) error {
+		if err := s.deleteDescriptors(ctx, tx, dppID, resolved.submodels); err != nil {
+			return err
+		}
 		for _, submodel := range resolved.submodels {
 			if err := s.submodelRepo.DeleteSubmodelInTransaction(ctx, tx, submodel.ID()); err != nil {
 				return fmt.Errorf("DPP-DELDPP-DELETESUBMODEL delete submodel %s: %w", submodel.ID(), err)
@@ -460,7 +681,13 @@ func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
-	body, err := elementResponse(element, normalizeRepresentation(representation), elementIDPath)
+	serializationContext, err := s.serializationContext(ctx, submodelID, false)
+	if err != nil {
+		return mapPersistenceError(err, http.StatusInternalServerError), nil
+	}
+	body, err := elementResponseWithContext(
+		element, normalizeRepresentation(representation), elementIDPath, idShortPath, serializationContext,
+	)
 	if err != nil {
 		return errorResponse(http.StatusInternalServerError, err), nil
 	}
@@ -503,7 +730,14 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
 	preserveElementMetadata(existing, element)
+	if err = s.preserveManagedElementAttachments(ctx, submodelID, idShortPath, existing, element); err != nil {
+		return errorResponse(http.StatusInternalServerError, err), nil
+	}
 	metadata, err = updatedMetadata(metadata)
+	if err != nil {
+		return mapPersistenceError(err, http.StatusInternalServerError), nil
+	}
+	aas, descriptorSubmodels, err := s.elementUpdateSyncResources(ctx, dppID, submodelID, metadata)
 	if err != nil {
 		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
@@ -515,13 +749,63 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 		if _, err := s.submodelRepo.PutSubmodelInTransaction(ctx, tx, metadata.ID(), metadata); err != nil {
 			return fmt.Errorf("DPP-UPDELEM-PUTMETADATA put metadata: %w", err)
 		}
-		return nil
+		return s.syncUpdatedDescriptors(ctx, tx, aas, descriptorSubmodels, nil)
 	})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
 	}
 
 	return s.ReadDataElement(ctx, dppID, elementIDPath, REPRESENTATION_COMPRESSED)
+}
+
+func (s *DPPRepositoryService) preserveManagedElementAttachments(
+	ctx context.Context,
+	submodelID string,
+	idShortPath string,
+	current types.ISubmodelElement,
+	replacement types.ISubmodelElement,
+) error {
+	currentFiles := make(map[string]*types.File)
+	replacementFiles := make(map[string]*types.File)
+	collectFileByPath(current, idShortPath, currentFiles)
+	collectFileByPath(replacement, idShortPath, replacementFiles)
+	if len(currentFiles) == 0 || len(replacementFiles) == 0 {
+		return nil
+	}
+	serializationContext, err := s.serializationContext(ctx, submodelID, false)
+	if err != nil {
+		return fmt.Errorf("DPP-UPDELEM-PRESERVEFILES-LOADPATHS load managed attachment paths: %w", err)
+	}
+	preserveManagedFiles(currentFiles, replacementFiles, serializationContext)
+	return nil
+}
+
+func (s *DPPRepositoryService) elementUpdateSyncResources(
+	ctx context.Context,
+	dppID string,
+	contentSubmodelID string,
+	metadata types.ISubmodel,
+) (types.IAssetAdministrationShell, []types.ISubmodel, error) {
+	var aas types.IAssetAdministrationShell
+	var err error
+	if s.registrySyncConfig.AASRegistryIntegration {
+		aas, err = s.aasRepo.GetAssetAdministrationShellByID(ctx, dppID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("DPP-UPDELEM-GETAAS get AAS for descriptor synchronization: %w", err)
+		}
+	}
+	if !s.registrySyncConfig.SubmodelRegistryIntegration {
+		return aas, nil, nil
+	}
+	submodels := []types.ISubmodel{metadata}
+	if contentSubmodelID == metadata.ID() {
+		return aas, submodels, nil
+	}
+	contentSubmodel, err := s.submodelRepo.GetSubmodelByID(ctx, contentSubmodelID, "deep", false, false)
+	if err != nil {
+		return nil, nil, fmt.Errorf("DPP-UPDELEM-GETSUBMODEL get content submodel for descriptor synchronization: %w", err)
+	}
+	return aas, append(submodels, contentSubmodel), nil
 }
 
 func preserveElementMetadata(existing types.ISubmodelElement, replacement types.ISubmodelElement) {
@@ -628,10 +912,22 @@ func (s *DPPRepositoryService) composeDPP(ctx context.Context, dppID string, rep
 	if err != nil {
 		return nil, err
 	}
-	return composeResolvedDPP(resolved, representation)
+	return composeResolvedDPPWithContext(resolved, representation, func(submodel types.ISubmodel) (dppSerializationContext, error) {
+		return s.serializationContext(ctx, submodel.ID(), !at.IsZero())
+	})
 }
 
 func composeResolvedDPP(resolved resolvedDPP, representation Representation) (dppDocument, error) {
+	return composeResolvedDPPWithContext(resolved, representation, nil)
+}
+
+type dppSerializationContextLoader func(types.ISubmodel) (dppSerializationContext, error)
+
+func composeResolvedDPPWithContext(
+	resolved resolvedDPP,
+	representation Representation,
+	contextLoader dppSerializationContextLoader,
+) (dppDocument, error) {
 	doc, err := composeHeader(resolved.metadata)
 	if err != nil {
 		return nil, err
@@ -647,7 +943,11 @@ func composeResolvedDPP(resolved resolvedDPP, representation Representation) (dp
 	if representation == REPRESENTATION_FULL {
 		elements := make([]map[string]any, 0, len(contentSubmodels))
 		for _, submodel := range contentSubmodels {
-			content, err := fullContent(submodel)
+			serializationContext, err := loadDPPSerializationContext(contextLoader, submodel)
+			if err != nil {
+				return nil, err
+			}
+			content, err := fullContentWithContext(submodel, serializationContext)
 			if err != nil {
 				return nil, err
 			}
@@ -661,14 +961,44 @@ func composeResolvedDPP(resolved resolvedDPP, representation Representation) (dp
 		return doc, nil
 	}
 	for _, submodel := range contentSubmodels {
+		serializationContext, err := loadDPPSerializationContext(contextLoader, submodel)
+		if err != nil {
+			return nil, err
+		}
 		sectionName := compressedContentSectionName(submodel, specificationSet)
-		content, err := compressedContent(submodel)
+		content, err := compressedContentWithContext(submodel, serializationContext)
 		if err != nil {
 			return nil, err
 		}
 		doc[sectionName] = content
 	}
 	return doc, nil
+}
+
+func loadDPPSerializationContext(loader dppSerializationContextLoader, submodel types.ISubmodel) (dppSerializationContext, error) {
+	if loader == nil {
+		return dppSerializationContext{}, nil
+	}
+	return loader(submodel)
+}
+
+func (s *DPPRepositoryService) serializationContext(
+	ctx context.Context,
+	submodelID string,
+	historical bool,
+) (dppSerializationContext, error) {
+	managedPaths, err := s.submodelRepo.ManagedFileAttachmentPaths(ctx, submodelID)
+	if err != nil {
+		return dppSerializationContext{}, fmt.Errorf(
+			"DPP-FILEURL-LOADMANAGEDPATHS load managed attachment paths for %s: %w", submodelID, err,
+		)
+	}
+	return dppSerializationContext{
+		submodelID:               submodelID,
+		externalBaseURL:          common.ExternalBaseURLFromContext(ctx),
+		managedAttachmentPaths:   managedPaths,
+		managedPathHistoryLookup: historical,
+	}, nil
 }
 
 func (s *DPPRepositoryService) resolveSubmodels(ctx context.Context, dppID string, at time.Time) (resolvedDPP, error) {
@@ -964,8 +1294,20 @@ func updatedMetadata(metadata types.ISubmodel) (types.ISubmodel, error) {
 }
 
 func elementResponse(element types.ISubmodelElement, representation Representation, elementIDPath string) (any, error) {
+	return elementResponseWithContext(
+		element, representation, elementIDPath, idShortValue(element), dppSerializationContext{},
+	)
+}
+
+func elementResponseWithContext(
+	element types.ISubmodelElement,
+	representation Representation,
+	elementIDPath string,
+	idShortPath string,
+	serializationContext dppSerializationContext,
+) (any, error) {
 	if representation == REPRESENTATION_FULL {
-		response, err := dppElementFromAAS(element)
+		response, err := dppElementFromAASWithContext(element, idShortPath, serializationContext)
 		if err != nil {
 			return nil, fmt.Errorf("DPP-ELEM-FULL convert element to DPP expanded representation: %w", err)
 		}
@@ -978,7 +1320,7 @@ func elementResponse(element types.ISubmodelElement, representation Representati
 		}
 		return response, nil
 	}
-	return compressedElementValue(element)
+	return compressedElementValueWithContext(element, idShortPath, serializationContext)
 }
 
 func idShortOrID(submodel types.ISubmodel) string {

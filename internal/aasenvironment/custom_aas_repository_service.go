@@ -102,7 +102,7 @@ func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Co
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	descriptor, descriptorErr := s.syncConfig.buildAASDescriptor(aas)
+	descriptor, descriptorErr := s.syncConfig.BuildAASDescriptor(aas)
 	if descriptorErr != nil {
 		return newAASRepoErrorResponse(descriptorErr, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
 	}
@@ -806,7 +806,7 @@ func (s *CustomAASRepositoryService) buildMergedPatchedSubmodel(ctx context.Cont
 }
 
 func (s *CustomAASRepositoryService) patchSubmodelAndSyncDescriptorsInTransaction(ctx context.Context, aasID string, submodelID string, submodel types.ISubmodel, patchIncludesSubmodelElements bool) error {
-	submodelDescriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+	submodelDescriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(submodel)
 	if descriptorErr != nil {
 		return descriptorErr
 	}
@@ -862,7 +862,7 @@ func (s *CustomAASRepositoryService) buildSubmodelDescriptorForReference(ctx con
 
 	submodel, getSubmodelErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, submodelID, "core", true, true)
 	if getSubmodelErr == nil {
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+		descriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(submodel)
 		return descriptor, true, descriptorErr
 	}
 	if !common.IsErrNotFound(getSubmodelErr) && !errors.Is(getSubmodelErr, sql.ErrNoRows) {

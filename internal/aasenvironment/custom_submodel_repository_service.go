@@ -119,7 +119,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+	descriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(submodel)
 	if descriptorErr != nil {
 		return newSubmodelRepoErrorResponse(descriptorErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
 	}
@@ -342,7 +342,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 			}
 		}
 
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(mergedSubmodel)
+		descriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(mergedSubmodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -433,7 +433,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 			return patchErr
 		}
 
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(mergedSubmodel)
+		descriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(mergedSubmodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}

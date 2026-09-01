@@ -31,6 +31,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -41,6 +42,7 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
@@ -65,6 +67,31 @@ func TestSubmodelRepositoryReadPoolSelection(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, reader, backend.readDB(t.Context()))
 	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
+}
+
+func TestManagedFileAttachmentPathsBulkLoadsCurrentAndLegacyAttachments(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	submodelID := "urn:sm:files"
+	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsSQL(submodelID)
+	require.NoError(t, err)
+	require.Contains(t, query, `"fr"."binary_content_id" IS NOT NULL`)
+	require.Contains(t, query, `"fd"."file_oid" IS NOT NULL`)
+	mock.ExpectQuery(regexp.QuoteMeta(query)).
+		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}).
+			AddRow("documents.manual").
+			AddRow("legacyFile"))
+
+	sut := &SubmodelDatabase{db: db}
+	paths, err := sut.ManagedFileAttachmentPaths(t.Context(), submodelID)
+	require.NoError(t, err)
+	require.Equal(t, map[string]struct{}{
+		"documents.manual": {},
+		"legacyFile":       {},
+	}, paths)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestGetSubmodelsDatabaseQueryError(t *testing.T) {

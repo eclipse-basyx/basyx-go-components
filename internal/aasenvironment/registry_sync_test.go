@@ -170,7 +170,7 @@ func TestBuildAASDescriptorDerivesFromIdentifiable(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	descriptor, err := config.buildAASDescriptor(aas)
+	descriptor, err := config.BuildAASDescriptor(aas)
 	require.NoError(t, err)
 	require.Equal(t, "urn:example:aas:derived", descriptor.Id)
 	require.Equal(t, "DerivedAAS", descriptor.IdShort)
@@ -227,7 +227,7 @@ func TestBuildSubmodelDescriptorDerivesFromIdentifiable(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	descriptor, err := config.buildSubmodelDescriptor(submodel)
+	descriptor, err := config.BuildSubmodelDescriptor(submodel)
 	require.NoError(t, err)
 	require.Equal(t, "urn:example:sm:derived", descriptor.Id)
 	require.Equal(t, "DerivedSubmodel", descriptor.IdShort)
@@ -263,9 +263,9 @@ func TestSubmodelDescriptorComparisonIgnoresElementChanges(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	previousDescriptor, err := config.buildSubmodelDescriptor(previous)
+	previousDescriptor, err := config.BuildSubmodelDescriptor(previous)
 	require.NoError(t, err)
-	submittedDescriptor, err := config.buildSubmodelDescriptor(submitted)
+	submittedDescriptor, err := config.BuildSubmodelDescriptor(submitted)
 	require.NoError(t, err)
 	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
@@ -276,7 +276,7 @@ func TestSubmodelDescriptorComparisonIgnoresElementChanges(t *testing.T) {
 
 	idShort := "changed"
 	submitted.SetIDShort(&idShort)
-	submittedDescriptor, err = config.buildSubmodelDescriptor(submitted)
+	submittedDescriptor, err = config.BuildSubmodelDescriptor(submitted)
 	require.NoError(t, err)
 	equal, err = registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
@@ -291,9 +291,9 @@ func TestAASDescriptorComparisonIgnoresNonDescriptorMetadata(t *testing.T) {
 	category := "changed"
 	submitted.SetCategory(&category)
 
-	previousDescriptor, err := config.buildAASDescriptor(previous)
+	previousDescriptor, err := config.BuildAASDescriptor(previous)
 	require.NoError(t, err)
-	submittedDescriptor, err := config.buildAASDescriptor(submitted)
+	submittedDescriptor, err := config.BuildAASDescriptor(submitted)
 	require.NoError(t, err)
 	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
@@ -304,7 +304,7 @@ func TestAASDescriptorComparisonIgnoresNonDescriptorMetadata(t *testing.T) {
 
 	globalAssetID := "urn:example:asset:changed"
 	submitted.AssetInformation().SetGlobalAssetID(&globalAssetID)
-	submittedDescriptor, err = config.buildAASDescriptor(submitted)
+	submittedDescriptor, err = config.BuildAASDescriptor(submitted)
 	require.NoError(t, err)
 	equal, err = registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)

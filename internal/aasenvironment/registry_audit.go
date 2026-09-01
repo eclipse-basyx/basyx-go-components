@@ -95,11 +95,31 @@ func aasRegistryAddAuditMetadataIfNotAvailable(ctx context.Context, operation st
 	return history.ContextWithAuditOperation(ctx, operation, aasRegistrySyncEndpoint)
 }
 
+// WithAASRegistrySyncUpsertAudit attributes an internal AAS descriptor upsert.
+func WithAASRegistrySyncUpsertAudit(ctx context.Context) context.Context {
+	return aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertOperation)
+}
+
+// WithAASRegistrySyncDeleteAudit attributes an internal AAS descriptor deletion.
+func WithAASRegistrySyncDeleteAudit(ctx context.Context) context.Context {
+	return aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncDeleteOperation)
+}
+
 func submodelRegistryAddAuditMetadataIfNotAvailable(ctx context.Context, operation string) context.Context {
 	if contextHasAuditMetadata(ctx) {
 		return ctx
 	}
 	return history.ContextWithAuditOperation(ctx, operation, submodelRegistrySyncEndpoint)
+}
+
+// WithSubmodelRegistrySyncUpsertAudit attributes an internal Submodel descriptor upsert.
+func WithSubmodelRegistrySyncUpsertAudit(ctx context.Context) context.Context {
+	return submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation)
+}
+
+// WithSubmodelRegistrySyncDeleteAudit attributes an internal Submodel descriptor deletion.
+func WithSubmodelRegistrySyncDeleteAudit(ctx context.Context) context.Context {
+	return submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncDeleteOperation)
 }
 
 func contextHasAuditMetadata(ctx context.Context) bool {

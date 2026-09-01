@@ -102,7 +102,8 @@ func NewRegistrySyncConfig(
 	return config, nil
 }
 
-func (c RegistrySyncConfig) buildAASDescriptor(aas types.IAssetAdministrationShell) (commonmodel.AssetAdministrationShellDescriptor, error) {
+// BuildAASDescriptor builds the registry descriptor for an AAS repository resource.
+func (c RegistrySyncConfig) BuildAASDescriptor(aas types.IAssetAdministrationShell) (commonmodel.AssetAdministrationShellDescriptor, error) {
 	if aas == nil {
 		return commonmodel.AssetAdministrationShellDescriptor{}, common.NewErrBadRequest(
 			"AASENV-SYNCAAS-NILAAS asset administration shell must not be nil",
@@ -134,7 +135,8 @@ func (c RegistrySyncConfig) buildAASDescriptor(aas types.IAssetAdministrationShe
 	return descriptor, nil
 }
 
-func (c RegistrySyncConfig) buildSubmodelDescriptor(submodel types.ISubmodel) (commonmodel.SubmodelDescriptor, error) {
+// BuildSubmodelDescriptor builds the registry descriptor for a Submodel repository resource.
+func (c RegistrySyncConfig) BuildSubmodelDescriptor(submodel types.ISubmodel) (commonmodel.SubmodelDescriptor, error) {
 	if submodel == nil {
 		return commonmodel.SubmodelDescriptor{}, common.NewErrBadRequest(
 			"AASENV-SYNCSM-NILSUBMODEL submodel must not be nil",
@@ -169,11 +171,11 @@ func registrySyncDescriptorsEqual(previous any, submitted any) (bool, error) {
 }
 
 func (c RegistrySyncConfig) changedSubmodelDescriptor(previous types.ISubmodel, submitted types.ISubmodel) (commonmodel.SubmodelDescriptor, bool, error) {
-	descriptor, err := c.buildSubmodelDescriptor(submitted)
+	descriptor, err := c.BuildSubmodelDescriptor(submitted)
 	if err != nil || previous == nil {
 		return descriptor, previous == nil, err
 	}
-	previousDescriptor, err := c.buildSubmodelDescriptor(previous)
+	previousDescriptor, err := c.BuildSubmodelDescriptor(previous)
 	if err != nil {
 		return commonmodel.SubmodelDescriptor{}, false, err
 	}
@@ -182,11 +184,11 @@ func (c RegistrySyncConfig) changedSubmodelDescriptor(previous types.ISubmodel, 
 }
 
 func (c RegistrySyncConfig) changedAASDescriptor(previous types.IAssetAdministrationShell, submitted types.IAssetAdministrationShell) (commonmodel.AssetAdministrationShellDescriptor, bool, error) {
-	descriptor, err := c.buildAASDescriptor(submitted)
+	descriptor, err := c.BuildAASDescriptor(submitted)
 	if err != nil || previous == nil {
 		return descriptor, previous == nil, err
 	}
-	previousDescriptor, err := c.buildAASDescriptor(previous)
+	previousDescriptor, err := c.BuildAASDescriptor(previous)
 	if err != nil {
 		return commonmodel.AssetAdministrationShellDescriptor{}, false, err
 	}
