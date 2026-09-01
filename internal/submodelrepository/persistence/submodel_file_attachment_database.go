@@ -73,7 +73,7 @@ func (s *SubmodelDatabase) ManagedFileAttachmentPaths(ctx context.Context, submo
 	if err != nil {
 		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-QUERY " + err.Error())
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	paths := make(map[string]struct{})
 	for rows.Next() {

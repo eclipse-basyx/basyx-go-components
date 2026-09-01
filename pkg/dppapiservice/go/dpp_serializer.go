@@ -85,10 +85,6 @@ func compressedContentWithContext(submodel types.ISubmodel, serializationContext
 	return content, nil
 }
 
-func compressedElementValue(element types.ISubmodelElement) (any, error) {
-	return compressedElementValueWithContext(element, idShortValue(element), dppSerializationContext{})
-}
-
 func compressedElementValueWithContext(element types.ISubmodelElement, idShortPath string, serializationContext dppSerializationContext) (any, error) {
 	valueOnly, err := basyxmodel.SubmodelElementToValueOnly(element)
 	if err != nil {
@@ -151,10 +147,6 @@ func dppCollectionFromSubmodel(submodel types.ISubmodel, serializationContext dp
 	result := dppElementBase(idShortOrID(submodel), "DataElementCollection", submodel.SemanticID())
 	result["elements"] = elements
 	return result, nil
-}
-
-func dppElementFromAAS(element types.ISubmodelElement) (map[string]any, error) {
-	return dppElementFromAASWithContext(element, idShortValue(element), dppSerializationContext{})
 }
 
 func dppElementFromAASWithContext(element types.ISubmodelElement, idShortPath string, serializationContext dppSerializationContext) (map[string]any, error) {
@@ -223,11 +215,6 @@ func dataElementCollection(collection *types.SubmodelElementCollection, idShortP
 	result := dppElementBase(idShortValue(collection), "DataElementCollection", collection.SemanticID())
 	result["elements"] = elements
 	return result, nil
-}
-
-func relatedResource(file *types.File) map[string]any {
-	result, _ := relatedResourceWithContext(file, idShortValue(file), dppSerializationContext{})
-	return result
 }
 
 func relatedResourceWithContext(file *types.File, idShortPath string, serializationContext dppSerializationContext) (map[string]any, error) {
