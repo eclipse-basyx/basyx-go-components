@@ -29,16 +29,22 @@ package dppapi
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
+	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 )
 
 func TestNewDPPRepositoryServiceWithRegistrySyncFlagCombinations(t *testing.T) {
@@ -351,6 +357,100 @@ func TestPreserveManagedFileValuesKeepsChangedExternalURL(t *testing.T) {
 	})
 	if got := dereferenceString(replacementFile.Value()); got != "https://files.example.test/replacement.pdf" {
 		t.Fatalf("replacement File value = %q, want changed external URL", got)
+	}
+}
+
+func TestSerializationContextLoaderBulkLoadsManagedAttachments(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repository, err := submodelrepositorydb.NewSubmodelDatabaseFromPools(db, db, nil, "off")
+	if err != nil {
+		t.Fatalf("NewSubmodelDatabaseFromPools() error = %v", err)
+	}
+	first := types.NewSubmodel("urn:example:first")
+	first.SetSubmodelElements([]types.ISubmodelElement{testFileElement("manual", "/aasx/files/manual")})
+	second := types.NewSubmodel("urn:example:second")
+	collection := types.NewSubmodelElementCollection()
+	collection.SetValue([]types.ISubmodelElement{testFileElement("datasheet", "/aasx/files/datasheet")})
+	collectionIDShort := "documents"
+	collection.SetIDShort(&collectionIDShort)
+	second.SetSubmodelElements([]types.ISubmodelElement{collection})
+
+	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL([]string{first.ID(), second.ID()})
+	if err != nil {
+		t.Fatalf("BuildManagedFileAttachmentPathsBySubmodelIDsSQL() error = %v", err)
+	}
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WillReturnRows(
+		sqlmock.NewRows([]string{"submodel_identifier", "idshort_path"}).
+			AddRow(first.ID(), "manual").
+			AddRow(second.ID(), "documents.datasheet"),
+	)
+
+	service := NewDPPRepositoryService(nil, repository)
+	loader, err := service.serializationContextLoader(t.Context(), []types.ISubmodel{first, second}, false)
+	if err != nil {
+		t.Fatalf("serializationContextLoader() error = %v", err)
+	}
+	firstContext, _ := loader(first)
+	secondContext, _ := loader(second)
+	if !firstContext.isManagedAttachment("manual", "") {
+		t.Fatal("first managed attachment path was not loaded")
+	}
+	if !secondContext.isManagedAttachment("documents.datasheet", "") {
+		t.Fatal("nested managed attachment path was not loaded")
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("attachment lookup queries = %v", err)
+	}
+}
+
+func TestSerializationContextLoaderSkipsSubmodelsWithoutFiles(t *testing.T) {
+	submodel := types.NewSubmodel("urn:example:scalar")
+	submodel.SetSubmodelElements([]types.ISubmodelElement{scalarProperty("name", "value", types.DataTypeDefXSDString)})
+	service := NewDPPRepositoryService(nil, nil)
+	loader, err := service.serializationContextLoader(t.Context(), []types.ISubmodel{submodel}, false)
+	if err != nil {
+		t.Fatalf("serializationContextLoader() error = %v", err)
+	}
+	serializationContext, err := loader(submodel)
+	if err != nil || serializationContext.submodelID != submodel.ID() {
+		t.Fatalf("serialization context = %#v, error = %v", serializationContext, err)
+	}
+}
+
+func TestPreserveManagedAttachmentsMapsLookupFailureToServerError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repository, err := submodelrepositorydb.NewSubmodelDatabaseFromPools(db, db, nil, "off")
+	if err != nil {
+		t.Fatalf("NewSubmodelDatabaseFromPools() error = %v", err)
+	}
+	current := types.NewSubmodel("urn:example:files")
+	current.SetSubmodelElements([]types.ISubmodelElement{testFileElement("manual", "/aasx/files/manual")})
+	replacement := types.NewSubmodel(current.ID())
+	replacement.SetSubmodelElements([]types.ISubmodelElement{testFileElement("manual", "/aasx/files/manual")})
+	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL([]string{current.ID()})
+	if err != nil {
+		t.Fatalf("BuildManagedFileAttachmentPathsBySubmodelIDsSQL() error = %v", err)
+	}
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WillReturnError(errors.New("reader unavailable"))
+
+	service := NewDPPRepositoryService(nil, repository)
+	err = service.preserveManagedAttachments(t.Context(), []types.ISubmodel{replacement}, []types.ISubmodel{current})
+	if err == nil {
+		t.Fatal("preserveManagedAttachments() error = nil")
+	}
+	if status := errorStatus(err, http.StatusBadRequest); status != http.StatusInternalServerError {
+		t.Fatalf("preserveManagedAttachments() status = %d, want %d", status, http.StatusInternalServerError)
+	}
+	if code := errorCode(err); code != "DPP-UPDDPP-PRESERVEFILES-LOADPATHS" {
+		t.Fatalf("preserveManagedAttachments() code = %q", code)
 	}
 }
 

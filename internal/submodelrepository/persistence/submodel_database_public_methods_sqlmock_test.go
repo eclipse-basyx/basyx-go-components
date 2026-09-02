@@ -75,23 +75,33 @@ func TestManagedFileAttachmentPathsBulkLoadsCurrentAndLegacyAttachments(t *testi
 	defer func() { _ = db.Close() }()
 
 	submodelID := "urn:sm:files"
-	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsSQL(submodelID)
+	secondSubmodelID := "urn:sm:more-files"
+	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL([]string{submodelID, secondSubmodelID})
 	require.NoError(t, err)
 	require.Contains(t, query, `"fr"."binary_content_id" IS NOT NULL`)
 	require.Contains(t, query, `"fd"."file_oid" IS NOT NULL`)
 	mock.ExpectQuery(regexp.QuoteMeta(query)).
-		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}).
-			AddRow("documents.manual").
-			AddRow("legacyFile"))
+		WillReturnRows(sqlmock.NewRows([]string{"submodel_identifier", "idshort_path"}).
+			AddRow(submodelID, "documents.manual").
+			AddRow(submodelID, "legacyFile").
+			AddRow(secondSubmodelID, "datasheet"))
 
 	sut := &SubmodelDatabase{db: db}
-	paths, err := sut.ManagedFileAttachmentPaths(t.Context(), submodelID)
+	paths, err := sut.ManagedFileAttachmentPathsBySubmodelIDs(t.Context(), []string{submodelID, secondSubmodelID})
 	require.NoError(t, err)
 	require.Equal(t, map[string]struct{}{
 		"documents.manual": {},
 		"legacyFile":       {},
-	}, paths)
+	}, paths[submodelID])
+	require.Equal(t, map[string]struct{}{"datasheet": {}}, paths[secondSubmodelID])
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestManagedFileAttachmentPathsBySubmodelIDsSkipsEmptyLookup(t *testing.T) {
+	sut := &SubmodelDatabase{}
+	paths, err := sut.ManagedFileAttachmentPathsBySubmodelIDs(t.Context(), nil)
+	require.NoError(t, err)
+	require.Empty(t, paths)
 }
 
 func TestGetSubmodelsDatabaseQueryError(t *testing.T) {

@@ -561,16 +561,31 @@ func (s *DPPRepositoryService) preserveManagedAttachments(
 	currentContent []types.ISubmodel,
 ) error {
 	currentByID, currentBySemanticID := indexCurrentDPPSubmodels(nil, currentContent)
+	type attachmentPair struct {
+		current     types.ISubmodel
+		replacement types.ISubmodel
+	}
+	pairs := make([]attachmentPair, 0, len(replacements))
+	currentWithFiles := make([]types.ISubmodel, 0, len(replacements))
 	for _, replacement := range replacements {
 		current := matchingCurrentDPPSubmodel(replacement, currentByID, currentBySemanticID)
-		if current == nil {
+		if current == nil || !submodelContainsFile(current) || !submodelContainsFile(replacement) {
 			continue
 		}
-		serializationContext, err := s.serializationContext(ctx, current.ID(), false)
-		if err != nil {
-			return fmt.Errorf("DPP-UPDDPP-PRESERVEFILES-LOADPATHS load managed attachment paths: %w", err)
-		}
-		preserveManagedFileValues(current, replacement, serializationContext)
+		pairs = append(pairs, attachmentPair{current: current, replacement: replacement})
+		currentWithFiles = append(currentWithFiles, current)
+	}
+	contextLoader, err := s.serializationContextLoader(ctx, currentWithFiles, false)
+	if err != nil {
+		return newDPPHTTPError(
+			http.StatusInternalServerError,
+			"DPP-UPDDPP-PRESERVEFILES-LOADPATHS",
+			"load managed attachment paths: "+err.Error(),
+		)
+	}
+	for _, pair := range pairs {
+		serializationContext, _ := contextLoader(pair.current)
+		preserveManagedFileValues(pair.current, pair.replacement, serializationContext)
 	}
 	return nil
 }
@@ -618,6 +633,32 @@ func collectFileByPath(element types.ISubmodelElement, path string, files map[st
 		for index, child := range typed.Value() {
 			collectFileByPath(child, fmt.Sprintf("%s[%d]", path, index), files)
 		}
+	}
+}
+
+func submodelContainsFile(submodel types.ISubmodel) bool {
+	return elementsContainFile(submodel.SubmodelElements())
+}
+
+func elementsContainFile(elements []types.ISubmodelElement) bool {
+	for _, element := range elements {
+		if elementContainsFile(element) {
+			return true
+		}
+	}
+	return false
+}
+
+func elementContainsFile(element types.ISubmodelElement) bool {
+	switch typed := element.(type) {
+	case *types.File:
+		return true
+	case *types.SubmodelElementCollection:
+		return elementsContainFile(typed.Value())
+	case *types.SubmodelElementList:
+		return elementsContainFile(typed.Value())
+	default:
+		return false
 	}
 }
 
@@ -819,9 +860,12 @@ func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
-	serializationContext, err := s.serializationContext(ctx, submodelID, false)
-	if err != nil {
-		return mapPersistenceError(err, http.StatusInternalServerError), nil
+	serializationContext := newDPPSerializationContext(ctx, submodelID, false, nil)
+	if elementContainsFile(element) {
+		serializationContext, err = s.serializationContext(ctx, submodelID, false)
+		if err != nil {
+			return mapPersistenceError(err, http.StatusInternalServerError), nil
+		}
 	}
 	body, err := elementResponseWithContext(
 		element, normalizeRepresentation(representation), elementIDPath, idShortPath, serializationContext,
@@ -1020,9 +1064,11 @@ func (s *DPPRepositoryService) composeDPP(ctx context.Context, dppID string, rep
 	if err != nil {
 		return nil, err
 	}
-	return composeResolvedDPPWithContext(resolved, representation, func(submodel types.ISubmodel) (dppSerializationContext, error) {
-		return s.serializationContext(ctx, submodel.ID(), !at.IsZero())
-	})
+	contextLoader, err := s.serializationContextLoader(ctx, resolved.submodels, !at.IsZero())
+	if err != nil {
+		return nil, err
+	}
+	return composeResolvedDPPWithContext(resolved, representation, contextLoader)
 }
 
 func composeResolvedDPP(resolved resolvedDPP, representation Representation) (dppDocument, error) {
@@ -1111,18 +1157,58 @@ func (s *DPPRepositoryService) serializationContext(
 	submodelID string,
 	historical bool,
 ) (dppSerializationContext, error) {
-	managedPaths, err := s.submodelRepo.ManagedFileAttachmentPaths(ctx, submodelID)
+	managedPathsBySubmodel, err := s.submodelRepo.ManagedFileAttachmentPathsBySubmodelIDs(ctx, []string{submodelID})
 	if err != nil {
 		return dppSerializationContext{}, fmt.Errorf(
 			"DPP-FILEURL-LOADMANAGEDPATHS load managed attachment paths for %s: %w", submodelID, err,
 		)
 	}
+	return newDPPSerializationContext(ctx, submodelID, historical, managedPathsBySubmodel[submodelID]), nil
+}
+
+func (s *DPPRepositoryService) serializationContextLoader(
+	ctx context.Context,
+	submodels []types.ISubmodel,
+	historical bool,
+) (dppSerializationContextLoader, error) {
+	submodelIDs := make([]string, 0, len(submodels))
+	seen := make(map[string]struct{}, len(submodels))
+	for _, submodel := range submodels {
+		if !submodelContainsFile(submodel) {
+			continue
+		}
+		if _, exists := seen[submodel.ID()]; exists {
+			continue
+		}
+		seen[submodel.ID()] = struct{}{}
+		submodelIDs = append(submodelIDs, submodel.ID())
+	}
+	if len(submodelIDs) == 0 {
+		return func(submodel types.ISubmodel) (dppSerializationContext, error) {
+			return newDPPSerializationContext(ctx, submodel.ID(), historical, nil), nil
+		}, nil
+	}
+	managedPaths, err := s.submodelRepo.ManagedFileAttachmentPathsBySubmodelIDs(ctx, submodelIDs)
+	if err != nil {
+		return nil, fmt.Errorf("DPP-FILEURL-LOADMANAGEDPATHS load managed attachment paths: %w", err)
+	}
+	return func(submodel types.ISubmodel) (dppSerializationContext, error) {
+		return newDPPSerializationContext(ctx, submodel.ID(), historical, managedPaths[submodel.ID()]), nil
+	}, nil
+}
+
+func newDPPSerializationContext(
+	ctx context.Context,
+	submodelID string,
+	historical bool,
+	managedPaths map[string]struct{},
+) dppSerializationContext {
 	return dppSerializationContext{
 		submodelID:               submodelID,
 		externalBaseURL:          common.ExternalBaseURLFromContext(ctx),
 		managedAttachmentPaths:   managedPaths,
 		managedPathHistoryLookup: historical,
-	}, nil
+	}
 }
 
 func (s *DPPRepositoryService) resolveSubmodels(ctx context.Context, dppID string, at time.Time) (resolvedDPP, error) {

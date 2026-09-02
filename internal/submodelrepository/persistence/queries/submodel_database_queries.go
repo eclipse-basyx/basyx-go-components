@@ -432,8 +432,8 @@ func BuildFileAttachmentExistsSQL(submodelID string, idShortPath string) (string
 		ToSQL()
 }
 
-// BuildManagedFileAttachmentPathsSQL builds a bulk lookup for current and legacy managed File attachments.
-func BuildManagedFileAttachmentPathsSQL(submodelID string) (string, []any, error) {
+// BuildManagedFileAttachmentPathsBySubmodelIDsSQL builds a set-based lookup for current and legacy managed File attachments.
+func BuildManagedFileAttachmentPathsBySubmodelIDsSQL(submodelIDs []string) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
 	sm := goqu.T("submodel").As("sm")
 	sme := goqu.T("submodel_element").As("sme")
@@ -446,12 +446,12 @@ func BuildManagedFileAttachmentPathsSQL(submodelID string) (string, []any, error
 		Join(fe, goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
 		LeftJoin(fd, goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
 		LeftJoin(fr, goqu.On(goqu.I("fr.file_element_id").Eq(goqu.I("sme.id")))).
-		Select(goqu.I("sme.idshort_path")).
+		Select(goqu.I("sm.submodel_identifier"), goqu.I("sme.idshort_path")).
 		Where(
-			goqu.I("sm.submodel_identifier").Eq(submodelID),
+			goqu.I("sm.submodel_identifier").In(submodelIDs),
 			goqu.Or(goqu.I("fr.binary_content_id").IsNotNull(), goqu.I("fd.file_oid").IsNotNull()),
 		).
-		Order(goqu.I("sme.idshort_path").Asc()).
+		Order(goqu.I("sm.submodel_identifier").Asc(), goqu.I("sme.idshort_path").Asc()).
 		ToSQL()
 }
 
