@@ -29,10 +29,22 @@ package dppapi
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	basyxmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
+
+type dppSerializationContext struct {
+	submodelID               string
+	externalBaseURL          string
+	managedAttachmentPaths   map[string]struct{}
+	managedPathHistoryLookup bool
+}
 
 func composeHeader(metadata types.ISubmodel) (dppDocument, error) {
 	valueOnly, err := basyxmodel.SubmodelToValueOnly(metadata)
@@ -52,6 +64,10 @@ func composeHeader(metadata types.ISubmodel) (dppDocument, error) {
 }
 
 func compressedContent(submodel types.ISubmodel) (any, error) {
+	return compressedContentWithContext(submodel, dppSerializationContext{})
+}
+
+func compressedContentWithContext(submodel types.ISubmodel, serializationContext dppSerializationContext) (any, error) {
 	valueOnly, err := basyxmodel.SubmodelToValueOnly(submodel)
 	if err != nil {
 		return nil, fmt.Errorf("DPP-CONTENT-COMPRESSED convert submodel value-only: %w", err)
@@ -65,11 +81,13 @@ func compressedContent(submodel types.ISubmodel) (any, error) {
 		return nil, fmt.Errorf("DPP-CONTENT-UNMARSHAL unmarshal submodel value-only: %w", err)
 	}
 	normalizeValueOnly(content)
-	enrichCompressedValue(content, submodel.SubmodelElements())
+	if err := enrichCompressedValue(content, submodel.SubmodelElements(), "", serializationContext); err != nil {
+		return nil, err
+	}
 	return content, nil
 }
 
-func compressedElementValue(element types.ISubmodelElement) (any, error) {
+func compressedElementValueWithContext(element types.ISubmodelElement, idShortPath string, serializationContext dppSerializationContext) (any, error) {
 	valueOnly, err := basyxmodel.SubmodelElementToValueOnly(element)
 	if err != nil {
 		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED convert element value-only: %w", err)
@@ -83,12 +101,18 @@ func compressedElementValue(element types.ISubmodelElement) (any, error) {
 		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED-UNMARSHAL unmarshal element value-only: %w", err)
 	}
 	normalizeValueOnly(content)
-	enrichCompressedElementValue(content, element)
+	if err := enrichCompressedElementValue(content, element, idShortPath, serializationContext); err != nil {
+		return nil, err
+	}
 	return content, nil
 }
 
 func fullContent(submodel types.ISubmodel) (any, error) {
-	content, err := dppCollectionFromSubmodel(submodel)
+	return fullContentWithContext(submodel, dppSerializationContext{})
+}
+
+func fullContentWithContext(submodel types.ISubmodel, serializationContext dppSerializationContext) (any, error) {
+	content, err := dppCollectionFromSubmodel(submodel, serializationContext)
 	if err != nil {
 		return nil, fmt.Errorf("DPP-CONTENT-FULL convert submodel to DPP expanded representation: %w", err)
 	}
@@ -117,8 +141,8 @@ func normalizeValueOnly(value any) {
 	}
 }
 
-func dppCollectionFromSubmodel(submodel types.ISubmodel) (map[string]any, error) {
-	elements, err := dppElementsFromAAS(submodel.SubmodelElements())
+func dppCollectionFromSubmodel(submodel types.ISubmodel, serializationContext dppSerializationContext) (map[string]any, error) {
+	elements, err := dppElementsFromAAS(submodel.SubmodelElements(), "", serializationContext)
 	if err != nil {
 		return nil, err
 	}
@@ -127,18 +151,18 @@ func dppCollectionFromSubmodel(submodel types.ISubmodel) (map[string]any, error)
 	return result, nil
 }
 
-func dppElementFromAAS(element types.ISubmodelElement) (map[string]any, error) {
+func dppElementFromAASWithContext(element types.ISubmodelElement, idShortPath string, serializationContext dppSerializationContext) (map[string]any, error) {
 	switch typed := element.(type) {
 	case *types.Property:
 		return singleValuedDataElement(typed), nil
 	case *types.SubmodelElementList:
-		return multiValuedDataElement(typed)
+		return multiValuedDataElement(typed, idShortPath, serializationContext)
 	case *types.MultiLanguageProperty:
 		return multiLanguageDataElement(typed), nil
 	case *types.SubmodelElementCollection:
-		return dataElementCollection(typed)
+		return dataElementCollection(typed, idShortPath, serializationContext)
 	case *types.File:
-		return relatedResource(typed), nil
+		return relatedResourceWithContext(typed, idShortPath, serializationContext)
 	default:
 		return nil, fmt.Errorf("DPP-ELEM-FULL-UNSUPPORTED unsupported AAS element type %v", element.ModelType())
 	}
@@ -151,14 +175,15 @@ func singleValuedDataElement(property *types.Property) map[string]any {
 	return result
 }
 
-func multiValuedDataElement(list *types.SubmodelElementList) (map[string]any, error) {
+func multiValuedDataElement(list *types.SubmodelElementList, idShortPath string, serializationContext dppSerializationContext) (map[string]any, error) {
 	result := dppElementBase(idShortValue(list), "MultiValuedDataElement", list.SemanticID())
 	if valueType, ok := dppListValueType(list); ok {
 		result["valueDataType"] = valueType
 	}
 	elements := make([]map[string]any, 0, len(list.Value()))
 	for index, child := range list.Value() {
-		element, err := dppElementFromAAS(child)
+		childPath := fmt.Sprintf("%s[%d]", idShortPath, index)
+		element, err := dppElementFromAASWithContext(child, childPath, serializationContext)
 		if err != nil {
 			return nil, err
 		}
@@ -184,8 +209,8 @@ func multiLanguageDataElement(property *types.MultiLanguageProperty) map[string]
 	return result
 }
 
-func dataElementCollection(collection *types.SubmodelElementCollection) (map[string]any, error) {
-	elements, err := dppElementsFromAAS(collection.Value())
+func dataElementCollection(collection *types.SubmodelElementCollection, idShortPath string, serializationContext dppSerializationContext) (map[string]any, error) {
+	elements, err := dppElementsFromAAS(collection.Value(), idShortPath, serializationContext)
 	if err != nil {
 		return nil, err
 	}
@@ -194,29 +219,89 @@ func dataElementCollection(collection *types.SubmodelElementCollection) (map[str
 	return result, nil
 }
 
-func relatedResource(file *types.File) map[string]any {
+func relatedResourceWithContext(file *types.File, idShortPath string, serializationContext dppSerializationContext) (map[string]any, error) {
 	result := dppElementBase(idShortValue(file), "RelatedResource", file.SemanticID())
 	result["contentType"] = dereferenceString(file.ContentType())
-	result["url"] = dereferenceString(file.Value())
+	attachmentURL, err := relatedResourceURL(file, idShortPath, serializationContext)
+	if err != nil {
+		return nil, err
+	}
+	result["url"] = attachmentURL
 	if resourceTitle := extensionValue(file.Extensions(), dppResourceTitleExtensionName); resourceTitle != "" {
 		result["resourceTitle"] = resourceTitle
 	}
 	if language := extensionValue(file.Extensions(), dppLanguageExtensionName); language != "" {
 		result["language"] = language
 	}
-	return result
+	return result, nil
 }
 
-func dppElementsFromAAS(elements []types.ISubmodelElement) ([]map[string]any, error) {
+func dppElementsFromAAS(elements []types.ISubmodelElement, parentPath string, serializationContext dppSerializationContext) ([]map[string]any, error) {
 	value := make([]map[string]any, 0, len(elements))
 	for _, element := range elements {
-		mapped, err := dppElementFromAAS(element)
+		path := nestedIDShortPath(parentPath, idShortValue(element))
+		mapped, err := dppElementFromAASWithContext(element, path, serializationContext)
 		if err != nil {
 			return nil, err
 		}
 		value = append(value, mapped)
 	}
 	return value, nil
+}
+
+func nestedIDShortPath(parentPath string, idShort string) string {
+	if parentPath == "" {
+		return idShort
+	}
+	if idShort == "" {
+		return parentPath
+	}
+	return parentPath + "." + idShort
+}
+
+func relatedResourceURL(file *types.File, idShortPath string, serializationContext dppSerializationContext) (string, error) {
+	value := dereferenceString(file.Value())
+	if isExternalResourceURL(value) || !serializationContext.isManagedAttachment(idShortPath, value) {
+		return value, nil
+	}
+	if serializationContext.externalBaseURL == "" {
+		return "", newDPPHTTPError(
+			http.StatusInternalServerError,
+			"DPP-FILEURL-MISSINGEXTERNALURL",
+			"managed attachment requires a valid general.externalUrl",
+		)
+	}
+	return fmt.Sprintf(
+		"%s/submodels/%s/submodel-elements/%s/attachment",
+		serializationContext.externalBaseURL,
+		common.EncodeString(serializationContext.submodelID),
+		url.PathEscape(idShortPath),
+	), nil
+}
+
+func (c dppSerializationContext) isManagedAttachment(idShortPath string, value string) bool {
+	if _, managed := c.managedAttachmentPaths[idShortPath]; managed {
+		return true
+	}
+	return c.managedPathHistoryLookup && isHistoricalManagedAttachmentValue(value)
+}
+
+func isHistoricalManagedAttachmentValue(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if strings.HasPrefix(trimmed, "/aasx/files/") {
+		return true
+	}
+	oid, err := strconv.ParseInt(trimmed, 10, 64)
+	return err == nil && oid > 0
+}
+
+func isExternalResourceURL(value string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	return scheme == "http" || scheme == "https"
 }
 
 func dppElementBase(elementID string, objectType string, semanticID types.IReference) map[string]any {
@@ -332,51 +417,65 @@ func dereferenceString(value *string) string {
 	return *value
 }
 
-func enrichCompressedValue(value any, elements []types.ISubmodelElement) {
+func enrichCompressedValue(value any, elements []types.ISubmodelElement, parentPath string, serializationContext dppSerializationContext) error {
 	object, ok := value.(map[string]any)
 	if !ok {
-		return
+		return nil
 	}
 	for _, element := range elements {
 		idShort := idShortValue(element)
 		if idShort == "" {
 			continue
 		}
-		enrichCompressedElementValue(object[idShort], element)
+		path := nestedIDShortPath(parentPath, idShort)
+		if err := enrichCompressedElementValue(object[idShort], element, path, serializationContext); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func enrichCompressedElementValue(value any, element types.ISubmodelElement) {
+func enrichCompressedElementValue(value any, element types.ISubmodelElement, idShortPath string, serializationContext dppSerializationContext) error {
 	switch typed := element.(type) {
 	case *types.File:
-		enrichCompressedFileValue(value, typed)
+		return enrichCompressedFileValue(value, typed, idShortPath, serializationContext)
 	case *types.SubmodelElementCollection:
-		enrichCompressedValue(value, typed.Value())
+		return enrichCompressedValue(value, typed.Value(), idShortPath, serializationContext)
 	case *types.SubmodelElementList:
 		items, ok := value.([]any)
 		if !ok {
-			return
+			return nil
 		}
 		for index, child := range typed.Value() {
 			if index >= len(items) {
-				return
+				return nil
 			}
-			enrichCompressedElementValue(items[index], child)
+			childPath := fmt.Sprintf("%s[%d]", idShortPath, index)
+			if err := enrichCompressedElementValue(items[index], child, childPath, serializationContext); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
-func enrichCompressedFileValue(value any, file *types.File) {
+func enrichCompressedFileValue(value any, file *types.File, idShortPath string, serializationContext dppSerializationContext) error {
 	object, ok := value.(map[string]any)
 	if !ok {
-		return
+		return nil
 	}
+	attachmentURL, err := relatedResourceURL(file, idShortPath, serializationContext)
+	if err != nil {
+		return err
+	}
+	object["url"] = attachmentURL
 	if resourceTitle := extensionValue(file.Extensions(), dppResourceTitleExtensionName); resourceTitle != "" {
 		object["resourceTitle"] = resourceTitle
 	}
 	if language := extensionValue(file.Extensions(), dppLanguageExtensionName); language != "" {
 		object["language"] = language
 	}
+	return nil
 }
 
 func extensionValue(extensions []types.IExtension, name string) string {

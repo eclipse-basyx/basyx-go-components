@@ -33,10 +33,13 @@ import (
 	"log/slog"
 	"net/http"
 
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
+	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	dppapi "github.com/eclipse-basyx/basyx-go-components/pkg/dppapiservice/go"
 	"github.com/go-chi/chi/v5"
@@ -56,6 +59,44 @@ import (
 //   - error: Setup error if security or router assembly fails
 func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) (http.Handler, error) {
 	dppService := dppapi.NewDPPRepositoryService(aasRepo, submodelRepo)
+	return newHTTPHandler(ctx, cfg, openapiSpec, dppService)
+}
+
+// NewHTTPHandlerWithRegistrySync assembles the DPP API handler with atomic descriptor synchronization.
+//
+// Parameters:
+//   - ctx: Request-independent context used for security setup
+//   - cfg: Runtime configuration for routing, security, CORS, and context path
+//   - openapiSpec: Filesystem containing the OpenAPI specification used for Swagger UI
+//   - aasRepo: Asset Administration Shell repository persistence dependency
+//   - submodelRepo: Submodel repository persistence dependency
+//   - aasRegistry: Optional AAS registry persistence dependency, required when enabled
+//   - submodelRegistry: Optional Submodel registry persistence dependency, required when enabled
+//   - registrySyncConfig: Validated descriptor synchronization configuration
+//
+// Returns:
+//   - http.Handler: Configured root HTTP handler for the DPP API service
+//   - error: Setup error if synchronization, security, or router assembly fails
+func NewHTTPHandlerWithRegistrySync(
+	ctx context.Context,
+	cfg *common.Config,
+	openapiSpec fs.FS,
+	aasRepo *aasrepositorydb.AssetAdministrationShellDatabase,
+	submodelRepo *submodelrepositorydb.SubmodelDatabase,
+	aasRegistry *aasregistrydb.PostgreSQLAASRegistryDatabase,
+	submodelRegistry *smregistrydb.PostgreSQLSMDatabase,
+	registrySyncConfig registrysync.Config,
+) (http.Handler, error) {
+	dppService, err := dppapi.NewDPPRepositoryServiceWithRegistrySync(
+		aasRepo, submodelRepo, aasRegistry, submodelRegistry, registrySyncConfig,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return newHTTPHandler(ctx, cfg, openapiSpec, dppService)
+}
+
+func newHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, dppService *dppapi.DPPRepositoryService) (http.Handler, error) {
 	dppRouter := dppapi.NewDPPRepositoryRouter(dppService)
 	contextPath := common.NormalizeBasePath(cfg.Server.ContextPath)
 

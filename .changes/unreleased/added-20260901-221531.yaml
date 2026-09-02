@@ -1,0 +1,7 @@
+kind: added
+body: Synchronize DPP API writes with AAS and Submodel registries and product discovery.
+time: 2026-09-01T22:15:31.117866+02:00
+custom:
+    Impact: High
+    PullRequest: 650
+    SecurityImpact: DPP write authorization now also covers the configured internal AAS Registry, Submodel Registry, and Discovery mutations; their independent read policies continue to control visibility.

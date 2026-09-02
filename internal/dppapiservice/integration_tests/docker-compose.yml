@@ -7,6 +7,10 @@ services:
     volumes:
       - ./config.json:/config/config.json:ro
     environment:
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://127.0.0.1:${DPP_IT_AAS_PORT:-18082}
       - POSTGRES_READER_HOST=db
       - POSTGRES_READER_PORT=5432
       - POSTGRES_READER_USER=admin
@@ -17,6 +21,27 @@ services:
       - POSTGRES_READER_MAXIDLECONNECTIONS=5
     ports:
       - "127.0.0.1:${DPP_IT_PORT:-18080}:8080"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
+  aas-environment:
+    build:
+      context: ../../..
+      dockerfile: cmd/aasenvironmentservice/Dockerfile
+    environment:
+      - SERVER_PORT=8082
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDppLifecycleIT
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://127.0.0.1:${DPP_IT_AAS_PORT:-18082}
+    ports:
+      - "127.0.0.1:${DPP_IT_AAS_PORT:-18082}:8082"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully

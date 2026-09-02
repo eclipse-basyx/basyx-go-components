@@ -119,7 +119,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+	descriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(submodel)
 	if descriptorErr != nil {
 		return newSubmodelRepoErrorResponse(descriptorErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
 	}
@@ -187,7 +187,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 			return nil
 		}
 
-		descriptor, descriptorChanged, descriptorErr := s.syncConfig.changedSubmodelDescriptor(putResult.Previous, submodel)
+		descriptor, descriptorChanged, descriptorErr := s.syncConfig.ChangedSubmodelDescriptor(putResult.Previous, submodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -342,7 +342,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 			}
 		}
 
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(mergedSubmodel)
+		descriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(mergedSubmodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -433,7 +433,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 			return patchErr
 		}
 
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(mergedSubmodel)
+		descriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(mergedSubmodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -553,7 +553,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 		}
 
 		if len(aasDescriptor.Endpoints) == 0 {
-			aasDescriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpoints(aasID)
+			aasDescriptor.Endpoints = s.syncConfig.AASDescriptorEndpoints(aasID)
 		}
 
 		if upsertErr := s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(

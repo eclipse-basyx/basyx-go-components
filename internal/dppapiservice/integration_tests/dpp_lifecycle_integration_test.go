@@ -33,6 +33,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -43,6 +45,7 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -59,8 +62,9 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	requireDockerCompose(t)
 
 	port := reserveLocalPort(t)
+	aasPort := reserveLocalPort(t)
 	databasePort := reserveLocalPort(t)
-	composeEnv := dppComposeEnvironment{apiPort: port, databasePort: databasePort}
+	composeEnv := dppComposeEnvironment{apiPort: port, aasPort: aasPort, databasePort: databasePort}
 	projectName := fmt.Sprintf("dpp-lifecycle-it-%d", time.Now().UnixNano())
 	composeFile := "docker-compose.yml"
 	ctx, cancel := context.WithTimeout(context.TODO(), dppComposeTestTimeout)
@@ -73,7 +77,9 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	})
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	aasBaseURL := fmt.Sprintf("http://127.0.0.1:%d", aasPort)
 	waitForDPPAPI(t, ctx, baseURL)
+	waitForDPPAPI(t, ctx, aasBaseURL)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	now := time.Now().UTC().Truncate(time.Second)
@@ -83,9 +89,21 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	productID := "https://www.example.org/" + idSuffix
 	encodedProductID := encodedPathParam(productID)
 	document := lifecycleDPPDocument(dppID, productID, now)
+	rollbackDPPID := dppID + "/rollback"
+	insertConflictingAASDescriptor(t, databasePort, rollbackDPPID)
+	doJSONAny(
+		t, client, http.MethodPost, baseURL+"/v1/dpps", lifecycleDPPDocument(rollbackDPPID, productID+"/rollback", now),
+		http.StatusConflict,
+	)
+	assertAASIdentifierExists(t, databasePort, rollbackDPPID, false)
+	doJSON(
+		t, client, http.MethodDelete,
+		aasBaseURL+"/shell-descriptors/"+common.EncodeString(rollbackDPPID), nil, http.StatusNoContent,
+	)
 
 	createBody := doJSON(t, client, http.MethodPost, baseURL+"/v1/dpps", document, http.StatusCreated)
 	assertJSONPathEquals(t, createBody, "digitalProductPassportId", dppID)
+	assertRegistrySynchronization(t, client, aasBaseURL, dppID, productID)
 	generatedMetadataID := dppID + "/submodels/DppMetadata"
 	importedMetadataID := "https://www.example.org/submodels/dpp-metadata/" + idSuffix
 	renameSubmodel(t, databasePort, generatedMetadataID, importedMetadataID)
@@ -112,6 +130,17 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	createdVersionDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	createdVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, createdVersionDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, createdVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
+	assertDPPSectionPathEquals(t, createdVersionBody, lifecycleTechnicalDataSpec, "manual.url", "https://example.test/manual.pdf")
+
+	technicalDataSubmodelID := submodelIDBySemanticID(t, databasePort, dppID, lifecycleTechnicalDataSpec)
+	attachmentURL := fmt.Sprintf(
+		"%s/submodels/%s/submodel-elements/manual/attachment", aasBaseURL, common.EncodeString(technicalDataSubmodelID),
+	)
+	attachmentBytes := []byte("managed DPP attachment")
+	uploadAttachment(t, client, attachmentURL, "manual.txt", attachmentBytes)
+	managedReadBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
+	assertDPPSectionPathEquals(t, managedReadBody, lifecycleTechnicalDataSpec, "manual.url", attachmentURL)
+	assertAttachmentDownload(t, client, attachmentURL, attachmentBytes)
 
 	fullBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"?representation=full", nil, http.StatusOK)
 	assertFullDPPSectionObjectType(t, fullBody, lifecycleTechnicalDataSpec, "DataElementCollection")
@@ -123,8 +152,17 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPElementValue(t, fullBody, lifecycleTechnicalDataSpec, "warrantyMonths", "valueDataType", "xsd:long")
 	assertDPPElementValue(t, fullBody, lifecycleTechnicalDataSpec, "manual", "resourceTitle", "User Manual")
 	assertDPPElementValue(t, fullBody, lifecycleTechnicalDataSpec, "manual", "language", "en-GB")
+	assertDPPElementValue(t, fullBody, lifecycleTechnicalDataSpec, "manual", "url", attachmentURL)
 	assertFullDPPSectionObjectType(t, fullBody, lifecycleCarbonFootprintSpec, "DataElementCollection")
 	assertDPPElementObjectType(t, fullBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", "SingleValuedDataElement")
+	doJSON(
+		t, client, http.MethodDelete,
+		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(technicalDataSubmodelID), nil, http.StatusNoContent,
+	)
+	doJSON(
+		t, client, http.MethodDelete,
+		aasBaseURL+"/shell-descriptors/"+common.EncodeString(dppID), nil, http.StatusNoContent,
+	)
 
 	productBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dppsByProductId/"+encodedProductID, nil, http.StatusOK)
 	assertJSONPathEquals(t, productBody, "digitalProductPassportId", dppID)
@@ -145,6 +183,14 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	dimensionWidthPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "dimensions", "widthMm"))
 	updatedDimensionWidth := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+dimensionWidthPath, 121, http.StatusOK)
 	assertScalarEquals(t, updatedDimensionWidth, "121")
+	doJSONAny(
+		t, client, http.MethodGet,
+		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(technicalDataSubmodelID), nil, http.StatusNotFound,
+	)
+	doJSONAny(
+		t, client, http.MethodGet,
+		aasBaseURL+"/shell-descriptors/"+common.EncodeString(dppID), nil, http.StatusNotFound,
+	)
 
 	beforePatchDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	patchBody := doJSON(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, map[string]any{
@@ -157,6 +203,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "warrantyMonths", "36")
 	assertSubmodelIdentifierExists(t, databasePort, importedMetadataID, true)
 	assertSubmodelIdentifierExists(t, databasePort, generatedMetadataID, false)
+	assertRegistrySynchronization(t, client, aasBaseURL, dppID, productID)
 
 	prePatchVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforePatchDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, prePatchVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
@@ -164,6 +211,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	updatedVersionDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	updatedVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, updatedVersionDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, updatedVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme Updated GmbH")
+	assertDPPSectionPathEquals(t, updatedVersionBody, lifecycleTechnicalDataSpec, "manual.url", attachmentURL)
 
 	fullVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, updatedVersionDate, "full"), nil, http.StatusOK)
 	assertFullDPPSectionObjectType(t, fullVersionBody, lifecycleTechnicalDataSpec, "DataElementCollection")
@@ -197,12 +245,27 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPSectionArrayValue(t, readAfterElementUpdate, lifecycleTechnicalDataSpec, "serialNumbers", 0, "SN-UPDATED")
 	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4200.5")
 
+	carbonFootprintSubmodelID := submodelIDBySemanticID(t, databasePort, dppID, lifecycleCarbonFootprintSpec)
+	doJSON(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, map[string]any{
+		lifecycleCarbonFootprintSpec: nil,
+	}, http.StatusOK)
+	doJSONAny(
+		t, client, http.MethodGet,
+		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusNotFound,
+	)
+
 	beforeDeleteDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
+	doJSON(
+		t, client, http.MethodDelete,
+		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(technicalDataSubmodelID), nil, http.StatusNoContent,
+	)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNoContent)
 	preDeleteVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforeDeleteDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, preDeleteVersionBody, lifecycleTechnicalDataSpec, "energyClass", "B")
 	doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, latestDPPHistoryTimestamp(t, databasePort, dppID), "compressed"), nil, http.StatusNotFound)
 	doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNotFound)
+	doJSONAny(t, client, http.MethodGet, aasBaseURL+"/shell-descriptors/"+common.EncodeString(dppID), nil, http.StatusNotFound)
+	doJSONAny(t, client, http.MethodGet, aasBaseURL+"/submodel-descriptors/"+common.EncodeString(importedMetadataID), nil, http.StatusNotFound)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(optionalDPPID), nil, http.StatusNoContent)
 }
 
@@ -257,6 +320,7 @@ func requireDockerCompose(t *testing.T) {
 //nolint:revive
 type dppComposeEnvironment struct {
 	apiPort       int
+	aasPort       int
 	databasePort  int
 	keycloakPort  int
 	securityEnv   string
@@ -265,6 +329,9 @@ type dppComposeEnvironment struct {
 
 func (environment dppComposeEnvironment) values() []string {
 	values := []string{fmt.Sprintf("DPP_IT_PORT=%d", environment.apiPort)}
+	if environment.aasPort != 0 {
+		values = append(values, fmt.Sprintf("DPP_IT_AAS_PORT=%d", environment.aasPort))
+	}
 	if environment.databasePort != 0 {
 		values = append(values, fmt.Sprintf("DPP_IT_DB_PORT=%d", environment.databasePort))
 	}
@@ -411,6 +478,207 @@ func assertSubmodelIdentifierExists(t *testing.T, databasePort int, submodelID s
 	}
 	if (count == 1) != expected {
 		t.Fatalf("submodel identifier %q exists = %t, want %t", submodelID, count == 1, expected)
+	}
+}
+
+func insertConflictingAASDescriptor(t *testing.T, databasePort int, aasID string) {
+	t.Helper()
+	db := openDPPIntegrationDatabase(t, databasePort)
+	defer func() { _ = db.Close() }()
+	tx, err := db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("begin conflicting descriptor insert: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	dialect := goqu.Dialect("postgres")
+	rootQuery, rootArgs, err := dialect.Insert("descriptor").Rows(goqu.Record{}).Returning("id").ToSQL()
+	if err != nil {
+		t.Fatalf("build conflicting descriptor root insert: %v", err)
+	}
+	var descriptorID int64
+	if err = tx.QueryRowContext(t.Context(), rootQuery, rootArgs...).Scan(&descriptorID); err != nil {
+		t.Fatalf("insert conflicting descriptor root: %v", err)
+	}
+	query, args, err := dialect.Insert("aas_descriptor").Rows(goqu.Record{
+		"descriptor_id": descriptorID,
+		"id":            aasID,
+	}).ToSQL()
+	if err != nil {
+		t.Fatalf("build conflicting AAS descriptor insert: %v", err)
+	}
+	if _, err = tx.ExecContext(t.Context(), query, args...); err != nil {
+		t.Fatalf("insert conflicting AAS descriptor: %v", err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatalf("commit conflicting AAS descriptor: %v", err)
+	}
+}
+
+func assertAASIdentifierExists(t *testing.T, databasePort int, aasID string, expected bool) {
+	t.Helper()
+	db := openDPPIntegrationDatabase(t, databasePort)
+	defer func() { _ = db.Close() }()
+	query, args, err := goqu.Dialect("postgres").
+		From("aas").
+		Select(goqu.COUNT("*")).
+		Where(goqu.I("aas_id").Eq(aasID)).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("build AAS identifier query: %v", err)
+	}
+	var count int
+	if err = db.QueryRowContext(t.Context(), query, args...).Scan(&count); err != nil {
+		t.Fatalf("query AAS identifier %q: %v", aasID, err)
+	}
+	if (count == 1) != expected {
+		t.Fatalf("AAS identifier %q exists = %t, want %t", aasID, count == 1, expected)
+	}
+}
+
+func assertRegistrySynchronization(t *testing.T, client *http.Client, aasBaseURL string, dppID string, productID string) {
+	t.Helper()
+	descriptor := doJSON(
+		t, client, http.MethodGet, aasBaseURL+"/shell-descriptors/"+common.EncodeString(dppID), nil, http.StatusOK,
+	)
+	assertJSONPathEquals(t, descriptor, "id", dppID)
+
+	submodelDescriptors, ok := descriptor["submodelDescriptors"].([]any)
+	if !ok || len(submodelDescriptors) < 2 {
+		t.Fatalf("submodelDescriptors = %#v, want DPP metadata and content descriptors", descriptor["submodelDescriptors"])
+	}
+	for _, rawDescriptor := range submodelDescriptors {
+		submodelDescriptor, ok := rawDescriptor.(map[string]any)
+		if !ok {
+			t.Fatalf("submodel descriptor = %#v, want object", rawDescriptor)
+		}
+		submodelID, ok := submodelDescriptor["id"].(string)
+		if !ok || submodelID == "" {
+			t.Fatalf("submodel descriptor id = %#v, want string", submodelDescriptor["id"])
+		}
+		doJSON(t, client, http.MethodGet, aasBaseURL+"/submodel-descriptors/"+common.EncodeString(submodelID), nil, http.StatusOK)
+	}
+
+	links := doJSONAny(
+		t, client, http.MethodGet, aasBaseURL+"/lookup/shells/"+common.EncodeString(dppID), nil, http.StatusOK,
+	)
+	linkItems, ok := links.([]any)
+	if !ok {
+		t.Fatalf("discovery links = %#v, want array", links)
+	}
+	for _, rawLink := range linkItems {
+		link, ok := rawLink.(map[string]any)
+		if ok && link["name"] == "globalAssetId" && link["value"] == productID {
+			return
+		}
+	}
+	t.Fatalf("discovery links = %#v, want globalAssetId %q", links, productID)
+}
+
+func submodelIDBySemanticID(t *testing.T, databasePort int, dppID string, semanticID string) string {
+	t.Helper()
+	db := openDPPIntegrationDatabase(t, databasePort)
+	defer func() { _ = db.Close() }()
+
+	query, args, err := goqu.Dialect("postgres").
+		From(goqu.T("aas").As("aas")).
+		Join(
+			goqu.T("aas_submodel_reference").As("submodel_reference"),
+			goqu.On(goqu.I("submodel_reference.aas_id").Eq(goqu.I("aas.id"))),
+		).
+		Join(
+			goqu.T("aas_submodel_reference_key").As("submodel_reference_key"),
+			goqu.On(goqu.I("submodel_reference_key.reference_id").Eq(goqu.I("submodel_reference.id"))),
+		).
+		Join(
+			goqu.T("submodel").As("sm"),
+			goqu.On(goqu.I("sm.submodel_identifier").Eq(goqu.I("submodel_reference_key.value"))),
+		).
+		Join(
+			goqu.T("submodel_semantic_id_reference_key").As("semantic_key"),
+			goqu.On(goqu.I("semantic_key.reference_id").Eq(goqu.I("sm.id"))),
+		).
+		Select(goqu.I("sm.submodel_identifier")).
+		Distinct().
+		Where(
+			goqu.I("aas.aas_id").Eq(dppID),
+			goqu.I("semantic_key.value").Eq(semanticID),
+		).
+		Order(goqu.I("sm.submodel_identifier").Asc()).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("build semantic submodel query: %v", err)
+	}
+	rows, err := db.QueryContext(t.Context(), query, args...)
+	if err != nil {
+		t.Fatalf("read submodel for DPP %q and semantic ID %q: %v", dppID, semanticID, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	submodelIDs := make([]string, 0, 1)
+	for rows.Next() {
+		var submodelID string
+		if err = rows.Scan(&submodelID); err != nil {
+			t.Fatalf("scan submodel for DPP %q and semantic ID %q: %v", dppID, semanticID, err)
+		}
+		submodelIDs = append(submodelIDs, submodelID)
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatalf("iterate submodels for DPP %q and semantic ID %q: %v", dppID, semanticID, err)
+	}
+	if len(submodelIDs) != 1 {
+		t.Fatalf("submodels for DPP %q and semantic ID %q = %v, want exactly one", dppID, semanticID, submodelIDs)
+	}
+	return submodelIDs[0]
+}
+
+func uploadAttachment(t *testing.T, client *http.Client, attachmentURL string, fileName string, payload []byte) {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", fileName)
+	if err != nil {
+		t.Fatalf("create attachment form file: %v", err)
+	}
+	if _, err = part.Write(payload); err != nil {
+		t.Fatalf("write attachment form file: %v", err)
+	}
+	if err = writer.WriteField("fileName", fileName); err != nil {
+		t.Fatalf("write attachment filename: %v", err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatalf("close attachment form: %v", err)
+	}
+
+	request, err := http.NewRequest(http.MethodPut, attachmentURL, body)
+	if err != nil {
+		t.Fatalf("create attachment upload request: %v", err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response, err := client.Do(request) //nolint:gosec
+	if err != nil {
+		t.Fatalf("upload attachment: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusNoContent {
+		responseBody, _ := io.ReadAll(response.Body)
+		t.Fatalf("upload attachment status = %d, want %d: %s", response.StatusCode, http.StatusNoContent, responseBody)
+	}
+}
+
+func assertAttachmentDownload(t *testing.T, client *http.Client, attachmentURL string, expected []byte) {
+	t.Helper()
+	response, err := client.Get(attachmentURL) //nolint:gosec
+	if err != nil {
+		t.Fatalf("download attachment: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	actual, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read attachment download: %v", err)
+	}
+	if response.StatusCode != http.StatusOK || !bytes.Equal(actual, expected) {
+		t.Fatalf("attachment download status = %d, body = %q", response.StatusCode, actual)
 	}
 }
 

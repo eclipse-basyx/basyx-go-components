@@ -63,6 +63,56 @@ func (s *SubmodelDatabase) FileAttachmentExists(submodelID string, idShortPath s
 	return fileOID.Valid, nil
 }
 
+// ManagedFileAttachmentPaths returns all canonical idShort paths backed by managed attachment bytes.
+func (s *SubmodelDatabase) ManagedFileAttachmentPaths(ctx context.Context, submodelID string) (map[string]struct{}, error) {
+	pathsBySubmodel, err := s.ManagedFileAttachmentPathsBySubmodelIDs(ctx, []string{submodelID})
+	if err != nil {
+		return nil, err
+	}
+	return pathsBySubmodel[submodelID], nil
+}
+
+// ManagedFileAttachmentPathsBySubmodelIDs returns canonical managed attachment paths grouped by Submodel ID.
+func (s *SubmodelDatabase) ManagedFileAttachmentPathsBySubmodelIDs(
+	ctx context.Context,
+	submodelIDs []string,
+) (map[string]map[string]struct{}, error) {
+	pathsBySubmodel := make(map[string]map[string]struct{}, len(submodelIDs))
+	for _, submodelID := range submodelIDs {
+		pathsBySubmodel[submodelID] = make(map[string]struct{})
+	}
+	if len(submodelIDs) == 0 {
+		return pathsBySubmodel, nil
+	}
+	query, args, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL(submodelIDs)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-BUILDSQL " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-QUERY " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var submodelID string
+		var path string
+		if err = rows.Scan(&submodelID, &path); err != nil {
+			return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-SCAN " + err.Error())
+		}
+		paths := pathsBySubmodel[submodelID]
+		if paths == nil {
+			paths = make(map[string]struct{})
+			pathsBySubmodel[submodelID] = paths
+		}
+		paths[path] = struct{}{}
+	}
+	if err = rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-ITERATE " + err.Error())
+	}
+	return pathsBySubmodel, nil
+}
+
 // UploadFileAttachment uploads attachment content for a File submodel element.
 func (s *SubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)

@@ -31,6 +31,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -41,6 +42,7 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
@@ -65,6 +67,41 @@ func TestSubmodelRepositoryReadPoolSelection(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, reader, backend.readDB(t.Context()))
 	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
+}
+
+func TestManagedFileAttachmentPathsBulkLoadsCurrentAndLegacyAttachments(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	submodelID := "urn:sm:files"
+	secondSubmodelID := "urn:sm:more-files"
+	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL([]string{submodelID, secondSubmodelID})
+	require.NoError(t, err)
+	require.Contains(t, query, `"fr"."binary_content_id" IS NOT NULL`)
+	require.Contains(t, query, `"fd"."file_oid" IS NOT NULL`)
+	mock.ExpectQuery(regexp.QuoteMeta(query)).
+		WillReturnRows(sqlmock.NewRows([]string{"submodel_identifier", "idshort_path"}).
+			AddRow(submodelID, "documents.manual").
+			AddRow(submodelID, "legacyFile").
+			AddRow(secondSubmodelID, "datasheet"))
+
+	sut := &SubmodelDatabase{db: db}
+	paths, err := sut.ManagedFileAttachmentPathsBySubmodelIDs(t.Context(), []string{submodelID, secondSubmodelID})
+	require.NoError(t, err)
+	require.Equal(t, map[string]struct{}{
+		"documents.manual": {},
+		"legacyFile":       {},
+	}, paths[submodelID])
+	require.Equal(t, map[string]struct{}{"datasheet": {}}, paths[secondSubmodelID])
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestManagedFileAttachmentPathsBySubmodelIDsSkipsEmptyLookup(t *testing.T) {
+	sut := &SubmodelDatabase{}
+	paths, err := sut.ManagedFileAttachmentPathsBySubmodelIDs(t.Context(), nil)
+	require.NoError(t, err)
+	require.Empty(t, paths)
 }
 
 func TestGetSubmodelsDatabaseQueryError(t *testing.T) {
