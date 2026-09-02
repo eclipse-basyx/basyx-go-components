@@ -40,6 +40,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
@@ -196,10 +197,48 @@ func TestRegistrySynchronizationSkipsExistingUnchangedDescriptors(t *testing.T) 
 	}
 }
 
+func TestRegistrySynchronizationPreservesAuthorizedCallerAuditScope(t *testing.T) {
+	aasRegistry := newRecordingAASRegistry()
+	submodelRegistry := newRecordingSubmodelRegistry()
+	service, err := newDPPRepositoryServiceWithRegistrySync(nil, nil, aasRegistry, submodelRegistry, registrysync.Config{
+		AASRegistryIntegration:      true,
+		SubmodelRegistryIntegration: true,
+		ExternalBaseURLs:            []string{"https://aas.example.test"},
+	})
+	if err != nil {
+		t.Fatalf("newDPPRepositoryServiceWithRegistrySync() error = %v", err)
+	}
+	ctx := history.ContextWithAudit(t.Context(), history.AuditContext{
+		ActorSubject:        "dpp-writer",
+		AuthorizationResult: "ALLOW",
+		RequestID:           "request-1",
+		CorrelationID:       "correlation-1",
+		HTTPMethod:          http.MethodPost,
+	})
+	aas := types.NewAssetAdministrationShell("urn:example:aas", types.NewAssetInformation(types.AssetKindInstance))
+	submodel := types.NewSubmodel("urn:example:submodel")
+	if err = service.syncCreatedDescriptors(ctx, nil, aas, []types.ISubmodel{submodel}); err != nil {
+		t.Fatalf("syncCreatedDescriptors() error = %v", err)
+	}
+
+	assertRegistryAudit := func(registry string, audit history.AuditContext) {
+		t.Helper()
+		if audit.ActorSubject != "dpp-writer" || audit.AuthorizationResult != "ALLOW" {
+			t.Fatalf("%s registry audit actor/result = %q/%q", registry, audit.ActorSubject, audit.AuthorizationResult)
+		}
+		if audit.RequestID != "request-1" || audit.CorrelationID != "correlation-1" {
+			t.Fatalf("%s registry audit request/correlation = %q/%q", registry, audit.RequestID, audit.CorrelationID)
+		}
+	}
+	assertRegistryAudit("AAS", aasRegistry.audits[0])
+	assertRegistryAudit("Submodel", submodelRegistry.audits[0])
+}
+
 type recordingAASRegistry struct {
 	calls             int
 	discoverySettings []bool
 	descriptors       map[string]commonmodel.AssetAdministrationShellDescriptor
+	audits            []history.AuditContext
 }
 
 func newRecordingAASRegistry() *recordingAASRegistry {
@@ -235,12 +274,14 @@ func (r *recordingAASRegistry) DeleteAssetAdministrationShellDescriptorByIDInTra
 func (r *recordingAASRegistry) record(ctx context.Context) {
 	r.calls++
 	r.discoverySettings = append(r.discoverySettings, discoveryIntegrationFromContext(ctx))
+	r.audits = append(r.audits, history.FromContext(ctx))
 }
 
 type recordingSubmodelRegistry struct {
 	calls             int
 	discoverySettings []bool
 	descriptors       map[string]commonmodel.SubmodelDescriptor
+	audits            []history.AuditContext
 }
 
 func newRecordingSubmodelRegistry() *recordingSubmodelRegistry {
@@ -278,6 +319,7 @@ func (r *recordingSubmodelRegistry) DeleteSubmodelDescriptorByIDInTransaction(ct
 func (r *recordingSubmodelRegistry) record(ctx context.Context) {
 	r.calls++
 	r.discoverySettings = append(r.discoverySettings, discoveryIntegrationFromContext(ctx))
+	r.audits = append(r.audits, history.FromContext(ctx))
 }
 
 func discoveryIntegrationFromContext(ctx context.Context) bool {
