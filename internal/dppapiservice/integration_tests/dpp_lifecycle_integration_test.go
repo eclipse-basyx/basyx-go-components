@@ -183,7 +183,14 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	dimensionWidthPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "dimensions", "widthMm"))
 	updatedDimensionWidth := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+dimensionWidthPath, 121, http.StatusOK)
 	assertScalarEquals(t, updatedDimensionWidth, "121")
-	assertRegistrySynchronization(t, client, aasBaseURL, dppID, productID)
+	doJSONAny(
+		t, client, http.MethodGet,
+		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(technicalDataSubmodelID), nil, http.StatusNotFound,
+	)
+	doJSONAny(
+		t, client, http.MethodGet,
+		aasBaseURL+"/shell-descriptors/"+common.EncodeString(dppID), nil, http.StatusNotFound,
+	)
 
 	beforePatchDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	patchBody := doJSON(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, map[string]any{
@@ -196,6 +203,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "warrantyMonths", "36")
 	assertSubmodelIdentifierExists(t, databasePort, importedMetadataID, true)
 	assertSubmodelIdentifierExists(t, databasePort, generatedMetadataID, false)
+	assertRegistrySynchronization(t, client, aasBaseURL, dppID, productID)
 
 	prePatchVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforePatchDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, prePatchVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")

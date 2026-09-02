@@ -82,8 +82,8 @@ func TestRegistrySynchronizationFlagCombinations(t *testing.T) {
 		submodelEnabled := combination&2 != 0
 		discoveryEnabled := combination&4 != 0
 		t.Run(fmt.Sprintf("aas=%t/submodel=%t/discovery=%t", aasEnabled, submodelEnabled, discoveryEnabled), func(t *testing.T) {
-			aasRegistry := &recordingAASRegistry{}
-			submodelRegistry := &recordingSubmodelRegistry{}
+			aasRegistry := newRecordingAASRegistry()
+			submodelRegistry := newRecordingSubmodelRegistry()
 			service, err := newDPPRepositoryServiceWithRegistrySync(nil, nil, aasRegistry, submodelRegistry, registrysync.Config{
 				AASRegistryIntegration:      aasEnabled,
 				SubmodelRegistryIntegration: submodelEnabled,
@@ -106,7 +106,9 @@ func TestRegistrySynchronizationFlagCombinations(t *testing.T) {
 			if err = service.syncCreatedDescriptors(ctx, nil, aas, []types.ISubmodel{submodel}); err != nil {
 				t.Fatalf("syncCreatedDescriptors() error = %v", err)
 			}
-			if err = service.syncUpdatedDescriptors(ctx, nil, aas, []types.ISubmodel{submodel}, []string{"urn:example:stale"}); err != nil {
+			if err = service.syncUpdatedDescriptors(ctx, nil, aas, aas, []submodelDescriptorUpdate{{
+				previous: submodel, submitted: submodel,
+			}}, []string{"urn:example:stale"}); err != nil {
 				t.Fatalf("syncUpdatedDescriptors() error = %v", err)
 			}
 			if err = service.deleteSubmodelDescriptorIfEnabled(ctx, nil, submodel.ID()); err != nil {
@@ -116,8 +118,8 @@ func TestRegistrySynchronizationFlagCombinations(t *testing.T) {
 				t.Fatalf("deleteAASDescriptorIfEnabled() error = %v", err)
 			}
 
-			assertRegistryCalls(t, "AAS", aasRegistry.calls, aasEnabled, 3)
-			assertRegistryCalls(t, "Submodel", submodelRegistry.calls, submodelEnabled, 4)
+			assertRegistryCalls(t, "AAS", aasRegistry.calls, aasEnabled, 2)
+			assertRegistryCalls(t, "Submodel", submodelRegistry.calls, submodelEnabled, 3)
 			for _, observed := range append(aasRegistry.discoverySettings, submodelRegistry.discoverySettings...) {
 				if observed != discoveryEnabled {
 					t.Fatalf("registry context discoveryIntegration = %t, want %t", observed, discoveryEnabled)
@@ -127,23 +129,100 @@ func TestRegistrySynchronizationFlagCombinations(t *testing.T) {
 	}
 }
 
+func TestRegistrySynchronizationRepairsMissingUnchangedDescriptors(t *testing.T) {
+	aasRegistry := newRecordingAASRegistry()
+	submodelRegistry := newRecordingSubmodelRegistry()
+	service, err := newDPPRepositoryServiceWithRegistrySync(nil, nil, aasRegistry, submodelRegistry, registrysync.Config{
+		AASRegistryIntegration:      true,
+		SubmodelRegistryIntegration: true,
+		ExternalBaseURLs:            []string{"https://aas.example.test"},
+	})
+	if err != nil {
+		t.Fatalf("newDPPRepositoryServiceWithRegistrySync() error = %v", err)
+	}
+
+	aas := types.NewAssetAdministrationShell("urn:example:aas", types.NewAssetInformation(types.AssetKindInstance))
+	submodel := types.NewSubmodel("urn:example:submodel")
+	if err = service.syncUpdatedDescriptors(t.Context(), nil, aas, aas, []submodelDescriptorUpdate{{
+		previous: submodel, submitted: submodel,
+	}}, nil); err != nil {
+		t.Fatalf("syncUpdatedDescriptors() error = %v", err)
+	}
+
+	if aasRegistry.calls != 1 {
+		t.Fatalf("AAS registry writes = %d, want repair upsert", aasRegistry.calls)
+	}
+	if submodelRegistry.calls != 1 {
+		t.Fatalf("Submodel registry writes = %d, want repair upsert", submodelRegistry.calls)
+	}
+}
+
+func TestRegistrySynchronizationSkipsExistingUnchangedDescriptors(t *testing.T) {
+	aasRegistry := newRecordingAASRegistry()
+	submodelRegistry := newRecordingSubmodelRegistry()
+	service, err := newDPPRepositoryServiceWithRegistrySync(nil, nil, aasRegistry, submodelRegistry, registrysync.Config{
+		AASRegistryIntegration:      true,
+		SubmodelRegistryIntegration: true,
+		ExternalBaseURLs:            []string{"https://aas.example.test"},
+	})
+	if err != nil {
+		t.Fatalf("newDPPRepositoryServiceWithRegistrySync() error = %v", err)
+	}
+
+	aas := types.NewAssetAdministrationShell("urn:example:aas", types.NewAssetInformation(types.AssetKindInstance))
+	submodel := types.NewSubmodel("urn:example:submodel")
+	if err = service.syncCreatedDescriptors(t.Context(), nil, aas, []types.ISubmodel{submodel}); err != nil {
+		t.Fatalf("syncCreatedDescriptors() error = %v", err)
+	}
+	aasWrites := aasRegistry.calls
+	submodelWrites := submodelRegistry.calls
+
+	if err = service.syncUpdatedDescriptors(t.Context(), nil, aas, aas, []submodelDescriptorUpdate{{
+		previous: submodel, submitted: submodel,
+	}}, nil); err != nil {
+		t.Fatalf("syncUpdatedDescriptors() error = %v", err)
+	}
+	if aasRegistry.calls != aasWrites {
+		t.Fatalf("AAS registry writes = %d, want unchanged %d", aasRegistry.calls, aasWrites)
+	}
+	if submodelRegistry.calls != submodelWrites {
+		t.Fatalf("Submodel registry writes = %d, want unchanged %d", submodelRegistry.calls, submodelWrites)
+	}
+}
+
 type recordingAASRegistry struct {
 	calls             int
 	discoverySettings []bool
+	descriptors       map[string]commonmodel.AssetAdministrationShellDescriptor
 }
 
-func (r *recordingAASRegistry) InsertAdministrationShellDescriptorInTransaction(ctx context.Context, _ *sql.Tx, _ commonmodel.AssetAdministrationShellDescriptor) error {
+func newRecordingAASRegistry() *recordingAASRegistry {
+	return &recordingAASRegistry{descriptors: make(map[string]commonmodel.AssetAdministrationShellDescriptor)}
+}
+
+func (r *recordingAASRegistry) InsertAdministrationShellDescriptorInTransaction(ctx context.Context, _ *sql.Tx, descriptor commonmodel.AssetAdministrationShellDescriptor) error {
 	r.record(ctx)
+	r.descriptors[descriptor.Id] = descriptor
 	return nil
 }
 
-func (r *recordingAASRegistry) UpsertAdministrationShellDescriptorInTransaction(ctx context.Context, _ *sql.Tx, _ commonmodel.AssetAdministrationShellDescriptor) error {
+func (r *recordingAASRegistry) UpsertAdministrationShellDescriptorInTransaction(ctx context.Context, _ *sql.Tx, descriptor commonmodel.AssetAdministrationShellDescriptor) error {
 	r.record(ctx)
+	r.descriptors[descriptor.Id] = descriptor
 	return nil
 }
 
-func (r *recordingAASRegistry) DeleteAssetAdministrationShellDescriptorByIDInTransaction(ctx context.Context, _ *sql.Tx, _ string) error {
+func (r *recordingAASRegistry) GetAssetAdministrationShellDescriptorByIDInTransaction(_ context.Context, _ *sql.Tx, id string) (commonmodel.AssetAdministrationShellDescriptor, error) {
+	descriptor, ok := r.descriptors[id]
+	if !ok {
+		return commonmodel.AssetAdministrationShellDescriptor{}, common.NewErrNotFound("DPP-TEST-AASDESC-NOTFOUND")
+	}
+	return descriptor, nil
+}
+
+func (r *recordingAASRegistry) DeleteAssetAdministrationShellDescriptorByIDInTransaction(ctx context.Context, _ *sql.Tx, id string) error {
 	r.record(ctx)
+	delete(r.descriptors, id)
 	return nil
 }
 
@@ -155,20 +234,38 @@ func (r *recordingAASRegistry) record(ctx context.Context) {
 type recordingSubmodelRegistry struct {
 	calls             int
 	discoverySettings []bool
+	descriptors       map[string]commonmodel.SubmodelDescriptor
 }
 
-func (r *recordingSubmodelRegistry) InsertSubmodelDescriptorInTransaction(ctx context.Context, _ *sql.Tx, descriptor commonmodel.SubmodelDescriptor) (commonmodel.SubmodelDescriptor, error) {
-	r.record(ctx)
-	return descriptor, nil
+func newRecordingSubmodelRegistry() *recordingSubmodelRegistry {
+	return &recordingSubmodelRegistry{descriptors: make(map[string]commonmodel.SubmodelDescriptor)}
 }
 
-func (r *recordingSubmodelRegistry) UpsertSubmodelDescriptorInTransaction(ctx context.Context, _ *sql.Tx, _ commonmodel.SubmodelDescriptor) error {
+func (r *recordingSubmodelRegistry) InsertSubmodelDescriptorsInTransaction(ctx context.Context, _ *sql.Tx, descriptors []commonmodel.SubmodelDescriptor) (int, error) {
 	r.record(ctx)
+	for _, descriptor := range descriptors {
+		r.descriptors[descriptor.Id] = descriptor
+	}
+	return -1, nil
+}
+
+func (r *recordingSubmodelRegistry) UpsertSubmodelDescriptorInTransaction(ctx context.Context, _ *sql.Tx, descriptor commonmodel.SubmodelDescriptor) error {
+	r.record(ctx)
+	r.descriptors[descriptor.Id] = descriptor
 	return nil
 }
 
-func (r *recordingSubmodelRegistry) DeleteSubmodelDescriptorByIDInTransaction(ctx context.Context, _ *sql.Tx, _ string) error {
+func (r *recordingSubmodelRegistry) GetSubmodelDescriptorByIDInTransaction(_ context.Context, _ *sql.Tx, id string) (commonmodel.SubmodelDescriptor, error) {
+	descriptor, ok := r.descriptors[id]
+	if !ok {
+		return commonmodel.SubmodelDescriptor{}, common.NewErrNotFound("DPP-TEST-SMDESC-NOTFOUND")
+	}
+	return descriptor, nil
+}
+
+func (r *recordingSubmodelRegistry) DeleteSubmodelDescriptorByIDInTransaction(ctx context.Context, _ *sql.Tx, id string) error {
 	r.record(ctx)
+	delete(r.descriptors, id)
 	return nil
 }
 

@@ -69,12 +69,14 @@ type DPPRepositoryService struct {
 type aasRegistryPersistence interface {
 	InsertAdministrationShellDescriptorInTransaction(context.Context, *sql.Tx, commonmodel.AssetAdministrationShellDescriptor) error
 	UpsertAdministrationShellDescriptorInTransaction(context.Context, *sql.Tx, commonmodel.AssetAdministrationShellDescriptor) error
+	GetAssetAdministrationShellDescriptorByIDInTransaction(context.Context, *sql.Tx, string) (commonmodel.AssetAdministrationShellDescriptor, error)
 	DeleteAssetAdministrationShellDescriptorByIDInTransaction(context.Context, *sql.Tx, string) error
 }
 
 type submodelRegistryPersistence interface {
-	InsertSubmodelDescriptorInTransaction(context.Context, *sql.Tx, commonmodel.SubmodelDescriptor) (commonmodel.SubmodelDescriptor, error)
+	InsertSubmodelDescriptorsInTransaction(context.Context, *sql.Tx, []commonmodel.SubmodelDescriptor) (int, error)
 	UpsertSubmodelDescriptorInTransaction(context.Context, *sql.Tx, commonmodel.SubmodelDescriptor) error
+	GetSubmodelDescriptorByIDInTransaction(context.Context, *sql.Tx, string) (commonmodel.SubmodelDescriptor, error)
 	DeleteSubmodelDescriptorByIDInTransaction(context.Context, *sql.Tx, string) error
 }
 
@@ -144,16 +146,15 @@ func newDPPRepositoryServiceWithRegistrySync(
 
 func (s *DPPRepositoryService) syncCreatedDescriptors(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell, submodels []types.ISubmodel) error {
 	if s.registrySyncConfig.SubmodelRegistryIntegration {
-		for _, submodel := range submodels {
-			descriptor, err := s.registrySyncConfig.BuildSubmodelDescriptor(submodel)
-			if err != nil {
-				return fmt.Errorf("DPP-REGSYNC-CREATE-BUILDSMDESC build submodel descriptor %s: %w", submodel.ID(), err)
-			}
-			if _, err = s.submodelRegistry.InsertSubmodelDescriptorInTransaction(
-				registrysync.WithSubmodelRegistrySyncUpsertAudit(ctx), tx, descriptor,
-			); err != nil {
-				return fmt.Errorf("DPP-REGSYNC-CREATE-INSERTSMDESC insert submodel descriptor %s: %w", submodel.ID(), err)
-			}
+		descriptors, err := s.buildSubmodelDescriptors(submodels)
+		if err != nil {
+			return err
+		}
+		failedIndex, err := s.submodelRegistry.InsertSubmodelDescriptorsInTransaction(
+			registrysync.WithSubmodelRegistrySyncUpsertAudit(ctx), tx, descriptors,
+		)
+		if err != nil {
+			return fmt.Errorf("DPP-REGSYNC-CREATE-INSERTSMDESCS insert submodel descriptors at index %d: %w", failedIndex, err)
 		}
 	}
 	if !s.registrySyncConfig.AASRegistryIntegration {
@@ -171,11 +172,29 @@ func (s *DPPRepositoryService) syncCreatedDescriptors(ctx context.Context, tx *s
 	return nil
 }
 
+func (s *DPPRepositoryService) buildSubmodelDescriptors(submodels []types.ISubmodel) ([]commonmodel.SubmodelDescriptor, error) {
+	descriptors := make([]commonmodel.SubmodelDescriptor, 0, len(submodels))
+	for _, submodel := range submodels {
+		descriptor, err := s.registrySyncConfig.BuildSubmodelDescriptor(submodel)
+		if err != nil {
+			return nil, fmt.Errorf("DPP-REGSYNC-CREATE-BUILDSMDESC build submodel descriptor %s: %w", submodel.ID(), err)
+		}
+		descriptors = append(descriptors, descriptor)
+	}
+	return descriptors, nil
+}
+
+type submodelDescriptorUpdate struct {
+	previous  types.ISubmodel
+	submitted types.ISubmodel
+}
+
 func (s *DPPRepositoryService) syncUpdatedDescriptors(
 	ctx context.Context,
 	tx *sql.Tx,
+	previousAAS types.IAssetAdministrationShell,
 	aas types.IAssetAdministrationShell,
-	submodels []types.ISubmodel,
+	submodels []submodelDescriptorUpdate,
 	staleSubmodelIDs []string,
 ) error {
 	if s.registrySyncConfig.SubmodelRegistryIntegration {
@@ -191,12 +210,21 @@ func (s *DPPRepositoryService) syncUpdatedDescriptors(
 			}
 		}
 	}
-	if !s.registrySyncConfig.AASRegistryIntegration {
+	if !s.registrySyncConfig.AASRegistryIntegration || aas == nil {
 		return nil
 	}
-	descriptor, err := s.registrySyncConfig.BuildAASDescriptor(aas)
+	descriptor, changed, err := s.registrySyncConfig.ChangedAASDescriptor(previousAAS, aas)
 	if err != nil {
 		return fmt.Errorf("DPP-REGSYNC-UPDATE-BUILDAASDESC build AAS descriptor: %w", err)
+	}
+	if !changed {
+		_, err = s.aasRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, aas.ID())
+		if err == nil {
+			return nil
+		}
+		if !common.IsErrNotFound(err) {
+			return fmt.Errorf("DPP-REGSYNC-UPDATE-GETAASDESC get AAS descriptor: %w", err)
+		}
 	}
 	if err = s.aasRegistry.UpsertAdministrationShellDescriptorInTransaction(
 		registrysync.WithAASRegistrySyncUpsertAudit(ctx), tx, descriptor,
@@ -206,16 +234,25 @@ func (s *DPPRepositoryService) syncUpdatedDescriptors(
 	return nil
 }
 
-func (s *DPPRepositoryService) upsertSubmodelDescriptors(ctx context.Context, tx *sql.Tx, submodels []types.ISubmodel) error {
+func (s *DPPRepositoryService) upsertSubmodelDescriptors(ctx context.Context, tx *sql.Tx, submodels []submodelDescriptorUpdate) error {
 	for _, submodel := range submodels {
-		descriptor, err := s.registrySyncConfig.BuildSubmodelDescriptor(submodel)
+		descriptor, changed, err := s.registrySyncConfig.ChangedSubmodelDescriptor(submodel.previous, submodel.submitted)
 		if err != nil {
-			return fmt.Errorf("DPP-REGSYNC-UPDATE-BUILDSMDESC build submodel descriptor %s: %w", submodel.ID(), err)
+			return fmt.Errorf("DPP-REGSYNC-UPDATE-BUILDSMDESC build submodel descriptor %s: %w", submodel.submitted.ID(), err)
+		}
+		if !changed {
+			_, err = s.submodelRegistry.GetSubmodelDescriptorByIDInTransaction(ctx, tx, submodel.submitted.ID())
+			if err == nil {
+				continue
+			}
+			if !common.IsErrNotFound(err) {
+				return fmt.Errorf("DPP-REGSYNC-UPDATE-GETSMDESC get submodel descriptor %s: %w", submodel.submitted.ID(), err)
+			}
 		}
 		if err = s.submodelRegistry.UpsertSubmodelDescriptorInTransaction(
 			registrysync.WithSubmodelRegistrySyncUpsertAudit(ctx), tx, descriptor,
 		); err != nil {
-			return fmt.Errorf("DPP-REGSYNC-UPDATE-UPSERTSMDESC upsert submodel descriptor %s: %w", submodel.ID(), err)
+			return fmt.Errorf("DPP-REGSYNC-UPDATE-UPSERTSMDESC upsert submodel descriptor %s: %w", submodel.submitted.ID(), err)
 		}
 	}
 	return nil
@@ -422,20 +459,24 @@ func mergeDPPUpdateDocument(
 
 func (s *DPPRepositoryService) persistDPPUpdate(ctx context.Context, dppID string, update preparedDPPUpdate) error {
 	return s.aasRepo.ExecuteInTransaction("DPP-UPDDPP-STARTTX", "DPP-UPDDPP-COMMITTX", func(tx *sql.Tx) error {
-		if _, err := s.aasRepo.PutAssetAdministrationShellByIDInTransaction(ctx, tx, dppID, update.aas); err != nil {
+		aasResult, err := s.aasRepo.PutAssetAdministrationShellByIDInTransactionWithResult(ctx, tx, dppID, update.aas)
+		if err != nil {
 			return fmt.Errorf("DPP-UPDDPP-PUTAAS put AAS: %w", err)
 		}
+		descriptorUpdates := make([]submodelDescriptorUpdate, 0, len(update.submodels))
 		for _, submodel := range update.submodels {
-			if _, err := s.submodelRepo.PutSubmodelInTransaction(ctx, tx, submodel.ID(), submodel); err != nil {
-				return fmt.Errorf("DPP-UPDDPP-PUTSUBMODEL put submodel %s: %w", submodel.ID(), err)
+			putResult, putErr := s.submodelRepo.PutSubmodelInTransactionWithResult(ctx, tx, submodel.ID(), submodel)
+			if putErr != nil {
+				return fmt.Errorf("DPP-UPDDPP-PUTSUBMODEL put submodel %s: %w", submodel.ID(), putErr)
 			}
+			descriptorUpdates = append(descriptorUpdates, submodelDescriptorUpdate{previous: putResult.Previous, submitted: submodel})
 		}
 		for _, submodelID := range update.staleSubmodelIDs {
 			if err := s.submodelRepo.DeleteSubmodelInTransaction(ctx, tx, submodelID); err != nil {
 				return fmt.Errorf("DPP-UPDDPP-DELETESUBMODEL delete stale submodel %s: %w", submodelID, err)
 			}
 		}
-		return s.syncUpdatedDescriptors(ctx, tx, update.aas, update.submodels, update.staleSubmodelIDs)
+		return s.syncUpdatedDescriptors(ctx, tx, aasResult.Previous, update.aas, descriptorUpdates, update.staleSubmodelIDs)
 	})
 }
 
@@ -834,19 +875,17 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 	if err != nil {
 		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
-	aas, descriptorSubmodels, err := s.elementUpdateSyncResources(ctx, dppID, submodelID, metadata)
-	if err != nil {
-		return mapPersistenceError(err, http.StatusInternalServerError), nil
-	}
-
 	err = s.aasRepo.ExecuteInTransaction("DPP-UPDELEM-STARTTX", "DPP-UPDELEM-COMMITTX", func(tx *sql.Tx) error {
 		if _, err := s.submodelRepo.PutSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, element); err != nil {
 			return fmt.Errorf("DPP-UPDELEM-PUTELEMENT put element %s: %w", idShortPath, err)
 		}
-		if _, err := s.submodelRepo.PutSubmodelInTransaction(ctx, tx, metadata.ID(), metadata); err != nil {
-			return fmt.Errorf("DPP-UPDELEM-PUTMETADATA put metadata: %w", err)
+		putResult, putErr := s.submodelRepo.PutSubmodelInTransactionWithResult(ctx, tx, metadata.ID(), metadata)
+		if putErr != nil {
+			return fmt.Errorf("DPP-UPDELEM-PUTMETADATA put metadata: %w", putErr)
 		}
-		return s.syncUpdatedDescriptors(ctx, tx, aas, descriptorSubmodels, nil)
+		return s.syncUpdatedDescriptors(ctx, tx, nil, nil, []submodelDescriptorUpdate{{
+			previous: putResult.Previous, submitted: metadata,
+		}}, nil)
 	})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
@@ -875,34 +914,6 @@ func (s *DPPRepositoryService) preserveManagedElementAttachments(
 	}
 	preserveManagedFiles(currentFiles, replacementFiles, serializationContext)
 	return nil
-}
-
-func (s *DPPRepositoryService) elementUpdateSyncResources(
-	ctx context.Context,
-	dppID string,
-	contentSubmodelID string,
-	metadata types.ISubmodel,
-) (types.IAssetAdministrationShell, []types.ISubmodel, error) {
-	var aas types.IAssetAdministrationShell
-	var err error
-	if s.registrySyncConfig.AASRegistryIntegration {
-		aas, err = s.aasRepo.GetAssetAdministrationShellByID(ctx, dppID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("DPP-UPDELEM-GETAAS get AAS for descriptor synchronization: %w", err)
-		}
-	}
-	if !s.registrySyncConfig.SubmodelRegistryIntegration {
-		return aas, nil, nil
-	}
-	submodels := []types.ISubmodel{metadata}
-	if contentSubmodelID == metadata.ID() {
-		return aas, submodels, nil
-	}
-	contentSubmodel, err := s.submodelRepo.GetSubmodelByID(ctx, contentSubmodelID, "deep", false, false)
-	if err != nil {
-		return nil, nil, fmt.Errorf("DPP-UPDELEM-GETSUBMODEL get content submodel for descriptor synchronization: %w", err)
-	}
-	return aas, append(submodels, contentSubmodel), nil
 }
 
 func preserveElementMetadata(existing types.ISubmodelElement, replacement types.ISubmodelElement) {
