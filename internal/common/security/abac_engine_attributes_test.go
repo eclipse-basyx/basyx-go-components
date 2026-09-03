@@ -54,25 +54,25 @@ func TestAttributesSatisfiedAll(t *testing.T) {
 			want:   true,
 		},
 		{
-			name: "one claim is missing",
+			name: "declared claims are resolved lazily",
 			items: []grammar.AttributeItem{
 				{Kind: grammar.ATTRCLAIM, Value: "role"},
 				{Kind: grammar.ATTRCLAIM, Value: "clearance"},
 			},
 			claims: Claims{"role": "reader"},
-			want:   false,
+			want:   true,
 		},
 		{
-			name:   "null claim is unusable",
+			name:   "null claim is checked only when evaluated",
 			items:  []grammar.AttributeItem{{Kind: grammar.ATTRCLAIM, Value: "role"}},
 			claims: Claims{"role": nil},
-			want:   false,
+			want:   true,
 		},
 		{
-			name:   "object claim is unusable",
+			name:   "object claim is checked only when evaluated",
 			items:  []grammar.AttributeItem{{Kind: grammar.ATTRCLAIM, Value: "role"}},
 			claims: Claims{"role": map[string]any{"name": "reader"}},
-			want:   false,
+			want:   true,
 		},
 		{
 			name:   "nested claim path is usable",
@@ -81,10 +81,10 @@ func TestAttributesSatisfiedAll(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "missing nested claim path denies access",
+			name:   "missing nested claim path is resolved lazily",
 			items:  []grammar.AttributeItem{{Kind: grammar.ATTRCLAIMPATH, Value: "/realm_access/roles"}},
 			claims: Claims{"profile": map[string]any{"tags": []any{"reader"}}},
-			want:   false,
+			want:   true,
 		},
 		{
 			name: "anonymous permits access without claims",
@@ -94,12 +94,12 @@ func TestAttributesSatisfiedAll(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "anonymous does not replace missing claims",
+			name: "anonymous permits public access despite declared claim metadata",
 			items: []grammar.AttributeItem{
 				{Kind: grammar.ATTRCLAIM, Value: "role"},
 				{Kind: grammar.ATTRGLOBAL, Value: "ANONYMOUS"},
 			},
-			want: false,
+			want: true,
 		},
 		{
 			name: "anonymous remains optional when all claims are present",

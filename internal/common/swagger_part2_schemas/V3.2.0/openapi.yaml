@@ -328,6 +328,76 @@ components:
       maxItems: 2
       items:
         $ref: '#/components/schemas/Value'
+    claimValue:
+      type: object
+      properties:
+        CLAIM:
+          type: string
+          minLength: 1
+      required:
+        - CLAIM
+      additionalProperties: false
+    claimPathValue:
+      type: object
+      properties:
+        CLAIMPATH:
+          type: string
+          pattern: '^(/([^~]|~[01])*)+$'
+      required:
+        - CLAIMPATH
+      additionalProperties: false
+    attributeValue:
+      oneOf:
+        - $ref: '#/components/schemas/claimValue'
+        - $ref: '#/components/schemas/claimPathValue'
+        - type: object
+          properties:
+            GLOBAL:
+              type: string
+              enum: [LOCALNOW, UTCNOW, CLIENTNOW, ANONYMOUS]
+          required: [GLOBAL]
+          additionalProperties: false
+        - type: object
+          properties:
+            REFERENCE:
+              type: string
+          required: [REFERENCE]
+          additionalProperties: false
+    claimPathEqualityItems:
+      type: array
+      minItems: 2
+      maxItems: 2
+      items:
+        oneOf:
+          - type: object
+            properties:
+              $attribute:
+                $ref: '#/components/schemas/claimPathValue'
+            required: [$attribute]
+            additionalProperties: false
+          - $ref: '#/components/schemas/stringValue'
+    eqComparisonItems:
+      oneOf:
+        - $ref: '#/components/schemas/comparisonItems'
+        - $ref: '#/components/schemas/claimPathEqualityItems'
+    claimPathContainsItems:
+      type: array
+      minItems: 2
+      maxItems: 2
+      description: The first operand is a CLAIMPATH selecting a JSON string array; the second is a scalar string operand.
+      items:
+        oneOf:
+          - type: object
+            properties:
+              $attribute:
+                $ref: '#/components/schemas/claimPathValue'
+            required: [$attribute]
+            additionalProperties: false
+          - $ref: '#/components/schemas/stringValue'
+    containsItems:
+      oneOf:
+        - $ref: '#/components/schemas/stringItems'
+        - $ref: '#/components/schemas/claimPathContainsItems'
     dateTimeLiteralPattern:
       type: string
       format: date-time
@@ -575,10 +645,8 @@ components:
         $not:
           $ref: '#/components/schemas/logicalExpression'
         $eq:
-          $ref: '#/components/schemas/comparisonItems'
+          $ref: '#/components/schemas/eqComparisonItems'
         $ne:
-          $ref: '#/components/schemas/comparisonItems'
-        $in:
           $ref: '#/components/schemas/comparisonItems'
         $gt:
           $ref: '#/components/schemas/comparisonItems'
@@ -589,7 +657,7 @@ components:
         $le:
           $ref: '#/components/schemas/comparisonItems'
         $contains:
-          $ref: '#/components/schemas/stringItems'
+          $ref: '#/components/schemas/containsItems'
         $starts-with:
           $ref: '#/components/schemas/stringItems'
         $ends-with:
@@ -610,8 +678,6 @@ components:
             - $eq
         - required:
             - $ne
-        - required:
-            - $in
         - required:
             - $gt
         - required:
@@ -642,10 +708,8 @@ components:
           items:
             $ref: '#/components/schemas/matchExpression'
         $eq:
-          $ref: '#/components/schemas/comparisonItems'
+          $ref: '#/components/schemas/eqComparisonItems'
         $ne:
-          $ref: '#/components/schemas/comparisonItems'
-        $in:
           $ref: '#/components/schemas/comparisonItems'
         $gt:
           $ref: '#/components/schemas/comparisonItems'
@@ -656,7 +720,7 @@ components:
         $le:
           $ref: '#/components/schemas/comparisonItems'
         $contains:
-          $ref: '#/components/schemas/stringItems'
+          $ref: '#/components/schemas/containsItems'
         $starts-with:
           $ref: '#/components/schemas/stringItems'
         $ends-with:
@@ -670,8 +734,6 @@ components:
             - $eq
         - required:
             - $ne
-        - required:
-            - $in
         - required:
             - $gt
         - required:
@@ -1172,6 +1234,8 @@ components:
     stringValue:
       type: object
       properties:
+        $attribute:
+          $ref: '#/components/schemas/attributeValue'
         $field:
           $ref: '#/components/schemas/FieldIdentifier'
         $strVal:
@@ -1179,6 +1243,8 @@ components:
         $strCast:
           $ref: '#/components/schemas/Value'
       oneOf:
+        - required:
+            - $attribute
         - required:
             - $field
         - required:
@@ -1315,6 +1381,8 @@ components:
     Value:
       type: object
       properties:
+        $attribute:
+          $ref: '#/components/schemas/attributeValue'
         $field:
           $ref: '#/components/schemas/FieldIdentifier'
         $strVal:

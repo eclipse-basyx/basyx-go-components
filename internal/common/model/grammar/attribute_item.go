@@ -32,6 +32,7 @@ package grammar
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
@@ -125,10 +126,31 @@ func (a *AttributeItem) UnmarshalJSON(b []byte) error {
 				return err
 			}
 		}
+		if k == string(ATTRCLAIMPATH) {
+			if err := validateClaimPath(s); err != nil {
+				return err
+			}
+		}
 
 		a.Kind = ATTRTYPE(k)
 		a.Value = s
 		break
+	}
+	return nil
+}
+
+func validateClaimPath(pointer string) error {
+	if pointer == "" || !strings.HasPrefix(pointer, "/") {
+		return fmt.Errorf("GRAMMAR-ATTRIBUTE-CLAIMPATH: CLAIMPATH must be a non-empty RFC 6901 JSON Pointer")
+	}
+	for index := 0; index < len(pointer); index++ {
+		if pointer[index] != '~' {
+			continue
+		}
+		if index+1 >= len(pointer) || (pointer[index+1] != '0' && pointer[index+1] != '1') {
+			return fmt.Errorf("GRAMMAR-ATTRIBUTE-CLAIMPATH: CLAIMPATH contains an invalid RFC 6901 escape")
+		}
+		index++
 	}
 	return nil
 }

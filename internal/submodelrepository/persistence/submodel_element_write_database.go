@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -251,10 +252,10 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 	return tx.Commit()
 }
 
-func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
+func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, parentPath string, submodelElement types.ISubmodelElement) (string, error) {
 	parent, err := s.lockSubmodelElementParentForInsert(ctx, tx, submodelID, parentPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	parentAuthorized, err := submodelelements.IsSubmodelElementPathAuthorized(
 		ctx,
@@ -263,12 +264,11 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 		parentPath,
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !parentAuthorized {
-		return newSubmodelElementParentNotFoundError(parentPath)
+		return "", newSubmodelElementParentNotFoundError(parentPath)
 	}
-
 	isFromList := false
 	switch parent.modelType {
 	case types.ModelTypeSubmodelElementCollection, types.ModelTypeEntity, types.ModelTypeAnnotatedRelationshipElement:
@@ -276,11 +276,11 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 	case types.ModelTypeSubmodelElementList:
 		isFromList = true
 	default:
-		return common.NewErrBadRequest("SMREPO-ADDSMEBYPATH-BADPARENT Parent element does not support child elements")
+		return "", common.NewErrBadRequest("SMREPO-ADDSMEBYPATH-BADPARENT Parent element does not support child elements")
 	}
 	parent.nextPosition, err = nextSubmodelElementPosition(ctx, tx, parent.elementID)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if err = s.ensureVisibleSubmodelElementCreateDoesNotExist(
@@ -293,7 +293,7 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 		"SMREPO-ADDSMEBYPATH-COLLISION Duplicate submodel element idShort",
 		"SMREPO-ADDSMEBYPATH-CHKDUP-ABACDENIED existing submodel element is not accessible under ABAC constraints",
 	); err != nil {
-		return err
+		return "", err
 	}
 
 	_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseIDContext(
@@ -313,10 +313,15 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 		nil,
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
-
-	return nil
+	if isFromList {
+		return fmt.Sprintf("%s[%d]", parentPath, parent.nextPosition), nil
+	}
+	if submodelElement.IDShort() == nil || *submodelElement.IDShort() == "" {
+		return "", nil
+	}
+	return parentPath + "." + *submodelElement.IDShort(), nil
 }
 
 type submodelElementInsertParent struct {
@@ -399,9 +404,18 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 		return err
 	}
 
-	err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, parentPath, submodelElement)
+	insertedPath, err := s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, parentPath, submodelElement)
 	if err != nil {
 		return err
+	}
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-ADDSMEBYPATH-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldCheckInsertedElementVisibility(shouldEnforce, insertedPath) {
+		if err = s.ensureCreatedSubmodelElementIsVisible(ctx, tx, submodelID, insertedPath); err != nil {
+			return err
+		}
 	}
 
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
@@ -594,7 +608,7 @@ func (s *SubmodelDatabase) createSubmodelElementForPut(
 		return submodelElementRootMutation{currentPath: idShortPath}, nil
 	}
 
-	if err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, parentPath, submodelElement); err != nil {
+	if _, err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, parentPath, submodelElement); err != nil {
 		return submodelElementRootMutation{}, err
 	}
 	return submodelElementRootMutation{
@@ -780,6 +794,16 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, s
 		return err
 	}
 	defer cleanup(&err)
+	shouldEnforce, err := shouldEnforceFormula(ctx, "SMREPO-UPDSMEVALONLY-SHOULDENFORCE")
+	if err != nil {
+		return err
+	}
+	if shouldEnforce {
+		ctx, err = s.ensureSubmodelElementCanBeUpdated(ctx, tx, submodelID, idShortOrPath)
+		if err != nil {
+			return err
+		}
+	}
 	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
@@ -787,6 +811,11 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, s
 
 	if err = s.updateSubmodelElementValueOnly(tx, submodelID, idShortOrPath, valueOnly); err != nil {
 		return err
+	}
+	if shouldEnforce {
+		if err = s.ensureUpdatedSubmodelElementIsVisible(ctx, tx, submodelID, idShortOrPath); err != nil {
+			return err
+		}
 	}
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 		previousPath: idShortOrPath,
@@ -823,6 +852,15 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 		return err
 	}
 	defer cleanup(&err)
+	shouldEnforce, err := shouldEnforceFormula(ctx, "SMREPO-UPDSMVALONLY-SHOULDENFORCE")
+	if err != nil {
+		return err
+	}
+	if shouldEnforce {
+		if err = s.ensureSubmodelUpdateStateVisible(ctx, tx, submodelID, "existing"); err != nil {
+			return err
+		}
+	}
 	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
@@ -837,6 +875,11 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 			previousPath: idShort,
 			currentPath:  idShort,
 		})
+	}
+	if shouldEnforce {
+		if err = s.ensureSubmodelUpdateStateVisible(ctx, tx, submodelID, "prospective"); err != nil {
+			return err
+		}
 	}
 
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, mutations...); err != nil {

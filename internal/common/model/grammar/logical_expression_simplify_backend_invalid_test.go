@@ -25,7 +25,12 @@
 
 package grammar
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/doug-martin/goqu/v9"
+)
 
 func TestSimplifyForBackendFilterNotDoesNotInvertInvalidAttribute(t *testing.T) {
 	t.Parallel()
@@ -38,11 +43,11 @@ func TestSimplifyForBackendFilterNotDoesNotInvertInvalidAttribute(t *testing.T) 
 	expression := LogicalExpression{Not: &comparison}
 
 	simplified, decision := expression.SimplifyForBackendFilter(func(AttributeValue) any { return nil })
-	if decision != SimplifyInvalid {
-		t.Fatalf("decision = %v, want %v", decision, SimplifyInvalid)
+	if decision != SimplifyIndeterminate {
+		t.Fatalf("decision = %v, want %v", decision, SimplifyIndeterminate)
 	}
-	if simplified.Boolean == nil || *simplified.Boolean {
-		t.Fatalf("expected false invalid expression, got %#v", simplified)
+	if !simplified.Indeterminate {
+		t.Fatalf("expected indeterminate expression, got %#v", simplified)
 	}
 }
 
@@ -58,16 +63,16 @@ func TestSimplifyForBackendFilterNotDoesNotInvertInvalidRegex(t *testing.T) {
 	expression := LogicalExpression{Not: &comparison}
 
 	_, decision := expression.SimplifyForBackendFilter(func(AttributeValue) any { return nil })
-	if decision != SimplifyInvalid {
-		t.Fatalf("decision = %v, want %v", decision, SimplifyInvalid)
+	if decision != SimplifyIndeterminate {
+		t.Fatalf("decision = %v, want %v", decision, SimplifyIndeterminate)
 	}
 }
 
-func TestSimplifyForBackendFilterInRequiresScalarThenStringArray(t *testing.T) {
+func TestSimplifyForBackendFilterClaimPathContainsRequiresStringArray(t *testing.T) {
 	t.Parallel()
 
 	admin := StandardString("admin")
-	roles := map[string]any{"CLAIM": "roles"}
+	roles := map[string]any{"CLAIMPATH": "/roles"}
 	tests := []struct {
 		name       string
 		expression LogicalExpression
@@ -76,27 +81,27 @@ func TestSimplifyForBackendFilterInRequiresScalarThenStringArray(t *testing.T) {
 	}{
 		{
 			name:       "member",
-			expression: LogicalExpression{In: []Value{{StrVal: &admin}, {Attribute: roles}}},
-			resolved:   []string{"reader", "admin"},
+			expression: LogicalExpression{Contains: StringItems{{Attribute: roles}, {StrVal: &admin}}},
+			resolved:   ClaimValue{Value: []any{"reader", "admin"}},
 			want:       SimplifyTrue,
 		},
 		{
 			name:       "not a member",
-			expression: LogicalExpression{In: []Value{{StrVal: &admin}, {Attribute: roles}}},
-			resolved:   []string{"reader", "administrator"},
+			expression: LogicalExpression{Contains: StringItems{{Attribute: roles}, {StrVal: &admin}}},
+			resolved:   ClaimValue{Value: []any{"reader", "administrator"}},
 			want:       SimplifyFalse,
 		},
 		{
-			name:       "array must be second",
-			expression: LogicalExpression{In: []Value{{Attribute: roles}, {StrVal: &admin}}},
-			resolved:   []string{"admin"},
-			want:       SimplifyInvalid,
+			name:       "array must be first",
+			expression: LogicalExpression{Contains: StringItems{{StrVal: &admin}, {Attribute: roles}}},
+			resolved:   ClaimValue{Value: []any{"admin"}},
+			want:       SimplifyIndeterminate,
 		},
 		{
 			name:       "scalar right operand",
-			expression: LogicalExpression{In: []Value{{StrVal: &admin}, {Attribute: roles}}},
-			resolved:   "admin",
-			want:       SimplifyInvalid,
+			expression: LogicalExpression{Contains: StringItems{{Attribute: roles}, {StrVal: &admin}}},
+			resolved:   ClaimValue{Value: "admin"},
+			want:       SimplifyIndeterminate,
 		},
 	}
 
@@ -110,5 +115,59 @@ func TestSimplifyForBackendFilterInRequiresScalarThenStringArray(t *testing.T) {
 				t.Fatalf("decision = %v, want %v", decision, testCase.want)
 			}
 		})
+	}
+}
+
+func TestSimplifyForBackendFilterThreeValuedTruthTables(t *testing.T) {
+	t.Parallel()
+
+	trueValue := true
+	falseValue := false
+	missing := StandardString("missing")
+	indeterminate := LogicalExpression{Eq: ComparisonItems{
+		{Attribute: map[string]any{"CLAIM": "missing"}},
+		{StrVal: &missing},
+	}}
+	fieldName := ModelStringPattern("$sm#id")
+	undecided := LogicalExpression{Eq: ComparisonItems{{Field: &fieldName}, {StrVal: &missing}}}
+	tests := []struct {
+		name       string
+		expression LogicalExpression
+		want       SimplifyDecision
+	}{
+		{name: "and false dominates", expression: LogicalExpression{And: []LogicalExpression{{Boolean: &falseValue}, indeterminate}}, want: SimplifyFalse},
+		{name: "or true dominates", expression: LogicalExpression{Or: []LogicalExpression{{Boolean: &trueValue}, indeterminate}}, want: SimplifyTrue},
+		{name: "and otherwise indeterminate", expression: LogicalExpression{And: []LogicalExpression{{Boolean: &trueValue}, indeterminate}}, want: SimplifyIndeterminate},
+		{name: "or otherwise indeterminate", expression: LogicalExpression{Or: []LogicalExpression{{Boolean: &falseValue}, indeterminate}}, want: SimplifyIndeterminate},
+		{name: "not indeterminate", expression: LogicalExpression{Not: &indeterminate}, want: SimplifyIndeterminate},
+		{name: "and backend dependent remains backend dependent", expression: LogicalExpression{And: []LogicalExpression{undecided, indeterminate}}, want: SimplifyUndecided},
+		{name: "or backend dependent remains backend dependent", expression: LogicalExpression{Or: []LogicalExpression{undecided, indeterminate}}, want: SimplifyUndecided},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			_, decision := test.expression.SimplifyForBackendFilter(func(AttributeValue) any { return nil })
+			if decision != test.want {
+				t.Fatalf("decision = %v, want %v", decision, test.want)
+			}
+		})
+	}
+}
+
+func TestIndeterminateBackendBranchRendersSQLNull(t *testing.T) {
+	t.Parallel()
+
+	expression := LogicalExpression{Indeterminate: true}
+	sqlExpression, _, err := expression.EvaluateToExpression(nil)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression() error = %v", err)
+	}
+	query, _, err := goqu.Dialect("postgres").From("resource").Select(goqu.V(1)).Where(sqlExpression).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL() error = %v", err)
+	}
+	if !strings.Contains(query, "NULL::boolean") || strings.Contains(query, "COALESCE") {
+		t.Fatalf("indeterminate SQL = %q, want NULL without coercion", query)
 	}
 }

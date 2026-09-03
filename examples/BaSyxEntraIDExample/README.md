@@ -64,15 +64,15 @@ required:
 }
 ```
 
-Use `$in` for exact string-array membership:
+Use first-position `CLAIMPATH` `$contains` for exact string-array membership:
 
 ```json
-{ "$in": [{ "$strVal": "basyx.admin" }, { "$attribute": { "CLAIMPATH": "/roles" } }] }
+{ "$contains": [{ "$attribute": { "CLAIMPATH": "/roles" } }, { "$strVal": "basyx.admin" }] }
 ```
 
 `administrator` does not satisfy `admin`, and a value at another JSON path is not
-considered. `$contains` and `$regex` remain string operators and must not be used
-for role-array membership.
+considered. Other `$contains` forms remain substring operations; `$regex` remains
+a string operator.
 
 The access-token version is selected by the API app registration, independently
 of the authorization endpoint version. Without `"requestedAccessTokenVersion":

@@ -29,7 +29,6 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -82,22 +81,14 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals G
 		if !exists {
 			return nil
 		}
-		normalized, ok := normalizeClaimValue(val)
-		if !ok {
-			return nil
-		}
-		return normalized
+		return grammar.ClaimValue{Value: val}
 	}
 	if pointer := m["CLAIMPATH"]; pointer != "" {
 		val, exists, err := jsonPointerValue(claims, pointer)
 		if err != nil || !exists {
 			return nil
 		}
-		normalized, ok := normalizeClaimValue(val)
-		if !ok {
-			return nil
-		}
-		return normalized
+		return grammar.ClaimValue{Value: val}
 	}
 	if g := m["GLOBAL"]; g != "" {
 		if val, ok := resolveGlobalToken(g, globals); ok {
@@ -105,47 +96,6 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals G
 		}
 	}
 	return nil
-}
-
-func normalizeClaimValue(value any) (any, bool) {
-	switch claim := value.(type) {
-	case nil:
-		return nil, false
-	case string:
-		return claim, true
-	case json.Number:
-		return claim.String(), true
-	case bool:
-		return strconv.FormatBool(claim), true
-	case float64:
-		return strconv.FormatFloat(claim, 'g', -1, 64), true
-	case float32:
-		return strconv.FormatFloat(float64(claim), 'g', -1, 32), true
-	case int:
-		return strconv.Itoa(claim), true
-	case int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprint(claim), true
-	case []string:
-		if len(claim) == 0 {
-			return nil, false
-		}
-		return claim, true
-	case []any:
-		values := make([]string, len(claim))
-		for index, item := range claim {
-			text, ok := item.(string)
-			if !ok {
-				return nil, false
-			}
-			values[index] = text
-		}
-		if len(values) == 0 {
-			return nil, false
-		}
-		return values, true
-	default:
-		return nil, false
-	}
 }
 
 // normalizeClaimScalar unwraps common container formats so operators see a scalar.

@@ -333,9 +333,21 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(ctx context.Context, submo
 }
 
 func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(ctx context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
-	_, err := s.replaceSubmodelInTransaction(ctx, tx, submodelID, submodel, true)
+	shouldEnforce, err := shouldEnforceFormula(ctx, "SMREPO-PATCHSM-SHOULDENFORCE")
 	if err != nil {
 		return err
+	}
+	if shouldEnforce {
+		if err = s.ensureSubmodelUpdateStateVisible(ctx, tx, submodelID, "existing"); err != nil {
+			return err
+		}
+	}
+	_, err = s.replaceSubmodelInTransaction(ctx, tx, submodelID, submodel, true)
+	if err != nil {
+		return err
+	}
+	if shouldEnforce {
+		return s.ensureSubmodelUpdateStateVisible(ctx, tx, submodelID, "prospective")
 	}
 	return nil
 }
@@ -400,8 +412,37 @@ func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(ctx context.Contex
 	return s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, previousSnapshot, submodel)
 }
 
-func (s *SubmodelDatabase) patchSubmodelMetadataInTransactionValidated(_ context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
-	return s.patchSubmodelMetadataInTransaction(tx, submodelID, submodel)
+func (s *SubmodelDatabase) patchSubmodelMetadataInTransactionValidated(ctx context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
+	shouldEnforce, err := shouldEnforceFormula(ctx, "SMREPO-PATCHSMMETA-SHOULDENFORCE")
+	if err != nil {
+		return err
+	}
+	if shouldEnforce {
+		if err = s.ensureSubmodelUpdateStateVisible(ctx, tx, submodelID, "existing"); err != nil {
+			return err
+		}
+	}
+	if err = s.patchSubmodelMetadataInTransaction(tx, submodelID, submodel); err != nil {
+		return err
+	}
+	if shouldEnforce {
+		return s.ensureSubmodelUpdateStateVisible(ctx, tx, submodelID, "prospective")
+	}
+	return nil
+}
+
+func (s *SubmodelDatabase) ensureSubmodelUpdateStateVisible(ctx context.Context, tx *sql.Tx, submodelID string, state string) error {
+	exists, visible, err := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return common.NewErrNotFound("SMREPO-UPDSM-ABACNOTFOUND " + state + " submodel was not found")
+	}
+	if !visible {
+		return common.NewErrDenied("SMREPO-UPDSM-ABACDENIED " + state + " submodel is not accessible under ABAC constraints")
+	}
+	return nil
 }
 
 // PutSubmodel creates or replaces a submodel and checks ABAC access on old/new state before commit when ABAC is enabled.

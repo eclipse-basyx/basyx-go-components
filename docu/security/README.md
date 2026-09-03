@@ -180,13 +180,15 @@ Example trustlist entry:
 
 `list` mappings merge and deduplicate scalar strings and string arrays from all configured sources. `scalar` mappings use the first present primitive source and accept an array only when it has exactly one item. Tokens with invalid mapped claim shapes are rejected with `401`.
 
-For exact role or entitlement checks, select a top-level claim with `CLAIM` or a nested claim with `CLAIMPATH`. `CLAIMPATH` uses an RFC 6901 JSON Pointer. Compare scalar claims with `$eq`; test exact membership in a string-array claim with `$in`, with the scalar first:
+For exact role or entitlement checks, select a top-level claim with `CLAIM` or a nested claim with `CLAIMPATH`. `CLAIMPATH` is a non-empty RFC 6901 JSON Pointer. Compare scalar string claims with `$eq`; test exact membership in a string-array claim with `$contains`, with `CLAIMPATH` first:
 
 ```json
-{ "$in": [{ "$strVal": "admin" }, { "$attribute": { "CLAIMPATH": "/realm_access/roles" } }] }
+{ "$contains": [{ "$attribute": { "CLAIMPATH": "/realm_access/roles" } }, { "$strVal": "admin" }] }
 ```
 
-BaSyx does not serialize arrays or objects into JSON text. `$contains` and `$regex` retain string semantics and must not be used for list membership. The example above cannot be satisfied by `administrator`, escaped delimiter text, or an `admin` value under an unrelated path. Single-item arrays are still arrays and require `$in`. For mixed delegated and app-only tokens from one issuer, avoid mandatory trustlist `scopes` when app-only tokens do not carry delegated scopes; direct `CLAIMPATH` access requires no trustlist mapping.
+When the first operand is `CLAIMPATH`, `$contains` performs exact, case-sensitive whole-element membership on a JSON string array. In every other accepted form it retains substring semantics. The example above cannot be satisfied by `administrator`, escaped delimiter text, or an `admin` value under an unrelated path. An empty array is false; mixed arrays, objects, nulls, and scalar values are indeterminate. The former `$in` form is no longer accepted. For mixed delegated and app-only tokens from one issuer, avoid mandatory trustlist `scopes` when app-only tokens do not carry delegated scopes; direct `CLAIMPATH` access requires no trustlist mapping.
+
+Claim values keep their JWT JSON type. Uncast `CLAIM` and scalar `CLAIMPATH` comparisons require strings. Claim casts are strict: string, number, and Boolean casts accept only the corresponding JSON type, while hexadecimal, date-time, and time casts accept strings with the required lexical form. Values are never coerced from strings such as `"3"` or `"true"` into numbers or Booleans.
 
 ## ABAC authorization
 
@@ -197,7 +199,7 @@ Evaluation gates:
    - Rights within one mapping entry are combined using logical OR (example: `PUT -> [CREATE, UPDATE]` means either right is sufficient).
    - Multiple matching mapping entries are also OR alternatives.
 2. Check rights in rule ACLs.
-3. Check attribute requirements (`CLAIM` or `CLAIMPATH` has a usable value, or `GLOBAL=ANONYMOUS`).
+3. Check subject eligibility from `ATTRIBUTES`; declared claims are PIP/token-issuer metadata and are resolved only if their formula occurrence is evaluated. Anonymous requests require `GLOBAL=ANONYMOUS`.
 4. Match object routes and descriptor objects.
 5. Evaluate formula and simplify using claims and globals.
 
@@ -205,7 +207,9 @@ Outcomes:
 - No match -> deny.
 - Fully decidable true -> allow.
 - Residual conditions -> allow + QueryFilter for downstream enforcement.
-- Invalid or unresolved claim operations -> deny. Invalid is preserved through logical operators, so `$not` cannot turn it into an allow.
+- False or indeterminate final formulas deny. `$not(indeterminate)` remains indeterminate; false dominates `$and`, true dominates `$or`, and otherwise an indeterminate operand makes the result indeterminate. A separately true ALLOW rule may still grant access.
+
+CREATE authorization is evaluated against the staged resource or created subtree inside the transaction. UPDATE and PATCH authorization must be true for both the complete current state and the complete prospective state after applying the operation's replacement or merge semantics. Checks happen before commit, and denial rolls back model, binary, history, and evidence changes.
 
 Relevant code:
 - [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go)
@@ -391,8 +395,8 @@ Access rules define:
 Attribute satisfaction follows these rules:
 
 - An attribute list must contain at least one subject attribute: `CLAIM`, `CLAIMPATH`, or `GLOBAL=ANONYMOUS`.
-- Every declared `CLAIM` or `CLAIMPATH` must resolve to a usable non-`null` value. `GLOBAL=ANONYMOUS` does not compensate for a missing or unusable claim.
-- Date-time globals are optional at this gate and are resolved during formula evaluation.
+- Declared `CLAIM` and `CLAIMPATH` values are not eagerly required. A missing or unusable value becomes indeterminate only when that formula occurrence is evaluated.
+- `REFERENCE` and date-time globals need not be repeated in `ATTRIBUTES`; operands are resolved from the formula context.
 - `GLOBAL=UTCNOW` and `GLOBAL=LOCALNOW` come from the server's trusted clock and are available to authenticated and anonymous requests.
 - `GLOBAL=CLIENTNOW` comes from the verified access-token claim with the same name. It is unavailable when that claim or access token is absent.
 - A list containing only date-time globals does not satisfy the attribute gate.

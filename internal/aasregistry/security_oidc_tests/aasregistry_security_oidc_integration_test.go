@@ -358,7 +358,7 @@ const rolesAccessRules = `{
       {
         "USEACL": "read-shells",
         "USEOBJECTS": [ "shells" ],
-        "FORMULA": { "$in": [ { "$strVal": "admin" }, { "$attribute": { "CLAIMPATH": "/realm_access/roles" } } ] }
+        "FORMULA": { "$contains": [ { "$attribute": { "CLAIMPATH": "/realm_access/roles" } }, { "$strVal": "admin" } ] }
       }
     ]
   }

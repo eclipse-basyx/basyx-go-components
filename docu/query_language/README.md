@@ -84,7 +84,7 @@ Key types:
   - SimplifyTrue: expression becomes a boolean true literal.
   - SimplifyFalse: expression becomes a boolean false literal.
   - SimplifyUndecided: expression still depends on backend fields.
-  - SimplifyInvalid: evaluation failed; authorization must fail closed.
+  - SimplifyIndeterminate: evaluation failed; authorization must fail closed.
 
 Implicit casts:
 - Simplification can insert implicit casts when field types and literal types differ.
@@ -98,9 +98,10 @@ Key functions:
 ### 3) Resolve attributes
 
 - Attribute values (for example, `CLAIM`, `CLAIMPATH`, or `GLOBAL`) are resolved by a caller-provided resolver.
-- An unavailable or unusable attribute is invalid, not backend-undecided. Invalid remains absorbing through `$not`, `$and`, `$or`, and `$match`.
+- An unavailable or unusable attribute is indeterminate, not backend-undecided. `$not` preserves indeterminate; false dominates `$and`, true dominates `$or`, and otherwise indeterminate propagates through `$and`, `$or`, and `$match`.
 - `CLAIM` selects a top-level JWT claim. `CLAIMPATH` selects a nested claim with an RFC 6901 JSON Pointer.
-- `$eq` compares scalar values. `$in` tests whether its scalar string first operand exactly equals an element of its string-array-valued second operand. `$in` is resolved before SQL and is not a field-list query operator.
+- `$eq` permits direct `CLAIMPATH` only against a scalar string operand, in either order. `$contains` with a first-position `CLAIMPATH` tests exact, case-sensitive membership in a JSON string array. Other `$contains` forms keep substring semantics. The former `$in` operator is rejected.
+- Claim casts preserve JWT JSON typing: `str`, `num`, and `bool` accept only strings, numbers, and Booleans respectively; hexadecimal/date-time/time casts accept matching lexical strings. Claim strings are not coerced to other primitive types.
 - Arrays and objects are never converted to JSON text for `$contains` or `$regex`.
 
 Key references:
@@ -251,10 +252,12 @@ Which simplifies to:
 For an exact nested role membership check:
 
 ```json
-{ "$in": [ { "$strVal": "admin" }, { "$attribute": { "CLAIMPATH": "/realm_access/roles" } } ] }
+{ "$contains": [ { "$attribute": { "CLAIMPATH": "/realm_access/roles" } }, { "$strVal": "admin" } ] }
 ```
 
-If $v$ is a scalar, the attribute node is replaced with the corresponding literal during simplification. String arrays remain typed and are accepted only by `$in`. Missing, `null`, object, empty-array, mixed-array, or unsupported values make the expression invalid and false; logical negation cannot invert that result to true.
+If $v$ is a scalar string, the uncast attribute node is replaced with the corresponding literal during simplification. String arrays remain typed and are accepted only by first-position `CLAIMPATH` `$contains`. An empty array evaluates false. Missing paths, `null`, objects, mixed arrays, wrong types, and invalid casts are indeterminate; logical negation cannot turn them into true.
+
+For writes, CREATE formulas evaluate the staged created target before commit. UPDATE formulas evaluate both the current state and the complete prospective state, and both evaluations must be true. Partial operations use their normal merge semantics when constructing the prospective state.
 
 ### Rule combination into QueryFilter (ABAC)
 

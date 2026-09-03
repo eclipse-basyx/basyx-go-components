@@ -55,7 +55,7 @@
       { "name": "admin_full", "acl": { "USEATTRIBUTES": "admin_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
     ],
     "DEFFORMULAS": [
-      { "name": "is_admin_role", "formula": { "$in": [{ "$strVal": "basyx.admin" }, { "$attribute": { "CLAIMPATH": "/roles" } }] } }
+      { "name": "is_admin_role", "formula": { "$contains": [ { "$attribute": { "CLAIMPATH": "/roles" } }, { "$strVal": "basyx.admin" } ] } }
     ],
     "rules": [
       { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description", "public_product_info"], "FORMULA": { "$boolean": true } },

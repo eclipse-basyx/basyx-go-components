@@ -25,16 +25,16 @@
       { "name": "always_true", "formula": { "$boolean": true } },
       { "name": "always_false", "formula": { "$boolean": false } },
       { "name": "data_provider_read_formula", "formula":
-        { "$in": [ { "$strVal": "view_digital_twin" }, { "$attribute": { "CLAIMPATH": "/role" } } ] }
+        { "$contains": [ { "$attribute": { "CLAIMPATH": "/role" } }, { "$strVal": "view_digital_twin" } ] }
       },
       { "name": "data_provider_create_formula", "formula":
-        { "$in": [ { "$strVal": "add_digital_twin" }, { "$attribute": { "CLAIMPATH": "/role" } } ] }
+        { "$contains": [ { "$attribute": { "CLAIMPATH": "/role" } }, { "$strVal": "add_digital_twin" } ] }
       },
       { "name": "data_provider_update_formula", "formula":
-        { "$in": [ { "$strVal": "update_digital_twin" }, { "$attribute": { "CLAIMPATH": "/role" } } ] }
+        { "$contains": [ { "$attribute": { "CLAIMPATH": "/role" } }, { "$strVal": "update_digital_twin" } ] }
       },
       { "name": "data_provider_delete_formula", "formula":
-        { "$in": [ { "$strVal": "delete_digital_twin" }, { "$attribute": { "CLAIMPATH": "/role" } } ] }
+        { "$contains": [ { "$attribute": { "CLAIMPATH": "/role" } }, { "$strVal": "delete_digital_twin" } ] }
       },
       { "name": "enforce_publicreadable_write_rule", "formula":
         {

@@ -30,10 +30,21 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
+
+// MarshalJSON serializes internal indeterminate markers as a valid false
+// placeholder. Internal deep-copy code restores the marker after unmarshalling.
+func (me MatchExpression) MarshalJSON() ([]byte, error) {
+	if me.Indeterminate {
+		return []byte(`{"$eq":[{"$boolean":true},{"$boolean":false}]}`), nil
+	}
+	type plain MatchExpression
+	return json.Marshal(plain(me))
+}
 
 // MatchExpression represents a pattern matching expression in the AAS access control grammar.
 //
@@ -52,6 +63,9 @@ import (
 //   - Regex match: {"$regex": ["$aas#id", "^https://.*"]}
 //   - Nested match: {"$match": [{"$eq": [...]}, {"$gt": [...]}]}
 type MatchExpression struct {
+	// Indeterminate is an internal runtime marker emitted during partial evaluation.
+	Indeterminate bool `json:"-" yaml:"-" mapstructure:"-"`
+
 	// Boolean is used internally by backend simplification. It is not part of
 	// the JSON matchExpression grammar.
 	Boolean *bool `json:"-" yaml:"-" mapstructure:"-"`
@@ -70,9 +84,6 @@ type MatchExpression struct {
 
 	// Gt corresponds to the JSON schema field "$gt".
 	Gt ComparisonItems `json:"$gt,omitempty" yaml:"$gt,omitempty" mapstructure:"$gt,omitempty"`
-
-	// In corresponds to the JSON schema field "$in".
-	In ComparisonItems `json:"$in,omitempty" yaml:"$in,omitempty" mapstructure:"$in,omitempty"`
 
 	// Le corresponds to the JSON schema field "$le".
 	Le ComparisonItems `json:"$le,omitempty" yaml:"$le,omitempty" mapstructure:"$le,omitempty"`
@@ -125,9 +136,6 @@ func (j *MatchExpression) UnmarshalJSON(value []byte) error {
 	if err := validateComparisonItems(plain.Ne, "$ne"); err != nil {
 		return err
 	}
-	if err := validateInItems(plain.In); err != nil {
-		return err
-	}
 	if err := validateOrderedComparisonItems(plain.Gt, "$gt"); err != nil {
 		return err
 	}
@@ -169,11 +177,6 @@ func AssertMatchExpressionRequired(obj MatchExpression) error {
 		}
 	}
 	for _, el := range obj.Ne {
-		if err := AssertValueRequired(el); err != nil {
-			return err
-		}
-	}
-	for _, el := range obj.In {
 		if err := AssertValueRequired(el); err != nil {
 			return err
 		}
@@ -234,11 +237,6 @@ func AssertMatchExpressionConstraints(obj MatchExpression) error {
 		}
 	}
 	for _, el := range obj.Ne {
-		if err := AssertValueConstraints(el); err != nil {
-			return err
-		}
-	}
-	for _, el := range obj.In {
 		if err := AssertValueConstraints(el); err != nil {
 			return err
 		}

@@ -1,7 +1,7 @@
 kind: changed
-body: ABAC claims are no longer serialized to JSON text. `CLAIM` selects a top-level scalar or string array, while `CLAIMPATH` selects a nested value using an RFC 6901 JSON Pointer. Scalar comparisons continue to use `$eq`; exact string-array membership uses `$in` with the scalar first. Policies using `$contains`, `$regex`, or `$eq` with actual array or object claims must migrate; those operators continue to work with scalar string claims. Single-item arrays also require `$in`.
+body: ABAC claims retain their JWT JSON types. `CLAIM` selects a top-level value and `CLAIMPATH` selects a nested value using a non-empty RFC 6901 JSON Pointer. Uncast scalar comparisons require strings; claim casts accept only the corresponding JSON type. Exact string-array membership uses `$contains` with `CLAIMPATH` first. The branch-only `$in` operator has been removed, so policies must migrate from `{"$in":[scalar,CLAIMPATH]}` to `{"$contains":[CLAIMPATH,scalar]}`. Attributes are resolved lazily, formula evaluation uses true/false/indeterminate logic, and CREATE/UPDATE checks are performed on staged state before commit, with UPDATE requiring both current and prospective state.
 time: 2026-08-27T09:00:46.000000000Z
 custom:
   Impact: High
   PullRequest: 616
-  SecurityImpact: Eliminates substring and nested-path claim confusion. Missing, `null`, empty, object, mixed-array, and unsupported claim values fail closed.
+  SecurityImpact: Eliminates substring and nested-path claim confusion. Missing, `null`, wrong-type, object, mixed-array, and unsupported claim values are indeterminate and fail closed; empty string arrays evaluate false.

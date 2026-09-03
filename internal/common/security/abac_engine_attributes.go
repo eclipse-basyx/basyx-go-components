@@ -30,51 +30,35 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
-// attributesSatisfiedAll returns true when all required claims are present and
-// the attributes identify either a claim-based or anonymous subject. Date-time
-// globals do not restrict access at this stage and are resolved when evaluating
-// formulas. Unknown attributes fail closed.
+// attributesSatisfiedAll checks only subject eligibility. ATTRIBUTES declares
+// what a PIP or token issuer may need; claim values are resolved lazily when an
+// evaluated formula occurrence uses them.
 func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
 	if len(items) == 0 {
 		return false
 	}
 
-	hasSubjectAttribute := false
+	hasClaimSubject := false
+	hasAnonymousSubject := false
 	for _, it := range items {
 		switch it.Kind {
 		case grammar.ATTRGLOBAL:
 			switch it.Value {
 			case "ANONYMOUS":
-				hasSubjectAttribute = true
+				hasAnonymousSubject = true
 			case "UTCNOW", "LOCALNOW", "CLIENTNOW":
 			default:
 				return false
 			}
-		case grammar.ATTRCLAIM:
-			hasSubjectAttribute = true
-			value, ok := claims[it.Value]
-			if !ok || !claimAttributeAvailable(value) {
-				return false
-			}
-		case grammar.ATTRCLAIMPATH:
-			hasSubjectAttribute = true
-			value, ok, err := jsonPointerValue(claims, it.Value)
-			if err != nil || !ok || !claimAttributeAvailable(value) {
-				return false
-			}
+		case grammar.ATTRCLAIM, grammar.ATTRCLAIMPATH:
+			hasClaimSubject = true
+		case grammar.ATTRREFERENCE:
 		default:
 			return false
 		}
 	}
-
-	return hasSubjectAttribute
-}
-
-func claimAttributeAvailable(value any) bool {
-	normalized, ok := normalizeClaimValue(value)
-	if !ok {
-		return false
+	if len(claims) == 0 {
+		return hasAnonymousSubject
 	}
-	text, isString := normalized.(string)
-	return !isString || text != ""
+	return hasClaimSubject || hasAnonymousSubject
 }
