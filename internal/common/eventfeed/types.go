@@ -31,7 +31,9 @@ import "time"
 type Presentation string
 
 const (
-	// PresentationFull returns the full event data representation.
+	// PresentationRegular returns the regular event data representation.
+	PresentationRegular Presentation = "REGULAR"
+	// PresentationFull is a deprecated alias for PresentationRegular.
 	PresentationFull Presentation = "FULL"
 	// PresentationCompact returns the compact event data representation.
 	PresentationCompact Presentation = "COMPACT"
@@ -58,6 +60,7 @@ const (
 
 // FeedEvent is a persisted CloudEvents feed record with both presentation variants.
 type FeedEvent struct {
+	Seq               int64
 	ID                string
 	Type              string
 	Subject           string
@@ -135,23 +138,20 @@ type PresentationCapabilities struct {
 	Default   string   `json:"default"`
 }
 
-// AuthCapabilities reports authentication options for the feed.
+// AuthCapabilities reports that feed HTTP security is inherited from the service.
 type AuthCapabilities struct {
-	Public bool `json:"public"`
-	Bearer bool `json:"bearer"`
+	Inherited bool `json:"inherited"`
 }
 
 // cursorData is the decoded keyset pagination cursor payload.
 type cursorData struct {
-	AfterID   string    `json:"afterId"`
-	AfterTime time.Time `json:"afterTime"`
+	AfterSeq int64 `json:"afterSeq"`
 }
 
 // domainQuery is the internal repository query after validation/cursor resolution.
 type domainQuery struct {
-	AfterID   string
-	AfterTime *time.Time
-	Since     *time.Time
-	Filter    *parsedFilter
-	Limit     int
+	AfterSeq int64
+	Since    *time.Time
+	Filter   *parsedFilter
+	Limit    int
 }

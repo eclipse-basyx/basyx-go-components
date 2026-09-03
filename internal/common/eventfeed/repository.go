@@ -35,6 +35,17 @@ import (
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 )
 
+const (
+	retentionBatchSize = 1000
+	retentionLockKey   = int64(6471200)
+)
+
+type queryExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // Repository persists and queries event feed records.
 type Repository struct {
 	db      *sql.DB
@@ -43,7 +54,6 @@ type Repository struct {
 	now     func() time.Time
 }
 
-// NewRepository creates an event feed repository backed by db.
 func NewRepository(db *sql.DB, maxAge time.Duration) *Repository {
 	return &Repository{
 		db:      db,
@@ -53,32 +63,40 @@ func NewRepository(db *sql.DB, maxAge time.Duration) *Repository {
 	}
 }
 
-// Save persists event.
+// Save persists event using a dedicated connection (not a model transaction).
 func (r *Repository) Save(ctx context.Context, event FeedEvent) error {
+	_, err := r.save(ctx, r.db, event)
+	return err
+}
+
+// SaveTx persists event in the same writer transaction as the model mutation.
+func (r *Repository) SaveTx(ctx context.Context, tx *sql.Tx, event FeedEvent) (FeedEvent, error) {
+	return r.save(ctx, tx, event)
+}
+
+func (r *Repository) save(ctx context.Context, exec queryExecer, event FeedEvent) (FeedEvent, error) {
 	query, args, err := r.dialect.Insert("feed_events").Rows(goqu.Record{
 		"id":                 event.ID,
 		"event_type":         event.Type,
 		"subject":            event.Subject,
 		"source":             event.Source,
-		"time":               event.Time.UTC(),
 		"dataschema_full":    event.DataSchemaFull,
 		"dataschema_compact": event.DataSchemaCompact,
 		"data_full":          goqu.L("?::jsonb", event.DataFull),
 		"data_compact":       goqu.L("?::jsonb", event.DataCompact),
-	}).ToSQL()
+	}).Returning("seq", "time").ToSQL()
 	if err != nil {
-		return fmt.Errorf("EVENTFEED-SAVE-BUILDSQL: %w", err)
+		return FeedEvent{}, fmt.Errorf("EVENTFEED-SAVE-BUILDSQL: %w", err)
 	}
-	if _, err = r.db.ExecContext(ctx, query, args...); err != nil {
-		return fmt.Errorf("EVENTFEED-SAVE-EXEC: %w", err)
+	if err = exec.QueryRowContext(ctx, query, args...).Scan(&event.Seq, &event.Time); err != nil {
+		return FeedEvent{}, fmt.Errorf("EVENTFEED-SAVE-EXEC: %w", err)
 	}
-	return nil
+	return event, nil
 }
 
-// FindByID finds an event by its identifier.
 func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, error) {
 	query, args, err := r.dialect.From("feed_events").
-		Select("id", "event_type", "subject", "source", "time",
+		Select("seq", "id", "event_type", "subject", "source", "time",
 			"dataschema_full", "dataschema_compact", "data_full", "data_compact").
 		Where(goqu.C("id").Eq(id)).
 		ToSQL()
@@ -87,7 +105,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, 
 	}
 	var e FeedEvent
 	err = r.db.QueryRowContext(ctx, query, args...).Scan(
-		&e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
+		&e.Seq, &e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
 		&e.DataSchemaFull, &e.DataSchemaCompact, &e.DataFull, &e.DataCompact,
 	)
 	if err == sql.ErrNoRows {
@@ -99,20 +117,23 @@ func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, 
 	return e, true, nil
 }
 
-// FindPage returns one ordered page of retained events.
 func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation Presentation) ([]FeedEvent, error) {
+	compact := presentation == PresentationCompact
+	schemaCol := "dataschema_full"
+	dataCol := "data_full"
+	if compact {
+		schemaCol = "dataschema_compact"
+		dataCol = "data_compact"
+	}
 	ds := r.dialect.From("feed_events").
-		Select("id", "event_type", "subject", "source", "time",
-			"dataschema_full", "dataschema_compact", "data_full", "data_compact")
+		Select("seq", "id", "event_type", "subject", "source", "time",
+			goqu.C(schemaCol), goqu.C(dataCol))
 
 	retentionFloor := r.now().Add(-r.maxAge)
 	ds = ds.Where(goqu.C("time").Gte(retentionFloor))
 
-	if q.AfterID != "" && q.AfterTime != nil {
-		ds = ds.Where(goqu.Or(
-			goqu.C("time").Gt(*q.AfterTime),
-			goqu.And(goqu.C("time").Eq(*q.AfterTime), goqu.C("id").Gt(q.AfterID)),
-		))
+	if q.AfterSeq > 0 {
+		ds = ds.Where(goqu.C("seq").Gt(q.AfterSeq))
 	}
 	if q.Since != nil {
 		ds = ds.Where(goqu.C("time").Gte(*q.Since))
@@ -131,7 +152,7 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 		}
 	}
 
-	ds = ds.Order(goqu.C("time").Asc(), goqu.C("id").Asc()).Limit(uint(q.Limit + 1))
+	ds = ds.Order(goqu.C("seq").Asc()).Limit(uint(q.Limit + 1))
 	query, args, err := ds.ToSQL()
 	if err != nil {
 		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-BUILDSQL: %w", err)
@@ -140,16 +161,24 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 	if err != nil {
 		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-QUERY: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 
 	events := make([]FeedEvent, 0, q.Limit+1)
 	for rows.Next() {
 		var e FeedEvent
+		var schema, data string
 		if err = rows.Scan(
-			&e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
-			&e.DataSchemaFull, &e.DataSchemaCompact, &e.DataFull, &e.DataCompact,
+			&e.Seq, &e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
+			&schema, &data,
 		); err != nil {
 			return nil, fmt.Errorf("EVENTFEED-FINDPAGE-SCAN: %w", err)
+		}
+		if compact {
+			e.DataSchemaCompact = schema
+			e.DataCompact = data
+		} else {
+			e.DataSchemaFull = schema
+			e.DataFull = data
 		}
 		events = append(events, e)
 	}
@@ -159,20 +188,45 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 	return events, nil
 }
 
-// DeleteOlderThan deletes events created before cutoff.
+// TryRetentionLock acquires a session advisory lock so only one replica cleans up.
+func (r *Repository) TryRetentionLock(ctx context.Context) (bool, error) {
+	var locked bool
+	if err := r.db.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", retentionLockKey).Scan(&locked); err != nil {
+		return false, fmt.Errorf("EVENTFEED-RETENTION-LOCK: %w", err)
+	}
+	return locked, nil
+}
+
+func (r *Repository) ReleaseRetentionLock(ctx context.Context) {
+	_, _ = r.db.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", retentionLockKey)
+}
+
+// DeleteOlderThan deletes events created before cutoff in bounded batches.
 func (r *Repository) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
-	query, args, err := r.dialect.Delete("feed_events").
-		Where(goqu.C("time").Lt(cutoff.UTC())).
-		ToSQL()
-	if err != nil {
-		return 0, fmt.Errorf("EVENTFEED-DELETE-BUILDSQL: %w", err)
+	var total int64
+	for {
+		query, args, err := r.dialect.Delete("feed_events").
+			Where(goqu.C("seq").In(
+				r.dialect.From("feed_events").
+					Select("seq").
+					Where(goqu.C("time").Lt(cutoff.UTC())).
+					Order(goqu.C("seq").Asc()).
+					Limit(uint(retentionBatchSize)),
+			)).
+			ToSQL()
+		if err != nil {
+			return total, fmt.Errorf("EVENTFEED-DELETE-BUILDSQL: %w", err)
+		}
+		res, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			return total, fmt.Errorf("EVENTFEED-DELETE-EXEC: %w", err)
+		}
+		n, _ := res.RowsAffected()
+		total += n
+		if n < int64(retentionBatchSize) {
+			return total, nil
+		}
 	}
-	res, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		return 0, fmt.Errorf("EVENTFEED-DELETE-EXEC: %w", err)
-	}
-	n, _ := res.RowsAffected()
-	return n, nil
 }
 
 func filterExpression(column string, cmp comparison) (goqu.Expression, error) {

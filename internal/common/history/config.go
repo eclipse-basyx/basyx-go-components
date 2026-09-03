@@ -159,11 +159,18 @@ func ActiveConfig() Config {
 	return activeConfig
 }
 
-// MutationRecordingEnabled reports whether PostgreSQL history or independent
-// WORM mutation evidence must be recorded for acknowledged model changes.
+// MutationRecordingEnabled reports whether acknowledged model changes must
+// still go through AppendVersionTx. History rows, WORM evidence, and the Event
+// Feed mutation sink all depend on that path.
 func MutationRecordingEnabled() bool {
 	cfg := ActiveConfig()
-	return cfg.Mode != ModeOff || cfg.EvidenceEnabled
+	return cfg.Mode != ModeOff || cfg.EvidenceEnabled || mutationSinkRegistered()
+}
+
+// LiveSnapshotRequired reports whether callers must load the current model
+// snapshot before a mutation so evidence or Event Feed can observe it.
+func LiveSnapshotRequired() bool {
+	return ActiveConfig().EvidenceEnabled || mutationSinkRegistered()
 }
 
 func normalizeConfig(cfg Config) Config {

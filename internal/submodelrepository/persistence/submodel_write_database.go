@@ -645,13 +645,9 @@ func (s *SubmodelDatabase) appendAcknowledgedSubmodelPutHistoryTx(
 	if !history.MutationRecordingEnabled() {
 		return nil
 	}
-	var previousSnapshot map[string]any
-	var err error
-	if history.ActiveConfig().EvidenceEnabled {
-		previousSnapshot, err = submodelToHistorySnapshot(previous)
-		if err != nil {
-			return err
-		}
+	previousSnapshot, err := submodelToHistorySnapshot(previous)
+	if err != nil {
+		return err
 	}
 	return s.appendSubmodelHistoryTx(ctx, tx, persisted, previousSnapshot, history.ChangeUpdated, false)
 }

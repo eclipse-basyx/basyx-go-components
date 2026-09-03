@@ -32,28 +32,46 @@
 -- ----------------------------------------------------------------------------
 -- Description:
 --   Adds feed_events table for the CloudEvents Event Feed REST API.
+--   Cursor/order key is BIGSERIAL seq assigned in the writer transaction.
 --
 -- Copyright (c) Eclipse BaSyx Authors and Fraunhofer IESE
 -- SPDX-License-Identifier: MIT
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS feed_events (
+    seq                 BIGSERIAL    NOT NULL,
     id                  VARCHAR(64)  PRIMARY KEY,
     event_type          TEXT         NOT NULL,
     subject             TEXT         NOT NULL,
     source              TEXT         NOT NULL,
-    time                TIMESTAMPTZ  NOT NULL,
+    time                TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
     dataschema_full     TEXT         NOT NULL,
     dataschema_compact  TEXT         NOT NULL,
     data_full           JSONB        NOT NULL,
-    data_compact        JSONB        NOT NULL
+    data_compact        JSONB        NOT NULL,
+    CONSTRAINT ux_feed_events_seq UNIQUE (seq)
 );
 
-CREATE INDEX IF NOT EXISTS ix_feed_events_time_id
-    ON feed_events (time ASC, id ASC);
+CREATE INDEX IF NOT EXISTS ix_feed_events_seq
+    ON feed_events (seq ASC);
 
-CREATE INDEX IF NOT EXISTS ix_feed_events_time
-    ON feed_events (time);
+CREATE INDEX IF NOT EXISTS ix_feed_events_event_type_seq
+    ON feed_events (event_type ASC, seq ASC);
+
+CREATE INDEX IF NOT EXISTS ix_feed_events_subject_seq
+    ON feed_events (subject ASC, seq ASC);
+
+CREATE INDEX IF NOT EXISTS ix_feed_events_source_seq
+    ON feed_events (source ASC, seq ASC);
+
+CREATE INDEX IF NOT EXISTS ix_feed_events_dataschema_full_seq
+    ON feed_events (dataschema_full ASC, seq ASC);
+
+CREATE INDEX IF NOT EXISTS ix_feed_events_dataschema_compact_seq
+    ON feed_events (dataschema_compact ASC, seq ASC);
+
+CREATE INDEX IF NOT EXISTS ix_feed_events_time_seq
+    ON feed_events (time ASC, seq ASC);
 
 UPDATE basyxsystem
 SET schema_version = 'v1.2.0',

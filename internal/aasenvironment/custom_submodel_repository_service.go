@@ -150,8 +150,6 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), nil
 	}
 
-	publishSubmodelFeedEvent(ctx, s.SubmodelRepositoryAPIAPIService, true, submodel, nil, globalAssetIDsForSubmodel(ctx, s.persistence, submodel.ID()))
-
 	submodelJSON, jsonErr := jsonization.ToJsonable(submodel)
 	if jsonErr != nil {
 		return newSubmodelRepoErrorResponse(jsonErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
@@ -179,14 +177,12 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 	}
 
 	isUpdate := false
-	var previousSubmodel types.ISubmodel
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		putResult, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransactionWithResult(ctx, tx, decodedIdentifier, submodel)
 		if putErr != nil {
 			return putErr
 		}
 		isUpdate = putResult.IsUpdate
-		previousSubmodel = putResult.Previous
 		if !putResult.Changed {
 			return nil
 		}
@@ -222,8 +218,6 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
-	publishSubmodelFeedEvent(ctx, s.SubmodelRepositoryAPIAPIService, !isUpdate, submodel, previousSubmodel, globalAssetIDsForSubmodel(ctx, s.persistence, submodel.ID()))
-
 	if isUpdate {
 		return commonmodel.Response(http.StatusNoContent, nil), nil
 	}
@@ -251,22 +245,6 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 		return newSubmodelRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	submodel, getErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, decodedSubmodelIdentifier, "core", true, false)
-	if getErr != nil {
-		if common.IsErrDenied(getErr) {
-			return newSubmodelRepoErrorResponse(getErr, http.StatusForbidden, operation, "Denied"), nil
-		}
-		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
-			return newSubmodelRepoErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
-		}
-		if common.IsErrBadRequest(getErr) {
-			return newSubmodelRepoErrorResponse(getErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newSubmodelRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
-	}
-
-	globalAssetIDs := globalAssetIDsForSubmodel(ctx, s.persistence, decodedSubmodelIdentifier)
-
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if deleteErr := s.persistence.SubmodelRepository.DeleteSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier); deleteErr != nil {
 			return deleteErr
@@ -291,8 +269,6 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 		}
 		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
-
-	publishSubmodelDeletedFeedEvent(ctx, s.SubmodelRepositoryAPIAPIService, submodel, globalAssetIDs)
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
 }

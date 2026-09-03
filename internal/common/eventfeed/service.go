@@ -27,6 +27,7 @@ package eventfeed
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -34,7 +35,6 @@ import (
 	"time"
 )
 
-// Service provides event feed publishing, querying, and retention operations.
 type Service struct {
 	repo   *Repository
 	cfg    Config
@@ -43,7 +43,6 @@ type Service struct {
 	logger *slog.Logger
 }
 
-// NewService creates an event feed service.
 func NewService(repo *Repository, cfg Config) *Service {
 	return &Service{
 		repo:   repo,
@@ -54,7 +53,6 @@ func NewService(repo *Repository, cfg Config) *Service {
 	}
 }
 
-// Builder returns the service's configured event builder.
 func (s *Service) Builder() *Builder {
 	return s.build
 }
@@ -66,18 +64,13 @@ func (s *Service) Write(ctx context.Context, event FeedEvent) error {
 	return s.repo.Save(ctx, event)
 }
 
-// PublishBestEffort writes event and logs build or persistence failures.
-func (s *Service) PublishBestEffort(ctx context.Context, event FeedEvent, err error) {
-	if err != nil {
-		s.logger.WarnContext(ctx, "event feed build failed", "error.code", "EVENTFEED-PUBLISH-BUILD", "error", err)
-		return
+// WriteTx persists event in the same writer transaction as the model mutation.
+func (s *Service) WriteTx(ctx context.Context, tx *sql.Tx, event FeedEvent) error {
+	if s == nil || s.repo == nil || tx == nil {
+		return nil
 	}
-	if s == nil || !s.cfg.Enabled {
-		return
-	}
-	if writeErr := s.Write(ctx, event); writeErr != nil {
-		s.logger.WarnContext(ctx, "event feed write failed", "error.code", "EVENTFEED-PUBLISH-WRITE", "error", writeErr)
-	}
+	_, err := s.repo.SaveTx(ctx, tx, event)
+	return err
 }
 
 func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, error) {
@@ -92,13 +85,11 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 	if err != nil {
 		return FeedResponse{}, err
 	}
-	events, err := s.repo.FindPage(ctx, domain, query.Presentation)
+	presentation := normalizePresentation(query.Presentation)
+	query.Presentation = presentation
+	events, hasMore, err := s.findAuthorizedPage(ctx, domain, presentation, query.Limit)
 	if err != nil {
 		return FeedResponse{}, err
-	}
-	hasMore := len(events) > query.Limit
-	if hasMore {
-		events = events[:query.Limit]
 	}
 	records, err := toRecords(events, query.Presentation)
 	if err != nil {
@@ -107,7 +98,7 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 	var cursor string
 	if hasMore && len(events) > 0 {
 		last := events[len(events)-1]
-		cursor, err = encodeCursor(last.ID, last.Time)
+		cursor, err = encodeCursor(last.Seq)
 		if err != nil {
 			return FeedResponse{}, err
 		}
@@ -124,14 +115,13 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 	}, nil
 }
 
-// Capabilities returns the event feed capabilities advertised to clients.
 func (s *Service) Capabilities() CapabilitiesResponse {
 	eventTypes := make(map[string]EventTypeCapabilities, len(allEventTypes()))
 	for _, t := range allEventTypes() {
 		full, compact := schemaPairForType(t, s.cfg.SchemaBaseURL)
 		eventTypes[t] = EventTypeCapabilities{
 			SupportsCompact:      true,
-			Schemas:              map[string]string{"FULL": full, "COMPACT": compact},
+			Schemas:              map[string]string{string(PresentationRegular): full, string(PresentationCompact): compact},
 			FilterableDataFields: nil,
 		}
 	}
@@ -141,23 +131,28 @@ func (s *Service) Capabilities() CapabilitiesResponse {
 		Filter: FilterCapabilities{
 			FilterableFields:  []string{"event.type", "event.subject", "event.source", "event.dataschema"},
 			SupportedPrefixes: []string{"rsql"},
-			RSQL:              RSQLCapabilities{Operators: []string{"==", "!=", "in", "out"}},
+			RSQL:              RSQLCapabilities{Operators: []string{"==", "!=", "=in=", "=out="}},
 		},
 		Presentation: PresentationCapabilities{
-			Supported: []string{string(PresentationFull), string(PresentationCompact)},
-			Default:   string(PresentationFull),
+			Supported: []string{string(PresentationRegular), string(PresentationCompact)},
+			Default:   string(PresentationRegular),
 		},
 		MaxAge:      s.cfg.MaxAgePeriod(),
 		MaxPageSize: s.cfg.MaxPageSize,
-		Auth: AuthCapabilities{
-			Public: s.cfg.PublicAccess,
-			Bearer: s.cfg.BearerAuth,
-		},
+		Auth:        AuthCapabilities{Inherited: true},
 	}
 }
 
-// RunRetention deletes events beyond the configured retention window.
 func (s *Service) RunRetention(ctx context.Context) (int64, error) {
+	locked, err := s.repo.TryRetentionLock(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if !locked {
+		return 0, nil
+	}
+	defer s.repo.ReleaseRetentionLock(ctx)
+
 	cutoff := s.now().Add(-(s.cfg.MaxAge + s.cfg.HardDeleteGrace))
 	n, err := s.repo.DeleteOlderThan(ctx, cutoff)
 	if err != nil {
@@ -166,6 +161,55 @@ func (s *Service) RunRetention(ctx context.Context) (int64, error) {
 	s.logger.InfoContext(ctx, "event feed retention completed",
 		"deleted", n, "cutoff", cutoff.Format(time.RFC3339))
 	return n, nil
+}
+
+func (s *Service) findAuthorizedPage(ctx context.Context, domain domainQuery, presentation Presentation, limit int) ([]FeedEvent, bool, error) {
+	authorizer := currentRecordAuthorizer()
+	if authorizer == nil {
+		events, err := s.repo.FindPage(ctx, domain, presentation)
+		if err != nil {
+			return nil, false, err
+		}
+		hasMore := len(events) > limit
+		if hasMore {
+			events = events[:limit]
+		}
+		return events, hasMore, nil
+	}
+	return s.collectAuthorizedEvents(ctx, domain, presentation, limit, authorizer)
+}
+
+func (s *Service) collectAuthorizedEvents(ctx context.Context, domain domainQuery, presentation Presentation, limit int, authorizer RecordAuthorizer) ([]FeedEvent, bool, error) {
+	out := make([]FeedEvent, 0, limit)
+	hasMore := false
+	for round := 0; round < 32; round++ {
+		page, err := s.repo.FindPage(ctx, domain, presentation)
+		if err != nil {
+			return nil, false, err
+		}
+		rawHasMore := len(page) > limit
+		if rawHasMore {
+			page = page[:limit]
+		}
+		if len(page) == 0 {
+			break
+		}
+		for _, event := range page {
+			domain.AfterSeq = event.Seq
+			if !authorizer.Allow(ctx, event.Type, event.Subject) {
+				continue
+			}
+			if len(out) == limit {
+				hasMore = true
+				return out, true, nil
+			}
+			out = append(out, event)
+		}
+		if !rawHasMore {
+			break
+		}
+	}
+	return out, hasMore, nil
 }
 
 func (s *Service) validateQuery(query FeedQuery) error {
@@ -182,32 +226,35 @@ func (s *Service) validateQuery(query FeedQuery) error {
 	if query.Since != nil && query.Since.After(s.now()) {
 		return newQueryError("EVENTFEED-QUERY-SINCE", "since must not be in the future")
 	}
-	switch query.Presentation {
-	case PresentationFull, PresentationCompact, "":
+	switch normalizePresentation(query.Presentation) {
+	case PresentationRegular, PresentationCompact:
 	default:
-		return newQueryError("EVENTFEED-QUERY-PRESENTATION", "presentation must be FULL or COMPACT")
+		return newQueryError("EVENTFEED-QUERY-PRESENTATION", "presentation must be REGULAR or COMPACT")
 	}
 	return nil
 }
 
-func (s *Service) buildDomainQuery(ctx context.Context, query FeedQuery, filter *parsedFilter) (domainQuery, error) {
-	presentation := query.Presentation
-	if presentation == "" {
-		presentation = PresentationFull
+func normalizePresentation(presentation Presentation) Presentation {
+	switch Presentation(strings.ToUpper(strings.TrimSpace(string(presentation)))) {
+	case "", PresentationRegular, PresentationFull:
+		return PresentationRegular
+	case PresentationCompact:
+		return PresentationCompact
+	default:
+		return presentation
 	}
-	_ = presentation
+}
 
+func (s *Service) buildDomainQuery(ctx context.Context, query FeedQuery, filter *parsedFilter) (domainQuery, error) {
 	if strings.TrimSpace(query.Cursor) != "" {
 		data, err := decodeCursor(query.Cursor)
 		if err != nil {
 			return domainQuery{}, newQueryError("EVENTFEED-QUERY-CURSOR", err.Error())
 		}
-		t := data.AfterTime.UTC()
 		return domainQuery{
-			AfterID:   data.AfterID,
-			AfterTime: &t,
-			Filter:    filter,
-			Limit:     query.Limit,
+			AfterSeq: data.AfterSeq,
+			Filter:   filter,
+			Limit:    query.Limit,
 		}, nil
 	}
 	if query.LastEventID != "" {
@@ -218,12 +265,10 @@ func (s *Service) buildDomainQuery(ctx context.Context, query FeedQuery, filter 
 		if !found {
 			return domainQuery{}, newQueryError("EVENTFEED-QUERY-LASTEVENT", "unknown lastEventId: "+query.LastEventID)
 		}
-		t := event.Time.UTC()
 		return domainQuery{
-			AfterID:   event.ID,
-			AfterTime: &t,
-			Filter:    filter,
-			Limit:     query.Limit,
+			AfterSeq: event.Seq,
+			Filter:   filter,
+			Limit:    query.Limit,
 		}, nil
 	}
 	return domainQuery{
@@ -238,7 +283,7 @@ func toRecords(events []FeedEvent, presentation Presentation) ([]FeedRecord, err
 	for _, e := range events {
 		dataJSON := e.DataFull
 		schema := e.DataSchemaFull
-		if presentation == PresentationCompact {
+		if normalizePresentation(presentation) == PresentationCompact {
 			dataJSON = e.DataCompact
 			schema = e.DataSchemaCompact
 		}

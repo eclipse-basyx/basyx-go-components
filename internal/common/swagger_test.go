@@ -438,3 +438,52 @@ func TestInjectServerURL_DoesNotInheritServerBasePathFromSpec(t *testing.T) {
 		t.Fatal("expected injected server URL to not inherit /api/v3 base path")
 	}
 }
+
+func TestAddSwaggerUIInjectsEventFeedOnlyWhenEnabled(t *testing.T) {
+	spec := []byte("openapi: 3.0.3\npaths:\n  /x:\n    get:\n      responses:\n        '200':\n          description: ok\n")
+
+	disabledRouter := chi.NewRouter()
+	includeEventFeed := false
+	AddSwaggerUI(disabledRouter, SwaggerUIConfig{
+		Title:            "test",
+		SpecURL:          "/api-docs/openapi.yaml",
+		UIPath:           "/swagger",
+		SpecPath:         "/api-docs/openapi.yaml",
+		SpecContent:      spec,
+		IncludeEventFeed: &includeEventFeed,
+	})
+	disabledRecorder := httptest.NewRecorder()
+	disabledRouter.ServeHTTP(disabledRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
+	if strings.Contains(disabledRecorder.Body.String(), "\n  /events:\n") {
+		t.Fatal("expected Event Feed paths to be hidden when disabled")
+	}
+	if strings.Contains(disabledRecorder.Body.String(), "/.well-known/event-feed.json") {
+		t.Fatal("expected Event Feed capabilities path to be hidden when disabled")
+	}
+
+	enabledRouter := chi.NewRouter()
+	includeEventFeed = true
+	AddSwaggerUI(enabledRouter, SwaggerUIConfig{
+		Title:            "test",
+		SpecURL:          "/api-docs/openapi.yaml",
+		UIPath:           "/swagger",
+		SpecPath:         "/api-docs/openapi.yaml",
+		SpecContent:      spec,
+		IncludeEventFeed: &includeEventFeed,
+	})
+	enabledRecorder := httptest.NewRecorder()
+	enabledRouter.ServeHTTP(enabledRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
+	body := enabledRecorder.Body.String()
+	if !strings.Contains(body, "\n  /events:\n") {
+		t.Fatal("expected Event Feed /events path when enabled")
+	}
+	if !strings.Contains(body, "/.well-known/event-feed.json") {
+		t.Fatal("expected Event Feed capabilities path when enabled")
+	}
+	if strings.Contains(body, "default: 100") {
+		t.Fatal("OpenAPI limit must not hard-code default 100")
+	}
+	if !strings.Contains(body, "eventing.feed.maxPageSize") {
+		t.Fatal("expected omitted limit to document configured maxPageSize")
+	}
+}

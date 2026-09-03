@@ -312,15 +312,15 @@ const eventFeedPathsYAML = `  /events:
           required: false
           schema:
             type: string
-            enum: [FULL, COMPACT]
-            default: FULL
+            enum: [REGULAR, COMPACT]
+            default: REGULAR
         - name: limit
           in: query
           required: false
           schema:
             type: integer
             minimum: 1
-            default: 100
+          description: Page size. When omitted, the configured eventing.feed.maxPageSize is used.
       responses:
         '200':
           description: Event feed page
@@ -349,6 +349,24 @@ const eventFeedPathsYAML = `  /events:
           description: Caller is not authorized
         '500':
           description: Internal server error
+  /.well-known/event-feed.json:
+    get:
+      tags:
+        - Event Feed API
+      summary: Returns Event Feed capabilities
+      operationId: GetEventFeedCapabilities
+      responses:
+        '200':
+          description: Event Feed capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Authentication required when security is enabled
+        '403':
+          description: Caller is not authorized
 `
 
 const abacManagementPathsYAML = `  /security/abac/active-policy:
@@ -1763,7 +1781,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 		includeVerifyEndpoint = &serverConfig.Server.VerificationEndpointAvailable
 		abacManagementEnabled := shouldIncludeABACManagement(serverConfig)
 		includeABACManagement = &abacManagementEnabled
-		eventFeedEnabled := serverConfig.Eventing.Enabled
+		eventFeedEnabled := serverConfig.Eventing.Feed.Enabled
 		includeEventFeed = &eventFeedEnabled
 	}
 

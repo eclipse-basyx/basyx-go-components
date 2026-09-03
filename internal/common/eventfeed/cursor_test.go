@@ -27,12 +27,10 @@ package eventfeed
 
 import (
 	"testing"
-	"time"
 )
 
 func TestCursorRoundTrip(t *testing.T) {
-	ts := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
-	enc, err := encodeCursor("evt-1", ts)
+	enc, err := encodeCursor(42)
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
@@ -40,11 +38,8 @@ func TestCursorRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if dec.AfterID != "evt-1" {
-		t.Fatalf("id=%s", dec.AfterID)
-	}
-	if !dec.AfterTime.Equal(ts) {
-		t.Fatalf("time=%s", dec.AfterTime)
+	if dec.AfterSeq != 42 {
+		t.Fatalf("seq=%d", dec.AfterSeq)
 	}
 }
 

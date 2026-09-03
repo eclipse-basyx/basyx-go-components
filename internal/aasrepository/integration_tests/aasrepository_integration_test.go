@@ -53,6 +53,7 @@ import (
 const actionDeleteAllAAS = "DELETE_ALL_AAS"
 
 var aasRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var aasRepositoryEventFeedBaseURL = testenv.LocalURLFromEnv("BASYX_IT_EVENT_FEED_API_PORT", 6008)
 var aasRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6006)
 var integrationTestDSN = getIntegrationTestDSN()
 
@@ -1607,18 +1608,21 @@ func TestStandaloneStartupRejectsUnsupportedSubmodelRegistryToggle(t *testing.T)
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
 		testenv.SetEnvDefaultsOrExit(map[string]string{
-			"BASYX_IT_API_URL":         aasRepositoryBaseURL,
-			"BASYX_IT_INVALID_API_URL": aasRepositoryInvalidBaseURL,
+			"BASYX_IT_API_URL":            aasRepositoryBaseURL,
+			"BASYX_IT_EVENT_FEED_API_URL": aasRepositoryEventFeedBaseURL,
+			"BASYX_IT_INVALID_API_URL":    aasRepositoryInvalidBaseURL,
 		})
 		os.Exit(m.Run())
 	}
 
 	runtime := testenv.NewComposeRuntimeOrExit("aasrepository-it", []testenv.PortBinding{
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
 	})
 	aasRepositoryBaseURL = runtime.LocalURL("api")
+	aasRepositoryEventFeedBaseURL = runtime.LocalURL("event-feed-api")
 	aasRepositoryInvalidBaseURL = runtime.LocalhostURL("invalid-api")
 	integrationTestDSN = runtime.PostgresURL("db", "basyxTestDB")
 
@@ -1629,5 +1633,8 @@ func TestMain(m *testing.M) {
 		PreDownBeforeUp: true,
 		HealthURL:       aasRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
+		WaitForReady: func() error {
+			return testenv.WaitHealthyURL(aasRepositoryEventFeedBaseURL+"/health", 150*time.Second)
+		},
 	}))
 }

@@ -29,7 +29,6 @@ package main
 import (
 	"context"
 	"crypto/rsa"
-	"database/sql"
 	"embed"
 	"flag"
 	"fmt"
@@ -47,6 +46,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeedsetup"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -118,11 +118,17 @@ func runServer(ctx context.Context, configPath string) error {
 	common.AddCors(r, cfg)
 
 	preconfigurationCompleted := atomic.Bool{}
-	common.AddHealthEndpointWithProbe(r, cfg, preconfigurationProbe(&preconfigurationCompleted))
+	common.AddHealthEndpointWithProbe(r, cfg, func() (bool, string) {
+		if preconfigurationCompleted.Load() {
+			return true, ""
+		}
+		return false, "AAS preconfiguration in progress"
+	})
 
 	if err = common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "AAS Environment Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "AASENV-SWAGGER-INIT", "error", err)
 	}
+
 	pools, asyncJobManager, sharedBulkManager, err := openSharedDatabase(ctx, cfg)
 	if err != nil {
 		return err
@@ -183,11 +189,13 @@ func runServer(ctx context.Context, configPath string) error {
 		ConceptDescriptionRepository: cdrPersistence,
 		Discovery:                    discoveryPersistence,
 	}
-	eventFeedModule, err := startEventFeed(ctx, sharedDB, common.NewEventFeedConfig(cfg.Eventing))
+	eventFeedModule, err := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg.Eventing))
 	if err != nil {
 		return err
 	}
+	eventfeedsetup.Bind(eventFeedModule)
 	defer eventFeedModule.Stop()
+	eventFeedModule.StartRetentionLoop(ctx)
 
 	customAASRegistry := aasenvironment.NewCustomAASRegistryService(
 		aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*aasRegistryPersistence),
@@ -311,24 +319,6 @@ func runServer(ctx context.Context, configPath string) error {
 	preconfigurationCompleted.Store(true)
 
 	return runner.Wait(ctx)
-}
-
-func preconfigurationProbe(completed *atomic.Bool) func() (bool, string) {
-	return func() (bool, string) {
-		if completed.Load() {
-			return true, ""
-		}
-		return false, "AAS preconfiguration in progress"
-	}
-}
-
-func startEventFeed(ctx context.Context, db *sql.DB, cfg eventfeed.Config) (*eventfeed.Module, error) {
-	module, err := eventfeed.NewModule(db, cfg)
-	if err != nil {
-		return nil, err
-	}
-	module.StartRetentionLoop(ctx)
-	return module, nil
 }
 
 func openSharedDatabase(

@@ -30,14 +30,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 )
 
-func encodeCursor(afterID string, afterTime time.Time) (string, error) {
-	payload, err := json.Marshal(cursorData{
-		AfterID:   afterID,
-		AfterTime: afterTime.UTC(),
-	})
+func encodeCursor(afterSeq int64) (string, error) {
+	if afterSeq < 1 {
+		return "", fmt.Errorf("EVENTFEED-CURSOR-SEQ cursor sequence must be positive")
+	}
+	payload, err := json.Marshal(cursorData{AfterSeq: afterSeq})
 	if err != nil {
 		return "", fmt.Errorf("EVENTFEED-CURSOR-ENCODE: %w", err)
 	}
@@ -60,7 +59,7 @@ func decodeCursor(cursor string) (cursorData, error) {
 	if err = json.Unmarshal(bytes, &data); err != nil {
 		return cursorData{}, fmt.Errorf("EVENTFEED-CURSOR-JSON Cursor contains invalid content: %s", cursor)
 	}
-	if strings.TrimSpace(data.AfterID) == "" || data.AfterTime.IsZero() {
+	if data.AfterSeq < 1 {
 		return cursorData{}, fmt.Errorf("EVENTFEED-CURSOR-FIELDS Cursor contains invalid content: %s", cursor)
 	}
 	return data, nil

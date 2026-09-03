@@ -39,21 +39,21 @@ import (
 
 const httpComponent = "EVENTFEED"
 
-// RegisterRoutes registers the enabled event feed endpoints on r.
 func RegisterRoutes(r chi.Router, svc *Service) {
 	if r == nil || svc == nil || !svc.cfg.Enabled {
 		return
 	}
 	r.Get("/events", svc.handleGetEvents)
+	r.Get("/.well-known/event-feed.json", svc.handleGetCapabilities)
 }
 
 func (s *Service) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	presentation := Presentation(strings.ToUpper(strings.TrimSpace(q.Get("presentation"))))
-	if presentation == "" {
-		presentation = PresentationFull
+	limit := s.cfg.MaxPageSize
+	if limit < 1 {
+		limit = 100
 	}
-	limit := 100
 	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil {
@@ -94,6 +94,10 @@ func (s *Service) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Service) handleGetCapabilities(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.Capabilities())
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

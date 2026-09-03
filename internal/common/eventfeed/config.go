@@ -39,8 +39,6 @@ type Config struct {
 	SourceBaseURL   string
 	SchemaBaseURL   string
 	HardDeleteGrace time.Duration
-	PublicAccess    bool
-	BearerAuth      bool
 	RetentionCron   string // informational; Go uses ticker interval
 	CleanupInterval time.Duration
 }
@@ -54,8 +52,6 @@ func DefaultConfig() Config {
 		SourceBaseURL:   "http://localhost",
 		SchemaBaseURL:   "https://admin-shell.io/events/schemas",
 		HardDeleteGrace: 10 * 24 * time.Hour,
-		PublicAccess:    false,
-		BearerAuth:      false,
 		CleanupInterval: 24 * time.Hour,
 	}
 }
@@ -83,7 +79,6 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// MaxAgePeriod returns MaxAge as an ISO 8601 day-based duration.
 func (c Config) MaxAgePeriod() string {
 	days := int(c.MaxAge.Hours() / 24)
 	if days < 1 {

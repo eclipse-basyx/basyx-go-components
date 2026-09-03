@@ -68,7 +68,7 @@ func (s *SubmodelDatabase) appendCurrentSubmodelHistoryTx(ctx context.Context, t
 }
 
 func (s *SubmodelDatabase) loadSubmodelHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (map[string]any, error) {
-	if !history.ActiveConfig().EvidenceEnabled {
+	if !history.LiveSnapshotRequired() {
 		return nil, nil
 	}
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelIdentifier); err != nil {

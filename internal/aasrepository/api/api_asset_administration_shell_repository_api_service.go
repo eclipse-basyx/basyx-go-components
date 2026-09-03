@@ -219,8 +219,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateAssetAdministrationShell"), nil
 	}
 
-	publishAASEvent(ctx, s.eventFeed, s.submodelBackend, true, aas)
-
 	aasJsonable, err := jsonization.ToJsonable(aas)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
@@ -464,8 +462,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 		return newAPIErrorResponse(putErr, http.StatusInternalServerError, operation, "PutAssetAdministrationShellByID"), nil
 	}
 
-	publishAASEvent(ctx, s.eventFeed, s.submodelBackend, !isUpdate, assetAdministrationShell)
-
 	if isUpdate {
 		return gen.Response(http.StatusNoContent, nil), nil
 	}
@@ -488,17 +484,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	aas, getErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
-	if getErr != nil {
-		if common.IsErrDenied(getErr) {
-			return newAPIErrorResponse(getErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(getErr) {
-			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
-		}
-		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
-	}
-
 	err := s.assetAdministrationShellBackend.DeleteAssetAdministrationShellByID(ctx, decodedIdentifier)
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -509,8 +494,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteAssetAdministrationShellByID"), nil
 	}
-
-	publishAASDeletedEvent(ctx, s.eventFeed, s.submodelBackend, aas)
 
 	return gen.Response(http.StatusNoContent, nil), nil
 }
@@ -750,10 +733,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceA
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodelReferenceInAssetAdministrationShell"), nil
 	}
 
-	if updatedAAS, getErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAssetAdministrationShellIdentifier); getErr == nil {
-		publishAASEvent(ctx, s.eventFeed, s.submodelBackend, false, updatedAAS)
-	}
-
 	referenceJsonable, err := jsonization.ToJsonable(reference)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidReferenceData"), nil
@@ -852,9 +831,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 	}
 
 	var isUpdate bool
-	var previousSubmodel types.ISubmodel
 	var referenceCreateAASNotFound bool
-	var aasReferenceAdded bool
 	submodelReference := types.NewReference(
 		types.ReferenceTypesModelReference,
 		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, decodedSubmodelIdentifier)},
@@ -869,14 +846,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 				referenceCreateAASNotFound = isCreateSubmodelReferenceAASNotFoundErr(createReferenceErr)
 				return createReferenceErr
 			}
-			aasReferenceAdded = createReferenceErr == nil
 
 			putResult, putErr := s.submodelBackend.PutSubmodelInTransactionWithResult(ctx, tx, decodedSubmodelIdentifier, submodel)
 			if putErr != nil {
 				return putErr
 			}
 			isUpdate = putResult.IsUpdate
-			previousSubmodel = putResult.Previous
 			return nil
 		},
 	)
@@ -897,14 +872,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 			return newAPIErrorResponse(txErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
 		return newAPIErrorResponse(txErr, http.StatusInternalServerError, operation, "PutSubmodel"), nil
-	}
-
-	publishSubmodelEvent(ctx, s.eventFeed, !isUpdate, submodel, previousSubmodel, globalAssetIDsForSubmodel(ctx, s.assetAdministrationShellBackend, decodedSubmodelIdentifier))
-
-	if aasReferenceAdded {
-		if updatedAAS, getErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier); getErr == nil {
-			publishAASEvent(ctx, s.eventFeed, s.submodelBackend, false, updatedAAS)
-		}
 	}
 
 	if isUpdate {
@@ -939,36 +906,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	_, aasLookupErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier)
-	if aasLookupErr != nil {
-		if common.IsErrDenied(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
-		}
-		if common.IsErrBadRequest(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
-	}
-
-	submodel, submodelLookupErr := s.submodelBackend.GetSubmodelByID(ctx, decodedSubmodelIdentifier, "core", true, false)
-	if submodelLookupErr != nil {
-		if common.IsErrDenied(submodelLookupErr) {
-			return newAPIErrorResponse(submodelLookupErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(submodelLookupErr) || errors.Is(submodelLookupErr, sql.ErrNoRows) {
-			return newAPIErrorResponse(submodelLookupErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
-		}
-		if common.IsErrBadRequest(submodelLookupErr) {
-			return newAPIErrorResponse(submodelLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(submodelLookupErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
-	}
-
-	globalAssetIDs := globalAssetIDsForSubmodel(ctx, s.assetAdministrationShellBackend, decodedSubmodelIdentifier)
-
 	deleteErr := s.assetAdministrationShellBackend.ExecuteInTransaction(
 		"AASREPO-DELSMBYID-STARTTX",
 		"AASREPO-DELSMBYID-COMMIT",
@@ -996,8 +933,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		}
 		return newAPIErrorResponse(deleteErr, http.StatusInternalServerError, operation, "DeleteSubmodel"), nil
 	}
-
-	publishSubmodelDeletedEvent(ctx, s.eventFeed, submodel, globalAssetIDs)
 
 	return gen.Response(http.StatusNoContent, nil), nil
 }

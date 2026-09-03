@@ -46,6 +46,10 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	// description endpoints
 	{"GET", "/description", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 
+	// event feed
+	{"GET", "/events", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"GET", "/.well-known/event-feed.json", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+
 	// ABAC policy management
 	{"GET", "/security/abac/active-policy", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/security/abac/active-policy/rules", []grammar.RightsEnum{grammar.RightsEnumREAD}},

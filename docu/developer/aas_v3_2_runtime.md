@@ -309,11 +309,12 @@ AASX export preserves managed File and thumbnail values byte-for-byte, creates p
 | `history.evidence.signing.required` | Requires signed manifests for verifier/recovery operations and requires a private key for `-write`. |
 | `history.integrityAnchor.provider: none` | Default. Non-`none` providers such as immudb, Rekor, Trillian, or timestamping services are reserved for later work. |
 | `history.auditIdentityMode` | `none` stores no request identity metadata. `minimal` stores the canonical request and correlation IDs supplied by the shared HTTP middleware, authenticated OIDC subject/issuer/client id, ABAC allow metadata, operation, endpoint, and method. Valid client or ingress IDs are preserved; missing or invalid IDs receive generated defaults. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available. Request and correlation IDs are not authenticated identity data. |
-| Active eventing, configured event sinks, or enabled outbox processing | Fail fast until outbox publishing is implemented. |
+| `eventing.feed.enabled` | Opt-in CloudEvents REST Event Feed. Writes feed rows in the same PostgreSQL transaction as the model mutation. Default is `false`. See [event_feed.md](../user/event_feed.md). |
+| Configured event sinks or enabled outbox processing | Fail fast until MQTT/Kafka publishing is implemented. |
 
 `AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Runtime middleware now populates `AuditContext` when configured; no external ledger anchor client is invoked by the append path yet.
 
-Future mutation routes must acquire the entity evidence lock before reading the complete pre-mutation model and append evidence in the same database transaction as the live write. A future eventing implementation should consume the same committed change identity through a transactional outbox instead of adding delivery state to `mutation_evidence_state` or independently reconstructing a mutation after commit.
+Future mutation routes must acquire the entity evidence lock before reading the complete pre-mutation model and append evidence in the same database transaction as the live write. The Event Feed consumes those same transaction-scoped mutations through `history.MutationSink` instead of reconstructing them after commit. MQTT/Kafka outbox delivery remains future work.
 
 Example verifier/publisher usage:
 

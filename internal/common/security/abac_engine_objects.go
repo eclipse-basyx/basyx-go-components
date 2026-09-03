@@ -156,6 +156,18 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 		filterField: "$sm#id",
 		hasWildcard: false,
 	},
+	{
+		scope:       "$sm",
+		route:       "/events",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/.well-known/event-feed.json",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
 	// Covers all concrete submodel endpoints under /submodels/{submodelIdentifier}/...
 	{
 		scope:       "$sm",
@@ -192,6 +204,18 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 	{
 		scope:       "$aas",
 		route:       "/shells/$recent-changes",
+		filterField: "$aas#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$aas",
+		route:       "/events",
+		filterField: "$aas#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$aas",
+		route:       "/.well-known/event-feed.json",
 		filterField: "$aas#id",
 		hasWildcard: false,
 	},

@@ -30,7 +30,7 @@ JSON records use the standard Go `log/slog` envelope and add the command
 directory name as `service.name`:
 
 ```json
-{"time":"2026-07-25T10:00:00Z","level":"INFO","msg":"configuration loaded","service.name":"aasregistryservice","configuration.source":"/app/config.yaml","logging.format":"json","logging.level":"info","server":{"host":"0.0.0.0","port":8080,"context_path":"","cache_enabled":false,"verification_mode":"permissive"},"features":{"abac_enabled":false,"swagger_enabled":true,"history_mode":"off","eventing_enabled":false}}
+{"time":"2026-07-25T10:00:00Z","level":"INFO","msg":"configuration loaded","service.name":"aasregistryservice","configuration.source":"/app/config.yaml","logging.format":"json","logging.level":"info","server":{"host":"0.0.0.0","port":8080,"context_path":"","cache_enabled":false,"verification_mode":"permissive"},"features":{"abac_enabled":false,"swagger_enabled":true,"history_mode":"off","eventing_enabled":false,"eventing_feed_enabled":false}}
 ```
 
 The same event in text mode is one readable record:

@@ -73,6 +73,17 @@ import (
 //		return err
 //	}
 func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool) error {
+	if err := notifyMutationSink(ctx, tx, Mutation{
+		Table:            table,
+		Identifier:       strings.TrimSpace(identifier),
+		ChangeType:       changeType,
+		PreviousSnapshot: previousSnapshot,
+		Snapshot:         snapshot,
+		Deleted:          deleted,
+	}); err != nil {
+		return err
+	}
+
 	cfg := ActiveConfig()
 	if cfg.Mode == ModeOff && !cfg.EvidenceEnabled {
 		return nil
@@ -137,16 +148,17 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 //	}
 func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, mutate SnapshotMutator) error {
 	cfg := ActiveConfig()
+	if mutate == nil {
+		return common.NewInternalServerError("HISTORY-MUTATE-NILMUTATOR snapshot mutator must not be nil")
+	}
+
 	if cfg.Mode == ModeOff && !cfg.EvidenceEnabled {
-		return nil
+		return notifyMutatedSnapshot(ctx, tx, table, identifier, changeType, previousSnapshot, mutate)
 	}
 
 	identifier, err := validateAppendInputs(tx, identifier)
 	if err != nil {
 		return err
-	}
-	if mutate == nil {
-		return common.NewInternalServerError("HISTORY-MUTATE-NILMUTATOR snapshot mutator must not be nil")
 	}
 	if err = lockIdentifierTx(ctx, tx, table, identifier); err != nil {
 		return err
@@ -161,6 +173,16 @@ func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 			return cloneErr
 		}
 		if err = mutate(currentSnapshot); err != nil {
+			return err
+		}
+		if err = notifyMutationSink(ctx, tx, Mutation{
+			Table:            table,
+			Identifier:       identifier,
+			ChangeType:       changeType,
+			PreviousSnapshot: previousSnapshot,
+			Snapshot:         currentSnapshot,
+			Deleted:          false,
+		}); err != nil {
 			return err
 		}
 		return appendVersionWithEvidenceTx(ctx, tx, table, identifier, changeType, previousSnapshot, currentSnapshot, false, cfg)
@@ -187,7 +209,38 @@ func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 	if err = mutate(currentSnapshot); err != nil {
 		return err
 	}
+	if err = notifyMutationSink(ctx, tx, Mutation{
+		Table:            table,
+		Identifier:       identifier,
+		ChangeType:       changeType,
+		PreviousSnapshot: previousSnapshot,
+		Snapshot:         currentSnapshot,
+		Deleted:          false,
+	}); err != nil {
+		return err
+	}
 	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, currentSnapshot, false, mutationBase, cfg)
+}
+
+func notifyMutatedSnapshot(ctx context.Context, tx *sql.Tx, table, identifier, changeType string, previousSnapshot map[string]any, mutate SnapshotMutator) error {
+	if tx == nil || previousSnapshot == nil {
+		return nil
+	}
+	currentSnapshot, err := cloneSnapshotMap(previousSnapshot)
+	if err != nil {
+		return err
+	}
+	if err = mutate(currentSnapshot); err != nil {
+		return err
+	}
+	return notifyMutationSink(ctx, tx, Mutation{
+		Table:            table,
+		Identifier:       strings.TrimSpace(identifier),
+		ChangeType:       changeType,
+		PreviousSnapshot: previousSnapshot,
+		Snapshot:         currentSnapshot,
+		Deleted:          false,
+	})
 }
 
 func appendVersionWithEvidenceTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool, cfg Config) error {

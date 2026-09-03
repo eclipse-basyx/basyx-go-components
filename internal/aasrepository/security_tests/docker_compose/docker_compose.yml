@@ -33,6 +33,7 @@ services:
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - BASYX_EVENTING_FEED_ENABLED=true
     ports:
       - "127.0.0.1:${BASYX_IT_API_PORT:-6004}:5004"
     depends_on:

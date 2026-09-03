@@ -46,7 +46,7 @@ func TestValidateQueryMutualExclusion(t *testing.T) {
 	err := svc.validateQuery(FeedQuery{
 		LastEventID:  "x",
 		Since:        &since,
-		Presentation: PresentationFull,
+		Presentation: PresentationRegular,
 		Limit:        10,
 	})
 	if !IsQueryError(err) {
@@ -74,8 +74,11 @@ func TestCapabilities(t *testing.T) {
 	if caps.MaxPageSize != 50 {
 		t.Fatalf("maxPageSize=%d", caps.MaxPageSize)
 	}
-	if caps.Presentation.Default != "FULL" {
+	if caps.Presentation.Default != "REGULAR" {
 		t.Fatalf("default presentation=%s", caps.Presentation.Default)
+	}
+	if caps.Auth.Inherited != true {
+		t.Fatal("expected inherited auth")
 	}
 }
 
@@ -84,7 +87,7 @@ func TestReadWithSQLMock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer db.Close()
 
 	cfg := DefaultConfig()
 	cfg.Enabled = true
@@ -98,15 +101,15 @@ func TestReadWithSQLMock(t *testing.T) {
 	ts1 := fixedNow.Add(-2 * time.Hour)
 	ts2 := fixedNow.Add(-1 * time.Hour)
 	rows := sqlmock.NewRows([]string{
-		"id", "event_type", "subject", "source", "time",
-		"dataschema_full", "dataschema_compact", "data_full", "data_compact",
+		"seq", "id", "event_type", "subject", "source", "time",
+		"dataschema_compact", "data_compact",
 	}).
-		AddRow("e1", TypeAASCreated, "aas-1", "http://localhost/shells", ts1,
-			"https://s/full", "https://s/compact", `{"aasId":"aas-1"}`, `{"aasId":"aas-1"}`).
-		AddRow("e2", TypeAASUpdated, "aas-1", "http://localhost/shells", ts2,
-			"https://s/full", "https://s/compact", `{"aasId":"aas-1"}`, `{"aasId":"aas-1"}`).
-		AddRow("e3", TypeAASUpdated, "aas-2", "http://localhost/shells", ts2.Add(time.Minute),
-			"https://s/full", "https://s/compact", `{"aasId":"aas-2"}`, `{"aasId":"aas-2"}`)
+		AddRow(int64(1), "e1", TypeAASCreated, "aas-1", "http://localhost/shells", ts1,
+			"https://s/compact", `{"aasId":"aas-1"}`).
+		AddRow(int64(2), "e2", TypeAASUpdated, "aas-1", "http://localhost/shells", ts2,
+			"https://s/compact", `{"aasId":"aas-1"}`).
+		AddRow(int64(3), "e3", TypeAASUpdated, "aas-2", "http://localhost/shells", ts2.Add(time.Minute),
+			"https://s/compact", `{"aasId":"aas-2"}`)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).
 		WillReturnRows(rows)
@@ -137,7 +140,7 @@ func TestHTTPHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer db.Close()
 
 	cfg := DefaultConfig()
 	cfg.Enabled = true
@@ -151,10 +154,10 @@ func TestHTTPHandlers(t *testing.T) {
 	RegisterRoutes(r, svc)
 
 	rows := sqlmock.NewRows([]string{
-		"id", "event_type", "subject", "source", "time",
-		"dataschema_full", "dataschema_compact", "data_full", "data_compact",
-	}).AddRow("e1", TypeAASCreated, "aas-1", "http://localhost/shells", fixedNow.Add(-time.Hour),
-		"https://s/full", "https://s/compact", `{"aasId":"aas-1"}`, `{"aasId":"aas-1"}`)
+		"seq", "id", "event_type", "subject", "source", "time",
+		"dataschema_full", "data_full",
+	}).AddRow(int64(1), "e1", TypeAASCreated, "aas-1", "http://localhost/shells", fixedNow.Add(-time.Hour),
+		"https://s/full", `{"aasId":"aas-1"}`)
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
 
 	req := httptest.NewRequest(http.MethodGet, "/events?limit=10", nil)
@@ -172,6 +175,13 @@ func TestHTTPHandlers(t *testing.T) {
 	}
 	if feed.Cursor != "" {
 		t.Fatalf("unexpected cursor on last page: %s", feed.Cursor)
+	}
+
+	capReq := httptest.NewRequest(http.MethodGet, "/.well-known/event-feed.json", nil)
+	capRR := httptest.NewRecorder()
+	r.ServeHTTP(capRR, capReq)
+	if capRR.Code != http.StatusOK {
+		t.Fatalf("capabilities status=%d body=%s", capRR.Code, capRR.Body.String())
 	}
 }
 
@@ -211,7 +221,7 @@ func TestSaveAndRetentionSQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer db.Close()
 
 	cfg := DefaultConfig()
 	cfg.Enabled = true
@@ -225,14 +235,18 @@ func TestSaveAndRetentionSQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
-	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO`)).
-		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO`)).
+		WillReturnRows(sqlmock.NewRows([]string{"seq", "time"}).AddRow(int64(1), fixedNow))
 	if err := svc.Write(context.Background(), ev); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_lock`)).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM`)).
 		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectExec(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	n, err := svc.RunRetention(context.Background())
 	if err != nil {
 		t.Fatalf("retention: %v", err)
@@ -242,5 +256,142 @@ func TestSaveAndRetentionSQL(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("sql: %v", err)
+	}
+}
+
+func TestRegisterRoutesDisabled(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = false
+	svc := NewService(nil, cfg)
+	r := chi.NewRouter()
+	RegisterRoutes(r, svc)
+
+	for _, path := range []string{"/events", "/.well-known/event-feed.json"} {
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("%s status=%d", path, rr.Code)
+		}
+	}
+}
+
+func TestHTTPOmittedLimitUsesMaxPageSize(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	cfg.MaxPageSize = 50
+	repo := NewRepository(db, cfg.MaxAge)
+	fixedNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	repo.now = func() time.Time { return fixedNow }
+	svc := NewService(repo, cfg)
+	svc.now = func() time.Time { return fixedNow }
+
+	r := chi.NewRouter()
+	RegisterRoutes(r, svc)
+
+	rows := sqlmock.NewRows([]string{
+		"seq", "id", "event_type", "subject", "source", "time",
+		"dataschema_full", "data_full",
+	})
+	mock.ExpectQuery(`LIMIT 51`).WillReturnRows(rows)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/events", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql: %v", err)
+	}
+}
+
+func TestReadHidesUnauthorizedSubjects(t *testing.T) {
+	t.Cleanup(func() { SetRecordAuthorizer(nil) })
+	SetRecordAuthorizer(denySubjectAuthorizer{deny: "hidden"})
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	repo := NewRepository(db, cfg.MaxAge)
+	fixedNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	repo.now = func() time.Time { return fixedNow }
+	svc := NewService(repo, cfg)
+	svc.now = func() time.Time { return fixedNow }
+
+	rows := sqlmock.NewRows([]string{
+		"seq", "id", "event_type", "subject", "source", "time",
+		"dataschema_full", "data_full",
+	}).
+		AddRow(int64(1), "e1", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Hour),
+			"https://s/full", `{"aasId":"hidden"}`).
+		AddRow(int64(2), "e2", TypeAASCreated, "visible", "http://localhost/shells", fixedNow.Add(-time.Minute),
+			"https://s/full", `{"aasId":"visible"}`)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
+
+	result, err := svc.Read(context.Background(), FeedQuery{Presentation: PresentationRegular, Limit: 10})
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(result.Records) != 1 || result.Records[0].Subject != "visible" {
+		t.Fatalf("records=%v", result.Records)
+	}
+}
+
+type denySubjectAuthorizer struct{ deny string }
+
+func (d denySubjectAuthorizer) Allow(_ context.Context, _, subject string) bool {
+	return subject != d.deny
+}
+
+func TestFindPageSQLShape(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	repo := NewRepository(db, 30*24*time.Hour)
+	fixedNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	repo.now = func() time.Time { return fixedNow }
+
+	rows := sqlmock.NewRows([]string{
+		"seq", "id", "event_type", "subject", "source", "time",
+		"dataschema_compact", "data_compact",
+	})
+	mock.ExpectQuery(`SELECT .*"dataschema_compact", "data_compact" FROM "feed_events".*ORDER BY "seq" ASC`).
+		WillReturnRows(rows)
+
+	if _, err = repo.FindPage(context.Background(), domainQuery{Limit: 10, Filter: &parsedFilter{
+		Comparisons: []comparison{{Field: "event.type", Operator: "==", Values: []string{TypeAASCreated}}},
+	}}, PresentationCompact); err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql: %v", err)
+	}
+}
+
+func TestCapabilitiesAdvertiseDraftOperators(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	caps := NewService(nil, cfg).Capabilities()
+	want := map[string]bool{"==": true, "!=": true, "=in=": true, "=out=": true}
+	if len(caps.Filter.RSQL.Operators) != len(want) {
+		t.Fatalf("operators=%v", caps.Filter.RSQL.Operators)
+	}
+	for _, op := range caps.Filter.RSQL.Operators {
+		if !want[op] {
+			t.Fatalf("unexpected operator %q", op)
+		}
 	}
 }

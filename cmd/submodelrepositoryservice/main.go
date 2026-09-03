@@ -43,6 +43,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeedsetup"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -181,6 +182,7 @@ func runServer(ctx context.Context, configPath string) error {
 	if eventFeedErr != nil {
 		return eventFeedErr
 	}
+	eventfeedsetup.Bind(eventFeedModule)
 	defer eventFeedModule.Stop()
 	eventFeedModule.StartRetentionLoop(ctx)
 

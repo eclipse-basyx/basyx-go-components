@@ -949,20 +949,6 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	submodel, getErr := s.submodelBackend.GetSubmodelByID(ctx, decodedSubmodelIdentifier, "core", true, false)
-	if getErr != nil {
-		if common.IsErrDenied(getErr) {
-			return newAPIErrorResponse(getErr, http.StatusForbidden, operation, "Denied"), nil
-		}
-		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
-			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
-		}
-		if common.IsErrBadRequest(getErr) {
-			return newAPIErrorResponse(getErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
-	}
-
 	err := s.submodelBackend.DeleteSubmodel(ctx, decodedSubmodelIdentifier)
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -976,8 +962,6 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
-
-	publishSubmodelDeletedEvent(ctx, s.eventFeed, s.submodelBackend, submodel)
 
 	return gen.Response(http.StatusNoContent, nil), nil
 }
@@ -1016,8 +1000,6 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), nil
 	}
-
-	publishSubmodelEvent(ctx, s.eventFeed, s.submodelBackend, true, submodel, nil)
 
 	submodelJsonable, err := jsonization.ToJsonable(submodel)
 	if err != nil {
@@ -1343,8 +1325,6 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
-
-	publishSubmodelEvent(ctx, s.eventFeed, s.submodelBackend, !putResult.IsUpdate, submodel, putResult.Previous)
 
 	if putResult.IsUpdate {
 		return gen.Response(http.StatusNoContent, nil), nil
