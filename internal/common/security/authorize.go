@@ -68,6 +68,8 @@ const (
 	filterKey ctxKey = "queryFilter"
 	// authorizationDecisionKey stores the ABAC decision made for the request.
 	authorizationDecisionKey ctxKey = "authorizationDecision"
+	// selectedFormulaRightKey records the right selected for an upsert operation.
+	selectedFormulaRightKey ctxKey = "selectedFormulaRight"
 )
 
 // ResolveResource extracts a Resource from an HTTP request.
@@ -337,16 +339,16 @@ func HasUnrestrictedFormulaForRight(ctx context.Context, right grammar.RightsEnu
 func SelectFormulaForRight(ctx context.Context, right grammar.RightsEnum) context.Context {
 	existing := GetQueryFilter(ctx)
 	if existing == nil {
-		return ctx
+		return context.WithValue(ctx, selectedFormulaRightKey, right)
 	}
 
 	qf, cloneErr := CloneQueryFilter(existing)
 	if cloneErr != nil {
 		slog.ErrorContext(ctx, "query filter clone failed", "error.code", "AUTH-SELECTQF-CLONEERR", "error", cloneErr)
-		return WithQueryFilter(ctx, failClosedQueryFilter(right))
+		return context.WithValue(WithQueryFilter(ctx, failClosedQueryFilter(right)), selectedFormulaRightKey, right)
 	}
 	if qf == nil {
-		return WithQueryFilter(ctx, failClosedQueryFilter(right))
+		return context.WithValue(WithQueryFilter(ctx, failClosedQueryFilter(right)), selectedFormulaRightKey, right)
 	}
 
 	if qf.FormulasByRight == nil {
@@ -354,18 +356,27 @@ func SelectFormulaForRight(ctx context.Context, right grammar.RightsEnum) contex
 		fallback := boolExpression(false)
 		qf.FormulasByRight[right] = fallback
 		qf.Formula = &fallback
-		return WithQueryFilter(ctx, qf)
+		return context.WithValue(WithQueryFilter(ctx, qf), selectedFormulaRightKey, right)
 	}
 
 	if selected, ok := qf.FormulasByRight[right]; ok {
 		qf.Formula = &selected
-		return WithQueryFilter(ctx, qf)
+		return context.WithValue(WithQueryFilter(ctx, qf), selectedFormulaRightKey, right)
 	}
 
 	fallback := boolExpression(false)
 	qf.FormulasByRight[right] = fallback
 	qf.Formula = &fallback
-	return WithQueryFilter(ctx, qf)
+	return context.WithValue(WithQueryFilter(ctx, qf), selectedFormulaRightKey, right)
+}
+
+// SelectedFormulaRight returns the right selected for an upsert formula.
+func SelectedFormulaRight(ctx context.Context) (grammar.RightsEnum, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	right, ok := ctx.Value(selectedFormulaRightKey).(grammar.RightsEnum)
+	return right, ok
 }
 
 // MergeQueryFilter combines an existing QueryFilter with a user query.

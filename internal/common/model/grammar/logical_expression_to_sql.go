@@ -2055,6 +2055,9 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	if le == nil {
 		return nil, nil, fmt.Errorf("logical expression is nil")
 	}
+	if le.Indeterminate {
+		return goqu.L("NULL::boolean"), nil, nil
+	}
 	// Handle comparison operations
 	if len(le.Eq) > 0 {
 		return le.evaluateComparison(le.Eq, "$eq", collector)
@@ -2119,7 +2122,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		if err != nil {
 			return nil, nil, err
 		}
-		return goqu.L("COALESCE(?, FALSE)", sqlValue), nil, nil
+		return goqu.L("?", sqlValue), nil, nil
 	}
 
 	// Handle logical operations
@@ -2271,6 +2274,9 @@ func evaluateMatchExpressions(match []MatchExpression) (exp.Expression, []Resolv
 }
 
 func evaluateMatchExpressionSQL(me MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
+	if me.Indeterminate {
+		return goqu.L("NULL::boolean"), nil, nil
+	}
 	if me.Boolean != nil {
 		return goqu.L("?::boolean", *me.Boolean), nil, nil
 	}

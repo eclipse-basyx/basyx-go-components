@@ -161,3 +161,22 @@ func TestJSONPointerValue_AcceptsRootPointer(t *testing.T) {
 		t.Fatalf("jsonPointerValue() = %#v, %v, want original claims, true", value, found)
 	}
 }
+
+func TestJSONPointerValueRejectsInvalidArrayIndices(t *testing.T) {
+	t.Parallel()
+
+	claims := Claims{"roles": []any{"reader", "admin"}}
+	for _, pointer := range []string{"/roles/-", "/roles/01", "/roles/-1", "/roles/2"} {
+		pointer := pointer
+		t.Run(pointer, func(t *testing.T) {
+			t.Parallel()
+			_, found, err := jsonPointerValue(claims, pointer)
+			if err != nil {
+				t.Fatalf("jsonPointerValue() error = %v", err)
+			}
+			if found {
+				t.Fatalf("jsonPointerValue() unexpectedly resolved %q", pointer)
+			}
+		})
+	}
+}

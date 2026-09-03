@@ -683,18 +683,6 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	if enforceErr != nil {
 		return enforceErr
 	}
-	if shouldEnforce {
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
-		if visErr != nil {
-			return visErr
-		}
-		if !exists {
-			return common.NewErrNotFound("AASREPO-NEWSMREFINAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		if !visible {
-			return common.NewErrDenied("AASREPO-NEWSMREFINAAS-ABACDENIED writing to this AAS is not allowed")
-		}
-	}
 	keys := submodelRef.Keys()
 	if len(keys) > 0 && keys[0].Value() != "" {
 		submodelIdentifier := keys[0].Value()
@@ -1757,15 +1745,17 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 		}
 
 		ctx = auth.SelectPutFormulaByExistence(ctx, thumbnailExists)
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
-		if visErr != nil {
-			return visErr
-		}
-		if !exists {
-			return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		if !visible {
-			return common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED updating this AAS is not allowed")
+		if thumbnailExists {
+			exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+			if visErr != nil {
+				return visErr
+			}
+			if !exists {
+				return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+			}
+			if !visible {
+				return common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED updating this AAS is not allowed")
+			}
 		}
 	}
 	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
@@ -1781,6 +1771,15 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 	reference, contentType, uploadErr := thumbnailHandler.uploadManagedThumbnailTx(ctx, tx, aasIdentifier, fileName, file)
 	if uploadErr != nil {
 		return uploadErr
+	}
+	if shouldEnforce {
+		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+		if visErr != nil {
+			return visErr
+		}
+		if !exists || !visible {
+			return common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED prospective AAS is not accessible under ABAC constraints")
+		}
 	}
 	binaryReceipt, err := history.EnsureBinaryEvidenceTx(ctx, tx, reference.Content, contentType)
 	if err != nil {

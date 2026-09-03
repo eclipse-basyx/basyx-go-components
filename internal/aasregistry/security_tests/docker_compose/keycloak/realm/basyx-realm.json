@@ -439,6 +439,7 @@
     "email" : "usera@mail.com",
     "emailVerified" : false,
     "attributes" : {
+      "clear" : [ "0" ],
       "role" : [ "viewer" ]
     },
     "createdTimestamp" : 1763553182453,
@@ -733,7 +734,7 @@
         "lightweight.claim" : "false",
         "access.token.claim" : "true",
         "claim.name" : "clear",
-        "jsonType.label" : "String"
+        "jsonType.label" : "long"
       }
     } ],
     "defaultClientScopes" : [ "web-origins", "acr", "profile", "roles", "basic", "email" ],

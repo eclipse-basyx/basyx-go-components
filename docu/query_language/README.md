@@ -80,10 +80,11 @@ Key types:
 ### 2) Simplify the logical expression
 
 - Simplification partially evaluates the expression using a resolver and leaves backend-only parts intact.
-- A tri-state decision is produced:
+- A four-state decision is produced:
   - SimplifyTrue: expression becomes a boolean true literal.
   - SimplifyFalse: expression becomes a boolean false literal.
   - SimplifyUndecided: expression still depends on backend fields.
+  - SimplifyIndeterminate: evaluation failed; authorization must fail closed.
 
 Implicit casts:
 - Simplification can insert implicit casts when field types and literal types differ.
@@ -96,9 +97,12 @@ Key functions:
 
 ### 3) Resolve attributes
 
-- Attribute values (for example, CLAIM or GLOBAL) are resolved by a caller-provided resolver.
-- If an attribute cannot be resolved, it remains undecidable and is preserved for backend evaluation.
-- In ABAC, attributes are resolved from claims and time globals.
+- Attribute values (for example, `CLAIM`, `CLAIMPATH`, or `GLOBAL`) are resolved by a caller-provided resolver.
+- An unavailable or unusable attribute is indeterminate, not backend-undecided. `$not` preserves indeterminate; false dominates `$and`, true dominates `$or`, and otherwise indeterminate propagates through `$and`, `$or`, and `$match`.
+- `CLAIM` selects a top-level JWT claim. `CLAIMPATH` selects a nested claim with an RFC 6901 JSON Pointer.
+- `$eq` permits direct `CLAIMPATH` only against a scalar string operand, in either order. `$contains` with a first-position `CLAIMPATH` tests exact, case-sensitive membership in a JSON string array. Other `$contains` forms keep substring semantics. The former `$in` operator is rejected.
+- Claim casts preserve JWT JSON typing: `str`, `num`, and `bool` accept only strings, numbers, and Booleans respectively; hexadecimal/date-time/time casts accept matching lexical strings. Claim strings are not coerced to other primitive types.
+- Arrays and objects are never converted to JSON text for `$contains` or `$regex`.
 
 Key references:
 - AttributeResolver usage in [internal/common/model/grammar/logical_expression_simplify_backend.go](../../internal/common/model/grammar/logical_expression_simplify_backend.go)
@@ -221,7 +225,7 @@ This is controlled by `SimplifyOptions.EnableImplicitCasts` in
 
 ### Attribute resolution
 
-Attribute references are resolved to concrete scalars via a resolver function:
+Attribute references are resolved to concrete scalar or string-array values via a resolver function:
 
 $$
           resolve(\$\text{attribute}(k)) \rightarrow v \quad \text{or} \quad \varnothing
@@ -245,8 +249,15 @@ Which simplifies to:
 { "$boolean": true }
 ```
 
-If $v$ is available, the attribute node is replaced with the literal $v$ during
-simplification; otherwise it remains unresolved and the expression is undecidable.
+For an exact nested role membership check:
+
+```json
+{ "$contains": [ { "$attribute": { "CLAIMPATH": "/realm_access/roles" } }, { "$strVal": "admin" } ] }
+```
+
+If $v$ is a scalar string, the uncast attribute node is replaced with the corresponding literal during simplification. String arrays remain typed and are accepted only by first-position `CLAIMPATH` `$contains`. An empty array evaluates false. Missing paths, `null`, objects, mixed arrays, wrong types, and invalid casts are indeterminate; logical negation cannot turn them into true.
+
+For writes, CREATE formulas evaluate the staged created target before commit. UPDATE formulas evaluate both the current state and the complete prospective state, and both evaluations must be true. Partial operations use their normal merge semantics when constructing the prospective state.
 
 ### Rule combination into QueryFilter (ABAC)
 

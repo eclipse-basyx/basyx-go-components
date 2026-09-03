@@ -36,6 +36,8 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 )
@@ -151,7 +153,7 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST"); visibilityErr != nil {
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
 		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
@@ -161,6 +163,9 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 		reference, contentType, uploadErr := fileHandler.UploadManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath, file, fileName)
 		if uploadErr != nil {
 			return uploadErr
+		}
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST-PROSPECTIVE", true); visibilityErr != nil {
+			return visibilityErr
 		}
 		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, contentType)
 	})
@@ -195,7 +200,7 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST"); visibilityErr != nil {
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
 		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
@@ -214,6 +219,9 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(
 		)
 		if uploadErr != nil {
 			return uploadErr
+		}
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST-PROSPECTIVE", true); visibilityErr != nil {
+			return visibilityErr
 		}
 		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, resolvedContentType)
 	})
@@ -333,7 +341,7 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-DELETEFILEHIST-STARTTX", "SMREPO-DELETEFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-DELETEFILEHIST"); visibilityErr != nil {
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-DELETEFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
 		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
@@ -350,12 +358,16 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 	})
 }
 
-func (s *SubmodelDatabase) ensureFileAttachmentMutationVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, errorPrefix string) error {
+func (s *SubmodelDatabase) ensureFileAttachmentMutationVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, errorPrefix string, prospective bool) error {
 	shouldEnforce, err := shouldEnforceFormula(ctx, errorPrefix+"-SHOULDENFORCE")
 	if err != nil || !shouldEnforce {
 		return err
 	}
-	exists, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	readCtx := ctx
+	if right, selected := auth.SelectedFormulaRight(ctx); selected && right == grammar.RightsEnumCREATE && !prospective {
+		readCtx = auth.ContextWithoutQueryFilter(ctx)
+	}
+	exists, visible, err := s.checkSubmodelElementVisibilityInTx(readCtx, tx, submodelID, idShortPath)
 	if err != nil {
 		return err
 	}

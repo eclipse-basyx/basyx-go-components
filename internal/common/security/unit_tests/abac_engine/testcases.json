@@ -106,17 +106,17 @@
   },
   {
     "input": "input/numcastformula.json",
-    "expected": "expected/access_allowed.json",
+    "expected": "expected/no_matching_rule.json",
     "eval": "eval/get_shellDescriptors_member.json"
   },
   {
     "input": "input/operator_num_ge.json",
-    "expected": "expected/access_allowed_num_ge.json",
+    "expected": "expected/no_matching_rule.json",
     "eval": "eval/get_shellDescriptors_viewer_clear2.json"
   },
   {
     "input": "input/operator_num_lt.json",
-    "expected": "expected/access_allowed.json",
+    "expected": "expected/no_matching_rule.json",
     "eval": "eval/get_shellDescriptors_viewer_clear0.json"
   },
   {
@@ -151,12 +151,12 @@
   },
   {
     "input": "input/no_attributes.json",
-    "expected": "expected/no_matching_rule.json",
+    "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_member.json"
   },
   {
     "input": "input/missing_claim.json",
-    "expected": "expected/no_matching_rule.json",
+    "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_member.json"
   },
   {
@@ -171,7 +171,7 @@
   },
   {
     "input": "input/compare_string_with_num_correct.json",
-    "expected": "expected/access_allowed.json",
+    "expected": "expected/no_matching_rule.json",
     "eval": "eval/get_submodelDescriptors_item_admin.json"
   },
   {
@@ -281,7 +281,7 @@
   },
   {
     "input": "input/operator_gt_string_number_with_cast.json",
-    "expected": "expected/access_allowed.json",
+    "expected": "expected/no_matching_rule.json",
     "eval": "eval/get_shellDescriptors_num_string.json"
   },
   {
