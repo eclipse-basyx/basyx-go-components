@@ -42,7 +42,7 @@ func TestGeneratedPayloadsMatchAdvertisedSchema(t *testing.T) {
 		{
 			name: "aas",
 			build: func() (FeedEvent, error) {
-				return b.AASCreated("aas-1", "asset-1", []string{"sm-1"})
+				return b.AASCreated("aas-1", "asset-1", []SubmodelRef{{SubmodelID: "sm-1", SemanticID: "sem-1"}})
 			},
 			regular: validateAASRegular,
 			compact: validateAASCompact,
@@ -50,7 +50,7 @@ func TestGeneratedPayloadsMatchAdvertisedSchema(t *testing.T) {
 		{
 			name: "asset",
 			build: func() (FeedEvent, error) {
-				return b.AssetUpdated("asset-1", "aas-1", []string{"sm-1"})
+				return b.AssetUpdated("asset-1", "aas-1", []SubmodelRef{{SubmodelID: "sm-1", SemanticID: "sem-1"}})
 			},
 			regular: validateAssetRegular,
 			compact: validateAssetCompact,
@@ -205,10 +205,18 @@ func validateReferredSemanticIDs(raw any) error {
 		if !ok {
 			return fmt.Errorf("submodels entry must be an object")
 		}
-		if err := requireExactKeys(m, "referredSemanticId"); err != nil {
+		_, hasReferredSemanticID := m["referredSemanticId"]
+		if hasReferredSemanticID {
+			if err := requireExactKeys(m, "type", "keys", "referredSemanticId"); err != nil {
+				return err
+			}
+			if err := validateReference(m["referredSemanticId"], "GlobalReference"); err != nil {
+				return err
+			}
+		} else if err := requireExactKeys(m, "type", "keys"); err != nil {
 			return err
 		}
-		if err := validateReference(m["referredSemanticId"], "GlobalReference"); err != nil {
+		if err := validateReferenceShape(m, "Submodel"); err != nil {
 			return err
 		}
 	}
@@ -223,6 +231,13 @@ func validateReference(raw any, keyType string) error {
 	if err := requireExactKeys(m, "type", "keys"); err != nil {
 		return err
 	}
+	return validateReferenceShape(m, keyType)
+}
+
+// validateReferenceShape checks a reference's "type"/"keys" fields without
+// requiring that those be the object's only keys, so it can also validate a
+// "submodels" entry that carries an extra optional "referredSemanticId".
+func validateReferenceShape(m map[string]any, keyType string) error {
 	keys, ok := m["keys"].([]any)
 	if !ok || len(keys) < 1 {
 		return fmt.Errorf("keys must have at least one entry")

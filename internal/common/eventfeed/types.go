@@ -58,6 +58,11 @@ const (
 	SemanticIDPCN = "0173-1#01-AHE582#003"
 )
 
+type SubmodelRef struct {
+	SubmodelID string
+	SemanticID string
+}
+
 // FeedEvent is a persisted CloudEvents feed record with both presentation variants.
 type FeedEvent struct {
 	Seq               int64

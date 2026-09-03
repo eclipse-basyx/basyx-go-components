@@ -61,28 +61,28 @@ func NewBuilder(cfg Config) *Builder {
 	}
 }
 
-func (b *Builder) AssetCreated(globalAssetID string, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
-	return b.assetEvent(TypeAssetCreated, globalAssetID, aasID, submodelSemanticIDs)
+func (b *Builder) AssetCreated(globalAssetID string, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
+	return b.assetEvent(TypeAssetCreated, globalAssetID, aasID, submodels)
 }
 
-func (b *Builder) AssetUpdated(globalAssetID string, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
-	return b.assetEvent(TypeAssetUpdated, globalAssetID, aasID, submodelSemanticIDs)
+func (b *Builder) AssetUpdated(globalAssetID string, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
+	return b.assetEvent(TypeAssetUpdated, globalAssetID, aasID, submodels)
 }
 
-func (b *Builder) AssetDeleted(globalAssetID string, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
-	return b.assetEvent(TypeAssetDeleted, globalAssetID, aasID, submodelSemanticIDs)
+func (b *Builder) AssetDeleted(globalAssetID string, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
+	return b.assetEvent(TypeAssetDeleted, globalAssetID, aasID, submodels)
 }
 
-func (b *Builder) AASCreated(aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
-	return b.aasEvent(TypeAASCreated, aasID, globalAssetID, submodelSemanticIDs)
+func (b *Builder) AASCreated(aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
+	return b.aasEvent(TypeAASCreated, aasID, globalAssetID, submodels)
 }
 
-func (b *Builder) AASUpdated(aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
-	return b.aasEvent(TypeAASUpdated, aasID, globalAssetID, submodelSemanticIDs)
+func (b *Builder) AASUpdated(aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
+	return b.aasEvent(TypeAASUpdated, aasID, globalAssetID, submodels)
 }
 
-func (b *Builder) AASDeleted(aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
-	return b.aasEvent(TypeAASDeleted, aasID, globalAssetID, submodelSemanticIDs)
+func (b *Builder) AASDeleted(aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
+	return b.aasEvent(TypeAASDeleted, aasID, globalAssetID, submodels)
 }
 
 func (b *Builder) SubmodelCreated(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
@@ -126,7 +126,7 @@ func irdiCode(semanticID string) string {
 	return parts[1]
 }
 
-func (b *Builder) assetEvent(eventType, globalAssetID, aasID string, submodelSemanticIDs []string) (FeedEvent, error) {
+func (b *Builder) assetEvent(eventType, globalAssetID, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
 	if globalAssetID == "" {
 		globalAssetID = aasID
 	}
@@ -136,18 +136,18 @@ func (b *Builder) assetEvent(eventType, globalAssetID, aasID string, submodelSem
 	}
 	full := map[string]any{
 		"globalAssetId": globalAssetID,
-		"submodels":     referredSemanticIDs(submodelSemanticIDs),
+		"submodels":     submodelReferences(submodels),
 		"aasRefs":       aasRefs,
 	}
 	compact := map[string]any{"globalAssetId": globalAssetID}
 	return b.build(eventType, globalAssetID, sourceSuffixAsset, schemaAssetFull, schemaAssetCompact, full, compact)
 }
 
-func (b *Builder) aasEvent(eventType, aasID, globalAssetID string, submodelSemanticIDs []string) (FeedEvent, error) {
+func (b *Builder) aasEvent(eventType, aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
 	full := map[string]any{
 		"aasId":         aasID,
 		"globalAssetId": globalAssetID,
-		"submodels":     referredSemanticIDs(submodelSemanticIDs),
+		"submodels":     submodelReferences(submodels),
 	}
 	compact := map[string]any{"aasId": aasID}
 	return b.build(eventType, aasID, sourceSuffixAAS, schemaAASFull, schemaAASCompact, full, compact)
@@ -204,13 +204,27 @@ func normalizeGlobalAssetIDs(ids []string) []string {
 	return out
 }
 
-func referredSemanticIDs(semanticIDs []string) []any {
-	out := make([]any, 0, len(semanticIDs))
-	for _, semanticID := range semanticIDs {
-		if semanticID == "" {
+// submodelReferences renders the "submodels" array shared by AAS and asset
+// change events: one ExternalReference entry per submodel, pointing at the
+// submodel itself, with an optional referredSemanticId. A submodel that has
+// no semantic id recorded in the database is still listed, just without a
+// referredSemanticId field.
+func submodelReferences(submodels []SubmodelRef) []any {
+	out := make([]any, 0, len(submodels))
+	for _, submodel := range submodels {
+		if submodel.SubmodelID == "" {
 			continue
 		}
-		out = append(out, map[string]any{"referredSemanticId": externalReference(semanticID)})
+		entry := map[string]any{
+			"type": "ExternalReference",
+			"keys": []map[string]any{
+				{"type": "Submodel", "value": submodel.SubmodelID},
+			},
+		}
+		if semRef := externalReference(submodel.SemanticID); semRef != nil {
+			entry["referredSemanticId"] = semRef
+		}
+		out = append(out, entry)
 	}
 	return out
 }

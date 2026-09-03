@@ -39,7 +39,10 @@ func TestBuilderAASCreatedPayloads(t *testing.T) {
 	b := NewBuilder(cfg)
 	b.now = func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }
 
-	ev, err := b.AASCreated("aas-1", "asset-1", []string{"sm-1", "sm-2"})
+	ev, err := b.AASCreated("aas-1", "asset-1", []SubmodelRef{
+		{SubmodelID: "sm-1", SemanticID: "sem-1"},
+		{SubmodelID: "sm-2"},
+	})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -71,6 +74,17 @@ func TestBuilderAASCreatedPayloads(t *testing.T) {
 	if !ok {
 		t.Fatalf("submodels[0]=%v", submodels[0])
 	}
+	if firstSubmodel["type"] != "ExternalReference" {
+		t.Fatalf("submodels[0] type=%v", firstSubmodel["type"])
+	}
+	submodelKeys, ok := firstSubmodel["keys"].([]any)
+	if !ok || len(submodelKeys) != 1 {
+		t.Fatalf("submodels[0] keys=%v", firstSubmodel["keys"])
+	}
+	submodelKey, ok := submodelKeys[0].(map[string]any)
+	if !ok || submodelKey["type"] != "Submodel" || submodelKey["value"] != "sm-1" {
+		t.Fatalf("submodels[0] key=%v", submodelKeys[0])
+	}
 	referredSemanticID, ok := firstSubmodel["referredSemanticId"].(map[string]any)
 	if !ok {
 		t.Fatalf("referredSemanticId=%v", firstSubmodel["referredSemanticId"])
@@ -83,11 +97,15 @@ func TestBuilderAASCreatedPayloads(t *testing.T) {
 		t.Fatalf("referredSemanticId keys=%v", referredSemanticID["keys"])
 	}
 	key, ok := keys[0].(map[string]any)
-	if !ok || key["type"] != "GlobalReference" || key["value"] != "sm-1" {
+	if !ok || key["type"] != "GlobalReference" || key["value"] != "sem-1" {
 		t.Fatalf("referredSemanticId key=%v", keys[0])
 	}
-	if _, hasSubmodelId := firstSubmodel["submodelId"]; hasSubmodelId {
-		t.Fatalf("submodels entry must not expose submodelId: %v", firstSubmodel)
+	secondSubmodel, ok := submodels[1].(map[string]any)
+	if !ok {
+		t.Fatalf("submodels[1]=%v", submodels[1])
+	}
+	if _, hasReferredSemanticID := secondSubmodel["referredSemanticId"]; hasReferredSemanticID {
+		t.Fatalf("submodels[1] must not expose referredSemanticId when none is recorded: %v", secondSubmodel)
 	}
 	var compact map[string]any
 	if err := json.Unmarshal([]byte(ev.DataCompact), &compact); err != nil {
@@ -123,7 +141,7 @@ func TestBuilderSubmodelUpdated(t *testing.T) {
 func TestBuilderDeletedAndPCN(t *testing.T) {
 	b := NewBuilder(DefaultConfig())
 
-	aasDel, err := b.AASDeleted("aas-1", "asset-1", []string{"sm-1"})
+	aasDel, err := b.AASDeleted("aas-1", "asset-1", []SubmodelRef{{SubmodelID: "sm-1"}})
 	if err != nil {
 		t.Fatalf("aas deleted: %v", err)
 	}

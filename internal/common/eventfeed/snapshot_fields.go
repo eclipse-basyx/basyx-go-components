@@ -33,7 +33,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
-func aasFieldsFromSnapshot(ctx context.Context, tx *sql.Tx, snap map[string]any) (aasID, globalAssetID string, submodelSemanticIDs []string, err error) {
+func aasFieldsFromSnapshot(ctx context.Context, tx *sql.Tx, snap map[string]any) (aasID, globalAssetID string, submodels []SubmodelRef, err error) {
 	if snap == nil {
 		return "", "", nil, nil
 	}
@@ -42,11 +42,11 @@ func aasFieldsFromSnapshot(ctx context.Context, tx *sql.Tx, snap map[string]any)
 		globalAssetID = stringField(info, "globalAssetId")
 	}
 	submodelIDs := submodelIDsFromAASSnapshot(snap)
-	submodelSemanticIDs, err = semanticIDsForSubmodelsTx(ctx, tx, submodelIDs)
+	submodels, err = submodelRefsForSubmodelsTx(ctx, tx, submodelIDs)
 	if err != nil {
 		return "", "", nil, err
 	}
-	return aasID, globalAssetID, submodelSemanticIDs, nil
+	return aasID, globalAssetID, submodels, nil
 }
 
 func submodelFieldsFromSnapshot(snap map[string]any) (submodelID, semanticID string) {
@@ -102,15 +102,21 @@ func stringField(m map[string]any, key string) string {
 	}
 }
 
-func semanticIDsForSubmodelsTx(ctx context.Context, tx *sql.Tx, submodelIDs []string) ([]string, error) {
+// submodelRefsForSubmodelsTx returns one SubmodelRef per id in submodelIDs.
+// A left join is used deliberately: a submodel without a recorded semantic
+// id must still appear in the result (with an empty SemanticID) rather than
+// being dropped, otherwise every referring AAS/asset event would render an
+// empty "submodels" array whenever none of its submodels happen to carry a
+// semantic id.
+func submodelRefsForSubmodelsTx(ctx context.Context, tx *sql.Tx, submodelIDs []string) ([]SubmodelRef, error) {
 	if tx == nil || len(submodelIDs) == 0 {
 		return nil, nil
 	}
 	dialect := goqu.Dialect("postgres")
 	query, args, err := dialect.From(goqu.T("submodel").As("s")).
 		Select(goqu.I("s.submodel_identifier"), goqu.I("k.value")).
-		Join(goqu.T("submodel_semantic_id_reference").As("r"), goqu.On(goqu.I("r.id").Eq(goqu.I("s.id")))).
-		Join(goqu.T("submodel_semantic_id_reference_key").As("k"), goqu.On(goqu.I("k.reference_id").Eq(goqu.I("r.id")))).
+		LeftJoin(goqu.T("submodel_semantic_id_reference").As("r"), goqu.On(goqu.I("r.id").Eq(goqu.I("s.id")))).
+		LeftJoin(goqu.T("submodel_semantic_id_reference_key").As("k"), goqu.On(goqu.I("k.reference_id").Eq(goqu.I("r.id")))).
 		Where(goqu.I("s.submodel_identifier").In(submodelIDs)).
 		Order(goqu.I("s.submodel_identifier").Asc(), goqu.I("k.position").Desc()).
 		ToSQL()
@@ -124,20 +130,18 @@ func semanticIDsForSubmodelsTx(ctx context.Context, tx *sql.Tx, submodelIDs []st
 	defer func() { _ = rows.Close() }()
 
 	seen := make(map[string]struct{}, len(submodelIDs))
-	out := make([]string, 0, len(submodelIDs))
+	out := make([]SubmodelRef, 0, len(submodelIDs))
 	for rows.Next() {
-		var id, value string
+		var id string
+		var value sql.NullString
 		if err = rows.Scan(&id, &value); err != nil {
 			return nil, fmt.Errorf("EVENTFEED-SEMANTICIDS-SCAN: %w", err)
-		}
-		if value == "" {
-			continue
 		}
 		if _, ok := seen[id]; ok {
 			continue
 		}
 		seen[id] = struct{}{}
-		out = append(out, value)
+		out = append(out, SubmodelRef{SubmodelID: id, SemanticID: value.String})
 	}
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("EVENTFEED-SEMANTICIDS-ROWS: %w", err)

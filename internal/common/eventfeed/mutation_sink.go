@@ -85,7 +85,7 @@ func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutat
 			snap = mutation.Snapshot
 		}
 	}
-	aasID, globalAssetID, submodelSemanticIDs, err := aasFieldsFromSnapshot(ctx, tx, snap)
+	aasID, globalAssetID, submodels, err := aasFieldsFromSnapshot(ctx, tx, snap)
 	if err != nil {
 		return err
 	}
@@ -93,7 +93,7 @@ func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutat
 		aasID = mutation.Identifier
 	}
 
-	var buildFn func(string, string, []string) (FeedEvent, error)
+	var buildFn func(string, string, []SubmodelRef) (FeedEvent, error)
 	switch mutation.ChangeType {
 	case mutationCreated:
 		buildFn = s.service.build.AASCreated
@@ -102,7 +102,7 @@ func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutat
 	default:
 		buildFn = s.service.build.AASUpdated
 	}
-	ev, err := buildFn(aasID, globalAssetID, submodelSemanticIDs)
+	ev, err := buildFn(aasID, globalAssetID, submodels)
 	if err != nil {
 		return fmt.Errorf("EVENTFEED-MUTATION-AAS-BUILD: %w", err)
 	}
@@ -112,7 +112,7 @@ func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutat
 	if globalAssetID == "" {
 		return nil
 	}
-	var assetFn func(string, string, []string) (FeedEvent, error)
+	var assetFn func(string, string, []SubmodelRef) (FeedEvent, error)
 	switch mutation.ChangeType {
 	case mutationCreated:
 		assetFn = s.service.build.AssetCreated
@@ -121,7 +121,7 @@ func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutat
 	default:
 		assetFn = s.service.build.AssetUpdated
 	}
-	aev, err := assetFn(globalAssetID, aasID, submodelSemanticIDs)
+	aev, err := assetFn(globalAssetID, aasID, submodels)
 	if err != nil {
 		return fmt.Errorf("EVENTFEED-MUTATION-ASSET-BUILD: %w", err)
 	}
