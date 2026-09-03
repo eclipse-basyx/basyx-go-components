@@ -472,40 +472,7 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 		right = WrapCastAroundField(right, comparisonType)
 	}
 
-	out := MatchExpression{}
-	leOut := LogicalExpression{}
-	switch op {
-	case "$eq":
-		out.Eq = []Value{left, right}
-		leOut.Eq = []Value{left, right}
-	case "$ne":
-		out.Ne = []Value{left, right}
-		leOut.Ne = []Value{left, right}
-	case "$gt":
-		out.Gt = []Value{left, right}
-		leOut.Gt = []Value{left, right}
-	case "$ge":
-		out.Ge = []Value{left, right}
-		leOut.Ge = []Value{left, right}
-	case "$lt":
-		out.Lt = []Value{left, right}
-		leOut.Lt = []Value{left, right}
-	case "$le":
-		out.Le = []Value{left, right}
-		leOut.Le = []Value{left, right}
-	case "$regex":
-		out.Regex = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-		leOut.Regex = out.Regex
-	case "$contains":
-		out.Contains = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-		leOut.Contains = out.Contains
-	case "$starts-with":
-		out.StartsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-		leOut.StartsWith = out.StartsWith
-	case "$ends-with":
-		out.EndsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-		leOut.EndsWith = out.EndsWith
-	}
+	out, leOut := buildMatchComparisonExpressions(op, left, right)
 
 	if isLiteral(left) && isLiteral(right) ||
 		(!valueContainsField(left) && !valueContainsField(right) && (valueContainsAttribute(left) || valueContainsAttribute(right))) {
@@ -518,6 +485,36 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 	}
 
 	return &out, SimplifyUndecided
+}
+
+func buildMatchComparisonExpressions(op string, left, right Value) (MatchExpression, LogicalExpression) {
+	values := []Value{left, right}
+	stringValues := []StringValue{valueToStringValue(left), valueToStringValue(right)}
+	out := MatchExpression{}
+	leOut := LogicalExpression{}
+	switch op {
+	case "$eq":
+		out.Eq, leOut.Eq = values, values
+	case "$ne":
+		out.Ne, leOut.Ne = values, values
+	case "$gt":
+		out.Gt, leOut.Gt = values, values
+	case "$ge":
+		out.Ge, leOut.Ge = values, values
+	case "$lt":
+		out.Lt, leOut.Lt = values, values
+	case "$le":
+		out.Le, leOut.Le = values, values
+	case "$regex":
+		out.Regex, leOut.Regex = stringValues, stringValues
+	case "$contains":
+		out.Contains, leOut.Contains = stringValues, stringValues
+	case "$starts-with":
+		out.StartsWith, leOut.StartsWith = stringValues, stringValues
+	case "$ends-with":
+		out.EndsWith, leOut.EndsWith = stringValues, stringValues
+	}
+	return out, leOut
 }
 
 func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, op string, opts SimplifyOptions) (*LogicalExpression, SimplifyDecision) {
@@ -1239,16 +1236,9 @@ func claimPathContains(haystack, needle StringValue, resolve AttributeResolver) 
 	if !ok {
 		return false, false
 	}
-	items, ok := claim.Value.([]any)
+	items, ok := claimStringArrayItems(claim.Value)
 	if !ok {
-		if strings, stringSlice := claim.Value.([]string); stringSlice {
-			items = make([]any, len(strings))
-			for index, item := range strings {
-				items[index] = item
-			}
-		} else {
-			return false, false
-		}
+		return false, false
 	}
 	wanted, ok := resolveStringItem(needle, resolve)
 	if !ok {
@@ -1265,6 +1255,21 @@ func claimPathContains(haystack, needle StringValue, resolve AttributeResolver) 
 		}
 	}
 	return found, true
+}
+
+func claimStringArrayItems(value any) ([]any, bool) {
+	if items, ok := value.([]any); ok {
+		return items, true
+	}
+	stringItems, ok := value.([]string)
+	if !ok {
+		return nil, false
+	}
+	items := make([]any, len(stringItems))
+	for index, item := range stringItems {
+		items[index] = item
+	}
+	return items, true
 }
 
 func boolOperandValue(value any) (bool, bool) {
@@ -1378,27 +1383,6 @@ func eqCmp(left, right Value, resolve AttributeResolver, negate bool) (bool, boo
 		return !equal, true
 	}
 	return equal, true
-}
-
-func inCmp(left, right Value, resolve AttributeResolver) (bool, bool) {
-	comparisonType, err := left.IsComparableTo(right)
-	if err != nil || comparisonType != KindString || containsStringArray(left, resolve) {
-		return false, false
-	}
-	values, isArray, validArray := stringArrayOperand(right, resolve)
-	if !isArray || !validArray {
-		return false, false
-	}
-	expected, expectedOK := resolveStringValue(left, resolve)
-	if !expectedOK {
-		return false, false
-	}
-	for _, value := range values {
-		if value == expected {
-			return true, true
-		}
-	}
-	return false, true
 }
 
 func resolveNumberValue(v Value, resolve AttributeResolver) (float64, bool) {
