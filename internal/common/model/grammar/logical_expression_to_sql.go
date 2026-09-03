@@ -237,8 +237,16 @@ func normalizeRoot(root string) string {
 func joinPlanConfigForAAS() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "aas",
-		BaseAliases:   []string{"aas", "asset_information", "specific_asset_id", "aas_submodel_reference", "aas_submodel_reference_key", "external_subject_reference", "external_subject_reference_key"},
-		Rules: map[string]existsJoinRule{
+		BaseAliases: []string{
+			"aas", "asset_information", "specific_asset_id", "aas_submodel_reference",
+			"aas_submodel_reference_key", "submodel", "submodel_element", "property_element",
+			"multilanguage_property_value", "semantic_id_reference", "semantic_id_reference_key",
+			"sm_supplemental_semantic_id_reference", "sm_supplemental_semantic_id_reference_key",
+			"sme_semantic_id_reference", "sme_semantic_id_reference_key",
+			"sme_supplemental_semantic_id_reference", "sme_supplemental_semantic_id_reference_key",
+			"external_subject_reference", "external_subject_reference_key",
+		},
+		Rules: mergeJoinRules(map[string]existsJoinRule{
 			"aas": {
 				Alias: "aas",
 				Deps:  nil,
@@ -306,7 +314,16 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 					)
 				},
 			},
-		},
+		}, submodelHierarchyJoinRules("submodel", existsJoinRule{
+			Alias: "submodel",
+			Deps:  []string{"aas_submodel_reference_key"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("submodel").As("submodel"),
+					goqu.On(goqu.I("submodel.submodel_identifier").Eq(goqu.I("aas_submodel_reference_key.value"))),
+				)
+			},
+		})),
 		TableForAlias: func(alias string) (string, bool) {
 			switch alias {
 			case "aas":
@@ -324,7 +341,7 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 			case "aas_submodel_reference_key":
 				return "aas_submodel_reference_key", true
 			default:
-				return "", false
+				return submodelHierarchyTableForAlias(alias, "submodel")
 			}
 		},
 		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
@@ -358,6 +375,165 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 				return false
 			}
 		},
+	}
+}
+
+func mergeJoinRules(ruleSets ...map[string]existsJoinRule) map[string]existsJoinRule {
+	merged := make(map[string]existsJoinRule)
+	for _, rules := range ruleSets {
+		for alias, rule := range rules {
+			merged[alias] = rule
+		}
+	}
+	return merged
+}
+
+func submodelHierarchyJoinRules(submodelAlias string, submodelRule existsJoinRule) map[string]existsJoinRule {
+	submodelRule.Alias = submodelAlias
+	return map[string]existsJoinRule{
+		submodelAlias: submodelRule,
+		"semantic_id_reference": {
+			Alias: "semantic_id_reference",
+			Deps:  []string{submodelAlias},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_semantic_id_reference").As("semantic_id_reference"),
+					goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I(submodelAlias+".id"))),
+				)
+			},
+		},
+		"semantic_id_reference_key": {
+			Alias: "semantic_id_reference_key",
+			Deps:  []string{"semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_semantic_id_reference_key").As("semantic_id_reference_key"),
+					goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
+				)
+			},
+		},
+		"sm_supplemental_semantic_id_reference": {
+			Alias: "sm_supplemental_semantic_id_reference",
+			Deps:  []string{submodelAlias},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_supplemental_semantic_id_reference").As("sm_supplemental_semantic_id_reference"),
+					goqu.On(goqu.I("sm_supplemental_semantic_id_reference.submodel_id").Eq(goqu.I(submodelAlias+".id"))),
+				)
+			},
+		},
+		"sm_supplemental_semantic_id_reference_key": {
+			Alias: "sm_supplemental_semantic_id_reference_key",
+			Deps:  []string{"sm_supplemental_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_supplemental_semantic_id_reference_key").As("sm_supplemental_semantic_id_reference_key"),
+					goqu.On(goqu.I("sm_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sm_supplemental_semantic_id_reference.id"))),
+				)
+			},
+		},
+		"submodel_element": {
+			Alias: "submodel_element",
+			Deps:  []string{submodelAlias},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element"),
+					goqu.On(goqu.I("submodel_element.submodel_id").Eq(goqu.I(submodelAlias+".id"))),
+				)
+			},
+		},
+		"property_element": {
+			Alias: "property_element",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("property_element"),
+					goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"multilanguage_property_value": {
+			Alias: "multilanguage_property_value",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("multilanguage_property_value"),
+					goqu.On(goqu.I("multilanguage_property_value.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"sme_semantic_id_reference": {
+			Alias: "sme_semantic_id_reference",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_semantic_id_reference").As("sme_semantic_id_reference"),
+					goqu.On(goqu.I("sme_semantic_id_reference.id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"sme_semantic_id_reference_key": {
+			Alias: "sme_semantic_id_reference_key",
+			Deps:  []string{"sme_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_semantic_id_reference_key").As("sme_semantic_id_reference_key"),
+					goqu.On(goqu.I("sme_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_semantic_id_reference.id"))),
+				)
+			},
+		},
+		"sme_supplemental_semantic_id_reference": {
+			Alias: "sme_supplemental_semantic_id_reference",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_supplemental_semantic_id_reference").As("sme_supplemental_semantic_id_reference"),
+					goqu.On(goqu.I("sme_supplemental_semantic_id_reference.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"sme_supplemental_semantic_id_reference_key": {
+			Alias: "sme_supplemental_semantic_id_reference_key",
+			Deps:  []string{"sme_supplemental_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_supplemental_semantic_id_reference_key").As("sme_supplemental_semantic_id_reference_key"),
+					goqu.On(goqu.I("sme_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_supplemental_semantic_id_reference.id"))),
+				)
+			},
+		},
+	}
+}
+
+func submodelHierarchyTableForAlias(alias string, submodelAlias string) (string, bool) {
+	if alias == submodelAlias {
+		return "submodel", true
+	}
+	switch alias {
+	case "semantic_id_reference":
+		return "submodel_semantic_id_reference", true
+	case "semantic_id_reference_key":
+		return "submodel_semantic_id_reference_key", true
+	case "sm_supplemental_semantic_id_reference":
+		return "submodel_supplemental_semantic_id_reference", true
+	case "sm_supplemental_semantic_id_reference_key":
+		return "submodel_supplemental_semantic_id_reference_key", true
+	case "submodel_element":
+		return "submodel_element", true
+	case "property_element":
+		return "property_element", true
+	case "multilanguage_property_value":
+		return "multilanguage_property_value", true
+	case "sme_semantic_id_reference":
+		return "submodel_element_semantic_id_reference", true
+	case "sme_semantic_id_reference_key":
+		return "submodel_element_semantic_id_reference_key", true
+	case "sme_supplemental_semantic_id_reference":
+		return "submodel_element_supplemental_semantic_id_reference", true
+	case "sme_supplemental_semantic_id_reference_key":
+		return "submodel_element_supplemental_semantic_id_reference_key", true
+	default:
+		return "", false
 	}
 }
 
@@ -1226,6 +1402,7 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 		for _, a := range plan.ExpandedAliases {
 			mapped := existsAliases[a]
 			sql = strings.ReplaceAll(sql, "\""+a+"\".", "\""+mapped+"\".")
+			sql = strings.ReplaceAll(sql, a+".", mapped+".")
 			sql = strings.ReplaceAll(sql, " AS \""+a+"\"", " AS \""+mapped+"\"")
 
 			fromAsRe := regexp.MustCompile(`(?i)FROM\s+"` + regexp.QuoteMeta(a) + `"\s+AS\s+"`)

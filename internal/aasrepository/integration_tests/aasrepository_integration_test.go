@@ -784,6 +784,198 @@ func requireFirstSpecificAssetID(t *testing.T, shell map[string]any) map[string]
 	return specificAssetID
 }
 
+func TestQueryAssetAdministrationShellsEvaluatesReferencedSubmodelHierarchy(t *testing.T) {
+	baseURL := aasRepositoryBaseURL
+	suffix := time.Now().UnixNano()
+
+	correlatedAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-correlated-%d", suffix)
+	splitAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-split-%d", suffix)
+	highAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-high-%d", suffix)
+	unrelatedAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-unrelated-%d", suffix)
+
+	createHierarchyQueryAAS(t, baseURL, correlatedAASID, "HierarchyQuery-Correlated")
+	createHierarchyQueryAAS(t, baseURL, splitAASID, "HierarchyQuery-Split")
+	createHierarchyQueryAAS(t, baseURL, highAASID, "HierarchyQuery-High")
+	createHierarchyQueryAAS(t, baseURL, unrelatedAASID, "HierarchyQuery-Unrelated")
+
+	putHierarchyQuerySubmodel(t, baseURL, correlatedAASID, fmt.Sprintf("urn:sm:hierarchy:correlated:%d", suffix), "CarbonFootprint", 42)
+	putHierarchyQuerySubmodel(t, baseURL, splitAASID, fmt.Sprintf("urn:sm:hierarchy:split-carbon:%d", suffix), "CarbonFootprint", 75)
+	putHierarchyQuerySubmodel(t, baseURL, splitAASID, fmt.Sprintf("urn:sm:hierarchy:split-other:%d", suffix), "OtherFootprint", 30)
+	putHierarchyQuerySubmodel(t, baseURL, highAASID, fmt.Sprintf("urn:sm:hierarchy:high:%d", suffix), "CarbonFootprint", 65)
+	putHierarchyQuerySubmodel(t, baseURL, unrelatedAASID, fmt.Sprintf("urn:sm:hierarchy:unrelated:%d", suffix), "OtherFootprint", 20)
+
+	submodelIsCarbonFootprint := map[string]any{
+		"$eq": []any{
+			map[string]any{"$field": "$sm#idShort"},
+			map[string]any{"$strVal": "CarbonFootprint"},
+		},
+	}
+	rootFootprintBelow48 := map[string]any{
+		"$lt": []any{
+			map[string]any{"$numCast": map[string]any{"$field": "$sme.AggregatedCarbonFootprint#value"}},
+			map[string]any{"$numVal": 48},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		condition   map[string]any
+		expectedIDs []string
+	}{
+		{
+			name:        "simple submodel condition without match",
+			condition:   submodelIsCarbonFootprint,
+			expectedIDs: []string{correlatedAASID, splitAASID, highAASID},
+		},
+		{
+			name: "simple submodel condition with match",
+			condition: map[string]any{
+				"$match": []any{submodelIsCarbonFootprint},
+			},
+			expectedIDs: []string{correlatedAASID, splitAASID, highAASID},
+		},
+		{
+			name:        "simple SME condition without submodel restriction",
+			condition:   rootFootprintBelow48,
+			expectedIDs: []string{correlatedAASID, splitAASID, unrelatedAASID},
+		},
+		{
+			name: "and without match permits different referenced submodels",
+			condition: map[string]any{
+				"$and": []any{submodelIsCarbonFootprint, rootFootprintBelow48},
+			},
+			expectedIDs: []string{correlatedAASID, splitAASID},
+		},
+		{
+			name: "match requires the submodel and SME predicates together",
+			condition: map[string]any{
+				"$match": []any{submodelIsCarbonFootprint, rootFootprintBelow48},
+			},
+			expectedIDs: []string{correlatedAASID},
+		},
+		{
+			name: "complex AAS submodel and nested SME match",
+			condition: map[string]any{
+				"$and": []any{
+					map[string]any{
+						"$starts-with": []any{
+							map[string]any{"$strCast": map[string]any{"$field": "$aas#idShort"}},
+							map[string]any{"$strVal": "HierarchyQuery-"},
+						},
+					},
+					map[string]any{
+						"$match": []any{
+							map[string]any{
+								"$starts-with": []any{
+									map[string]any{"$strCast": map[string]any{"$field": "$sm#idShort"}},
+									map[string]any{"$strVal": "Carbon"},
+								},
+							},
+							map[string]any{
+								"$eq": []any{
+									map[string]any{"$field": "$sme.Metrics.AggregatedCarbonFootprint#valueType"},
+									map[string]any{"$strVal": "xs:double"},
+								},
+							},
+							map[string]any{
+								"$ge": []any{
+									map[string]any{"$numCast": map[string]any{"$field": "$sme.Metrics.AggregatedCarbonFootprint#value"}},
+									map[string]any{"$numVal": 40},
+								},
+							},
+							map[string]any{
+								"$lt": []any{
+									map[string]any{"$numCast": map[string]any{"$field": "$sme.Metrics.AggregatedCarbonFootprint#value"}},
+									map[string]any{"$numVal": 50},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedIDs: []string{correlatedAASID},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actualIDs := queryAASIDs(t, baseURL, test.condition)
+			assert.ElementsMatch(t, test.expectedIDs, actualIDs)
+		})
+	}
+}
+
+func createHierarchyQueryAAS(t *testing.T, baseURL string, aasID string, idShort string) {
+	t.Helper()
+
+	body := fmt.Sprintf(
+		`{"id":"%s","idShort":"%s","modelType":"AssetAdministrationShell","assetInformation":{"assetKind":"Instance"}}`,
+		aasID,
+		idShort,
+	)
+	statusCode, err := postResponseStatus(baseURL+"/shells", body)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	encodedAASIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	t.Cleanup(func() {
+		_, _ = deleteResponseStatus(fmt.Sprintf("%s/shells/%s", baseURL, encodedAASIdentifier))
+	})
+}
+
+func putHierarchyQuerySubmodel(
+	t *testing.T,
+	baseURL string,
+	aasID string,
+	submodelID string,
+	idShort string,
+	footprint float64,
+) {
+	t.Helper()
+
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+	body := fmt.Sprintf(`{
+		"id":"%s",
+		"idShort":"%s",
+		"modelType":"Submodel",
+		"kind":"Instance",
+		"submodelElements":[
+			{"idShort":"AggregatedCarbonFootprint","modelType":"Property","valueType":"xs:double","value":"%g"},
+			{"idShort":"Metrics","modelType":"SubmodelElementCollection","value":[
+				{"idShort":"AggregatedCarbonFootprint","modelType":"Property","valueType":"xs:double","value":"%g"}
+			]}
+		]
+	}`, submodelID, idShort, footprint, footprint)
+
+	_, statusCode, _, err := putJSONResponse(endpoint, body)
+	require.NoError(t, err, "PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created when creating referenced Submodel")
+}
+
+func queryAASIDs(t *testing.T, baseURL string, condition map[string]any) []string {
+	t.Helper()
+
+	body, err := json.Marshal(map[string]any{"$condition": condition})
+	require.NoError(t, err, "failed to marshal AAS query")
+	payload, statusCode, _, err := postJSONResponse(baseURL+"/query/shells", string(body))
+	require.NoError(t, err, "AAS query request failed")
+	require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for AAS query")
+
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "query result should be an array")
+	identifiers := make([]string, 0, len(result))
+	for _, item := range result {
+		shell, ok := item.(map[string]any)
+		require.True(t, ok, "query result item should be an object")
+		identifier, ok := shell["id"].(string)
+		require.True(t, ok, "query result item should contain a string id")
+		identifiers = append(identifiers, identifier)
+	}
+	return identifiers
+}
+
 func TestPostAssetAdministrationShellAcceptsNullSubmodels(t *testing.T) {
 	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/null-submodels-%d", time.Now().UnixNano())
