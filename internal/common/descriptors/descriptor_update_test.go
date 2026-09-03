@@ -68,6 +68,60 @@ func TestLockSubmodelDescriptorForAASUpdateTxLocksOnlySubmodelDescriptor(t *test
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUpdateAdministrationShellDescriptorTxTouchesRootForPayloadOnlyChange(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	previous := testAdministrationShellDescriptor()
+	next := previous
+	next.Description = []types.ILangStringTextType{types.NewLangStringTextType("en", "updated")}
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	mock.ExpectExec(`UPDATE "aas_descriptor" SET "db_updated_at"=CURRENT_TIMESTAMP WHERE \("descriptor_id" = \$1\)`).
+		WithArgs(int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE "descriptor_payload" SET "description_payload"=\$1::jsonb WHERE \("descriptor_id" = \$2\)`).
+		WithArgs(sqlmock.AnyArg(), int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+
+	changed, err := UpdateAdministrationShellDescriptorTx(t.Context(), tx, 42, previous, next)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUpdateSubmodelDescriptorTxTouchesRootForPayloadOnlyChange(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	previous := testSubmodelDescriptor("sm-1", "original")
+	next := previous
+	next.Description = []types.ILangStringTextType{types.NewLangStringTextType("en", "updated")}
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	mock.ExpectExec(`UPDATE "submodel_descriptor" SET "db_updated_at"=CURRENT_TIMESTAMP WHERE \("descriptor_id" = \$1\)`).
+		WithArgs(int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE "descriptor_payload" SET "description_payload"=\$1::jsonb WHERE \("descriptor_id" = \$2\)`).
+		WithArgs(sqlmock.AnyArg(), int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+
+	changed, err := UpdateSubmodelDescriptorTx(t.Context(), tx, 42, previous, next, 0, false)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestBuildAdministrationShellDescriptorUpdatePlan(t *testing.T) {
 	base := testAdministrationShellDescriptor()
 

@@ -557,7 +557,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 		if snapshotErr != nil {
 			return snapshotErr
 		}
-		descriptorID, err := descriptors.LockAdministrationShellDescriptorForUpdateTx(ctx, tx, aasd.Id)
+		descriptorID, err := descriptors.LockExistingAdministrationShellDescriptorForUpdateTx(ctx, tx, aasd.Id)
 		if err != nil {
 			return err
 		}

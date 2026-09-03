@@ -41,6 +41,7 @@ type submodelDescriptorListScope struct {
 	collectorRoot   grammar.CollectorRoot
 	fragmentPrefix  string
 	aasDescriptorID *int64
+	identifiable    string
 }
 
 type submodelDescriptorListRow struct {
@@ -76,6 +77,35 @@ func listSubmodelDescriptorsSingleStatement(
 			fragmentPrefix: "$smdesc",
 		},
 	)
+}
+
+// GetSubmodelDescriptorByIDSingleStatement loads one standalone Submodel
+// descriptor, including its complete normalized graph, with one SQL statement.
+func GetSubmodelDescriptorByIDSingleStatement(
+	ctx context.Context,
+	db DBQueryer,
+	identifier string,
+) (model.SubmodelDescriptor, error) {
+	descriptors, _, err := listSubmodelDescriptorsFromPageQuery(
+		ctx,
+		db,
+		1,
+		"",
+		time.Time{},
+		time.Time{},
+		submodelDescriptorListScope{
+			collectorRoot:  grammar.CollectorRootSMDesc,
+			fragmentPrefix: "$smdesc",
+			identifiable:   identifier,
+		},
+	)
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	if len(descriptors) != 1 || descriptors[0].Id != identifier {
+		return model.SubmodelDescriptor{}, common.NewErrNotFound("Submodel Descriptor not found")
+	}
+	return descriptors[0], nil
 }
 
 func listSubmodelDescriptorsForAASSingleStatement(
@@ -291,6 +321,7 @@ func buildStandaloneSubmodelDescriptorListQuery(
 		cursor,
 		createdFrom,
 		updatedFrom,
+		scope.identifiable,
 	)
 	authorized, maskRuntime, maskedColumns, err := buildAuthorizedSubmodelDescriptorRows(
 		ctx,
@@ -358,6 +389,7 @@ func buildStandaloneSubmodelDescriptorRawPage(
 	cursor string,
 	createdFrom time.Time,
 	updatedFrom time.Time,
+	identifiable string,
 ) *goqu.SelectDataset {
 	pageSource := goqu.T(common.TblSubmodelDescriptor).As("submodel_descriptor_raw_page")
 	page := dialect.From(pageSource).
@@ -372,6 +404,9 @@ func buildStandaloneSubmodelDescriptorRawPage(
 		createdFrom,
 		updatedFrom,
 	)
+	if identifiable != "" {
+		page = page.Where(pageSource.Col(common.ColAASID).Eq(identifiable))
+	}
 	if cursor != "" {
 		cursorSource := goqu.T(common.TblSubmodelDescriptor).As("submodel_descriptor_cursor")
 		cursorExists := dialect.From(cursorSource).
