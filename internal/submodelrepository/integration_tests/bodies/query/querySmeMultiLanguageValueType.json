@@ -1,0 +1,26 @@
+{
+    "$condition": {
+        "$and": [
+            {
+                "$eq": [
+                    {
+                        "$field": "$sme.ProductName#valueType"
+                    },
+                    {
+                        "$strVal": "xs:string"
+                    }
+                ]
+            },
+            {
+                "$contains": [
+                    {
+                        "$field": "$sm#idShort"
+                    },
+                    {
+                        "$strVal": "Query_Language"
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -2319,6 +2319,30 @@
         "expectedStatus": 200
     },
     {
+        "context": "Query Submodel By SME MultiLanguageProperty Value Contains (ProductName text contains Capteur)",
+        "method": "POST",
+        "endpoint": "{{BASYX_IT_API_URL}}/query/submodels",
+        "data":"bodies/query/querySmeMultiLanguageValueContains.json",
+        "shouldMatch":"expected/query/paginatedSubmodelG.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By SME MultiLanguageProperty ValueType Guard (ProductName valueType is not xs:string, returns empty)",
+        "method": "POST",
+        "endpoint": "{{BASYX_IT_API_URL}}/query/submodels",
+        "data":"bodies/query/querySmeMultiLanguageValueType.json",
+        "shouldMatch":"expected/query/paginatedEmptyResult.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By SME Property ValueType (TechnicalSpec valueType=xs:string, returns G)",
+        "method": "POST",
+        "endpoint": "{{BASYX_IT_API_URL}}/query/submodels",
+        "data":"bodies/query/querySmeTechnicalSpecValueType.json",
+        "shouldMatch":"expected/query/paginatedSubmodelG.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "Query Submodel By SME SemanticId (contains TechnicalSpecification)",
         "method": "POST",
         "endpoint": "{{BASYX_IT_API_URL}}/query/submodels",
