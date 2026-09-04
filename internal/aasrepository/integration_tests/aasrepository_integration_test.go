@@ -792,17 +792,22 @@ func TestQueryAssetAdministrationShellsEvaluatesReferencedSubmodelHierarchy(t *t
 	splitAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-split-%d", suffix)
 	highAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-high-%d", suffix)
 	unrelatedAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-unrelated-%d", suffix)
+	correlatedSubmodelID := fmt.Sprintf("urn:sm:hierarchy:correlated:%d", suffix)
+	splitCarbonSubmodelID := fmt.Sprintf("urn:sm:hierarchy:split-carbon:%d", suffix)
+	splitOtherSubmodelID := fmt.Sprintf("urn:sm:hierarchy:split-other:%d", suffix)
+	highSubmodelID := fmt.Sprintf("urn:sm:hierarchy:high:%d", suffix)
+	unrelatedSubmodelID := fmt.Sprintf("urn:sm:hierarchy:unrelated:%d", suffix)
 
 	createHierarchyQueryAAS(t, baseURL, correlatedAASID, "HierarchyQuery-Correlated")
 	createHierarchyQueryAAS(t, baseURL, splitAASID, "HierarchyQuery-Split")
 	createHierarchyQueryAAS(t, baseURL, highAASID, "HierarchyQuery-High")
 	createHierarchyQueryAAS(t, baseURL, unrelatedAASID, "HierarchyQuery-Unrelated")
 
-	putHierarchyQuerySubmodel(t, baseURL, correlatedAASID, fmt.Sprintf("urn:sm:hierarchy:correlated:%d", suffix), "CarbonFootprint", 42)
-	putHierarchyQuerySubmodel(t, baseURL, splitAASID, fmt.Sprintf("urn:sm:hierarchy:split-carbon:%d", suffix), "CarbonFootprint", 75)
-	putHierarchyQuerySubmodel(t, baseURL, splitAASID, fmt.Sprintf("urn:sm:hierarchy:split-other:%d", suffix), "OtherFootprint", 30)
-	putHierarchyQuerySubmodel(t, baseURL, highAASID, fmt.Sprintf("urn:sm:hierarchy:high:%d", suffix), "CarbonFootprint", 65)
-	putHierarchyQuerySubmodel(t, baseURL, unrelatedAASID, fmt.Sprintf("urn:sm:hierarchy:unrelated:%d", suffix), "OtherFootprint", 20)
+	putHierarchyQuerySubmodel(t, baseURL, correlatedAASID, correlatedSubmodelID, "CarbonFootprint", 42)
+	putHierarchyQuerySubmodel(t, baseURL, splitAASID, splitCarbonSubmodelID, "CarbonFootprint", 75)
+	putHierarchyQuerySubmodel(t, baseURL, splitAASID, splitOtherSubmodelID, "OtherFootprint", 30)
+	putHierarchyQuerySubmodel(t, baseURL, highAASID, highSubmodelID, "CarbonFootprint", 65)
+	putHierarchyQuerySubmodel(t, baseURL, unrelatedAASID, unrelatedSubmodelID, "OtherFootprint", 20)
 
 	submodelIsCarbonFootprint := map[string]any{
 		"$eq": []any{
@@ -826,6 +831,16 @@ func TestQueryAssetAdministrationShellsEvaluatesReferencedSubmodelHierarchy(t *t
 			name:        "simple submodel condition without match",
 			condition:   submodelIsCarbonFootprint,
 			expectedIDs: []string{correlatedAASID, splitAASID, highAASID},
+		},
+		{
+			name: "submodel identifier matches only its referencing AAS",
+			condition: map[string]any{
+				"$eq": []any{
+					map[string]any{"$field": "$sm#id"},
+					map[string]any{"$strVal": correlatedSubmodelID},
+				},
+			},
+			expectedIDs: []string{correlatedAASID},
 		},
 		{
 			name: "simple submodel condition with match",
