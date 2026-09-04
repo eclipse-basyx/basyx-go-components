@@ -42,6 +42,8 @@ import (
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeedsetup"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -176,12 +178,21 @@ func runServer(ctx context.Context, configPath string) error {
 		SubmodelRepository: smDatabase,
 	}
 	enableReferencingAASDescriptorEmbeddingSync := registrySyncConfig.SubmodelRegistryIntegration
+	eventFeedModule, eventFeedErr := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg.Eventing))
+	if eventFeedErr != nil {
+		return eventFeedErr
+	}
+	eventfeedsetup.Bind(eventFeedModule)
+	defer eventFeedModule.Stop()
+	eventFeedModule.StartRetentionLoop(ctx)
+
 	smSvc := aasenvironment.NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
 		api.NewSubmodelRepositoryAPIAPIService(ctx, *smDatabase, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 		enableReferencingAASDescriptorEmbeddingSync,
 	)
+	smSvc.SetEventFeed(eventFeedModule)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", cfg.Server.StrictVerification)
 
 	serializationSvc := api.NewSerializationAPIAPIService()
@@ -227,6 +238,8 @@ func runServer(ctx context.Context, configPath string) error {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+
+	eventFeedModule.RegisterRoutes(apiRouter)
 
 	// Mount protected API under base path
 	r.Mount(base, apiRouter)

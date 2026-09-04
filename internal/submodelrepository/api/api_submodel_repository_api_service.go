@@ -30,6 +30,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -46,6 +47,7 @@ type SubmodelRepositoryAPIAPIService struct {
 	asyncJobLifecycleContext context.Context
 	asyncResultRetention     time.Duration
 	asyncDelegationSlots     chan struct{}
+	eventFeed                *eventfeed.Module
 }
 
 const componentName = "SMREPO"
@@ -88,6 +90,22 @@ func NewSubmodelRepositoryAPIAPIService(
 		asyncResultRetention:     asyncResultRetention,
 		asyncDelegationSlots:     make(chan struct{}, maximumConcurrentDelegations),
 	}
+}
+
+// SetEventFeed attaches an optional Event Feed module for create/update hooks.
+func (s *SubmodelRepositoryAPIAPIService) SetEventFeed(module *eventfeed.Module) {
+	if s == nil {
+		return
+	}
+	s.eventFeed = module
+}
+
+// EventFeedModule returns the attached Event Feed module, if any.
+func (s *SubmodelRepositoryAPIAPIService) EventFeedModule() *eventfeed.Module {
+	if s == nil {
+		return nil
+	}
+	return s.eventFeed
 }
 
 func (s *SubmodelRepositoryAPIAPIService) tryAcquireAsyncDelegationSlot() bool {
@@ -1291,7 +1309,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 		return newAPIErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
 	}
 
-	isUpdate, err := s.submodelBackend.PutSubmodel(ctx, decodedIdentifier, submodel)
+	putResult, err := s.submodelBackend.PutSubmodelWithResult(ctx, decodedIdentifier, submodel)
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
@@ -1308,7 +1326,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
-	if isUpdate {
+	if putResult.IsUpdate {
 		return gen.Response(http.StatusNoContent, nil), nil
 	}
 

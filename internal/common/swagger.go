@@ -98,6 +98,7 @@ type SwaggerUIConfig struct {
 	Enabled               *bool          // nil/default=true, false disables Swagger UI and OpenAPI spec endpoints
 	IncludeVerifyEndpoint *bool          // nil/default=true, false disables /verify injection in OpenAPI spec
 	IncludeABACManagement *bool          // nil/default=false, true injects ABAC management API paths
+	IncludeEventFeed      *bool          // nil/default=false, true injects Event Feed API paths when eventing is enabled
 }
 
 // ContactConfig holds contact information for OpenAPI spec
@@ -110,6 +111,7 @@ type ContactConfig struct {
 var openAPIVersionRegex = regexp.MustCompile(`(?m)^\s*version:\s*V([0-9]+\.[0-9]+\.[0-9]+)`)
 var verifyPathRegex = regexp.MustCompile(`(?m)^\s*/verify:\s*$`)
 var abacManagementPathRegex = regexp.MustCompile(`(?m)^\s*/security/abac/policy-versions:\s*$`)
+var eventFeedPathRegex = regexp.MustCompile(`(?m)^\s*/events:\s*$`)
 var pathsSectionRegex = regexp.MustCompile(`(?m)^paths:\s*(?:\r?\n)`)
 
 func detectPart2SchemaVersion(specContent []byte) string {
@@ -169,6 +171,13 @@ func localizePart1SchemaReferences(specContent []byte, specPath string) []byte {
 func localizeSchemaReferences(specContent []byte, specPath string) []byte {
 	specContent = localizePart2SchemaReferences(specContent, specPath)
 	return localizePart1SchemaReferences(specContent, specPath)
+}
+
+func injectEventFeedEndpoints(specContent []byte) []byte {
+	if eventFeedPathRegex.Match(specContent) {
+		return specContent
+	}
+	return injectPathFragment(specContent, eventFeedPathsYAML)
 }
 
 func injectVerifyEndpoint(specContent []byte) []byte {
@@ -265,6 +274,100 @@ func injectVerifyEndpoint(specContent []byte) []byte {
 	appended = append(appended, verifyPath...)
 	return appended
 }
+
+const eventFeedPathsYAML = `  /events:
+    get:
+      tags:
+        - Event Feed API
+      summary: Returns a page of CloudEvents from the Event Feed
+      operationId: GetEventFeed
+      parameters:
+        - name: lastEventId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Resume after this event id (mutually exclusive with since)
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Return events at or after this timestamp (mutually exclusive with lastEventId)
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Opaque keyset cursor from a previous page
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 'RSQL filter, e.g. rsql:event.type==io.admin-shell.submodel.created.v1'
+        - name: presentation
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [REGULAR, COMPACT]
+            default: REGULAR
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: Page size. When omitted, the configured eventing.feed.maxPageSize is used.
+      responses:
+        '200':
+          description: Event feed page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  updated:
+                    type: string
+                    format: date-time
+                  records:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  cursor:
+                    type: string
+        '400':
+          description: Invalid query parameters
+        '401':
+          description: Authentication required when security is enabled
+        '403':
+          description: Caller is not authorized
+        '500':
+          description: Internal server error
+  /.well-known/event-feed.json:
+    get:
+      tags:
+        - Event Feed API
+      summary: Returns Event Feed capabilities
+      operationId: GetEventFeedCapabilities
+      responses:
+        '200':
+          description: Event Feed capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Authentication required when security is enabled
+        '403':
+          description: Caller is not authorized
+`
 
 const abacManagementPathsYAML = `  /security/abac/active-policy:
     get:
@@ -1510,6 +1613,13 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	if includeABACManagement {
 		specContent = injectABACManagementAPI(specContent)
 	}
+	includeEventFeed := false
+	if cfg.IncludeEventFeed != nil {
+		includeEventFeed = *cfg.IncludeEventFeed
+	}
+	if includeEventFeed {
+		specContent = injectEventFeedEndpoints(specContent)
+	}
 
 	// Serve the OpenAPI spec
 	r.Get(cfg.SpecPath, func(w http.ResponseWriter, _ *http.Request) {
@@ -1658,6 +1768,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 	var enabled *bool
 	var includeVerifyEndpoint *bool
 	var includeABACManagement *bool
+	var includeEventFeed *bool
 	if serverConfig != nil && (serverConfig.Swagger.ContactName != "" || serverConfig.Swagger.ContactEmail != "" || serverConfig.Swagger.ContactURL != "") {
 		contact = &ContactConfig{
 			Name:  serverConfig.Swagger.ContactName,
@@ -1670,6 +1781,8 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 		includeVerifyEndpoint = &serverConfig.Server.VerificationEndpointAvailable
 		abacManagementEnabled := shouldIncludeABACManagement(serverConfig)
 		includeABACManagement = &abacManagementEnabled
+		eventFeedEnabled := serverConfig.Eventing.Feed.Enabled
+		includeEventFeed = &eventFeedEnabled
 	}
 
 	AddSwaggerUI(r, SwaggerUIConfig{
@@ -1684,6 +1797,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 		Enabled:               enabled,
 		IncludeVerifyEndpoint: includeVerifyEndpoint,
 		IncludeABACManagement: includeABACManagement,
+		IncludeEventFeed:      includeEventFeed,
 	})
 
 	return nil

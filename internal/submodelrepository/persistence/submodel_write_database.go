@@ -433,6 +433,36 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	return result.IsUpdate, nil
 }
 
+// PutSubmodelWithResult creates or replaces a submodel and reports whether persisted
+// content changed, including the previous submodel state for diffing.
+func (s *SubmodelDatabase) PutSubmodelWithResult(ctx context.Context, submodelID string, submodel types.ISubmodel) (PutSubmodelResult, error) {
+	if submodelID != submodel.ID() {
+		return PutSubmodelResult{}, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
+		return PutSubmodelResult{}, err
+	}
+
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return PutSubmodelResult{}, common.NewInternalServerError("SMREPO-PUTSM-STARTTX " + err.Error())
+	}
+	defer cleanup(&err)
+
+	result, err := s.putSubmodelInTransaction(ctx, tx, submodelID, submodel)
+	if err != nil {
+		return PutSubmodelResult{}, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return PutSubmodelResult{}, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
+	}
+
+	return result, nil
+}
+
 // PutSubmodelResult describes the repository mutation performed by a PUT.
 type PutSubmodelResult struct {
 	IsUpdate bool
@@ -615,13 +645,9 @@ func (s *SubmodelDatabase) appendAcknowledgedSubmodelPutHistoryTx(
 	if !history.MutationRecordingEnabled() {
 		return nil
 	}
-	var previousSnapshot map[string]any
-	var err error
-	if history.ActiveConfig().EvidenceEnabled {
-		previousSnapshot, err = submodelToHistorySnapshot(previous)
-		if err != nil {
-			return err
-		}
+	previousSnapshot, err := submodelToHistorySnapshot(previous)
+	if err != nil {
+		return err
 	}
 	return s.appendSubmodelHistoryTx(ctx, tx, persisted, previousSnapshot, history.ChangeUpdated, false)
 }

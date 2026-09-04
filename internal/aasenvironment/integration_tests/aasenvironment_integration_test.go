@@ -43,6 +43,7 @@ const composeFilePath = "./docker_compose/docker_compose.yml"
 
 var aasEnvBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
 var aasEnvSyncOffBaseURL = testenv.LocalURLFromEnv("BASYX_IT_SYNC_OFF_API_PORT", 6005)
+var aasEnvEventFeedBaseURL = testenv.LocalURLFromEnv("BASYX_IT_EVENT_FEED_API_PORT", 6009)
 var integrationTestDSN = testenv.PostgresKeywordDSNFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 
 var allowedIntegrationPackages = map[string]struct{}{
@@ -60,9 +61,11 @@ func TestMain(m *testing.M) {
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "sync-off-api", EnvVar: "BASYX_IT_SYNC_OFF_API_PORT"},
 		{Name: "sync-off-db", EnvVar: "BASYX_IT_SYNC_OFF_DB_PORT"},
+		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 	})
 	aasEnvBaseURL = runtime.LocalURL("api")
 	aasEnvSyncOffBaseURL = runtime.LocalURL("sync-off-api")
+	aasEnvEventFeedBaseURL = runtime.LocalURL("event-feed-api")
 	integrationTestDSN = runtime.PostgresKeywordDSN("db", "basyxTestDB")
 	serializationBaseURL = runtime.LocalURL("api")
 	serializationIntegrationDSN = runtime.PostgresKeywordDSN("db", "basyxTestDB")
@@ -76,6 +79,9 @@ func TestMain(m *testing.M) {
 		PreDownBeforeUp: true,
 		HealthURL:       aasEnvBaseURL + "/health",
 		HealthTimeout:   3 * time.Minute,
+		WaitForReady: func() error {
+			return testenv.WaitHealthyURL(aasEnvEventFeedBaseURL+"/health", 3*time.Minute)
+		},
 	}))
 }
 

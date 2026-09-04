@@ -45,6 +45,8 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeedsetup"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -187,6 +189,14 @@ func runServer(ctx context.Context, configPath string) error {
 		ConceptDescriptionRepository: cdrPersistence,
 		Discovery:                    discoveryPersistence,
 	}
+	eventFeedModule, err := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg.Eventing))
+	if err != nil {
+		return err
+	}
+	eventfeedsetup.Bind(eventFeedModule)
+	defer eventFeedModule.Stop()
+	eventFeedModule.StartRetentionLoop(ctx)
+
 	customAASRegistry := aasenvironment.NewCustomAASRegistryService(
 		aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*aasRegistryPersistence),
 		persistence,
@@ -200,11 +210,13 @@ func runServer(ctx context.Context, configPath string) error {
 		persistence,
 		registrySyncConfig,
 	)
+	customAASRepository.SetEventFeed(eventFeedModule)
 	customSMRepository := aasenvironment.NewCustomSubmodelRepositoryService(
 		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelRepositoryPersistence, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)
+	customSMRepository.SetEventFeed(eventFeedModule)
 	customCDRepository := aasenvironment.NewCustomConceptDescriptionRepositoryService(
 		cdrapi.NewConceptDescriptionRepositoryAPIAPIService(cdrPersistence),
 		persistence,
@@ -248,34 +260,27 @@ func runServer(ctx context.Context, configPath string) error {
 		common.AddVerificationEndpoint(apiRouter, cfg, environmentStager)
 	}
 
-	for operation, rt := range aasRegistryCtrl.Routes() {
-		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
-	for operation, rt := range smRegistryCtrl.Routes() {
-		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
-	for operation, rt := range aasRepositoryCtrl.Routes() {
-		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
-	for operation, rt := range smRepositoryCtrl.Routes() {
-		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
-	for operation, rt := range cdrCtrl.Routes() {
-		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
-	for operation, rt := range discoveryCtrl.Routes() {
-		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
-	for operation, rt := range descriptionCtrl.Routes() {
-		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
+	mountRoutes(versioningGuard, apiRouter, aasRegistryCtrl.Routes(), func(rt aasregistryopenapi.Route) (string, string, http.HandlerFunc) {
+		return rt.Method, rt.Pattern, rt.HandlerFunc
+	})
+	mountRoutes(versioningGuard, apiRouter, smRegistryCtrl.Routes(), func(rt smregistryopenapi.Route) (string, string, http.HandlerFunc) {
+		return rt.Method, rt.Pattern, rt.HandlerFunc
+	})
+	mountRoutes(versioningGuard, apiRouter, aasRepositoryCtrl.Routes(), func(rt aasrepositoryopenapi.Route) (string, string, http.HandlerFunc) {
+		return rt.Method, rt.Pattern, rt.HandlerFunc
+	})
+	mountRoutes(versioningGuard, apiRouter, smRepositoryCtrl.Routes(), func(rt submodelrepositoryopenapi.Route) (string, string, http.HandlerFunc) {
+		return rt.Method, rt.Pattern, rt.HandlerFunc
+	})
+	mountRoutes(versioningGuard, apiRouter, cdrCtrl.Routes(), func(rt commonmodel.Route) (string, string, http.HandlerFunc) {
+		return rt.Method, rt.Pattern, rt.HandlerFunc
+	})
+	mountRoutes(versioningGuard, apiRouter, discoveryCtrl.Routes(), func(rt discoveryopenapi.Route) (string, string, http.HandlerFunc) {
+		return rt.Method, rt.Pattern, rt.HandlerFunc
+	})
+	mountRoutes(versioningGuard, apiRouter, descriptionCtrl.Routes(), func(rt discoveryopenapi.Route) (string, string, http.HandlerFunc) {
+		return rt.Method, rt.Pattern, rt.HandlerFunc
+	})
 	versioningGuard.Cover(http.MethodPost, "/bulk/shell-descriptors")
 	versioningGuard.Cover(http.MethodPut, "/bulk/shell-descriptors")
 	versioningGuard.Cover(http.MethodDelete, "/bulk/shell-descriptors")
@@ -284,6 +289,8 @@ func runServer(ctx context.Context, configPath string) error {
 	versioningGuard.Cover(http.MethodDelete, "/bulk/submodel-descriptors")
 	aasBulkHandler.RegisterRoutes(apiRouter, true)
 	smBulkHandler.RegisterRoutes(apiRouter, false)
+
+	eventFeedModule.RegisterRoutes(apiRouter)
 
 	r.Mount(base, apiRouter)
 
@@ -305,6 +312,18 @@ func runServer(ctx context.Context, configPath string) error {
 	preconfigurationCompleted.Store(true)
 
 	return runner.Wait(ctx)
+}
+
+// mountRoutes registers every route in routes on apiRouter, classifying each
+// with versioningGuard first. extract adapts the generated per-API Route
+// type (distinct per OpenAPI package, but structurally identical) to its
+// method/pattern/handler fields.
+func mountRoutes[T any](versioningGuard *history.MutationCoverageGuard, apiRouter chi.Router, routes map[string]T, extract func(T) (method, pattern string, handler http.HandlerFunc)) {
+	for operation, rt := range routes {
+		method, pattern, handler := extract(rt)
+		versioningGuard.ClassifyRoute(operation, method, pattern)
+		apiRouter.Method(method, pattern, handler)
+	}
 }
 
 func openSharedDatabase(

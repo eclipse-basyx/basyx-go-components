@@ -77,3 +77,17 @@ general:
 # jws:
 #   privateKeyPath: "./rsa-key.pem"
 #   certificateChainPath: "./rsa-cert.pem"
+
+# Event Feed (CloudEvents REST). Requires DB schema >= v1.2.0 (feed_events).
+# Set eventing.feed.enabled: true to opt in. MQTT/Kafka sinks stay unimplemented.
+eventing:
+  enabled: false
+  format: cloudevents
+  feed:
+    enabled: false
+    maxAgeDays: 30
+    hardDeleteGraceDays: 10
+    maxPageSize: 100
+    sourceBaseUrl: "http://localhost:5004"
+    schemaBaseUrl: "https://admin-shell.io/events/schemas"
+    cleanupIntervalHours: 24
