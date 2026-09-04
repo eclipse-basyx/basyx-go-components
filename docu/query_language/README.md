@@ -429,9 +429,10 @@ condition is correlated to the fragment row being reconstructed.
 
 This fragment flag is distinct from the logical `$match` operator inside a
 `$condition`. Logical `$match` contains a list of predicates and evaluates them
-in one shared list or hierarchy scope. On the AAS Repository query endpoint,
-that permits `$sm` and `$sme` predicates to be correlated to one Submodel
-referenced by the candidate AAS.
+in one shared list or hierarchy scope. On the AAS Repository query endpoint of
+the AAS Environment Service, that permits `$sm` and `$sme` predicates to be
+correlated to one Submodel referenced by the candidate AAS. This hierarchy
+extension is not currently enabled by the standalone AAS Repository Service.
 
 The two sources have different responsibilities:
 

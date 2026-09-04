@@ -1,5 +1,5 @@
 kind: added
-body: AAS Repository shell queries can evaluate `$sm` and `$sme` field conditions against Submodels referenced by each Asset Administration Shell, with logical `$match` correlating all enclosed conditions to the same referenced Submodel hierarchy.
+body: AAS Environment Service shell queries can evaluate `$sm` and `$sme` field conditions against Submodels referenced by each Asset Administration Shell, with logical `$match` correlating all enclosed conditions to the same referenced Submodel hierarchy.
 time: 2026-09-03T12:47:47.755852+02:00
 custom:
   Impact: Low

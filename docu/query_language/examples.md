@@ -8,7 +8,7 @@ the [query language architecture guide](README.md).
 
 | Endpoint | Main field roots | Typical content |
 | --- | --- | --- |
-| `POST /query/shells` | `$aas`, `$sm`, `$sme` | Asset Administration Shells and their referenced local Submodels and elements |
+| `POST /query/shells` | `$aas`; additionally `$sm` and `$sme` in the AAS Environment Service | Asset Administration Shells and, in the AAS Environment Service, their referenced local Submodels and elements |
 | `POST /query/submodels` | `$sm`, `$sme` | Submodels and their elements |
 | `POST /query/shell-descriptors` | `$aasdesc`, nested `$smdesc` | AAS Descriptors and nested Submodel Descriptors |
 | `POST /query/submodel-descriptors` | `$smdesc` | Submodel Descriptors |
@@ -72,9 +72,11 @@ mask individual fragments inside `Motor`.
 
 ### Select AASs by referenced Submodel content
 
-On `/query/shells`, `$sm` searches only Submodels referenced by the candidate
-AAS, and `$sme` searches their elements. This query returns an AAS only when one
-of its referenced `CarbonFootprint` Submodels has the specified property value:
+On the AAS Environment Service's `/query/shells` endpoint, `$sm` searches only
+Submodels referenced by the candidate AAS, and `$sme` searches their elements.
+This extension is not currently enabled by the standalone AAS Repository
+Service. The following query returns an AAS only when one of its referenced
+`CarbonFootprint` Submodels has the specified property value:
 
 ```json
 {

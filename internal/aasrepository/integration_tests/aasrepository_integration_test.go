@@ -784,8 +784,23 @@ func requireFirstSpecificAssetID(t *testing.T, shell map[string]any) map[string]
 	return specificAssetID
 }
 
-func TestQueryAssetAdministrationShellsEvaluatesReferencedSubmodelHierarchy(t *testing.T) {
+func TestQueryAssetAdministrationShellsReferencedSubmodelHierarchyAvailability(t *testing.T) {
 	baseURL := aasRepositoryBaseURL
+	if os.Getenv("BASYX_AASENVIRONMENT_SERVICE") == "" {
+		body, err := json.Marshal(map[string]any{
+			"$condition": map[string]any{
+				"$eq": []any{
+					map[string]any{"$field": "$sm#idShort"},
+					map[string]any{"$strVal": "CarbonFootprint"},
+				},
+			},
+		})
+		require.NoError(t, err)
+		statusCode, err := postResponseStatus(baseURL+"/query/shells", string(body))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, statusCode)
+		return
+	}
 	suffix := time.Now().UnixNano()
 
 	correlatedAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-correlated-%d", suffix)

@@ -27,6 +27,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,6 +35,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	aasopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 	submodelopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
 	"github.com/stretchr/testify/require"
@@ -60,7 +62,7 @@ func TestGetAllAssetAdministrationShellsRejectsInvalidCursorWithStandardErrorBod
 	_, expectedDecodeErr := common.DecodeString(invalidCursor)
 	require.Error(t, expectedDecodeErr)
 
-	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil)
+	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, false)
 	response, err := sut.GetAllAssetAdministrationShells(contextWithABACDisabled(t), nil, "", 1, invalidCursor, time.Time{}, time.Time{})
 
 	require.NoError(t, err)
@@ -74,6 +76,35 @@ func TestGetAllAssetAdministrationShellsRejectsInvalidCursorWithStandardErrorBod
 	require.Equal(t, "400", handlers[0].Code)
 	require.Equal(t, "AASREPO-400-GetAllAssetAdministrationShells-BadRequest-BadCursor", handlers[0].CorrelationID)
 	require.NotEmpty(t, handlers[0].Timestamp)
+}
+
+func TestQueryAssetAdministrationShellsRejectsHierarchyFieldsOutsideAASEnvironment(t *testing.T) {
+	t.Parallel()
+
+	var query grammar.Query
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"$condition": {
+			"$lt": [
+				{"$numCast": {"$field": "$sme.Metrics.Value#value"}},
+				{"$numVal": 48}
+			]
+		}
+	}`), &query))
+
+	disabledService := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, false)
+	response, err := disabledService.QueryAssetAdministrationShells(t.Context(), 0, "", query)
+
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, response.Code)
+	handlers, ok := response.Body.([]common.ErrorHandler)
+	require.True(t, ok)
+	require.Len(t, handlers, 1)
+	require.Contains(t, handlers[0].Text, "only supported by the AAS Environment Service")
+
+	enabledService := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, true)
+	require.NoError(t, enabledService.validateAASHierarchyQuery(query))
+	require.True(t, grammar.AASHierarchyQueriesEnabled(enabledService.queryContext(t.Context(), query)))
+	require.False(t, grammar.AASHierarchyQueriesEnabled(disabledService.queryContext(t.Context(), grammar.Query{})))
 }
 
 func TestToAASOperationRedirectRewritesSubmodelNamespace(t *testing.T) {
@@ -98,7 +129,7 @@ func TestToAASOperationRedirectRewritesSubmodelNamespace(t *testing.T) {
 func TestInvokeOperationAsyncAasRepositoryRequiresClientTimeoutDuration(t *testing.T) {
 	t.Parallel()
 
-	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil)
+	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, false)
 	response, err := sut.InvokeOperationAsyncAasRepository(contextWithABACDisabled(t), "", "", "", model.OperationRequest{})
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, response.Code)

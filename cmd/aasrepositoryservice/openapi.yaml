@@ -15,7 +15,6 @@ info:
   x-profile-identifier: https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001
   x-profile-identifiers:
     - https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001
-    - https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-005
     - https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-003
     - https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-004
     - https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-005

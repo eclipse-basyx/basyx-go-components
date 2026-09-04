@@ -137,6 +137,13 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
 }
 
+// NewResolvedFieldPathCollectorForAAS creates an AAS collector with optional
+// access to the referenced Submodel hierarchy.
+func NewResolvedFieldPathCollectorForAAS(hierarchyQueriesEnabled bool) *ResolvedFieldPathCollector {
+	cfg := joinPlanConfigForAAS(hierarchyQueriesEnabled)
+	return NewResolvedFieldPathCollectorWithConfig(&cfg)
+}
+
 // NewResolvedFieldPathCollectorForNestedSMDesc creates a collector that
 // evaluates MATCH filters against the current submodel descriptor and
 // non-MATCH filters against its owning AAS descriptor.
@@ -205,7 +212,7 @@ func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPat
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 	switch root {
 	case CollectorRootAAS:
-		return joinPlanConfigForAAS(), nil
+		return joinPlanConfigForAAS(true), nil
 	case CollectorRootAASDesc:
 		return defaultJoinPlanConfig(), nil
 	case CollectorRootSMDesc:
@@ -234,7 +241,32 @@ func normalizeRoot(root string) string {
 	return r
 }
 
-func joinPlanConfigForAAS() JoinPlanConfig {
+func joinPlanConfigForAAS(hierarchyQueriesEnabled bool) JoinPlanConfig {
+	config := joinPlanConfigForAASWithHierarchy()
+	if hierarchyQueriesEnabled {
+		return config
+	}
+
+	aliases := make([]string, 0, len(config.BaseAliases))
+	for _, alias := range config.BaseAliases {
+		if _, hierarchyAlias := submodelHierarchyTableForAlias(alias, "submodel"); hierarchyAlias {
+			delete(config.Rules, alias)
+			continue
+		}
+		aliases = append(aliases, alias)
+	}
+	config.BaseAliases = aliases
+	tableForAlias := config.TableForAlias
+	config.TableForAlias = func(alias string) (string, bool) {
+		if _, hierarchyAlias := submodelHierarchyTableForAlias(alias, "submodel"); hierarchyAlias {
+			return "", false
+		}
+		return tableForAlias(alias)
+	}
+	return config
+}
+
+func joinPlanConfigForAASWithHierarchy() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "aas",
 		BaseAliases: []string{

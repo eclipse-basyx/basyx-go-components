@@ -73,6 +73,22 @@ func TestLogicalExpressionAASSimpleSubmodelConditionBuildsReferencedSubmodelExis
 	)
 }
 
+func TestLogicalExpressionAASSubmodelConditionRequiresHierarchyEnabledCollector(t *testing.T) {
+	expression := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$sm#idShort"),
+			strVal("CarbonFootprint"),
+		},
+	}
+
+	collector := NewResolvedFieldPathCollectorForAAS(false)
+	_, _, err := expression.EvaluateToExpression(collector)
+
+	if err == nil {
+		t.Fatal("expected disabled AAS hierarchy collector to reject a Submodel field")
+	}
+}
+
 func TestLogicalExpressionAASSimpleSMEConditionBuildsReferencedSubmodelElementExists(t *testing.T) {
 	expression := LogicalExpression{
 		Lt: ComparisonItems{
