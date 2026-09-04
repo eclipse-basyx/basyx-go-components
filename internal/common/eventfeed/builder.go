@@ -47,12 +47,15 @@ const (
 	sourceSuffixSubmodel = "/submodels"
 )
 
+// Builder constructs FeedEvent values for the change types the Event Feed
+// API advertises.
 type Builder struct {
 	sourceBaseURL string
 	schemaBaseURL string
 	now           func() time.Time
 }
 
+// NewBuilder creates a Builder configured with cfg's source and schema base URLs.
 func NewBuilder(cfg Config) *Builder {
 	return &Builder{
 		sourceBaseURL: trimTrailingSlash(cfg.SourceBaseURL),
@@ -61,38 +64,47 @@ func NewBuilder(cfg Config) *Builder {
 	}
 }
 
+// AssetCreated builds an asset.created feed event.
 func (b *Builder) AssetCreated(globalAssetID string, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.assetEvent(TypeAssetCreated, globalAssetID, aasID, submodels)
 }
 
+// AssetUpdated builds an asset.updated feed event.
 func (b *Builder) AssetUpdated(globalAssetID string, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.assetEvent(TypeAssetUpdated, globalAssetID, aasID, submodels)
 }
 
+// AssetDeleted builds an asset.deleted feed event.
 func (b *Builder) AssetDeleted(globalAssetID string, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.assetEvent(TypeAssetDeleted, globalAssetID, aasID, submodels)
 }
 
+// AASCreated builds an aas.created feed event.
 func (b *Builder) AASCreated(aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.aasEvent(TypeAASCreated, aasID, globalAssetID, submodels)
 }
 
+// AASUpdated builds an aas.updated feed event.
 func (b *Builder) AASUpdated(aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.aasEvent(TypeAASUpdated, aasID, globalAssetID, submodels)
 }
 
+// AASDeleted builds an aas.deleted feed event.
 func (b *Builder) AASDeleted(aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.aasEvent(TypeAASDeleted, aasID, globalAssetID, submodels)
 }
 
+// SubmodelCreated builds a submodel.created feed event.
 func (b *Builder) SubmodelCreated(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelCreated, submodelID, semanticID, globalAssetIDs)
 }
 
+// SubmodelUpdated builds a submodel.updated feed event.
 func (b *Builder) SubmodelUpdated(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelUpdated, submodelID, semanticID, globalAssetIDs)
 }
 
+// SubmodelDeleted builds a submodel.deleted feed event.
 func (b *Builder) SubmodelDeleted(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelDeleted, submodelID, semanticID, globalAssetIDs)
 }
@@ -112,6 +124,8 @@ func (b *Builder) PCN(submodelID string, globalAssetIDs []string, record any) (F
 	return b.build(TypePCN, submodelID, sourceSuffixSubmodel, schemaPCNFull, schemaPCNCompact, full, compact)
 }
 
+// IsPCNSemanticID reports whether semanticID refers to the IDTA Product
+// Change Notifications submodel semantic id.
 func IsPCNSemanticID(semanticID string) bool {
 	return irdiCode(semanticID) == irdiCode(SemanticIDPCN)
 }

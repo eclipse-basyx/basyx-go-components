@@ -23,6 +23,8 @@
  * SPDX-License-Identifier: MIT
  ******************************************************************************/
 
+// Package eventfeedsetup wires the eventfeed module into the process-wide
+// history mutation hook.
 package eventfeedsetup
 
 import (

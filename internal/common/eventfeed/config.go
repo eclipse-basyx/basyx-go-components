@@ -79,6 +79,7 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// MaxAgePeriod formats MaxAge as an ISO-8601 period (e.g. "P30D") for capability advertisement.
 func (c Config) MaxAgePeriod() string {
 	days := int(c.MaxAge.Hours() / 24)
 	if days < 1 {

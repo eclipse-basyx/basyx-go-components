@@ -23,6 +23,8 @@
  * SPDX-License-Identifier: MIT
  ******************************************************************************/
 
+// Package eventfeed implements the AAS Event Feed API: building, persisting,
+// querying, and serving CloudEvents-style change notifications.
 package eventfeed
 
 import (

@@ -54,6 +54,8 @@ type Repository struct {
 	now     func() time.Time
 }
 
+// NewRepository creates a Repository backed by db, treating events older
+// than maxAge as outside the retention window for page queries.
 func NewRepository(db *sql.DB, maxAge time.Duration) *Repository {
 	return &Repository{
 		db:      db,
@@ -94,6 +96,7 @@ func (r *Repository) save(ctx context.Context, exec queryExecer, event FeedEvent
 	return event, nil
 }
 
+// FindByID looks up a single event by its CloudEvents id. found is false if no such event exists.
 func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, error) {
 	query, args, err := r.dialect.From("feed_events").
 		Select("seq", "id", "event_type", "subject", "source", "time",
@@ -117,6 +120,9 @@ func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, 
 	return e, true, nil
 }
 
+// FindPage returns up to q.Limit+1 events matching q, in the given
+// presentation. The caller uses the extra record to detect whether more
+// pages remain.
 func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation Presentation) ([]FeedEvent, error) {
 	compact := presentation == PresentationCompact
 	schemaCol := "dataschema_full"
@@ -161,7 +167,7 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 	if err != nil {
 		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-QUERY: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	events := make([]FeedEvent, 0, q.Limit+1)
 	for rows.Next() {
@@ -197,6 +203,7 @@ func (r *Repository) TryRetentionLock(ctx context.Context) (bool, error) {
 	return locked, nil
 }
 
+// ReleaseRetentionLock releases the advisory lock acquired by TryRetentionLock.
 func (r *Repository) ReleaseRetentionLock(ctx context.Context) {
 	_, _ = r.db.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", retentionLockKey)
 }

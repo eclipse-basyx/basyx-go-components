@@ -58,6 +58,7 @@ const (
 	SemanticIDPCN = "0173-1#01-AHE582#003"
 )
 
+// SubmodelRef identifies a submodel referenced from an AAS or asset change event.
 type SubmodelRef struct {
 	SubmodelID string
 	SemanticID string

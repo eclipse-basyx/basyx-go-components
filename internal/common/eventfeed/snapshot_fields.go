@@ -188,4 +188,3 @@ func globalAssetIDsForSubmodelTx(ctx context.Context, tx *sql.Tx, submodelID str
 	}
 	return out, nil
 }
-

@@ -34,6 +34,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Module wires together the Event Feed service, its HTTP routes, and its
+// background retention loop for a single process.
 type Module struct {
 	Service *Service
 	cfg     Config
@@ -41,6 +43,8 @@ type Module struct {
 	onStop  func()
 }
 
+// NewModule builds a Module from cfg, validating it first. A disabled config
+// returns a no-op Module rather than an error.
 func NewModule(db *sql.DB, cfg Config) (*Module, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -54,10 +58,12 @@ func NewModule(db *sql.DB, cfg Config) (*Module, error) {
 	return mod, nil
 }
 
+// Enabled reports whether the module is configured and ready to serve.
 func (m *Module) Enabled() bool {
 	return m != nil && m.cfg.Enabled && m.Service != nil
 }
 
+// RegisterRoutes mounts the Event Feed HTTP endpoints on r if the module is enabled.
 func (m *Module) RegisterRoutes(r chi.Router) {
 	if m == nil || !m.Enabled() {
 		return
@@ -65,6 +71,7 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	RegisterRoutes(r, m.Service)
 }
 
+// StartRetentionLoop runs the retention job immediately, then on cfg.CleanupInterval until ctx is done or Stop is called.
 func (m *Module) StartRetentionLoop(ctx context.Context) {
 	if m == nil || !m.Enabled() {
 		return
@@ -104,6 +111,7 @@ func (m *Module) SetOnStop(fn func()) {
 	m.onStop = fn
 }
 
+// Stop invokes the registered onStop callback, if any, and terminates the retention loop.
 func (m *Module) Stop() {
 	if m == nil {
 		return

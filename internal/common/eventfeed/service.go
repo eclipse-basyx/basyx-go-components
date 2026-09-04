@@ -35,6 +35,7 @@ import (
 	"time"
 )
 
+// Service implements the Event Feed API's read, write, and retention logic.
 type Service struct {
 	repo   *Repository
 	cfg    Config
@@ -43,6 +44,7 @@ type Service struct {
 	logger *slog.Logger
 }
 
+// NewService creates a Service backed by repo and configured with cfg.
 func NewService(repo *Repository, cfg Config) *Service {
 	return &Service{
 		repo:   repo,
@@ -53,6 +55,7 @@ func NewService(repo *Repository, cfg Config) *Service {
 	}
 }
 
+// Builder returns the event Builder used to construct feed events for this service.
 func (s *Service) Builder() *Builder {
 	return s.build
 }
@@ -115,6 +118,7 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 	}, nil
 }
 
+// Capabilities describes the feed's supported event types, filters, and presentation modes for discovery.
 func (s *Service) Capabilities() CapabilitiesResponse {
 	eventTypes := make(map[string]EventTypeCapabilities, len(allEventTypes()))
 	for _, t := range allEventTypes() {
@@ -143,6 +147,9 @@ func (s *Service) Capabilities() CapabilitiesResponse {
 	}
 }
 
+// RunRetention deletes events past the configured retention window, using an
+// advisory lock so only one replica performs the cleanup at a time. It
+// returns the number of deleted events.
 func (s *Service) RunRetention(ctx context.Context) (int64, error) {
 	locked, err := s.repo.TryRetentionLock(ctx)
 	if err != nil {
@@ -200,7 +207,6 @@ func (s *Service) collectAuthorizedEvents(ctx context.Context, domain domainQuer
 				continue
 			}
 			if len(out) == limit {
-				hasMore = true
 				return out, true, nil
 			}
 			out = append(out, event)
