@@ -192,7 +192,6 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 			`"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"."value"`,
 			`EXISTS`,
 			`external_subject_reference_key`,
-			`'PUBLIC_READABLE'`,
 		} {
 			if !strings.Contains(actual, want) {
 				return fmt.Errorf("expected SQL to contain %q, got: %s", want, actual)
@@ -208,7 +207,7 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 	}()
 
 	mock.ExpectQuery("supplemental reference lookup").
-		WithArgs(sqlmock.AnyArg(), "supplementalsemanticIdExample value").
+		WithArgs(sqlmock.AnyArg(), "PUBLIC_READABLE", "supplementalsemanticIdExample value").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"owner_id",
 			"ref_id",
@@ -424,17 +423,21 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 				_ = db.Close()
 			}()
 
-			mock.ExpectQuery("supplemental reference lookup").
-				WithArgs(sqlmock.AnyArg(), "FILTER_VISIBLE").
-				WillReturnRows(sqlmock.NewRows([]string{
-					"owner_id",
-					"ref_id",
-					"ref_type",
-					"key_id",
-					"key_type",
-					"key_value",
-					"parent_reference_payload",
-				}))
+			expectation := mock.ExpectQuery("supplemental reference lookup")
+			if test.name == "submodel element" {
+				expectation.WithArgs(sqlmock.AnyArg(), "PUBLIC_READABLE", "FILTER_VISIBLE")
+			} else {
+				expectation.WithArgs(sqlmock.AnyArg(), "FILTER_VISIBLE")
+			}
+			expectation.WillReturnRows(sqlmock.NewRows([]string{
+				"owner_id",
+				"ref_id",
+				"ref_type",
+				"key_id",
+				"key_type",
+				"key_value",
+				"parent_reference_payload",
+			}))
 
 			out, readErr := test.read(ctx, db, []int64{12})
 			if readErr != nil {

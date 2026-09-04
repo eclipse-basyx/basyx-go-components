@@ -101,6 +101,7 @@ func TestIntegration(t *testing.T) {
 			cmd := exec.Command("go", "test", "-v", "-count=1", pkg)
 			cmd.Env = append(os.Environ(),
 				"BASYX_EXTERNAL_COMPOSE=1",
+				"BASYX_AASENVIRONMENT_SERVICE=1",
 				"BASYX_AASENVIRONMENT_SKIP_IMPORTED_DESCRIPTION=1",
 			)
 			cmd.Stdout = os.Stdout

@@ -5,6 +5,9 @@ This document explains how logical expressions are simplified and converted into
 For request/response examples, including query-endpoint and ABAC composition,
 see [Query Language Examples](examples.md).
 
+For the planned cross-resource authorization model for AAS hierarchy queries,
+see [AAS Hierarchy Query Authorization Plan](aas_hierarchy_authorization/README.md).
+
 ## Quick mental model (no background required)
 
 - A query is a tree of logical operators (AND/OR/NOT) and comparisons (EQ/GT/etc).
@@ -422,10 +425,17 @@ logic.
 | Fragment condition | `$condition` | `CONDITION` or `USEFORMULA` |
 | Row-local evaluation | `$match` | `MATCH` |
 
-`$match` and `MATCH` are optional flags inside a fragment filter. They do not
-add another condition, select a parent resource, or decide whether an ABAC rule
-permits a request. They only control how that filter's condition is correlated
-to the fragment row being reconstructed.
+When used as properties of a fragment filter, `$match` and `MATCH` are optional
+flags. They do not add another condition, select a parent resource, or decide
+whether an ABAC rule permits a request. They only control how that filter's
+condition is correlated to the fragment row being reconstructed.
+
+This fragment flag is distinct from the logical `$match` operator inside a
+`$condition`. Logical `$match` contains a list of predicates and evaluates them
+in one shared list or hierarchy scope. On the AAS Repository query endpoint of
+the AAS Environment Service, that permits `$sm` and `$sme` predicates to be
+correlated to one Submodel referenced by the candidate AAS. This hierarchy
+extension is not currently enabled by the standalone AAS Repository Service.
 
 The two sources have different responsibilities:
 
@@ -512,7 +522,7 @@ where it keeps conditions bound to the same item and array indices.
 #### Root scope and correlation boundaries
 
 The root prefix describes the resource through which a fragment is read. It is
-not changed by `$match` or `MATCH`:
+not changed by a fragment filter's `$match` or `MATCH` flag:
 
 | Query context | Fragment and field prefix | Scope without matching | Scope with matching |
 | --- | --- | --- | --- |

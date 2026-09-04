@@ -171,7 +171,7 @@ func runServer(ctx context.Context, configPath string) error {
 		SubmodelRepository: submodelDatabase,
 	}
 	aasSvc := aasenvironment.NewCustomAASRepositoryService(
-		api.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasDatabase, submodelDatabase, asyncJobManager),
+		api.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasDatabase, submodelDatabase, false, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)

@@ -1,0 +1,276 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
+package grammar
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
+)
+
+func buildAASHierarchySQL(t *testing.T, expression LogicalExpression) string {
+	t.Helper()
+
+	collector := mustCollectorForRoot(t, "$aas")
+	whereExpression, _, err := expression.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("aas")).
+		Select(goqu.V(1)).
+		Where(whereExpression)
+	sql, _, err := dataset.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	return sql
+}
+
+func buildPreparedAASHierarchySQL(t *testing.T, expression LogicalExpression) (string, []interface{}) {
+	t.Helper()
+
+	collector := mustCollectorForRoot(t, "$aas")
+	whereExpression, _, err := expression.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("aas")).
+		Select(goqu.V(1)).
+		Where(whereExpression)
+	sql, args, err := dataset.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	return sql, args
+}
+
+func TestLogicalExpressionAASSimpleSubmodelConditionBuildsReferencedSubmodelExists(t *testing.T) {
+	expression := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$sm#idShort"),
+			strVal("CarbonFootprint"),
+		},
+	}
+
+	sql := buildAASHierarchySQL(t, expression)
+
+	assertSQLContainsAll(t, sql,
+		"EXISTS",
+		"aas_submodel_reference",
+		"aas_submodel_reference_key",
+		"submodel_identifier",
+		"id_short",
+		"CarbonFootprint",
+		fmt.Sprintf(`"aas_submodel_reference__exists"."type" = %d`, int(types.ReferenceTypesModelReference)),
+		fmt.Sprintf(`"aas_submodel_reference_key__exists"."type" = %d`, int(types.KeyTypesSubmodel)),
+	)
+}
+
+func TestLogicalExpressionAASSubmodelConditionRequiresHierarchyEnabledCollector(t *testing.T) {
+	expression := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$sm#idShort"),
+			strVal("CarbonFootprint"),
+		},
+	}
+
+	collector := NewResolvedFieldPathCollectorForAAS(false)
+	_, _, err := expression.EvaluateToExpression(collector)
+
+	if err == nil {
+		t.Fatal("expected disabled AAS hierarchy collector to reject a Submodel field")
+	}
+}
+
+func TestLogicalExpressionAASSimpleSMEConditionBuildsReferencedSubmodelElementExists(t *testing.T) {
+	expression := LogicalExpression{
+		Lt: ComparisonItems{
+			Value{NumCast: valuePtr(field("$sme.AggregatedCarbonFootprint#value"))},
+			Value{NumVal: floatPtr(48)},
+		},
+	}
+
+	sql := buildAASHierarchySQL(t, expression)
+
+	assertSQLContainsAll(t, sql,
+		"aas_submodel_reference",
+		"aas_submodel_reference_key",
+		"submodel",
+		"submodel_element",
+		"property_element",
+		"property_element__exists.value_num",
+		"AggregatedCarbonFootprint",
+		"double precision",
+	)
+	if strings.Contains(sql, "property_element.value_num") {
+		t.Fatalf("expected raw property expression aliases to be rewritten for the correlated EXISTS: %s", sql)
+	}
+}
+
+func TestLogicalExpressionAASStandaloneBoolCastBuildsSubmodelExists(t *testing.T) {
+	expression := LogicalExpression{
+		BoolCast: valuePtr(field("$sm#idShort")),
+	}
+
+	sql := buildAASHierarchySQL(t, expression)
+
+	assertSQLContainsAll(t, sql, "EXISTS", "submodel__exists", "COALESCE")
+}
+
+func TestLogicalExpressionAASStandaloneBoolCastBuildsSMEExists(t *testing.T) {
+	expression := LogicalExpression{
+		BoolCast: valuePtr(field("$sme.Enabled#value")),
+	}
+
+	sql := buildAASHierarchySQL(t, expression)
+
+	assertSQLContainsAll(t, sql, "EXISTS", "property_element__exists", "Enabled", "COALESCE")
+}
+
+func TestLogicalExpressionAASHierarchyAliasRewritePreservesPreparedLiteral(t *testing.T) {
+	literal := "property_element.literal"
+	expression := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$sme.Test#value"),
+			strVal(literal),
+		},
+	}
+
+	sql, args := buildPreparedAASHierarchySQL(t, expression)
+
+	if strings.Contains(sql, literal) {
+		t.Fatalf("expected literal to remain a prepared argument, got SQL: %s", sql)
+	}
+	found := false
+	for _, arg := range args {
+		value, ok := arg.(string)
+		if !ok {
+			continue
+		}
+		if value == "property_element__exists.literal" {
+			t.Fatalf("prepared literal was rewritten as an SQL alias: %#v", args)
+		}
+		if value == literal {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected prepared literal %q in arguments, got %#v", literal, args)
+	}
+}
+
+func TestLogicalExpressionAASMatchCorrelatesSubmodelAndSMEInOneExists(t *testing.T) {
+	expression := LogicalExpression{
+		Match: []MatchExpression{
+			{Eq: ComparisonItems{field("$sm#idShort"), strVal("CarbonFootprint")}},
+			{
+				Lt: ComparisonItems{
+					Value{NumCast: valuePtr(field("$sme.AggregatedCarbonFootprint#value"))},
+					Value{NumVal: floatPtr(48)},
+				},
+			},
+		},
+	}
+
+	sql := buildAASHierarchySQL(t, expression)
+
+	if count := strings.Count(sql, "EXISTS"); count != 1 {
+		t.Fatalf("expected one correlated EXISTS for MATCH, got %d: %s", count, sql)
+	}
+	assertSQLContainsAll(t, sql,
+		"aas_submodel_reference",
+		"submodel_identifier",
+		"CarbonFootprint",
+		"AggregatedCarbonFootprint",
+	)
+}
+
+func TestLogicalExpressionAASAndKeepsSubmodelAndSMEInIndependentExists(t *testing.T) {
+	expression := LogicalExpression{
+		And: []LogicalExpression{
+			{Eq: ComparisonItems{field("$sm#idShort"), strVal("CarbonFootprint")}},
+			{
+				Lt: ComparisonItems{
+					Value{NumCast: valuePtr(field("$sme.AggregatedCarbonFootprint#value"))},
+					Value{NumVal: floatPtr(48)},
+				},
+			},
+		},
+	}
+
+	sql := buildAASHierarchySQL(t, expression)
+
+	if count := strings.Count(sql, "EXISTS"); count != 2 {
+		t.Fatalf("expected two independent EXISTS expressions without MATCH, got %d: %s", count, sql)
+	}
+}
+
+func TestLogicalExpressionAASComplexConditionCombinesAASAndMatchedHierarchy(t *testing.T) {
+	expression := LogicalExpression{
+		And: []LogicalExpression{
+			{Regex: StringItems{strField("$aas#idShort"), strString("^Factory-")}},
+			{
+				Match: []MatchExpression{
+					{StartsWith: StringItems{strField("$sm#idShort"), strString("Carbon")}},
+					{Eq: ComparisonItems{field("$sme.Metrics.AggregatedCarbonFootprint#valueType"), strVal("xs:double")}},
+					{
+						Ge: ComparisonItems{
+							Value{NumCast: valuePtr(field("$sme.Metrics.AggregatedCarbonFootprint#value"))},
+							Value{NumVal: floatPtr(10)},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	sql := buildAASHierarchySQL(t, expression)
+
+	assertSQLContainsAll(t, sql,
+		"Factory-",
+		"Carbon",
+		"Metrics.AggregatedCarbonFootprint",
+		"xs:double",
+		"double precision",
+	)
+}
+
+func assertSQLContainsAll(t *testing.T, sql string, expected ...string) {
+	t.Helper()
+	for _, value := range expected {
+		if !strings.Contains(sql, value) {
+			t.Fatalf("expected SQL to contain %q, got: %s", value, sql)
+		}
+	}
+}

@@ -48,6 +48,7 @@ type AssetAdministrationShellRepositoryAPIAPIService struct {
 	submodelAPI                     *submodelapi.SubmodelRepositoryAPIAPIService
 	lifecycleContext                context.Context
 	asyncJobManager                 *asyncjob.Manager
+	aasHierarchyQueriesEnabled      bool
 }
 
 const componentName = "AASREPO"
@@ -57,6 +58,7 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(
 	ctx context.Context,
 	databaseBackendAssetAdministrationShell *persistencepostgresql.AssetAdministrationShellDatabase,
 	submodelBackend *submodelpersistence.SubmodelDatabase,
+	aasHierarchyQueriesEnabled bool,
 	managers ...*asyncjob.Manager,
 ) *AssetAdministrationShellRepositoryAPIAPIService {
 	var asyncJobManager *asyncjob.Manager
@@ -74,6 +76,7 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(
 		submodelAPI:                     submodelService,
 		lifecycleContext:                ctx,
 		asyncJobManager:                 asyncJobManager,
+		aasHierarchyQueriesEnabled:      aasHierarchyQueriesEnabled,
 	}
 }
 
@@ -104,8 +107,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
+	if hierarchyErr := s.validateAASHierarchyQuery(query); hierarchyErr != nil {
+		return newAPIErrorResponse(hierarchyErr, http.StatusBadRequest, operation, "BadRequest"), nil
+	}
 
-	queryCtx := auth.MergeQueryFilter(ctx, query)
+	queryCtx := s.queryContext(ctx, query)
 	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(queryCtx, limit, decodedCursor, "", nil, time.Time{}, time.Time{})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
@@ -132,6 +138,28 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         jsonAASList,
 	}), nil
+}
+
+func (s *AssetAdministrationShellRepositoryAPIAPIService) queryContext(ctx context.Context, query grammar.Query) context.Context {
+	queryCtx := auth.MergeQueryFilter(ctx, query)
+	if s.aasHierarchyQueriesEnabled {
+		return grammar.ContextWithAASHierarchyQueries(queryCtx)
+	}
+	return queryCtx
+}
+
+func (s *AssetAdministrationShellRepositoryAPIAPIService) validateAASHierarchyQuery(query grammar.Query) error {
+	if s.aasHierarchyQueriesEnabled {
+		return nil
+	}
+	field, found := grammar.FindModelFieldByRoot(query, "$sm", "$sme")
+	if !found {
+		return nil
+	}
+	return common.NewErrBadRequest(
+		"AASREPO-QUERYAAS-HIERARCHYDISABLED field " + string(field) +
+			" is only supported by the AAS Environment Service",
+	)
 }
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells

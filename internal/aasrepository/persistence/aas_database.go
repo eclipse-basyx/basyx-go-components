@@ -308,13 +308,8 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDAndDat
 	return aas, nil
 }
 
-func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
-	if err != nil {
-		return nil, common.NewInternalServerError("AASREPO-ABAC-COLLECTOR " + err.Error())
-	}
-
-	return collector, nil
+func buildAASCollector(ctx context.Context) (*grammar.ResolvedFieldPathCollector, error) {
+	return grammar.NewResolvedFieldPathCollectorForAAS(grammar.AASHierarchyQueriesEnabled(ctx)), nil
 }
 
 func buildCoreAssetAdministrationShellSelectExpressions(
@@ -383,7 +378,7 @@ func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Co
 	dialect := goqu.Dialect("postgres")
 	ds := buildGetAssetAdministrationShellDBIDByIdentifierDataset(&dialect, aasIdentifier)
 
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return false, false, collectorErr
 	}
@@ -879,7 +874,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsInTransac
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + err.Error())
 	}
 
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, "", collectorErr
 	}
@@ -972,7 +967,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-BUILDSQL " + err.Error())
 	}
 
-	collector, err := buildAASCollector()
+	collector, err := buildAASCollector(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1034,7 +1029,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellByIDInTran
 	dialect := goqu.Dialect("postgres")
 	selectDS := buildGetAssetAdministrationShellDBIDByIdentifierDataset(&dialect, aasIdentifier)
 
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, collectorErr
 	}
@@ -1345,7 +1340,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + err.Error())
 	}
-	collector, err := buildAASCollector()
+	collector, err := buildAASCollector(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1887,7 +1882,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 	dialect := goqu.Dialect("postgres")
 	selectDS := buildGetAssetAdministrationShellDBIDByIdentifierDataset(&dialect, aasIdentifier)
 
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, "", collectorErr
 	}
@@ -2185,7 +2180,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBIDI
 
 func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBIDWithQueryer(ctx context.Context, db aasDBQueryer, aasDBID int64) (types.IAssetAdministrationShell, error) {
 	dialect := goqu.Dialect("postgres")
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, collectorErr
 	}
@@ -2544,7 +2539,7 @@ func parseSpecificAssetIDSemanticIDPayload(payload []byte) (types.IReference, bo
 func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationID(ctx context.Context, db aasDBQueryer, assetInformationID int64) ([]types.ISpecificAssetID, error) {
 	dialect := goqu.Dialect("postgres")
 	queryDS := buildReadSpecificAssetIDsByAssetInformationIDDataset(&dialect, assetInformationID)
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, collectorErr
 	}

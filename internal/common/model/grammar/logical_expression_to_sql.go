@@ -38,6 +38,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -137,6 +138,13 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
 }
 
+// NewResolvedFieldPathCollectorForAAS creates an AAS collector with optional
+// access to the referenced Submodel hierarchy.
+func NewResolvedFieldPathCollectorForAAS(hierarchyQueriesEnabled bool) *ResolvedFieldPathCollector {
+	cfg := joinPlanConfigForAAS(hierarchyQueriesEnabled)
+	return NewResolvedFieldPathCollectorWithConfig(&cfg)
+}
+
 // NewResolvedFieldPathCollectorForNestedSMDesc creates a collector that
 // evaluates MATCH filters against the current submodel descriptor and
 // non-MATCH filters against its owning AAS descriptor.
@@ -205,7 +213,7 @@ func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPat
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 	switch root {
 	case CollectorRootAAS:
-		return joinPlanConfigForAAS(), nil
+		return joinPlanConfigForAAS(true), nil
 	case CollectorRootAASDesc:
 		return defaultJoinPlanConfig(), nil
 	case CollectorRootSMDesc:
@@ -234,11 +242,44 @@ func normalizeRoot(root string) string {
 	return r
 }
 
-func joinPlanConfigForAAS() JoinPlanConfig {
+func joinPlanConfigForAAS(hierarchyQueriesEnabled bool) JoinPlanConfig {
+	config := joinPlanConfigForAASWithHierarchy()
+	if hierarchyQueriesEnabled {
+		return config
+	}
+
+	aliases := make([]string, 0, len(config.BaseAliases))
+	for _, alias := range config.BaseAliases {
+		if _, hierarchyAlias := submodelHierarchyTableForAlias(alias, "submodel"); hierarchyAlias {
+			delete(config.Rules, alias)
+			continue
+		}
+		aliases = append(aliases, alias)
+	}
+	config.BaseAliases = aliases
+	tableForAlias := config.TableForAlias
+	config.TableForAlias = func(alias string) (string, bool) {
+		if _, hierarchyAlias := submodelHierarchyTableForAlias(alias, "submodel"); hierarchyAlias {
+			return "", false
+		}
+		return tableForAlias(alias)
+	}
+	return config
+}
+
+func joinPlanConfigForAASWithHierarchy() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "aas",
-		BaseAliases:   []string{"aas", "asset_information", "specific_asset_id", "aas_submodel_reference", "aas_submodel_reference_key", "external_subject_reference", "external_subject_reference_key"},
-		Rules: map[string]existsJoinRule{
+		BaseAliases: []string{
+			"aas", "asset_information", "specific_asset_id", "aas_submodel_reference",
+			"aas_submodel_reference_key", "submodel", "submodel_element", "property_element",
+			"multilanguage_property_value", "semantic_id_reference", "semantic_id_reference_key",
+			"sm_supplemental_semantic_id_reference", "sm_supplemental_semantic_id_reference_key",
+			"sme_semantic_id_reference", "sme_semantic_id_reference_key",
+			"sme_supplemental_semantic_id_reference", "sme_supplemental_semantic_id_reference_key",
+			"external_subject_reference", "external_subject_reference_key",
+		},
+		Rules: mergeJoinRules(map[string]existsJoinRule{
 			"aas": {
 				Alias: "aas",
 				Deps:  nil,
@@ -306,7 +347,20 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 					)
 				},
 			},
-		},
+		}, submodelHierarchyJoinRules("submodel", existsJoinRule{
+			Alias: "submodel",
+			Deps:  []string{"aas_submodel_reference_key"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("submodel").As("submodel"),
+					goqu.On(
+						goqu.I("submodel.submodel_identifier").Eq(goqu.I("aas_submodel_reference_key.value")),
+						goqu.I("aas_submodel_reference.type").Eq(int(types.ReferenceTypesModelReference)),
+						goqu.I("aas_submodel_reference_key.type").Eq(int(types.KeyTypesSubmodel)),
+					),
+				)
+			},
+		})),
 		TableForAlias: func(alias string) (string, bool) {
 			switch alias {
 			case "aas":
@@ -324,7 +378,7 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 			case "aas_submodel_reference_key":
 				return "aas_submodel_reference_key", true
 			default:
-				return "", false
+				return submodelHierarchyTableForAlias(alias, "submodel")
 			}
 		},
 		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
@@ -358,6 +412,165 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 				return false
 			}
 		},
+	}
+}
+
+func mergeJoinRules(ruleSets ...map[string]existsJoinRule) map[string]existsJoinRule {
+	merged := make(map[string]existsJoinRule)
+	for _, rules := range ruleSets {
+		for alias, rule := range rules {
+			merged[alias] = rule
+		}
+	}
+	return merged
+}
+
+func submodelHierarchyJoinRules(submodelAlias string, submodelRule existsJoinRule) map[string]existsJoinRule {
+	submodelRule.Alias = submodelAlias
+	return map[string]existsJoinRule{
+		submodelAlias: submodelRule,
+		"semantic_id_reference": {
+			Alias: "semantic_id_reference",
+			Deps:  []string{submodelAlias},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_semantic_id_reference").As("semantic_id_reference"),
+					goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I(submodelAlias+".id"))),
+				)
+			},
+		},
+		"semantic_id_reference_key": {
+			Alias: "semantic_id_reference_key",
+			Deps:  []string{"semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_semantic_id_reference_key").As("semantic_id_reference_key"),
+					goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
+				)
+			},
+		},
+		"sm_supplemental_semantic_id_reference": {
+			Alias: "sm_supplemental_semantic_id_reference",
+			Deps:  []string{submodelAlias},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_supplemental_semantic_id_reference").As("sm_supplemental_semantic_id_reference"),
+					goqu.On(goqu.I("sm_supplemental_semantic_id_reference.submodel_id").Eq(goqu.I(submodelAlias+".id"))),
+				)
+			},
+		},
+		"sm_supplemental_semantic_id_reference_key": {
+			Alias: "sm_supplemental_semantic_id_reference_key",
+			Deps:  []string{"sm_supplemental_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_supplemental_semantic_id_reference_key").As("sm_supplemental_semantic_id_reference_key"),
+					goqu.On(goqu.I("sm_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sm_supplemental_semantic_id_reference.id"))),
+				)
+			},
+		},
+		"submodel_element": {
+			Alias: "submodel_element",
+			Deps:  []string{submodelAlias},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element"),
+					goqu.On(goqu.I("submodel_element.submodel_id").Eq(goqu.I(submodelAlias+".id"))),
+				)
+			},
+		},
+		"property_element": {
+			Alias: "property_element",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("property_element"),
+					goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"multilanguage_property_value": {
+			Alias: "multilanguage_property_value",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("multilanguage_property_value"),
+					goqu.On(goqu.I("multilanguage_property_value.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"sme_semantic_id_reference": {
+			Alias: "sme_semantic_id_reference",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_semantic_id_reference").As("sme_semantic_id_reference"),
+					goqu.On(goqu.I("sme_semantic_id_reference.id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"sme_semantic_id_reference_key": {
+			Alias: "sme_semantic_id_reference_key",
+			Deps:  []string{"sme_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_semantic_id_reference_key").As("sme_semantic_id_reference_key"),
+					goqu.On(goqu.I("sme_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_semantic_id_reference.id"))),
+				)
+			},
+		},
+		"sme_supplemental_semantic_id_reference": {
+			Alias: "sme_supplemental_semantic_id_reference",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_supplemental_semantic_id_reference").As("sme_supplemental_semantic_id_reference"),
+					goqu.On(goqu.I("sme_supplemental_semantic_id_reference.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"sme_supplemental_semantic_id_reference_key": {
+			Alias: "sme_supplemental_semantic_id_reference_key",
+			Deps:  []string{"sme_supplemental_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_supplemental_semantic_id_reference_key").As("sme_supplemental_semantic_id_reference_key"),
+					goqu.On(goqu.I("sme_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_supplemental_semantic_id_reference.id"))),
+				)
+			},
+		},
+	}
+}
+
+func submodelHierarchyTableForAlias(alias string, submodelAlias string) (string, bool) {
+	if alias == submodelAlias {
+		return "submodel", true
+	}
+	switch alias {
+	case "semantic_id_reference":
+		return "submodel_semantic_id_reference", true
+	case "semantic_id_reference_key":
+		return "submodel_semantic_id_reference_key", true
+	case "sm_supplemental_semantic_id_reference":
+		return "submodel_supplemental_semantic_id_reference", true
+	case "sm_supplemental_semantic_id_reference_key":
+		return "submodel_supplemental_semantic_id_reference_key", true
+	case "submodel_element":
+		return "submodel_element", true
+	case "property_element":
+		return "property_element", true
+	case "multilanguage_property_value":
+		return "multilanguage_property_value", true
+	case "sme_semantic_id_reference":
+		return "submodel_element_semantic_id_reference", true
+	case "sme_semantic_id_reference_key":
+		return "submodel_element_semantic_id_reference_key", true
+	case "sme_supplemental_semantic_id_reference":
+		return "submodel_element_supplemental_semantic_id_reference", true
+	case "sme_supplemental_semantic_id_reference_key":
+		return "submodel_element_supplemental_semantic_id_reference_key", true
+	default:
+		return "", false
 	}
 }
 
@@ -1218,7 +1431,7 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 
 	ds = ds.Where(correlation)
 	if aliasCollision && rootAlias != "" && rootColumn != "" {
-		sql, args, err := ds.ToSQL()
+		sql, args, err := ds.Prepared(true).ToSQL()
 		if err != nil {
 			return nil, err
 		}
@@ -1226,6 +1439,7 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 		for _, a := range plan.ExpandedAliases {
 			mapped := existsAliases[a]
 			sql = strings.ReplaceAll(sql, "\""+a+"\".", "\""+mapped+"\".")
+			sql = strings.ReplaceAll(sql, a+".", mapped+".")
 			sql = strings.ReplaceAll(sql, " AS \""+a+"\"", " AS \""+mapped+"\"")
 
 			fromAsRe := regexp.MustCompile(`(?i)FROM\s+"` + regexp.QuoteMeta(a) + `"\s+AS\s+"`)
@@ -1241,6 +1455,7 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 			}
 		}
 		sql = strings.ReplaceAll(sql, "\"__outer__\"", "\""+rootAlias+"\"")
+		sql = postgresPreparedPlaceholderPattern.ReplaceAllString(sql, "?")
 		return goqu.L("EXISTS ("+sql+")", args...), nil
 	}
 
@@ -1248,6 +1463,8 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 }
 
 const postgresIdentifierMaxBytes = 63
+
+var postgresPreparedPlaceholderPattern = regexp.MustCompile(`\$[0-9]+`)
 
 func buildPostgresExistsAliases(aliases []string) map[string]string {
 	sortedAliases := append([]string(nil), aliases...)
@@ -2006,28 +2223,49 @@ func handleBinaryOperationWithCollector(
 	}
 
 	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
-	// No resolved fields (should not happen due to earlier fast-path), fall back.
-	if len(resolved) == 0 {
-		return opExpr, nil, nil
-	}
+	return applyCollectorToResolvedExpression(opExpr, resolved, collector)
+}
 
+func applyCollectorToResolvedExpression(
+	expression exp.Expression,
+	resolved []ResolvedFieldPath,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	if len(resolved) == 0 {
+		return expression, nil, nil
+	}
 	if collector != nil && collector.canEvaluateInline(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+		return andBindingsForResolvedFieldPaths(resolved, expression), resolved, nil
 	}
 	if collector != nil && resolvedNeedsCTE(resolved) {
-		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, collector)
+		existsExpr, err := buildInlineExistsExpression(resolved, expression, collector)
 		if err != nil {
 			return nil, nil, err
 		}
 		return existsExpr, resolved, nil
 	}
 	if collector != nil {
-		return opExpr, resolved, nil
+		return expression, resolved, nil
 	}
 	if anyResolvedHasBindings(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+		return andBindingsForResolvedFieldPaths(resolved, expression), resolved, nil
 	}
-	return opExpr, resolved, nil
+	return expression, resolved, nil
+}
+
+func evaluateStandaloneBoolCast(
+	operand *Value,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	boolOperand := Value{BoolCast: operand}
+	_, castType := extractFieldOperandAndCast(&boolOperand)
+	sqlValue, resolvedPath, err := toSQLResolvedFieldOrValue(&boolOperand, castType, "$boolCast")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resolved := collectResolvedFieldPaths(resolvedPath, nil)
+	return applyCollectorToResolvedExpression(goqu.L("COALESCE(?, FALSE)", sqlValue), resolved, collector)
 }
 
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
@@ -2094,32 +2332,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		if err != nil {
 			return nil, nil, err
 		}
-		if collector != nil && collector.canEvaluateInline(resolved) {
-			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
-		}
-		if collector != nil && resolvedNeedsCTE(resolved) {
-			existsExpr, err := buildInlineExistsExpression(resolved, expr, collector)
-			if err != nil {
-				return nil, nil, err
-			}
-			return existsExpr, resolved, nil
-		}
-		if collector != nil {
-			return expr, resolved, nil
-		}
-		if anyResolvedHasBindings(resolved) {
-			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
-		}
-		return expr, resolved, nil
+		return applyCollectorToResolvedExpression(expr, resolved, collector)
 	}
 
 	if le.BoolCast != nil {
-		boolOperand := Value{BoolCast: le.BoolCast}
-		sqlValue, err := toSQLComponent(&boolOperand, "$boolCast")
-		if err != nil {
-			return nil, nil, err
-		}
-		return goqu.L("COALESCE(?, FALSE)", sqlValue), nil, nil
+		return evaluateStandaloneBoolCast(le.BoolCast, collector)
 	}
 
 	// Handle logical operations

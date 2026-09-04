@@ -259,7 +259,7 @@ func buildAASListSelectedDataset(
 	if err != nil {
 		return nil, common.NewInternalServerError("AASREPO-GETAASLIST-BUILDPAGE " + err.Error())
 	}
-	collector, err := buildAASCollector()
+	collector, err := buildAASCollector(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +294,7 @@ func buildAASListCombinedCoreDataset(
 	dialect goqu.DialectWrapper,
 	limit int32,
 ) (*goqu.SelectDataset, error) {
-	collector, err := buildAASCollector()
+	collector, err := buildAASCollector(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -646,7 +646,7 @@ func buildAASListMaterializationStatements(
 	page aasListPage,
 ) ([]common.PostgreSQLBatchStatement, error) {
 	dialect := goqu.Dialect(common.Dialect)
-	collector, err := buildAASCollector()
+	collector, err := buildAASCollector(ctx)
 	if err != nil {
 		return nil, err
 	}
