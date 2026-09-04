@@ -5,6 +5,9 @@ This document explains how logical expressions are simplified and converted into
 For request/response examples, including query-endpoint and ABAC composition,
 see [Query Language Examples](examples.md).
 
+For the planned cross-resource authorization model for AAS hierarchy queries,
+see [AAS Hierarchy Query Authorization Plan](aas_hierarchy_authorization/README.md).
+
 ## Quick mental model (no background required)
 
 - A query is a tree of logical operators (AND/OR/NOT) and comparisons (EQ/GT/etc).

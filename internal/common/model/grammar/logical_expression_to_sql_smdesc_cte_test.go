@@ -27,6 +27,7 @@
 package grammar
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -74,20 +75,17 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 		Select(goqu.V(1)).
 		Where(whereExpr)
 
-	sql, _, err := ds.Prepared(true).ToSQL()
+	sql, args, err := ds.Prepared(true).ToSQL()
 
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 	t.Logf("SQL: %s", sql)
 
-	if !strings.Contains(sql, "'sub-short'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'sub-short'", sql)
+	if len(args) != 4 || args[1] != "sub-short" || args[2] != "urn:sm" || fmt.Sprint(args[3]) != "0" {
+		t.Fatalf("expected prepared arguments %#v, got: %#v", []any{1, "sub-short", "urn:sm", 0}, args)
 	}
-	if !strings.Contains(sql, "'urn:sm'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'urn:sm'", sql)
-	}
-	if !strings.Contains(sql, "position\" = 0") {
+	if !strings.Contains(sql, "position\" = $4") {
 		t.Fatalf("expected SQL to contain position binding 0, got: %s", sql)
 	}
 }

@@ -807,11 +807,13 @@ func TestQueryAssetAdministrationShellsReferencedSubmodelHierarchyAvailability(t
 	splitAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-split-%d", suffix)
 	highAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-high-%d", suffix)
 	unrelatedAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-unrelated-%d", suffix)
+	collisionAASID := fmt.Sprintf("https://example.com/ids/aas/hierarchy-reference-collision-%d", suffix)
 	correlatedSubmodelID := fmt.Sprintf("urn:sm:hierarchy:correlated:%d", suffix)
 	splitCarbonSubmodelID := fmt.Sprintf("urn:sm:hierarchy:split-carbon:%d", suffix)
 	splitOtherSubmodelID := fmt.Sprintf("urn:sm:hierarchy:split-other:%d", suffix)
 	highSubmodelID := fmt.Sprintf("urn:sm:hierarchy:high:%d", suffix)
 	unrelatedSubmodelID := fmt.Sprintf("urn:sm:hierarchy:unrelated:%d", suffix)
+	collisionSubmodelID := fmt.Sprintf("urn:sm:hierarchy:reference-collision:%d", suffix)
 
 	createHierarchyQueryAAS(t, baseURL, correlatedAASID, "HierarchyQuery-Correlated")
 	createHierarchyQueryAAS(t, baseURL, splitAASID, "HierarchyQuery-Split")
@@ -823,6 +825,8 @@ func TestQueryAssetAdministrationShellsReferencedSubmodelHierarchyAvailability(t
 	putHierarchyQuerySubmodel(t, baseURL, splitAASID, splitOtherSubmodelID, "OtherFootprint", 30)
 	putHierarchyQuerySubmodel(t, baseURL, highAASID, highSubmodelID, "CarbonFootprint", 65)
 	putHierarchyQuerySubmodel(t, baseURL, unrelatedAASID, unrelatedSubmodelID, "OtherFootprint", 20)
+	createHierarchyQuerySubmodel(t, baseURL, collisionSubmodelID, "HierarchyReferenceCollision")
+	createHierarchyQueryAASWithExternalReference(t, baseURL, collisionAASID, collisionSubmodelID)
 
 	submodelIsCarbonFootprint := map[string]any{
 		"$eq": []any{
@@ -856,6 +860,30 @@ func TestQueryAssetAdministrationShellsReferencedSubmodelHierarchyAvailability(t
 				},
 			},
 			expectedIDs: []string{correlatedAASID},
+		},
+		{
+			name: "external reference value collision does not associate a local submodel",
+			condition: map[string]any{
+				"$eq": []any{
+					map[string]any{"$field": "$sm#id"},
+					map[string]any{"$strVal": collisionSubmodelID},
+				},
+			},
+			expectedIDs: []string{},
+		},
+		{
+			name: "standalone submodel bool cast uses the hierarchy scope",
+			condition: map[string]any{
+				"$boolCast": map[string]any{"$field": "$sm#idShort"},
+			},
+			expectedIDs: []string{},
+		},
+		{
+			name: "standalone SME bool cast uses the hierarchy scope",
+			condition: map[string]any{
+				"$boolCast": map[string]any{"$field": "$sme.Enabled#value"},
+			},
+			expectedIDs: []string{correlatedAASID, splitAASID, highAASID, unrelatedAASID},
 		},
 		{
 			name: "simple submodel condition with match",
@@ -953,6 +981,48 @@ func createHierarchyQueryAAS(t *testing.T, baseURL string, aasID string, idShort
 	})
 }
 
+func createHierarchyQueryAASWithExternalReference(t *testing.T, baseURL string, aasID string, referenceValue string) {
+	t.Helper()
+
+	body := fmt.Sprintf(`{
+		"id":"%s",
+		"idShort":"HierarchyQuery-ReferenceCollision",
+		"modelType":"AssetAdministrationShell",
+		"assetInformation":{"assetKind":"Instance"},
+		"submodels":[{
+			"type":"ExternalReference",
+			"keys":[{"type":"GlobalReference","value":"%s"}]
+		}]
+	}`, aasID, referenceValue)
+	statusCode, err := postResponseStatus(baseURL+"/shells", body)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	encodedAASIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	t.Cleanup(func() {
+		_, _ = deleteResponseStatus(fmt.Sprintf("%s/shells/%s", baseURL, encodedAASIdentifier))
+	})
+}
+
+func createHierarchyQuerySubmodel(t *testing.T, baseURL string, submodelID string, idShort string) {
+	t.Helper()
+
+	body := fmt.Sprintf(`{
+		"id":"%s",
+		"idShort":"%s",
+		"modelType":"Submodel",
+		"kind":"Instance"
+	}`, submodelID, idShort)
+	statusCode, err := postResponseStatus(baseURL+"/submodels", body)
+	require.NoError(t, err, "Submodel creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for Submodel creation")
+
+	encodedSubmodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	t.Cleanup(func() {
+		_, _ = deleteResponseStatus(fmt.Sprintf("%s/submodels/%s", baseURL, encodedSubmodelIdentifier))
+	})
+}
+
 func putHierarchyQuerySubmodel(
 	t *testing.T,
 	baseURL string,
@@ -973,6 +1043,7 @@ func putHierarchyQuerySubmodel(
 		"kind":"Instance",
 		"submodelElements":[
 			{"idShort":"AggregatedCarbonFootprint","modelType":"Property","valueType":"xs:double","value":"%g"},
+			{"idShort":"Enabled","modelType":"Property","valueType":"xs:boolean","value":"true"},
 			{"idShort":"Metrics","modelType":"SubmodelElementCollection","value":[
 				{"idShort":"AggregatedCarbonFootprint","modelType":"Property","valueType":"xs:double","value":"%g"}
 			]}

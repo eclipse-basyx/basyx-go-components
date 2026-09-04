@@ -38,6 +38,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -352,7 +353,11 @@ func joinPlanConfigForAASWithHierarchy() JoinPlanConfig {
 			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 				return ds.Join(
 					goqu.T("submodel").As("submodel"),
-					goqu.On(goqu.I("submodel.submodel_identifier").Eq(goqu.I("aas_submodel_reference_key.value"))),
+					goqu.On(
+						goqu.I("submodel.submodel_identifier").Eq(goqu.I("aas_submodel_reference_key.value")),
+						goqu.I("aas_submodel_reference.type").Eq(int(types.ReferenceTypesModelReference)),
+						goqu.I("aas_submodel_reference_key.type").Eq(int(types.KeyTypesSubmodel)),
+					),
 				)
 			},
 		})),
@@ -1426,7 +1431,7 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 
 	ds = ds.Where(correlation)
 	if aliasCollision && rootAlias != "" && rootColumn != "" {
-		sql, args, err := ds.ToSQL()
+		sql, args, err := ds.Prepared(true).ToSQL()
 		if err != nil {
 			return nil, err
 		}
@@ -1450,6 +1455,7 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 			}
 		}
 		sql = strings.ReplaceAll(sql, "\"__outer__\"", "\""+rootAlias+"\"")
+		sql = postgresPreparedPlaceholderPattern.ReplaceAllString(sql, "?")
 		return goqu.L("EXISTS ("+sql+")", args...), nil
 	}
 
@@ -1457,6 +1463,8 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 }
 
 const postgresIdentifierMaxBytes = 63
+
+var postgresPreparedPlaceholderPattern = regexp.MustCompile(`\$[0-9]+`)
 
 func buildPostgresExistsAliases(aliases []string) map[string]string {
 	sortedAliases := append([]string(nil), aliases...)
@@ -2215,28 +2223,49 @@ func handleBinaryOperationWithCollector(
 	}
 
 	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
-	// No resolved fields (should not happen due to earlier fast-path), fall back.
-	if len(resolved) == 0 {
-		return opExpr, nil, nil
-	}
+	return applyCollectorToResolvedExpression(opExpr, resolved, collector)
+}
 
+func applyCollectorToResolvedExpression(
+	expression exp.Expression,
+	resolved []ResolvedFieldPath,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	if len(resolved) == 0 {
+		return expression, nil, nil
+	}
 	if collector != nil && collector.canEvaluateInline(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+		return andBindingsForResolvedFieldPaths(resolved, expression), resolved, nil
 	}
 	if collector != nil && resolvedNeedsCTE(resolved) {
-		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, collector)
+		existsExpr, err := buildInlineExistsExpression(resolved, expression, collector)
 		if err != nil {
 			return nil, nil, err
 		}
 		return existsExpr, resolved, nil
 	}
 	if collector != nil {
-		return opExpr, resolved, nil
+		return expression, resolved, nil
 	}
 	if anyResolvedHasBindings(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+		return andBindingsForResolvedFieldPaths(resolved, expression), resolved, nil
 	}
-	return opExpr, resolved, nil
+	return expression, resolved, nil
+}
+
+func evaluateStandaloneBoolCast(
+	operand *Value,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	boolOperand := Value{BoolCast: operand}
+	_, castType := extractFieldOperandAndCast(&boolOperand)
+	sqlValue, resolvedPath, err := toSQLResolvedFieldOrValue(&boolOperand, castType, "$boolCast")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resolved := collectResolvedFieldPaths(resolvedPath, nil)
+	return applyCollectorToResolvedExpression(goqu.L("COALESCE(?, FALSE)", sqlValue), resolved, collector)
 }
 
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
@@ -2303,32 +2332,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		if err != nil {
 			return nil, nil, err
 		}
-		if collector != nil && collector.canEvaluateInline(resolved) {
-			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
-		}
-		if collector != nil && resolvedNeedsCTE(resolved) {
-			existsExpr, err := buildInlineExistsExpression(resolved, expr, collector)
-			if err != nil {
-				return nil, nil, err
-			}
-			return existsExpr, resolved, nil
-		}
-		if collector != nil {
-			return expr, resolved, nil
-		}
-		if anyResolvedHasBindings(resolved) {
-			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
-		}
-		return expr, resolved, nil
+		return applyCollectorToResolvedExpression(expr, resolved, collector)
 	}
 
 	if le.BoolCast != nil {
-		boolOperand := Value{BoolCast: le.BoolCast}
-		sqlValue, err := toSQLComponent(&boolOperand, "$boolCast")
-		if err != nil {
-			return nil, nil, err
-		}
-		return goqu.L("COALESCE(?, FALSE)", sqlValue), nil, nil
+		return evaluateStandaloneBoolCast(le.BoolCast, collector)
 	}
 
 	// Handle logical operations

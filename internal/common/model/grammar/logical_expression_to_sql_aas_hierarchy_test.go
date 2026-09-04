@@ -27,9 +27,11 @@
 package grammar
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 )
 
@@ -53,6 +55,26 @@ func buildAASHierarchySQL(t *testing.T, expression LogicalExpression) string {
 	return sql
 }
 
+func buildPreparedAASHierarchySQL(t *testing.T, expression LogicalExpression) (string, []interface{}) {
+	t.Helper()
+
+	collector := mustCollectorForRoot(t, "$aas")
+	whereExpression, _, err := expression.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("aas")).
+		Select(goqu.V(1)).
+		Where(whereExpression)
+	sql, args, err := dataset.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	return sql, args
+}
+
 func TestLogicalExpressionAASSimpleSubmodelConditionBuildsReferencedSubmodelExists(t *testing.T) {
 	expression := LogicalExpression{
 		Eq: ComparisonItems{
@@ -70,6 +92,8 @@ func TestLogicalExpressionAASSimpleSubmodelConditionBuildsReferencedSubmodelExis
 		"submodel_identifier",
 		"id_short",
 		"CarbonFootprint",
+		fmt.Sprintf(`"aas_submodel_reference__exists"."type" = %d`, int(types.ReferenceTypesModelReference)),
+		fmt.Sprintf(`"aas_submodel_reference_key__exists"."type" = %d`, int(types.KeyTypesSubmodel)),
 	)
 }
 
@@ -111,6 +135,58 @@ func TestLogicalExpressionAASSimpleSMEConditionBuildsReferencedSubmodelElementEx
 	)
 	if strings.Contains(sql, "property_element.value_num") {
 		t.Fatalf("expected raw property expression aliases to be rewritten for the correlated EXISTS: %s", sql)
+	}
+}
+
+func TestLogicalExpressionAASStandaloneBoolCastBuildsSubmodelExists(t *testing.T) {
+	expression := LogicalExpression{
+		BoolCast: valuePtr(field("$sm#idShort")),
+	}
+
+	sql := buildAASHierarchySQL(t, expression)
+
+	assertSQLContainsAll(t, sql, "EXISTS", "submodel__exists", "COALESCE")
+}
+
+func TestLogicalExpressionAASStandaloneBoolCastBuildsSMEExists(t *testing.T) {
+	expression := LogicalExpression{
+		BoolCast: valuePtr(field("$sme.Enabled#value")),
+	}
+
+	sql := buildAASHierarchySQL(t, expression)
+
+	assertSQLContainsAll(t, sql, "EXISTS", "property_element__exists", "Enabled", "COALESCE")
+}
+
+func TestLogicalExpressionAASHierarchyAliasRewritePreservesPreparedLiteral(t *testing.T) {
+	literal := "property_element.literal"
+	expression := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$sme.Test#value"),
+			strVal(literal),
+		},
+	}
+
+	sql, args := buildPreparedAASHierarchySQL(t, expression)
+
+	if strings.Contains(sql, literal) {
+		t.Fatalf("expected literal to remain a prepared argument, got SQL: %s", sql)
+	}
+	found := false
+	for _, arg := range args {
+		value, ok := arg.(string)
+		if !ok {
+			continue
+		}
+		if value == "property_element__exists.literal" {
+			t.Fatalf("prepared literal was rewritten as an SQL alias: %#v", args)
+		}
+		if value == literal {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected prepared literal %q in arguments, got %#v", literal, args)
 	}
 }
 
