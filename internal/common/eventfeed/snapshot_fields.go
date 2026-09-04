@@ -33,20 +33,15 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
-func aasFieldsFromSnapshot(ctx context.Context, tx *sql.Tx, snap map[string]any) (aasID, globalAssetID string, submodels []SubmodelRef, err error) {
+func aasFieldsFromSnapshot(snap map[string]any) (aasID, globalAssetID string, submodels []SubmodelRef) {
 	if snap == nil {
-		return "", "", nil, nil
+		return "", "", nil
 	}
 	aasID = stringField(snap, "id")
 	if info, ok := snap["assetInformation"].(map[string]any); ok {
 		globalAssetID = stringField(info, "globalAssetId")
 	}
-	submodelIDs := submodelIDsFromAASSnapshot(snap)
-	submodels, err = submodelRefsForSubmodelsTx(ctx, tx, submodelIDs)
-	if err != nil {
-		return "", "", nil, err
-	}
-	return aasID, globalAssetID, submodels, nil
+	return aasID, globalAssetID, submodelRefsFromAASSnapshot(snap)
 }
 
 func submodelFieldsFromSnapshot(snap map[string]any) (submodelID, semanticID string) {
@@ -60,20 +55,38 @@ func submodelFieldsFromSnapshot(snap map[string]any) (submodelID, semanticID str
 	return submodelID, semanticID
 }
 
-func submodelIDsFromAASSnapshot(snap map[string]any) []string {
+// submodelRefsFromAASSnapshot reads the AAS's own submodel references, taking
+// both the submodel id and the optional referredSemanticId straight from the
+// stored AAS entry. The submodel repository is deliberately not consulted: the
+// AAS event must describe what the AAS write recorded, and a referenced
+// submodel may legitimately not exist (yet), live in another repository, or be
+// created moments later — none of which may drop it from the event.
+func submodelRefsFromAASSnapshot(snap map[string]any) []SubmodelRef {
 	raw, ok := snap["submodels"].([]any)
 	if !ok || len(raw) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(raw))
+	out := make([]SubmodelRef, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
 	for _, item := range raw {
 		ref, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		if id := lastReferenceKeyValue(ref); id != "" {
-			out = append(out, id)
+		id := lastReferenceKeyValue(ref)
+		if id == "" {
+			continue
 		}
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+
+		var semanticID string
+		if referred, ok := ref["referredSemanticId"].(map[string]any); ok {
+			semanticID = lastReferenceKeyValue(referred)
+		}
+		out = append(out, SubmodelRef{SubmodelID: id, SemanticID: semanticID})
 	}
 	return out
 }
@@ -100,53 +113,6 @@ func stringField(m map[string]any, key string) string {
 	default:
 		return ""
 	}
-}
-
-// submodelRefsForSubmodelsTx returns one SubmodelRef per id in submodelIDs.
-// A left join is used deliberately: a submodel without a recorded semantic
-// id must still appear in the result (with an empty SemanticID) rather than
-// being dropped, otherwise every referring AAS/asset event would render an
-// empty "submodels" array whenever none of its submodels happen to carry a
-// semantic id.
-func submodelRefsForSubmodelsTx(ctx context.Context, tx *sql.Tx, submodelIDs []string) ([]SubmodelRef, error) {
-	if tx == nil || len(submodelIDs) == 0 {
-		return nil, nil
-	}
-	dialect := goqu.Dialect("postgres")
-	query, args, err := dialect.From(goqu.T("submodel").As("s")).
-		Select(goqu.I("s.submodel_identifier"), goqu.I("k.value")).
-		LeftJoin(goqu.T("submodel_semantic_id_reference").As("r"), goqu.On(goqu.I("r.id").Eq(goqu.I("s.id")))).
-		LeftJoin(goqu.T("submodel_semantic_id_reference_key").As("k"), goqu.On(goqu.I("k.reference_id").Eq(goqu.I("r.id")))).
-		Where(goqu.I("s.submodel_identifier").In(submodelIDs)).
-		Order(goqu.I("s.submodel_identifier").Asc(), goqu.I("k.position").Desc()).
-		ToSQL()
-	if err != nil {
-		return nil, fmt.Errorf("EVENTFEED-SEMANTICIDS-BUILDSQL: %w", err)
-	}
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("EVENTFEED-SEMANTICIDS-QUERY: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	seen := make(map[string]struct{}, len(submodelIDs))
-	out := make([]SubmodelRef, 0, len(submodelIDs))
-	for rows.Next() {
-		var id string
-		var value sql.NullString
-		if err = rows.Scan(&id, &value); err != nil {
-			return nil, fmt.Errorf("EVENTFEED-SEMANTICIDS-SCAN: %w", err)
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		out = append(out, SubmodelRef{SubmodelID: id, SemanticID: value.String})
-	}
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("EVENTFEED-SEMANTICIDS-ROWS: %w", err)
-	}
-	return out, nil
 }
 
 func globalAssetIDsForSubmodelTx(ctx context.Context, tx *sql.Tx, submodelID string) ([]string, error) {

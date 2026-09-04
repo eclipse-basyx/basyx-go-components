@@ -29,7 +29,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,6 +108,90 @@ func TestMutationSinkWritesAASAndAssetInTx(t *testing.T) {
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("sql: %v", err)
+	}
+}
+
+// An AAS may reference a submodel that does not exist as a stored submodel:
+// it can be created moments later (the usual AASX upload order) or live in a
+// different repository. Such a reference must still appear in the AAS and
+// asset events, with the referredSemanticId the AAS write recorded.
+func TestMutationSinkAASEventKeepsReferenceToUnknownSubmodel(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	svc := NewService(NewRepository(db, cfg.MaxAge), cfg)
+	fixedNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return fixedNow }
+	svc.build.now = func() time.Time { return fixedNow }
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	// Exactly two statements may reach the database: the AAS event insert and
+	// the asset event insert. Any submodel lookup would be an unexpected query
+	// and fail ExpectationsWereMet below.
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO`)).
+		WillReturnRows(sqlmock.NewRows([]string{"seq", "time"}).AddRow(int64(1), fixedNow))
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO`)).
+		WillReturnRows(sqlmock.NewRows([]string{"seq", "time"}).AddRow(int64(2), fixedNow))
+
+	snapshot := map[string]any{
+		"id":               "aas-1",
+		"assetInformation": map[string]any{"globalAssetId": "asset-1"},
+		"submodels": []any{
+			map[string]any{
+				"type": "ModelReference",
+				"keys": []any{map[string]any{"type": "Submodel", "value": "sm-not-stored"}},
+				"referredSemanticId": map[string]any{
+					"type": "ExternalReference",
+					"keys": []any{map[string]any{"type": "GlobalReference", "value": "0173-1#01-AHE582#003"}},
+				},
+			},
+		},
+	}
+
+	sink := NewMutationSink(svc)
+	if err = sink.HandleMutation(context.Background(), tx, Mutation{
+		Table:      mutationTableAAS,
+		Identifier: "aas-1",
+		ChangeType: mutationUpdated,
+		Snapshot:   snapshot,
+	}); err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql: %v", err)
+	}
+
+	// The reference and its referredSemanticId survive into both payloads.
+	aasID, globalAssetID, submodels := aasFieldsFromSnapshot(snapshot)
+	want := []SubmodelRef{{SubmodelID: "sm-not-stored", SemanticID: "0173-1#01-AHE582#003"}}
+	if !reflect.DeepEqual(submodels, want) {
+		t.Fatalf("submodels = %#v, want %#v", submodels, want)
+	}
+	aasEvent, err := svc.build.AASUpdated(aasID, globalAssetID, submodels)
+	if err != nil {
+		t.Fatalf("build aas: %v", err)
+	}
+	assetEvent, err := svc.build.AssetUpdated(globalAssetID, aasID, submodels)
+	if err != nil {
+		t.Fatalf("build asset: %v", err)
+	}
+	for name, payload := range map[string]string{"aas": aasEvent.DataFull, "asset": assetEvent.DataFull} {
+		if !strings.Contains(payload, "sm-not-stored") {
+			t.Fatalf("%s event dropped the submodel reference: %s", name, payload)
+		}
+		if !strings.Contains(payload, `"referredSemanticId"`) || !strings.Contains(payload, "0173-1#01-AHE582#003") {
+			t.Fatalf("%s event lost referredSemanticId: %s", name, payload)
+		}
 	}
 }
 

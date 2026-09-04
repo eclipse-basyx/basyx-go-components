@@ -85,10 +85,7 @@ func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutat
 			snap = mutation.Snapshot
 		}
 	}
-	aasID, globalAssetID, submodels, err := aasFieldsFromSnapshot(ctx, tx, snap)
-	if err != nil {
-		return err
-	}
+	aasID, globalAssetID, submodels := aasFieldsFromSnapshot(snap)
 	if aasID == "" {
 		aasID = mutation.Identifier
 	}
