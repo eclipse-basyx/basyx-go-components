@@ -3,5 +3,5 @@ body: Querying the text of a MultiLanguageProperty
 time: 2026-09-04T12:03:19.464619101+02:00
 custom:
     Impact: Low
-    PullRequest: "659"
+    PullRequest: 659
     SecurityImpact: None
