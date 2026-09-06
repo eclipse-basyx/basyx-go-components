@@ -628,8 +628,11 @@ Expected result:
 }
 ```
 
-The French text matches even though the condition names no language. To restrict
-the match to one language, add a condition on `#language`.
+The French text matches even though the condition names no language. Adding a
+separate `#language` condition with `$and` only checks that the language exists;
+it does not require the matching text to belong to that language. For example,
+the text condition above combined with `#language = "en"` still matches this
+Submodel.
 
 ## What can be combined
 
