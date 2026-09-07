@@ -103,8 +103,12 @@ func TestQueryAssetAdministrationShellsRejectsHierarchyFieldsOutsideAASEnvironme
 
 	enabledService := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, true)
 	require.NoError(t, enabledService.validateAASHierarchyQuery(query))
-	require.True(t, grammar.AASHierarchyQueriesEnabled(enabledService.queryContext(t.Context(), query)))
-	require.False(t, grammar.AASHierarchyQueriesEnabled(disabledService.queryContext(t.Context(), grammar.Query{})))
+	enabledContext, enabledContextErr := enabledService.queryContext(t.Context(), query)
+	require.NoError(t, enabledContextErr)
+	disabledContext, disabledContextErr := disabledService.queryContext(t.Context(), grammar.Query{})
+	require.NoError(t, disabledContextErr)
+	require.True(t, grammar.AASHierarchyQueriesEnabled(enabledContext))
+	require.False(t, grammar.AASHierarchyQueriesEnabled(disabledContext))
 }
 
 func TestToAASOperationRedirectRewritesSubmodelNamespace(t *testing.T) {

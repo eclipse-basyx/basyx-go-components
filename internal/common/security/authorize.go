@@ -128,12 +128,17 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				}
 				opts := grammar.DefaultSimplifyOptions()
 				opts.EnableImplicitCasts = settings.EnableImplicitCasts
-				evaluation := model.AuthorizeWithFilterWithOptions(EvalInput{
-					Method:    r.Method,
-					Path:      policyPath,
-					RoutePath: routePath,
-					Claims:    claims,
-				}, opts)
+				session := newAuthorizationSession(model, claims, nil, opts)
+				evaluation := session.evaluate(r.Method, policyPath)
+				if policyPath != routePath {
+					evaluation = model.AuthorizeWithFilterWithOptions(EvalInput{
+						Method:    r.Method,
+						Path:      policyPath,
+						RoutePath: routePath,
+						Claims:    session.claims,
+						Globals:   session.globals,
+					}, opts)
+				}
 				if !evaluation.Allowed {
 					if evaluation.Reason == DecisionRouteNotFound {
 						component := routerErrorComponent(model)
@@ -170,6 +175,8 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				if evaluation.QueryFilter != nil {
 					ctx = context.WithValue(ctx, filterKey, evaluation.QueryFilter)
 				}
+				session = session.withOuterAccess(accessViewFromEvaluation("", evaluation))
+				ctx = context.WithValue(ctx, authorizationSessionContextKey{}, session)
 
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return

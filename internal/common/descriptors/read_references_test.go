@@ -244,8 +244,8 @@ func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
 			name:                "nested semantic keys correlate to owning AAS descriptor",
 			fragment:            "$aasdesc#submodelDescriptors[].semanticId.keys[]",
 			field:               "$aasdesc#submodelDescriptors[].idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
 			columns:             []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
 			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
 				_, err := ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(ctx, db, ids)
@@ -256,8 +256,8 @@ func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
 			name:                "standalone semantic keys stay on current submodel descriptor",
 			fragment:            "$smdesc#semanticId.keys[]",
 			field:               "$smdesc#idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
 			columns:             []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
 			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
 				_, err := ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(ctx, db, ids)
@@ -268,8 +268,8 @@ func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
 			name:                "nested supplemental references correlate to owning AAS descriptor",
 			fragment:            "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
 			field:               "$aasdesc#submodelDescriptors[].idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
 			columns:             []string{"owner_id", "ref_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
 			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
 				_, err := ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, ids)
@@ -280,8 +280,8 @@ func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
 			name:                "standalone supplemental keys stay on current submodel descriptor",
 			fragment:            "$smdesc#supplementalSemanticIds[].keys[]",
 			field:               "$smdesc#idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
 			columns:             []string{"owner_id", "ref_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
 			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
 				_, err := ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, ids)

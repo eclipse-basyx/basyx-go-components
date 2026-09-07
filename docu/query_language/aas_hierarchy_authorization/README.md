@@ -1,6 +1,16 @@
 # Security-Filtered Query Conditions and Cross-Resource Authorization Plan
 
-Status: proposed architecture; not implemented yet. Plan B below is recommended.
+Status: Plan B implemented as the mandatory ABAC query-security strategy.
+
+The implementation preserves caller and policy provenance in an immutable
+request authorization session and semantic access-view IR. Query-language
+conditions, caller response-filter conditions, and membership-changing
+selectors are compiled against target-specific visibility guards. Related
+Submodel and SME fields require their own complete READ alternative, including
+the alternative's formula, object coverage, and security filters. PostgreSQL 16
+or newer is required for total, non-throwing input validation; regular-expression
+evaluation uses the schema-installed `basyx_safe_regex_match` function.
+
 
 ## Scope: two precondition points
 

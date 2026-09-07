@@ -154,20 +154,9 @@ func TestLogicalExpression_SMDesc_SupplementalSemanticIdsWithCollector_BuildsCTE
 		t.Fatalf("did not expect wildcard supplemental references to contain position bindings, got: %s", sql)
 	}
 
-	aliases := buildPostgresExistsAliases([]string{
-		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
-		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
-	})
-	referenceAlias := aliases["aasdesc_submodel_descriptor_supplemental_semantic_id_reference"]
-	keyAlias := aliases["aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"]
-	if referenceAlias == keyAlias {
-		t.Fatalf("expected distinct PostgreSQL aliases, got %q", referenceAlias)
-	}
-	if len(referenceAlias) > postgresIdentifierMaxBytes || len(keyAlias) > postgresIdentifierMaxBytes {
-		t.Fatalf("expected aliases within PostgreSQL's identifier limit, got %q and %q", referenceAlias, keyAlias)
-	}
-	if !strings.Contains(sql, `AS "`+referenceAlias+`"`) || !strings.Contains(sql, `AS "`+keyAlias+`"`) {
-		t.Fatalf("expected SQL to use collision-safe aliases %q and %q, got: %s", referenceAlias, keyAlias, sql)
+	if !strings.Contains(sql, `AS "submodel_descriptor__exists"`) ||
+		!strings.Contains(sql, `"submodel_descriptor__exists"."authorization_group_key"`) {
+		t.Fatalf("expected structurally scoped correlation without rendered alias rewriting, got: %s", sql)
 	}
 
 	aasdescSQL := supplementalSemanticIDSQL(t, CollectorRootAASDesc, "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")

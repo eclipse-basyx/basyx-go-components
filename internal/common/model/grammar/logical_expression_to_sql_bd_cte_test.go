@@ -66,3 +66,45 @@ func TestLogicalExpression_BD_WithCollector_BuildsCTE(t *testing.T) {
 		t.Fatalf("expected args to contain array indices 0 and 1, got %#v", args)
 	}
 }
+
+func TestLogicalExpression_BD_GlobalAssetIDCorrelatesDescriptorToAASIdentifier(t *testing.T) {
+	t.Parallel()
+
+	expr := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$bd#globalAssetId"),
+			strVal("global-asset"),
+		},
+	}
+
+	collector := mustCollectorForRoot(t, "$bd")
+	whereExpr, _, err := expr.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	ds := goqu.Dialect("postgres").
+		From(goqu.T("aas_identifier").As("aas_identifier")).
+		Join(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.id").Eq(goqu.I("aas_identifier.aasid"))),
+		).
+		Select(goqu.V(1)).
+		Where(whereExpr)
+	sql, args, err := ds.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	for _, expected := range []string{
+		`"aas_descriptor"."global_asset_id"`,
+		`"aas_descriptor"."id" = "aas_identifier"."aasid"`,
+	} {
+		if !strings.Contains(sql, expected) {
+			t.Fatalf("expected SQL to contain %q, got:\n%s", expected, sql)
+		}
+	}
+	if !argListContains(args, "global-asset") {
+		t.Fatalf("expected args to contain global asset ID, got %#v", args)
+	}
+}

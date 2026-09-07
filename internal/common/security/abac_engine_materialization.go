@@ -171,12 +171,14 @@ func AccessModelFromMaterializedRules(policyID string, rules []MaterializedABACR
 			filterList: doc.Filters,
 		})
 	}
-	return &AccessModel{
+	model := &AccessModel{
 		apiRouter: apiRouter,
 		rules:     materialized,
 		basePath:  basePath,
 		policyID:  policyID,
-	}, nil
+	}
+	model.semanticReadRuleIndexes = buildSemanticReadRuleIndexes(materialized, basePath)
+	return model, nil
 }
 
 func materializedRuleRows(configured []grammar.AccessPermissionRule, rules []materializedRule) ([]MaterializedABACRule, []materializedRuleDocument, error) {

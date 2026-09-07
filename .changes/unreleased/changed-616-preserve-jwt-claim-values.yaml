@@ -4,4 +4,4 @@ time: 2026-08-27T09:00:46.000000000Z
 custom:
   Impact: High
   PullRequest: 616
-  SecurityImpact: Eliminates substring and nested-path claim confusion. Missing, `null`, wrong-type, object, mixed-array, and unsupported claim values are indeterminate and fail closed; empty string arrays evaluate false.
+  SecurityImpact: Claim evaluation now follows the documented JSON types and paths. Missing, `null`, wrong-type, object, mixed-array, and unsupported values are indeterminate and fail closed; empty string arrays evaluate false.

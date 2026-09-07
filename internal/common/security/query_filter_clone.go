@@ -132,6 +132,7 @@ func restoreFragmentFilterPredicateMetadata(
 		return FragmentFilterPredicate{}, fmt.Errorf("AUTH-CLONEQF-SCOPEMISMATCH fragment predicate shape changed during clone")
 	}
 	cloned.global = source.global
+	cloned.caller = source.caller
 	if cloned.Condition != nil && source.Condition != nil {
 		restoreLogicalIndeterminateMarkers(cloned.Condition, *source.Condition)
 	}

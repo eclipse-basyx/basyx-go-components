@@ -22,6 +22,12 @@
         ]
       },
       {
+        "name": "query_shells_route",
+        "objects": [
+          { "ROUTE": "/query/shells" }
+        ]
+      },
+      {
         "name": "superpath_routes",
         "objects": [
           { "ROUTE": "/shells/*/submodels/*" }
@@ -121,6 +127,11 @@
       {
         "USEACL": "read_role",
         "USEOBJECTS": ["serialization_route"],
+        "USEFORMULA": "role_is_viewer"
+      },
+      {
+        "USEACL": "read_role",
+        "USEOBJECTS": ["query_shells_route"],
         "USEFORMULA": "role_is_viewer"
       },
       {

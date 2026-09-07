@@ -995,5 +995,29 @@
                       "user":  "admin",
                       "password":  "pwd"
                   }
+    },
+    {
+        "context":  "Security hidden SME invalid numeric cast is a neutral no-match",
+        "method":  "POST",
+        "endpoint":  "{{BASYX_IT_API_URL}}/query/submodels",
+        "data":  "bodies/query_tests/security_hidden_invalid_numcast.json",
+        "shouldMatch":  "expected/sophisticatedQueryTests/empty_response.json",
+        "expectedStatus":  200,
+        "token":  {
+                      "user":  "usera",
+                      "password":  "pwd"
+                  }
+    },
+    {
+        "context":  "Security malformed regex is total and returns a neutral no-match",
+        "method":  "POST",
+        "endpoint":  "{{BASYX_IT_API_URL}}/query/submodels",
+        "data":  "bodies/query_tests/security_hidden_invalid_regex.json",
+        "shouldMatch":  "expected/sophisticatedQueryTests/empty_response.json",
+        "expectedStatus":  200,
+        "token":  {
+                      "user":  "usera",
+                      "password":  "pwd"
+                  }
     }
 ]

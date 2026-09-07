@@ -101,7 +101,7 @@ func TestMergedSMEStructuralFilterDropsTrueGlobalFormulaAndUsesReaderAlias(t *te
 	if err != nil {
 		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
 	}
-	condition, err := evaluateFragmentFilterPredicate(predicate, normalizedFragment, collector)
+	condition, err := evaluateFragmentFilterPredicate(t.Context(), predicate, normalizedFragment, collector)
 	if err != nil {
 		t.Fatalf("evaluateFragmentFilterPredicate returned error: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestAddCorrelatedFilterQueryFromContext_MixedAliasesUseInlineAndExists(t *t
 		t.Fatalf("expected supplemental semantic ID predicate to remain row-local: %s", sqlStr)
 	}
 	if !strings.Contains(sqlStr, `EXISTS (`) ||
-		!strings.Contains(sqlStr, `"external_subject_reference_key__exists"."value"`) {
+		!strings.Contains(sqlStr, `"external_subject_reference_key"."value"`) {
 		t.Fatalf("expected specific asset route guard in correlated EXISTS: %s", sqlStr)
 	}
 }

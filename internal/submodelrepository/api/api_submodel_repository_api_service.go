@@ -625,6 +625,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
 		}
 	}
+	ctx, selectorErr := withAuthorizedSubmodelListSelectors(ctx, idShort, decodedSemanticID)
+	if selectorErr != nil {
+		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
+	}
 
 	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithElementsByListFilters(
 		ctx,
@@ -747,6 +751,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsRecentChanges(
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
 		}
+	}
+	ctx, selectorErr := withAuthorizedSubmodelListSelectors(ctx, idShort, decodedSemanticID)
+	if selectorErr != nil {
+		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
 	}
 
 	normalizedLimit, err := common.NormalizeRecentChangesLimit(limit)
@@ -1029,6 +1037,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
 		}
 	}
+	ctx, selectorErr := withAuthorizedSubmodelListSelectors(ctx, idShort, decodedSemanticID)
+	if selectorErr != nil {
+		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
+	}
 
 	submodels, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, limit, decodedCursor, idShort, decodedSemanticID, time.Time{}, time.Time{})
 	if err != nil {
@@ -1092,6 +1104,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
 		}
+	}
+	ctx, selectorErr := withAuthorizedSubmodelListSelectors(ctx, idShort, decodedSemanticID)
+	if selectorErr != nil {
+		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
 	}
 
 	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithElementsByListFilters(
@@ -1158,6 +1174,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
 		}
 	}
+	ctx, selectorErr := withAuthorizedSubmodelListSelectors(ctx, idShort, decodedSemanticID)
+	if selectorErr != nil {
+		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
+	}
 
 	references, nextCursor, err := s.submodelBackend.GetSubmodelReferences(ctx, limit, decodedCursor, idShort, decodedSemanticID)
 	if err != nil {
@@ -1221,6 +1241,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
 		}
+	}
+	ctx, selectorErr := withAuthorizedSubmodelListSelectors(ctx, idShort, decodedSemanticID)
+	if selectorErr != nil {
+		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
 	}
 
 	cursorState := decodeAllSubmodelsPathCursorState(decodedCursor)
@@ -2898,7 +2922,12 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 	cursor string,
 	query grammar.Query,
 ) (gen.ImplResponse, error) {
-	querySelectionCtx := auth.MergeQueryFilter(ctx, query)
+	querySelectionCtx, queryContextErr := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceSM, query)
+	if queryContextErr != nil {
+		return common.NewErrorResponse(
+			queryContextErr, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "BuildAuthorizedQuery",
+		), queryContextErr
+	}
 
 	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithElementsByListFilters(
 		querySelectionCtx,
@@ -2953,4 +2982,17 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 	}
 
 	return gen.Response(http.StatusOK, res), nil
+}
+
+func withAuthorizedSubmodelListSelectors(
+	ctx context.Context,
+	idShort string,
+	semanticID string,
+) (context.Context, error) {
+	return auth.WithAuthorizedStringSelectors(
+		ctx,
+		auth.SemanticResourceSM,
+		auth.StringSelector{Field: "$sm#idShort", Value: idShort},
+		auth.StringSelector{Field: "$sm#semanticId.keys[].value", Value: semanticID},
+	)
 }

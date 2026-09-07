@@ -92,8 +92,8 @@ func TestLogicalExpressionAASSimpleSubmodelConditionBuildsReferencedSubmodelExis
 		"submodel_identifier",
 		"id_short",
 		"CarbonFootprint",
-		fmt.Sprintf(`"aas_submodel_reference__exists"."type" = %d`, int(types.ReferenceTypesModelReference)),
-		fmt.Sprintf(`"aas_submodel_reference_key__exists"."type" = %d`, int(types.KeyTypesSubmodel)),
+		fmt.Sprintf(`"aas_submodel_reference"."type" = %d`, int(types.ReferenceTypesModelReference)),
+		fmt.Sprintf(`"aas_submodel_reference_key"."type" = %d`, int(types.KeyTypesSubmodel)),
 	)
 }
 
@@ -129,13 +129,11 @@ func TestLogicalExpressionAASSimpleSMEConditionBuildsReferencedSubmodelElementEx
 		"submodel",
 		"submodel_element",
 		"property_element",
-		"property_element__exists.value_num",
+		"property_element.value_num",
 		"AggregatedCarbonFootprint",
 		"double precision",
 	)
-	if strings.Contains(sql, "property_element.value_num") {
-		t.Fatalf("expected raw property expression aliases to be rewritten for the correlated EXISTS: %s", sql)
-	}
+	assertSQLContainsAll(t, sql, `"aas__exists"."authorization_group_key"`)
 }
 
 func TestLogicalExpressionAASStandaloneBoolCastBuildsSubmodelExists(t *testing.T) {
@@ -145,7 +143,10 @@ func TestLogicalExpressionAASStandaloneBoolCastBuildsSubmodelExists(t *testing.T
 
 	sql := buildAASHierarchySQL(t, expression)
 
-	assertSQLContainsAll(t, sql, "EXISTS", "submodel__exists", "COALESCE")
+	assertSQLContainsAll(t, sql, "EXISTS", "submodel", "pg_input_is_valid")
+	if strings.Contains(sql, "COALESCE") {
+		t.Fatalf("indeterminate boolean cast must remain SQL NULL: %s", sql)
+	}
 }
 
 func TestLogicalExpressionAASStandaloneBoolCastBuildsSMEExists(t *testing.T) {
@@ -155,10 +156,10 @@ func TestLogicalExpressionAASStandaloneBoolCastBuildsSMEExists(t *testing.T) {
 
 	sql := buildAASHierarchySQL(t, expression)
 
-	assertSQLContainsAll(t, sql, "EXISTS", "property_element__exists", "Enabled", "COALESCE")
+	assertSQLContainsAll(t, sql, "EXISTS", "property_element", "Enabled", "pg_input_is_valid")
 }
 
-func TestLogicalExpressionAASHierarchyAliasRewritePreservesPreparedLiteral(t *testing.T) {
+func TestLogicalExpressionAASHierarchyStructuredScopePreservesPreparedLiteral(t *testing.T) {
 	literal := "property_element.literal"
 	expression := LogicalExpression{
 		Eq: ComparisonItems{

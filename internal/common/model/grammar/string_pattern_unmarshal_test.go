@@ -51,6 +51,7 @@ func TestModelStringPattern_UnmarshalJSON_AcceptsAASAndSME(t *testing.T) {
 		"$sme#valueType",
 		"$sme#language",
 		"$cd#id",
+		"$bd#globalAssetId",
 	}
 
 	for _, in := range cases {

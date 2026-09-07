@@ -408,7 +408,11 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 		return nil, "", common.NewErrBadRequest("SMREPO-QUERYSMS-INVALIDQUERY query condition is required")
 	}
 
-	ctx = auth.MergeQueryFilter(ctx, queryWrapper.Query)
+	var err error
+	ctx, err = auth.WithAuthorizedQuery(ctx, auth.SemanticResourceSM, queryWrapper.Query)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-QUERYSMS-AUTHORIZEDQUERY " + err.Error())
+	}
 	return s.GetSubmodels(ctx, limit, cursor, "", "", time.Time{}, time.Time{})
 }
 

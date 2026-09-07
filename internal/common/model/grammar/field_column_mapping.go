@@ -104,6 +104,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 		ByContext: map[resolveContext]string{
 			ctxAAS:     "asset_information.global_asset_id",
 			ctxAASDesc: "aas_descriptor.global_asset_id",
+			ctxBD:      "aas_descriptor.global_asset_id",
 		},
 	},
 

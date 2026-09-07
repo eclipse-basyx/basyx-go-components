@@ -117,7 +117,7 @@ func TestReadSubmodelDescriptorsByAASDescriptorIDsFilterCorrelation(t *testing.T
 			name:                "MATCH correlates to current submodel descriptor",
 			field:               "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value",
 			match:               true,
-			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
 			unexpected:          `"submodel_descriptor"."aas_descriptor_id" = "descriptor"."id"`,
 		},
 	}
@@ -213,23 +213,23 @@ func TestReadSubmodelDescriptorEndpointsFilterCorrelation(t *testing.T) {
 			name:                "nested non-MATCH correlates to owning AAS descriptor",
 			fragment:            "$aasdesc#submodelDescriptors[].endpoints[]",
 			field:               "$aasdesc#submodelDescriptors[].idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
 		},
 		{
 			name:                "nested MATCH correlates to current submodel descriptor",
 			fragment:            "$aasdesc#submodelDescriptors[].endpoints[]",
 			field:               "$aasdesc#specificAssetIds[].name",
 			match:               true,
-			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
 		},
 		{
 			name:                "standalone non-MATCH stays on current submodel descriptor",
 			fragment:            "$smdesc#endpoints[]",
 			field:               "$smdesc#idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
 		},
 	}
 

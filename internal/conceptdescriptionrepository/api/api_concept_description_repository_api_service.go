@@ -120,7 +120,10 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, operation, "BadLimit"), nil
 	}
 
-	queryCtx := auth.MergeQueryFilter(ctx, query)
+	queryCtx, queryContextErr := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceCD, query)
+	if queryContextErr != nil {
+		return common.NewErrorResponse(queryContextErr, http.StatusInternalServerError, componentName, operation, "BuildAuthorizedQuery"), queryContextErr
+	}
 	cds, nextCursor, err := s.d.GetConceptDescriptions(queryCtx, nil, nil, nil, uint(uintLimit64), &decodedCursor, time.Time{}, time.Time{})
 	if err != nil {
 		switch {
@@ -167,6 +170,14 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadLimit"), nil
 	}
 	uintLimit := uint(uintLimit64)
+	ctx, selectorErr := auth.WithAuthorizedStringSelectors(
+		ctx,
+		auth.SemanticResourceCD,
+		auth.StringSelector{Field: "$cd#idShort", Value: idShort},
+	)
+	if selectorErr != nil {
+		return common.NewErrorResponse(selectorErr, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "BuildAuthorizedSelectors"), selectorErr
+	}
 	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, &idShort, &isCaseOf, &dataSpecificationRef, uintLimit, &decodedCursor, createdFrom, updatedFrom)
 	if err != nil {
 		switch {

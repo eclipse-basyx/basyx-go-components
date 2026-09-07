@@ -30,6 +30,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -427,7 +428,7 @@ func buildFragmentMaskCondition(
 
 	wcs := make([]exp.Expression, 0, len(filters))
 	for _, filter := range filters {
-		wc, err := evaluateFragmentFilterPredicate(filter.Predicate, filter.Fragment, collector)
+		wc, err := evaluateFragmentFilterPredicate(ctx, filter.Predicate, filter.Fragment, collector)
 		if err != nil {
 			return nil, false, err
 		}
@@ -440,23 +441,25 @@ func buildFragmentMaskCondition(
 }
 
 func evaluateFragmentFilterPredicate(
+	ctx context.Context,
 	predicate FragmentFilterPredicate,
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (exp.Expression, error) {
 	if predicate.Condition != nil {
-		return evaluateFragmentFilterLeaf(predicate, fragment, collector)
+		return evaluateFragmentFilterLeaf(ctx, predicate, fragment, collector)
 	}
 	if len(predicate.And) > 0 {
-		return evaluateFragmentFilterChildren(predicate.And, fragment, collector, true)
+		return evaluateFragmentFilterChildren(ctx, predicate.And, fragment, collector, true)
 	}
 	if len(predicate.Or) > 0 {
-		return evaluateFragmentFilterChildren(predicate.Or, fragment, collector, false)
+		return evaluateFragmentFilterChildren(ctx, predicate.Or, fragment, collector, false)
 	}
 	return nil, fmt.Errorf("FILTER-EVALPRED-INVALID fragment filter predicate is empty")
 }
 
 func evaluateFragmentFilterLeaf(
+	ctx context.Context,
 	predicate FragmentFilterPredicate,
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
@@ -468,7 +471,13 @@ func evaluateFragmentFilterLeaf(
 	fragment = predicate.evaluationFragment(fragment)
 	evalCollector := collector.WithoutInlineAliases()
 	if predicate.Match {
-		evalCollector = collector.ForFragmentMatch(fragment)
+		if predicate.caller {
+			evalCollector = conditionVisibleRowCollector(ctx, collector.ForFragmentMatch(fragment))
+		} else {
+			evalCollector = collector.ForFragmentMatch(fragment)
+		}
+	} else if predicate.caller {
+		evalCollector = conditionVisibleCollector(ctx, evalCollector)
 	}
 	whereCondition, _, err := predicate.Condition.EvaluateToExpressionWithNegatedFragments(
 		evalCollector,
@@ -481,6 +490,7 @@ func evaluateFragmentFilterLeaf(
 }
 
 func evaluateFragmentFilterChildren(
+	ctx context.Context,
 	children []FragmentFilterPredicate,
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
@@ -488,7 +498,7 @@ func evaluateFragmentFilterChildren(
 ) (exp.Expression, error) {
 	expressions := make([]exp.Expression, 0, len(children))
 	for _, child := range children {
-		expression, err := evaluateFragmentFilterPredicate(child, fragment, collector)
+		expression, err := evaluateFragmentFilterPredicate(ctx, child, fragment, collector)
 		if err != nil {
 			return nil, err
 		}
@@ -571,6 +581,9 @@ func fragmentFilterPredicateScopeSignature(predicate FragmentFilterPredicate) st
 		if predicate.global {
 			return "leaf:global"
 		}
+		if predicate.caller {
+			return "leaf:caller"
+		}
 		if predicate.fragment == nil {
 			return "leaf"
 		}
@@ -636,6 +649,28 @@ func GetColumnSelectStatement(ctx context.Context, columns []FilterColumnSpec, c
 // has no QueryFilter or no formula, the original dataset is returned unchanged.
 // Errors from grammar expression evaluation are propagated to the caller.
 func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, collector *grammar.ResolvedFieldPathCollector) (*goqu.SelectDataset, error) {
+	if authorized := AuthorizedQueryFromContext(ctx); authorized != nil {
+		if authorized.outer.decision == AccessViewDenied {
+			return ds.Where(goqu.L("FALSE")), nil
+		}
+		if authorized.outer.queryFilter != nil && authorized.outer.queryFilter.Formula != nil {
+			wc, _, err := authorized.outer.queryFilter.Formula.EvaluateToExpression(collector.WithoutFieldValueDecorator())
+			if err != nil {
+				return nil, err
+			}
+			ds = ds.Where(wc)
+		}
+		caller := authorized.callerForBackend()
+		if caller.Condition != nil {
+			wc, _, err := caller.Condition.EvaluateToExpression(conditionVisibleCollector(ctx, collector))
+			if err != nil {
+				return nil, err
+			}
+			ds = ds.Where(wc)
+		}
+		return ds, nil
+	}
+
 	p := GetQueryFilter(ctx)
 	if p != nil && p.Formula != nil {
 		wc, _, err := p.Formula.EvaluateToExpression(collector)
@@ -645,4 +680,621 @@ func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, col
 		ds = ds.Where(wc)
 	}
 	return ds, nil
+}
+
+func conditionVisibleCollector(
+	ctx context.Context,
+	collector *grammar.ResolvedFieldPathCollector,
+) *grammar.ResolvedFieldPathCollector {
+	return decorateConditionVisibleCollector(ctx, collector)
+}
+
+func conditionVisibleRowCollector(
+	ctx context.Context,
+	collector *grammar.ResolvedFieldPathCollector,
+) *grammar.ResolvedFieldPathCollector {
+	return decorateConditionVisibleCollector(ctx, collector)
+}
+
+func decorateConditionVisibleCollector(
+	ctx context.Context,
+	collector *grammar.ResolvedFieldPathCollector,
+) *grammar.ResolvedFieldPathCollector {
+	authorized := AuthorizedQueryFromContext(ctx)
+	if collector == nil || authorized == nil {
+		return collector
+	}
+	return collector.WithFieldValueDecorator(func(access grammar.SemanticFieldAccess) (grammar.FieldValueDecoration, error) {
+		target := SemanticAccessTarget{
+			Resource: semanticResourceFromField(access.Field),
+			Field:    access.Field,
+		}
+		view, found := authorized.accessView(target.Resource)
+		if !found || view.decision == AccessViewDenied {
+			return grammar.FieldValueDecoration{SQLValue: goqu.L("NULL")}, nil
+		}
+		if view.decision == AccessViewUnrestricted ||
+			view.queryFilter == nil && len(view.alternatives) == 0 {
+			return grammar.FieldValueDecoration{SQLValue: access.SQLValue, IncludeResolved: true}, nil
+		}
+		if target.Resource == authorized.outer.resource &&
+			fieldVisibleAfterOuterSelection(view, target) {
+			return grammar.FieldValueDecoration{SQLValue: access.SQLValue, IncludeResolved: true}, nil
+		}
+
+		guard, resolved, guarded, err := compileConditionVisibilityGuard(view, target)
+		if err != nil {
+			return grammar.FieldValueDecoration{}, err
+		}
+		if !guarded {
+			return grammar.FieldValueDecoration{SQLValue: access.SQLValue, IncludeResolved: true}, nil
+		}
+		return grammar.FieldValueDecoration{
+			SQLValue:           access.SQLValue,
+			AdditionalResolved: resolved,
+			IncludeResolved:    true,
+			VisibilityWitness:  guard,
+		}, nil
+	})
+}
+
+func fieldVisibleAfterOuterSelection(
+	view SemanticAccessView,
+	target SemanticAccessTarget,
+) bool {
+	fragment := grammar.FragmentStringPattern(target.Field)
+	if len(view.alternatives) == 0 {
+		return view.queryFilter != nil &&
+			len(conditionVisibilityFilterEntries(view.queryFilter, fragment)) == 0
+	}
+	for _, alternative := range view.alternatives {
+		if len(alternative.coverages) > 0 ||
+			len(conditionVisibilityFilterEntries(
+				&QueryFilter{Filters: alternative.filters},
+				fragment,
+			)) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func (q *AuthorizedQuery) accessView(resource SemanticResourceKind) (SemanticAccessView, bool) {
+	if q == nil {
+		return SemanticAccessView{}, false
+	}
+	if resource == q.outer.resource {
+		return q.outer, true
+	}
+	view, ok := q.relatedViews[resource]
+	if !ok && resource == SemanticResourceSME {
+		view, ok = q.relatedViews[SemanticResourceSM]
+	}
+	return view, ok
+}
+
+func semanticResourceFromField(field grammar.ModelStringPattern) SemanticResourceKind {
+	value := strings.TrimPrefix(string(field), "$")
+	separator := strings.IndexAny(value, ".#")
+	if separator >= 0 {
+		value = value[:separator]
+	}
+	return SemanticResourceKind(value)
+}
+
+func compileConditionVisibilityGuard(
+	view SemanticAccessView,
+	target SemanticAccessTarget,
+) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
+	if view.decision == AccessViewDenied {
+		return goqu.L("FALSE"), nil, true, nil
+	}
+	if view.decision == AccessViewUnrestricted ||
+		view.queryFilter == nil && len(view.alternatives) == 0 {
+		return nil, nil, false, nil
+	}
+	if len(view.alternatives) > 0 {
+		return compileAlternativeVisibilityGuard(view.alternatives, target)
+	}
+
+	fragment := grammar.FragmentStringPattern(target.Field)
+	filters := conditionVisibilityFilterEntries(view.queryFilter, fragment)
+	if len(filters) > 0 {
+		expressions := make([]exp.Expression, 0, len(filters))
+		var resolved []grammar.ResolvedFieldPath
+		for _, filter := range filters {
+			expression, paths, err := evaluateConditionVisibilityPredicate(filter.Predicate, filter.Fragment, &target)
+			if err != nil {
+				return nil, nil, false, err
+			}
+			expressions = append(expressions, expression)
+			resolved = append(resolved, paths...)
+		}
+		return goqu.And(expressions...), resolved, true, nil
+	}
+
+	if view.queryFilter.Formula == nil {
+		return nil, nil, false, nil
+	}
+	guard, resolved, err := view.queryFilter.Formula.EvaluateToExpression(nil)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return guard, resolved, true, nil
+}
+
+func compileAlternativeVisibilityGuard(
+	alternatives []CompiledGrantAlternative,
+	target SemanticAccessTarget,
+) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
+	expressions := make([]exp.Expression, 0, len(alternatives))
+	var resolved []grammar.ResolvedFieldPath
+	for _, alternative := range alternatives {
+		expression, paths, applicable, err := compileGrantAlternativeVisibility(alternative, target)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		if !applicable {
+			continue
+		}
+		expressions = append(expressions, expression)
+		resolved = append(resolved, paths...)
+	}
+	if len(expressions) == 0 {
+		return goqu.L("FALSE"), nil, true, nil
+	}
+	return goqu.Or(expressions...), resolved, true, nil
+}
+
+func compileGrantAlternativeVisibility(
+	alternative CompiledGrantAlternative,
+	target SemanticAccessTarget,
+) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
+	formula, resolved, err := alternative.formula.EvaluateToExpression(nil)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("SECURITY-CONDITIONVIEW-GRANTFORMULA: %w", err)
+	}
+	expressions := []exp.Expression{formula}
+	filters := conditionVisibilityFilterEntries(
+		&QueryFilter{Filters: alternative.filters},
+		grammar.FragmentStringPattern(target.Field),
+	)
+	for _, filter := range filters {
+		expression, paths, evaluateErr := evaluateConditionVisibilityPredicate(filter.Predicate, filter.Fragment, &target)
+		if evaluateErr != nil {
+			return nil, nil, false, evaluateErr
+		}
+		expressions = append(expressions, expression)
+		resolved = append(resolved, paths...)
+	}
+	coverage, paths, applicable, err := compileSemanticCoverageGuard(alternative.coverages, target)
+	if err != nil || !applicable {
+		return nil, nil, applicable, err
+	}
+	if coverage != nil {
+		expressions = append(expressions, coverage)
+		resolved = append(resolved, paths...)
+	}
+	return goqu.And(expressions...), resolved, true, nil
+}
+
+func compileSemanticCoverageGuard(
+	coverages []semanticObjectCoverage,
+	target SemanticAccessTarget,
+) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
+	if len(coverages) == 0 {
+		return nil, nil, true, nil
+	}
+	var expressions []exp.Expression
+	var resolved []grammar.ResolvedFieldPath
+	for _, coverage := range coverages {
+		if coverage.resource != target.Resource {
+			continue
+		}
+		expression, paths, applicable, err := compileSemanticObjectCoverage(coverage, target)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		if !applicable {
+			continue
+		}
+		expressions = append(expressions, expression)
+		resolved = append(resolved, paths...)
+	}
+	if len(expressions) == 0 {
+		return nil, nil, false, nil
+	}
+	return goqu.Or(expressions...), resolved, true, nil
+}
+
+func compileSemanticObjectCoverage(
+	coverage semanticObjectCoverage,
+	target SemanticAccessTarget,
+) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
+	if target.Resource == SemanticResourceSM {
+		return compileSubmodelIdentifierCoverage(coverage)
+	}
+	if target.Resource == SemanticResourceSME {
+		return compileSMESubtreeCoverage(coverage, target)
+	}
+	return nil, nil, false, nil
+}
+
+func compileSubmodelIdentifierCoverage(
+	coverage semanticObjectCoverage,
+) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
+	if coverage.allSubmodelIDs {
+		return goqu.L("TRUE"), nil, true, nil
+	}
+	field := grammar.ModelStringPattern("$sm#id")
+	value := grammar.StandardString(coverage.submodelID)
+	condition := grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}}
+	expression, resolved, err := condition.EvaluateToExpression(nil)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("SECURITY-CONDITIONVIEW-SUBMODELID: %w", err)
+	}
+	return expression, resolved, true, nil
+}
+
+func compileSMESubtreeCoverage(
+	coverage semanticObjectCoverage,
+	target SemanticAccessTarget,
+) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
+	targetPath := submodelElementPath(target.Field)
+	if !coverageCoversSMEField(coverage, target.Field, targetPath) {
+		return nil, nil, false, nil
+	}
+	expressions := make([]exp.Expression, 0, 2)
+	var resolved []grammar.ResolvedFieldPath
+	identifier, paths, _, err := compileSubmodelIdentifierCoverage(coverage)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	if !coverage.allSubmodelIDs {
+		expressions = append(expressions, identifier)
+		resolved = append(resolved, paths...)
+	}
+	if !coverage.allSubmodelElements && targetPath == "" {
+		pathExpression, pathResolved, pathErr := submodelElementCoverageExpression(coverage)
+		if pathErr != nil {
+			return nil, nil, false, pathErr
+		}
+		expressions = append(expressions, pathExpression)
+		resolved = append(resolved, pathResolved...)
+	}
+	if len(expressions) == 0 {
+		return goqu.L("TRUE"), nil, true, nil
+	}
+	return goqu.And(expressions...), resolved, true, nil
+}
+
+func coverageCoversSMEField(
+	coverage semanticObjectCoverage,
+	_ grammar.ModelStringPattern,
+	targetPath string,
+) bool {
+	if coverage.allSubmodelElements || targetPath == "" {
+		return true
+	}
+	return submodelElementPathCovered(coverage.submodelElementPath, targetPath)
+}
+
+func submodelElementCoverageExpression(
+	coverage semanticObjectCoverage,
+) (exp.Expression, []grammar.ResolvedFieldPath, error) {
+	return submodelElementSubtreeExpression(coverage.submodelElementPath)
+}
+
+func submodelElementPath(field grammar.ModelStringPattern) string {
+	value := string(field)
+	if !strings.HasPrefix(value, "$sme") {
+		return ""
+	}
+	hash := strings.IndexByte(value, '#')
+	if hash < 0 {
+		hash = len(value)
+	}
+	return strings.TrimPrefix(value[len("$sme"):hash], ".")
+}
+
+func submodelElementPathCovered(root string, candidate string) bool {
+	root = strings.TrimSpace(root)
+	candidate = strings.TrimSpace(candidate)
+	return candidate == root || strings.HasPrefix(candidate, root+".") || strings.HasPrefix(candidate, root+"[")
+}
+
+func submodelElementSubtreeExpression(
+	path string,
+) (exp.Expression, []grammar.ResolvedFieldPath, error) {
+	field := grammar.ModelStringPattern("$sme#idShort")
+	resolved, err := grammar.ResolveScalarFieldToSQL(&field)
+	if err != nil {
+		return nil, nil, fmt.Errorf("SECURITY-CONDITIONVIEW-REFERABLEPATH: %w", err)
+	}
+	resolved.Column = "submodel_element.idshort_path"
+	idShortPath := goqu.I(resolved.Column)
+	escaped := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(path)
+	return goqu.Or(
+		idShortPath.Eq(path),
+		goqu.L("? LIKE (? || '.%') ESCAPE '!'", idShortPath, escaped),
+		goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", idShortPath, escaped),
+	), []grammar.ResolvedFieldPath{resolved}, nil
+}
+
+func conditionVisibilityFilterEntries(
+	queryFilter *QueryFilter,
+	field grammar.FragmentStringPattern,
+) []FragmentFilterEntry {
+	if queryFilter == nil {
+		return nil
+	}
+	entries := make([]FragmentFilterEntry, 0, len(queryFilter.Filters))
+	for fragment, predicate := range queryFilter.Filters {
+		if !fragmentAffectsSemanticField(fragment, field) {
+			continue
+		}
+		entries = append(entries, FragmentFilterEntry{Fragment: fragment, Predicate: predicate})
+	}
+	sort.Slice(entries, func(first, second int) bool {
+		return entries[first].Fragment < entries[second].Fragment
+	})
+	return entries
+}
+
+func fragmentAffectsSemanticField(
+	fragment grammar.FragmentStringPattern,
+	field grammar.FragmentStringPattern,
+) bool {
+	if fragmentRoot(fragment) != "$sme" || fragmentRoot(field) != "$sme" {
+		return fragmentCoversSemanticField(fragment, field)
+	}
+	if !smeFragmentSuffixOverlaps(fragment, field) {
+		return false
+	}
+	fragmentPath := submodelElementPath(grammar.ModelStringPattern(fragment))
+	fieldPath := submodelElementPath(grammar.ModelStringPattern(field))
+	if fragmentPath == "" || fieldPath == "" {
+		return true
+	}
+	fragmentTokens := tokenizeSMEPath(fragmentPath)
+	fieldTokens := tokenizeSMEPath(fieldPath)
+	if semanticFragmentSuffix(fragment) != "" {
+		return len(fragmentTokens) == len(fieldTokens) && semanticTokenPathsOverlap(fragmentTokens, fieldTokens)
+	}
+	return semanticTokenPathsOverlap(fragmentTokens, fieldTokens)
+}
+
+func smeFragmentSuffixOverlaps(
+	fragment grammar.FragmentStringPattern,
+	field grammar.FragmentStringPattern,
+) bool {
+	fragmentSuffix := semanticFragmentSuffix(fragment)
+	if fragmentSuffix == "" {
+		return true
+	}
+	fragmentTokens := builder.TokenizeField("$sme#" + fragmentSuffix)
+	fieldTokens := builder.TokenizeField("$sme#" + semanticFragmentSuffix(field))
+	return semanticTokenPathsOverlap(fragmentTokens, fieldTokens)
+}
+
+func semanticFragmentSuffix(fragment grammar.FragmentStringPattern) string {
+	value := string(fragment)
+	hash := strings.IndexByte(value, '#')
+	if hash < 0 || hash+1 >= len(value) {
+		return ""
+	}
+	return value[hash+1:]
+}
+
+func tokenizeSMEPath(path string) []builder.Token {
+	return builder.TokenizeField("$sme#" + path)
+}
+
+func semanticTokenPathsOverlap(first []builder.Token, second []builder.Token) bool {
+	limit := min(len(first), len(second))
+	for index := 0; index < limit; index++ {
+		if !semanticTokensOverlap(first[index], second[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+func semanticTokenPathCovers(cover []builder.Token, candidate []builder.Token) bool {
+	if len(cover) > len(candidate) {
+		return false
+	}
+	for index := range cover {
+		if !semanticTokenCovers(cover[index], candidate[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+func semanticTokensOverlap(first builder.Token, second builder.Token) bool {
+	if first.GetName() != second.GetName() {
+		return false
+	}
+	firstArray, firstIsArray := first.(builder.ArrayToken)
+	secondArray, secondIsArray := second.(builder.ArrayToken)
+	if firstIsArray != secondIsArray {
+		return true
+	}
+	return !firstIsArray || firstArray.Index < 0 || secondArray.Index < 0 || firstArray.Index == secondArray.Index
+}
+
+func semanticTokenCovers(cover builder.Token, candidate builder.Token) bool {
+	if cover.GetName() != candidate.GetName() {
+		return false
+	}
+	coverArray, coverIsArray := cover.(builder.ArrayToken)
+	candidateArray, candidateIsArray := candidate.(builder.ArrayToken)
+	if !coverIsArray {
+		return true
+	}
+	if !candidateIsArray {
+		return false
+	}
+	if coverArray.Index < 0 {
+		return true
+	}
+	return candidateArray.Index >= 0 && coverArray.Index == candidateArray.Index
+}
+
+func fragmentCoversSemanticField(
+	fragment grammar.FragmentStringPattern,
+	field grammar.FragmentStringPattern,
+) bool {
+	if !fragmentRootsEqual(fragment, field) {
+		return false
+	}
+	fragmentTokens := builder.TokenizeField(string(fragment))
+	fieldTokens := builder.TokenizeField(string(field))
+	if len(fragmentTokens) > len(fieldTokens) {
+		return false
+	}
+	for index := range fragmentTokens {
+		if fragmentTokens[index].GetName() != fieldTokens[index].GetName() {
+			return false
+		}
+		_, fragmentArray := fragmentTokens[index].(builder.ArrayToken)
+		_, fieldArray := fieldTokens[index].(builder.ArrayToken)
+		if fragmentArray != fieldArray {
+			return false
+		}
+	}
+	return true
+}
+
+func evaluateConditionVisibilityPredicate(
+	predicate FragmentFilterPredicate,
+	fragment grammar.FragmentStringPattern,
+	target *SemanticAccessTarget,
+) (exp.Expression, []grammar.ResolvedFieldPath, error) {
+	if predicate.Condition != nil {
+		if predicate.global {
+			return predicate.Condition.EvaluateToExpression(nil)
+		}
+		fragment = predicate.evaluationFragment(fragment)
+		if target != nil && target.Resource == SemanticResourceSME {
+			return evaluateSMEConditionVisibilityPredicate(*predicate.Condition, fragment, *target)
+		}
+		return predicate.Condition.EvaluateToExpressionWithNegatedFragments(
+			nil,
+			[]grammar.FragmentStringPattern{fragment},
+		)
+	}
+	children := predicate.Or
+	combine := goqu.Or
+	if len(predicate.And) > 0 {
+		children = predicate.And
+		combine = goqu.And
+	}
+	if len(children) == 0 {
+		return nil, nil, fmt.Errorf("SECURITY-CONDITIONVIEW-EMPTYPREDICATE fragment filter predicate is empty")
+	}
+	expressions := make([]exp.Expression, 0, len(children))
+	var resolved []grammar.ResolvedFieldPath
+	for _, child := range children {
+		expression, paths, err := evaluateConditionVisibilityPredicate(child, fragment, target)
+		if err != nil {
+			return nil, nil, err
+		}
+		expressions = append(expressions, expression)
+		resolved = append(resolved, paths...)
+	}
+	return combine(expressions...), resolved, nil
+}
+
+func evaluateSMEConditionVisibilityPredicate(
+	condition grammar.LogicalExpression,
+	fragment grammar.FragmentStringPattern,
+	target SemanticAccessTarget,
+) (exp.Expression, []grammar.ResolvedFieldPath, error) {
+	conditionExpression, resolved, err := evaluateSMEConditionWithFragmentScope(condition, fragment)
+	if err != nil {
+		return nil, nil, err
+	}
+	fragmentPath := submodelElementPath(grammar.ModelStringPattern(fragment))
+	if fragmentPath == "" || smeFragmentPathCoversField(fragment, target.Field) {
+		return conditionExpression, resolved, nil
+	}
+	rowScope, scopeResolved, err := smeFragmentRowScopeExpression(fragment)
+	if err != nil {
+		return nil, nil, err
+	}
+	return goqu.Or(conditionExpression, goqu.L("NOT (?)", rowScope)), append(resolved, scopeResolved...), nil
+}
+
+func evaluateSMEConditionWithFragmentScope(
+	condition grammar.LogicalExpression,
+	fragment grammar.FragmentStringPattern,
+) (exp.Expression, []grammar.ResolvedFieldPath, error) {
+	suffix := semanticFragmentSuffix(fragment)
+	if suffix == "" {
+		return condition.EvaluateToExpression(nil)
+	}
+	suffixFragment := grammar.FragmentStringPattern("$sme#" + suffix)
+	expression, resolved, err := condition.EvaluateToExpressionWithNegatedFragments(
+		nil,
+		[]grammar.FragmentStringPattern{suffixFragment},
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	bindings, err := grammar.ResolveFragmentFieldToSQL(&suffixFragment)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(bindings) > 0 {
+		resolved = append(resolved, grammar.ResolvedFieldPath{ArrayBindings: bindings})
+	}
+	return expression, resolved, nil
+}
+
+func smeFragmentPathCoversField(
+	fragment grammar.FragmentStringPattern,
+	field grammar.ModelStringPattern,
+) bool {
+	fragmentPath := submodelElementPath(grammar.ModelStringPattern(fragment))
+	fieldPath := submodelElementPath(field)
+	if fragmentPath == "" {
+		return true
+	}
+	if fieldPath == "" {
+		return false
+	}
+	fragmentTokens := tokenizeSMEPath(fragmentPath)
+	fieldTokens := tokenizeSMEPath(fieldPath)
+	if semanticFragmentSuffix(fragment) != "" && len(fragmentTokens) != len(fieldTokens) {
+		return false
+	}
+	return semanticTokenPathCovers(fragmentTokens, fieldTokens)
+}
+
+func smeFragmentRowScopeExpression(
+	fragment grammar.FragmentStringPattern,
+) (exp.Expression, []grammar.ResolvedFieldPath, error) {
+	path := submodelElementPath(grammar.ModelStringPattern(fragment))
+	field := grammar.ModelStringPattern("$sme#idShort")
+	resolved, err := grammar.ResolveScalarFieldToSQL(&field)
+	if err != nil {
+		return nil, nil, fmt.Errorf("SECURITY-CONDITIONVIEW-SMEFILTERSCOPE: %w", err)
+	}
+	resolved.Column = "submodel_element.idshort_path"
+	pathColumn := goqu.I(resolved.Column)
+	if strings.Contains(path, "[]") {
+		pattern := "^" + strings.ReplaceAll(regexp.QuoteMeta(path), regexp.QuoteMeta("[]"), `\[[0-9]+\]`) + "$"
+		return goqu.L("? ~ ?", pathColumn, pattern), []grammar.ResolvedFieldPath{resolved}, nil
+	}
+	if semanticFragmentSuffix(fragment) != "" {
+		return pathColumn.Eq(path), []grammar.ResolvedFieldPath{resolved}, nil
+	}
+	escaped := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(path)
+	return goqu.Or(
+		pathColumn.Eq(path),
+		goqu.L("? LIKE (? || '.%') ESCAPE '!'", pathColumn, escaped),
+		goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", pathColumn, escaped),
+	), []grammar.ResolvedFieldPath{resolved}, nil
 }

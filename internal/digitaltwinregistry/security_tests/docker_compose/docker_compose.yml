@@ -41,7 +41,7 @@ services:
         condition: service_completed_successfully
 
   db:
-    image: postgres:15
+    image: postgres:18
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123

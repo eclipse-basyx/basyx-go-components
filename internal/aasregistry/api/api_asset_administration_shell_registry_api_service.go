@@ -85,6 +85,15 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 			err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "BadAssetIds",
 		), nil
 	}
+	ctx, selectorErr := auth.WithAuthorizedStringSelectors(
+		ctx,
+		auth.SemanticResourceAASDesc,
+		auth.StringSelector{Field: "$aasdesc#assetKind", Value: string(assetKind)},
+		auth.StringSelector{Field: "$aasdesc#assetType", Value: decodedAssetType},
+	)
+	if selectorErr != nil {
+		return common.NewErrorResponse(selectorErr, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "BuildAuthorizedSelectors"), selectorErr
+	}
 	fetch := func(pageLimit int32, pageCursor string) ([]model.AssetAdministrationShellDescriptor, string, error) {
 		return s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, pageLimit, pageCursor, assetKind, decodedAssetType, createdFrom, updatedFrom)
 	}
@@ -742,7 +751,13 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 // QueryAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors that confirm to the input query
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
-	ctx = auth.MergeQueryFilter(ctx, query)
+	queryCtx, queryContextErr := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceAASDesc, query)
+	if queryContextErr != nil {
+		return common.NewErrorResponse(
+			queryContextErr, http.StatusInternalServerError, componentName, "QueryAssetAdministrationShellDescriptors", "BuildAuthorizedQuery",
+		), queryContextErr
+	}
+	ctx = queryCtx
 
 	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "", time.Time{}, time.Time{})
 	if err != nil {
