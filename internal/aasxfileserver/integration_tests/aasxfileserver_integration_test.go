@@ -49,6 +49,7 @@ var (
 	contextBaseURL      = testenv.LocalURLFromEnv("BASYX_IT_CONTEXT_API_PORT", 6006) + "/external/aasx"
 	limitedBaseURL      = testenv.LocalURLFromEnv("BASYX_IT_LIMITED_API_PORT", 6009)
 	saturatedBaseURL    = testenv.LocalURLFromEnv("BASYX_IT_SATURATED_API_PORT", 6013)
+	syncOnlyBaseURL     = testenv.LocalURLFromEnv("BASYX_IT_SYNC_ONLY_API_PORT", 6014)
 	secureBaseURL       = testenv.LocalhostURLFromEnv("BASYX_IT_SECURITY_API_PORT", 6010)
 	secureReplicaBURL   = testenv.LocalhostURLFromEnv("BASYX_IT_SECURITY_API_B_PORT", 6011)
 	securityKeycloakURL = testenv.LocalhostURLFromEnv("BASYX_IT_KEYCLOAK_PORT", 8080) + "/realms/basyx/protocol/openid-connect/token"
@@ -68,6 +69,7 @@ func TestMain(m *testing.M) {
 		{Name: "context-api", EnvVar: "BASYX_IT_CONTEXT_API_PORT"},
 		{Name: "limited-api", EnvVar: "BASYX_IT_LIMITED_API_PORT"},
 		{Name: "saturated-api", EnvVar: "BASYX_IT_SATURATED_API_PORT"},
+		{Name: "sync-only-api", EnvVar: "BASYX_IT_SYNC_ONLY_API_PORT"},
 		{Name: "security-api", EnvVar: "BASYX_IT_SECURITY_API_PORT"},
 		{Name: "security-api-b", EnvVar: "BASYX_IT_SECURITY_API_B_PORT"},
 		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
@@ -78,6 +80,7 @@ func TestMain(m *testing.M) {
 	contextBaseURL = runtime.LocalURL("context-api") + "/external/aasx"
 	limitedBaseURL = runtime.LocalURL("limited-api")
 	saturatedBaseURL = runtime.LocalURL("saturated-api")
+	syncOnlyBaseURL = runtime.LocalURL("sync-only-api")
 	secureBaseURL = runtime.LocalhostURL("security-api")
 	secureReplicaBURL = runtime.LocalhostURL("security-api-b")
 	securityKeycloakURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
@@ -99,6 +102,7 @@ func TestMain(m *testing.M) {
 				contextBaseURL + "/health",
 				limitedBaseURL + "/health",
 				saturatedBaseURL + "/health",
+				syncOnlyBaseURL + "/health",
 				secureBaseURL + "/health",
 				secureReplicaBURL + "/health",
 			} {

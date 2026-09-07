@@ -406,6 +406,36 @@ func TestAasxAsyncEndpointsRejectMalformedHandleID(t *testing.T) {
 	}
 }
 
+func TestDescriptionAdvertisesOnlyEnabledProfiles(t *testing.T) {
+	tests := []struct {
+		name                string
+		asyncProfileEnabled bool
+		expectedProfiles    []string
+	}{
+		{
+			name:             "synchronous only",
+			expectedProfiles: []string{aasxFileServerSSP001},
+		},
+		{
+			name:                "synchronous and asynchronous",
+			asyncProfileEnabled: true,
+			expectedProfiles:    []string{aasxFileServerSSP001, aasxFileServerSSP002},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := NewDescriptionAPIAPIService(test.asyncProfileEnabled)
+
+			response, err := service.GetSelfDescription(t.Context())
+
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, response.Code)
+			require.Equal(t, openapi.ServiceDescription{Profiles: test.expectedProfiles}, response.Body)
+		})
+	}
+}
+
 func newWorkerReadTrackingUpload() *workerReadTrackingUpload {
 	return &workerReadTrackingUpload{
 		ReadSeeker: strings.NewReader(""),

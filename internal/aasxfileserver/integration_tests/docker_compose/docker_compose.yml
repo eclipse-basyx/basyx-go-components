@@ -122,6 +122,25 @@ services:
       basyx_configuration:
         condition: service_completed_successfully
 
+  aasx_fileserver_sync_only_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=1
+      - POSTGRES_MAXIDLECONNECTIONS=1
+    ports:
+      - "127.0.0.1:${BASYX_IT_SYNC_ONLY_API_PORT:-6014}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
   aasx_fileserver_secure_it:
     build:
       context: ../../../..

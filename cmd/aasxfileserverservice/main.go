@@ -28,10 +28,10 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"errors"
 	"flag"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -59,6 +59,11 @@ const (
 	minimumAASXAsyncDatabaseHeadroom = 1
 	aasxAsyncDatabaseHeadroomDivisor = 5
 )
+
+type aasxAsyncProfile struct {
+	manager *asyncjob.Manager
+	uploads *aasxpersistence.AsyncUploadStore
+}
 
 func runServer(ctx context.Context, configPath string) error {
 	cfg, err := common.LoadConfig(configPath)
@@ -108,43 +113,19 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	slog.InfoContext(ctx, "PostgreSQL connection established")
 
-	asyncExecutionCapacity, err := aasxAsyncExecutionCapacity(sharedDB.Stats().MaxOpenConnections)
+	asyncProfile, err := newAASXAsyncProfile(ctx, sharedDB)
 	if err != nil {
 		return err
 	}
-	asyncManager, err := asyncjob.NewPostgresManagerWithExecutionCapacity(
-		ctx,
-		sharedDB,
-		"AASXFS-UPLOAD",
-		15*time.Minute,
-		asyncExecutionCapacity,
-	)
-	if err != nil {
-		return err
-	}
-	asyncUploads, err := aasxpersistence.NewAsyncUploadStore(sharedDB)
-	if err != nil {
-		return err
-	}
-	aasxSvc := aasxapi.NewAASXFileServerAPIAPIService(
-		aasxDatabase,
-		aasxapi.WithAsyncPackageUploads(asyncManager, asyncUploads),
-	)
+	aasxSvc := aasxapi.NewAASXFileServerAPIAPIService(aasxDatabase, asyncProfile.serviceOptions()...)
 	aasxCtrl := openapi.NewAASXFileServerAPIAPIController(
 		aasxSvc,
 		"",
 		openapi.WithAASXFileServerUploadStager(binarycontent.NewStager(sharedDB), cfg.General.UploadMaxSizeBytes),
 	)
-	asyncUploadCtrl := openapi.NewAASXAsyncFileServerAPIAPIController(
-		aasxSvc,
-		"",
-		openapi.WithAASXAsyncFileServerUploadStager(binarycontent.NewStager(sharedDB), cfg.General.UploadMaxSizeBytes),
-		openapi.WithAASXAsyncFileServerExecutionSlotAcquirer(asyncManager.TryAcquireExecutionSlotLease),
-	)
-	asyncStatusCtrl := openapi.NewAASXAsyncFileServerStatusAPIAPIController(aasxSvc, "")
-	asyncResultCtrl := openapi.NewAASXAsyncFileServerResultAPIAPIController(aasxSvc, "")
+	asyncControllers := asyncProfile.controllers(aasxSvc, sharedDB, cfg.General.UploadMaxSizeBytes)
 
-	descSvc := aasxapi.NewDescriptionAPIAPIService()
+	descSvc := aasxapi.NewDescriptionAPIAPIService(asyncProfile.enabled())
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc, "")
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
@@ -171,7 +152,7 @@ func runServer(ctx context.Context, configPath string) error {
 	for _, rt := range aasxCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, controller := range []openapi.Router{asyncUploadCtrl, asyncStatusCtrl, asyncResultCtrl} {
+	for _, controller := range asyncControllers {
 		for _, rt := range controller.Routes() {
 			apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 		}
@@ -189,15 +170,64 @@ func runServer(ctx context.Context, configPath string) error {
 	return common.RunHTTPServer(ctx, "AASX", cfg.Server, r)
 }
 
-func aasxAsyncExecutionCapacity(maximumOpenConnections int) (int, error) {
+func aasxAsyncExecutionCapacity(maximumOpenConnections int) int {
 	if maximumOpenConnections <= minimumAASXAsyncDatabaseHeadroom {
-		return 0, fmt.Errorf(
-			"AASXFILES-ASYNC-CAPACITY database pool requires more than %d open connection for asynchronous uploads",
-			minimumAASXAsyncDatabaseHeadroom,
-		)
+		return 0
 	}
 	databaseHeadroom := max(maximumOpenConnections/aasxAsyncDatabaseHeadroomDivisor, minimumAASXAsyncDatabaseHeadroom)
-	return maximumOpenConnections - databaseHeadroom, nil
+	return maximumOpenConnections - databaseHeadroom
+}
+
+func newAASXAsyncProfile(ctx context.Context, db *sql.DB) (aasxAsyncProfile, error) {
+	maximumOpenConnections := db.Stats().MaxOpenConnections
+	executionCapacity := aasxAsyncExecutionCapacity(maximumOpenConnections)
+	if executionCapacity == 0 {
+		slog.WarnContext(
+			ctx,
+			"SSP-002 asynchronous profile disabled because the database pool has insufficient capacity",
+			"error.code", "AASXFILES-ASYNC-DISABLED",
+			"max_open_connections", maximumOpenConnections,
+			"required_open_connections", minimumAASXAsyncDatabaseHeadroom+1,
+		)
+		return aasxAsyncProfile{}, nil
+	}
+
+	manager, err := asyncjob.NewPostgresManagerWithExecutionCapacity(ctx, db, "AASXFS-UPLOAD", 15*time.Minute, executionCapacity)
+	if err != nil {
+		return aasxAsyncProfile{}, err
+	}
+	uploads, err := aasxpersistence.NewAsyncUploadStore(db)
+	if err != nil {
+		return aasxAsyncProfile{}, err
+	}
+	return aasxAsyncProfile{manager: manager, uploads: uploads}, nil
+}
+
+func (profile aasxAsyncProfile) enabled() bool {
+	return profile.manager != nil && profile.uploads != nil
+}
+
+func (profile aasxAsyncProfile) serviceOptions() []aasxapi.AASXFileServerServiceOption {
+	if !profile.enabled() {
+		return nil
+	}
+	return []aasxapi.AASXFileServerServiceOption{aasxapi.WithAsyncPackageUploads(profile.manager, profile.uploads)}
+}
+
+func (profile aasxAsyncProfile) controllers(service *aasxapi.AASXFileServerAPIAPIService, db *sql.DB, maximumUploadSize int64) []openapi.Router {
+	if !profile.enabled() {
+		return nil
+	}
+	return []openapi.Router{
+		openapi.NewAASXAsyncFileServerAPIAPIController(
+			service,
+			"",
+			openapi.WithAASXAsyncFileServerUploadStager(binarycontent.NewStager(db), maximumUploadSize),
+			openapi.WithAASXAsyncFileServerExecutionSlotAcquirer(profile.manager.TryAcquireExecutionSlotLease),
+		),
+		openapi.NewAASXAsyncFileServerStatusAPIAPIController(service, ""),
+		openapi.NewAASXAsyncFileServerResultAPIAPIController(service, ""),
+	}
 }
 
 func requireAsyncAuthentication(next http.Handler) http.Handler {

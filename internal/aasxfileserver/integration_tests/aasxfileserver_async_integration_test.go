@@ -490,6 +490,20 @@ func TestDescriptionAdvertisesSynchronousAndAsynchronousProfiles(t *testing.T) {
 	require.Contains(t, description.Profiles, ssp002Profile)
 }
 
+func TestSingleConnectionPoolStartsWithOnlySynchronousProfile(t *testing.T) {
+	_, status := listPackagesFrom(t, syncOnlyBaseURL)
+	require.Equal(t, http.StatusOK, status)
+
+	descriptionResponse := doAsyncRequest(t, http.MethodGet, syncOnlyBaseURL+"/description", nil, "")
+	require.Equal(t, http.StatusOK, descriptionResponse.status)
+	var description openapi.ServiceDescription
+	require.NoError(t, json.Unmarshal(descriptionResponse.body, &description))
+	require.Equal(t, []string{ssp001Profile}, description.Profiles)
+
+	asyncResponse := doAsyncRequest(t, http.MethodPost, syncOnlyBaseURL+"/packages-async", nil, "")
+	require.Equal(t, http.StatusNotFound, asyncResponse.status)
+}
+
 func assertAcceptedOperation(t *testing.T, response asyncResponse, requestBaseURL string) string {
 	t.Helper()
 	require.Equalf(t, http.StatusAccepted, response.status, "response: %s", response.body)

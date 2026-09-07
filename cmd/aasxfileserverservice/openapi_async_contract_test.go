@@ -275,16 +275,9 @@ func TestAASXAsyncUploadPathDoesNotUseFullBufferAPIs(t *testing.T) {
 }
 
 func TestAASXAsyncExecutionCapacityKeepsDatabaseHeadroom(t *testing.T) {
-	capacity, err := aasxAsyncExecutionCapacity(50)
-	require.NoError(t, err)
-	require.Equal(t, 40, capacity)
-
-	capacity, err = aasxAsyncExecutionCapacity(2)
-	require.NoError(t, err)
-	require.Equal(t, 1, capacity)
-
-	_, err = aasxAsyncExecutionCapacity(1)
-	require.Error(t, err)
+	require.Equal(t, 40, aasxAsyncExecutionCapacity(50))
+	require.Equal(t, 1, aasxAsyncExecutionCapacity(2))
+	require.Zero(t, aasxAsyncExecutionCapacity(1))
 }
 
 func readGeneratedContractEvidence(t *testing.T) generatedContractEvidence {
