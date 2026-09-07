@@ -30,10 +30,21 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
+
+// MarshalJSON serializes internal indeterminate markers as a valid false
+// placeholder. Internal deep-copy code restores the marker after unmarshalling.
+func (me MatchExpression) MarshalJSON() ([]byte, error) {
+	if me.Indeterminate {
+		return []byte(`{"$eq":[{"$boolean":true},{"$boolean":false}]}`), nil
+	}
+	type plain MatchExpression
+	return json.Marshal(plain(me))
+}
 
 // MatchExpression represents a pattern matching expression in the AAS access control grammar.
 //
@@ -52,6 +63,9 @@ import (
 //   - Regex match: {"$regex": ["$aas#id", "^https://.*"]}
 //   - Nested match: {"$match": [{"$eq": [...]}, {"$gt": [...]}]}
 type MatchExpression struct {
+	// Indeterminate is an internal runtime marker emitted during partial evaluation.
+	Indeterminate bool `json:"-" yaml:"-" mapstructure:"-"`
+
 	// Boolean is used internally by backend simplification. It is not part of
 	// the JSON matchExpression grammar.
 	Boolean *bool `json:"-" yaml:"-" mapstructure:"-"`

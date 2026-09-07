@@ -30,10 +30,21 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
+
+// MarshalJSON serializes internal indeterminate markers as a valid false
+// placeholder. Internal deep-copy code restores the marker after unmarshalling.
+func (le LogicalExpression) MarshalJSON() ([]byte, error) {
+	if le.Indeterminate {
+		return []byte(`{"$boolean":false}`), nil
+	}
+	type plain LogicalExpression
+	return json.Marshal(plain(le))
+}
 
 // LogicalExpression represents a logical expression tree for AAS access control rules.
 //
@@ -61,6 +72,9 @@ import (
 //	  {"$gt": ["$sme.temperature#value", "100"]}
 //	]}
 type LogicalExpression struct {
+	// Indeterminate is an internal runtime marker emitted during partial evaluation.
+	Indeterminate bool `json:"-" yaml:"-" mapstructure:"-"`
+
 	// And corresponds to the JSON schema field "$and".
 	And []LogicalExpression `json:"$and,omitempty" yaml:"$and,omitempty" mapstructure:"$and,omitempty"`
 
@@ -193,6 +207,12 @@ func validateComparisonItems(items ComparisonItems, op string) error {
 	if len(items) != 2 {
 		return fmt.Errorf("comparison %s requires exactly 2 operands, got %d", op, len(items))
 	}
+	if valueIsDirectClaimPath(items[0]) || valueIsDirectClaimPath(items[1]) {
+		if op != "$eq" || !isClaimPathEqualityShape(items) {
+			return fmt.Errorf("GRAMMAR-LOGEXPR-CLAIMPATH: direct CLAIMPATH is only valid in $eq with a scalar string operand")
+		}
+		return nil
+	}
 	if countEqualityComparisonShapes(items) == 1 {
 		return nil
 	}
@@ -206,10 +226,26 @@ func validateOrderedComparisonItems(items ComparisonItems, op string) error {
 	if len(items) != 2 {
 		return fmt.Errorf("comparison %s requires exactly 2 operands, got %d", op, len(items))
 	}
+	if valueIsDirectClaimPath(items[0]) || valueIsDirectClaimPath(items[1]) {
+		return fmt.Errorf("GRAMMAR-LOGEXPR-CLAIMPATH: direct CLAIMPATH is not valid with %s", op)
+	}
 	if countOrderedComparisonShapes(items) == 1 {
 		return nil
 	}
 	return fmt.Errorf("GRAMMAR-LOGEXPR-CMPTYPE: %s operands do not match orderedComparisonItems", op)
+}
+
+func isClaimPathEqualityShape(items ComparisonItems) bool {
+	return valueIsDirectClaimPath(items[0]) && isClaimPathScalarValue(items[1]) ||
+		valueIsDirectClaimPath(items[1]) && isClaimPathScalarValue(items[0])
+}
+
+func valueIsDirectClaimPath(value Value) bool {
+	return attributeIsClaimPath(value.Attribute)
+}
+
+func isClaimPathScalarValue(value Value) bool {
+	return value.StrVal != nil || value.StrCast != nil
 }
 
 func countEqualityComparisonShapes(items ComparisonItems) int {
@@ -272,7 +308,27 @@ func validateStringItems(items StringItems, op string) error {
 	if len(items) != 2 {
 		return fmt.Errorf("GRAMMAR-LOGEXPR-STRINGITEMS: %s requires exactly 2 operands, got %d", op, len(items))
 	}
+	if op == "$contains" && isDirectClaimPathString(items[0]) {
+		if !isScalarClaimPathStringOperand(items[1]) {
+			return fmt.Errorf("GRAMMAR-LOGEXPR-CONTAINSITEMS: $contains with CLAIMPATH requires a scalar string second operand")
+		}
+		return nil
+	}
+	if isDirectClaimPathString(items[1]) {
+		return fmt.Errorf("GRAMMAR-LOGEXPR-STRINGITEMS: %s does not allow CLAIMPATH in this position", op)
+	}
+	if isDirectClaimPathString(items[0]) {
+		return fmt.Errorf("GRAMMAR-LOGEXPR-STRINGITEMS: %s does not allow direct CLAIMPATH", op)
+	}
 	return nil
+}
+
+func isDirectClaimPathString(value StringValue) bool {
+	return attributeIsClaimPath(value.Attribute)
+}
+
+func isScalarClaimPathStringOperand(value StringValue) bool {
+	return value.StrVal != nil || value.StrCast != nil
 }
 
 // AssertLogicalExpressionRequired checks if the required fields are not zero-ed

@@ -154,6 +154,167 @@ func TestSecurityMiddleware_RejectsAnonymousGetWhenACLRequiresSubClaim(t *testin
 	}
 }
 
+func TestAuthorizeWithFilterInvalidClaimCannotBeAllowedByNot(t *testing.T) {
+	t.Parallel()
+
+	model := mustParseClaimAuthorizationModel(t, `{
+		"$not": {
+			"$eq": [
+				{"$attribute": {"CLAIM": "role"}},
+				{"$strVal": "blocked"}
+			]
+		}
+	}`, `{"CLAIM":"role"}`)
+	tests := []struct {
+		name    string
+		claim   any
+		allowed bool
+	}{
+		{name: "different scalar", claim: "reader", allowed: true},
+		{name: "blocked scalar", claim: "blocked"},
+		{name: "null", claim: nil},
+		{name: "object", claim: map[string]any{"name": "reader"}},
+		{name: "unsupported", claim: func() {}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			allowed, _, _ := model.AuthorizeWithFilter(EvalInput{
+				Method: http.MethodGet,
+				Path:   "/description",
+				Claims: Claims{"role": testCase.claim},
+			})
+			if allowed != testCase.allowed {
+				t.Fatalf("allowed = %t, want %t", allowed, testCase.allowed)
+			}
+		})
+	}
+}
+
+func TestAuthorizeWithFilterClaimPathContainsUsesExactArrayMembership(t *testing.T) {
+	t.Parallel()
+
+	model := mustParseClaimAuthorizationModel(t, `{
+		"$contains": [ {"$attribute": {"CLAIMPATH": "/realm_access/roles"}}, {"$strVal": "admin"} ]
+	}`, `{"CLAIMPATH":"/realm_access/roles"}`)
+	tests := []struct {
+		name    string
+		claims  Claims
+		allowed bool
+	}{
+		{
+			name:    "exact member",
+			claims:  Claims{"realm_access": map[string]any{"roles": []any{"reader", "admin"}}},
+			allowed: true,
+		},
+		{name: "substring", claims: Claims{"realm_access": map[string]any{"roles": []any{"administrator"}}}},
+		{name: "escaped delimiter", claims: Claims{"realm_access": map[string]any{"roles": []any{`x","admin`}}}},
+		{name: "unrelated path", claims: Claims{"profile": map[string]any{"tags": []any{"admin"}}}},
+		{name: "null", claims: Claims{"realm_access": map[string]any{"roles": nil}}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			allowed, _, _ := model.AuthorizeWithFilter(EvalInput{
+				Method: http.MethodGet,
+				Path:   "/description",
+				Claims: testCase.claims,
+			})
+			if allowed != testCase.allowed {
+				t.Fatalf("allowed = %t, want %t", allowed, testCase.allowed)
+			}
+		})
+	}
+}
+
+func TestAuthorizeWithFilterResolvesDeclaredClaimsLazily(t *testing.T) {
+	t.Parallel()
+
+	model := mustParseClaimAuthorizationModel(t, `{
+		"$or": [
+			{"$boolean": true},
+			{"$eq": [{"$attribute": {"CLAIM": "optional"}}, {"$strVal": "value"}]}
+		]
+	}`, `{"CLAIM":"optional"}`)
+	allowed, _, _ := model.AuthorizeWithFilter(EvalInput{
+		Method: http.MethodGet,
+		Path:   "/description",
+		Claims: Claims{"sub": "authenticated-subject"},
+	})
+	if !allowed {
+		t.Fatal("decisive true branch must permit without resolving the skipped declared claim")
+	}
+}
+
+func TestAuthorizeWithFilterPermitOverridesIndeterminateRule(t *testing.T) {
+	t.Parallel()
+
+	router := api.NewRouter()
+	router.Get("/description", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {"rules": [
+			{
+				"ACL":{"ACCESS":"ALLOW","RIGHTS":["READ"],"ATTRIBUTES":[{"CLAIM":"missing"}]},
+				"OBJECTS":[{"ROUTE":"/description"}],
+				"FORMULA":{"$eq":[{"$attribute":{"CLAIM":"missing"}},{"$strVal":"value"}]}
+			},
+			{
+				"ACL":{"ACCESS":"ALLOW","RIGHTS":["READ"],"ATTRIBUTES":[{"CLAIM":"sub"}]},
+				"OBJECTS":[{"ROUTE":"/description"}],
+				"FORMULA":{"$boolean":true}
+			}
+		]}
+	}`), router, "")
+	if err != nil {
+		t.Fatalf("ParseAccessModel() error = %v", err)
+	}
+	allowed, _, _ := model.AuthorizeWithFilter(EvalInput{Method: http.MethodGet, Path: "/description", Claims: Claims{"sub": "subject"}})
+	if !allowed {
+		t.Fatal("an independently true ALLOW rule must override an indeterminate rule")
+	}
+}
+
+func TestEdcBpnHeaderMiddlewareProvidesOptionalEmptyValue(t *testing.T) {
+	t.Parallel()
+
+	claims := Claims{"sub": "subject"}
+	handler := EdcBpnHeaderMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		if got := FromContext(request)["Edc-Bpn"]; got != "" {
+			t.Fatalf("Edc-Bpn = %#v, want empty string", got)
+		}
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/description", nil)
+	request = request.WithContext(context.WithValue(request.Context(), ClaimsKey, claims))
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+}
+
+func mustParseClaimAuthorizationModel(t *testing.T, formula, attribute string) *AccessModel {
+	t.Helper()
+
+	router := api.NewRouter()
+	router.Get("/description", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	policy := `{
+		"AllAccessPermissionRules": {
+			"rules": [{
+				"ACL": {
+					"ACCESS": "ALLOW",
+					"RIGHTS": ["READ"],
+					"ATTRIBUTES": [` + attribute + `]
+				},
+				"OBJECTS": [{"ROUTE": "/description"}],
+				"FORMULA": ` + formula + `
+			}]
+		}
+	}`
+	model, err := ParseAccessModel([]byte(policy), router, "")
+	if err != nil {
+		t.Fatalf("ParseAccessModel() error = %v", err)
+	}
+	return model
+}
+
 func TestAuthorizeWithFilter_AllowsAnonymousServerTimeFormula(t *testing.T) {
 	t.Parallel()
 

@@ -1,0 +1,7 @@
+kind: fixed
+body: Invalid ABAC claim comparisons remain invalid through `$not`, `$and`, `$or`, and `$match` instead of becoming Boolean false that negation could turn into an allow decision.
+time: 2026-08-31T14:27:44.597663300+02:00
+custom:
+  Impact: Low
+  PullRequest: 616
+  SecurityImpact: More restrictive; malformed or unusable claim values can no longer activate negated authorization rules.

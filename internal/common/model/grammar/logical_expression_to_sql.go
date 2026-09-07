@@ -2265,7 +2265,7 @@ func evaluateStandaloneBoolCast(
 	}
 
 	resolved := collectResolvedFieldPaths(resolvedPath, nil)
-	return applyCollectorToResolvedExpression(goqu.L("COALESCE(?, FALSE)", sqlValue), resolved, collector)
+	return applyCollectorToResolvedExpression(goqu.L("?", sqlValue), resolved, collector)
 }
 
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
@@ -2292,6 +2292,9 @@ func evaluateStandaloneBoolCast(
 func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if le == nil {
 		return nil, nil, fmt.Errorf("logical expression is nil")
+	}
+	if le.Indeterminate {
+		return goqu.L("NULL::boolean"), nil, nil
 	}
 	// Handle comparison operations
 	if len(le.Eq) > 0 {
@@ -2488,6 +2491,9 @@ func evaluateMatchExpressions(match []MatchExpression) (exp.Expression, []Resolv
 }
 
 func evaluateMatchExpressionSQL(me MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
+	if me.Indeterminate {
+		return goqu.L("NULL::boolean"), nil, nil
+	}
 	if me.Boolean != nil {
 		return goqu.L("?::boolean", *me.Boolean), nil, nil
 	}

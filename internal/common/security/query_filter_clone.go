@@ -30,6 +30,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 // WithQueryFilter stores the provided query filter in the context.
@@ -61,6 +63,7 @@ func CloneQueryFilter(queryFilter *QueryFilter) (*QueryFilter, error) {
 	if err := json.Unmarshal(b, &cloned); err != nil {
 		return nil, err
 	}
+	restoreQueryFilterIndeterminateMarkers(&cloned, queryFilter)
 	for fragment, predicate := range queryFilter.Filters {
 		clonedPredicate, ok := cloned.Filters[fragment]
 		if !ok {
@@ -76,6 +79,49 @@ func CloneQueryFilter(queryFilter *QueryFilter) (*QueryFilter, error) {
 	return &cloned, nil
 }
 
+func restoreQueryFilterIndeterminateMarkers(cloned, source *QueryFilter) {
+	if cloned.Formula != nil && source.Formula != nil {
+		restoreLogicalIndeterminateMarkers(cloned.Formula, *source.Formula)
+	}
+	for right, sourceFormula := range source.FormulasByRight {
+		clonedFormula, ok := cloned.FormulasByRight[right]
+		if !ok {
+			continue
+		}
+		restoreLogicalIndeterminateMarkers(&clonedFormula, sourceFormula)
+		cloned.FormulasByRight[right] = clonedFormula
+	}
+}
+
+func restoreLogicalIndeterminateMarkers(cloned *grammar.LogicalExpression, source grammar.LogicalExpression) {
+	if source.Indeterminate {
+		*cloned = source
+		return
+	}
+	for index := range source.And {
+		restoreLogicalIndeterminateMarkers(&cloned.And[index], source.And[index])
+	}
+	for index := range source.Or {
+		restoreLogicalIndeterminateMarkers(&cloned.Or[index], source.Or[index])
+	}
+	if source.Not != nil && cloned.Not != nil {
+		restoreLogicalIndeterminateMarkers(cloned.Not, *source.Not)
+	}
+	for index := range source.Match {
+		restoreMatchIndeterminateMarkers(&cloned.Match[index], source.Match[index])
+	}
+}
+
+func restoreMatchIndeterminateMarkers(cloned *grammar.MatchExpression, source grammar.MatchExpression) {
+	if source.Indeterminate {
+		*cloned = source
+		return
+	}
+	for index := range source.Match {
+		restoreMatchIndeterminateMarkers(&cloned.Match[index], source.Match[index])
+	}
+}
+
 func restoreFragmentFilterPredicateMetadata(
 	cloned FragmentFilterPredicate,
 	source FragmentFilterPredicate,
@@ -86,6 +132,9 @@ func restoreFragmentFilterPredicateMetadata(
 		return FragmentFilterPredicate{}, fmt.Errorf("AUTH-CLONEQF-SCOPEMISMATCH fragment predicate shape changed during clone")
 	}
 	cloned.global = source.global
+	if cloned.Condition != nil && source.Condition != nil {
+		restoreLogicalIndeterminateMarkers(cloned.Condition, *source.Condition)
+	}
 	if source.fragment != nil {
 		fragmentCopy := *source.fragment
 		cloned.fragment = &fragmentCopy

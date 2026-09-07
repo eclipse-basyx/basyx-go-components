@@ -29,6 +29,7 @@ package grammar
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"regexp"
@@ -55,6 +56,13 @@ import (
 //	adapted, decision := le.SimplifyForBackendFilter(resolver)
 type AttributeResolver func(attr AttributeValue) any
 
+// ClaimValue preserves the JSON type of a value resolved from a verified token.
+// It lets casts enforce the stricter claim rules without changing global or
+// backend value handling.
+type ClaimValue struct {
+	Value any
+}
+
 // SimplifyOptions controls how backend simplification treats comparisons.
 type SimplifyOptions struct {
 	// EnableImplicitCasts wraps field operands in casts to match the other operand's type.
@@ -66,9 +74,10 @@ func DefaultSimplifyOptions() SimplifyOptions {
 	return SimplifyOptions{EnableImplicitCasts: true}
 }
 
-// SimplifyDecision is a tri-state result for SimplifyForBackendFilter.
+// SimplifyDecision describes the result of SimplifyForBackendFilter.
 //
 // - SimplifyTrue / SimplifyFalse: the expression is fully decidable without backend context.
+// - SimplifyIndeterminate: evaluation failed and the complete expression must deny access.
 //
 // When SimplifyTrue/SimplifyFalse is returned, the returned LogicalExpression will be a
 // boolean literal.
@@ -83,6 +92,8 @@ const (
 	SimplifyTrue
 	// SimplifyFalse - expression is trivial and false
 	SimplifyFalse
+	// SimplifyIndeterminate - runtime evaluation is indeterminate and fails closed
+	SimplifyIndeterminate
 )
 
 func decisionFromBool(b bool) SimplifyDecision {
@@ -90,6 +101,14 @@ func decisionFromBool(b bool) SimplifyDecision {
 		return SimplifyTrue
 	}
 	return SimplifyFalse
+}
+
+func invalidLogicalExpression() (LogicalExpression, SimplifyDecision) {
+	return LogicalExpression{Indeterminate: true}, SimplifyIndeterminate
+}
+
+func invalidMatchExpression() (MatchExpression, SimplifyDecision) {
+	return MatchExpression{Indeterminate: true}, SimplifyIndeterminate
 }
 
 // deduplicateLogicalExpressions removes duplicates from a slice.
@@ -129,6 +148,7 @@ func deduplicateLogicalExpressions(exprs []LogicalExpression) []LogicalExpressio
 // The returned decision reports whether the full expression is decidable here:
 //   - SimplifyTrue / SimplifyFalse: fully decided without backend evaluation
 //   - SimplifyUndecided: still depends on backend ($field)
+//   - SimplifyIndeterminate: evaluation failed and the returned expression is false
 //
 //nolint:revive // Cyclomatic complexity is acceptable here.
 func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) (LogicalExpression, SimplifyDecision) {
@@ -140,6 +160,9 @@ func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) 
 //
 //nolint:revive // Cyclomatic complexity is acceptable here.
 func (le LogicalExpression) SimplifyForBackendFilterWithOptions(resolve AttributeResolver, opts SimplifyOptions) (LogicalExpression, SimplifyDecision) {
+	if le.Indeterminate {
+		return le, SimplifyIndeterminate
+	}
 	// Boolean literal stays as-is.
 	if le.Boolean != nil {
 		return le, decisionFromBool(*le.Boolean)
@@ -152,7 +175,7 @@ func (le LogicalExpression) SimplifyForBackendFilterWithOptions(resolve Attribut
 		if b, ok := resolveBoolValue(Value{BoolCast: le.BoolCast}, resolve); ok {
 			return LogicalExpression{Boolean: &b}, decisionFromBool(b)
 		}
-		return le, SimplifyUndecided
+		return invalidLogicalExpression()
 	}
 
 	rle, rdec := handleComparison(le, resolve, opts)
@@ -169,6 +192,8 @@ func (le LogicalExpression) SimplifyForBackendFilterWithOptions(resolve Attribut
 		case SimplifyFalse:
 			b := false
 			return LogicalExpression{Boolean: &b}, SimplifyFalse
+		case SimplifyIndeterminate:
+			return invalidLogicalExpression()
 		default:
 			if len(simplified) == 1 {
 				return LogicalExpression{Match: simplified}, SimplifyUndecided
@@ -183,25 +208,31 @@ func (le LogicalExpression) SimplifyForBackendFilterWithOptions(resolve Attribut
 			return le.And[0].SimplifyForBackendFilterWithOptions(resolve, opts)
 		}
 		out := LogicalExpression{}
-		anyUnknown := false
-		// Short-circuit: if any child becomes false => whole AND is false.
+		anyFalse := false
+		anyInvalid := false
 		for _, sub := range le.And {
 			t, decision := sub.SimplifyForBackendFilterWithOptions(resolve, opts)
 			switch decision {
 			case SimplifyFalse:
-				b := false
-				return LogicalExpression{Boolean: &b}, SimplifyFalse
+				anyFalse = true
 			case SimplifyTrue:
-				// true child is neutral in AND; omit it
-				continue
+			case SimplifyIndeterminate:
+				anyInvalid = true
 			case SimplifyUndecided:
-				// keep expression
+				out.And = append(out.And, t)
 			}
-			out.And = append(out.And, t)
-			anyUnknown = true
 		}
-		if !anyUnknown {
-			// All children were true (or empty after trimming) -> true
+		if anyFalse {
+			b := false
+			return LogicalExpression{Boolean: &b}, SimplifyFalse
+		}
+		if anyInvalid {
+			if len(out.And) == 0 {
+				return invalidLogicalExpression()
+			}
+			out.And = append(out.And, LogicalExpression{Indeterminate: true})
+		}
+		if len(out.And) == 0 {
 			b := true
 			return LogicalExpression{Boolean: &b}, SimplifyTrue
 		}
@@ -217,25 +248,31 @@ func (le LogicalExpression) SimplifyForBackendFilterWithOptions(resolve Attribut
 			return le.Or[0].SimplifyForBackendFilterWithOptions(resolve, opts)
 		}
 		out := LogicalExpression{}
-		anyUnknown := false
-		// Short-circuit: if any child becomes true => whole OR is true.
+		anyTrue := false
+		anyInvalid := false
 		for _, sub := range le.Or {
 			t, decision := sub.SimplifyForBackendFilterWithOptions(resolve, opts)
 			switch decision {
 			case SimplifyTrue:
-				b := true
-				return LogicalExpression{Boolean: &b}, SimplifyTrue
+				anyTrue = true
 			case SimplifyFalse:
-				// false child is neutral in OR; omit it
-				continue
+			case SimplifyIndeterminate:
+				anyInvalid = true
 			case SimplifyUndecided:
-				// keep expression
+				out.Or = append(out.Or, t)
 			}
-			out.Or = append(out.Or, t)
-			anyUnknown = true
 		}
-		if !anyUnknown {
-			// All children were false (or empty after trimming) -> false
+		if anyTrue {
+			b := true
+			return LogicalExpression{Boolean: &b}, SimplifyTrue
+		}
+		if anyInvalid {
+			if len(out.Or) == 0 {
+				return invalidLogicalExpression()
+			}
+			out.Or = append(out.Or, LogicalExpression{Indeterminate: true})
+		}
+		if len(out.Or) == 0 {
 			b := false
 			return LogicalExpression{Boolean: &b}, SimplifyFalse
 		}
@@ -256,6 +293,8 @@ func (le LogicalExpression) SimplifyForBackendFilterWithOptions(resolve Attribut
 		case SimplifyFalse:
 			b := true
 			return LogicalExpression{Boolean: &b}, SimplifyTrue
+		case SimplifyIndeterminate:
+			return invalidLogicalExpression()
 		default:
 			return LogicalExpression{Not: &t}, SimplifyUndecided
 		}
@@ -265,7 +304,7 @@ func (le LogicalExpression) SimplifyForBackendFilterWithOptions(resolve Attribut
 }
 
 // SimplifyForBackendFilterNoResolver runs SimplifyForBackendFilter with a no-op resolver.
-// Attributes will remain unresolved, so only literal-only subexpressions can be reduced.
+// Attribute operands are invalid, while field-dependent expressions remain undecided.
 func (le LogicalExpression) SimplifyForBackendFilterNoResolver() (LogicalExpression, SimplifyDecision) {
 	return le.SimplifyForBackendFilter(func(AttributeValue) any { return nil })
 }
@@ -276,26 +315,39 @@ func simplifyMatchExpressionsForBackendFilter(match []MatchExpression, resolve A
 	}
 
 	out := make([]MatchExpression, 0, len(match))
-	anyUnknown := false
+	anyFalse := false
+	anyInvalid := false
 	for _, m := range match {
 		t, decision := simplifyMatchExpressionForBackendFilter(m, resolve, opts)
 		switch decision {
 		case SimplifyFalse:
-			return nil, SimplifyFalse
+			anyFalse = true
 		case SimplifyTrue:
-			continue
+		case SimplifyIndeterminate:
+			anyInvalid = true
 		case SimplifyUndecided:
+			out = append(out, t)
 		}
-		out = append(out, t)
-		anyUnknown = true
 	}
-	if !anyUnknown {
+	if anyFalse {
+		return nil, SimplifyFalse
+	}
+	if anyInvalid {
+		if len(out) == 0 {
+			return nil, SimplifyIndeterminate
+		}
+		out = append(out, MatchExpression{Indeterminate: true})
+	}
+	if len(out) == 0 {
 		return nil, SimplifyTrue
 	}
 	return out, SimplifyUndecided
 }
 
 func simplifyMatchExpressionForBackendFilter(me MatchExpression, resolve AttributeResolver, opts SimplifyOptions) (MatchExpression, SimplifyDecision) {
+	if me.Indeterminate {
+		return me, SimplifyIndeterminate
+	}
 	if me.Boolean != nil {
 		return me, decisionFromBool(*me.Boolean)
 	}
@@ -342,6 +394,8 @@ func simplifyMatchExpressionForBackendFilter(me MatchExpression, resolve Attribu
 		case SimplifyFalse:
 			b := false
 			return MatchExpression{Boolean: &b}, SimplifyFalse
+		case SimplifyIndeterminate:
+			return invalidMatchExpression()
 		default:
 			return MatchExpression{Match: simplified}, SimplifyUndecided
 		}
@@ -388,11 +442,14 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 		return &me, SimplifyUndecided
 	}
 
-	left := replaceAttribute(items[0], resolve)
+	left := items[0]
+	if op != "$contains" || !valueIsDirectClaimPath(left) {
+		left = replaceAttribute(left, resolve)
+	}
 	right := replaceAttribute(items[1], resolve)
-	if valueContainsAttribute(left) || valueContainsAttribute(right) {
-		b := false
-		return &MatchExpression{Boolean: &b}, SimplifyFalse
+	if op != "$contains" && (valueContainsAttribute(left) || valueContainsAttribute(right)) {
+		invalid, decision := invalidMatchExpression()
+		return &invalid, decision
 	}
 	isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
 	if !isStringOp {
@@ -405,7 +462,8 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 		var err error
 		comparisonType, err = left.IsComparableTo(right)
 		if err != nil {
-			return &me, SimplifyUndecided
+			invalid, decision := invalidMatchExpression()
+			return &invalid, decision
 		}
 	}
 
@@ -414,47 +472,49 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 		right = WrapCastAroundField(right, comparisonType)
 	}
 
-	out := MatchExpression{}
-	leOut := LogicalExpression{}
-	switch op {
-	case "$eq":
-		out.Eq = []Value{left, right}
-		leOut.Eq = []Value{left, right}
-	case "$ne":
-		out.Ne = []Value{left, right}
-		leOut.Ne = []Value{left, right}
-	case "$gt":
-		out.Gt = []Value{left, right}
-		leOut.Gt = []Value{left, right}
-	case "$ge":
-		out.Ge = []Value{left, right}
-		leOut.Ge = []Value{left, right}
-	case "$lt":
-		out.Lt = []Value{left, right}
-		leOut.Lt = []Value{left, right}
-	case "$le":
-		out.Le = []Value{left, right}
-		leOut.Le = []Value{left, right}
-	case "$regex":
-		out.Regex = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-		leOut.Regex = out.Regex
-	case "$contains":
-		out.Contains = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-		leOut.Contains = out.Contains
-	case "$starts-with":
-		out.StartsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-		leOut.StartsWith = out.StartsWith
-	case "$ends-with":
-		out.EndsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-		leOut.EndsWith = out.EndsWith
-	}
+	out, leOut := buildMatchComparisonExpressions(op, left, right)
 
-	if isLiteral(left) && isLiteral(right) {
-		b := evalComparisonOnly(leOut, resolve)
+	if isLiteral(left) && isLiteral(right) ||
+		(!valueContainsField(left) && !valueContainsField(right) && (valueContainsAttribute(left) || valueContainsAttribute(right))) {
+		b, valid := evalComparisonOnly(leOut, resolve)
+		if !valid {
+			invalid, decision := invalidMatchExpression()
+			return &invalid, decision
+		}
 		return &MatchExpression{Boolean: &b}, decisionFromBool(b)
 	}
 
 	return &out, SimplifyUndecided
+}
+
+func buildMatchComparisonExpressions(op string, left, right Value) (MatchExpression, LogicalExpression) {
+	values := []Value{left, right}
+	stringValues := []StringValue{valueToStringValue(left), valueToStringValue(right)}
+	out := MatchExpression{}
+	leOut := LogicalExpression{}
+	switch op {
+	case "$eq":
+		out.Eq, leOut.Eq = values, values
+	case "$ne":
+		out.Ne, leOut.Ne = values, values
+	case "$gt":
+		out.Gt, leOut.Gt = values, values
+	case "$ge":
+		out.Ge, leOut.Ge = values, values
+	case "$lt":
+		out.Lt, leOut.Lt = values, values
+	case "$le":
+		out.Le, leOut.Le = values, values
+	case "$regex":
+		out.Regex, leOut.Regex = stringValues, stringValues
+	case "$contains":
+		out.Contains, leOut.Contains = stringValues, stringValues
+	case "$starts-with":
+		out.StartsWith, leOut.StartsWith = stringValues, stringValues
+	case "$ends-with":
+		out.EndsWith, leOut.EndsWith = stringValues, stringValues
+	}
+	return out, leOut
 }
 
 func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, op string, opts SimplifyOptions) (*LogicalExpression, SimplifyDecision) {
@@ -462,25 +522,23 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 		return &le, SimplifyUndecided
 	}
 
-	left := replaceAttribute(items[0], resolve)
-	right := replaceAttribute(items[1], resolve)
-	if valueContainsAttribute(left) || valueContainsAttribute(right) {
-		b := false
-		return &LogicalExpression{Boolean: &b}, SimplifyFalse
+	left := items[0]
+	if op != "$contains" || !valueIsDirectClaimPath(left) {
+		left = replaceAttribute(left, resolve)
 	}
-	isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
+	right := replaceAttribute(items[1], resolve)
+	if op != "$contains" && (valueContainsAttribute(left) || valueContainsAttribute(right)) {
+		invalid, decision := invalidLogicalExpression()
+		return &invalid, decision
+	}
+	isStringOp := isStringComparisonOperator(op)
 	if !isStringOp {
 		left, right = convertEnumLiteralIfNeeded(left, right)
 	}
-	var comparisonType ComparisonKind
-	if isStringOp {
-		comparisonType = KindString
-	} else {
-		var err error
-		comparisonType, err = left.IsComparableTo(right)
-		if err != nil {
-			return &le, SimplifyUndecided
-		}
+	comparisonType, err := comparisonKind(left, right, isStringOp)
+	if err != nil {
+		invalid, decision := invalidLogicalExpression()
+		return &invalid, decision
 	}
 
 	if opts.EnableImplicitCasts {
@@ -488,32 +546,15 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 		right = WrapCastAroundField(right, comparisonType)
 	}
 
-	out := LogicalExpression{}
-	switch op {
-	case "$eq":
-		out.Eq = []Value{left, right}
-	case "$ne":
-		out.Ne = []Value{left, right}
-	case "$gt":
-		out.Gt = []Value{left, right}
-	case "$ge":
-		out.Ge = []Value{left, right}
-	case "$lt":
-		out.Lt = []Value{left, right}
-	case "$le":
-		out.Le = []Value{left, right}
-	case "$regex":
-		out.Regex = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-	case "$contains":
-		out.Contains = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-	case "$starts-with":
-		out.StartsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-	case "$ends-with":
-		out.EndsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
-	}
+	out := comparisonExpression(op, left, right)
 
-	if isLiteral(left) && isLiteral(right) {
-		b := evalComparisonOnly(out, resolve)
+	if isLiteral(left) && isLiteral(right) ||
+		(!valueContainsField(left) && !valueContainsField(right) && (valueContainsAttribute(left) || valueContainsAttribute(right))) {
+		b, valid := evalComparisonOnly(out, resolve)
+		if !valid {
+			invalid, decision := invalidLogicalExpression()
+			return &invalid, decision
+		}
 		if b {
 			return &LogicalExpression{Boolean: &b}, SimplifyTrue
 		}
@@ -523,7 +564,50 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 	return &out, SimplifyUndecided
 }
 
-func evalComparisonOnly(le LogicalExpression, resolve AttributeResolver) bool {
+func isStringComparisonOperator(op string) bool {
+	return op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
+}
+
+func comparisonKind(left, right Value, stringOperator bool) (ComparisonKind, error) {
+	if stringOperator {
+		return KindString, nil
+	}
+	return left.IsComparableTo(right)
+}
+
+func comparisonExpression(op string, left, right Value) LogicalExpression {
+	values := []Value{left, right}
+	switch op {
+	case "$eq":
+		return LogicalExpression{Eq: values}
+	case "$ne":
+		return LogicalExpression{Ne: values}
+	case "$gt":
+		return LogicalExpression{Gt: values}
+	case "$ge":
+		return LogicalExpression{Ge: values}
+	case "$lt":
+		return LogicalExpression{Lt: values}
+	case "$le":
+		return LogicalExpression{Le: values}
+	case "$regex":
+		return LogicalExpression{Regex: stringComparisonValues(left, right)}
+	case "$contains":
+		return LogicalExpression{Contains: stringComparisonValues(left, right)}
+	case "$starts-with":
+		return LogicalExpression{StartsWith: stringComparisonValues(left, right)}
+	case "$ends-with":
+		return LogicalExpression{EndsWith: stringComparisonValues(left, right)}
+	default:
+		return LogicalExpression{}
+	}
+}
+
+func stringComparisonValues(left, right Value) []StringValue {
+	return []StringValue{valueToStringValue(left), valueToStringValue(right)}
+}
+
+func evalComparisonOnly(le LogicalExpression, resolve AttributeResolver) (bool, bool) {
 	if len(le.Gt) == 2 {
 		return orderedCmp(le.Gt[0], le.Gt[1], resolve, "gt")
 	}
@@ -543,33 +627,47 @@ func evalComparisonOnly(le LogicalExpression, resolve AttributeResolver) bool {
 	if len(le.Ne) == 2 {
 		return eqCmp(le.Ne[0], le.Ne[1], resolve, true)
 	}
-
 	if len(le.Regex) == 2 {
-		hay := asString(resolveStringItem(le.Regex[0], resolve))
-		pat := asString(resolveStringItem(le.Regex[1], resolve))
+		hay, hayOK := resolveStringItem(le.Regex[0], resolve)
+		pat, patOK := resolveStringItem(le.Regex[1], resolve)
+		if !hayOK || !patOK {
+			return false, false
+		}
 		re, err := regexp.Compile(pat)
 		if err != nil {
-			return false
+			return false, false
 		}
-		return re.MatchString(hay)
+		return re.MatchString(hay), true
 	}
 	if len(le.Contains) == 2 {
-		hay := asString(resolveStringItem(le.Contains[0], resolve))
-		needle := asString(resolveStringItem(le.Contains[1], resolve))
-		return strings.Contains(hay, needle)
+		if attributeIsClaimPath(le.Contains[0].Attribute) {
+			return claimPathContains(le.Contains[0], le.Contains[1], resolve)
+		}
+		hay, hayOK := resolveStringItem(le.Contains[0], resolve)
+		needle, needleOK := resolveStringItem(le.Contains[1], resolve)
+		if !hayOK || !needleOK {
+			return false, false
+		}
+		return strings.Contains(hay, needle), true
 	}
 	if len(le.StartsWith) == 2 {
-		hay := asString(resolveStringItem(le.StartsWith[0], resolve))
-		prefix := asString(resolveStringItem(le.StartsWith[1], resolve))
-		return strings.HasPrefix(hay, prefix)
+		hay, hayOK := resolveStringItem(le.StartsWith[0], resolve)
+		prefix, prefixOK := resolveStringItem(le.StartsWith[1], resolve)
+		if !hayOK || !prefixOK {
+			return false, false
+		}
+		return strings.HasPrefix(hay, prefix), true
 	}
 	if len(le.EndsWith) == 2 {
-		hay := asString(resolveStringItem(le.EndsWith[0], resolve))
-		suffix := asString(resolveStringItem(le.EndsWith[1], resolve))
-		return strings.HasSuffix(hay, suffix)
+		hay, hayOK := resolveStringItem(le.EndsWith[0], resolve)
+		suffix, suffixOK := resolveStringItem(le.EndsWith[1], resolve)
+		if !hayOK || !suffixOK {
+			return false, false
+		}
+		return strings.HasSuffix(hay, suffix), true
 	}
 
-	return false
+	return false, false
 }
 
 func convertEnumLiteralIfNeeded(left, right Value) (Value, Value) {
@@ -684,6 +782,9 @@ func replaceAttribute(v Value, resolve AttributeResolver) Value {
 
 	if valueContainsAttribute(v) {
 		resolved := resolveValue(v, resolve)
+		if isStructuredValue(resolved) {
+			return v
+		}
 		if lit, ok := literalValueFromAnyWithHint(resolved, v.EffectiveTypeWithCast()); ok {
 			return lit
 		}
@@ -696,6 +797,18 @@ func replaceAttribute(v Value, resolve AttributeResolver) Value {
 	}
 
 	return v
+}
+
+func isStructuredValue(value any) bool {
+	if claim, ok := value.(ClaimValue); ok {
+		value = claim.Value
+	}
+	switch value.(type) {
+	case []any, []string, map[string]any, map[string]string:
+		return true
+	default:
+		return false
+	}
 }
 
 func valueContainsField(v Value) bool {
@@ -788,6 +901,9 @@ func literalValueFromAny(x any) (Value, bool) {
 }
 
 func literalValueFromAnyWithHint(x any, hint ComparisonKind) (Value, bool) {
+	if claim, ok := x.(ClaimValue); ok {
+		return literalClaimValueWithHint(claim.Value, hint)
+	}
 	switch hint {
 	case KindDateTime:
 		if dt, ok := toDateTime(x); ok {
@@ -828,6 +944,79 @@ func literalValueFromAnyWithHint(x any, hint ComparisonKind) (Value, bool) {
 		}
 	}
 	return literalValueFromAny(x)
+}
+
+func literalClaimValueWithHint(value any, hint ComparisonKind) (Value, bool) {
+	switch hint {
+	case KindString:
+		text, ok := value.(string)
+		if !ok {
+			return Value{}, false
+		}
+		return literalValueFromAny(text)
+	case KindNumber:
+		if number, ok := strictClaimNumber(value); ok {
+			return literalValueFromAny(number)
+		}
+	case KindBool:
+		if boolean, ok := value.(bool); ok {
+			return literalValueFromAny(boolean)
+		}
+	case KindDateTime:
+		if text, ok := value.(string); ok {
+			if parsed, valid := toDateTime(text); valid {
+				return literalValueFromAny(parsed)
+			}
+		}
+	case KindTime:
+		if text, ok := value.(string); ok {
+			if _, valid := toTimeOfDaySeconds(text); valid {
+				pattern := TimeLiteralPattern(text)
+				return Value{TimeVal: &pattern}, true
+			}
+		}
+	case KindHex:
+		if text, ok := value.(string); ok {
+			if normalized, valid := normalizeHexString(text); valid {
+				pattern := HexLiteralPattern(normalized)
+				return Value{HexVal: &pattern}, true
+			}
+		}
+	}
+	return Value{}, false
+}
+
+func strictClaimNumber(value any) (float64, bool) {
+	const maxSafeInteger = float64(1<<53 - 1)
+
+	var parsed float64
+	switch number := value.(type) {
+	case json.Number:
+		var err error
+		parsed, err = number.Float64()
+		if err != nil {
+			return 0, false
+		}
+	case float64:
+		parsed = number
+	case float32:
+		parsed = float64(number)
+	case int:
+		parsed = float64(number)
+	case int32:
+		parsed = float64(number)
+	case int64:
+		parsed = float64(number)
+	default:
+		return 0, false
+	}
+	if math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+		return 0, false
+	}
+	if math.Trunc(parsed) == parsed && math.Abs(parsed) > maxSafeInteger {
+		return 0, false
+	}
+	return parsed, true
 }
 
 func stringItemsToValues(items []StringValue) []Value {
@@ -908,9 +1097,22 @@ func resolveDateTimeLiteral(v Value, resolve AttributeResolver) any {
 }
 
 func resolveCastValue(v Value, resolve AttributeResolver) any {
+	if kind, operand, ok := castOperand(v); ok {
+		if claim, isClaim := resolveValue(*operand, resolve).(ClaimValue); isClaim {
+			literal, valid := literalClaimValueWithHint(claim.Value, kind)
+			if !valid {
+				return nil
+			}
+			return resolveValue(literal, resolve)
+		}
+	}
 	switch {
 	case v.StrCast != nil:
-		return fmt.Sprint(resolveValue(*v.StrCast, resolve))
+		value, ok := stringOperandValue(resolveValue(*v.StrCast, resolve))
+		if !ok {
+			return nil
+		}
+		return value
 	case v.NumCast != nil:
 		x := resolveValue(*v.NumCast, resolve)
 		if f, ok := toFloat(x); ok {
@@ -923,7 +1125,11 @@ func resolveCastValue(v Value, resolve AttributeResolver) any {
 		}
 		return x
 	case v.BoolCast != nil:
-		return castToBool(resolveValue(*v.BoolCast, resolve))
+		value, ok := boolOperandValue(resolveValue(*v.BoolCast, resolve))
+		if !ok {
+			return nil
+		}
+		return value
 	case v.TimeCast != nil:
 		inner := resolveValue(*v.TimeCast, resolve)
 		if t, ok := toDateTime(inner); ok {
@@ -934,20 +1140,39 @@ func resolveCastValue(v Value, resolve AttributeResolver) any {
 				return TimeLiteralPattern(s)
 			}
 		}
-		return fmt.Sprint(inner)
+		return nil
 	case v.DateTimeCast != nil:
 		inner := resolveValue(*v.DateTimeCast, resolve)
 		if t, ok := toDateTime(inner); ok {
 			return t
 		}
-		return fmt.Sprint(inner)
+		return nil
 	case v.HexCast != nil:
 		if hv, ok := normalizeHexAny(resolveValue(*v.HexCast, resolve)); ok {
 			return HexLiteralPattern(hv)
 		}
-		return fmt.Sprint(resolveValue(*v.HexCast, resolve))
+		return nil
 	default:
 		return nil
+	}
+}
+
+func castOperand(value Value) (ComparisonKind, *Value, bool) {
+	switch {
+	case value.StrCast != nil:
+		return KindString, value.StrCast, true
+	case value.NumCast != nil:
+		return KindNumber, value.NumCast, true
+	case value.BoolCast != nil:
+		return KindBool, value.BoolCast, true
+	case value.TimeCast != nil:
+		return KindTime, value.TimeCast, true
+	case value.DateTimeCast != nil:
+		return KindDateTime, value.DateTimeCast, true
+	case value.HexCast != nil:
+		return KindHex, value.HexCast, true
+	default:
+		return KindUnknown, nil, false
 	}
 }
 
@@ -984,41 +1209,91 @@ func resolveValue(v Value, resolve AttributeResolver) any {
 	return resolveCastValue(v, resolve)
 }
 
-func resolveStringItem(s StringValue, resolve AttributeResolver) string {
+func resolveStringItem(s StringValue, resolve AttributeResolver) (string, bool) {
 	if s.Attribute != nil {
-		return asString(resolve(s.Attribute))
+		value := resolve(s.Attribute)
+		if claim, ok := value.(ClaimValue); ok {
+			text, valid := claim.Value.(string)
+			return text, valid
+		}
+		return stringOperandValue(value)
 	}
 	if s.StrVal != nil {
-		return string(*s.StrVal)
+		return string(*s.StrVal), true
 	}
 	if s.StrCast != nil {
-		return fmt.Sprint(resolveValue(*s.StrCast, resolve))
+		return stringOperandValue(resolveValue(*s.StrCast, resolve))
 	}
 	if s.Field != nil {
-		return ""
+		return "", false
 	}
-	return ""
+	return "", false
 }
 
-func asString(v any) string {
-	return fmt.Sprint(v)
+func claimPathContains(haystack, needle StringValue, resolve AttributeResolver) (bool, bool) {
+	resolved := resolve(haystack.Attribute)
+	claim, ok := resolved.(ClaimValue)
+	if !ok {
+		return false, false
+	}
+	items, ok := claimStringArrayItems(claim.Value)
+	if !ok {
+		return false, false
+	}
+	wanted, ok := resolveStringItem(needle, resolve)
+	if !ok {
+		return false, false
+	}
+	found := false
+	for _, item := range items {
+		text, stringItem := item.(string)
+		if !stringItem {
+			return false, false
+		}
+		if text == wanted {
+			found = true
+		}
+	}
+	return found, true
 }
 
-func castToBool(v any) bool {
-	switch strings.ToLower(fmt.Sprint(v)) {
+func claimStringArrayItems(value any) ([]any, bool) {
+	if items, ok := value.([]any); ok {
+		return items, true
+	}
+	stringItems, ok := value.([]string)
+	if !ok {
+		return nil, false
+	}
+	items := make([]any, len(stringItems))
+	for index, item := range stringItems {
+		items[index] = item
+	}
+	return items, true
+}
+
+func boolOperandValue(value any) (bool, bool) {
+	if boolean, ok := value.(bool); ok {
+		return boolean, true
+	}
+	text, ok := value.(string)
+	if !ok {
+		return false, false
+	}
+	switch strings.ToLower(strings.TrimSpace(text)) {
 	case "true", "1", "yes", "y", "on":
-		return true
-	case "false", "0", "no", "n", "off", "":
-		return false
+		return true, true
+	case "false", "0", "no", "n", "off":
+		return false, true
 	default:
-		return false
+		return false, false
 	}
 }
 
-func orderedCmp(left, right Value, resolve AttributeResolver, op string) bool {
+func orderedCmp(left, right Value, resolve AttributeResolver, op string) (bool, bool) {
 	comparisonType, err := left.IsComparableTo(right)
 	if err != nil {
-		return false
+		return false, false
 	}
 
 	switch comparisonType {
@@ -1026,75 +1301,88 @@ func orderedCmp(left, right Value, resolve AttributeResolver, op string) bool {
 		lv, lok := resolveNumberValue(left, resolve)
 		rv, rok := resolveNumberValue(right, resolve)
 		if !lok || !rok {
-			return false
+			return false, false
 		}
-		return compareFloats(lv, rv, op)
+		return compareFloats(lv, rv, op), true
 	case KindTime:
 		lv, lok := resolveTimeValue(left, resolve)
 		rv, rok := resolveTimeValue(right, resolve)
 		if !lok || !rok {
-			return false
+			return false, false
 		}
-		return compareInts(lv, rv, op)
+		return compareInts(lv, rv, op), true
 	case KindDateTime:
 		lv, lok := resolveDateTimeValue(left, resolve)
 		rv, rok := resolveDateTimeValue(right, resolve)
 		if !lok || !rok {
-			return false
+			return false, false
 		}
-		return compareTimes(lv, rv, op)
+		return compareTimes(lv, rv, op), true
 	case KindHex:
 		lv, lok := resolveHexValue(left, resolve)
 		rv, rok := resolveHexValue(right, resolve)
 		if !lok || !rok {
-			return false
+			return false, false
 		}
-		return compareHex(lv, rv, op)
+		return compareHex(lv, rv, op), true
 	default:
-		return false
+		return false, false
 	}
 }
 
-func eqCmp(left, right Value, resolve AttributeResolver, negate bool) bool {
+func eqCmp(left, right Value, resolve AttributeResolver, negate bool) (bool, bool) {
 	comparisonType, err := left.IsComparableTo(right)
 	if err != nil {
-		return negate
+		return false, false
+	}
+	if containsStringArray(left, resolve) || containsStringArray(right, resolve) {
+		return false, false
 	}
 
 	equal := false
+	valid := false
 	switch comparisonType {
 	case KindNumber:
 		lv, lok := resolveNumberValue(left, resolve)
 		rv, rok := resolveNumberValue(right, resolve)
-		equal = lok && rok && lv == rv
+		valid = lok && rok
+		equal = valid && lv == rv
 	case KindDateTime:
 		lv, lok := resolveDateTimeValue(left, resolve)
 		rv, rok := resolveDateTimeValue(right, resolve)
-		equal = lok && rok && lv.Equal(rv)
+		valid = lok && rok
+		equal = valid && lv.Equal(rv)
 	case KindTime:
 		lv, lok := resolveTimeValue(left, resolve)
 		rv, rok := resolveTimeValue(right, resolve)
-		equal = lok && rok && lv == rv
+		valid = lok && rok
+		equal = valid && lv == rv
 	case KindHex:
 		lv, lok := resolveHexValue(left, resolve)
 		rv, rok := resolveHexValue(right, resolve)
-		equal = lok && rok && lv == rv
+		valid = lok && rok
+		equal = valid && lv == rv
 	case KindBool:
 		lv, lok := resolveBoolValue(left, resolve)
 		rv, rok := resolveBoolValue(right, resolve)
-		equal = lok && rok && lv == rv
+		valid = lok && rok
+		equal = valid && lv == rv
 	case KindString:
 		lv, lok := resolveStringValue(left, resolve)
 		rv, rok := resolveStringValue(right, resolve)
-		equal = lok && rok && lv == rv
+		valid = lok && rok
+		equal = valid && lv == rv
 	default:
-		equal = false
+		return false, false
+	}
+	if !valid {
+		return false, false
 	}
 
 	if negate {
-		return !equal
+		return !equal, true
 	}
-	return equal
+	return equal, true
 }
 
 func resolveNumberValue(v Value, resolve AttributeResolver) (float64, bool) {
@@ -1183,7 +1471,7 @@ func resolveBoolValue(v Value, resolve AttributeResolver) (bool, bool) {
 	case v.Boolean != nil:
 		return *v.Boolean, true
 	case v.BoolCast != nil:
-		return castToBool(resolveValue(*v.BoolCast, resolve)), true
+		return boolOperandValue(resolveValue(*v.BoolCast, resolve))
 	default:
 		return false, false
 	}
@@ -1194,14 +1482,48 @@ func resolveStringValue(v Value, resolve AttributeResolver) (string, bool) {
 	case v.StrVal != nil:
 		return string(*v.StrVal), true
 	case v.StrCast != nil:
-		return fmt.Sprint(resolveValue(*v.StrCast, resolve)), true
+		return stringOperandValue(resolveValue(*v.StrCast, resolve))
 	case v.Attribute != nil:
-		return asString(resolve(v.Attribute)), true
+		return stringOperandValue(resolve(v.Attribute))
 	case v.Field != nil:
 		return "", false
 	default:
-		return asString(resolveValue(v, resolve)), true
+		return stringOperandValue(resolveValue(v, resolve))
 	}
+}
+
+func containsStringArray(value Value, resolve AttributeResolver) bool {
+	_, isArray, _ := stringArrayOperand(value, resolve)
+	return isArray
+}
+
+func stringArrayOperand(value Value, resolve AttributeResolver) ([]string, bool, bool) {
+	raw := resolveValue(value, resolve)
+	switch items := raw.(type) {
+	case []string:
+		return items, true, len(items) > 0
+	case []any:
+		values := make([]string, len(items))
+		for index, item := range items {
+			text, ok := item.(string)
+			if !ok {
+				return nil, true, false
+			}
+			values[index] = text
+		}
+		return values, true, len(values) > 0
+	case nil:
+		return nil, false, true
+	default:
+		return nil, false, true
+	}
+}
+
+func stringOperandValue(value any) (string, bool) {
+	if value == nil || isStructuredValue(value) {
+		return "", false
+	}
+	return fmt.Sprint(value), true
 }
 
 func compareFloats(a, b float64, op string) bool {

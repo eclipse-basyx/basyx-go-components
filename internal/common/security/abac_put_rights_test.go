@@ -78,10 +78,16 @@ func TestSelectPutFormulaByExistence_SelectsRightSpecificFormula(t *testing.T) {
 	createCtx := SelectPutFormulaByExistence(ctx, false)
 	createQF := GetQueryFilter(createCtx)
 	assertBooleanFormulaPointer(t, createQF.Formula, true)
+	if right, ok := SelectedFormulaRight(createCtx); !ok || right != grammar.RightsEnumCREATE {
+		t.Fatalf("SelectedFormulaRight() = %q, %t, want CREATE, true", right, ok)
+	}
 
 	updateCtx := SelectPutFormulaByExistence(ctx, true)
 	updateQF := GetQueryFilter(updateCtx)
 	assertBooleanFormulaPointer(t, updateQF.Formula, false)
+	if right, ok := SelectedFormulaRight(updateCtx); !ok || right != grammar.RightsEnumUPDATE {
+		t.Fatalf("SelectedFormulaRight() = %q, %t, want UPDATE, true", right, ok)
+	}
 }
 
 func TestSelectPutFormulaByExistence_DefaultsToFalseIfMissing(t *testing.T) {
