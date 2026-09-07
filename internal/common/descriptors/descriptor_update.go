@@ -91,6 +91,19 @@ func LockAdministrationShellDescriptorForUpdateTx(ctx context.Context, tx *sql.T
 	return descriptorID, nil
 }
 
+// LockExistingAdministrationShellDescriptorForUpdateTx locks an existing AAS
+// descriptor without taking the advisory lock used to serialize upserts.
+func LockExistingAdministrationShellDescriptorForUpdateTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {
+	descriptorID, found, err := selectAASDescriptorIDForUpdateTx(ctx, tx, aasID)
+	if err != nil {
+		return 0, common.NewInternalServerError("AASDESC-UPDATE-LOCK-SELECT " + err.Error())
+	}
+	if !found {
+		return 0, common.NewErrNotFound("AAS Descriptor not found")
+	}
+	return descriptorID, nil
+}
+
 // LockGlobalSubmodelDescriptorForUpdateTx locks an existing global Submodel
 // descriptor and returns its stable internal descriptor id.
 func LockGlobalSubmodelDescriptorForUpdateTx(ctx context.Context, tx *sql.Tx, submodelID string) (int64, error) {
@@ -182,8 +195,12 @@ func UpdateAdministrationShellDescriptorTx(
 	if !plan.changed() {
 		return false, nil
 	}
-	if err = updateAASDescriptorRowTx(ctx, tx, descriptorID, next); err != nil {
-		return false, common.NewInternalServerError("AASDESC-UPDATE-ROOT " + err.Error())
+	if plan.root {
+		if err = updateAASDescriptorRowTx(ctx, tx, descriptorID, next); err != nil {
+			return false, common.NewInternalServerError("AASDESC-UPDATE-ROOT " + err.Error())
+		}
+	} else if err = touchDescriptorRowTx(ctx, tx, common.TblAASDescriptor, descriptorID); err != nil {
+		return false, common.NewInternalServerError("AASDESC-UPDATE-TOUCHROOT " + err.Error())
 	}
 	if plan.payload.changed() {
 		if err = updateAdministrationShellDescriptorPayloadTx(ctx, tx, descriptorID, next, plan.payload); err != nil {
@@ -232,8 +249,12 @@ func UpdateSubmodelDescriptorTx(
 	if !plan.changed() && !positionChanged {
 		return false, nil
 	}
-	if err = updateSubmodelDescriptorRowTx(ctx, tx, descriptorID, next, position); err != nil {
-		return false, err
+	if plan.root || positionChanged {
+		if err = updateSubmodelDescriptorRowTx(ctx, tx, descriptorID, next, position); err != nil {
+			return false, err
+		}
+	} else if err = touchDescriptorRowTx(ctx, tx, common.TblSubmodelDescriptor, descriptorID); err != nil {
+		return false, common.NewInternalServerError("SMDESC-UPDATE-TOUCHROOT " + err.Error())
 	}
 	if plan.payload.changed() {
 		if err = updateSubmodelDescriptorPayloadTx(ctx, tx, descriptorID, next, plan.payload); err != nil {
@@ -262,6 +283,23 @@ func UpdateSubmodelDescriptorTx(
 		}
 	}
 	return true, nil
+}
+
+func touchDescriptorRowTx(ctx context.Context, tx *sql.Tx, table string, descriptorID int64) error {
+	d := goqu.Dialect(common.Dialect)
+	query, args, err := d.
+		Update(table).
+		Set(goqu.Record{"db_updated_at": goqu.L("CURRENT_TIMESTAMP")}).
+		Where(goqu.C(common.ColDescriptorID).Eq(descriptorID)).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("DESC-UPDATE-TOUCHROOT-BUILDQ " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("DESC-UPDATE-TOUCHROOT-EXECQ " + err.Error())
+	}
+	return nil
 }
 
 func buildAdministrationShellDescriptorUpdatePlan(

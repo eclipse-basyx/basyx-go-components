@@ -27,19 +27,58 @@
 package dppapi
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 )
 
+type dppHTTPError struct {
+	status  int
+	code    string
+	message string
+}
+
+func newDPPHTTPError(status int, code string, message string) error {
+	return &dppHTTPError{status: status, code: code, message: message}
+}
+
+func (e *dppHTTPError) Error() string {
+	return e.code + " " + e.message
+}
+
+func (e *dppHTTPError) HTTPStatus() int {
+	return e.status
+}
+
+func (e *dppHTTPError) ErrorCode() string {
+	return e.code
+}
+
 func errorResponse(status int, err error) ImplResponse {
-	return Response(status, Result{Messages: []Message{{
+	return Response(errorStatus(err, status), Result{Messages: []Message{{
 		MessageType:   "Error",
 		Text:          err.Error(),
-		Code:          firstErrorCode(err.Error()),
+		Code:          errorCode(err),
 		CorrelationId: "",
 		Timestamp:     time.Now().UTC(),
 	}}})
+}
+
+func errorStatus(err error, fallback int) int {
+	var httpError interface{ HTTPStatus() int }
+	if errors.As(err, &httpError) && httpError.HTTPStatus() >= 400 && httpError.HTTPStatus() <= 599 {
+		return httpError.HTTPStatus()
+	}
+	return fallback
+}
+
+func errorCode(err error) string {
+	var codedError interface{ ErrorCode() string }
+	if errors.As(err, &codedError) && strings.TrimSpace(codedError.ErrorCode()) != "" {
+		return codedError.ErrorCode()
+	}
+	return firstErrorCode(err.Error())
 }
 
 func mapPersistenceError(err error, fallbackStatus int) ImplResponse {

@@ -381,3 +381,25 @@ func TestCallerMatchOnVisibleNestedFieldStaysCorrelatedToCurrentReference(t *tes
 	require.Equal(t, 1, countArgument(args, "WRITTEN_BY_X"))
 	require.Equal(t, 1, countArgument(args, "FILTER_VISIBLE"))
 }
+
+func TestStandaloneSubmodelDescriptorListFiltersExactIdentifier(t *testing.T) {
+	t.Parallel()
+
+	dataset, err := buildSubmodelDescriptorListQuery(
+		common.ContextWithConfig(t.Context(), &common.Config{}),
+		1,
+		"",
+		time.Time{},
+		time.Time{},
+		submodelDescriptorListScope{
+			collectorRoot:  grammar.CollectorRootSMDesc,
+			fragmentPrefix: "$smdesc",
+			identifiable:   "urn:example:submodel:target",
+		},
+	)
+	require.NoError(t, err)
+	query, args, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, query, `"submodel_descriptor_raw_page"."id" = $1`)
+	require.Contains(t, args, "urn:example:submodel:target")
+}
