@@ -34,8 +34,30 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
+
+func TestExecutePostgreSQLReadTransactionValidatesInputsAndDriver(t *testing.T) {
+	t.Parallel()
+
+	err := ExecutePostgreSQLReadTransaction(context.Background(), nil, func(pgx.Tx) error { return nil })
+	if err == nil || !IsErrBadRequest(err) {
+		t.Fatalf("expected bad request for nil database, got %v", err)
+	}
+
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err = ExecutePostgreSQLReadTransaction(context.Background(), db, nil); err == nil || !IsErrBadRequest(err) {
+		t.Fatalf("expected bad request for nil callback, got %v", err)
+	}
+	if err = ExecutePostgreSQLReadTransaction(context.Background(), db, func(pgx.Tx) error { return nil }); err == nil || !IsInternalServerError(err) {
+		t.Fatalf("expected unsupported-driver error, got %v", err)
+	}
+}
 
 func TestExecutePostgreSQLBatchInTransactionExecutesOneCollectedBlock(t *testing.T) {
 	t.Parallel()

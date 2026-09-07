@@ -119,7 +119,7 @@ func TestRegistrySyncConfigBuildsDeterministicEndpoints(t *testing.T) {
 		},
 	}
 
-	aasEndpoints := config.buildAASDescriptorEndpoints("urn:example:aas:001")
+	aasEndpoints := config.AASDescriptorEndpoints("urn:example:aas:001")
 	require.Len(t, aasEndpoints, 2)
 	require.Equal(t, "AAS-3.0", aasEndpoints[0].Interface)
 	require.Equal(t, "AAS-3.0", aasEndpoints[1].Interface)
@@ -127,7 +127,7 @@ func TestRegistrySyncConfigBuildsDeterministicEndpoints(t *testing.T) {
 	require.Equal(t, "https://internal.example/api/v3/shells/dXJuOmV4YW1wbGU6YWFzOjAwMQ", aasEndpoints[1].ProtocolInformation.Href)
 	require.Equal(t, "https", aasEndpoints[0].ProtocolInformation.EndpointProtocol)
 
-	submodelEndpoints := config.buildSubmodelDescriptorEndpoints("urn:example:sm:001")
+	submodelEndpoints := config.SubmodelDescriptorEndpoints("urn:example:sm:001")
 	require.Len(t, submodelEndpoints, 2)
 	require.Equal(t, "SUBMODEL-3.0", submodelEndpoints[0].Interface)
 	require.Equal(t, "SUBMODEL-3.0", submodelEndpoints[1].Interface)
@@ -170,7 +170,7 @@ func TestBuildAASDescriptorDerivesFromIdentifiable(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	descriptor, err := config.buildAASDescriptor(aas)
+	descriptor, err := config.BuildAASDescriptor(aas)
 	require.NoError(t, err)
 	require.Equal(t, "urn:example:aas:derived", descriptor.Id)
 	require.Equal(t, "DerivedAAS", descriptor.IdShort)
@@ -227,7 +227,7 @@ func TestBuildSubmodelDescriptorDerivesFromIdentifiable(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	descriptor, err := config.buildSubmodelDescriptor(submodel)
+	descriptor, err := config.BuildSubmodelDescriptor(submodel)
 	require.NoError(t, err)
 	require.Equal(t, "urn:example:sm:derived", descriptor.Id)
 	require.Equal(t, "DerivedSubmodel", descriptor.IdShort)
@@ -263,20 +263,20 @@ func TestSubmodelDescriptorComparisonIgnoresElementChanges(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	previousDescriptor, err := config.buildSubmodelDescriptor(previous)
+	previousDescriptor, err := config.BuildSubmodelDescriptor(previous)
 	require.NoError(t, err)
-	submittedDescriptor, err := config.buildSubmodelDescriptor(submitted)
+	submittedDescriptor, err := config.BuildSubmodelDescriptor(submitted)
 	require.NoError(t, err)
 	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
 	require.True(t, equal)
-	_, descriptorChanged, err := config.changedSubmodelDescriptor(previous, submitted)
+	_, descriptorChanged, err := config.ChangedSubmodelDescriptor(previous, submitted)
 	require.NoError(t, err)
 	require.False(t, descriptorChanged)
 
 	idShort := "changed"
 	submitted.SetIDShort(&idShort)
-	submittedDescriptor, err = config.buildSubmodelDescriptor(submitted)
+	submittedDescriptor, err = config.BuildSubmodelDescriptor(submitted)
 	require.NoError(t, err)
 	equal, err = registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
@@ -291,20 +291,20 @@ func TestAASDescriptorComparisonIgnoresNonDescriptorMetadata(t *testing.T) {
 	category := "changed"
 	submitted.SetCategory(&category)
 
-	previousDescriptor, err := config.buildAASDescriptor(previous)
+	previousDescriptor, err := config.BuildAASDescriptor(previous)
 	require.NoError(t, err)
-	submittedDescriptor, err := config.buildAASDescriptor(submitted)
+	submittedDescriptor, err := config.BuildAASDescriptor(submitted)
 	require.NoError(t, err)
 	equal, err := registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
 	require.True(t, equal)
-	_, descriptorChanged, err := config.changedAASDescriptor(previous, submitted)
+	_, descriptorChanged, err := config.ChangedAASDescriptor(previous, submitted)
 	require.NoError(t, err)
 	require.False(t, descriptorChanged)
 
 	globalAssetID := "urn:example:asset:changed"
 	submitted.AssetInformation().SetGlobalAssetID(&globalAssetID)
-	submittedDescriptor, err = config.buildAASDescriptor(submitted)
+	submittedDescriptor, err = config.BuildAASDescriptor(submitted)
 	require.NoError(t, err)
 	equal, err = registrySyncDescriptorsEqual(previousDescriptor, submittedDescriptor)
 	require.NoError(t, err)
@@ -327,7 +327,14 @@ func TestBuildEmbeddedSubmodelDescriptorsSkipsNilReferencesAndKeys(t *testing.T)
 		),
 	}
 
-	descriptors := config.buildEmbeddedSubmodelDescriptors(references)
+	aas := types.NewAssetAdministrationShell(
+		"urn:example:aas:nil-guard",
+		types.NewAssetInformation(types.AssetKindInstance),
+	)
+	aas.SetSubmodels(references)
+	aasDescriptor, err := config.BuildAASDescriptor(aas)
+	require.NoError(t, err)
+	descriptors := aasDescriptor.SubmodelDescriptors
 	require.Len(t, descriptors, 1)
 	require.Equal(t, "urn:example:sm:nil-guard", descriptors[0].Id)
 	require.Len(t, descriptors[0].Endpoints, 1)

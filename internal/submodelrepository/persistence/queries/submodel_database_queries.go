@@ -160,7 +160,7 @@ func SelectSubmodelDataset(
 
 	if cursor != nil && *cursor != "" {
 		cursorExistsDS := dialect.From(goqu.T("submodel").As("s2")).
-			Select(goqu.V(1)).
+			Select(goqu.L("1")).
 			Where(goqu.Ex{"s2.submodel_identifier": *cursor})
 
 		selectDS = selectDS.
@@ -190,6 +190,41 @@ func SelectSubmodelDataset(
 	return selectDS, nil
 }
 
+// SelectSubmodelIdentifierDataset builds the IDs-only page used by reference
+// representations. The payload join remains available to authorization
+// collectors, but payload columns are not projected or materialized.
+func SelectSubmodelIdentifierDataset(
+	idShort string,
+	limit int32,
+	cursor string,
+) *goqu.SelectDataset {
+	dialect := goqu.Dialect(common.Dialect)
+	selectDS := dialect.From("submodel").
+		Join(goqu.T("submodel_payload"), goqu.On(goqu.Ex{"submodel.id": goqu.I("submodel_payload.submodel_id")})).
+		Select(goqu.I("submodel.submodel_identifier")).
+		Order(goqu.I("submodel.submodel_identifier").Asc())
+
+	if idShort != "" {
+		selectDS = selectDS.Where(goqu.Ex{"submodel.id_short": idShort})
+	}
+	if cursor != "" {
+		cursorExistsDS := dialect.From(goqu.T("submodel").As("cursor_submodel")).
+			Select(goqu.L("1")).
+			Where(goqu.Ex{"cursor_submodel.submodel_identifier": cursor})
+		selectDS = selectDS.
+			Where(goqu.Func("EXISTS", cursorExistsDS)).
+			Where(goqu.I("submodel.submodel_identifier").Gte(cursor))
+	}
+	if limit == 0 {
+		limit = 100
+	}
+	if limit > 0 {
+		//nolint:gosec // the positive int32 limit safely fits into uint64
+		selectDS = selectDS.Limit(uint(limit) + 1)
+	}
+	return selectDS
+}
+
 // ApplySubmodelSemanticIDFilter adds a semantic ID existence filter to a submodel dataset.
 func ApplySubmodelSemanticIDFilter(selectDS *goqu.SelectDataset, semanticID string) *goqu.SelectDataset {
 	if semanticID == "" {
@@ -199,7 +234,7 @@ func ApplySubmodelSemanticIDFilter(selectDS *goqu.SelectDataset, semanticID stri
 	dialect := goqu.Dialect(common.Dialect)
 	semanticIDFilterDS := dialect.
 		From(goqu.T("submodel_semantic_id_reference_key").As("ssrk_filter")).
-		Select(goqu.V(1)).
+		Select(goqu.L("1")).
 		Where(goqu.I("ssrk_filter.reference_id").Eq(goqu.I("submodel.id"))).
 		Where(goqu.I("ssrk_filter.value").Eq(semanticID))
 	return selectDS.Where(goqu.Func("EXISTS", semanticIDFilterDS))
@@ -252,7 +287,7 @@ func BuildSubmodelCursorExistsSQL(cursor string) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
 	return dialect.
 		From(goqu.T("submodel").As("sm")).
-		Select(goqu.V(1)).
+		Select(goqu.L("1")).
 		Where(goqu.I("sm.submodel_identifier").Eq(cursor)).
 		Limit(1).
 		ToSQL()
@@ -324,14 +359,46 @@ func BuildSubmodelElementParentForInsertSQL(submodelID string, parentPath string
 		ToSQL()
 }
 
-// BuildSubmodelElementNextPositionSQL builds the indexed position lookup used
-// after the parent row has been locked in the current transaction.
-func BuildSubmodelElementNextPositionSQL(parentElementID int) (string, []any, error) {
+// BuildSubmodelElementChildInsertStateSQL builds the state lookup used after
+// the parent row has been locked in the current transaction.
+func BuildSubmodelElementChildInsertStateSQL(submodelDatabaseID int, parentElementID int, idShort string) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
-	return dialect.
+	nextPosition := dialect.
 		From(goqu.T("submodel_element").As("child")).
 		Select(goqu.L("COALESCE(MAX(?), -1) + 1", goqu.I("child.position"))).
-		Where(goqu.I("child.parent_sme_id").Eq(parentElementID)).
+		Where(goqu.I("child.parent_sme_id").Eq(parentElementID))
+	collisionPath := dialect.
+		From(goqu.T("submodel_element").As("sibling")).
+		Select(goqu.I("sibling.idshort_path")).
+		Where(
+			goqu.I("sibling.submodel_id").Eq(submodelDatabaseID),
+			goqu.I("sibling.parent_sme_id").Eq(parentElementID),
+			goqu.I("sibling.id_short").Eq(idShort),
+		).
+		Limit(1)
+	collisionProjection := goqu.L("NULL").As("collision_path")
+	if idShort != "" {
+		collisionProjection = goqu.L("(?)", collisionPath).As("collision_path")
+	}
+	insertState := dialect.Select(
+		goqu.L("(?)", nextPosition).As("next_position"),
+		collisionProjection,
+	)
+
+	return dialect.
+		From("child_insert_state").
+		Select(
+			"next_position",
+			"collision_path",
+			goqu.Case().
+				When(
+					goqu.C("collision_path").IsNull(),
+					goqu.Func("nextval", goqu.Func("pg_get_serial_sequence", "submodel_element", "id")),
+				).
+				Else(goqu.L("NULL")).
+				As("first_node_id"),
+		).
+		With("child_insert_state", insertState).
 		Prepared(true).
 		ToSQL()
 }
@@ -362,6 +429,29 @@ func BuildFileAttachmentExistsSQL(submodelID string, idShortPath string) (string
 			goqu.I("sme.idshort_path").Eq(idShortPath),
 		).
 		Limit(1).
+		ToSQL()
+}
+
+// BuildManagedFileAttachmentPathsBySubmodelIDsSQL builds a set-based lookup for current and legacy managed File attachments.
+func BuildManagedFileAttachmentPathsBySubmodelIDsSQL(submodelIDs []string) (string, []any, error) {
+	dialect := goqu.Dialect(common.Dialect)
+	sm := goqu.T("submodel").As("sm")
+	sme := goqu.T("submodel_element").As("sme")
+	fe := goqu.T("file_element").As("fe")
+	fd := goqu.T("file_data").As("fd")
+	fr := goqu.T("file_binary_reference").As("fr")
+
+	return dialect.From(sm).
+		Join(sme, goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
+		Join(fe, goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
+		LeftJoin(fd, goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
+		LeftJoin(fr, goqu.On(goqu.I("fr.file_element_id").Eq(goqu.I("sme.id")))).
+		Select(goqu.I("sm.submodel_identifier"), goqu.I("sme.idshort_path")).
+		Where(
+			goqu.I("sm.submodel_identifier").In(submodelIDs),
+			goqu.Or(goqu.I("fr.binary_content_id").IsNotNull(), goqu.I("fd.file_oid").IsNotNull()),
+		).
+		Order(goqu.I("sm.submodel_identifier").Asc(), goqu.I("sme.idshort_path").Asc()).
 		ToSQL()
 }
 

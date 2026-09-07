@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/miniscruff/changie/v1.26.0/docs/schema.json
+changesDir: .changes
+unreleasedDir: unreleased
+headerPath: header.tpl.md
+changelogPath: CHANGELOG.md
+versionExt: md
+versionFormat: |-
+  ## {{.Version}} ({{.Time.Format "2006-01-02"}})
+
+  Changes since [{{.PreviousVersion}}](https://github.com/eclipse-basyx/basyx-go-components/compare/{{.PreviousVersion}}...{{.Version}}).
+kindFormat: '### {{.Kind}}'
+changeFormat: |-
+  * **{{.Custom.Impact}} impact** — {{.Body}} ([#{{.Custom.PullRequest}}](https://github.com/eclipse-basyx/basyx-go-components/pull/{{.Custom.PullRequest}}))
+    * **Security:** {{.Custom.SecurityImpact}}
+kinds:
+  - label: Added
+    key: added
+  - label: Changed
+    key: changed
+  - label: Deprecated
+    key: deprecated
+  - label: Removed
+    key: removed
+  - label: Fixed
+    key: fixed
+  - label: Security
+    key: security
+custom:
+  - key: Impact
+    label: User impact
+    type: enum
+    enumOptions:
+      - High
+      - Low
+  - key: PullRequest
+    label: Pull request number
+    type: int
+    minInt: 1
+  - key: SecurityImpact
+    label: Security impact (use "None." when there is none)
+    type: string
+    minLength: 1
+newlines:
+  afterChangelogHeader: 1
+  beforeKind: 1
+  afterKind: 1
+  afterChange: 1
+  afterChangelogVersion: 0
+  endOfVersion: 0

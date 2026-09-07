@@ -278,18 +278,27 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 	default:
 		return common.NewErrBadRequest("SMREPO-ADDSMEBYPATH-BADPARENT Parent element does not support child elements")
 	}
-	parent.nextPosition, err = nextSubmodelElementPosition(ctx, tx, parent.elementID)
+	idShort := ""
+	if elementIDShort := submodelElement.IDShort(); elementIDShort != nil {
+		idShort = *elementIDShort
+	}
+	var collisionPath string
+	parent.nextPosition, collisionPath, parent.firstNodeID, err = submodelElementChildInsertState(
+		ctx,
+		tx,
+		parent.submodelDatabaseID,
+		parent.elementID,
+		idShort,
+	)
 	if err != nil {
 		return err
 	}
 
-	if err = s.ensureVisibleSubmodelElementCreateDoesNotExist(
+	if err = s.ensureVisibleSubmodelElementCreateCollisionAllowed(
 		ctx,
 		tx,
 		submodelID,
-		parent.submodelDatabaseID,
-		&parent.elementID,
-		submodelElement,
+		collisionPath,
 		"SMREPO-ADDSMEBYPATH-COLLISION Duplicate submodel element idShort",
 		"SMREPO-ADDSMEBYPATH-CHKDUP-ABACDENIED existing submodel element is not accessible under ABAC constraints",
 	); err != nil {
@@ -306,6 +315,7 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 			ParentID:      parent.elementID,
 			ParentPath:    parentPath,
 			RootSmeID:     parent.rootSmeID,
+			FirstNodeID:   parent.firstNodeID,
 			IsFromList:    isFromList,
 			StartPosition: parent.nextPosition,
 			StartDepth:    parent.childDepth,
@@ -325,6 +335,7 @@ type submodelElementInsertParent struct {
 	rootSmeID          int
 	modelType          types.ModelType
 	nextPosition       int
+	firstNodeID        int
 	childDepth         int
 }
 
@@ -351,17 +362,19 @@ func (s *SubmodelDatabase) lockSubmodelElementParentForInsert(ctx context.Contex
 	return submodelElementInsertParent{}, submodelElementParentNotFoundError(ctx, tx, submodelID, parentPath)
 }
 
-func nextSubmodelElementPosition(ctx context.Context, tx *sql.Tx, parentElementID int) (int, error) {
-	query, args, err := submodelqueries.BuildSubmodelElementNextPositionSQL(parentElementID)
+func submodelElementChildInsertState(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, parentElementID int, idShort string) (int, string, int, error) {
+	query, args, err := submodelqueries.BuildSubmodelElementChildInsertStateSQL(submodelDatabaseID, parentElementID, idShort)
 	if err != nil {
-		return 0, common.NewInternalServerError("SMREPO-ADDSMEBYPATH-BUILDNEXTPOSQ " + err.Error())
+		return 0, "", 0, common.NewInternalServerError("SMREPO-ADDSMEBYPATH-BUILDSTATEQ " + err.Error())
 	}
 
 	var nextPosition int
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&nextPosition); err != nil {
-		return 0, common.NewInternalServerError("SMREPO-ADDSMEBYPATH-EXECNEXTPOSQ " + err.Error())
+	var collisionPath sql.NullString
+	var firstNodeID sql.NullInt64
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&nextPosition, &collisionPath, &firstNodeID); err != nil {
+		return 0, "", 0, common.NewInternalServerError("SMREPO-ADDSMEBYPATH-EXECSTATEQ " + err.Error())
 	}
-	return nextPosition, nil
+	return nextPosition, collisionPath.String, int(firstNodeID.Int64), nil
 }
 
 func submodelElementParentNotFoundError(ctx context.Context, tx *sql.Tx, submodelID string, parentPath string) error {
@@ -875,6 +888,37 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateDoesNotExist(
 			if duplicatePath == "" {
 				return common.NewInternalServerError("SMREPO-CHKSMEDUP-EMPTYPATH existing submodel element duplicate path is empty")
 			}
+			exists, visible, err := s.checkSubmodelElementVisibilityInTx(readCtx, tx, submodelID, duplicatePath)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return common.NewErrNotFound("SMREPO-CHKSMEDUP-NOTFOUND existing submodel element not found")
+			}
+			if !visible {
+				return common.NewErrDenied(deniedMessage)
+			}
+			return nil
+		},
+		conflictMessage,
+		deniedMessage,
+	)
+}
+
+func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateCollisionAllowed(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	duplicatePath string,
+	conflictMessage string,
+	deniedMessage string,
+) error {
+	return createprecheck.EnsureVisibleCreate(
+		ctx,
+		func(context.Context) (bool, error) {
+			return duplicatePath != "", nil
+		},
+		func(readCtx context.Context) error {
 			exists, visible, err := s.checkSubmodelElementVisibilityInTx(readCtx, tx, submodelID, duplicatePath)
 			if err != nil {
 				return err

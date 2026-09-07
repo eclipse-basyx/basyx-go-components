@@ -606,6 +606,130 @@ func contextWithABACDisabled(t *testing.T) context.Context {
 	return cfgCtx
 }
 
+func TestSubmodelElementPageQueryShapeIsIndependentOfPageSize(t *testing.T) {
+	t.Parallel()
+
+	ctx := contextWithABACDisabled(t)
+	oneQuery, _, err := buildSubmodelElementPageQuery(ctx, []int64{1}, "deep")
+	require.NoError(t, err)
+	manyQuery, _, err := buildSubmodelElementPageQuery(ctx, []int64{1, 2, 3}, "deep")
+	require.NoError(t, err)
+
+	require.Equal(t, oneQuery, manyQuery)
+	require.Contains(t, oneQuery, "ROW_NUMBER() OVER (PARTITION BY")
+	require.Contains(t, oneQuery, "visible_submodel_roots")
+	require.Contains(t, oneQuery, "selected_submodel_elements")
+	require.Contains(t, oneQuery, "UNION ALL")
+	require.Contains(t, oneQuery, `SELECT "selected_root"."root_id" AS "element_id"`)
+	require.NotContains(t, oneQuery, `"selected_sme"."id" = "selected_root"."root_id"`)
+	require.Contains(t, oneQuery, `"selected_sme"."submodel_id" = "selected_root"."submodel_id"`)
+	require.Contains(t, oneQuery, `"selected_sme"."root_sme_id"`)
+	require.Contains(t, oneQuery, `"selected_sme"."id" != "selected_root"."root_id"`)
+	require.Contains(t, oneQuery, `NULL::jsonb AS "raw_value_payload"`)
+	require.NotContains(t, oneQuery, `"property_element"`)
+}
+
+func TestSubmodelElementCorePageSelectsOnlyRootsAndDirectChildren(t *testing.T) {
+	t.Parallel()
+
+	query, _, err := buildSubmodelElementPageQuery(contextWithABACDisabled(t), []int64{1}, "core")
+	require.NoError(t, err)
+	require.Contains(t, query, `"selected_sme"."parent_sme_id" = "selected_root"."root_id"`)
+}
+
+func TestSubmodelElementPageValueQueryShapeIsIndependentOfPageSize(t *testing.T) {
+	t.Parallel()
+
+	oneIDs := map[types.ModelType][]int64{
+		types.ModelTypeProperty:              {1},
+		types.ModelTypeMultiLanguageProperty: {2},
+	}
+	manyIDs := map[types.ModelType][]int64{
+		types.ModelTypeProperty:              {1, 3, 5},
+		types.ModelTypeMultiLanguageProperty: {2, 4},
+	}
+	oneQuery, oneArgs, err := buildSubmodelElementPageValueQuery(oneIDs, []int64{1}, false)
+	require.NoError(t, err)
+	manyQuery, manyArgs, err := buildSubmodelElementPageValueQuery(manyIDs, []int64{1, 2, 3}, false)
+	require.NoError(t, err)
+
+	require.Equal(t, oneQuery, manyQuery)
+	require.Len(t, manyArgs, len(oneArgs))
+	require.Contains(t, oneQuery, "UNION ALL")
+	require.Contains(t, oneQuery, `"property_element" AS "page_property"`)
+	require.Contains(t, oneQuery, `"multilanguage_property_value" AS "page_multilanguage_value"`)
+	require.Contains(t, oneQuery, `ORDER BY "page_multilanguage_value"."id"`)
+	require.NotContains(t, oneQuery, `ORDER BY "page_multilanguage_value"."language"`)
+	require.Contains(t, oneQuery, `"submodel_element_page_value"."element_id" = ANY($1::bigint[])`)
+	require.Contains(t, oneQuery, `COALESCE("submodel_element_page_value"."value_payload"::jsonb, '{}'::jsonb) - 'value'`)
+}
+
+func TestSubmodelElementPageValueQueryHonorsBlobValueOption(t *testing.T) {
+	t.Parallel()
+
+	ids := map[types.ModelType][]int64{types.ModelTypeBlob: {1}}
+	withoutValue, _, err := buildSubmodelElementPageValueQuery(ids, []int64{1}, false)
+	require.NoError(t, err)
+	withValue, _, err := buildSubmodelElementPageValueQuery(ids, []int64{1}, true)
+	require.NoError(t, err)
+
+	require.NotContains(t, withoutValue, `"page_blob"."value"`)
+	require.Contains(t, withValue, `"page_blob"."value"`)
+}
+
+func TestAllSubmodelPathPageKeepsCompositeCursorAndStableOrder(t *testing.T) {
+	t.Parallel()
+
+	dialect := goqu.Dialect("postgres")
+	visibleSubmodels := dialect.From("submodel").Select(
+		goqu.I("id").As("submodel_id"),
+		goqu.I("submodel_identifier").As("submodel_identifier"),
+	)
+	query, args, err := buildAllSubmodelElementPathsPageQuery(
+		contextWithABACDisabled(t),
+		visibleSubmodels,
+		100,
+		"urn:example:sm",
+		"Collection.Property|42",
+		"deep",
+	)
+	require.NoError(t, err)
+	require.NotContains(t, query, "WITH RECURSIVE")
+	require.NotContains(t, query, "visible_path_smes")
+	require.Contains(t, query, `FROM (SELECT "visible_submodel"."submodel_identifier"`)
+	require.Contains(t, query, `LATERAL (SELECT "sme"."idshort_path", "sme"."id" AS "sme_id"`)
+	require.Contains(t, query, `ORDER BY "sme"."idshort_path" ASC, "sme"."id" ASC LIMIT ALL`)
+	require.Contains(t, query, `AS "authorized_cursor"`)
+	require.Contains(t, query, `ORDER BY "authorized_path"."submodel_identifier" ASC, "authorized_path"."idshort_path" ASC, "authorized_path"."sme_id" ASC`)
+	require.Contains(t, query, `"authorized_path"."sme_id" >`)
+	require.Equal(t, int64(101), args[len(args)-1])
+}
+
+func TestAllSubmodelPathPageScopesStructuralRecursionToEachCandidate(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
+		},
+	})
+	dialect := goqu.Dialect("postgres")
+	visibleSubmodels := dialect.From("submodel").Select(
+		goqu.I("id").As("submodel_id"),
+		goqu.I("submodel_identifier").As("submodel_identifier"),
+	)
+	query, args, err := buildAllSubmodelElementPathsPageQuery(ctx, visibleSubmodels, 1, "", "", "deep")
+	require.NoError(t, err)
+	require.NotContains(t, query, "visible_path_smes")
+	require.Contains(t, query, `LATERAL (SELECT "sme"."idshort_path", "sme"."id" AS "sme_id"`)
+	require.Contains(t, query, `ORDER BY "sme"."idshort_path" ASC, "sme"."id" ASC LIMIT ALL`)
+	require.Contains(t, query, `WITH RECURSIVE visible_path_candidate_ancestors`)
+	require.Contains(t, query, `"visible_path_candidate_target"."id" = "sme"."id"`)
+	require.Contains(t, query, `"visible_path_candidate_parent"."id" = "visible_path_candidate_current"."parent_sme_id"`)
+	require.Equal(t, int64(2), args[len(args)-1])
+}
+
 func TestNormalizeSMERowFiltersIgnoresOtherStructuralRoots(t *testing.T) {
 	t.Parallel()
 

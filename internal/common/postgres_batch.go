@@ -288,6 +288,60 @@ func ExecutePostgreSQLBatchTransaction(
 	})
 }
 
+// ExecutePostgreSQLReadTransaction runs a callback on the pgx connection
+// underlying a database/sql handle using one read-only repeatable-read
+// transaction. The callback owns result and batch-result consumption.
+func ExecutePostgreSQLReadTransaction(
+	ctx context.Context,
+	db *sql.DB,
+	read func(pgx.Tx) error,
+) error {
+	if db == nil {
+		return NewErrBadRequest("COMMON-PGREADTX-NILDB database handle must not be nil")
+	}
+	if read == nil {
+		return NewErrBadRequest("COMMON-PGREADTX-NILFN read callback must not be nil")
+	}
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return internalServerErrorWithCause("COMMON-PGREADTX-GETCONN", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	return conn.Raw(func(driverConn any) error {
+		stdlibConn, ok := driverConn.(*stdlib.Conn)
+		if !ok {
+			return NewInternalServerError("COMMON-PGREADTX-UNSUPPORTEDDRIVER expected pgx stdlib connection")
+		}
+		tx, beginErr := stdlibConn.Conn().BeginTx(ctx, pgx.TxOptions{
+			IsoLevel:   pgx.RepeatableRead,
+			AccessMode: pgx.ReadOnly,
+		})
+		if beginErr != nil {
+			return internalServerErrorWithCause("COMMON-PGREADTX-BEGIN", beginErr)
+		}
+		committed := false
+		defer func() {
+			if !committed {
+				_ = tx.Rollback(ctx)
+			}
+		}()
+
+		if readErr := read(tx); readErr != nil {
+			return readErr
+		}
+		if contextErr := ctx.Err(); contextErr != nil {
+			return internalServerErrorWithCause("COMMON-PGREADTX-CONTEXT", contextErr)
+		}
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			return internalServerErrorWithCause("COMMON-PGREADTX-COMMIT", commitErr)
+		}
+		committed = true
+		return nil
+	})
+}
+
 func executePostgreSQLBatchResults(results pgx.BatchResults, count int) error {
 	for index := 0; index < count; index++ {
 		if _, execErr := results.Exec(); execErr != nil {

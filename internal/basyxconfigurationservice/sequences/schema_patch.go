@@ -26,8 +26,6 @@
 package sequences
 
 import (
-	"database/sql"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -131,28 +129,11 @@ func (sp *SchemaPatch) GetDescription(stepIndex int) string {
 }
 
 func (sp *SchemaPatch) getCurrentSchemaVersion() (string, error) {
-	query, _, err := goqu.Dialect("postgres").
-		From(goqu.T("basyxsystem")).
-		Select(goqu.C("schema_version")).
-		Order(goqu.C("identifier").Asc()).
-		Limit(1).
-		ToSQL()
+	version, err := readCurrentSchemaVersion(sp.ctx.DB)
 	if err != nil {
-		return "", fmt.Errorf("BASYXCFG-PATCH-BUILDVERSIONQUERY: %w", err)
+		return "", fmt.Errorf("BASYXCFG-PATCH-READVERSION: %w", err)
 	}
-
-	var version string
-	err = sp.ctx.DB.QueryRow(query).Scan(&version)
-	if err == nil {
-		return strings.TrimSpace(version), nil
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		if seedErr := seedSystemTableIfMissing(sp.ctx.DB); seedErr != nil {
-			return "", fmt.Errorf("BASYXCFG-PATCH-SEEDVERSION: %w", seedErr)
-		}
-		return initialSchemaVersion, nil
-	}
-	return "", fmt.Errorf("BASYXCFG-PATCH-READVERSION: %w", err)
+	return version, nil
 }
 
 func (sp *SchemaPatch) failPatchDirty(errorCode string, cause error) (int, error) {

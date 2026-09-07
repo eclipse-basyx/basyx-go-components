@@ -38,19 +38,27 @@ func temporalColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression
 }
 
 func operationValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue bool) exp.Expression {
+	operation := goqu.T("operation_element").As("oe")
+	return dialect.From(operation).
+		Select(operationPayloadExpressionForRead(dialect, goqu.T("oe"), includeBlobValue)).
+		Where(goqu.I("oe.id").Eq(goqu.I("sme.id"))).
+		Limit(1)
+}
+
+func operationPayloadExpressionForRead(
+	dialect goqu.DialectWrapper,
+	operation exp.IdentifierExpression,
+	includeBlobValue bool,
+) exp.Expression {
 	var payload exp.Expression = goqu.Func("jsonb_build_object",
-		common.PostgreSQLTextLiteral("input_variables"), goqu.I("oe.input_variables"),
-		common.PostgreSQLTextLiteral("output_variables"), goqu.I("oe.output_variables"),
-		common.PostgreSQLTextLiteral("inoutput_variables"), goqu.I("oe.inoutput_variables"),
+		common.PostgreSQLTextLiteral("input_variables"), operation.Col("input_variables"),
+		common.PostgreSQLTextLiteral("output_variables"), operation.Col("output_variables"),
+		common.PostgreSQLTextLiteral("inoutput_variables"), operation.Col("inoutput_variables"),
 	)
 	if !includeBlobValue {
 		payload = withoutEmbeddedBlobValues(dialect, payload)
 	}
-
-	return dialect.From(goqu.T("operation_element").As("oe")).
-		Select(payload).
-		Where(goqu.I("oe.id").Eq(goqu.I("sme.id"))).
-		Limit(1)
+	return payload
 }
 
 func withoutEmbeddedBlobValues(dialect goqu.DialectWrapper, payload exp.Expression) exp.Expression {

@@ -334,6 +334,48 @@ func TestPutSubmodelPostUpdateFormulaDenialRollsBack(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestForceGenericPlanForSubmodelPutRestoresPreviousMode(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	mock.ExpectQuery(`SELECT current_setting\('plan_cache_mode'::text\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"current_setting"}).AddRow("force_custom_plan"))
+	mock.ExpectQuery(`SELECT set_config\('plan_cache_mode'::text, 'force_generic_plan'::text, TRUE\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"set_config"}).AddRow("force_generic_plan"))
+	mock.ExpectQuery(`SELECT set_config\('plan_cache_mode'::text, 'force_custom_plan'::text, TRUE\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"set_config"}).AddRow("force_custom_plan"))
+	mock.ExpectRollback()
+
+	restore, err := forceGenericPlanForSubmodelPutTx(contextWithABACDisabled(t), tx)
+	require.NoError(t, err)
+	require.NoError(t, restore())
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestForceGenericPlanForSubmodelPutKeepsExistingGenericMode(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	mock.ExpectQuery(`SELECT current_setting\('plan_cache_mode'::text\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"current_setting"}).AddRow("force_generic_plan"))
+	mock.ExpectRollback()
+
+	restore, err := forceGenericPlanForSubmodelPutTx(contextWithABACDisabled(t), tx)
+	require.NoError(t, err)
+	require.NoError(t, restore())
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func contextWithUpdateFormula(t *testing.T, allowed bool) context.Context {
 	t.Helper()
 	expression := grammar.LogicalExpression{Boolean: &allowed}
@@ -343,6 +385,18 @@ func contextWithUpdateFormula(t *testing.T, allowed bool) context.Context {
 			grammar.RightsEnumUPDATE: expression,
 		},
 	})
+}
+
+func expectForceGenericSubmodelPutPlan(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT current_setting\('plan_cache_mode'::text\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"current_setting"}).AddRow("auto"))
+	mock.ExpectQuery(`SELECT set_config\('plan_cache_mode'::text, 'force_generic_plan'::text, TRUE\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"set_config"}).AddRow("force_generic_plan"))
+}
+
+func expectRestoreSubmodelPutPlan(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT set_config\('plan_cache_mode'::text, 'auto'::text, TRUE\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"set_config"}).AddRow("auto"))
 }
 
 func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
@@ -497,7 +551,9 @@ func expectCreatedPutSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID strin
 
 func expectBareSubmodelStateLoad(mock sqlmock.Sqlmock, submodelID string, idShort string) {
 	expectSubmodelMetadataStateLoad(mock, submodelID, idShort, nil, nil, nil, nil, nil, nil, nil, nil)
+	expectForceGenericSubmodelPutPlan(mock)
 	expectEmptyRootSubmodelElementsLoad(mock)
+	expectRestoreSubmodelPutPlan(mock)
 }
 
 func expectSubmodelStateLoad(mock sqlmock.Sqlmock, submodelID string, idShort string, payloads ...any) {

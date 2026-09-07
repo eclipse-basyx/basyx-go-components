@@ -128,3 +128,38 @@ func TestCanSkipDeleteReadbackRequiresUnrestrictedDeleteFormula(t *testing.T) {
 		t.Fatal("unrestricted delete should skip descriptor readback")
 	}
 }
+
+func TestCanSkipUpdateReadbackRequiresUnrestrictedUpdateFormula(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	deny := false
+	restricted := auth.WithQueryFilter(t.Context(), &auth.QueryFilter{
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumUPDATE: {Boolean: &deny},
+		},
+	})
+	unrestricted := auth.WithQueryFilter(t.Context(), &auth.QueryFilter{
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumUPDATE: {Boolean: &allow},
+		},
+	})
+	fragmentFiltered := auth.WithQueryFilter(t.Context(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			grammar.FragmentStringPattern("$aasdesc#description"): auth.NewFragmentFilterPredicate(
+				grammar.LogicalExpression{Boolean: &allow},
+				false,
+			),
+		},
+	})
+
+	if CanSkipUpdateReadback(restricted) {
+		t.Fatal("restricted update must retain descriptor readback")
+	}
+	if !CanSkipUpdateReadback(unrestricted) {
+		t.Fatal("unrestricted update should skip descriptor readback")
+	}
+	if CanSkipUpdateReadback(fragmentFiltered) {
+		t.Fatal("fragment-filtered update must retain descriptor readback")
+	}
+}

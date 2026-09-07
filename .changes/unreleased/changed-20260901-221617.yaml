@@ -1,0 +1,7 @@
+kind: changed
+body: Expose AAS-managed File attachments as AAS Environment attachment URLs in DPP representations; GENERAL_EXTERNALURL is required to serialize these URLs even when registry synchronization is disabled.
+time: 2026-09-01T22:16:17.324369+02:00
+custom:
+    Impact: High
+    PullRequest: 650
+    SecurityImpact: None.

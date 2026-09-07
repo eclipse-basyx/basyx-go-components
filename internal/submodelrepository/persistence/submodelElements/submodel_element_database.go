@@ -711,7 +711,7 @@ func insertSubmodelElements(requestCtx *context.Context, executeBatch func(*sql.
 		return nil, err
 	}
 
-	insertBaseErr := insertBaseNodesDepthWise(requestCtx, localTx, batch, dialect, int64(submodelDatabaseID), nodes)
+	insertBaseErr := insertBaseNodesDepthWise(requestCtx, localTx, batch, dialect, int64(submodelDatabaseID), nodes, ctx.FirstNodeID)
 	if insertBaseErr != nil {
 		err = insertBaseErr
 		return nil, err

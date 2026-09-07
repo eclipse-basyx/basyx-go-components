@@ -177,7 +177,13 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 	}
 
 	if cursor != "" {
-		ds = ds.Where(goqu.I("aas.aas_id").Gte(cursor))
+		cursorExists := dialect.From(goqu.T("aas").As("cursor_aas")).
+			Select(goqu.L("1")).
+			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
+		ds = ds.Where(
+			goqu.Func("EXISTS", cursorExists),
+			goqu.I("aas.aas_id").Gte(cursor),
+		)
 	}
 
 	if idShort != "" {
@@ -199,6 +205,46 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 		ds = ds.Where(buildSpecificAssetIDFilterExpression(dialect, specificAssetID))
 	}
 
+	return ds, nil
+}
+
+func buildGetAssetAdministrationShellIdentifiersDataset(
+	dialect *goqu.DialectWrapper,
+	limit int32,
+	cursor string,
+	idShort string,
+	specificAssetIDs []types.ISpecificAssetID,
+) (*goqu.SelectDataset, error) {
+	ds := dialect.
+		From(goqu.T("aas").As("aas")).
+		LeftJoin(
+			goqu.T("asset_information").As("asset_information"),
+			goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id"))),
+		).
+		Select(goqu.I("aas.aas_id")).
+		Order(goqu.I("aas.aas_id").Asc())
+	if limit > 0 {
+		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
+		if err != nil {
+			return nil, err
+		}
+		ds = ds.Limit(pageLimitPlusOne)
+	}
+	if cursor != "" {
+		cursorExists := dialect.From(goqu.T("aas").As("cursor_aas")).
+			Select(goqu.L("1")).
+			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
+		ds = ds.Where(
+			goqu.Func("EXISTS", cursorExists),
+			goqu.I("aas.aas_id").Gte(cursor),
+		)
+	}
+	if idShort != "" {
+		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
+	}
+	for _, specificAssetID := range uniqueSpecificAssetIDs(specificAssetIDs) {
+		ds = ds.Where(buildSpecificAssetIDFilterExpression(dialect, specificAssetID))
+	}
 	return ds, nil
 }
 
@@ -296,20 +342,36 @@ func buildGetAssetAdministrationShellDBIDByIdentifierDataset(dialect *goqu.Diale
 		Limit(1)
 }
 
-func buildDeleteAssetAdministrationShellByDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
-	return dialect.Delete("aas").Where(goqu.I("id").Eq(aasDBID)).ToSQL()
-}
+func buildCleanupAndDeleteAssetAdministrationShellQuery(dialect *goqu.DialectWrapper, aasIdentifier string) (string, []any, error) {
+	target := dialect.From(goqu.T("aas").As("a")).
+		LeftJoin(
+			goqu.T("thumbnail_file_data").As("tfd"),
+			goqu.On(goqu.I("tfd.id").Eq(goqu.I("a.id"))),
+		).
+		Select(goqu.I("a.id"), goqu.I("tfd.file_oid")).
+		Where(goqu.I("a.aas_id").Eq(aasIdentifier)).
+		ForUpdate(goqu.Wait, goqu.T("a"))
 
-func buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
-	unlinkSubquery := dialect.From(goqu.T("thumbnail_file_data").As("tfd")).
-		Select(goqu.Func("lo_unlink", goqu.I("tfd.file_oid")).As("unlink_result")).
-		Where(
-			goqu.I("tfd.id").Eq(aasDBID),
-			goqu.I("tfd.file_oid").IsNotNull(),
-		)
+	deleted := dialect.Delete("aas").
+		Where(goqu.C("id").In(dialect.From("target_aas").Select("id"))).
+		Returning("id")
 
-	return dialect.From(unlinkSubquery.As("unlink_results")).
-		Select(goqu.COUNT("*")).
+	unlinked := dialect.From("target_aas").
+		Select(goqu.Func("lo_unlink", goqu.C("file_oid")).As("unlink_result")).
+		Where(goqu.C("file_oid").IsNotNull())
+
+	return dialect.Select(
+		goqu.L("(SELECT COUNT(*) FROM ?)", goqu.I("deleted_aas")).As("deleted_count"),
+		goqu.L(
+			"(SELECT COALESCE(SUM(?), 0) FROM ?)",
+			goqu.I("unlink_result"),
+			goqu.I("unlinked_large_objects"),
+		).As("unlinked_count"),
+	).
+		With("target_aas", target).
+		With("deleted_aas", deleted).
+		With("unlinked_large_objects", unlinked).
+		Prepared(true).
 		ToSQL()
 }
 

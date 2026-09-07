@@ -45,6 +45,7 @@ type BatchInsertContext struct {
 	ParentID      int    // Database ID of the parent element (0 for top-level elements)
 	ParentPath    string // Path of the parent element (empty for top-level elements)
 	RootSmeID     int    // Database ID of the root submodel element (0 for top-level elements, will be set to own ID)
+	FirstNodeID   int    // Optional preallocated database ID for the first inserted element
 	IsFromList    bool   // Whether elements are being inserted into a SubmodelElementList
 	StartPosition int    // Starting position for elements (used when adding to existing containers)
 	StartDepth    int    // Depth of inserted root elements (0 for top-level elements)
@@ -189,12 +190,12 @@ func buildIDShortPath(parentPath string, isFromList bool, position int, idShort 
 	return parentPath + "." + idShort
 }
 
-func insertBaseNodesDepthWise(requestCtx *context.Context, tx *sql.Tx, batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, submodelDatabaseID int64, nodes []*flattenedInsertNode) error {
+func insertBaseNodesDepthWise(requestCtx *context.Context, tx *sql.Tx, batch *common.PostgreSQLBatch, dialect goqu.DialectWrapper, submodelDatabaseID int64, nodes []*flattenedInsertNode, firstNodeID int) error {
 	if len(nodes) == 0 {
 		return nil
 	}
 
-	if err := assignReservedNodeIDs(requestCtx, tx, nodes); err != nil {
+	if err := assignReservedNodeIDs(requestCtx, tx, nodes, firstNodeID); err != nil {
 		return err
 	}
 
@@ -239,11 +240,16 @@ func insertBaseNodesDepthWise(requestCtx *context.Context, tx *sql.Tx, batch *co
 	return nil
 }
 
-func assignReservedNodeIDs(requestCtx *context.Context, tx *sql.Tx, nodes []*flattenedInsertNode) error {
-	reservedIDs, err := reserveSubmodelElementIDs(requestCtx, tx, len(nodes))
+func assignReservedNodeIDs(requestCtx *context.Context, tx *sql.Tx, nodes []*flattenedInsertNode, firstNodeID int) error {
+	reservedIDs := make([]int, 0, len(nodes))
+	if firstNodeID > 0 && len(nodes) > 0 {
+		reservedIDs = append(reservedIDs, firstNodeID)
+	}
+	remainingIDs, err := reserveSubmodelElementIDs(requestCtx, tx, len(nodes)-len(reservedIDs))
 	if err != nil {
 		return err
 	}
+	reservedIDs = append(reservedIDs, remainingIDs...)
 	if len(reservedIDs) != len(nodes) {
 		return common.NewInternalServerError("SMREPO-INSSME-RESERVEID-COUNTMISMATCH reserved IDs count does not match node count")
 	}
@@ -256,6 +262,9 @@ func assignReservedNodeIDs(requestCtx *context.Context, tx *sql.Tx, nodes []*fla
 }
 
 func reserveSubmodelElementIDs(requestCtx *context.Context, tx *sql.Tx, count int) ([]int, error) {
+	if count == 0 {
+		return nil, nil
+	}
 	if tx == nil {
 		return nil, common.NewInternalServerError("SMREPO-INSSME-RESERVEID-NILTX transaction must not be nil")
 	}

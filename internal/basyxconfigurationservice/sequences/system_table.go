@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
@@ -134,4 +135,29 @@ func seedSystemTableIfMissing(db *sql.DB) error {
 		return fmt.Errorf("BASYXCFG-SYSTEM-INSERTSEED: %w", err)
 	}
 	return nil
+}
+
+func readCurrentSchemaVersion(db *sql.DB) (string, error) {
+	query, _, err := goqu.Dialect("postgres").
+		From(goqu.T("basyxsystem")).
+		Select(goqu.C("schema_version")).
+		Order(goqu.C("identifier").Asc()).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return "", fmt.Errorf("BASYXCFG-VERSION-BUILDQUERY: %w", err)
+	}
+
+	var version string
+	err = db.QueryRow(query).Scan(&version)
+	if err == nil {
+		return strings.TrimSpace(version), nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		if seedErr := seedSystemTableIfMissing(db); seedErr != nil {
+			return "", fmt.Errorf("BASYXCFG-VERSION-SEED: %w", seedErr)
+		}
+		return initialSchemaVersion, nil
+	}
+	return "", fmt.Errorf("BASYXCFG-VERSION-READ: %w", err)
 }

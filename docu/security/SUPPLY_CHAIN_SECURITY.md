@@ -32,7 +32,7 @@ Images are signed by GitHub Actions keyless identity for this repository.
 Expected certificate identity values:
 
 - Release workflow:
-  - `https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/tags/<tag>`
+  - `https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/heads/main`
 - Snapshot workflow:
   - `https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-snapshot.yml@refs/heads/main`
 
@@ -46,7 +46,7 @@ Example (replace image and digest):
 
 ```bash
 IMAGE="eclipsebasyx/aasregistry-go@sha256:<digest>"
-IDENTITY="https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/tags/v1.2.3"
+IDENTITY="https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/heads/main"
 
 cosign verify \
   --certificate-identity "$IDENTITY" \
@@ -64,7 +64,7 @@ Use the provenance predicate type that was detected from BuildKit output (common
 
 ```bash
 IMAGE="eclipsebasyx/aasregistry-go@sha256:<digest>"
-IDENTITY="https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/tags/v1.2.3"
+IDENTITY="https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/heads/main"
 PROVENANCE_TYPE="https://slsa.dev/provenance/v1"
 
 cosign verify-attestation \
@@ -80,7 +80,7 @@ The workflow creates explicit Cosign SBOM attestations from BuildKit SBOM data, 
 
 ```bash
 IMAGE="eclipsebasyx/aasregistry-go@sha256:<digest>"
-IDENTITY="https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/tags/v1.2.3"
+IDENTITY="https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/heads/main"
 
 cosign verify-attestation \
   --type "https://spdx.dev/Document" \
@@ -105,13 +105,16 @@ GitHub Releases include per-service exported SBOM files:
 - `service-version.spdx.json`
 - `service-version.cdx.json`
 
-These assets are generated in CI and attached to the published release.
+These assets are generated in CI and attached while the release is still a
+draft. The release is published only after every service image, signature,
+attestation, and exported SBOM succeeds.
 
 ## Semantic Version and Provenance Consistency
 
 Release workflow enforces semantic version parsing from the Git tag.
 
-- Stable releases receive `major.minor.patch`, `major.minor`, `major`, and `latest` tags.
+- Every release first publishes only its immutable `major.minor.patch` image tags.
+- Stable `major.minor`, `major`, and `latest` aliases are promoted only after all service images succeed.
 - Pre-releases keep only explicit pre-release tags.
 - Metadata labels include source repository, commit SHA, and version.
 - BuildKit and Cosign attestations plus signatures are anchored to the immutable digest.

@@ -601,7 +601,7 @@ func joinPlanConfigForSME() JoinPlanConfig {
 				Alias: "property_element",
 				Deps:  []string{"submodel_element"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
-					return ds.Join(
+					return ds.LeftJoin(
 						goqu.T("property_element").As("property_element"),
 						goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
 					)
@@ -611,7 +611,7 @@ func joinPlanConfigForSME() JoinPlanConfig {
 				Alias: "multilanguage_property_value",
 				Deps:  []string{"submodel_element"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
-					return ds.Join(
+					return ds.LeftJoin(
 						goqu.T("multilanguage_property_value").As("multilanguage_property_value"),
 						goqu.On(goqu.I("multilanguage_property_value.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
 					)
@@ -1475,13 +1475,12 @@ func requiredAliasesFromResolvedWithConfig(resolved []ResolvedFieldPath, config 
 				if strings.Contains(r.Column, alias+".") {
 					req[alias] = struct{}{}
 					found = true
-					break
+					continue
 				}
 				if config.TableForAlias != nil {
 					if table, ok := config.TableForAlias(alias); ok && strings.Contains(r.Column, table+".") {
 						req[alias] = struct{}{}
 						found = true
-						break
 					}
 				}
 			}
@@ -2195,7 +2194,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 
 	// Handle boolean literal
 	if le.Boolean != nil {
-		return goqu.L("?", *le.Boolean), nil, nil
+		return goqu.L("?::boolean", *le.Boolean), nil, nil
 	}
 
 	return nil, nil, fmt.Errorf("logical expression has no valid operation")
@@ -2272,7 +2271,7 @@ func evaluateMatchExpressions(match []MatchExpression) (exp.Expression, []Resolv
 
 func evaluateMatchExpressionSQL(me MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
 	if me.Boolean != nil {
-		return goqu.L("?", *me.Boolean), nil, nil
+		return goqu.L("?::boolean", *me.Boolean), nil, nil
 	}
 	if len(me.Eq) > 0 {
 		return evaluateMatchComparison(me.Eq, "$eq")

@@ -34,6 +34,30 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
+func TestBooleanLogicalExpressionUsesTypedSQLParameter(t *testing.T) {
+	value := false
+	expression, _, err := (&LogicalExpression{Boolean: &value}).EvaluateToExpression(nil)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	query, args, err := goqu.Dialect("postgres").
+		From("descriptor").
+		Select(goqu.L("1")).
+		Where(expression).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	if !strings.Contains(query, "::boolean") {
+		t.Fatalf("expected explicit boolean parameter type, got %s", query)
+	}
+	if len(args) != 1 || args[0] != false {
+		t.Fatalf("expected one false boolean argument, got %#v", args)
+	}
+}
+
 func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_NoCollector_ORsWithNegatedFragment(t *testing.T) {
 	le := &LogicalExpression{Eq: ComparisonItems{field("$aasdesc#idShort"), strVal("shell-short")}}
 

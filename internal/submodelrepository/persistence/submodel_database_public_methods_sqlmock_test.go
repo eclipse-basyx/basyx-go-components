@@ -31,6 +31,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -41,6 +42,7 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
@@ -65,6 +67,41 @@ func TestSubmodelRepositoryReadPoolSelection(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, reader, backend.readDB(t.Context()))
 	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
+}
+
+func TestManagedFileAttachmentPathsBulkLoadsCurrentAndLegacyAttachments(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	submodelID := "urn:sm:files"
+	secondSubmodelID := "urn:sm:more-files"
+	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL([]string{submodelID, secondSubmodelID})
+	require.NoError(t, err)
+	require.Contains(t, query, `"fr"."binary_content_id" IS NOT NULL`)
+	require.Contains(t, query, `"fd"."file_oid" IS NOT NULL`)
+	mock.ExpectQuery(regexp.QuoteMeta(query)).
+		WillReturnRows(sqlmock.NewRows([]string{"submodel_identifier", "idshort_path"}).
+			AddRow(submodelID, "documents.manual").
+			AddRow(submodelID, "legacyFile").
+			AddRow(secondSubmodelID, "datasheet"))
+
+	sut := &SubmodelDatabase{db: db}
+	paths, err := sut.ManagedFileAttachmentPathsBySubmodelIDs(t.Context(), []string{submodelID, secondSubmodelID})
+	require.NoError(t, err)
+	require.Equal(t, map[string]struct{}{
+		"documents.manual": {},
+		"legacyFile":       {},
+	}, paths[submodelID])
+	require.Equal(t, map[string]struct{}{"datasheet": {}}, paths[secondSubmodelID])
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestManagedFileAttachmentPathsBySubmodelIDsSkipsEmptyLookup(t *testing.T) {
+	sut := &SubmodelDatabase{}
+	paths, err := sut.ManagedFileAttachmentPathsBySubmodelIDs(t.Context(), nil)
+	require.NoError(t, err)
+	require.Empty(t, paths)
 }
 
 func TestGetSubmodelsDatabaseQueryError(t *testing.T) {
@@ -774,11 +811,9 @@ func TestAddSubmodelElementWithPathUnrestrictedDuplicateReturnsConflict(t *testi
 			"model_type",
 			"child_depth",
 		}).AddRow(42, 7, 7, types.ModelTypeSubmodelElementList, 2))
-	mock.ExpectQuery(`SELECT COALESCE.*MAX.*FROM "submodel_element" AS "child"`).
-		WithArgs(7).
-		WillReturnRows(sqlmock.NewRows([]string{"next_position"}).AddRow(3))
-	mock.ExpectQuery(`SELECT "idshort_path" FROM "submodel_element"`).
-		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}).AddRow("container[0]"))
+	mock.ExpectQuery(`WITH child_insert_state AS .*MAX.*FROM "submodel_element" AS "child".*"collision_path".*SELECT "next_position", "collision_path", CASE.*nextval.*first_node_id`).
+		WithArgs(7, 42, 7, "Created", 1, "submodel_element", "id").
+		WillReturnRows(sqlmock.NewRows([]string{"next_position", "collision_path", "first_node_id"}).AddRow(3, "container[0]", nil))
 	mock.ExpectRollback()
 
 	err = sut.AddSubmodelElementWithPath(contextWithABACDisabled(t), "sm", "container", element)
@@ -812,13 +847,9 @@ func TestAddSubmodelElementWithPathInTransactionUsesOnlyTransactionConnection(t 
 			"model_type",
 			"child_depth",
 		}).AddRow(42, 7, 7, types.ModelTypeSubmodelElementCollection, 2))
-	mock.ExpectQuery(`SELECT COALESCE.*MAX.*FROM "submodel_element" AS "child"`).
-		WithArgs(7).
-		WillReturnRows(sqlmock.NewRows([]string{"next_position"}).AddRow(3))
-	mock.ExpectQuery(`SELECT "idshort_path" FROM "submodel_element"`).
-		WillReturnRows(sqlmock.NewRows([]string{"idshort_path"}))
-	mock.ExpectQuery(`SELECT .*nextval.*generate_series`).
-		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(101))
+	mock.ExpectQuery(`WITH child_insert_state AS .*MAX.*FROM "submodel_element" AS "child".*"collision_path".*SELECT "next_position", "collision_path", CASE.*nextval.*first_node_id`).
+		WithArgs(7, 42, 7, "Created", 1, "submodel_element", "id").
+		WillReturnRows(sqlmock.NewRows([]string{"next_position", "collision_path", "first_node_id"}).AddRow(3, nil, 101))
 	mock.ExpectExec(`(?s)INSERT INTO "submodel_element".*INSERT INTO "property_element"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectRollback()
@@ -1149,22 +1180,9 @@ func TestGetSubmodelReferencesReturnsModelReferencesWithSingleSubmodelKey(t *tes
 
 	sut := &SubmodelDatabase{db: db}
 
-	rows := sqlmock.NewRows([]string{
-		"submodel_identifier",
-		"id_short",
-		"category",
-		"kind",
-		"description",
-		"display_name",
-		"administrative_information",
-		"embedded_data_specification",
-		"supplemental_semantic_ids",
-		"extensions",
-		"qualifiers",
-		"semantic_id",
-	}).
-		AddRow("sm-1", "idShort-1", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil).
-		AddRow("sm-2", "idShort-2", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	rows := sqlmock.NewRows([]string{"submodel_identifier"}).
+		AddRow("sm-1").
+		AddRow("sm-2")
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
@@ -1189,6 +1207,140 @@ func TestGetSubmodelReferencesReturnsModelReferencesWithSingleSubmodelKey(t *tes
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetSubmodelsWithElementsUsesThreePageWideSelects(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{
+			"identifier",
+			"id_short",
+			"category",
+			"kind",
+			"description",
+			"display_name",
+			"administration",
+			"embedded_data_specifications",
+			"supplemental_semantic_ids",
+			"extensions",
+			"qualifiers",
+			"semantic_id",
+			"database_id",
+		}).AddRow("sm-1", "Short", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(7)),
+	)
+	mock.ExpectQuery("WITH").WillReturnRows(
+		sqlmock.NewRows([]string{
+			"submodel_id",
+			"id",
+			"parent_id",
+			"root_id",
+			"id_short",
+			"path",
+			"category",
+			"model_type",
+			"position",
+			"embedded",
+			"supplemental",
+			"extensions",
+			"display_name",
+			"description",
+			"value",
+			"semantic_referred",
+			"supplemental_referred",
+			"qualifiers",
+			"semantic",
+			"semantic_visible",
+			"value_visible",
+		}).AddRow(
+			int64(7),
+			int64(10),
+			nil,
+			nil,
+			"Property",
+			"Property",
+			nil,
+			int64(types.ModelTypeProperty),
+			0,
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte("[]"),
+			nil,
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte("[]"),
+			[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic"}]}`),
+			true,
+			true,
+		),
+	)
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"element_id", "value_payload"}).AddRow(
+			int64(10),
+			[]byte(`{"value":"page-value","value_type":24,"value_id":[],"value_id_referred":[]}`),
+		),
+	)
+	mock.ExpectCommit()
+
+	sut := &SubmodelDatabase{db: db}
+	result, cursor, err := sut.GetSubmodelsWithElementsByListFilters(
+		contextWithABACDisabled(t),
+		100,
+		"",
+		"",
+		"",
+		time.Time{},
+		time.Time{},
+		"deep",
+		true,
+	)
+	require.NoError(t, err)
+	require.Empty(t, cursor)
+	require.Len(t, result, 1)
+	require.Len(t, result[0].SubmodelElements(), 1)
+	property, ok := result[0].SubmodelElements()[0].(types.IProperty)
+	require.True(t, ok)
+	require.NotNil(t, property.Value())
+	require.Equal(t, "page-value", *property.Value())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetAllSubmodelPathsPageUsesOneSetBasedSelect(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`LATERAL .*LIMIT ALL`).WillReturnRows(
+		sqlmock.NewRows([]string{"submodel_identifier", "idshort_path", "sme_id"}).
+			AddRow("sm-1", "A", int64(1)).
+			AddRow("sm-1", "B", int64(2)),
+	)
+	mock.ExpectCommit()
+
+	sut := &SubmodelDatabase{db: db}
+	page, err := sut.GetAllSubmodelPathsPage(
+		contextWithABACDisabled(t),
+		1,
+		"",
+		"",
+		"",
+		"",
+		"deep",
+	)
+	require.NoError(t, err)
+	require.Equal(t, []string{"A"}, page.Paths)
+	require.Equal(t, "sm-1", page.NextSubmodelCursor)
+	require.Equal(t, "A|1", page.NextPathCursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetSubmodelReferencesReturnsBadRequestForEmptySubmodelIdentifier(t *testing.T) {
 	t.Parallel()
 
@@ -1200,21 +1352,7 @@ func TestGetSubmodelReferencesReturnsBadRequestForEmptySubmodelIdentifier(t *tes
 
 	sut := &SubmodelDatabase{db: db}
 
-	rows := sqlmock.NewRows([]string{
-		"submodel_identifier",
-		"id_short",
-		"category",
-		"kind",
-		"description",
-		"display_name",
-		"administrative_information",
-		"embedded_data_specification",
-		"supplemental_semantic_ids",
-		"extensions",
-		"qualifiers",
-		"semantic_id",
-	}).
-		AddRow("", "idShort-empty", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	rows := sqlmock.NewRows([]string{"submodel_identifier"}).AddRow("")
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
@@ -1239,24 +1377,10 @@ func TestGetSubmodelReferencesWithSemanticIDFilterReturnsMatchingReference(t *te
 
 	sut := &SubmodelDatabase{db: db}
 
-	rows := sqlmock.NewRows([]string{
-		"submodel_identifier",
-		"id_short",
-		"category",
-		"kind",
-		"description",
-		"display_name",
-		"administrative_information",
-		"embedded_data_specification",
-		"supplemental_semantic_ids",
-		"extensions",
-		"qualifiers",
-		"semantic_id",
-	}).
-		AddRow("sm-filtered-1", "idShort-filtered-1", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	rows := sqlmock.NewRows([]string{"submodel_identifier"}).AddRow("sm-filtered-1")
 
 	semanticID := "urn:semantic:id:test"
-	mock.ExpectQuery(`SELECT .*FROM .*submodel.*ssrk_filter.*` + semanticID).WillReturnRows(rows)
+	mock.ExpectQuery(`SELECT .*FROM .*submodel.*ssrk_filter`).WillReturnRows(rows)
 
 	references, cursor, err := sut.GetSubmodelReferences(contextWithABACDisabled(t), 10, "", "", semanticID)
 	require.NoError(t, err)

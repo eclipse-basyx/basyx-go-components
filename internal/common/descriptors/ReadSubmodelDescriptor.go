@@ -133,6 +133,7 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 			payloadAlias.Col(common.ColAdministrativeInfoPayload).As("c5"),
 			payloadAlias.Col(common.ColDescriptionPayload).As("c6"),
 			payloadAlias.Col(common.ColDisplayNamePayload).As("c7"),
+			payloadAlias.Col(common.ColExtensionsPayload).As("c8"),
 			submodelDescriptorAlias.Col(common.ColPosition).As("sort_smd_position"),
 			submodelDescriptorAlias.Col(common.ColDescriptorID).As("sort_smd_descriptor_id"),
 		}, maskRuntime.Projections()...)...).
@@ -173,6 +174,7 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 			goqu.I(dataAlias+".c5"),
 			goqu.I(dataAlias+".c6"),
 			goqu.I(dataAlias+".c7"),
+			goqu.I(dataAlias+".c8"),
 		).
 		Order(
 			goqu.I(dataAlias+".sort_smd_position").Asc(),
@@ -199,9 +201,9 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 // grouped by AAS descriptor id in the returned map. The function performs a
 // single base query to collect submodel rows and then issues batched lookups to
 // materialize related data (semantic references, administrative information,
-// display name and description language strings, endpoints, extensions and
-// supplemental semantic references). Batched queries are executed concurrently
-// using errgroup to reduce latency.
+// language strings, extensions, endpoints and supplemental semantic references).
+// Extension payloads are carried by the base rows; independent lookups are
+// executed concurrently using errgroup to reduce latency.
 //
 // If an AAS descriptor id from the input has no submodel descriptors, the map
 // will contain that key with a nil slice to signal an empty result explicitly.
@@ -285,6 +287,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			payloadAlias.Col(common.ColAdministrativeInfoPayload).As("c5"),
 			payloadAlias.Col(common.ColDescriptionPayload).As("c6"),
 			payloadAlias.Col(common.ColDisplayNamePayload).As("c7"),
+			payloadAlias.Col(common.ColExtensionsPayload).As("c8"),
 			submodelDescriptorAlias.Col(common.ColPosition).As("sort_smd_position"),
 			submodelDescriptorAlias.Col(common.ColDescriptorID).As("sort_smd_descriptor_id"),
 		}, maskRuntime.Projections()...)...).
@@ -322,6 +325,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			goqu.I(dataAlias+".c5"),
 			goqu.I(dataAlias+".c6"),
 			goqu.I(dataAlias+".c7"),
+			goqu.I(dataAlias+".c8"),
 		).
 		Order(
 			goqu.I(dataAlias+".sort_smd_position").Asc(),
@@ -375,18 +379,16 @@ func materializeSubmodelDescriptors(
 }
 
 type submodelDescriptorLookups struct {
-	semRefBySmdDesc  map[int64]types.IReference
-	suppBySmdDesc    map[int64][]types.IReference
-	endpointsByDesc  map[int64][]model.Endpoint
-	extensionsByDesc map[int64][]types.Extension
+	semRefBySmdDesc map[int64]types.IReference
+	suppBySmdDesc   map[int64][]types.IReference
+	endpointsByDesc map[int64][]model.Endpoint
 }
 
 func newSubmodelDescriptorLookups() submodelDescriptorLookups {
 	return submodelDescriptorLookups{
-		semRefBySmdDesc:  map[int64]types.IReference{},
-		suppBySmdDesc:    map[int64][]types.IReference{},
-		endpointsByDesc:  map[int64][]model.Endpoint{},
-		extensionsByDesc: map[int64][]types.Extension{},
+		semRefBySmdDesc: map[int64]types.IReference{},
+		suppBySmdDesc:   map[int64][]types.IReference{},
+		endpointsByDesc: map[int64][]model.Endpoint{},
 	}
 }
 
@@ -423,10 +425,6 @@ func loadSubmodelDescriptorLookupsParallel(
 		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
 			return ReadEndpointsByDescriptorIDs(gctx, db, ids, "submodel")
 		}, &lookups.endpointsByDesc)
-
-		GoAssign(g, func() (map[int64][]types.Extension, error) {
-			return ReadExtensionsByDescriptorIDs(gctx, db, ids)
-		}, &lookups.extensionsByDesc)
 	}
 
 	if err := g.Wait(); err != nil {
@@ -453,10 +451,6 @@ func loadSubmodelDescriptorLookupsSerial(
 			return submodelDescriptorLookups{}, err
 		}
 		lookups.endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, smdDescIDs, "submodel")
-		if err != nil {
-			return submodelDescriptorLookups{}, err
-		}
-		lookups.extensionsByDesc, err = ReadExtensionsByDescriptorIDs(ctx, db, smdDescIDs)
 		if err != nil {
 			return submodelDescriptorLookups{}, err
 		}
@@ -488,6 +482,10 @@ func assembleSubmodelDescriptors(
 			if err != nil {
 				return common.NewInternalServerError("SMDESC-READ-DESCRIPTIONPAYLOAD")
 			}
+			extensions, err := parseExtensionsPayload(r.ExtensionsPayload)
+			if err != nil {
+				return common.NewInternalServerError("SMDESC-READ-EXTENSIONSPAYLOAD " + err.Error())
+			}
 
 			out[groupID] = append(out[groupID], model.SubmodelDescriptor{
 				IdShort:                r.IDShort.String,
@@ -497,7 +495,7 @@ func assembleSubmodelDescriptors(
 				DisplayName:            displayName,
 				Description:            description,
 				Endpoints:              lookups.endpointsByDesc[r.SmdDescID],
-				Extensions:             lookups.extensionsByDesc[r.SmdDescID],
+				Extensions:             extensions,
 				SupplementalSemanticId: lookups.suppBySmdDesc[r.SmdDescID],
 			})
 		}
@@ -549,6 +547,7 @@ func readSubmodelDescriptorRows(
 			&r.AdministrativeInfoPayload,
 			&r.DescriptionPayload,
 			&r.DisplayNamePayload,
+			&r.ExtensionsPayload,
 		); err != nil {
 			return nil, nil, err
 		}

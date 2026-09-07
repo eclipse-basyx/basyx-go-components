@@ -566,6 +566,74 @@ The request cannot expose `manufacturerAssetId`, because the ABAC filter is
 mandatory. It also cannot recover `P-200`, because the request itself narrowed
 the policy-visible rows to `P-100`.
 
+## 7. Query MultiLanguageProperty text
+
+`#value` on a `MultiLanguageProperty` matches its language string text. The
+condition holds when any language entry satisfies it, so the language does not
+need to be constrained.
+
+Starting Submodel:
+
+```json
+{
+  "id": "https://example.org/submodel/MultiLanguageTest",
+  "submodelElements": [
+    {
+      "idShort": "ProductName",
+      "modelType": "MultiLanguageProperty",
+      "value": [
+        { "language": "en", "text": "Industrial Sensor" },
+        { "language": "de", "text": "Industriesensor" },
+        { "language": "fr", "text": "Capteur industriel" }
+      ]
+    }
+  ]
+}
+```
+
+Request:
+
+```json
+{
+  "$condition": {
+    "$contains": [
+      { "$field": "$sme.ProductName#value" },
+      { "$strVal": "Capteur" }
+    ]
+  }
+}
+```
+
+Expected result:
+
+```json
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "https://example.org/submodel/MultiLanguageTest",
+      "submodelElements": [
+        {
+          "idShort": "ProductName",
+          "modelType": "MultiLanguageProperty",
+          "value": [
+            { "language": "en", "text": "Industrial Sensor" },
+            { "language": "de", "text": "Industriesensor" },
+            { "language": "fr", "text": "Capteur industriel" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+The French text matches even though the condition names no language. Adding a
+separate `#language` condition with `$and` only checks that the language exists;
+it does not require the matching text to belong to that language. For example,
+the text condition above combined with `#language = "en"` still matches this
+Submodel.
+
 ## What can be combined
 
 - `$and`, `$or`, and `$not` can combine logical expressions.
