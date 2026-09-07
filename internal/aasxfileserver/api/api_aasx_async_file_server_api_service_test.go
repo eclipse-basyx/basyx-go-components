@@ -333,7 +333,7 @@ func TestAsyncStatusSanitizesPersistenceReadFailure(t *testing.T) {
 
 	service := NewAASXFileServerAPIAPIService(nil)
 	service.asyncJobs = manager
-	response, err := service.GetAasxAsyncStatus(t.Context(), "test-handle")
+	response, err := service.GetAasxAsyncStatus(t.Context(), common.EncodeString("test-handle"))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusInternalServerError, response.Code)
 	responseBody, err := json.Marshal(response.Body)
@@ -361,11 +361,47 @@ func TestGetAasxAsyncResultPreservesTypedFailure(t *testing.T) {
 			require.NoError(t, manager.Fail(t.Context(), handleID, http.StatusInternalServerError, test.payload))
 			service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
 
-			response, err := service.GetAasxAsyncResult(t.Context(), handleID)
+			response, err := service.GetAasxAsyncResult(t.Context(), common.EncodeString(handleID))
 
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, response.Code)
 			require.Equal(t, expected, response.Body)
+		})
+	}
+}
+
+func TestGetAasxAsyncStatusReturnsEncodedResultLocation(t *testing.T) {
+	manager := asyncjob.NewManager("AASXFS-TEST", time.Minute)
+	handleID, err := manager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: asyncPackageJobKind})
+	require.NoError(t, err)
+	require.NoError(t, manager.Fail(t.Context(), handleID, http.StatusInternalServerError, failedOperationResult("failed")))
+	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
+
+	response, err := service.GetAasxAsyncStatus(t.Context(), common.EncodeString(handleID))
+
+	require.NoError(t, err)
+	require.Equal(t, http.StatusFound, response.Code)
+	require.Equal(t, openapi.Redirect{
+		Location: "/packages-async/result/" + common.EncodeString(handleID),
+	}, response.Body)
+}
+
+func TestAasxAsyncEndpointsRejectMalformedHandleID(t *testing.T) {
+	service := NewAASXFileServerAPIAPIService(nil)
+	tests := []struct {
+		name string
+		call func(context.Context, string) (openapi.ImplResponse, error)
+	}{
+		{name: "status", call: service.GetAasxAsyncStatus},
+		{name: "result", call: service.GetAasxAsyncResult},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response, err := test.call(t.Context(), "%")
+
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, response.Code)
 		})
 	}
 }

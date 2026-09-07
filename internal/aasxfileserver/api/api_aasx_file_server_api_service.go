@@ -231,9 +231,13 @@ func acquireAsyncExecutionSlot(ctx context.Context, manager *asyncjob.Manager) (
 }
 
 // GetAasxAsyncStatus returns a running result or redirects terminal operations.
-func (s *AASXFileServerAPIAPIService) GetAasxAsyncStatus(ctx context.Context, handleID string) (openapi.ImplResponse, error) {
+func (s *AASXFileServerAPIAPIService) GetAasxAsyncStatus(ctx context.Context, encodedHandleID string) (openapi.ImplResponse, error) {
 	const operation = "GetAasxAsyncStatus"
-	record, response, ok := s.asyncRecord(ctx, handleID, operation)
+	decodedHandleID, decodeErr := common.DecodeString(encodedHandleID)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedHandleId"), nil
+	}
+	record, response, ok := s.asyncRecord(ctx, decodedHandleID, operation)
 	if !ok {
 		return response, nil
 	}
@@ -244,14 +248,18 @@ func (s *AASXFileServerAPIAPIService) GetAasxAsyncStatus(ctx context.Context, ha
 		}), nil
 	}
 	return openapi.Response(http.StatusFound, openapi.Redirect{
-		Location: "/packages-async/result/" + url.PathEscape(handleID),
+		Location: "/packages-async/result/" + url.PathEscape(common.EncodeString(decodedHandleID)),
 	}), nil
 }
 
 // GetAasxAsyncResult returns the retained terminal operation result.
-func (s *AASXFileServerAPIAPIService) GetAasxAsyncResult(ctx context.Context, handleID string) (openapi.ImplResponse, error) {
+func (s *AASXFileServerAPIAPIService) GetAasxAsyncResult(ctx context.Context, encodedHandleID string) (openapi.ImplResponse, error) {
 	const operation = "GetAasxAsyncResult"
-	record, response, ok := s.asyncRecord(ctx, handleID, operation)
+	decodedHandleID, decodeErr := common.DecodeString(encodedHandleID)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedHandleId"), nil
+	}
+	record, response, ok := s.asyncRecord(ctx, decodedHandleID, operation)
 	if !ok {
 		return response, nil
 	}

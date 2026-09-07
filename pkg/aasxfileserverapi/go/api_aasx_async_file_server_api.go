@@ -127,7 +127,7 @@ func (controller *AASXAsyncFileServerAPIAPIController) PostAsyncAASXPackage(writ
 	}
 	if result.Code == http.StatusAccepted {
 		if handle, ok := result.Body.(OperationHandle); ok && handle.HandleId != "" {
-			location := "/packages-async/status/" + url.PathEscape(handle.HandleId)
+			location := "/packages-async/status/" + url.PathEscape(common.EncodeString(handle.HandleId))
 			writer.Header().Set("Location", common.ContextualizeAPIResourceLocation(request, location, "/packages-async"))
 		}
 	}

@@ -205,12 +205,12 @@ func TestAsyncHandleRemainsOwnerScopedAcrossReplicas(t *testing.T) {
 	accepted := postAsyncFileWithAuthorization(t, secureBaseURL, validAASXPath, ownerAToken)
 	handle := assertAcceptedOperation(t, accepted, secureBaseURL)
 	for _, endpoint := range []string{"status", "result"} {
-		knownURL := secureReplicaBURL + "/packages-async/" + endpoint + "/" + url.PathEscape(handle)
+		knownURL := secureReplicaBURL + "/packages-async/" + endpoint + "/" + encodedHandlePathSegment(handle)
 		anonymous := doAsyncRequest(t, http.MethodGet, knownURL, nil, "")
 		require.Equalf(t, http.StatusUnauthorized, anonymous.status, "anonymous %s response: %s", endpoint, anonymous.body)
 
 		foreign := doAuthorizedAsyncRequest(t, http.MethodGet, knownURL, nil, "", ownerBToken)
-		unknown := doAuthorizedAsyncRequest(t, http.MethodGet, secureReplicaBURL+"/packages-async/"+endpoint+"/unknown-owner-handle", nil, "", ownerBToken)
+		unknown := doAuthorizedAsyncRequest(t, http.MethodGet, secureReplicaBURL+"/packages-async/"+endpoint+"/"+encodedHandlePathSegment("unknown-owner-handle"), nil, "", ownerBToken)
 		require.Equalf(t, http.StatusNotFound, foreign.status, "owner B %s response: %s", endpoint, foreign.body)
 		require.Equalf(t, http.StatusNotFound, unknown.status, "unknown %s response: %s", endpoint, unknown.body)
 		require.Equal(t, normalizedErrorPayload(t, unknown.body), normalizedErrorPayload(t, foreign.body), "foreign handles must not be distinguishable from unknown handles")
@@ -226,9 +226,16 @@ func TestAsyncHandleRemainsOwnerScopedAcrossReplicas(t *testing.T) {
 }
 
 func TestAsyncStatusAndResultContracts(t *testing.T) {
+	t.Run("malformed handle", func(t *testing.T) {
+		for _, endpoint := range []string{"status", "result"} {
+			response := doAsyncRequest(t, http.MethodGet, baseURL+"/packages-async/"+endpoint+"/%25", nil, "")
+			require.Equalf(t, http.StatusBadRequest, response.status, "%s response: %s", endpoint, response.body)
+		}
+	})
+
 	t.Run("unknown handle", func(t *testing.T) {
 		for _, endpoint := range []string{"status", "result"} {
-			response := doAsyncRequest(t, http.MethodGet, baseURL+"/packages-async/"+endpoint+"/unknown-handle", nil, "")
+			response := doAsyncRequest(t, http.MethodGet, baseURL+"/packages-async/"+endpoint+"/"+encodedHandlePathSegment("unknown-handle"), nil, "")
 			require.Equalf(t, http.StatusNotFound, response.status, "%s response: %s", endpoint, response.body)
 		}
 	})
@@ -326,12 +333,12 @@ func TestAcceptedAsyncUploadReportsBackgroundPackageFailureAndCleansStaging(t *t
 	require.Equal(t, http.StatusOK, status)
 	require.ElementsMatch(t, collectPackageIDs(packagesBefore.Result), collectPackageIDs(packagesAfter.Result))
 	require.Eventually(t, func() bool { return countLargeObjects(t, db) == largeObjectsBefore }, 5*time.Second, 50*time.Millisecond)
-	retained := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+url.PathEscape(handle), nil, "")
+	retained := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+encodedHandlePathSegment(handle), nil, "")
 	require.Equal(t, http.StatusOK, retained.status)
 	require.Equal(t, "Failed", decodeBaseOperationResult(t, retained.body).ExecutionState)
 
 	expireAsyncHandle(t, db, handle)
-	expired := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+url.PathEscape(handle), nil, "")
+	expired := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+encodedHandlePathSegment(handle), nil, "")
 	require.Equal(t, http.StatusNotFound, expired.status)
 }
 
@@ -343,7 +350,7 @@ func TestAsyncLocationIncludesConfiguredContextPath(t *testing.T) {
 	location := accepted.header.Get("Location")
 	parsed, err := url.Parse(location)
 	require.NoError(t, err)
-	require.Equal(t, "/external/aasx/packages-async/status/"+url.PathEscape(handle), parsed.Path)
+	require.Equal(t, "/external/aasx/packages-async/status/"+encodedHandlePathSegment(handle), parsed.Path)
 	require.NotContains(t, location, "aasx_fileserver_context_it")
 	result := awaitAsyncResult(t, contextBaseURL, handle)
 	require.Equal(t, "Completed", result.ExecutionState)
@@ -363,7 +370,7 @@ func TestAsyncTerminalRetentionStartsAtCompletionAndExpiresThroughCleanup(t *tes
 	require.Equal(t, http.StatusOK, status)
 	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
 	t.Cleanup(func() { deletePackage(t, replicaBURL, created.PackageId, "") })
-	retained := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+url.PathEscape(handle), nil, "")
+	retained := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+encodedHandlePathSegment(handle), nil, "")
 	require.Equal(t, http.StatusOK, retained.status)
 	require.Equal(t, "Completed", decodeBaseOperationResult(t, retained.body).ExecutionState)
 
@@ -383,7 +390,7 @@ func TestAsyncTerminalRetentionStartsAtCompletionAndExpiresThroughCleanup(t *tes
 	require.NoError(t, err)
 
 	for _, endpoint := range []string{"status", "result"} {
-		response := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/"+endpoint+"/"+url.PathEscape(handle), nil, "")
+		response := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/"+endpoint+"/"+encodedHandlePathSegment(handle), nil, "")
 		require.Equal(t, http.StatusNotFound, response.status)
 	}
 }
@@ -404,13 +411,13 @@ func TestRunningAsyncHandleDoesNotExpireAndResultIsNotAvailable(t *testing.T) {
 	_, err = db.ExecContext(t.Context(), query, args...)
 	require.NoError(t, err)
 
-	statusResponse := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/status/"+url.PathEscape(handle), nil, "")
+	statusResponse := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/status/"+encodedHandlePathSegment(handle), nil, "")
 	require.Equal(t, http.StatusOK, statusResponse.status)
 	running := decodeBaseOperationResult(t, statusResponse.body)
 	require.Equal(t, "Running", running.ExecutionState)
 	require.True(t, running.Success)
 
-	resultResponse := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+url.PathEscape(handle), nil, "")
+	resultResponse := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages-async/result/"+encodedHandlePathSegment(handle), nil, "")
 	require.Equal(t, http.StatusBadRequest, resultResponse.status)
 
 	releasePersistence()
@@ -524,7 +531,7 @@ func awaitTerminalStatusWithAuthorization(t *testing.T, pollingBaseURL string, h
 	t.Helper()
 	deadline := time.Now().Add(asyncDeadline)
 	for time.Now().Before(deadline) {
-		response := doAuthorizedAsyncRequest(t, http.MethodGet, pollingBaseURL+"/packages-async/status/"+url.PathEscape(handle), nil, "", token)
+		response := doAuthorizedAsyncRequest(t, http.MethodGet, pollingBaseURL+"/packages-async/status/"+encodedHandlePathSegment(handle), nil, "", token)
 		switch response.status {
 		case http.StatusOK:
 			running := decodeBaseOperationResult(t, response.body)
@@ -723,7 +730,7 @@ func deletePackage(t *testing.T, serviceURL string, packageID string, token stri
 
 func assertRunningStatus(t *testing.T, serviceURL string, handle string, token string) {
 	t.Helper()
-	response := doAuthorizedAsyncRequest(t, http.MethodGet, serviceURL+"/packages-async/status/"+url.PathEscape(handle), nil, "", token)
+	response := doAuthorizedAsyncRequest(t, http.MethodGet, serviceURL+"/packages-async/status/"+encodedHandlePathSegment(handle), nil, "", token)
 	require.Equalf(t, http.StatusOK, response.status, "running status response: %s", response.body)
 	result := decodeBaseOperationResult(t, response.body)
 	require.Equal(t, "Running", result.ExecutionState)
@@ -810,12 +817,17 @@ func assertHandleLocation(t *testing.T, location string, requestBaseURL string, 
 	require.NoError(t, err)
 	base, err := url.Parse(requestBaseURL)
 	require.NoError(t, err)
-	expectedPath := strings.TrimSuffix(base.Path, "/") + pathPrefix + url.PathEscape(handle)
+	encodedHandle := encodedHandlePathSegment(handle)
+	expectedPath := strings.TrimSuffix(base.Path, "/") + pathPrefix + encodedHandle
 	require.Equal(t, expectedPath, resolved.EscapedPath())
-	require.Equal(t, handle, strings.TrimPrefix(resolved.Path, strings.TrimSuffix(base.Path, "/")+pathPrefix))
+	require.Equal(t, encodedHandle, strings.TrimPrefix(resolved.Path, strings.TrimSuffix(base.Path, "/")+pathPrefix))
 	if resolved.IsAbs() {
 		require.Equal(t, base.Host, resolved.Host, "Location exposed an internal or unrelated host")
 	}
+}
+
+func encodedHandlePathSegment(handle string) string {
+	return url.PathEscape(common.EncodeString(handle))
 }
 
 func resolveLocation(t *testing.T, serviceURL string, location string) string {
