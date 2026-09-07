@@ -44,6 +44,7 @@ type authorizedQueryContextKey struct{}
 // expression independently of its physical SQL tables.
 type SemanticResourceKind string
 
+// Semantic resource kinds identify the model resources supported by query authorization.
 const (
 	SemanticResourceAAS     SemanticResourceKind = "aas"
 	SemanticResourceAASDesc SemanticResourceKind = "aasdesc"
@@ -72,6 +73,7 @@ type StringSelector struct {
 // resource view.
 type AccessViewDecision uint8
 
+// Access view decisions describe how a semantic resource can be observed.
 const (
 	AccessViewDenied AccessViewDecision = iota
 	AccessViewRestricted

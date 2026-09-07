@@ -278,10 +278,6 @@ func splitGlobalAssetIDLinks(links []model.AssetLink) ([]string, []model.AssetLi
 	return globalAssetIDs, assetLinks
 }
 
-func buildGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
-	return buildGlobalAssetIDQueryForField("$aasdesc#globalAssetId", globalAssetIDs)
-}
-
 func buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
 	return buildGlobalAssetIDQueryForField("$bd#globalAssetId", globalAssetIDs)
 }

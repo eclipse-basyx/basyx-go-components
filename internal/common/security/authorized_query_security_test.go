@@ -47,9 +47,9 @@ func TestCallerConditionReadsSecurityHiddenFieldThroughGuard(t *testing.T) {
 		{StrVal: &secret},
 	}}
 	ctx := WithQueryFilter(t.Context(), queryFilterHidingField("$aas#idShort"))
-	ctx = mustAuthorizedQueryContext(t, ctx, grammar.Query{Condition: &condition})
+	ctx = mustAuthorizedQueryContext(ctx, t, grammar.Query{Condition: &condition})
 
-	sql := buildAuthorizedAASSelectionSQL(t, ctx)
+	sql := buildAuthorizedAASSelectionSQL(ctx, t)
 	if strings.Count(sql, "::boolean") < 2 || !strings.Contains(sql, `"aas"."id_short"`) {
 		t.Fatalf("hidden caller field must be evaluated with a condition-visible guard:\n%s", sql)
 	}
@@ -82,7 +82,7 @@ func TestDeniedRelatedSubmodelIsNullUnderPositiveAndNegatedConditions(t *testing
 				},
 			})
 			ctx = grammar.ContextWithAASHierarchyQueries(ctx)
-			sql := buildAuthorizedAASSelectionSQL(t, ctx)
+			sql := buildAuthorizedAASSelectionSQL(ctx, t)
 			if !strings.Contains(sql, "NULL") {
 				t.Fatalf("denied related field must compile to neutral NULL:\n%s", sql)
 			}
@@ -115,7 +115,7 @@ func TestRelatedSubmodelGrantAndCallerPredicateShareOneExistsWitness(t *testing.
 		},
 	})
 	ctx = grammar.ContextWithAASHierarchyQueries(ctx)
-	sql := buildAuthorizedAASSelectionSQL(t, ctx)
+	sql := buildAuthorizedAASSelectionSQL(ctx, t)
 	if count := strings.Count(sql, "EXISTS"); count != 1 {
 		t.Fatalf("grant and caller predicate must use one related-row witness, got %d EXISTS clauses:\n%s", count, sql)
 	}
@@ -218,7 +218,7 @@ func TestNegatedRestrictedRelatedConditionRequiresVisibleWitness(t *testing.T) {
 		},
 	})
 	ctx = grammar.ContextWithAASHierarchyQueries(ctx)
-	sql := buildAuthorizedAASSelectionSQL(t, ctx)
+	sql := buildAuthorizedAASSelectionSQL(ctx, t)
 	if strings.Count(sql, "EXISTS") != 2 || !strings.Contains(sql, "AND NOT (EXISTS") {
 		t.Fatalf("negated related predicate must require a visible witness outside negation:\n%s", sql)
 	}
@@ -263,7 +263,7 @@ func TestReferableGrantBuildsSegmentAwareSMESubtreeView(t *testing.T) {
 		},
 	})
 	ctx = grammar.ContextWithAASHierarchyQueries(ctx)
-	sql := buildAuthorizedAASSelectionSQL(t, ctx)
+	sql := buildAuthorizedAASSelectionSQL(ctx, t)
 	if !strings.Contains(sql, `"submodel_element"."idshort_path" LIKE`) ||
 		!strings.Contains(sql, `"submodel"."submodel_identifier"`) {
 		t.Fatalf("REFERABLE view must bind the submodel and segment-bounded SME subtree:\n%s", sql)
@@ -553,7 +553,7 @@ func TestAuthorizedQueryDeepCopiesCallerLiteralPointers(t *testing.T) {
 	field := grammar.ModelStringPattern("$aas#idShort")
 	value := grammar.StandardString("original")
 	condition := grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}}
-	ctx := mustAuthorizedQueryContext(t, t.Context(), grammar.Query{Condition: &condition})
+	ctx := mustAuthorizedQueryContext(t.Context(), t, grammar.Query{Condition: &condition})
 
 	field = "$aas#id"
 	value = "mutated"
@@ -577,9 +577,9 @@ func TestNegatedCallerConditionCannotMatchSecurityHiddenField(t *testing.T) {
 	}}
 	condition := grammar.LogicalExpression{Not: &leaf}
 	ctx := WithQueryFilter(t.Context(), queryFilterHidingField("$aas#idShort"))
-	ctx = mustAuthorizedQueryContext(t, ctx, grammar.Query{Condition: &condition})
+	ctx = mustAuthorizedQueryContext(ctx, t, grammar.Query{Condition: &condition})
 
-	sql := buildAuthorizedAASSelectionSQL(t, ctx)
+	sql := buildAuthorizedAASSelectionSQL(ctx, t)
 	if !strings.Contains(sql, "AND NOT") || strings.Count(sql, "::boolean") < 2 {
 		t.Fatalf("trusted visibility must stay outside caller negation:\n%s", sql)
 	}
@@ -596,7 +596,7 @@ func TestCallerResponseFilterConditionCannotReadAnotherHiddenField(t *testing.T)
 	}}
 	responseFragment := grammar.FragmentStringPattern("$aas#assetInformation.globalAssetId")
 	ctx := WithQueryFilter(t.Context(), queryFilterHidingField("$aas#idShort"))
-	ctx = mustAuthorizedQueryContext(t, ctx, grammar.Query{FilterConditions: []grammar.SubFilter{{
+	ctx = mustAuthorizedQueryContext(ctx, t, grammar.Query{FilterConditions: []grammar.SubFilter{{
 		Condition: &condition,
 		Fragment:  &responseFragment,
 	}}})
@@ -633,7 +633,7 @@ func TestCallerMatchResponseFilterRetainsHiddenFieldGuard(t *testing.T) {
 	responseFragment := grammar.FragmentStringPattern("$aas#assetInformation.specificAssetIds[]")
 	match := true
 	ctx := WithQueryFilter(t.Context(), queryFilterHidingField(responseFragment))
-	ctx = mustAuthorizedQueryContext(t, ctx, grammar.Query{FilterConditions: []grammar.SubFilter{{
+	ctx = mustAuthorizedQueryContext(ctx, t, grammar.Query{FilterConditions: []grammar.SubFilter{{
 		Condition: &condition,
 		Fragment:  &responseFragment,
 		Match:     &match,
@@ -711,9 +711,9 @@ func TestParentArrayMaskProtectsCallerReadOfChildField(t *testing.T) {
 	value := grammar.StandardString("secret")
 	condition := grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}}
 	ctx := WithQueryFilter(t.Context(), queryFilterHidingField("$aas#assetInformation.specificAssetIds[]"))
-	ctx = mustAuthorizedQueryContext(t, ctx, grammar.Query{Condition: &condition})
+	ctx = mustAuthorizedQueryContext(ctx, t, grammar.Query{Condition: &condition})
 
-	sql := buildAuthorizedAASSelectionSQL(t, ctx)
+	sql := buildAuthorizedAASSelectionSQL(ctx, t)
 	if !strings.Contains(sql, "::boolean") || !strings.Contains(sql, "specific_asset_id") {
 		t.Fatalf("parent fragment mask did not protect its child field:\n%s", sql)
 	}
@@ -733,7 +733,7 @@ func queryFilterHidingField(fragment grammar.FragmentStringPattern) *QueryFilter
 	}
 }
 
-func buildAuthorizedAASSelectionSQL(t *testing.T, ctx context.Context) string {
+func buildAuthorizedAASSelectionSQL(ctx context.Context, t *testing.T) string {
 	t.Helper()
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
 	if err != nil {
@@ -751,7 +751,7 @@ func buildAuthorizedAASSelectionSQL(t *testing.T, ctx context.Context) string {
 	return sql
 }
 
-func mustAuthorizedQueryContext(t *testing.T, ctx context.Context, query grammar.Query) context.Context {
+func mustAuthorizedQueryContext(ctx context.Context, t *testing.T, query grammar.Query) context.Context {
 	t.Helper()
 	authorized, err := WithAuthorizedQuery(ctx, SemanticResourceAAS, query)
 	if err != nil {
