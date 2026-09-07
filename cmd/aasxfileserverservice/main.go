@@ -46,6 +46,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
@@ -201,8 +202,7 @@ func aasxAsyncExecutionCapacity(maximumOpenConnections int) (int, error) {
 
 func requireAsyncAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		authorization := strings.TrimSpace(request.Header.Get("Authorization"))
-		if strings.Contains(request.URL.Path, "/packages-async") && !strings.HasPrefix(authorization, "Bearer ") {
+		if strings.Contains(request.URL.Path, "/packages-async") && !auth.IsAuthenticated(request.Context()) {
 			_ = common.WriteErrorResponse(writer, errors.New("access denied"), http.StatusUnauthorized, "Middleware", "Rules", "Denied")
 			return
 		}

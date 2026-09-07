@@ -40,40 +40,52 @@ import (
 	"strings"
 	"testing"
 
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v3"
 )
 
 const generatedAASXAPIDirectory = "../../pkg/aasxfileserverapi/go"
 
-func TestRequireAsyncAuthentication(t *testing.T) {
-	t.Parallel()
+func TestRequireAsyncAuthenticationRejectsUnverifiedTokenThroughSecurityChain(t *testing.T) {
+	router := chi.NewRouter()
+	accessModel, err := auth.ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"rules": [{
+				"ACL": {
+					"ACCESS": "ALLOW",
+					"RIGHTS": ["CREATE"],
+					"ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
+				},
+				"OBJECTS": [{"ROUTE": "/packages-async"}],
+				"FORMULA": {"$boolean": true}
+			}]
+		}
+	}`), router, "")
+	require.NoError(t, err)
 
-	handler := requireAsyncAuthentication(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+	oidc, err := auth.NewOIDC(t.Context(), auth.OIDCSettings{AllowAnonymous: true})
+	require.NoError(t, err)
+
+	handlerCalled := false
+	router.Use(
+		oidc.Middleware,
+		requireAsyncAuthentication,
+		auth.ABACMiddleware(auth.ABACSettings{Enabled: true, Model: accessModel}),
+	)
+	router.Post("/packages-async", func(writer http.ResponseWriter, _ *http.Request) {
+		handlerCalled = true
 		writer.WriteHeader(http.StatusNoContent)
-	}))
-	tests := []struct {
-		name          string
-		path          string
-		authorization string
-		wantStatus    int
-	}{
-		{name: "anonymous async request", path: "/packages-async", wantStatus: http.StatusUnauthorized},
-		{name: "bearer async request", path: "/packages-async/status/handle", authorization: "Bearer token", wantStatus: http.StatusNoContent},
-		{name: "anonymous synchronous request", path: "/packages", wantStatus: http.StatusNoContent},
-	}
+	})
 
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			request := httptest.NewRequest(http.MethodGet, test.path, nil)
-			request.Header.Set("Authorization", test.authorization)
-			response := httptest.NewRecorder()
-			handler.ServeHTTP(response, request)
-			require.Equal(t, test.wantStatus, response.Code)
-		})
-	}
+	request := httptest.NewRequest(http.MethodPost, "/packages-async", nil)
+	request.Header.Set("Authorization", "\u00a0Bearer junk")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	require.Equal(t, http.StatusUnauthorized, response.Code)
+	require.False(t, handlerCalled)
 }
 
 type generatedContractEvidence struct {
