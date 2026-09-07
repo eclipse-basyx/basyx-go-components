@@ -53,7 +53,7 @@ FOR EACH ROW
 EXECUTE FUNCTION cleanup_terminal_aasx_async_upload();
 
 UPDATE basyxsystem
-SET schema_version = 'v1.1.16',
+SET schema_version = 'v1.1.18',
     state = 'clean'
 WHERE identifier = (
   SELECT identifier
