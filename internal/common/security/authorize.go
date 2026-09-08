@@ -290,6 +290,9 @@ func ContextWithoutQueryFilter(ctx context.Context) context.Context {
 // enforcement decision is required, or when an inconsistent QueryFilter is
 // detected (Formula is set but FormulasByRight is empty).
 func ShouldEnforceFormula(ctx context.Context) (bool, error) {
+	if boundRequestFromContext(ctx) != nil {
+		return true, nil
+	}
 	cfg, ok := common.ConfigFromContext(ctx)
 	if !ok {
 		// return true to be safe in case of misconfiguration, but also return an error to allow proper logging and debugging

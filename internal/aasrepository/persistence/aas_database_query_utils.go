@@ -26,7 +26,9 @@
 package persistence
 
 import (
+	"context"
 	"fmt"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"strconv"
 	"time"
 
@@ -375,13 +377,19 @@ func buildCleanupAndDeleteAssetAdministrationShellQuery(dialect *goqu.DialectWra
 		ToSQL()
 }
 
-func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64, limit int32, cursorID int64) (string, []any, error) {
+func buildGetAllSubmodelReferencesByAASIDQuery(ctx context.Context, dialect *goqu.DialectWrapper, aasDBID int64, limit int32, cursorID int64) (string, []any, error) {
 	ds := dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).
 		InnerJoin(goqu.T("aas_submodel_reference_payload").As("rp"), goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("r.id")))).
 		Select(goqu.I("r.id"), goqu.I("rp.parent_reference_payload")).
 		Where(goqu.I("r.aas_id").Eq(aasDBID)).
 		Order(goqu.I("r.id").Asc())
+
+	var err error
+	ds, err = auth.AddResourceBoundReferenceFilter(ctx, ds, "r")
+	if err != nil {
+		return "", nil, err
+	}
 
 	if limit > 0 {
 		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)

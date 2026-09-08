@@ -130,6 +130,7 @@ func wrapReconciliationDeleteRows(paths []string) []reconciliationDeleteJSONRow 
 func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 	oldSubmodel types.ISubmodel,
 	newSubmodel types.ISubmodel,
+	resourceBound ...bool,
 ) (submodelReconciliationPlan, error) {
 	metadata, err := buildSubmodelReconciliationMetadata(oldSubmodel, newSubmodel)
 	if err != nil {
@@ -142,6 +143,11 @@ func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 	newRows, err := submodelelements.BuildReconciliationElementRows(s.db, newSubmodel.SubmodelElements())
 	if err != nil {
 		return submodelReconciliationPlan{}, err
+	}
+	if len(resourceBound) > 0 && resourceBound[0] {
+		if err := protectReconciliationListIdentities(oldRows, newRows); err != nil {
+			return submodelReconciliationPlan{}, err
+		}
 	}
 	updates, inserts, deletes, err := reconcileSubmodelElementRows(oldRows, newRows)
 	if err != nil {

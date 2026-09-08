@@ -92,6 +92,9 @@ func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel", submodel.ID()); err != nil {
+		return err
+	}
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodel.ID()); err != nil {
 		return err
 	}
@@ -104,6 +107,9 @@ func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Cont
 		return err
 	}
 
+	if err := auth.ResourceBoundCreatedTx(ctx, tx, "submodel", submodel.ID()); err != nil {
+		return err
+	}
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-NEWSM-SHOULDENFORCE")
 	if enforceErr != nil {
 		return enforceErr
@@ -333,6 +339,9 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(ctx context.Context, submo
 }
 
 func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(ctx context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel", submodelID); err != nil {
+		return err
+	}
 	_, err := s.replaceSubmodelInTransaction(ctx, tx, submodelID, submodel, true)
 	if err != nil {
 		return err
@@ -442,6 +451,9 @@ type PutSubmodelResult struct {
 
 // PutSubmodelInTransaction creates or replaces a submodel within an existing transaction.
 func (s *SubmodelDatabase) PutSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel", submodelID); err != nil {
+		return false, err
+	}
 	result, err := s.PutSubmodelInTransactionWithResult(ctx, tx, submodelID, submodel)
 	return result.IsUpdate, err
 }
@@ -463,6 +475,9 @@ func (s *SubmodelDatabase) PutSubmodelInTransactionWithResult(ctx context.Contex
 }
 
 func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (PutSubmodelResult, error) {
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel", submodelID); err != nil {
+		return PutSubmodelResult{}, err
+	}
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelID); err != nil {
 		return PutSubmodelResult{}, err
 	}
@@ -486,6 +501,9 @@ func (s *SubmodelDatabase) createSubmodelForPutTx(ctx context.Context, tx *sql.T
 		return false, err
 	}
 	if err = s.createSubmodelInTransaction(ctx, tx, submodel); err != nil {
+		return false, err
+	}
+	if err := auth.ResourceBoundCreatedTx(ctx, tx, "submodel", submodel.ID()); err != nil {
 		return false, err
 	}
 	recordHistory := history.MutationRecordingEnabled()
@@ -517,7 +535,7 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 	if err != nil {
 		return PutSubmodelResult{}, mapPutReadbackError(err, shouldEnforce, true)
 	}
-	plan, err := s.buildSubmodelReconciliationPlan(previous, submitted)
+	plan, err := s.buildSubmodelReconciliationPlan(previous, submitted, auth.ResourceBoundRequestActive(ctx))
 	if err != nil {
 		return PutSubmodelResult{}, err
 	}
@@ -635,6 +653,17 @@ func (s *SubmodelDatabase) executeSubmodelReconciliationTx(
 	if !plan.hasLiveMutation() {
 		return nil
 	}
+	creates := make([]string, 0, len(plan.Inserts))
+	updates := make([]string, 0, len(plan.Updates))
+	for _, element := range plan.Inserts {
+		creates = append(creates, element.Path)
+	}
+	for _, element := range plan.Updates {
+		updates = append(updates, element.Path)
+	}
+	if err := auth.ResourceBoundReconcileTx(ctx, tx, submodelID, creates, updates, plan.Deletes); err != nil {
+		return err
+	}
 	deferSiblingConstraints := plan.requiresDeferredSiblingConstraints()
 	if deferSiblingConstraints {
 		if err := deferSubmodelElementReconciliationConstraints(ctx, tx); err != nil {
@@ -642,6 +671,9 @@ func (s *SubmodelDatabase) executeSubmodelReconciliationTx(
 		}
 	}
 	if _, err := executeSubmodelReconciliationStatement(ctx, tx, submodelID, plan); err != nil {
+		return err
+	}
+	if err := auth.ResourceBoundCreatedTx(ctx, tx, "submodel", submodelID); err != nil {
 		return err
 	}
 	if deferSiblingConstraints {
@@ -775,6 +807,9 @@ func (s *SubmodelDatabase) DeleteSubmodelInTransaction(ctx context.Context, tx *
 }
 
 func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string) error {
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel", submodelID); err != nil {
+		return err
+	}
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelID); err != nil {
 		return err
 	}

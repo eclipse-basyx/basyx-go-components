@@ -231,6 +231,9 @@ func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context
 }
 
 func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (map[string]any, error) {
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas", aasIdentifier); err != nil {
+		return nil, err
+	}
 	if !history.ActiveConfig().EvidenceEnabled {
 		return nil, nil
 	}
@@ -458,6 +461,12 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShell(ctx co
 
 // CreateAssetAdministrationShellInTransaction persists a new AAS within an existing transaction.
 func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell) error {
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas", aas.ID()); err != nil {
+		return err
+	}
+	if err := auth.ResourceBoundReferencesTx(ctx, tx, aas.ID(), aas.Submodels(), true); err != nil {
+		return err
+	}
 	if tx == nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-NILTX transaction must not be nil")
 	}
@@ -477,6 +486,9 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 		return err
 	}
 
+	if err := auth.ResourceBoundCreatedTx(ctx, tx, "aas", aas.ID()); err != nil {
+		return err
+	}
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWAAS-SHOULDENFORCE")
 	if enforceErr != nil {
 		return enforceErr
@@ -676,6 +688,10 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	}
 	aasDBID, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-NEWSMREFINAAS")
 	if err != nil {
+		return err
+	}
+
+	if err := auth.ResourceBoundReferencesTx(ctx, tx, aasIdentifier, []types.IReference{submodelRef}, false); err != nil {
 		return err
 	}
 
@@ -1124,6 +1140,12 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDInTran
 }
 
 func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTransactionValidated(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (PutAssetAdministrationShellResult, error) {
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas", aasIdentifier); err != nil {
+		return PutAssetAdministrationShellResult{}, err
+	}
+	if err := auth.ResourceBoundReferencesTx(ctx, tx, aasIdentifier, aas.Submodels(), true); err != nil {
+		return PutAssetAdministrationShellResult{}, err
+	}
 	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
 		return PutAssetAdministrationShellResult{}, err
 	}
@@ -1180,6 +1202,9 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 		}
 	} else {
 		if err := s.createAssetAdministrationShellInTransaction(ctx, tx, aas); err != nil {
+			return PutAssetAdministrationShellResult{}, err
+		}
+		if err := auth.ResourceBoundCreatedTx(ctx, tx, "aas", aasIdentifier); err != nil {
 			return PutAssetAdministrationShellResult{}, err
 		}
 	}
@@ -1925,7 +1950,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 		}
 	}
 
-	sqlQuery, args, buildErr := buildGetAllSubmodelReferencesByAASIDQuery(&dialect, aasDBID, limit, cursorID)
+	sqlQuery, args, buildErr := buildGetAllSubmodelReferencesByAASIDQuery(ctx, &dialect, aasDBID, limit, cursorID)
 	if buildErr != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-BUILDSQL " + buildErr.Error())
 	}
@@ -2114,6 +2139,10 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 	if err != nil {
 		return err
 	}
+	if err := auth.ResourceBoundUnlinkTx(ctx, tx, submodelIdentifier); err != nil {
+		return err
+	}
+
 	if err = deleteSubmodelReferenceInAssetAdministrationShellTx(ctx, tx, aasDBID, aasIdentifier, submodelIdentifier); err != nil {
 		return err
 	}

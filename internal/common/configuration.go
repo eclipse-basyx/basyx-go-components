@@ -264,6 +264,8 @@ func PrintSplash(output io.Writer) error {
 // It combines server settings, database configuration, CORS policy,
 // OIDC authentication, and ABAC authorization settings.
 type Config struct {
+	Security   SecurityConfig       `mapstructure:"security" yaml:"security"`
+	ReBAC      ReBACConfig          `mapstructure:"rebac" yaml:"rebac"`
 	Logging    commonlogging.Config `mapstructure:"logging" yaml:"logging"`   // Process logging configuration
 	Server     ServerConfig         `mapstructure:"server" yaml:"server"`     // HTTP server configuration
 	Postgres   PostgresConfig       `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
@@ -519,7 +521,11 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 	applyABACEnvOverrides(cfg)
+	applyResourceBoundEnvOverrides(cfg)
 	if err = validateGeneralConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err = validateResourceBoundConfig(cfg); err != nil {
 		return nil, err
 	}
 	if err = validateABACConfig(cfg); err != nil {
@@ -1372,6 +1378,10 @@ func AddCors(r *chi.Mux, config *Config) {
 		commonlogging.CorrelationIDHeader,
 	}
 	exposedResponseHeaders := appendUniqueHeaders(requestMetadataHeaders, "Location")
+	if ResourceBoundEnabled(config) {
+		requestMetadataHeaders = appendUniqueHeaders(requestMetadataHeaders, "If-Match")
+		exposedResponseHeaders = appendUniqueHeaders(exposedResponseHeaders, "ETag")
+	}
 	c := cors.New(cors.Options{
 		AllowedOrigins:   config.CorsConfig.AllowedOrigins,
 		AllowedMethods:   config.CorsConfig.AllowedMethods,

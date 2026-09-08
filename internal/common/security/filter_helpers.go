@@ -68,7 +68,14 @@ func AddCorrelatedFilterQueryFromContext(
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
 	maskCondition, hasMask, err := buildFragmentMaskCondition(ctx, fragment, collector)
-	return addFilterCondition(ds, maskCondition, hasMask, err)
+	ds, err = addFilterCondition(ds, maskCondition, hasMask, err)
+	if err != nil {
+		return nil, err
+	}
+	if fragment == "$aas#submodels[]" {
+		return AddResourceBoundReferenceFilter(ctx, ds, "aas_submodel_reference")
+	}
+	return ds, nil
 }
 
 func addFilterCondition(
@@ -415,6 +422,11 @@ func buildFragmentMaskCondition(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (exp.Expression, bool, error) {
+	if state := boundRequestFromContext(ctx); state != nil && GetQueryFilter(ctx) != nil {
+		predicate, err := state.expression(collector, fragment)
+		return predicate, true, err
+	}
+
 	p := GetQueryFilter(ctx)
 	if p == nil {
 		return nil, false, nil
@@ -532,6 +544,9 @@ func fragmentPathMatches(fragment grammar.FragmentStringPattern, pattern grammar
 }
 
 func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentStringPattern) (string, error) {
+	if state := boundRequestFromContext(ctx); state != nil {
+		return state.fragmentSignature(fragment), nil
+	}
 	p := GetQueryFilter(ctx)
 	if p == nil {
 		return "no-query-filter", nil
@@ -636,6 +651,14 @@ func GetColumnSelectStatement(ctx context.Context, columns []FilterColumnSpec, c
 // has no QueryFilter or no formula, the original dataset is returned unchanged.
 // Errors from grammar expression evaluation are propagated to the caller.
 func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, collector *grammar.ResolvedFieldPathCollector) (*goqu.SelectDataset, error) {
+	if state := boundRequestFromContext(ctx); state != nil {
+		predicate, err := state.expression(collector, "")
+		if err != nil {
+			return nil, err
+		}
+		return ds.Where(predicate), nil
+	}
+
 	p := GetQueryFilter(ctx)
 	if p != nil && p.Formula != nil {
 		wc, _, err := p.Formula.EvaluateToExpression(collector)

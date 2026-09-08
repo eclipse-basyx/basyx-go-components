@@ -288,6 +288,12 @@ func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([][]grammar.Rights
 	}
 
 	if len(alternatives) > 0 {
+		if in.RequiredRight == grammar.RightsEnumVIEW {
+			return [][]grammar.RightsEnum{{grammar.RightsEnumVIEW, grammar.RightsEnumREAD}}, true, true
+		}
+		if in.RequiredRight != "" {
+			return [][]grammar.RightsEnum{{in.RequiredRight}}, true, true
+		}
 		return alternatives, true, true
 	}
 
