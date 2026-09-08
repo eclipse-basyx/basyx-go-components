@@ -31,7 +31,6 @@ import (
 	"errors"
 	"io"
 	"sync"
-	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -203,7 +202,7 @@ func (upload *durableAsyncUpload) Close() error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(upload.ctx), 5*time.Second)
+	ctx, cancel := asyncjob.NewPersistenceContext(upload.ctx)
 	defer cancel()
 	tx, err := upload.db.BeginTx(ctx, nil)
 	if err != nil {
