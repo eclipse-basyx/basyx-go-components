@@ -238,11 +238,7 @@ type transactionLargeObjectReader struct {
 
 // ReadSeekCloser combines the operations required for independently reopened
 // PostgreSQL large objects.
-type ReadSeekCloser interface {
-	io.Reader
-	io.Seeker
-	io.Closer
-}
+type ReadSeekCloser = io.ReadSeekCloser
 
 // OpenOID opens a PostgreSQL large object for bounded-memory response streaming.
 //
