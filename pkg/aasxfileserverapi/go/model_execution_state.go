@@ -25,61 +25,35 @@
 
 package openapi
 
-import "fmt"
+import "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 
 // ExecutionState identifies the lifecycle state of an asynchronous operation.
-type ExecutionState string
+type ExecutionState = model.ExecutionState
 
 // ExecutionState values identify the lifecycle state of an asynchronous operation.
 const (
-	EXECUTIONSTATE_INITIATED ExecutionState = "Initiated"
-	EXECUTIONSTATE_RUNNING   ExecutionState = "Running"
-	EXECUTIONSTATE_COMPLETED ExecutionState = "Completed"
-	EXECUTIONSTATE_CANCELED  ExecutionState = "Canceled"
-	EXECUTIONSTATE_FAILED    ExecutionState = "Failed"
-	EXECUTIONSTATE_TIMEOUT   ExecutionState = "Timeout"
+	EXECUTIONSTATE_INITIATED ExecutionState = model.EXECUTIONSTATE_INITIATED
+	EXECUTIONSTATE_RUNNING   ExecutionState = model.EXECUTIONSTATE_RUNNING
+	EXECUTIONSTATE_COMPLETED ExecutionState = model.EXECUTIONSTATE_COMPLETED
+	EXECUTIONSTATE_CANCELED  ExecutionState = model.EXECUTIONSTATE_CANCELED
+	EXECUTIONSTATE_FAILED    ExecutionState = model.EXECUTIONSTATE_FAILED
+	EXECUTIONSTATE_TIMEOUT   ExecutionState = model.EXECUTIONSTATE_TIMEOUT
 )
 
 // AllowedExecutionStateEnumValues contains every supported asynchronous execution state.
-var AllowedExecutionStateEnumValues = []ExecutionState{
-	EXECUTIONSTATE_INITIATED,
-	EXECUTIONSTATE_RUNNING,
-	EXECUTIONSTATE_COMPLETED,
-	EXECUTIONSTATE_CANCELED,
-	EXECUTIONSTATE_FAILED,
-	EXECUTIONSTATE_TIMEOUT,
-}
-
-var validExecutionStateEnumValues = map[ExecutionState]struct{}{
-	EXECUTIONSTATE_INITIATED: {},
-	EXECUTIONSTATE_RUNNING:   {},
-	EXECUTIONSTATE_COMPLETED: {},
-	EXECUTIONSTATE_CANCELED:  {},
-	EXECUTIONSTATE_FAILED:    {},
-	EXECUTIONSTATE_TIMEOUT:   {},
-}
-
-// IsValid reports whether the execution state is supported.
-func (state ExecutionState) IsValid() bool {
-	_, found := validExecutionStateEnumValues[state]
-	return found
-}
+var AllowedExecutionStateEnumValues = model.AllowedExecutionStateEnumValues
 
 // NewExecutionStateFromValue parses and validates an execution state value.
 func NewExecutionStateFromValue(value string) (ExecutionState, error) {
-	state := ExecutionState(value)
-	if state.IsValid() {
-		return state, nil
-	}
-	return "", fmt.Errorf("invalid value %q for ExecutionState: valid values are %v", value, AllowedExecutionStateEnumValues)
+	return model.NewExecutionStateFromValue(value)
 }
 
 // AssertExecutionStateRequired validates required ExecutionState fields.
-func AssertExecutionStateRequired(ExecutionState) error {
-	return nil
+func AssertExecutionStateRequired(state ExecutionState) error {
+	return model.AssertExecutionStateRequired(state)
 }
 
 // AssertExecutionStateConstraints validates ExecutionState constraints.
-func AssertExecutionStateConstraints(ExecutionState) error {
-	return nil
+func AssertExecutionStateConstraints(state ExecutionState) error {
+	return model.AssertExecutionStateConstraints(state)
 }
