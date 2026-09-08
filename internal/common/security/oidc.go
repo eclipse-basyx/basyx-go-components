@@ -148,6 +148,8 @@ type ctxKey string
 const (
 	// ClaimsKey is the context key used to store JWT claims.
 	ClaimsKey ctxKey = "jwtClaims"
+	// authenticatedKey records that OIDC successfully verified the request token.
+	authenticatedKey ctxKey = "authenticated"
 )
 
 // FromContext retrieves Claims previously stored by the middleware.
@@ -170,6 +172,12 @@ func ClaimsFromContext(ctx context.Context) Claims {
 	return nil
 }
 
+// IsAuthenticated reports whether OIDC successfully verified the request token.
+func IsAuthenticated(ctx context.Context) bool {
+	authenticated, _ := ctx.Value(authenticatedKey).(bool)
+	return authenticated
+}
+
 // Middleware validates a Bearer token (if present) and injects claims.
 //
 // Behavior:
@@ -185,6 +193,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 			if o.settings.AllowAnonymous {
 				anon := Claims{}
 				ctx := context.WithValue(r.Context(), ClaimsKey, anon)
+				ctx = context.WithValue(ctx, authenticatedKey, false)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -231,7 +240,9 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		r = r.WithContext(context.WithValue(r.Context(), ClaimsKey, c))
+		ctx := context.WithValue(r.Context(), ClaimsKey, c)
+		ctx = context.WithValue(ctx, authenticatedKey, true)
+		r = r.WithContext(ctx)
 		next.ServeHTTP(w, r)
 	})
 }

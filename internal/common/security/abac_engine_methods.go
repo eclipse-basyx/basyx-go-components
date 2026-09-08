@@ -46,6 +46,16 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	// description endpoints
 	{"GET", "/description", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 
+	// aasx file server
+	{"GET", "/packages", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/packages", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"GET", "/packages/{packageId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/packages/{packageId}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
+	{"DELETE", "/packages/{packageId}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+	{"POST", "/packages-async", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"GET", "/packages-async/status/{handleId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"GET", "/packages-async/result/{handleId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+
 	// ABAC policy management
 	{"GET", "/security/abac/active-policy", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/security/abac/active-policy/rules", []grammar.RightsEnum{grammar.RightsEnumREAD}},

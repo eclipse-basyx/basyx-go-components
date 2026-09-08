@@ -23,38 +23,21 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package api
+package openapi
 
-import (
-	"context"
-	"net/http"
-
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
-)
-
-const (
-	aasxFileServerSSP001 = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001"
-	aasxFileServerSSP002 = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002"
-)
-
-// DescriptionAPIAPIService provides the configured self-description response.
-type DescriptionAPIAPIService struct {
-	profiles []string
+// BaseOperationResult represents the state and messages of an asynchronous operation.
+type BaseOperationResult struct {
+	Messages       []map[string]interface{} `json:"messages,omitempty"`
+	ExecutionState ExecutionState           `json:"executionState,omitempty"`
+	Success        bool                     `json:"success,omitempty"`
 }
 
-// NewDescriptionAPIAPIService creates a new description service.
-func NewDescriptionAPIAPIService(asyncProfileEnabled bool) *DescriptionAPIAPIService {
-	profiles := []string{aasxFileServerSSP001}
-	if asyncProfileEnabled {
-		profiles = append(profiles, aasxFileServerSSP002)
-	}
-	return &DescriptionAPIAPIService{profiles: profiles}
+// AssertBaseOperationResultRequired validates required BaseOperationResult fields.
+func AssertBaseOperationResultRequired(BaseOperationResult) error {
+	return nil
 }
 
-// GetSelfDescription returns the supported profile for the AASX file server.
-func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (openapi.ImplResponse, error) {
-	_ = ctx
-	return openapi.Response(http.StatusOK, openapi.ServiceDescription{
-		Profiles: s.profiles,
-	}), nil
+// AssertBaseOperationResultConstraints validates BaseOperationResult constraints.
+func AssertBaseOperationResultConstraints(BaseOperationResult) error {
+	return nil
 }
