@@ -207,6 +207,14 @@ func (s *AssetAdministrationShellDatabase) appendAASHistoryTx(ctx context.Contex
 	return history.AppendVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, previousSnapshot, snapshot, deleted)
 }
 
+func (s *AssetAdministrationShellDatabase) appendAcknowledgedAASHistoryTx(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell, previousSnapshot map[string]any, changeType string, deleted bool) error {
+	snapshot, err := aasToHistorySnapshot(aas)
+	if err != nil {
+		return err
+	}
+	return history.AppendAcknowledgedVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, previousSnapshot, snapshot, deleted)
+}
+
 func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any, changeType string) error {
 	if !history.MutationRecordingEnabled() {
 		return nil
@@ -1220,7 +1228,7 @@ func (s *AssetAdministrationShellDatabase) appendAcknowledgedAASPutHistoryTx(
 	if err != nil {
 		return err
 	}
-	return s.appendAASHistoryTx(ctx, tx, previous, previousSnapshot, history.ChangeUpdated, false)
+	return s.appendAcknowledgedAASHistoryTx(ctx, tx, previous, previousSnapshot, history.ChangeUpdated, false)
 }
 
 func (s *AssetAdministrationShellDatabase) loadPreviousAASForPutTx(

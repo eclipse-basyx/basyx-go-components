@@ -34,6 +34,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +50,101 @@ func TestAASRepositoryEventFeedDisabledByDefault(t *testing.T) {
 		_ = resp.Body.Close()
 		require.Equal(t, http.StatusNotFound, resp.StatusCode, path)
 	}
+}
+
+func TestAASRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
+	baseURL := aasRepositoryEventFeedBaseURL
+	aasID := fmt.Sprintf("urn:example:event-feed:noop:aas:%d", time.Now().UnixNano())
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	t.Cleanup(func() {
+		if _, err := deleteResponseStatus(baseURL + "/shells/" + encodedAASID); err != nil {
+			t.Logf("cleanup delete failed: %v", err)
+		}
+	})
+
+	shell := func(idShort string) string {
+		return fmt.Sprintf(`{
+			"id": %q,
+			"idShort": %q,
+			"modelType": "AssetAdministrationShell",
+			"assetInformation": {"assetKind": "Instance", "globalAssetId": "urn:example:event-feed:noop:asset"}
+		}`, aasID, idShort)
+	}
+
+	status, err := postResponseStatus(baseURL+"/shells", shell("NoOpPutITAAS"))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status)
+
+	for range 2 {
+		putStatus, putErr := putResponseStatus(baseURL+"/shells/"+encodedAASID, shell("NoOpPutITAAS"))
+		require.NoError(t, putErr)
+		require.Equal(t, http.StatusNoContent, putStatus)
+	}
+
+	created, updated := countAASFeedEventTypes(t, baseURL, aasID)
+	require.Equal(t, 1, created, "expected exactly one aas.created event")
+	require.Equal(t, 0, updated, "identical PUTs must not emit aas.updated events")
+
+	putStatus, err := putResponseStatus(baseURL+"/shells/"+encodedAASID, shell("NoOpPutITAASChanged"))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, putStatus)
+
+	created, updated = countAASFeedEventTypes(t, baseURL, aasID)
+	require.Equal(t, 1, created, "expected exactly one aas.created event")
+	require.Equal(t, 1, updated, "a content change must still emit exactly one aas.updated event")
+}
+
+func countAASFeedEventTypes(t *testing.T, baseURL string, subject string) (created int, updated int) {
+	t.Helper()
+	eventsURL := baseURL + "/events?" + url.Values{
+		"limit":  []string{"100"},
+		"filter": []string{"rsql:event.subject=='" + subject + "'"},
+	}.Encode()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(eventsURL)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var feed struct {
+		Records []struct {
+			Type    string `json:"type"`
+			Subject string `json:"subject"`
+		} `json:"records"`
+	}
+	require.NoError(t, json.Unmarshal(body, &feed))
+	for _, record := range feed.Records {
+		if record.Subject != subject {
+			continue
+		}
+		switch record.Type {
+		case "io.admin-shell.aas.created.v1":
+			created++
+		case "io.admin-shell.aas.updated.v1":
+			updated++
+		}
+	}
+	return created, updated
+}
+
+func putResponseStatus(endpoint string, body string) (int, error) {
+	req, err := http.NewRequest(http.MethodPut, endpoint, strings.NewReader(body))
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return resp.StatusCode, nil
 }
 
 func TestAASRepositoryEventFeedCreateAndRead(t *testing.T) {

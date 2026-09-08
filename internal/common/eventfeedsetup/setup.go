@@ -59,5 +59,6 @@ func (s *historySink) HandleMutation(ctx context.Context, tx *sql.Tx, mutation h
 		PreviousSnapshot: mutation.PreviousSnapshot,
 		Snapshot:         mutation.Snapshot,
 		Deleted:          mutation.Deleted,
+		Acknowledged:     mutation.Acknowledged,
 	})
 }

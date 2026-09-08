@@ -67,6 +67,50 @@ func TestMutationSinkDisabled(t *testing.T) {
 	}
 }
 
+// A PUT that changed no persisted content is still recorded in history, but it
+// is not a content change, so it must not reach the feed.
+func TestMutationSinkSkipsAcknowledgedWrites(t *testing.T) {
+	for _, table := range []string{mutationTableAAS, mutationTableSubmodel} {
+		t.Run(table, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("sqlmock: %v", err)
+			}
+			defer func() { _ = db.Close() }()
+
+			cfg := DefaultConfig()
+			cfg.Enabled = true
+			svc := NewService(NewRepository(db, cfg.MaxAge), cfg)
+
+			mock.ExpectBegin()
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatalf("begin: %v", err)
+			}
+
+			// No statement is expected: any INSERT INTO feed_events would be an
+			// unexpected query and fail ExpectationsWereMet below.
+			snapshot := map[string]any{
+				"id":               "entity-1",
+				"assetInformation": map[string]any{"globalAssetId": "asset-1"},
+			}
+			if err = NewMutationSink(svc).HandleMutation(context.Background(), tx, Mutation{
+				Table:            table,
+				Identifier:       "entity-1",
+				ChangeType:       mutationUpdated,
+				PreviousSnapshot: snapshot,
+				Snapshot:         snapshot,
+				Acknowledged:     true,
+			}); err != nil {
+				t.Fatalf("handle: %v", err)
+			}
+			if err = mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("acknowledged write reached the feed: %v", err)
+			}
+		})
+	}
+}
+
 func TestMutationSinkWritesAASAndAssetInTx(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

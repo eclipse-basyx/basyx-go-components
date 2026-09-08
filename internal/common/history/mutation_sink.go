@@ -44,6 +44,7 @@ type Mutation struct {
 	PreviousSnapshot map[string]any
 	Snapshot         map[string]any
 	Deleted          bool
+	Acknowledged     bool
 }
 
 // MutationSink consumes normalized mutations inside the writer transaction.

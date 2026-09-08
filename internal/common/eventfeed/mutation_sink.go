@@ -50,6 +50,7 @@ type Mutation struct {
 	PreviousSnapshot map[string]any
 	Snapshot         map[string]any
 	Deleted          bool
+	Acknowledged     bool
 }
 
 // MutationSink writes CloudEvents feed rows inside the authoritative mutation transaction.
@@ -65,6 +66,9 @@ func NewMutationSink(svc *Service) *MutationSink {
 // HandleMutation persists feed events for mutation.
 func (s *MutationSink) HandleMutation(ctx context.Context, tx *sql.Tx, mutation Mutation) error {
 	if s == nil || s.service == nil || !s.service.cfg.Enabled || tx == nil {
+		return nil
+	}
+	if mutation.Acknowledged {
 		return nil
 	}
 	switch mutation.Table {

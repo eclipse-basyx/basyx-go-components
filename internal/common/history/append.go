@@ -73,6 +73,22 @@ import (
 //		return err
 //	}
 func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool) error {
+	return appendVersionTx(ctx, tx, table, identifier, changeType, previousSnapshot, snapshot, deleted, false)
+}
+
+// AppendAcknowledgedVersionTx appends a history row for a write that was
+// accepted without changing any persisted content, such as a PUT whose
+// reconciliation plan had no live mutation.
+//
+// It records exactly the same history row as AppendVersionTx, preserving the
+// audit trail that the write was accepted. The difference is the mutation
+// handed to the sink: it is marked Acknowledged, so sinks that report content
+// changes (Event Feed) skip it instead of emitting a phantom update.
+func AppendAcknowledgedVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool) error {
+	return appendVersionTx(ctx, tx, table, identifier, changeType, previousSnapshot, snapshot, deleted, true)
+}
+
+func appendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool, acknowledged bool) error {
 	if err := notifyMutationSink(ctx, tx, Mutation{
 		Table:            table,
 		Identifier:       strings.TrimSpace(identifier),
@@ -80,6 +96,7 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 		PreviousSnapshot: previousSnapshot,
 		Snapshot:         snapshot,
 		Deleted:          deleted,
+		Acknowledged:     acknowledged,
 	}); err != nil {
 		return err
 	}

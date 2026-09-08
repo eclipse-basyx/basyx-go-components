@@ -50,6 +50,104 @@ func TestSubmodelRepositoryEventFeedDisabledByDefault(t *testing.T) {
 	}
 }
 
+func TestSubmodelRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
+	baseURL := submodelRepositoryEventFeedBaseURL
+	smID := fmt.Sprintf("urn:example:event-feed:noop:sm:%d", time.Now().UnixNano())
+	encodedSMID := base64.RawURLEncoding.EncodeToString([]byte(smID))
+	client := &http.Client{Timeout: 10 * time.Second}
+	t.Cleanup(func() {
+		req, err := http.NewRequest(http.MethodDelete, baseURL+"/submodels/"+encodedSMID, nil)
+		if err != nil {
+			t.Logf("cleanup request: %v", err)
+			return
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Logf("cleanup delete failed: %v", err)
+			return
+		}
+		_ = resp.Body.Close()
+	})
+
+	submodel := func(idShort string) string {
+		return fmt.Sprintf(`{
+			"id": %q,
+			"idShort": %q,
+			"modelType": "Submodel",
+			"kind": "Instance",
+			"submodelElements": []
+		}`, smID, idShort)
+	}
+
+	postReq, err := http.NewRequest(http.MethodPost, baseURL+"/submodels", bytes.NewReader([]byte(submodel("NoOpPutITSM"))))
+	require.NoError(t, err)
+	postReq.Header.Set("Content-Type", "application/json")
+	postResp, err := client.Do(postReq)
+	require.NoError(t, err)
+	_ = postResp.Body.Close()
+	require.Equal(t, http.StatusCreated, postResp.StatusCode)
+
+	putSubmodel := func(idShort string) {
+		t.Helper()
+		req, reqErr := http.NewRequest(http.MethodPut, baseURL+"/submodels/"+encodedSMID, bytes.NewReader([]byte(submodel(idShort))))
+		require.NoError(t, reqErr)
+		req.Header.Set("Content-Type", "application/json")
+		resp, doErr := client.Do(req)
+		require.NoError(t, doErr)
+		_ = resp.Body.Close()
+		require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	}
+
+	for range 2 {
+		putSubmodel("NoOpPutITSM")
+	}
+
+	created, updated := countSubmodelFeedEventTypes(t, client, baseURL, smID)
+	require.Equal(t, 1, created, "expected exactly one submodel.created event")
+	require.Equal(t, 0, updated, "identical PUTs must not emit submodel.updated events")
+
+	putSubmodel("NoOpPutITSMChanged")
+
+	created, updated = countSubmodelFeedEventTypes(t, client, baseURL, smID)
+	require.Equal(t, 1, created, "expected exactly one submodel.created event")
+	require.Equal(t, 1, updated, "a content change must still emit exactly one submodel.updated event")
+}
+
+func countSubmodelFeedEventTypes(t *testing.T, client *http.Client, baseURL string, subject string) (created int, updated int) {
+	t.Helper()
+	eventsURL := baseURL + "/events?" + url.Values{
+		"limit":  []string{"100"},
+		"filter": []string{"rsql:event.subject=='" + subject + "'"},
+	}.Encode()
+
+	resp, err := client.Get(eventsURL)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var feed struct {
+		Records []struct {
+			Type    string `json:"type"`
+			Subject string `json:"subject"`
+		} `json:"records"`
+	}
+	require.NoError(t, json.Unmarshal(body, &feed))
+	for _, record := range feed.Records {
+		if record.Subject != subject {
+			continue
+		}
+		switch record.Type {
+		case "io.admin-shell.submodel.created.v1":
+			created++
+		case "io.admin-shell.submodel.updated.v1":
+			updated++
+		}
+	}
+	return created, updated
+}
+
 func TestSubmodelRepositoryEventFeedCreateAndRead(t *testing.T) {
 	baseURL := submodelRepositoryEventFeedBaseURL
 	smID := fmt.Sprintf("urn:example:event-feed:sm:%d", time.Now().UnixNano())
