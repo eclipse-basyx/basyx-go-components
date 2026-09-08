@@ -140,7 +140,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "regex uses safe function and respects explicit $strCast",
 			expr:    LogicalExpression{Regex: StringItems{StringValue{StrCast: valuePtr(field("$aasdesc#assetType"))}, strString("^foo.*")}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "basyx_safe_regex_match", "::text"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", " ~ basyx_safe_regex_pattern(", "::text"},
 			wantArgs: []interface{}{
 				"^foo.*",
 			},

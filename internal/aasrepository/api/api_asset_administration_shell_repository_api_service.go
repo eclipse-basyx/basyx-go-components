@@ -187,7 +187,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
 	}
 
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, "", nil, createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -263,7 +263,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
 	}
 
-	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, idShort, specificAssetIDs)
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, "", nil)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -408,7 +408,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 	}
 
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, normalizedLimit, decodedCursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, normalizedLimit, decodedCursor, "", nil, createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil

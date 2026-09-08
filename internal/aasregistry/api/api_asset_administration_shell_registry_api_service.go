@@ -95,7 +95,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 		return common.NewErrorResponse(selectorErr, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "BuildAuthorizedSelectors"), selectorErr
 	}
 	fetch := func(pageLimit int32, pageCursor string) ([]model.AssetAdministrationShellDescriptor, string, error) {
-		return s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, pageLimit, pageCursor, assetKind, decodedAssetType, createdFrom, updatedFrom)
+		return s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, pageLimit, pageCursor, "", "", createdFrom, updatedFrom)
 	}
 	var aasds []model.AssetAdministrationShellDescriptor
 	var nextCursor string

@@ -199,7 +199,7 @@ Evaluation gates:
    - Rights within one mapping entry are combined using logical OR (example: `PUT -> [CREATE, UPDATE]` means either right is sufficient).
    - Multiple matching mapping entries are also OR alternatives.
 2. Check rights in rule ACLs.
-3. Check subject eligibility from `ATTRIBUTES`; declared claims are PIP/token-issuer metadata and are resolved only if their formula occurrence is evaluated. Anonymous requests require `GLOBAL=ANONYMOUS`.
+3. Check subject eligibility from `ATTRIBUTES`; every declared `CLAIM` and `CLAIMPATH` must be present. Claim values are resolved and type-checked when their formula occurrence is evaluated. Anonymous requests require `GLOBAL=ANONYMOUS`.
 4. Match object routes and descriptor objects.
 5. Evaluate formula and simplify using claims and globals.
 
@@ -379,7 +379,9 @@ Registry-specific operation semantics:
 
 ## Claims enrichment
 
-- Digital Twin Registry injects the `Edc-Bpn` header into claims before ABAC.
+- Digital Twin Registry injects a non-empty `Edc-Bpn` header into a request-local
+  copy of the verified claims before ABAC. A missing or whitespace-only header
+  does not create or overwrite a claim.
   - [internal/common/security/edc_bpn.go](../../internal/common/security/edc_bpn.go)
   - [cmd/digitaltwinregistryservice/main.go](../../cmd/digitaltwinregistryservice/main.go)
 
@@ -395,11 +397,29 @@ Access rules define:
 Attribute satisfaction follows these rules:
 
 - An attribute list must contain at least one subject attribute: `CLAIM`, `CLAIMPATH`, or `GLOBAL=ANONYMOUS`.
-- Declared `CLAIM` and `CLAIMPATH` values are not eagerly required. A missing or unusable value becomes indeterminate only when that formula occurrence is evaluated.
+- Every declared `CLAIM` and `CLAIMPATH` must be present before the rule can become active. A present `null`, object, or otherwise unusable value becomes indeterminate if a formula evaluates it with an incompatible operation.
 - `REFERENCE` and date-time globals need not be repeated in `ATTRIBUTES`; operands are resolved from the formula context.
 - `GLOBAL=UTCNOW` and `GLOBAL=LOCALNOW` come from the server's trusted clock and are available to authenticated and anonymous requests.
 - `GLOBAL=CLIENTNOW` comes from the verified access-token claim with the same name. It is unavailable when that claim or access token is absent.
 - A list containing only date-time globals does not satisfy the attribute gate.
+
+Object coverage follows these BaSyx rules:
+
+- An `IDENTIFIABLE` `$aas` object covers AAS data endpoints, including asset
+  information and Submodel references. It does not cover Submodel data below
+  `/shells/{aasIdentifier}/submodels/...`.
+- Nested AAS Environment Submodel routes require a dedicated grant, such as an
+  explicit `$sm` object; element-specific access can instead use an explicit
+  `$sme` object. An explicitly matching `ROUTE` remains a route-level grant.
+- An `IDENTIFIABLE` `$sm` object covers the Submodel and its Submodel Elements.
+- A `$sme` `REFERABLE` covers the named element and all descendants at segment
+  boundaries. For example, `Metrics` covers `Metrics.Temperature`, but not
+  `MetricsPrivate`. This descendant behavior is an intentional BaSyx policy
+  semantic. [IDTA Part 4 v3.1](https://github.com/admin-shell-io/aas-specs-security/blob/v3.1.0/documentation/IDTA-01004/modules/ROOT/pages/access-rule-model.adoc)
+  defines Referable as a designated object but does not define descendant
+  inheritance.
+- A `FRAGMENT` object covers only its named element path and field fragment;
+  it does not inherit the Referable subtree behavior.
 
 Validation invariants enforced by the current implementation:
 - Rule-level one-of:

@@ -151,12 +151,12 @@
   },
   {
     "input": "input/no_attributes.json",
-    "expected": "expected/access_allowed.json",
+    "expected": "expected/no_matching_rule.json",
     "eval": "eval/get_shellDescriptors_member.json"
   },
   {
     "input": "input/missing_claim.json",
-    "expected": "expected/access_allowed.json",
+    "expected": "expected/no_matching_rule.json",
     "eval": "eval/get_shellDescriptors_member.json"
   },
   {

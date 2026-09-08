@@ -9,7 +9,8 @@ selectors are compiled against target-specific visibility guards. Related
 Submodel and SME fields require their own complete READ alternative, including
 the alternative's formula, object coverage, and security filters. PostgreSQL 16
 or newer is required for total, non-throwing input validation; regular-expression
-evaluation uses the schema-installed `basyx_safe_regex_match` function.
+evaluation validates patterns with the schema-installed `basyx_safe_regex_pattern`
+function while keeping PostgreSQL's regex operator visible to the query planner.
 
 
 ## Scope: two precondition points
@@ -101,13 +102,19 @@ The effective result is the intersection of independently evaluated permissions:
 
 1. The outer AAS must satisfy the effective AAS READ policy.
 2. A `$sm` predicate may evaluate a referenced Submodel only when a Submodel READ alternative admits that row and exposes the requested target through its security fragment projection.
-3. A `$sme` predicate may evaluate a referenced Submodel Element only when a Submodel, Referable, or Fragment READ alternative admits that exact SME target and exposes it through its security fragment projection.
+3. A `$sme` predicate may evaluate a referenced Submodel Element only when a Submodel, Referable, or Fragment READ alternative covers that SME target and exposes it through its security fragment projection.
 
 These permissions do not have to be declared in one access rule. Separate rules are preferable when AAS and Submodel access have different conditions. A rule containing both `$aas` and `$sm` objects can express the same grant when both objects intentionally share rights, attributes, and formulas; the object entries remain alternative targets and must still be evaluated once for each resource scope.
 
 Within one rule alternative, the main formula, object constraint, and applicable security fragment predicate remain associated. Across permitting alternatives, condition visibility is combined with `OR`. A rule without an applicable filter exposes the covered target unrestricted and must not be narrowed by another rule's filter. Multiple applicable filters within one alternative retain their defined conjunction and fragment-instance semantics.
 
-A Referable grant is exact by default. Descendants are included only when the source policy construct explicitly defines subtree semantics and is normalized to a subtree constraint during policy compilation. A string-prefix match on `idShortPath` must never create subtree access implicitly.
+BaSyx intentionally treats a Referable grant as a subtree grant: the named SME
+and all of its descendants are covered. Descendant matching is segment-aware;
+for example, `Metrics` covers `Metrics.Temperature`, but not
+`MetricsPrivate.Temperature`. IDTA Part 4 v3.1 defines Referable as a designated
+object but does not define descendant inheritance, so this is an explicit BaSyx
+policy semantic rather than a normative IDTA requirement. Fragment object grants
+remain exact.
 
 Conceptually:
 
@@ -130,7 +137,7 @@ These examples define the recommended Plan B boundary for `/query/shells`.
 | AAS-A and Submodel-B with a security fragment filter | Submodel-B | `$sm` and `$sme` conditions only on fragments that survive the applicable security filter. The same filter still controls a returned Submodel representation. |
 | AAS-A and SME-A only | Submodel-B containing SME-A | `$sme` conditions on SME-A only. Alice must not use Submodel-B as a condition or observe other SMEs in it. |
 | AAS-A and an `OBJECTS: FRAGMENT` grant for SME-A | Submodel-B containing SME-A | `$sme` conditions only on that authorized Fragment. Other fields of SME-A remain unavailable as conditions. |
-| AAS-A and a parent SME subtree | Submodel-B containing that subtree | `$sme` conditions on the visible parent SME and its explicitly covered descendants only. |
+| AAS-A and a parent SME Referable | Submodel-B containing that subtree | `$sme` conditions on the visible parent SME and its segment-bounded descendants only. |
 | SME-A only | Submodel-B containing SME-A | No AAS may be returned, because the outer AAS is not readable. |
 
 For the SME-A-only case, the query planner may join through Submodel-B to prove ownership and the AAS reference, but this join must not grant or evaluate general Submodel-B data. The SME authorization guard, security fragment predicate, and caller predicate must apply to the same SME row.
@@ -289,7 +296,7 @@ Relevant components:
 
 ### 2. Precompile semantic rule indexes at policy activation
 
-Extend access-model materialization with immutable rule indexes keyed by right and semantic resource scope. Object parsing, reusable-definition expansion, route-to-scope translation, and normalization of Identifiable, Referable, Fragment, exact-path, and explicit-subtree constraints must happen once when the policy is loaded or activated, not for every query. The compiled rule representation must keep the main rule formula, object constraint, security fragment filters, and caller response filters as distinct concepts.
+Extend access-model materialization with immutable rule indexes keyed by right and semantic resource scope. Object parsing, reusable-definition expansion, route-to-scope translation, and normalization of Identifiable, Referable-subtree, and exact Fragment constraints must happen once when the policy is loaded or activated, not for every query. The compiled rule representation must keep the main rule formula, object constraint, security fragment filters, and caller response filters as distinct concepts.
 
 Known route objects such as a global wildcard or Submodel collection route should be translated through one explicit mapping table. A route grant that cannot be translated without ambiguity must be marked unusable for hierarchy authorization during policy validation; it must never be silently treated as a grant for another resource type. An AAS route grant must not become an implicit Submodel grant.
 
@@ -303,7 +310,7 @@ The result should preserve complete permitting alternatives:
 
 - an explicit `unrestricted`, `restricted`, or `denied` decision;
 - for each permitting rule, its simplified main formula, normalized object constraint, and target-specific security fragment predicate;
-- exact Referable and Fragment grants, plus only explicitly defined subtree grants;
+- segment-bounded Referable subtree grants and exact Fragment grants;
 - policy and matched-rule metadata for auditing.
 
 For a condition target, eligibility is conceptually:
@@ -318,7 +325,7 @@ conditionEligible(target, row)
     )
 ```
 
-An Identifiable Submodel grant covers the Submodel and its SME condition targets. A Referable grant covers its exact SME by default. A Fragment object grant covers its exact fragment. When no security filter applies to the requested target in one permitting alternative, the final term is true for that alternative. A matching filter applies to its fragment prefix and descendants using its exact array-index and `$match` scope.
+An Identifiable Submodel grant covers the Submodel and its SME condition targets. A Referable grant covers its named SME and segment-bounded descendants. A Fragment object grant covers its exact element path and field fragment. When no security filter applies to the requested target in one permitting alternative, the final term is true for that alternative. A matching filter applies to its fragment prefix and descendants using its exact array-index and `$match` scope.
 
 Keep condition visibility behind a small security-layer strategy interface. The recommended `SecurityProjectionForCallerConditions` strategy implements the expression above. `ObjectScopeOnly` preserves the legacy behavior, and `SecurityProjectionForAllConditions` represents Plan A without changing the query API or SQL planner contracts. The selected strategy consumes a compiled rule alternative and semantic target and returns a provider-agnostic condition-access decision. Strategy selection is trusted service or policy configuration, never caller input.
 
@@ -343,7 +350,7 @@ The AAS query API should inspect the validated query roots:
 
 - no `$sm` or `$sme`: compile target-specific AAS security fragment visibility for caller `$aas` conditions;
 - `$sm`: compile the effective Submodel READ condition-access view once;
-- `$sme`: compile the effective SME READ condition-access view once. It includes qualifying Submodel READ alternatives, exact Referable grants, Fragment object grants, explicit subtree grants, and their applicable security fragment predicates, while preserving the owning Submodel correlation without requiring general Submodel visibility;
+- `$sme`: compile the effective SME READ condition-access view once. It includes qualifying Submodel READ alternatives, segment-bounded Referable subtree grants, exact Fragment object grants, and their applicable security fragment predicates, while preserving the owning Submodel correlation without requiring general Submodel visibility;
 - both roots: compile both views. A shared `$match` containing `$sm` and `$sme` requires both applicable views on the same referenced Submodel scope.
 
 Every other query-language API must perform the corresponding root inspection for its own resource type. This shared step is what makes Plan B consistent across repositories and registries rather than a special case in `/query/shells`.
@@ -482,14 +489,14 @@ Add focused security-compiler unit tests for:
 
 - policy-activation indexing by right and semantic resource scope;
 - preservation of each rule's main formula, object constraint, and security fragment predicates as one alternative without recursively filtering the main formula under Plan B;
-- unrestricted Submodel, exact Referable, exact Fragment object, explicit subtree, and denied condition-access views;
+- unrestricted Submodel, Referable subtree, exact Fragment object, and denied condition-access views;
 - proof that `FILTER` and `FILTERLIST` restrict matching targets in the recommended caller-condition view and remain independently available to response reconstruction;
 - proof that caller `$filters` never alter the condition-access view;
 - `OR` across permitting rules, including an unrestricted alternative overriding a filtered alternative for the same target;
 - conjunction, prefix, index, wildcard, and `$match` semantics for multiple security filters in one alternative;
 - `ObjectScopeOnly`, `SecurityProjectionForCallerConditions`, and a fail-closed `SecurityProjectionForAllConditions` implementation behind one contract;
 - Plan A undefined-value behavior under `NOT`, inequality, and existence expressions, if Plan A is implemented;
-- exact Referable behavior by default and subtree behavior only after explicit normalization;
+- segment-bounded Referable subtree behavior without string-prefix collisions;
 - route translation, including rejection of ambiguous translations and prevention of AAS-to-Submodel grant inference;
 - constant-false denied views versus policy/session compilation failures;
 - immutable request snapshots and request-dependent simplification without cross-request caching;
@@ -519,7 +526,7 @@ Add ABAC integration coverage with an allowed AAS referencing both allowed and d
 - a caller `$filters` entry hiding a condition field, proving that caller projection does not alter query membership;
 - an allowed Submodel with an SME excluded by object scope rather than a response filter;
 - an allowed AAS with one explicitly allowed SME but no general parent-Submodel access;
-- exact Referable, exact Fragment, and explicit-subtree grants;
+- Referable subtree and exact Fragment grants;
 - multiple referenced Submodels where authorization and the caller predicate match different rows;
 - a policy activation during a request, proving one policy snapshot is used;
 - missing or untranslatable related-resource authorization, proving fail-closed behavior;
@@ -565,7 +572,7 @@ Add performance regression coverage using representative high-cardinality data a
 - Policies can grant AAS and Submodel/SME access in separate rules.
 - Under the recommended Plan B strategy, access-rule `FILTER` and `FILTERLIST` predicates reduce condition visibility for caller `$condition` expressions and specialized membership-changing inputs such as DTR `assetIds`, while retaining their existing response-reconstruction behavior.
 - Caller `$filters` remain post-condition response projections and never change condition visibility or authorization.
-- Related-resource condition access is determined per permitting READ alternative by its ACL gates, object target, raw main formula, and target-specific security fragment predicate. Exact Referable or Fragment object grants do not widen into subtree access.
+- Related-resource condition access is determined per permitting READ alternative by its ACL gates, object target, raw main formula, and target-specific security fragment predicate. Referable objects cover their segment-bounded SME subtree; Fragment objects do not widen beyond their exact path and field fragment.
 - An unrestricted permitting alternative overrides filtered alternatives only for the targets it covers; filters from one rule never narrow a separate unrestricted grant.
 - The condition-visibility strategy can be replaced without changing the query API, persistence adapter, or planner contracts, but Plan A and Plan B remain explicit distinct modes.
 - All related checks use the same principal, trusted globals, simplification options, and active policy snapshot.
@@ -588,4 +595,4 @@ Add performance regression coverage using representative high-cardinality data a
 
 ## Specification reference
 
-The design follows the resource separation and least-privilege intent of the [IDTA AAS Specification Part 4: Security](https://industrialdigitaltwin.org/en/wp-content/uploads/sites/2/2025/06/IDTA-01004-3-0-2_AAS-Specification_Part4_Security.pdf). The specification defines authorization targets and object forms for Identifiables, Referables, and Fragments and describes an access-rule `FILTER` as further restricting returned or accessible parts. It does not normatively define whether that projection precedes a client query condition or the rule's own main formula. This plan therefore makes the two interpretations explicit, recommends Plan B as BaSyx's secure query semantic, and isolates ordering behind the condition-visibility strategy.
+The design follows the resource separation and least-privilege intent of the [IDTA AAS Specification Part 4: Security v3.1](https://github.com/admin-shell-io/aas-specs-security/blob/v3.1.0/documentation/IDTA-01004/modules/ROOT/pages/access-rule-model.adoc). The specification defines authorization targets and object forms for Identifiables, Referables, and Fragments and describes an access-rule `FILTER` as further restricting returned or accessible parts. It does not normatively define Referable descendant inheritance or whether that projection precedes a client query condition or the rule's own main formula. This plan therefore documents BaSyx's segment-bounded Referable subtree semantic, makes the two projection interpretations explicit, recommends Plan B as BaSyx's secure query semantic, and isolates ordering behind the condition-visibility strategy.

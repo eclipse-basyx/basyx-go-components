@@ -2870,7 +2870,7 @@ func buildStringOperationExpression(left interface{}, right interface{}, operati
 	case "$ends-with":
 		return goqu.L("? LIKE '%' || ?", left, right), nil
 	case "$regex":
-		return goqu.Func("basyx_safe_regex_match", left, right), nil
+		return goqu.L("? ~ basyx_safe_regex_pattern(?)", left, right), nil
 	default:
 		return nil, fmt.Errorf("unsupported string operation: %s", operation)
 	}

@@ -102,8 +102,8 @@ func TestRegexUsesSafeDatabaseFunctionForFieldDerivedPattern(t *testing.T) {
 		{Field: &field},
 	}}
 	sql := renderLogicalExpressionSQL(t, expression)
-	if !strings.Contains(sql, "basyx_safe_regex_match") || strings.Contains(sql, " ~ ") {
-		t.Fatalf("field-derived regular expression can still expose invalid patterns:\n%s", sql)
+	if !strings.Contains(sql, " ~ basyx_safe_regex_pattern(") {
+		t.Fatalf("field-derived regular expression is not safely validated at the regex operand:\n%s", sql)
 	}
 }
 

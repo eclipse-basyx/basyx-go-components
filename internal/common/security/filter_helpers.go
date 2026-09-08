@@ -915,7 +915,7 @@ func compileSemanticObjectCoverage(
 		return compileSubmodelIdentifierCoverage(coverage)
 	}
 	if target.Resource == SemanticResourceSME {
-		return compileSMESubtreeCoverage(coverage, target)
+		return compileSMEObjectCoverage(coverage, target)
 	}
 	return nil, nil, false, nil
 }
@@ -936,7 +936,7 @@ func compileSubmodelIdentifierCoverage(
 	return expression, resolved, true, nil
 }
 
-func compileSMESubtreeCoverage(
+func compileSMEObjectCoverage(
 	coverage semanticObjectCoverage,
 	target SemanticAccessTarget,
 ) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
@@ -970,9 +970,15 @@ func compileSMESubtreeCoverage(
 
 func coverageCoversSMEField(
 	coverage semanticObjectCoverage,
-	_ grammar.ModelStringPattern,
+	field grammar.ModelStringPattern,
 	targetPath string,
 ) bool {
+	if coverage.submodelFragment != "" {
+		if submodelElementFragment(field) != coverage.submodelFragment {
+			return false
+		}
+		return targetPath == "" || targetPath == coverage.submodelElementPath
+	}
 	if coverage.allSubmodelElements || targetPath == "" {
 		return true
 	}
@@ -982,6 +988,9 @@ func coverageCoversSMEField(
 func submodelElementCoverageExpression(
 	coverage semanticObjectCoverage,
 ) (exp.Expression, []grammar.ResolvedFieldPath, error) {
+	if coverage.submodelFragment != "" {
+		return submodelElementExactExpression(coverage.submodelElementPath)
+	}
 	return submodelElementSubtreeExpression(coverage.submodelElementPath)
 }
 
@@ -997,6 +1006,18 @@ func submodelElementPath(field grammar.ModelStringPattern) string {
 	return strings.TrimPrefix(value[len("$sme"):hash], ".")
 }
 
+func submodelElementFragment(field grammar.ModelStringPattern) string {
+	value := string(field)
+	if !strings.HasPrefix(value, "$sme") {
+		return ""
+	}
+	hash := strings.IndexByte(value, '#')
+	if hash < 0 || hash+1 >= len(value) {
+		return ""
+	}
+	return strings.TrimSpace(value[hash+1:])
+}
+
 func submodelElementPathCovered(root string, candidate string) bool {
 	root = strings.TrimSpace(root)
 	candidate = strings.TrimSpace(candidate)
@@ -1006,19 +1027,36 @@ func submodelElementPathCovered(root string, candidate string) bool {
 func submodelElementSubtreeExpression(
 	path string,
 ) (exp.Expression, []grammar.ResolvedFieldPath, error) {
-	field := grammar.ModelStringPattern("$sme#idShort")
-	resolved, err := grammar.ResolveScalarFieldToSQL(&field)
+	idShortPath, resolved, err := resolveSubmodelElementPathColumn()
 	if err != nil {
 		return nil, nil, fmt.Errorf("SECURITY-CONDITIONVIEW-REFERABLEPATH: %w", err)
 	}
-	resolved.Column = "submodel_element.idshort_path"
-	idShortPath := goqu.I(resolved.Column)
 	escaped := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(path)
 	return goqu.Or(
 		idShortPath.Eq(path),
 		goqu.L("? LIKE (? || '.%') ESCAPE '!'", idShortPath, escaped),
 		goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", idShortPath, escaped),
 	), []grammar.ResolvedFieldPath{resolved}, nil
+}
+
+func submodelElementExactExpression(
+	path string,
+) (exp.Expression, []grammar.ResolvedFieldPath, error) {
+	idShortPath, resolved, err := resolveSubmodelElementPathColumn()
+	if err != nil {
+		return nil, nil, fmt.Errorf("SECURITY-CONDITIONVIEW-FRAGMENTPATH: %w", err)
+	}
+	return idShortPath.Eq(path), []grammar.ResolvedFieldPath{resolved}, nil
+}
+
+func resolveSubmodelElementPathColumn() (exp.IdentifierExpression, grammar.ResolvedFieldPath, error) {
+	field := grammar.ModelStringPattern("$sme#idShort")
+	resolved, err := grammar.ResolveScalarFieldToSQL(&field)
+	if err != nil {
+		return nil, grammar.ResolvedFieldPath{}, err
+	}
+	resolved.Column = "submodel_element.idshort_path"
+	return goqu.I(resolved.Column), resolved, nil
 }
 
 func conditionVisibilityFilterEntries(

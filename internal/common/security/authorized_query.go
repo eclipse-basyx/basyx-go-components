@@ -96,6 +96,7 @@ type semanticObjectCoverage struct {
 	allSubmodelIDs      bool
 	allSubmodelElements bool
 	submodelElementPath string
+	submodelFragment    string
 }
 
 // SemanticAccessView is the immutable policy view applicable to one semantic
@@ -294,8 +295,33 @@ func semanticCoveragesForObject(
 				submodelElementPath: strings.TrimSpace(object.Referable.IDShortPath),
 			}}
 		}
+	case grammar.Fragment:
+		if resource == SemanticResourceSME && object.Fragment != nil && object.Fragment.Scope == "$sme" {
+			return fragmentObjectCoverages(resource, *object.Fragment)
+		}
 	}
 	return nil
+}
+
+func fragmentObjectCoverages(
+	resource SemanticResourceKind,
+	fragment grammar.FragmentValue,
+) []semanticObjectCoverage {
+	coverages := make([]semanticObjectCoverage, 0, len(fragment.Fragments))
+	for _, fieldFragment := range fragment.Fragments {
+		fieldFragment = strings.TrimPrefix(strings.TrimSpace(fieldFragment), "#")
+		if fieldFragment == "" {
+			continue
+		}
+		coverages = append(coverages, semanticObjectCoverage{
+			resource:            resource,
+			submodelID:          fragment.ID.ID,
+			allSubmodelIDs:      fragment.ID.IsAll,
+			submodelElementPath: strings.TrimSpace(fragment.IDShortPath),
+			submodelFragment:    fieldFragment,
+		})
+	}
+	return coverages
 }
 
 func allSubmodelCoverage(resource SemanticResourceKind) semanticObjectCoverage {
@@ -603,7 +629,8 @@ func simplifyCallerQueryForBackend(
 }
 
 // WithAuthorizedStringSelectors lowers public list parameters into the same
-// caller-controlled query boundary as query-language conditions.
+// caller-controlled query boundary as query-language conditions. Callers must
+// not also pass the lowered selectors to a backend's native filter arguments.
 func WithAuthorizedStringSelectors(
 	ctx context.Context,
 	outerResource SemanticResourceKind,

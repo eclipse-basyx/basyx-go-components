@@ -30,15 +30,14 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
-// attributesSatisfiedAll checks only subject eligibility. ATTRIBUTES declares
-// what a PIP or token issuer may need; claim values are resolved lazily when an
-// evaluated formula occurrence uses them.
+// attributesSatisfiedAll checks subject eligibility. Every declared claim must
+// be present; its value is resolved and type-checked only when a formula uses it.
 func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
 	if len(items) == 0 {
 		return false
 	}
 
-	hasClaimSubject := false
+	hasSubjectAttribute := false
 	hasAnonymousSubject := false
 	for _, it := range items {
 		switch it.Kind {
@@ -50,15 +49,20 @@ func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
 			default:
 				return false
 			}
-		case grammar.ATTRCLAIM, grammar.ATTRCLAIMPATH:
-			hasClaimSubject = true
+		case grammar.ATTRCLAIM:
+			hasSubjectAttribute = true
+			if _, exists := claims[it.Value]; !exists {
+				return false
+			}
+		case grammar.ATTRCLAIMPATH:
+			hasSubjectAttribute = true
+			if _, exists, err := jsonPointerValue(claims, it.Value); err != nil || !exists {
+				return false
+			}
 		case grammar.ATTRREFERENCE:
 		default:
 			return false
 		}
 	}
-	if len(claims) == 0 {
-		return hasAnonymousSubject
-	}
-	return hasClaimSubject || hasAnonymousSubject
+	return hasSubjectAttribute || hasAnonymousSubject
 }

@@ -36,14 +36,24 @@ import (
 // when security is enabled.
 func EdcBpnHeaderMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bpn := strings.TrimSpace(r.Header.Get("Edc-Bpn"))
+		if bpn == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		claims := FromContext(r)
 		if claims == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		claims["Edc-Bpn"] = strings.TrimSpace(r.Header.Get("Edc-Bpn"))
-		ctx := context.WithValue(r.Context(), ClaimsKey, claims)
+		enrichedClaims := make(Claims, len(claims)+1)
+		for key, value := range claims {
+			enrichedClaims[key] = value
+		}
+		enrichedClaims["Edc-Bpn"] = bpn
+		ctx := context.WithValue(r.Context(), ClaimsKey, enrichedClaims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

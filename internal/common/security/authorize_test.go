@@ -227,7 +227,7 @@ func TestAuthorizeWithFilterClaimPathContainsUsesExactArrayMembership(t *testing
 	}
 }
 
-func TestAuthorizeWithFilterResolvesDeclaredClaimsLazily(t *testing.T) {
+func TestAuthorizeWithFilterRequiresDeclaredClaims(t *testing.T) {
 	t.Parallel()
 
 	model := mustParseClaimAuthorizationModel(t, `{
@@ -241,8 +241,8 @@ func TestAuthorizeWithFilterResolvesDeclaredClaimsLazily(t *testing.T) {
 		Path:   "/description",
 		Claims: Claims{"sub": "authenticated-subject"},
 	})
-	if !allowed {
-		t.Fatal("decisive true branch must permit without resolving the skipped declared claim")
+	if allowed {
+		t.Fatal("a true formula branch must not bypass a missing declared claim")
 	}
 }
 
@@ -274,18 +274,50 @@ func TestAuthorizeWithFilterPermitOverridesIndeterminateRule(t *testing.T) {
 	}
 }
 
-func TestEdcBpnHeaderMiddlewareProvidesOptionalEmptyValue(t *testing.T) {
+func TestEdcBpnHeaderMiddlewarePreservesMissingClaim(t *testing.T) {
 	t.Parallel()
 
 	claims := Claims{"sub": "subject"}
 	handler := EdcBpnHeaderMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
-		if got := FromContext(request)["Edc-Bpn"]; got != "" {
-			t.Fatalf("Edc-Bpn = %#v, want empty string", got)
+		if _, exists := FromContext(request)["Edc-Bpn"]; exists {
+			t.Fatal("missing Edc-Bpn header must not create a claim")
 		}
 	}))
 	request := httptest.NewRequest(http.MethodGet, "/description", nil)
 	request = request.WithContext(context.WithValue(request.Context(), ClaimsKey, claims))
 	handler.ServeHTTP(httptest.NewRecorder(), request)
+}
+
+func TestEdcBpnHeaderMiddlewareDoesNotEraseVerifiedClaim(t *testing.T) {
+	t.Parallel()
+
+	claims := Claims{"sub": "subject", "Edc-Bpn": "signed-bpn"}
+	handler := EdcBpnHeaderMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		if got := FromContext(request)["Edc-Bpn"]; got != "signed-bpn" {
+			t.Fatalf("Edc-Bpn = %#v, want signed-bpn", got)
+		}
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/description", nil)
+	request = request.WithContext(context.WithValue(request.Context(), ClaimsKey, claims))
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+}
+
+func TestEdcBpnHeaderMiddlewareCopiesClaimsBeforeEnrichment(t *testing.T) {
+	t.Parallel()
+
+	claims := Claims{"sub": "subject"}
+	handler := EdcBpnHeaderMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		if got := FromContext(request)["Edc-Bpn"]; got != "BPNL000000000001" {
+			t.Fatalf("Edc-Bpn = %#v, want BPNL000000000001", got)
+		}
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/description", nil)
+	request.Header.Set("Edc-Bpn", " BPNL000000000001 ")
+	request = request.WithContext(context.WithValue(request.Context(), ClaimsKey, claims))
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+	if _, exists := claims["Edc-Bpn"]; exists {
+		t.Fatal("middleware mutated the verified claims map")
+	}
 }
 
 func mustParseClaimAuthorizationModel(t *testing.T, formula, attribute string) *AccessModel {

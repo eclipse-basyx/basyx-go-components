@@ -178,7 +178,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 	if selectorErr != nil {
 		return common.NewErrorResponse(selectorErr, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "BuildAuthorizedSelectors"), selectorErr
 	}
-	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, &idShort, &isCaseOf, &dataSpecificationRef, uintLimit, &decodedCursor, createdFrom, updatedFrom)
+	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, &isCaseOf, &dataSpecificationRef, uintLimit, &decodedCursor, createdFrom, updatedFrom)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):

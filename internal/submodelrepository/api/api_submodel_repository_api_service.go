@@ -634,8 +634,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 		ctx,
 		limit,
 		decodedCursor,
-		idShort,
-		decodedSemanticID,
+		"",
+		"",
 		createdFrom,
 		updatedFrom,
 		level,
@@ -762,7 +762,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsRecentChanges(
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 	}
 
-	submodels, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, normalizedLimit, decodedCursor, idShort, decodedSemanticID, createdFrom, updatedFrom)
+	submodels, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, normalizedLimit, decodedCursor, "", "", createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -1042,7 +1042,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
 	}
 
-	submodels, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, limit, decodedCursor, idShort, decodedSemanticID, time.Time{}, time.Time{})
+	submodels, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, limit, decodedCursor, "", "", time.Time{}, time.Time{})
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
@@ -1114,8 +1114,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		ctx,
 		limit,
 		decodedCursor,
-		idShort,
-		decodedSemanticID,
+		"",
+		"",
 		time.Time{},
 		time.Time{},
 		level,
@@ -1179,7 +1179,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
 	}
 
-	references, nextCursor, err := s.submodelBackend.GetSubmodelReferences(ctx, limit, decodedCursor, idShort, decodedSemanticID)
+	references, nextCursor, err := s.submodelBackend.GetSubmodelReferences(ctx, limit, decodedCursor, "", "")
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -1263,8 +1263,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 		effectiveLimit,
 		cursorState.SubmodelCursor,
 		cursorState.PathCursor,
-		idShort,
-		decodedSemanticID,
+		"",
+		"",
 		level,
 	)
 	if err != nil {

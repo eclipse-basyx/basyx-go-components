@@ -31,15 +31,16 @@ BEGIN
 END
 $minimum_postgres_version$;
 
-CREATE OR REPLACE FUNCTION basyx_safe_regex_match(input_value text, pattern_value text)
-RETURNS boolean
+CREATE OR REPLACE FUNCTION basyx_safe_regex_pattern(pattern_value text)
+RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
 PARALLEL SAFE
 STRICT
 AS $safe_regex$
 BEGIN
-  RETURN input_value ~ pattern_value;
+  PERFORM '' ~ pattern_value;
+  RETURN pattern_value;
 EXCEPTION
   WHEN invalid_regular_expression THEN
     RETURN NULL;
