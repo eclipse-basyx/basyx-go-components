@@ -1,0 +1,7 @@
+kind: added
+body: The AASX File Server now supports durable asynchronous package uploads through `POST /packages-async`.
+time: 2026-09-07T09:36:12.0101282+02:00
+custom:
+    Impact: Low
+    PullRequest: 609
+    SecurityImpact: Async uploads use existing create/read authorization; status and results are restricted to the submitting owner.

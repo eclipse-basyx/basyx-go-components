@@ -15,6 +15,36 @@ import (
 	"net/http"
 )
 
+// AASXAsyncFileServerAPIAPIRouter binds asynchronous package upload requests.
+type AASXAsyncFileServerAPIAPIRouter interface {
+	PostAsyncAASXPackage(http.ResponseWriter, *http.Request)
+}
+
+// AASXAsyncFileServerResultAPIAPIRouter binds asynchronous result requests.
+type AASXAsyncFileServerResultAPIAPIRouter interface {
+	GetAasxAsyncResult(http.ResponseWriter, *http.Request)
+}
+
+// AASXAsyncFileServerStatusAPIAPIRouter binds asynchronous status requests.
+type AASXAsyncFileServerStatusAPIAPIRouter interface {
+	GetAasxAsyncStatus(http.ResponseWriter, *http.Request)
+}
+
+// AASXAsyncFileServerAPIAPIServicer implements asynchronous package acceptance.
+type AASXAsyncFileServerAPIAPIServicer interface {
+	PostAsyncAASXPackage(context.Context, StagedUpload, []string, string) (ImplResponse, error)
+}
+
+// AASXAsyncFileServerResultAPIAPIServicer implements asynchronous result retrieval.
+type AASXAsyncFileServerResultAPIAPIServicer interface {
+	GetAasxAsyncResult(context.Context, string) (ImplResponse, error)
+}
+
+// AASXAsyncFileServerStatusAPIAPIServicer implements asynchronous status retrieval.
+type AASXAsyncFileServerStatusAPIAPIServicer interface {
+	GetAasxAsyncStatus(context.Context, string) (ImplResponse, error)
+}
+
 // AASXFileServerAPIAPIRouter defines the required methods for binding the api requests to a responses for the AASXFileServerAPIAPI
 // The AASXFileServerAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a AASXFileServerAPIAPIServicer to perform the required actions, then write the service results to the http response.

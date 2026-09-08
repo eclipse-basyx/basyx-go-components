@@ -176,6 +176,38 @@ func TestExecutionSlotsAreBoundedAndReusable(t *testing.T) {
 	}
 }
 
+func TestExecutionSlotLeaseTransfersCapacityToWorker(t *testing.T) {
+	manager, err := NewManagerWithExecutionCapacity("ASYNC-TEST", time.Minute, 1)
+	require.NoError(t, err)
+
+	lease, acquired := manager.TryAcquireExecutionSlotLease()
+	require.True(t, acquired)
+	releaseWorkerSlot, claimed := lease.Claim()
+	require.True(t, claimed)
+	lease.ReleaseIfUnclaimed()
+
+	_, acquired = manager.TryAcquireExecutionSlot()
+	require.False(t, acquired, "request cleanup released a slot already transferred to a worker")
+
+	releaseWorkerSlot()
+	release, acquired := manager.TryAcquireExecutionSlot()
+	require.True(t, acquired)
+	release()
+}
+
+func TestExecutionSlotLeaseReleasesUnclaimedCapacity(t *testing.T) {
+	manager, err := NewManagerWithExecutionCapacity("ASYNC-TEST", time.Minute, 1)
+	require.NoError(t, err)
+
+	lease, acquired := manager.TryAcquireExecutionSlotLease()
+	require.True(t, acquired)
+	lease.ReleaseIfUnclaimed()
+
+	release, acquired := manager.TryAcquireExecutionSlot()
+	require.True(t, acquired)
+	release()
+}
+
 func TestCompleteStartsTerminalRetention(t *testing.T) {
 	manager := NewManager("ASYNC-TEST", time.Minute)
 

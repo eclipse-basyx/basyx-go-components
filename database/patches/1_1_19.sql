@@ -23,38 +23,36 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package api
+DO $minimum_postgres_version$
+BEGIN
+  IF current_setting('server_version_num')::integer < 160000 THEN
+    RAISE EXCEPTION 'DATABASE-PATCH-1_1_19-POSTGRESVERSION PostgreSQL 16 or newer is required';
+  END IF;
+END
+$minimum_postgres_version$;
 
-import (
-	"context"
-	"net/http"
+CREATE OR REPLACE FUNCTION basyx_safe_regex_pattern(pattern_value text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+PARALLEL SAFE
+STRICT
+AS $safe_regex$
+BEGIN
+  PERFORM '' ~ pattern_value;
+  RETURN pattern_value;
+EXCEPTION
+  WHEN invalid_regular_expression THEN
+    RETURN NULL;
+END
+$safe_regex$;
 
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
-)
-
-const (
-	aasxFileServerSSP001 = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001"
-	aasxFileServerSSP002 = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002"
-)
-
-// DescriptionAPIAPIService provides the configured self-description response.
-type DescriptionAPIAPIService struct {
-	profiles []string
-}
-
-// NewDescriptionAPIAPIService creates a new description service.
-func NewDescriptionAPIAPIService(asyncProfileEnabled bool) *DescriptionAPIAPIService {
-	profiles := []string{aasxFileServerSSP001}
-	if asyncProfileEnabled {
-		profiles = append(profiles, aasxFileServerSSP002)
-	}
-	return &DescriptionAPIAPIService{profiles: profiles}
-}
-
-// GetSelfDescription returns the supported profile for the AASX file server.
-func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (openapi.ImplResponse, error) {
-	_ = ctx
-	return openapi.Response(http.StatusOK, openapi.ServiceDescription{
-		Profiles: s.profiles,
-	}), nil
-}
+UPDATE basyxsystem
+SET schema_version = 'v1.1.19',
+    state = 'clean'
+WHERE identifier = (
+  SELECT identifier
+  FROM basyxsystem
+  ORDER BY identifier ASC
+  LIMIT 1
+);
