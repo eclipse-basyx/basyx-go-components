@@ -450,6 +450,8 @@ func buildUnrestrictedAssetLinkQueryForRoot(assetLink []model.AssetLink, root st
 }
 
 func mergeGlobalAssetIDLookupVisibility(ctx context.Context, globalAssetIDs []string) (context.Context, error) {
+	// globalAssetId is intentionally selectable in the DTR discovery contract. This query
+	// constrains the requested value; it is not a response-field visibility check.
 	globalAssetIDQuery := buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs)
 	if globalAssetIDQuery.Condition == nil {
 		return ctx, nil

@@ -214,7 +214,7 @@ After integration, run #616's grammar, claim-resolution, authorization, OIDC, an
 
 The DTR already contains useful parts of the required implementation, but its current asset-ID flow has three layers that must not be treated as one reusable abstraction:
 
-1. `mergeAssetLinkLookupFilter` and `buildAssetLinkQueryForRoot` convert `assetIds` into grammar expressions and add DTR-specific `Edc-Bpn` or `PUBLIC_READABLE` witnesses. `$match` keeps the requested name, value, and access witness on the same asset-link row.
+1. `mergeAssetLinkLookupFilter` and `buildAssetLinkQueryForRoot` convert `assetIds` into grammar expressions. Non-global specific asset IDs receive DTR-specific `Edc-Bpn` or `PUBLIC_READABLE` witnesses, with `$match` keeping the requested name, value, and access witness on the same asset-link row. `globalAssetId` is the DTR contract's public discovery-key exception and is matched directly.
 2. `SearchAASIDsByAssetLinks` builds one parameterized goqu query for the lookup stage. It deduplicates requested links, uses one correlated `EXISTS` per exact name/value pair, applies the authorization formula before keyset pagination, and can use the existing `(name, value, aasRef)` and AAS identifier indexes.
 3. The shared security and descriptor code represents fragment predicates with `FragmentFilterPredicate`, resolves row scopes through `ResolvedFieldPathCollector`, injects row-local or correlated predicates through `AddFilterQueryFromContext` and `AddCorrelatedFilterQueryFromContext`, deduplicates equivalent masks, and uses `SharedFragmentMaskRuntime` when response JSON must be reconstructed with masked fields.
 
@@ -225,7 +225,7 @@ matching parent
   = EXISTS related row (
       correlation
       AND caller selection on that row
-      AND security visibility for the selected target on that row
+      AND security visibility for the selected target on that row, when required
     )
 ```
 
@@ -263,13 +263,20 @@ Do not reuse these parts as the new architecture:
 
 ### DTR migration path
 
-Treat DTR `assetIds`, `createdAfter`, and similar membership-changing parameters as caller-condition provenance even though the public endpoint does not expose a `$condition` document. Keep decoding, validation, exact asset-link matching, duplicate removal, and AND semantics for multiple links in the DTR adapter. Replace its manual security expansion with the same `SecurityProjectionForCallerConditions` view used by common query endpoints.
+Treat DTR `assetIds`, `createdAfter`, and similar membership-changing parameters as caller-condition provenance even though the public endpoint does not expose a `$condition` document. Keep decoding, validation, exact asset-link matching, duplicate removal, and AND semantics for multiple links in the DTR adapter. Replace its manual security expansion with the same `SecurityProjectionForCallerConditions` view used by common query endpoints, while preserving the contract-defined public `globalAssetId` discovery-key exception.
 
-For a specific asset link, the requested name/value predicate and the target-specific security guard must remain in the same `$match` or correlated row scope. For `globalAssetId`, visibility must be compiled for `$aasdesc#globalAssetId` or its translated `$bd` target itself; visibility of a different public asset-link fragment must not authorize selection by a hidden global asset ID. An unrestricted READ alternative should reduce the visibility guard to true and preserve the existing indexed lookup fast path.
+For a non-global specific asset link, the requested name/value predicate and the target-specific security guard must remain in the same `$match` or correlated row scope. `globalAssetId` is different: in the DTR profile it is intentionally a public discovery selector, so knowing the value may reveal the associated AAS identifier and may select that descriptor through BaSyx's `/shell-descriptors?assetIds=...` extension. Do not compile a fragment-visibility guard that turns response masking of `$aasdesc#globalAssetId` into lookup denial. Descriptor-level READ authorization and response projection still apply after candidate selection; this exception does not make the rest of the descriptor public.
+
+This separation matches the current Eclipse Tractus-X DTR contract and implementation:
+
+- the [Basic Discovery OpenAPI](https://github.com/eclipse-tractusx/sldt-digital-twin-registry/blob/main/backend/src/main/resources/static/aas-registry-openapi.yaml) explicitly supports lookup by an asset link named `globalAssetId`;
+- compatibility use cases [26](https://github.com/eclipse-tractusx/sldt-digital-twin-registry/tree/main/backend/src/test/resources/integrationtests/aas-registry-usecases/26_testFindExternalShellIdByGlobalAssetIdExpectSuccess) and [27](https://github.com/eclipse-tractusx/sldt-digital-twin-registry/tree/main/backend/src/test/resources/integrationtests/aas-registry-usecases/27_testFindExternalShellIdByGlobalAssetIdAssetLinkExpectSuccess) create a descriptor with only `globalAssetId` and expect GET and POST lookup to return its AAS identifier;
+- [`ShellIdentifierRepositoryImpl`](https://github.com/eclipse-tractusx/sldt-digital-twin-registry/blob/main/backend/src/main/java/org/eclipse/tractusx/semantics/registry/repository/ShellIdentifierRepositoryImpl.java) has a dedicated global-ID lookup branch without the BPN visibility predicate used for other specific asset IDs; and
+- [`DefaultShellAccessHandler`](https://github.com/eclipse-tractusx/sldt-digital-twin-registry/blob/main/backend/src/main/java/org/eclipse/tractusx/semantics/registry/service/DefaultShellAccessHandler.java) can omit `globalAssetId` from a public-only descriptor response. Lookup visibility and response-field projection are therefore deliberately separate concerns.
 
 The lookup endpoints can continue using the existing single-statement `SearchAASIDsByAssetLinks` shape after its authorization input is changed from the merged context filter to the typed condition-access view. For `/shell-descriptors?assetIds=...`, the final scalable form should place the asset-link `EXISTS`, condition-access guard, descriptor authorization, ordering, and pagination in one descriptor query. The current two-stage ID-list handoff may remain only as a transitional compatibility path with a bounded page, the same immutable authorization snapshot in both stages, and tests proving stable paging; it must not be copied to hierarchy queries.
 
-Extend the existing DTR unit, integration, and scalability suites with filtered and unrestricted cases for specific and global asset IDs, multiple links, `$match` row correlation, rare and common values, and pagination. Add a regression proving that a security-masked asset ID cannot select a descriptor even when another visible fragment makes that descriptor readable. Assert that the lookup SQL remains parameterized and indexable and that the final descriptor-list path neither materializes masked JSON before selection nor enumerates an unbounded ID set in Go.
+Extend the existing DTR unit, integration, and scalability suites with filtered and unrestricted cases for specific and global asset IDs, multiple links, `$match` row correlation, rare and common values, and pagination. Preserve the imported Tractus-X regressions proving that `globalAssetId` alone discovers the AAS identifier through both lookup variants. Add a separate regression proving that a security-masked non-global specific asset ID cannot select a descriptor even when another visible fragment makes that descriptor readable. Assert that the lookup SQL remains parameterized and indexable and that the final descriptor-list path neither materializes masked JSON before selection nor enumerates an unbounded ID set in Go.
 
 Relevant existing components:
 
@@ -570,7 +577,7 @@ Add performance regression coverage using representative high-cardinality data a
 - AAS authorization alone can never make denied Submodel or SME data observable through a query predicate.
 - `$aas#submodels[]` remains a structural correlation edge: no third implicit permission is required, while explicit AAS policy conditions and reconstruction filters on that fragment retain their normal behavior.
 - Policies can grant AAS and Submodel/SME access in separate rules.
-- Under the recommended Plan B strategy, access-rule `FILTER` and `FILTERLIST` predicates reduce condition visibility for caller `$condition` expressions and specialized membership-changing inputs such as DTR `assetIds`, while retaining their existing response-reconstruction behavior.
+- Under the recommended Plan B strategy, access-rule `FILTER` and `FILTERLIST` predicates reduce condition visibility for caller `$condition` expressions and specialized membership-changing inputs such as non-global DTR `assetIds`, while retaining their existing response-reconstruction behavior. The public `globalAssetId` discovery-key exception is preserved.
 - Caller `$filters` remain post-condition response projections and never change condition visibility or authorization.
 - Related-resource condition access is determined per permitting READ alternative by its ACL gates, object target, raw main formula, and target-specific security fragment predicate. Referable objects cover their segment-bounded SME subtree; Fragment objects do not widen beyond their exact path and field fragment.
 - An unrestricted permitting alternative overrides filtered alternatives only for the targets it covers; filters from one rule never narrow a separate unrestricted grant.
@@ -581,7 +588,7 @@ Add performance regression coverage using representative high-cardinality data a
 - A valid denied or fully masked target compiles to constant false. Missing session state, invalid policy data, and ambiguous required route translation reject the request before SQL execution.
 - A malformed value in an unauthorized related resource cannot produce a cast, regex, or date-processing error and cannot affect results, counts, pagination, or cursors.
 - Every authorization alternative and caller predicate is correlated to the same referenced Submodel and, when applicable, the same SME row.
-- DTR specific-asset and global-asset lookup cannot select a descriptor through an asset ID hidden by the applicable security fragment filter. Its query path reuses the shared condition-visibility compiler; an unrestricted grant reduces only the visibility guard to true and retains the existing exact indexed lookup shape.
+- DTR lookup by `globalAssetId` remains intentionally public and can reveal the associated AAS identifier even when response projection masks that field. Non-global specific-asset lookup cannot select a descriptor through an asset ID hidden by the applicable security fragment filter. Both paths retain their existing exact indexed lookup shapes, and descriptor-level authorization remains separate from discovery-key visibility.
 - Common query and DTR adapters share fragment matching, predicate composition, collector correlation, and goqu guard generation; DTR-specific `Edc-Bpn` or `PUBLIC_READABLE` formulas are not duplicated into the generic authorization layer.
 - A hierarchy request executes as one set-oriented, parameterized SQL statement with no N+1 authorization path or application-side enumeration of authorized resource IDs.
 - Preconditional semantics are enforced through correlated authorization guards without materializing a security-filtered resource before caller-condition evaluation; correctness does not depend on PostgreSQL evaluating predicates in textual order.
