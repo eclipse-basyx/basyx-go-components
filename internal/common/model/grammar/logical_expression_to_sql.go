@@ -30,7 +30,6 @@
 package grammar
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -38,6 +37,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -137,6 +137,13 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
 }
 
+// NewResolvedFieldPathCollectorForAAS creates an AAS collector with optional
+// access to the referenced Submodel hierarchy.
+func NewResolvedFieldPathCollectorForAAS(hierarchyQueriesEnabled bool) *ResolvedFieldPathCollector {
+	cfg := joinPlanConfigForAAS(hierarchyQueriesEnabled)
+	return NewResolvedFieldPathCollectorWithConfig(&cfg)
+}
+
 // NewResolvedFieldPathCollectorForNestedSMDesc creates a collector that
 // evaluates MATCH filters against the current submodel descriptor and
 // non-MATCH filters against its owning AAS descriptor.
@@ -205,7 +212,7 @@ func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPat
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 	switch root {
 	case CollectorRootAAS:
-		return joinPlanConfigForAAS(), nil
+		return joinPlanConfigForAAS(true), nil
 	case CollectorRootAASDesc:
 		return defaultJoinPlanConfig(), nil
 	case CollectorRootSMDesc:
@@ -234,11 +241,44 @@ func normalizeRoot(root string) string {
 	return r
 }
 
-func joinPlanConfigForAAS() JoinPlanConfig {
+func joinPlanConfigForAAS(hierarchyQueriesEnabled bool) JoinPlanConfig {
+	config := joinPlanConfigForAASWithHierarchy()
+	if hierarchyQueriesEnabled {
+		return config
+	}
+
+	aliases := make([]string, 0, len(config.BaseAliases))
+	for _, alias := range config.BaseAliases {
+		if _, hierarchyAlias := submodelHierarchyTableForAlias(alias, "submodel"); hierarchyAlias {
+			delete(config.Rules, alias)
+			continue
+		}
+		aliases = append(aliases, alias)
+	}
+	config.BaseAliases = aliases
+	tableForAlias := config.TableForAlias
+	config.TableForAlias = func(alias string) (string, bool) {
+		if _, hierarchyAlias := submodelHierarchyTableForAlias(alias, "submodel"); hierarchyAlias {
+			return "", false
+		}
+		return tableForAlias(alias)
+	}
+	return config
+}
+
+func joinPlanConfigForAASWithHierarchy() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "aas",
-		BaseAliases:   []string{"aas", "asset_information", "specific_asset_id", "aas_submodel_reference", "aas_submodel_reference_key", "external_subject_reference", "external_subject_reference_key"},
-		Rules: map[string]existsJoinRule{
+		BaseAliases: []string{
+			"aas", "asset_information", "specific_asset_id", "aas_submodel_reference",
+			"aas_submodel_reference_key", "submodel", "submodel_element", "property_element",
+			"multilanguage_property_value", "semantic_id_reference", "semantic_id_reference_key",
+			"sm_supplemental_semantic_id_reference", "sm_supplemental_semantic_id_reference_key",
+			"sme_semantic_id_reference", "sme_semantic_id_reference_key",
+			"sme_supplemental_semantic_id_reference", "sme_supplemental_semantic_id_reference_key",
+			"external_subject_reference", "external_subject_reference_key",
+		},
+		Rules: mergeJoinRules(map[string]existsJoinRule{
 			"aas": {
 				Alias: "aas",
 				Deps:  nil,
@@ -306,7 +346,20 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 					)
 				},
 			},
-		},
+		}, submodelHierarchyJoinRules("submodel", existsJoinRule{
+			Alias: "submodel",
+			Deps:  []string{"aas_submodel_reference_key"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("submodel").As("submodel"),
+					goqu.On(
+						goqu.I("submodel.submodel_identifier").Eq(goqu.I("aas_submodel_reference_key.value")),
+						goqu.I("aas_submodel_reference.type").Eq(int(types.ReferenceTypesModelReference)),
+						goqu.I("aas_submodel_reference_key.type").Eq(int(types.KeyTypesSubmodel)),
+					),
+				)
+			},
+		})),
 		TableForAlias: func(alias string) (string, bool) {
 			switch alias {
 			case "aas":
@@ -324,7 +377,7 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 			case "aas_submodel_reference_key":
 				return "aas_submodel_reference_key", true
 			default:
-				return "", false
+				return submodelHierarchyTableForAlias(alias, "submodel")
 			}
 		},
 		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
@@ -358,6 +411,165 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 				return false
 			}
 		},
+	}
+}
+
+func mergeJoinRules(ruleSets ...map[string]existsJoinRule) map[string]existsJoinRule {
+	merged := make(map[string]existsJoinRule)
+	for _, rules := range ruleSets {
+		for alias, rule := range rules {
+			merged[alias] = rule
+		}
+	}
+	return merged
+}
+
+func submodelHierarchyJoinRules(submodelAlias string, submodelRule existsJoinRule) map[string]existsJoinRule {
+	submodelRule.Alias = submodelAlias
+	return map[string]existsJoinRule{
+		submodelAlias: submodelRule,
+		"semantic_id_reference": {
+			Alias: "semantic_id_reference",
+			Deps:  []string{submodelAlias},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_semantic_id_reference").As("semantic_id_reference"),
+					goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I(submodelAlias+".id"))),
+				)
+			},
+		},
+		"semantic_id_reference_key": {
+			Alias: "semantic_id_reference_key",
+			Deps:  []string{"semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_semantic_id_reference_key").As("semantic_id_reference_key"),
+					goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
+				)
+			},
+		},
+		"sm_supplemental_semantic_id_reference": {
+			Alias: "sm_supplemental_semantic_id_reference",
+			Deps:  []string{submodelAlias},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_supplemental_semantic_id_reference").As("sm_supplemental_semantic_id_reference"),
+					goqu.On(goqu.I("sm_supplemental_semantic_id_reference.submodel_id").Eq(goqu.I(submodelAlias+".id"))),
+				)
+			},
+		},
+		"sm_supplemental_semantic_id_reference_key": {
+			Alias: "sm_supplemental_semantic_id_reference_key",
+			Deps:  []string{"sm_supplemental_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_supplemental_semantic_id_reference_key").As("sm_supplemental_semantic_id_reference_key"),
+					goqu.On(goqu.I("sm_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sm_supplemental_semantic_id_reference.id"))),
+				)
+			},
+		},
+		"submodel_element": {
+			Alias: "submodel_element",
+			Deps:  []string{submodelAlias},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element"),
+					goqu.On(goqu.I("submodel_element.submodel_id").Eq(goqu.I(submodelAlias+".id"))),
+				)
+			},
+		},
+		"property_element": {
+			Alias: "property_element",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("property_element"),
+					goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"multilanguage_property_value": {
+			Alias: "multilanguage_property_value",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("multilanguage_property_value"),
+					goqu.On(goqu.I("multilanguage_property_value.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"sme_semantic_id_reference": {
+			Alias: "sme_semantic_id_reference",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_semantic_id_reference").As("sme_semantic_id_reference"),
+					goqu.On(goqu.I("sme_semantic_id_reference.id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"sme_semantic_id_reference_key": {
+			Alias: "sme_semantic_id_reference_key",
+			Deps:  []string{"sme_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_semantic_id_reference_key").As("sme_semantic_id_reference_key"),
+					goqu.On(goqu.I("sme_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_semantic_id_reference.id"))),
+				)
+			},
+		},
+		"sme_supplemental_semantic_id_reference": {
+			Alias: "sme_supplemental_semantic_id_reference",
+			Deps:  []string{"submodel_element"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_supplemental_semantic_id_reference").As("sme_supplemental_semantic_id_reference"),
+					goqu.On(goqu.I("sme_supplemental_semantic_id_reference.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
+				)
+			},
+		},
+		"sme_supplemental_semantic_id_reference_key": {
+			Alias: "sme_supplemental_semantic_id_reference_key",
+			Deps:  []string{"sme_supplemental_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.LeftJoin(
+					goqu.T("submodel_element_supplemental_semantic_id_reference_key").As("sme_supplemental_semantic_id_reference_key"),
+					goqu.On(goqu.I("sme_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_supplemental_semantic_id_reference.id"))),
+				)
+			},
+		},
+	}
+}
+
+func submodelHierarchyTableForAlias(alias string, submodelAlias string) (string, bool) {
+	if alias == submodelAlias {
+		return "submodel", true
+	}
+	switch alias {
+	case "semantic_id_reference":
+		return "submodel_semantic_id_reference", true
+	case "semantic_id_reference_key":
+		return "submodel_semantic_id_reference_key", true
+	case "sm_supplemental_semantic_id_reference":
+		return "submodel_supplemental_semantic_id_reference", true
+	case "sm_supplemental_semantic_id_reference_key":
+		return "submodel_supplemental_semantic_id_reference_key", true
+	case "submodel_element":
+		return "submodel_element", true
+	case "property_element":
+		return "property_element", true
+	case "multilanguage_property_value":
+		return "multilanguage_property_value", true
+	case "sme_semantic_id_reference":
+		return "submodel_element_semantic_id_reference", true
+	case "sme_semantic_id_reference_key":
+		return "submodel_element_semantic_id_reference_key", true
+	case "sme_supplemental_semantic_id_reference":
+		return "submodel_element_supplemental_semantic_id_reference", true
+	case "sme_supplemental_semantic_id_reference_key":
+		return "submodel_element_supplemental_semantic_id_reference_key", true
+	default:
+		return "", false
 	}
 }
 
@@ -791,23 +1003,33 @@ func joinPlanConfigForCD() JoinPlanConfig {
 
 func joinPlanConfigForBD() JoinPlanConfig {
 	return JoinPlanConfig{
-		PreferredBase: "specific_asset_id",
-		BaseAliases:   []string{"specific_asset_id"},
+		PreferredBase: "aas_identifier",
+		BaseAliases:   []string{"aas_identifier"},
 		Rules: map[string]existsJoinRule{
-			"specific_asset_id": {
-				Alias: "specific_asset_id",
+			"aas_identifier": {
+				Alias: "aas_identifier",
 				Deps:  nil,
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds
 				},
 			},
-			"aas_identifier": {
-				Alias: "aas_identifier",
-				Deps:  []string{"specific_asset_id"},
+			"aas_descriptor": {
+				Alias: "aas_descriptor",
+				Deps:  []string{"aas_identifier"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.Join(
-						goqu.T("aas_identifier"),
-						goqu.On(goqu.I("aas_identifier.id").Eq(goqu.I("specific_asset_id.aasref"))),
+						goqu.T("aas_descriptor"),
+						goqu.On(goqu.I("aas_descriptor.id").Eq(goqu.I("aas_identifier.aasid"))),
+					)
+				},
+			},
+			"specific_asset_id": {
+				Alias: "specific_asset_id",
+				Deps:  []string{"aas_identifier"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("specific_asset_id"),
+						goqu.On(goqu.I("specific_asset_id.aasref").Eq(goqu.I("aas_identifier.id"))),
 					)
 				},
 			},
@@ -834,8 +1056,8 @@ func joinPlanConfigForBD() JoinPlanConfig {
 		},
 		TableForAlias: existsTableForAlias,
 		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
-			if base == "specific_asset_id" {
-				return goqu.I("specific_asset_id.aasref"), nil
+			if base == "aas_identifier" {
+				return goqu.I("aas_identifier.id"), nil
 			}
 			return nil, fmt.Errorf("unsupported BD base alias %q", base)
 		},
@@ -849,7 +1071,7 @@ func joinPlanConfigForBD() JoinPlanConfig {
 			return "id"
 		},
 		Correlatable: func(alias string) bool {
-			return alias == "specific_asset_id"
+			return alias == "aas_identifier"
 		},
 	}
 }
@@ -862,11 +1084,75 @@ type ResolvedFieldPathCollector struct {
 	fragmentBindingAliasRewrites map[string]string
 	matchFragment                *FragmentStringPattern
 	smeRowAlias                  string
+	fieldValueDecorator          FieldValueDecorator
 }
+
+// SemanticFieldAccess is the provider-neutral IR for one field read. It keeps
+// the semantic model path together with its resolved SQL value and bindings.
+// Security packages may decorate SQLValue with a condition-visible access view.
+type SemanticFieldAccess struct {
+	Field    ModelStringPattern
+	SQLValue exp.Expression
+	Resolved ResolvedFieldPath
+}
+
+// FieldValueDecoration is the observable SQL value for one semantic field.
+// IncludeResolved is false for denied views so an unavailable related row does
+// not turn into a truthy NOT(EXISTS(...)) oracle.
+type FieldValueDecoration struct {
+	SQLValue           exp.Expression
+	AdditionalResolved []ResolvedFieldPath
+	IncludeResolved    bool
+	VisibilityWitness  exp.Expression
+}
+
+// FieldValueDecorator converts a semantic field read into its observable SQL
+// value while preserving any access-view paths in the same correlation scope.
+type FieldValueDecorator func(SemanticFieldAccess) (FieldValueDecoration, error)
 
 // NewResolvedFieldPathCollectorWithConfig creates a collector with the provided join config.
 func NewResolvedFieldPathCollectorWithConfig(config *JoinPlanConfig) *ResolvedFieldPathCollector {
 	return &ResolvedFieldPathCollector{joinConfig: config}
+}
+
+// WithFieldValueDecorator returns an independent collector that decorates
+// caller-controlled field reads. The original collector remains unchanged.
+func (c *ResolvedFieldPathCollector) WithFieldValueDecorator(decorator FieldValueDecorator) *ResolvedFieldPathCollector {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	clone.fieldValueDecorator = decorator
+	return &clone
+}
+
+// WithPreferredBaseInline returns an independent collector that evaluates the
+// semantic root row locally while leaving related-resource aliases correlated.
+func (c *ResolvedFieldPathCollector) WithPreferredBaseInline() *ResolvedFieldPathCollector {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	clone.inlineAliases = make(map[string]struct{}, len(c.inlineAliases)+1)
+	for alias := range c.inlineAliases {
+		clone.inlineAliases[alias] = struct{}{}
+	}
+	config := clone.effectiveJoinConfig()
+	if base := strings.TrimSpace(config.PreferredBase); base != "" {
+		clone.inlineAliases[base] = struct{}{}
+	}
+	return &clone
+}
+
+// WithoutFieldValueDecorator returns an independent collector for trusted
+// policy expressions that must evaluate raw resource values.
+func (c *ResolvedFieldPathCollector) WithoutFieldValueDecorator() *ResolvedFieldPathCollector {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	clone.fieldValueDecorator = nil
+	return &clone
 }
 
 // AllowInlineAliases marks aliases that are already joined by the caller's
@@ -1182,12 +1468,8 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 	}
 	rootKey := cfg.RootJoinKey()
 	rootAlias := ""
-	rootColumn := ""
 	if cfg.RootJoinKeyAlias != nil {
 		rootAlias = strings.TrimSpace(cfg.RootJoinKeyAlias())
-	}
-	if cfg.RootJoinKeyColumn != nil {
-		rootColumn = strings.TrimSpace(cfg.RootJoinKeyColumn())
 	}
 	aliasCollision := false
 	if rootAlias != "" {
@@ -1200,74 +1482,112 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 	}
 
 	whereExpr := andBindingsForResolvedFieldPaths(resolved, predicate)
-	var correlation exp.Expression = groupKey.Eq(rootKey)
-	if correlationMode == smeMatchDescendant && collector != nil {
-		descendantOuterAlias := collector.smeRowAlias
-		if aliasCollision {
-			descendantOuterAlias = "__outer__"
-		}
-		correlation = buildSMEDescendantCorrelation(plan.BaseAlias, descendantOuterAlias)
+	matchExists, err := renderInlineExistsExpression(
+		ds,
+		plan,
+		groupKey,
+		rootKey,
+		whereExpr,
+		correlationMode,
+		collector,
+		aliasCollision,
+	)
+	if err != nil {
+		return nil, err
 	}
-	if aliasCollision && rootAlias != "" && rootColumn != "" && correlationMode != smeMatchDescendant {
-		outerPlaceholder := "__outer__"
-		correlation = groupKey.Eq(goqu.I(outerPlaceholder + "." + rootColumn))
+
+	return matchExists, nil
+}
+
+func visibilityWitnessForResolved(resolved []ResolvedFieldPath) exp.Expression {
+	witnesses := make([]exp.Expression, 0, len(resolved))
+	for _, path := range resolved {
+		if path.visibilityWitness != nil {
+			witnesses = append(witnesses, path.visibilityWitness)
+		}
+	}
+	if len(witnesses) == 0 {
+		return nil
+	}
+	return goqu.And(witnesses...)
+}
+
+func renderInlineExistsExpression(
+	ds *goqu.SelectDataset,
+	plan existsJoinPlan,
+	groupKey exp.IdentifierExpression,
+	rootKey exp.IdentifierExpression,
+	whereExpr exp.Expression,
+	correlationMode smeMatchCorrelation,
+	collector *ResolvedFieldPathCollector,
+	aliasCollision bool,
+) (exp.Expression, error) {
+	if aliasCollision {
+		return renderDerivedInlineExistsExpression(ds, plan, groupKey, rootKey, whereExpr, correlationMode, collector), nil
+	}
+	correlation := exp.Expression(groupKey.Eq(rootKey))
+	if correlationMode == smeMatchDescendant && collector != nil {
+		correlation = buildSMEDescendantCorrelation(plan.BaseAlias, collector.smeRowAlias)
 	}
 	if whereExpr != nil {
 		correlation = goqu.And(correlation, whereExpr)
 	}
-
-	ds = ds.Where(correlation)
-	if aliasCollision && rootAlias != "" && rootColumn != "" {
-		sql, args, err := ds.ToSQL()
-		if err != nil {
-			return nil, err
-		}
-		existsAliases := buildPostgresExistsAliases(plan.ExpandedAliases)
-		for _, a := range plan.ExpandedAliases {
-			mapped := existsAliases[a]
-			sql = strings.ReplaceAll(sql, "\""+a+"\".", "\""+mapped+"\".")
-			sql = strings.ReplaceAll(sql, " AS \""+a+"\"", " AS \""+mapped+"\"")
-
-			fromAsRe := regexp.MustCompile(`(?i)FROM\s+"` + regexp.QuoteMeta(a) + `"\s+AS\s+"`)
-			if !fromAsRe.MatchString(sql) {
-				fromRe := regexp.MustCompile(`(?i)FROM\s+"` + regexp.QuoteMeta(a) + `"`)
-				sql = fromRe.ReplaceAllString(sql, `FROM "`+a+`" AS "`+mapped+`"`)
-			}
-
-			joinAsRe := regexp.MustCompile(`(?i)JOIN\s+"` + regexp.QuoteMeta(a) + `"\s+AS\s+"`)
-			if !joinAsRe.MatchString(sql) {
-				joinRe := regexp.MustCompile(`(?i)JOIN\s+"` + regexp.QuoteMeta(a) + `"`)
-				sql = joinRe.ReplaceAllString(sql, `JOIN "`+a+`" AS "`+mapped+`"`)
-			}
-		}
-		sql = strings.ReplaceAll(sql, "\"__outer__\"", "\""+rootAlias+"\"")
-		return goqu.L("EXISTS ("+sql+")", args...), nil
-	}
-
-	return goqu.L("EXISTS ?", ds), nil
+	return goqu.L("EXISTS ?", ds.Where(correlation)), nil
 }
 
-const postgresIdentifierMaxBytes = 63
-
-func buildPostgresExistsAliases(aliases []string) map[string]string {
-	sortedAliases := append([]string(nil), aliases...)
-	sort.Strings(sortedAliases)
-
-	result := make(map[string]string, len(sortedAliases))
-	used := make(map[string]struct{}, len(sortedAliases))
-	for _, alias := range sortedAliases {
-		base := alias + "__exists"
-		candidate := base
-		for salt := 0; len(candidate) > postgresIdentifierMaxBytes || hasAlias(used, candidate); salt++ {
-			digest := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", base, salt)))
-			suffix := fmt.Sprintf("_%x", digest[:6])
-			prefixLength := postgresIdentifierMaxBytes - len(suffix)
-			candidate = base[:min(len(base), prefixLength)] + suffix
-		}
-		result[alias] = candidate
-		used[candidate] = struct{}{}
+func renderDerivedInlineExistsExpression(
+	ds *goqu.SelectDataset,
+	plan existsJoinPlan,
+	groupKey exp.IdentifierExpression,
+	rootKey exp.IdentifierExpression,
+	whereExpr exp.Expression,
+	correlationMode smeMatchCorrelation,
+	collector *ResolvedFieldPathCollector,
+) exp.Expression {
+	const groupKeyAlias = "authorization_group_key"
+	derivedAlias := plan.BaseAlias + "__exists"
+	projections := []interface{}{groupKey.As(groupKeyAlias)}
+	correlation := exp.Expression(goqu.I(derivedAlias + "." + groupKeyAlias).Eq(rootKey))
+	if correlationMode == smeMatchDescendant && collector != nil {
+		const submodelIDAlias = "authorization_submodel_id"
+		const pathAlias = "authorization_idshort_path"
+		projections = append(
+			projections,
+			goqu.I(plan.BaseAlias+".submodel_id").As(submodelIDAlias),
+			goqu.I(plan.BaseAlias+".idshort_path").As(pathAlias),
+		)
+		correlation = buildSMEDescendantCorrelationForColumns(
+			derivedAlias+"."+submodelIDAlias,
+			derivedAlias+"."+pathAlias,
+			collector.smeRowAlias,
+		)
 	}
-	return result
+	inner := ds.Select(projections...)
+	if whereExpr != nil {
+		inner = inner.Where(whereExpr)
+	}
+	outer := goqu.Dialect("postgres").
+		From(inner.As(derivedAlias)).
+		Select(goqu.L("1")).
+		Where(correlation)
+	return goqu.L("EXISTS ?", outer)
+}
+
+func buildSMEDescendantCorrelationForColumns(
+	innerSubmodelID string,
+	innerPath string,
+	outerAlias string,
+) exp.Expression {
+	pathColumn := goqu.I(innerPath)
+	outerPath := goqu.I(outerAlias + ".idshort_path")
+	escapedOuterPath := goqu.L("REPLACE(REPLACE(REPLACE(?, '!', '!!'), '%', '!%'), '_', '!_')", outerPath)
+	return goqu.And(
+		goqu.I(innerSubmodelID).Eq(goqu.I(outerAlias+".submodel_id")),
+		goqu.Or(
+			goqu.L("? LIKE (? || '.%') ESCAPE '!'", pathColumn, escapedOuterPath),
+			goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", pathColumn, escapedOuterPath),
+		),
+	)
 }
 
 func hasAlias(aliases map[string]struct{}, alias string) bool {
@@ -1355,23 +1675,90 @@ func descriptorIDForBaseAlias(base string) (exp.IdentifierExpression, error) {
 	}
 }
 
-func toSQLResolvedFieldOrValue(operand *Value, explicitCastType string, position string) (interface{}, *ResolvedFieldPath, error) {
-	fieldOperand, _ := extractFieldOperandAndCast(operand)
-	if fieldOperand == nil || fieldOperand.Field == nil {
-		val, err := toSQLComponent(operand, position)
-		return val, nil, err
+func toSQLResolvedFieldOrValue(
+	operand *Value,
+	position string,
+	collector *ResolvedFieldPathCollector,
+) (interface{}, []ResolvedFieldPath, error) {
+	if operand == nil {
+		return nil, nil, fmt.Errorf("GRAMMAR-SQLOPERAND-NIL: %s operand is nil", position)
 	}
-	fieldStr := string(*fieldOperand.Field)
-	f := ModelStringPattern(fieldStr)
+	if operand.Attribute != nil {
+		return nil, nil, fmt.Errorf("GRAMMAR-SQLOPERAND-ATTRIBUTE: attribute operands are not supported in SQL evaluation")
+	}
+	switch {
+	case operand.StrCast != nil:
+		return castResolvedOperandToSQL(operand.StrCast, position, "text", collector)
+	case operand.NumCast != nil:
+		return castResolvedOperandToSQL(operand.NumCast, position, "double precision", collector)
+	case operand.BoolCast != nil:
+		return castResolvedOperandToSQL(operand.BoolCast, position, "boolean", collector)
+	case operand.TimeCast != nil:
+		return castResolvedOperandToSQL(operand.TimeCast, position, "time", collector)
+	case operand.DateTimeCast != nil:
+		return castResolvedOperandToSQL(operand.DateTimeCast, position, "timestamptz", collector)
+	case operand.HexCast != nil:
+		return castResolvedOperandToSQL(operand.HexCast, position, "text", collector)
+	case operand.Year != nil:
+		return datePartResolvedOperandToSQL(operand.Year, position, "YEAR", collector)
+	case operand.Month != nil:
+		return datePartResolvedOperandToSQL(operand.Month, position, "MONTH", collector)
+	case operand.DayOfMonth != nil:
+		return datePartResolvedOperandToSQL(operand.DayOfMonth, position, "DAY", collector)
+	case operand.DayOfWeek != nil:
+		return datePartResolvedOperandToSQL(operand.DayOfWeek, position, "DOW", collector)
+	case operand.Field != nil:
+		return decoratedFieldToSQL(*operand.Field, collector)
+	default:
+		return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil, nil
+	}
+}
+
+func decoratedFieldToSQL(f ModelStringPattern, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
 	resolved, err := ResolveScalarFieldToSQL(&f)
 	if err != nil {
 		return nil, nil, err
 	}
-	ident := columnToExpression(resolved.Column)
-	if explicitCastType != "" {
-		return safeCastSQLValue(ident, explicitCastType), &resolved, nil
+	var sqlValue exp.Expression = columnToExpression(resolved.Column)
+	resolvedPaths := []ResolvedFieldPath{resolved}
+	if collector != nil && collector.fieldValueDecorator != nil {
+		decoration, decorateErr := collector.fieldValueDecorator(SemanticFieldAccess{
+			Field:    f,
+			SQLValue: sqlValue,
+			Resolved: resolved,
+		})
+		if decorateErr != nil {
+			return nil, nil, decorateErr
+		}
+		sqlValue = decoration.SQLValue
+		if decoration.IncludeResolved {
+			resolvedPaths = []ResolvedFieldPath{resolved}
+			resolvedPaths[0].visibilityWitness = decoration.VisibilityWitness
+		} else {
+			resolvedPaths = nil
+		}
+		resolvedPaths = append(resolvedPaths, decoration.AdditionalResolved...)
 	}
-	return ident, &resolved, nil
+	return sqlValue, resolvedPaths, nil
+}
+
+func castResolvedOperandToSQL(inner *Value, position, targetType string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	return safeCastSQLValue(sqlValue, targetType), resolved, nil
+}
+
+func datePartResolvedOperandToSQL(inner *Value, position, part string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	if inner.DateTimeCast == nil {
+		sqlValue = safeCastSQLValue(sqlValue, "timestamptz")
+	}
+	return goqu.L("EXTRACT("+part+" FROM ?)", sqlValue), resolved, nil
 }
 
 func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
@@ -1414,14 +1801,10 @@ func resolvedNeedsCTE(resolved []ResolvedFieldPath) bool {
 	return false
 }
 
-func collectResolvedFieldPaths(a, b *ResolvedFieldPath) []ResolvedFieldPath {
-	var out []ResolvedFieldPath
-	if a != nil {
-		out = append(out, *a)
-	}
-	if b != nil {
-		out = append(out, *b)
-	}
+func collectResolvedFieldPaths(a, b []ResolvedFieldPath) []ResolvedFieldPath {
+	out := make([]ResolvedFieldPath, 0, len(a)+len(b))
+	out = append(out, a...)
+	out = append(out, b...)
 	return out
 }
 
@@ -1875,9 +2258,10 @@ func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFie
 
 type binaryOperationValidator func(leftOperand, rightOperand *Value) error
 
-func handleBinaryOperationWithoutCollector(
+func handleBinaryOperationWithoutApply(
 	leftOperand, rightOperand *Value,
 	operation string,
+	collector *ResolvedFieldPathCollector,
 	fieldToFieldErr error,
 	build func(left interface{}, right interface{}, operation string) (exp.Expression, error),
 	validate binaryOperationValidator,
@@ -1886,42 +2270,20 @@ func handleBinaryOperationWithoutCollector(
 		return nil, nil, fmt.Errorf("binary operation operands must not be nil")
 	}
 
+	leftOperand = cloneValueForSQL(leftOperand)
+	rightOperand = cloneValueForSQL(rightOperand)
 	normalizeSemanticShorthand(leftOperand)
 	normalizeSemanticShorthand(rightOperand)
 
-	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
-	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
-
-	// Field-to-field operations are forbidden by the query language.
-	// We can safely assume operations have either 0 or 1 field operands.
-	if leftField != nil && rightField != nil {
+	if valueContainsField(*leftOperand) && valueContainsField(*rightOperand) {
 		return nil, nil, fieldToFieldErr
 	}
 
-	// Fast-path: both are values (no FieldIdentifiers involved).
-	if leftField == nil && rightField == nil {
-		leftSQL, err := toSQLComponent(leftOperand, "left")
-		if err != nil {
-			return nil, nil, err
-		}
-		rightSQL, err := toSQLComponent(rightOperand, "right")
-		if err != nil {
-			return nil, nil, err
-		}
-		if validate != nil {
-			if err := validate(leftOperand, rightOperand); err != nil {
-				return nil, nil, err
-			}
-		}
-		expr, err := build(leftSQL, rightSQL, operation)
-		return expr, nil, err
-	}
-
-	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
+	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, "left", collector)
 	if err != nil {
 		return nil, nil, err
 	}
-	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
+	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, "right", collector)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1949,84 +2311,65 @@ func handleBinaryOperationWithCollector(
 	build func(left interface{}, right interface{}, operation string) (exp.Expression, error),
 	validate binaryOperationValidator,
 ) (exp.Expression, []ResolvedFieldPath, error) {
-	if leftOperand == nil || rightOperand == nil {
-		return nil, nil, fmt.Errorf("binary operation operands must not be nil")
-	}
-
-	normalizeSemanticShorthand(leftOperand)
-	normalizeSemanticShorthand(rightOperand)
-
-	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
-	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
-
-	// Field-to-field operations are forbidden by the query language.
-	// We can safely assume operations have either 0 or 1 field operands.
-	if leftField != nil && rightField != nil {
-		return nil, nil, fieldToFieldErr
-	}
-
-	// Fast-path: both are values (no FieldIdentifiers involved).
-	if leftField == nil && rightField == nil {
-		leftSQL, err := toSQLComponent(leftOperand, "left")
-		if err != nil {
-			return nil, nil, err
-		}
-		rightSQL, err := toSQLComponent(rightOperand, "right")
-		if err != nil {
-			return nil, nil, err
-		}
-		if validate != nil {
-			if err := validate(leftOperand, rightOperand); err != nil {
-				return nil, nil, err
-			}
-		}
-		expr, err := build(leftSQL, rightSQL, operation)
-		return expr, nil, err
-	}
-
-	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
+	expression, resolved, err := handleBinaryOperationWithoutApply(leftOperand, rightOperand, operation, collector, fieldToFieldErr, build, validate)
 	if err != nil {
 		return nil, nil, err
 	}
-	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
-	if err != nil {
-		return nil, nil, err
-	}
+	return applyCollectorToResolvedExpression(expression, resolved, collector)
+}
 
-	if validate != nil {
-		if err := validate(leftOperand, rightOperand); err != nil {
-			return nil, nil, err
-		}
-	}
+func applyCollectorToResolvedExpression(
+	expression exp.Expression,
+	resolved []ResolvedFieldPath,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	return applyCollectorToResolvedExpressionWithVisibility(expression, resolved, collector, true)
+}
 
-	opExpr, err := build(leftSQL, rightSQL, operation)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
-	// No resolved fields (should not happen due to earlier fast-path), fall back.
+func applyCollectorToResolvedExpressionWithVisibility(
+	expression exp.Expression,
+	resolved []ResolvedFieldPath,
+	collector *ResolvedFieldPathCollector,
+	includeVisibility bool,
+) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(resolved) == 0 {
-		return opExpr, nil, nil
+		return expression, nil, nil
 	}
-
+	if includeVisibility {
+		if witness := visibilityWitnessForResolved(resolved); witness != nil {
+			expression = goqu.And(witness, expression)
+		}
+	}
 	if collector != nil && collector.canEvaluateInline(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+		return andBindingsForResolvedFieldPaths(resolved, expression), resolved, nil
 	}
 	if collector != nil && resolvedNeedsCTE(resolved) {
-		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, collector)
+		existsExpr, err := buildInlineExistsExpression(resolved, expression, collector)
 		if err != nil {
 			return nil, nil, err
 		}
 		return existsExpr, resolved, nil
 	}
 	if collector != nil {
-		return opExpr, resolved, nil
+		return expression, resolved, nil
 	}
 	if anyResolvedHasBindings(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+		return andBindingsForResolvedFieldPaths(resolved, expression), resolved, nil
 	}
-	return opExpr, resolved, nil
+	return expression, resolved, nil
+}
+
+func evaluateStandaloneBoolCast(
+	operand *Value,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	boolOperand := Value{BoolCast: operand}
+	sqlValue, resolved, err := toSQLResolvedFieldOrValue(&boolOperand, "$boolCast", collector)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return applyCollectorToResolvedExpression(goqu.L("?", sqlValue), resolved, collector)
 }
 
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
@@ -2053,6 +2396,9 @@ func handleBinaryOperationWithCollector(
 func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if le == nil {
 		return nil, nil, fmt.Errorf("logical expression is nil")
+	}
+	if le.Indeterminate {
+		return goqu.L("NULL::boolean"), nil, nil
 	}
 	// Handle comparison operations
 	if len(le.Eq) > 0 {
@@ -2089,36 +2435,15 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Match) > 0 {
-		expr, resolved, err := evaluateMatchExpressions(le.Match)
+		expr, resolved, err := evaluateMatchExpressions(le.Match, collector)
 		if err != nil {
 			return nil, nil, err
 		}
-		if collector != nil && collector.canEvaluateInline(resolved) {
-			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
-		}
-		if collector != nil && resolvedNeedsCTE(resolved) {
-			existsExpr, err := buildInlineExistsExpression(resolved, expr, collector)
-			if err != nil {
-				return nil, nil, err
-			}
-			return existsExpr, resolved, nil
-		}
-		if collector != nil {
-			return expr, resolved, nil
-		}
-		if anyResolvedHasBindings(resolved) {
-			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
-		}
-		return expr, resolved, nil
+		return applyCollectorToResolvedExpression(expr, resolved, collector)
 	}
 
 	if le.BoolCast != nil {
-		boolOperand := Value{BoolCast: le.BoolCast}
-		sqlValue, err := toSQLComponent(&boolOperand, "$boolCast")
-		if err != nil {
-			return nil, nil, err
-		}
-		return goqu.L("COALESCE(?, FALSE)", sqlValue), nil, nil
+		return evaluateStandaloneBoolCast(le.BoolCast, collector)
 	}
 
 	// Handle logical operations
@@ -2137,7 +2462,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Or) > 0 {
-		if collector != nil {
+		if collector != nil && collector.fieldValueDecorator == nil {
 			var combined []exp.Expression
 			var sharedResolved []ResolvedFieldPath
 			canGroup := true
@@ -2189,7 +2514,21 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		if err != nil {
 			return nil, nil, fmt.Errorf("error evaluating NOT condition: %w", err)
 		}
-		return goqu.L("NOT (?)", expr), resolved, nil
+		negated := goqu.L("NOT (?)", expr)
+		witness := visibilityWitnessForResolved(resolved)
+		if witness == nil {
+			return negated, resolved, nil
+		}
+		availability, _, err := applyCollectorToResolvedExpressionWithVisibility(
+			witness,
+			resolved,
+			collector,
+			false,
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error evaluating NOT visibility: %w", err)
+		}
+		return goqu.And(availability, negated), resolved, nil
 	}
 
 	// Handle boolean literal
@@ -2252,14 +2591,14 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 	return goqu.Or(mainExpr, fragmentGuard), resolved, nil
 }
 
-func evaluateMatchExpressions(match []MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(match) == 0 {
 		return nil, nil, fmt.Errorf("match expression list is empty")
 	}
 	var expressions []exp.Expression
 	var resolved []ResolvedFieldPath
 	for i, m := range match {
-		expr, childResolved, err := evaluateMatchExpressionSQL(m)
+		expr, childResolved, err := evaluateMatchExpressionSQL(m, collector)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error evaluating match expression at index %d: %w", i, err)
 		}
@@ -2269,47 +2608,50 @@ func evaluateMatchExpressions(match []MatchExpression) (exp.Expression, []Resolv
 	return goqu.And(expressions...), resolved, nil
 }
 
-func evaluateMatchExpressionSQL(me MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+	if me.Indeterminate {
+		return goqu.L("NULL::boolean"), nil, nil
+	}
 	if me.Boolean != nil {
 		return goqu.L("?::boolean", *me.Boolean), nil, nil
 	}
 	if len(me.Eq) > 0 {
-		return evaluateMatchComparison(me.Eq, "$eq")
+		return evaluateMatchComparison(me.Eq, "$eq", collector)
 	}
 	if len(me.Ne) > 0 {
-		return evaluateMatchComparison(me.Ne, "$ne")
+		return evaluateMatchComparison(me.Ne, "$ne", collector)
 	}
 	if len(me.Gt) > 0 {
-		return evaluateMatchComparison(me.Gt, "$gt")
+		return evaluateMatchComparison(me.Gt, "$gt", collector)
 	}
 	if len(me.Ge) > 0 {
-		return evaluateMatchComparison(me.Ge, "$ge")
+		return evaluateMatchComparison(me.Ge, "$ge", collector)
 	}
 	if len(me.Lt) > 0 {
-		return evaluateMatchComparison(me.Lt, "$lt")
+		return evaluateMatchComparison(me.Lt, "$lt", collector)
 	}
 	if len(me.Le) > 0 {
-		return evaluateMatchComparison(me.Le, "$le")
+		return evaluateMatchComparison(me.Le, "$le", collector)
 	}
 	if len(me.Contains) > 0 {
-		return evaluateMatchStringOperation(me.Contains, "$contains")
+		return evaluateMatchStringOperation(me.Contains, "$contains", collector)
 	}
 	if len(me.StartsWith) > 0 {
-		return evaluateMatchStringOperation(me.StartsWith, "$starts-with")
+		return evaluateMatchStringOperation(me.StartsWith, "$starts-with", collector)
 	}
 	if len(me.EndsWith) > 0 {
-		return evaluateMatchStringOperation(me.EndsWith, "$ends-with")
+		return evaluateMatchStringOperation(me.EndsWith, "$ends-with", collector)
 	}
 	if len(me.Regex) > 0 {
-		return evaluateMatchStringOperation(me.Regex, "$regex")
+		return evaluateMatchStringOperation(me.Regex, "$regex", collector)
 	}
 	if len(me.Match) > 0 {
-		return evaluateMatchExpressions(me.Match)
+		return evaluateMatchExpressions(me.Match, collector)
 	}
 	return nil, nil, fmt.Errorf("match expression has no valid operation")
 }
 
-func evaluateMatchComparison(operands []Value, operation string) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(operands) != 2 {
 		return nil, nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
 	}
@@ -2319,26 +2661,28 @@ func evaluateMatchComparison(operands []Value, operation string) (exp.Expression
 		_, err := leftOperand.IsComparableTo(*rightOperand)
 		return err
 	}
-	return handleBinaryOperationWithoutCollector(
+	return handleBinaryOperationWithoutApply(
 		leftOperand,
 		rightOperand,
 		operation,
+		collector,
 		fmt.Errorf("field-to-field comparisons are not supported"),
 		buildComparisonExpression,
 		validate,
 	)
 }
 
-func evaluateMatchStringOperation(items []StringValue, operation string) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchStringOperation(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(items) != 2 {
 		return nil, nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
 	}
 	leftOperand := stringValueToValue(items[0])
 	rightOperand := stringValueToValue(items[1])
-	return handleBinaryOperationWithoutCollector(
+	return handleBinaryOperationWithoutApply(
 		&leftOperand,
 		&rightOperand,
 		operation,
+		collector,
 		fmt.Errorf("field-to-field string operations are not supported"),
 		buildStringOperationExpression,
 		nil,
@@ -2458,21 +2802,47 @@ func buildStringOperationExpression(left interface{}, right interface{}, operati
 	case "$ends-with":
 		return goqu.L("? LIKE '%' || ?", left, right), nil
 	case "$regex":
-		// PostgreSQL regex match (case-sensitive). Use ~* if you need case-insensitive semantics.
-		return goqu.L("? ~ ?", left, right), nil
+		return goqu.L("? ~ basyx_safe_regex_pattern(?)", left, right), nil
 	default:
 		return nil, fmt.Errorf("unsupported string operation: %s", operation)
 	}
 }
 
+func cloneValueForSQL(value *Value) *Value {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	if value.Field != nil {
+		field := *value.Field
+		clone.Field = &field
+	}
+	clone.BoolCast = cloneValueForSQL(value.BoolCast)
+	clone.DateTimeCast = cloneValueForSQL(value.DateTimeCast)
+	clone.DayOfMonth = cloneValueForSQL(value.DayOfMonth)
+	clone.DayOfWeek = cloneValueForSQL(value.DayOfWeek)
+	clone.HexCast = cloneValueForSQL(value.HexCast)
+	clone.Month = cloneValueForSQL(value.Month)
+	clone.NumCast = cloneValueForSQL(value.NumCast)
+	clone.StrCast = cloneValueForSQL(value.StrCast)
+	clone.TimeCast = cloneValueForSQL(value.TimeCast)
+	clone.Year = cloneValueForSQL(value.Year)
+	return &clone
+}
+
 // normalizeSemanticShorthand expands known shorthand fields to their explicit keys[0].value form.
 func normalizeSemanticShorthand(operand *Value) {
-	inner, _ := extractFieldOperandAndCast(operand)
-	if inner == nil || inner.Field == nil {
+	if operand == nil {
+		return
+	}
+	for _, child := range valueChildren(*operand) {
+		normalizeSemanticShorthand(child)
+	}
+	if operand.Field == nil {
 		return
 	}
 
-	field := string(*inner.Field)
+	field := string(*operand.Field)
 
 	parts := strings.SplitN(field, "#", 2)
 	if len(parts) != 2 {
@@ -2489,7 +2859,7 @@ func normalizeSemanticShorthand(operand *Value) {
 
 	if strings.HasSuffix(suffix, "semanticId") || strings.HasSuffix(suffix, "externalSubjectId") {
 		suffix += ".keys[0].value"
-		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		*operand.Field = ModelStringPattern(prefix + "#" + suffix)
 		return
 	}
 
@@ -2499,69 +2869,13 @@ func normalizeSemanticShorthand(operand *Value) {
 	}
 	if lastSegment == "supplementalSemanticIds" {
 		suffix += "[].keys[0].value"
-		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		*operand.Field = ModelStringPattern(prefix + "#" + suffix)
 		return
 	}
 	if strings.HasPrefix(lastSegment, "supplementalSemanticIds[") && strings.HasSuffix(lastSegment, "]") {
 		suffix += ".keys[0].value"
-		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		*operand.Field = ModelStringPattern(prefix + "#" + suffix)
 	}
-}
-
-func toSQLComponent(operand *Value, position string) (interface{}, error) {
-	if operand == nil {
-		return nil, fmt.Errorf("%s operand is nil", position)
-	}
-	if operand.Attribute != nil {
-		return nil, fmt.Errorf("attribute operands are not supported in SQL evaluation")
-	}
-
-	// Handle casts first so they take precedence over any accidentally set literal/field.
-	if operand.StrCast != nil {
-		return castOperandToSQLType(operand.StrCast, position, "text")
-	}
-	if operand.NumCast != nil {
-		return castOperandToSQLType(operand.NumCast, position, "double precision")
-	}
-	if operand.BoolCast != nil {
-		return castOperandToSQLType(operand.BoolCast, position, "boolean")
-	}
-	if operand.TimeCast != nil {
-		return castOperandToSQLType(operand.TimeCast, position, "time")
-	}
-	if operand.DateTimeCast != nil {
-		return castOperandToSQLType(operand.DateTimeCast, position, "timestamptz")
-	}
-	if operand.HexCast != nil {
-		return castOperandToSQLType(operand.HexCast, position, "text")
-	}
-	if operand.Year != nil {
-		return datePartOperandToSQL(operand.Year, position, "YEAR")
-	}
-	if operand.Month != nil {
-		return datePartOperandToSQL(operand.Month, position, "MONTH")
-	}
-	if operand.DayOfMonth != nil {
-		return datePartOperandToSQL(operand.DayOfMonth, position, "DAY")
-	}
-	if operand.DayOfWeek != nil {
-		return datePartOperandToSQL(operand.DayOfWeek, position, "DOW")
-	}
-
-	if operand.IsField() {
-		if operand.Field == nil {
-			return nil, fmt.Errorf("%s operand is not a valid field", position)
-		}
-		fieldName := string(*operand.Field)
-		f := ModelStringPattern(fieldName)
-		resolved, err := ResolveScalarFieldToSQL(&f)
-		if err != nil {
-			return nil, err
-		}
-		return columnToExpression(resolved.Column), nil
-	}
-
-	return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil
 }
 
 // buildComparisonExpression is a helper function to build comparison expressions
@@ -2589,51 +2903,28 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 // For types that can raise runtime errors (e.g. timestamptz, time, numeric, boolean), the cast is guarded
 // so non-castable inputs yield NULL instead of a PostgreSQL cast error.
 // This is critical for security rules: a failed cast should simply cause the predicate to not match.
-// safeCastTimestampWithTimezoneRegex guards timestamptz casts in SQL-safe mode.
-//
-// Why this exists:
-//   - API inputs are RFC3339 (e.g. 2025-05-18T14:18:00.748914Z).
-//   - PostgreSQL timestamptz::text commonly renders as
-//     "YYYY-MM-DD HH:MM:SS[.fraction]+HH[:MM]" (space instead of "T").
-//   - A previous "T"-only regex rejected valid PostgreSQL text forms, causing
-//     guarded casts to become NULL and time comparisons (e.g. createdAfter) to fail.
-//
-// Accepted format:
-// - ISO 8601 / RFC3339-compatible date-time with timezone
-// - Date-time separator can be either "T" (RFC3339) or space (PostgreSQL text output).
-const safeCastTimestampWithTimezoneRegex = `^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}(?::?[0-9]{2})?)?)?$`
-
 func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 	switch targetType {
 	case "timestamptz":
-		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::timestamptz) END", sqlValue, safeCastTimestampWithTimezoneRegex, sqlValue)
+		return totalCastSQLValue(sqlValue, targetType, "timestamp with time zone")
 	case "time":
-		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::time) END", sqlValue, `^(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$`, sqlValue)
+		return totalCastSQLValue(sqlValue, targetType, "time without time zone")
 	case "double precision":
-		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::double precision) END", sqlValue, `^\s*-?[0-9]+(\.[0-9]+)?\s*$`, sqlValue)
+		return totalCastSQLValue(sqlValue, targetType, "double precision")
 	case "boolean":
-		return goqu.L("CASE WHEN lower(?::text) IN ('true','false','1','0','yes','no') THEN (?::boolean) END", sqlValue, sqlValue)
+		return totalCastSQLValue(sqlValue, targetType, "boolean")
 	default:
 		// text/hex casts are always safe
 		return goqu.L("?::"+targetType, sqlValue)
 	}
 }
 
-// castOperandToSQLType recursively converts an operand to SQL and applies a PostgreSQL cast.
-func castOperandToSQLType(inner *Value, position string, targetType string) (exp.Expression, error) {
-	sqlValue, err := toSQLComponent(inner, position)
-	if err != nil {
-		return nil, err
-	}
-	return safeCastSQLValue(sqlValue, targetType), nil
-}
-
-func datePartOperandToSQL(inner *Value, position string, part string) (exp.Expression, error) {
-	sqlValue, err := toSQLComponent(inner, position)
-	if err != nil {
-		return nil, err
-	}
-	return goqu.L("EXTRACT("+part+" FROM ?::timestamptz)", sqlValue), nil
+func totalCastSQLValue(sqlValue interface{}, targetType string, validationType string) exp.Expression {
+	return goqu.L(
+		"basyx_validated_cast_input(?::text, ?)::"+targetType,
+		sqlValue,
+		validationType,
+	)
 }
 
 // normalizeLiteralForSQL converts grammar literals to safe SQL encodable values.

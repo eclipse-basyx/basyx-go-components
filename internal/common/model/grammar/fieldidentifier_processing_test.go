@@ -77,6 +77,12 @@ func mustMarshalPrettyJSON(t *testing.T, v any) []byte {
 
 var fieldIdentifierProcessingCases = []fidTestCase{
 	{
+		Name:       "bd_globalAssetId",
+		Kind:       "scalar",
+		Input:      `$bd#globalAssetId`,
+		WantScalar: &expectedScalar{Column: "aas_descriptor.global_asset_id", Bindings: []expectedBinding{}},
+	},
+	{
 		Name:  "aasdesc_specificAsset_externalSubject_keys_value_indexed",
 		Kind:  "scalar",
 		Input: `$aasdesc#specificAssetIds[2].externalSubjectId.keys[5].value`,

@@ -1,0 +1,7 @@
+kind: fixed
+body: Invalid ABAC claim comparisons now retain their indeterminate result through `$not`, `$and`, `$or`, and `$match` instead of being converted to Boolean values.
+time: 2026-08-31T14:27:44.597663300+02:00
+custom:
+  Impact: Low
+  PullRequest: 616
+  SecurityImpact: Invalid or unusable claim values now consistently fail closed.

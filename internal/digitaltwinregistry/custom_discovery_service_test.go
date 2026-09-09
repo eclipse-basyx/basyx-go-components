@@ -27,8 +27,11 @@ package digitaltwinregistry
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -62,5 +65,72 @@ func TestBuildAssetLinkQuery_BuildsConditionWhenReadFormulaIsRestricted(t *testi
 	}
 	if len(query.Condition.And) == 0 {
 		t.Fatalf("expected AND conditions for asset-link query, got %#v", query.Condition)
+	}
+}
+
+func TestAuthorizedBasicDiscoveryGlobalAssetIDQueryUsesVisibleBDField(t *testing.T) {
+	t.Parallel()
+
+	policyField := grammar.ModelStringPattern("$aasdesc#globalAssetId")
+	publicReadable := grammar.StandardString("public-visible-global")
+	policy := grammar.LogicalExpression{Eq: grammar.ComparisonItems{
+		{Field: &policyField},
+		{StrVal: &publicReadable},
+	}}
+	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
+	ctx = auth.WithQueryFilter(ctx, &auth.QueryFilter{
+		Formula: &policy,
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumREAD: policy,
+		},
+	})
+	caller := buildBasicDiscoveryGlobalAssetIDQuery([]string{"global-asset"})
+	if caller.Condition == nil || len(caller.Condition.And) != 1 ||
+		len(caller.Condition.And[0].Eq) != 2 || caller.Condition.And[0].Eq[0].Field == nil ||
+		*caller.Condition.And[0].Eq[0].Field != "$bd#globalAssetId" {
+		t.Fatalf("expected a basic-discovery globalAssetId condition, got %#v", caller.Condition)
+	}
+	ctx, err := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceBD, caller)
+	if err != nil {
+		t.Fatalf("create authorized discovery query: %v", err)
+	}
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
+	if err != nil {
+		t.Fatalf("create basic-discovery collector: %v", err)
+	}
+	dataset, err := auth.AddFormulaQueryFromContext(
+		ctx,
+		goqu.Dialect("postgres").
+			From("aas_identifier").
+			Join(
+				goqu.T("aas_descriptor"),
+				goqu.On(goqu.I("aas_descriptor.id").Eq(goqu.I("aas_identifier.aasid"))),
+			),
+		collector,
+	)
+	if err != nil {
+		t.Fatalf("compile authorized discovery query: %v", err)
+	}
+	sql, args, err := dataset.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("render authorized discovery query: %v", err)
+	}
+	if strings.Contains(sql, "NULL") {
+		t.Fatalf("basic-discovery globalAssetId was neutralized as an unavailable semantic field:\n%s", sql)
+	}
+	if strings.Count(sql, `"aas_descriptor"."global_asset_id"`) < 2 {
+		t.Fatalf("expected policy and caller globalAssetId predicates, got:\n%s\nargs: %#v", sql, args)
+	}
+	for _, expected := range []any{"public-visible-global", "global-asset"} {
+		found := false
+		for _, arg := range args {
+			if arg == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected SQL args to contain %q, got %#v", expected, args)
+		}
 	}
 }

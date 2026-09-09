@@ -95,7 +95,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "ge number with explicit $numCast is guarded",
 			expr:    LogicalExpression{Ge: ComparisonItems{Value{NumCast: valuePtr(field("$aasdesc#id"))}, Value{NumVal: floatPtr(10)}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::double precision", ">= ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "basyx_validated_cast_input", "::double precision", ">= ?"},
 			wantArgs: []interface{}{
 				float64(10),
 			},
@@ -138,9 +138,9 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 			noExists: true,
 		},
 		{
-			name:    "regex uses ~ and respects explicit $strCast",
+			name:    "regex uses safe function and respects explicit $strCast",
 			expr:    LogicalExpression{Regex: StringItems{StringValue{StrCast: valuePtr(field("$aasdesc#assetType"))}, strString("^foo.*")}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "~", "::text"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", " ~ basyx_safe_regex_pattern(", "::text"},
 			wantArgs: []interface{}{
 				"^foo.*",
 			},

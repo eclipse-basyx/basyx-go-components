@@ -70,6 +70,48 @@ func TestAASRepositoryCreateExistingUnauthorizedShellDoesNotReturnConflict(t *te
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestAASRepositoryCreateExistingUnauthorizedSubmodelReferenceDoesNotReturnConflict(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &AssetAdministrationShellDatabase{db: db}
+	aasID := "urn:example:aas:hidden-reference"
+	submodelID := "urn:example:submodel:hidden-reference"
+	reference := types.NewReference(
+		types.ReferenceTypesModelReference,
+		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, submodelID)},
+	)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "aas".*FOR UPDATE`).
+		WithArgs(aasID).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	mock.ExpectQuery(`SELECT 1 FROM "aas_submodel_reference"`).
+		WithArgs(int64(42), submodelID, sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(1))
+	mock.ExpectQuery(`SELECT "id" FROM "aas"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	mock.ExpectQuery(`FROM "aas" AS "aas".*\$2`).
+		WithArgs(aasID, false, sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectRollback()
+
+	err = sut.CreateSubmodelReferenceInAssetAdministrationShell(
+		contextWithRestrictedCreateAAS(t),
+		aasID,
+		reference,
+	)
+	require.Error(t, err)
+	require.Truef(t, common.IsErrDenied(err), "got %v", err)
+	require.False(t, common.IsErrConflict(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func contextWithRestrictedCreateAAS(t *testing.T) context.Context {
 	t.Helper()
 

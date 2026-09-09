@@ -77,7 +77,11 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
 		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$aasdesc#createdAt")
-		ctx = auth.MergeQueryFilter(ctx, query)
+		var queryErr error
+		ctx, queryErr = auth.WithAuthorizedQuery(ctx, auth.SemanticResourceAASDesc, query)
+		if queryErr != nil {
+			return common.NewErrorResponse(queryErr, http.StatusInternalServerError, customRegistryComponentName, "GetAllAssetAdministrationShellDescriptors", "BuildAuthorizedQuery"), queryErr
+		}
 	}
 	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 
@@ -171,7 +175,10 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAsset
 		}), nil
 	}
 	descriptorQuery := buildAASIDQuery(aasIDs)
-	descriptorCtx := auth.MergeQueryFilter(ctx, descriptorQuery)
+	descriptorCtx, descriptorContextErr := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceAASDesc, descriptorQuery)
+	if descriptorContextErr != nil {
+		return common.NewErrorResponse(descriptorContextErr, http.StatusInternalServerError, customRegistryComponentName, "GetAllAssetAdministrationShellDescriptors", "BuildDescriptorQuery"), descriptorContextErr
+	}
 	descriptorResp, descriptorErr := s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
 		descriptorCtx,
 		limit,
@@ -271,12 +278,8 @@ func splitGlobalAssetIDLinks(links []model.AssetLink) ([]string, []model.AssetLi
 	return globalAssetIDs, assetLinks
 }
 
-func buildGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
-	return buildGlobalAssetIDQueryForField("$aasdesc#globalAssetId", globalAssetIDs)
-}
-
 func buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
-	return buildGlobalAssetIDQuery(globalAssetIDs)
+	return buildGlobalAssetIDQueryForField("$bd#globalAssetId", globalAssetIDs)
 }
 
 func buildBasicDiscoveryGlobalAssetIDDescriptorVisibilityQuery(ctx context.Context) grammar.Query {
@@ -350,7 +353,10 @@ func mergeAssetLinkLookupFilter(ctx context.Context, links []model.AssetLink) (c
 	globalAssetIDs, specificAssetLinks := splitGlobalAssetIDLinks(links)
 	readUnrestricted := auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
 	if globalAssetIDDescriptorVisibilityRequired(ctx, globalAssetIDs, readUnrestricted) {
-		ctx = auth.MergeQueryFilter(ctx, buildBasicDiscoveryGlobalAssetIDDescriptorVisibilityQuery(ctx))
+		ctx, enforceErr = auth.WithAuthorizedQuery(ctx, auth.SemanticResourceBD, buildBasicDiscoveryGlobalAssetIDDescriptorVisibilityQuery(ctx))
+		if enforceErr != nil {
+			return ctx, enforceErr
+		}
 	}
 
 	if !shouldEnforceFormula {
@@ -361,7 +367,10 @@ func mergeAssetLinkLookupFilter(ctx context.Context, links []model.AssetLink) (c
 	if assetLinkQuery.Condition == nil && len(assetLinkQuery.FilterConditions) == 0 {
 		return ctx, nil
 	}
-	ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+	ctx, enforceErr = auth.WithAuthorizedQuery(ctx, auth.SemanticResourceBD, assetLinkQuery)
+	if enforceErr != nil {
+		return ctx, enforceErr
+	}
 	if len(globalAssetIDs) > 0 {
 		return ctx, nil
 	}

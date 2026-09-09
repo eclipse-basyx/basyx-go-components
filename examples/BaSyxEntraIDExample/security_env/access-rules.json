@@ -2,7 +2,8 @@
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
       { "name": "anonymous_attr", "attributes": [{ "GLOBAL": "ANONYMOUS" }] },
-      { "name": "authenticated_attr", "attributes": [{ "CLAIM": "scp" }] }
+      { "name": "authenticated_attr", "attributes": [{ "CLAIM": "scp" }] },
+      { "name": "admin_attr", "attributes": [{ "CLAIMPATH": "/roles" }] }
     ],
     "DEFOBJECTS": [
       {
@@ -51,15 +52,15 @@
     "DEFACLS": [
       { "name": "anonymous_read", "acl": { "USEATTRIBUTES": "anonymous_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
       { "name": "authenticated_full", "acl": { "USEATTRIBUTES": "authenticated_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } },
-      { "name": "admin_full", "acl": { "USEATTRIBUTES": "authenticated_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
+      { "name": "admin_full", "acl": { "USEATTRIBUTES": "admin_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
     ],
     "DEFFORMULAS": [
-      { "name": "is_admin_scope", "formula": { "$contains": [{ "$attribute": { "CLAIM": "scp" } }, { "$strVal": "basyx.admin" }] } }
+      { "name": "is_admin_role", "formula": { "$contains": [ { "$attribute": { "CLAIMPATH": "/roles" } }, { "$strVal": "basyx.admin" } ] } }
     ],
     "rules": [
       { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description", "public_product_info"], "FORMULA": { "$boolean": true } },
       { "USEACL": "authenticated_full", "USEOBJECTS": ["all_api"], "FORMULA": { "$boolean": true } },
-      { "USEACL": "admin_full", "USEOBJECTS": ["abac_policy_management"], "USEFORMULA": "is_admin_scope" }
+      { "USEACL": "admin_full", "USEOBJECTS": ["abac_policy_management"], "USEFORMULA": "is_admin_role" }
     ]
   }
 }

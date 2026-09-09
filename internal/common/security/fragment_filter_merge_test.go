@@ -140,6 +140,25 @@ func TestAuthorizeMultipleABACRulesEquivalentFragmentsDoNotExposeRestrictedIndex
 	}
 }
 
+func TestCloneQueryFilterPreservesIndeterminateMarkers(t *testing.T) {
+	t.Parallel()
+
+	field := grammar.ModelStringPattern("$sm#id")
+	value := grammar.StandardString("allowed")
+	filter := &QueryFilter{Formula: &grammar.LogicalExpression{And: []grammar.LogicalExpression{
+		{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}},
+		{Indeterminate: true},
+	}}}
+
+	cloned, err := CloneQueryFilter(filter)
+	if err != nil {
+		t.Fatalf("CloneQueryFilter() error = %v", err)
+	}
+	if cloned.Formula == nil || len(cloned.Formula.And) != 2 || !cloned.Formula.And[1].Indeterminate {
+		t.Fatalf("CloneQueryFilter() lost indeterminate marker: %#v", cloned)
+	}
+}
+
 func constantFragmentFilterEntriesValue(entries []FragmentFilterEntry, target grammar.FragmentStringPattern) (bool, bool) {
 	visible := true
 	for _, entry := range entries {

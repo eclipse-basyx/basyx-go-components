@@ -143,7 +143,7 @@ func TestLogicalExpression_SimplifyForBackendFilter_EnumTypeInvalidString_FallsB
 	}
 }
 
-func TestLogicalExpression_SimplifyForBackendFilter_CreatedAfterUsesTimestampRegexCompatibleWithPostgresText(t *testing.T) {
+func TestLogicalExpression_SimplifyForBackendFilter_CreatedAfterUsesPostgresInputValidation(t *testing.T) {
 	createdAfter := time.Date(2025, 5, 18, 14, 18, 0, 748914000, time.UTC)
 	createdAfterPattern := ModelStringPattern("$aasdesc#createdAt")
 	createdAfterVal := DateTimeLiteralPattern(createdAfter)
@@ -169,7 +169,7 @@ func TestLogicalExpression_SimplifyForBackendFilter_CreatedAfterUsesTimestampReg
 	if !strings.Contains(sql, "::timestamptz") {
 		t.Fatalf("expected SQL to contain timestamptz cast, got: %s", sql)
 	}
-	if !argListContains(args, safeCastTimestampWithTimezoneRegex) {
-		t.Fatalf("expected args to contain timestamp regex %q, got %#v", safeCastTimestampWithTimezoneRegex, args)
+	if !strings.Contains(sql, "basyx_validated_cast_input") || !argListContains(args, "timestamp with time zone") {
+		t.Fatalf("expected PostgreSQL timestamp input validation, got SQL %s with args %#v", sql, args)
 	}
 }

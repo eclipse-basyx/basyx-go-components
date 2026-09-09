@@ -42,11 +42,12 @@ import (
 // (ARM) used by the ABAC engine. It holds the generated schema and provides
 // evaluation helpers.
 type AccessModel struct {
-	gen       grammar.AccessRuleModelSchemaJSON
-	apiRouter *api.Mux
-	rules     []materializedRule
-	basePath  string
-	policyID  string
+	gen               grammar.AccessRuleModelSchemaJSON
+	apiRouter         *api.Mux
+	rules             []materializedRule
+	semanticReadRules map[SemanticResourceKind][]compiledSemanticReadRule
+	basePath          string
+	policyID          string
 }
 
 type materializedRule struct {
@@ -94,12 +95,14 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessMod
 		return nil, fmt.Errorf("parse access model: %w", err)
 	}
 
-	return &AccessModel{
+	model := &AccessModel{
 		gen:       m,
 		apiRouter: apiRouter,
 		rules:     rules,
 		basePath:  basePath,
-	}, nil
+	}
+	model.semanticReadRules = buildSemanticReadRules(rules, basePath)
+	return model, nil
 }
 
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
@@ -154,6 +157,8 @@ type AuthorizationEvaluation struct {
 	// Multiple IDs are comma-separated in configured rule order. The field is
 	// empty when no allow rule matched or rule metadata is unavailable.
 	MatchedRuleID string
+
+	alternatives []CompiledGrantAlternative
 }
 
 // AuthorizeWithFilter evaluates the request against the model rules in order.
@@ -210,6 +215,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	}
 
 	var ruleExprs []QueryFilter
+	var grantAlternatives []CompiledGrantAlternative
 	allFragments := make(map[grammar.FragmentStringPattern]struct{})
 	matchedRuleIDs := make([]string, 0, len(m.rules))
 	relevantRights := collectRelevantRights(rightAlternatives)
@@ -259,7 +265,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 
 		adapted, decision := combinedLE.SimplifyForBackendFilterWithOptions(resolver, opts)
-		if decision == grammar.SimplifyFalse {
+		if decision == grammar.SimplifyFalse || decision == grammar.SimplifyIndeterminate {
 			continue
 		}
 		if r.id != "" {
@@ -290,6 +296,11 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			Formula: &adapted,
 			Filters: fragments,
 		})
+		grantAlternatives = append(grantAlternatives, CompiledGrantAlternative{
+			ruleID:  r.id,
+			formula: adapted,
+			filters: fragments,
+		})
 	}
 
 	if len(ruleExprs) == 0 {
@@ -316,7 +327,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 		simplifiedRight, rightDecision := combinedRight.SimplifyForBackendFilterWithOptions(resolver, opts)
 		switch rightDecision {
-		case grammar.SimplifyFalse:
+		case grammar.SimplifyFalse, grammar.SimplifyIndeterminate:
 			combinedByRight[right] = boolExpression(false)
 		case grammar.SimplifyTrue:
 			combinedByRight[right] = boolExpression(true)
@@ -327,7 +338,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 
 	hasFormula := true
 	switch decision {
-	case grammar.SimplifyFalse:
+	case grammar.SimplifyFalse, grammar.SimplifyIndeterminate:
 		return AuthorizationEvaluation{Reason: DecisionNoMatch}
 	case grammar.SimplifyTrue:
 		hasFormula = false
@@ -354,6 +365,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		QueryFilter:   qf,
 		PolicyID:      m.policyID,
 		MatchedRuleID: strings.Join(matchedRuleIDs, ","),
+		alternatives:  grantAlternatives,
 	}
 }
 

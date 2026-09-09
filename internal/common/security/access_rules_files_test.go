@@ -39,6 +39,8 @@ func TestBundledAccessRuleFilesParse(t *testing.T) {
 	patterns := []string{
 		filepath.Join("..", "..", "..", "cmd", "*", "config", "access_rules", "access-rules.json"),
 		filepath.Join("..", "..", "..", "examples", "*", "security_env", "access-rules.json"),
+		filepath.Join("..", "..", "digitaltwinregistry", "integration_tests", "docker_compose", "security_env", "access-rules.json"),
+		filepath.Join("..", "..", "digitaltwinregistry", "security_tests", "docker_compose", "security_env", "access-rules.json"),
 	}
 	for _, pattern := range patterns {
 		files, err := filepath.Glob(pattern)

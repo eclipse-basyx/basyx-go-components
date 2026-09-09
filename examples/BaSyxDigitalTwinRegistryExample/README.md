@@ -6,7 +6,7 @@ This example runs a BaSyx Digital Twin Registry (DTR) with ABAC-based access con
 
 What is special in this setup:
 - Access decisions are not only endpoint-based, they are also data-fragment-based. A caller can receive only parts of a shell descriptor depending on claims.
-- The `Edc-Bpn` HTTP header is injected as a claim and used in ABAC formulas (`bpn_or_public`, `bpn_or_public_with_header`, `bpn_match`) to filter data visibility.
+- A non-empty `Edc-Bpn` HTTP header is injected as a claim and used in ABAC formulas (`bpn_or_public`, `bpn_or_public_with_header`, `bpn_match`) to filter data visibility. A missing or whitespace-only header does not create a claim.
 - `specificAssetIds[].externalSubjectId.keys[].value` drives tenant-specific visibility. `PUBLIC_READABLE` data is visible across tenants.
 - `PUT /shell-descriptors/{aasIdentifier}` has create-or-update semantics and authorization depends on whether the descriptor already exists.
 
@@ -308,7 +308,7 @@ Expected result:
 - HTTP `200`.
 - `specificAssetIds` is not present.
 - `id` and `submodelDescriptors` are present.
-- Why: route-level read (`bpn_or_public`) still allows access because the descriptor contains `PUBLIC_READABLE`, but fragment filtering for `specificAssetIds` uses `bpn_or_public_with_header`, which requires a non-`<nil>` `Edc-Bpn` header.
+- Why: route-level read (`bpn_or_public`) still allows access because the descriptor contains `PUBLIC_READABLE`, but fragment filtering for `specificAssetIds` uses `bpn_or_public_with_header`, which requires a non-empty `Edc-Bpn` header.
 
 5. Read descriptor by id with non-matching BPN header (`BPNL00000000015G`).
 

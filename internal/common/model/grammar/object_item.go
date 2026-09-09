@@ -149,8 +149,8 @@ type FragmentValue struct {
 	// ID is either a wildcard ("*") or a concrete identifier string.
 	ID Identifier
 
-	// IdShortPath is a dotted idShort path (e.g., "sub.a.b").
-	iDShortPath string
+	// IDShortPath is a dotted idShort path (e.g., "sub.a.b").
+	IDShortPath string
 
 	// Fragments are one or more trailing string fragments.
 	Fragments []string
@@ -332,7 +332,7 @@ func referableObjectString(value ReferableValue) string {
 }
 
 func fragmentObjectString(value FragmentValue) string {
-	out := fmt.Sprintf("%s.%s", identifierObjectString(value.Scope, value.ID), value.iDShortPath)
+	out := fmt.Sprintf("%s.%s", identifierObjectString(value.Scope, value.ID), value.IDShortPath)
 	for _, fragment := range value.Fragments {
 		out += " " + strconv.Quote(fragment)
 	}
@@ -419,7 +419,7 @@ func parseFragment(s string) (*FragmentValue, error) {
 	out := &FragmentValue{
 		Scope:       head[1],
 		ID:          id,
-		iDShortPath: head[3],
+		IDShortPath: head[3],
 	}
 	for _, f := range frags {
 		out.Fragments = append(out.Fragments, f[1])

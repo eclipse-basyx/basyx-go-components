@@ -5,6 +5,49 @@ This document explains how logical expressions are simplified and converted into
 For request/response examples, including query-endpoint and ABAC composition,
 see [Query Language Examples](examples.md).
 
+For the planned cross-resource authorization model for AAS hierarchy queries,
+see [AAS Hierarchy Query Authorization Plan](aas_hierarchy_authorization/README.md).
+
+## Policy dialect and deployment compatibility
+
+This implementation uses a BaSyx policy dialect; it does not claim complete
+IDTA Part 4 conformance. `CLAIMPATH` is an extension. Claim casts retain the
+JWT JSON types described below, and REFERABLE grants cover the target and its
+descendants at SME segment boundaries. Audit existing policies and actual token
+types when upgrading, including rights inherited by descendants.
+
+The current evaluator preserves its existing indeterminate semantics:
+`OR(true, indeterminate)` is true, and `NOT(AND(false, indeterminate))` is true.
+This differs from the whole-expression invalidity rule in
+[IDTA Part 4 v3.1](https://industrialdigitaltwin.io/aas-specifications/IDTA-01004/v3.1/access-rule-model.html#_formulas_and_logical_expressions).
+Full conformance requires a separate evaluator change and migration decision;
+the query-visibility fixes do not establish it.
+
+Policy `ROUTE` literals are relative to `server.contextPath`. With context path
+`/sub`, `/submodels/*` covers direct requests under `/sub/submodels/*` and the
+same Submodel scope in queries. Do not include the context path in a policy
+literal: `/api/submodels/*` with context path `/api` means
+`/api/api/submodels/*`, and does not grant the standard Submodel query scope.
+
+Caller expressions resolve every field through its visibility checks, including
+fields inside nested casts and date-part operators. Hidden fields cannot select
+returned resources through these operators. Test upgrades with existing policies
+and representative data; correctness tests do not establish throughput or latency
+equivalence. Measure item reads, filtered queries, large hierarchies, and restricted
+value updates with ABAC enabled and disabled before setting deployment capacity.
+
+Queries and policy expressions are limited to 64 nested JSON container levels
+and 8,192 JSON tokens (including keys and delimiters), checked before recursive
+expression decoding. Query limits include all response filters together. Split
+larger requests or policies into smaller expressions when upgrading; query
+requests exceeding these limits return HTTP 400.
+
+Updated services require database schema `v1.1.19`. Run the configuration service
+to install `basyx_validated_cast_input` before starting the updated services.
+The helper validates each textual cast input once; nested casts generate SQL
+whose size grows linearly with nesting depth. Its PostgreSQL function-call cost
+still needs representative workload measurement.
+
 ## Quick mental model (no background required)
 
 - A query is a tree of logical operators (AND/OR/NOT) and comparisons (EQ/GT/etc).
@@ -80,10 +123,11 @@ Key types:
 ### 2) Simplify the logical expression
 
 - Simplification partially evaluates the expression using a resolver and leaves backend-only parts intact.
-- A tri-state decision is produced:
+- A four-state decision is produced:
   - SimplifyTrue: expression becomes a boolean true literal.
   - SimplifyFalse: expression becomes a boolean false literal.
   - SimplifyUndecided: expression still depends on backend fields.
+  - SimplifyIndeterminate: evaluation failed; authorization must fail closed.
 
 Implicit casts:
 - Simplification can insert implicit casts when field types and literal types differ.
@@ -96,9 +140,12 @@ Key functions:
 
 ### 3) Resolve attributes
 
-- Attribute values (for example, CLAIM or GLOBAL) are resolved by a caller-provided resolver.
-- If an attribute cannot be resolved, it remains undecidable and is preserved for backend evaluation.
-- In ABAC, attributes are resolved from claims and time globals.
+- Attribute values (for example, `CLAIM`, `CLAIMPATH`, or `GLOBAL`) are resolved by a caller-provided resolver.
+- An unavailable or unusable attribute is indeterminate, not backend-undecided. `$not` preserves indeterminate; false dominates `$and`, true dominates `$or`, and otherwise indeterminate propagates through `$and`, `$or`, and `$match`.
+- `CLAIM` selects a top-level JWT claim. `CLAIMPATH` selects a nested claim with an RFC 6901 JSON Pointer.
+- `$eq` permits direct `CLAIMPATH` only against a scalar string operand, in either order. `$contains` with a first-position `CLAIMPATH` tests exact, case-sensitive membership in a JSON string array. Other `$contains` forms keep substring semantics. The former `$in` operator is rejected.
+- Claim casts preserve JWT JSON typing: `str`, `num`, and `bool` accept only strings, numbers, and Booleans respectively; hexadecimal/date-time/time casts accept matching lexical strings. Claim strings are not coerced to other primitive types.
+- Arrays and objects are never converted to JSON text for `$contains` or `$regex`.
 
 Key references:
 - AttributeResolver usage in [internal/common/model/grammar/logical_expression_simplify_backend.go](../../internal/common/model/grammar/logical_expression_simplify_backend.go)
@@ -221,7 +268,7 @@ This is controlled by `SimplifyOptions.EnableImplicitCasts` in
 
 ### Attribute resolution
 
-Attribute references are resolved to concrete scalars via a resolver function:
+Attribute references are resolved to concrete scalar or string-array values via a resolver function:
 
 $$
           resolve(\$\text{attribute}(k)) \rightarrow v \quad \text{or} \quad \varnothing
@@ -245,8 +292,15 @@ Which simplifies to:
 { "$boolean": true }
 ```
 
-If $v$ is available, the attribute node is replaced with the literal $v$ during
-simplification; otherwise it remains unresolved and the expression is undecidable.
+For an exact nested role membership check:
+
+```json
+{ "$contains": [ { "$attribute": { "CLAIMPATH": "/realm_access/roles" } }, { "$strVal": "admin" } ] }
+```
+
+If $v$ is a scalar string, the uncast attribute node is replaced with the corresponding literal during simplification. String arrays remain typed and are accepted only by first-position `CLAIMPATH` `$contains`. An empty array evaluates false. Missing paths, `null`, objects, mixed arrays, wrong types, and invalid casts are indeterminate; logical negation cannot turn them into true.
+
+For writes, CREATE formulas evaluate the staged created target before commit. UPDATE formulas evaluate both the current state and the complete prospective state, and both evaluations must be true. Partial operations use their normal merge semantics when constructing the prospective state.
 
 ### Rule combination into QueryFilter (ABAC)
 
@@ -422,10 +476,17 @@ logic.
 | Fragment condition | `$condition` | `CONDITION` or `USEFORMULA` |
 | Row-local evaluation | `$match` | `MATCH` |
 
-`$match` and `MATCH` are optional flags inside a fragment filter. They do not
-add another condition, select a parent resource, or decide whether an ABAC rule
-permits a request. They only control how that filter's condition is correlated
-to the fragment row being reconstructed.
+When used as properties of a fragment filter, `$match` and `MATCH` are optional
+flags. They do not add another condition, select a parent resource, or decide
+whether an ABAC rule permits a request. They only control how that filter's
+condition is correlated to the fragment row being reconstructed.
+
+This fragment flag is distinct from the logical `$match` operator inside a
+`$condition`. Logical `$match` contains a list of predicates and evaluates them
+in one shared list or hierarchy scope. On the AAS Repository query endpoint of
+the AAS Environment Service, that permits `$sm` and `$sme` predicates to be
+correlated to one Submodel referenced by the candidate AAS. This hierarchy
+extension is not currently enabled by the standalone AAS Repository Service.
 
 The two sources have different responsibilities:
 
@@ -512,7 +573,7 @@ where it keeps conditions bound to the same item and array indices.
 #### Root scope and correlation boundaries
 
 The root prefix describes the resource through which a fragment is read. It is
-not changed by `$match` or `MATCH`:
+not changed by a fragment filter's `$match` or `MATCH` flag:
 
 | Query context | Fragment and field prefix | Scope without matching | Scope with matching |
 | --- | --- | --- | --- |

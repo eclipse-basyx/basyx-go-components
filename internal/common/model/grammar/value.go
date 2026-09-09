@@ -466,6 +466,28 @@ func isStringValueOperand(v Value) bool {
 	return v.Attribute != nil || v.Field != nil || v.StrCast != nil || v.StrVal != nil
 }
 
+func attributeIsClaimPath(attribute AttributeValue) bool {
+	switch value := attribute.(type) {
+	case map[string]string:
+		_, ok := value[string(ATTRCLAIMPATH)]
+		return ok
+	case map[string]any:
+		_, ok := value[string(ATTRCLAIMPATH)]
+		return ok
+	default:
+		raw, err := json.Marshal(attribute)
+		if err != nil {
+			return false
+		}
+		var decoded map[string]any
+		if json.Unmarshal(raw, &decoded) != nil {
+			return false
+		}
+		_, ok := decoded[string(ATTRCLAIMPATH)]
+		return ok
+	}
+}
+
 func isFieldOperand(v Value) bool {
 	return v.Field != nil
 }

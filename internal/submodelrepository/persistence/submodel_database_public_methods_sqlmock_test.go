@@ -858,7 +858,7 @@ func TestAddSubmodelElementWithPathInTransactionUsesOnlyTransactionConnection(t 
 	defer cancel()
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	err = sut.addSubmodelElementWithPathInTransaction(ctx, tx, "sm", "container", element)
+	_, err = sut.addSubmodelElementWithPathInTransaction(ctx, tx, "sm", "container", element)
 	require.NoError(t, err)
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())

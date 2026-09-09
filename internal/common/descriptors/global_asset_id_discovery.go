@@ -38,7 +38,9 @@ const globalAssetIDExternalSubjectIDValue = "PUBLIC_READABLE"
 
 type publicReadableGlobalAssetIDExternalSubjectIDKey struct{}
 
-// WithPublicReadableGlobalAssetIDExternalSubjectID marks descriptor writes that should expose generated globalAssetId asset links publicly.
+// WithPublicReadableGlobalAssetIDExternalSubjectID marks DTR descriptor writes whose generated
+// globalAssetId link is a public discovery selector. This permits lookup of the associated AAS ID;
+// response-field authorization remains independent and may still omit globalAssetId from a payload.
 func WithPublicReadableGlobalAssetIDExternalSubjectID(ctx context.Context) context.Context {
 	return context.WithValue(ctx, publicReadableGlobalAssetIDExternalSubjectIDKey{}, true)
 }

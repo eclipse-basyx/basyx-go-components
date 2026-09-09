@@ -30,35 +30,39 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
-// attributesSatisfiedAll returns true when all required claims are present and
-// the attributes identify either a claim-based or anonymous subject. Date-time
-// globals do not restrict access at this stage and are resolved when evaluating
-// formulas. Unknown attributes fail closed.
+// attributesSatisfiedAll checks subject eligibility. Every declared claim must
+// be present; its value is resolved and type-checked only when a formula uses it.
 func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
 	if len(items) == 0 {
 		return false
 	}
 
 	hasSubjectAttribute := false
+	hasAnonymousSubject := false
 	for _, it := range items {
 		switch it.Kind {
 		case grammar.ATTRGLOBAL:
 			switch it.Value {
 			case "ANONYMOUS":
-				hasSubjectAttribute = true
+				hasAnonymousSubject = true
 			case "UTCNOW", "LOCALNOW", "CLIENTNOW":
 			default:
 				return false
 			}
 		case grammar.ATTRCLAIM:
 			hasSubjectAttribute = true
-			if _, ok := claims[it.Value]; !ok {
+			if _, exists := claims[it.Value]; !exists {
 				return false
 			}
+		case grammar.ATTRCLAIMPATH:
+			hasSubjectAttribute = true
+			if _, exists, err := jsonPointerValue(claims, it.Value); err != nil || !exists {
+				return false
+			}
+		case grammar.ATTRREFERENCE:
 		default:
 			return false
 		}
 	}
-
-	return hasSubjectAttribute
+	return hasSubjectAttribute || hasAnonymousSubject
 }

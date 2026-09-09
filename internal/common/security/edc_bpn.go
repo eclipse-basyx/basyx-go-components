@@ -33,7 +33,7 @@ import (
 )
 
 // EdcBpnHeaderMiddleware injects the Edc-Bpn header value into JWT claims
-// when security is enabled. The claim key is "edc_bpn".
+// when security is enabled.
 func EdcBpnHeaderMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bpn := strings.TrimSpace(r.Header.Get("Edc-Bpn"))
@@ -48,8 +48,12 @@ func EdcBpnHeaderMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		claims["Edc-Bpn"] = bpn
-		ctx := context.WithValue(r.Context(), ClaimsKey, claims)
+		enrichedClaims := make(Claims, len(claims)+1)
+		for key, value := range claims {
+			enrichedClaims[key] = value
+		}
+		enrichedClaims["Edc-Bpn"] = bpn
+		ctx := context.WithValue(r.Context(), ClaimsKey, enrichedClaims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

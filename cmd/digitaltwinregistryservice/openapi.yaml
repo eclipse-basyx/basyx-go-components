@@ -13,6 +13,13 @@ info:
     Creating or updating shell descriptors also creates/updates discovery entries, including the
     descriptor globalAssetId as specific asset id name "globalAssetId" when present.
 
+    In the DTR profile, globalAssetId is an intentionally public discovery key. A client that
+    knows a globalAssetId can use it to discover the associated AAS identifier. This association
+    is not treated as confidential. Authorization of the selected descriptor and projection of
+    fields in its response are separate checks; a response filter may omit globalAssetId without
+    making lookup by that value private. Other specific asset identifiers remain subject to their
+    Edc-Bpn or PUBLIC_READABLE visibility.
+
     Digital Twin Registry custom additions (beyond IDTA base profile):
 
     - PUT /shell-descriptors/{aasIdentifier} and PUT
@@ -114,6 +121,10 @@ paths:
 
         - Supports assetIds query parameters for base64-url-encoded AssetLink values.
           Multiple assetIds are matched with AND semantics, aligned with lookup.
+          An AssetLink named "globalAssetId" is an intentionally public DTR discovery
+          selector: knowing its value may select the associated descriptor and reveal its
+          AAS identifier. Normal descriptor READ authorization still applies to the result.
+          Response projection may omit globalAssetId, but does not disable lookup by it.
         - Supports createdAfter query parameter (RFC3339) to apply additional filtering.
       operationId: GetAllAssetAdministrationShellDescriptors
       x-semanticIds:
@@ -569,7 +580,12 @@ paths:
       tags:
         - Asset Administration Shell Basic Discovery API
       summary: Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
-      description: >-
+      description: |-
+        An encoded AssetLink whose name is "globalAssetId" performs intentionally public
+        DTR discovery. A matching AAS identifier may be returned even when response-field
+        filtering would omit globalAssetId from a descriptor representation. This is the
+        intended DTR contract; other specific asset identifiers retain their visibility rules.
+
         DTR compatibility note: when no decodable assetIds are provided, the response may
         be {} (empty object).
       operationId: GetAllAssetAdministrationShellIdsByAssetLink
@@ -607,6 +623,11 @@ paths:
         - Asset Administration Shell Basic Discovery API
       summary: Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
       description: |-
+        An AssetLink whose name is "globalAssetId" performs intentionally public DTR
+        discovery. A matching AAS identifier may be returned even when response-field
+        filtering would omit globalAssetId from a descriptor representation. This is the
+        intended DTR contract; other specific asset identifiers retain their visibility rules.
+
         DTR extension:
 
         - Supports createdAfter query parameter (RFC3339) to apply additional filtering.

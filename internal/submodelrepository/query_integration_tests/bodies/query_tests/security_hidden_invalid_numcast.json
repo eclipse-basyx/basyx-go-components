@@ -1,0 +1,8 @@
+{
+  "$condition": {
+    "$eq": [
+      { "$numCast": { "$field": "$sme.NewTestList[0]#value" } },
+      { "$numVal": -987654321.25 }
+    ]
+  }
+}

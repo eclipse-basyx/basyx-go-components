@@ -74,6 +74,20 @@ type Query struct {
 	Select []ModelStringPattern `json:"$select,omitempty" yaml:"$select,omitempty" mapstructure:"$select,omitempty"`
 }
 
+// UnmarshalJSON bounds query complexity before recursively decoding its expressions.
+func (j *Query) UnmarshalJSON(value []byte) error {
+	if err := validateExpressionJSONComplexity(value); err != nil {
+		return err
+	}
+	type Plain Query
+	var plain Plain
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
+		return err
+	}
+	*j = Query(plain)
+	return nil
+}
+
 // QueryWrapper wraps a Query object
 type QueryWrapper struct {
 	// Query corresponds to the JSON schema field "Query".
