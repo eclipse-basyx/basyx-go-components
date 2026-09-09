@@ -177,7 +177,7 @@ func AccessModelFromMaterializedRules(policyID string, rules []MaterializedABACR
 		basePath:  basePath,
 		policyID:  policyID,
 	}
-	model.semanticReadRuleIndexes = buildSemanticReadRuleIndexes(materialized, basePath)
+	model.semanticReadRules = buildSemanticReadRules(materialized, basePath)
 	return model, nil
 }
 

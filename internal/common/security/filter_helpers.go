@@ -912,6 +912,9 @@ func compileSemanticObjectCoverage(
 	target SemanticAccessTarget,
 ) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
 	if target.Resource == SemanticResourceSM {
+		if !coverageCoversSubmodelField(coverage, target.Field) {
+			return nil, nil, false, nil
+		}
 		return compileSubmodelIdentifierCoverage(coverage)
 	}
 	if target.Resource == SemanticResourceSME {
@@ -923,8 +926,12 @@ func compileSemanticObjectCoverage(
 func compileSubmodelIdentifierCoverage(
 	coverage semanticObjectCoverage,
 ) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
+	expressions := make([]exp.Expression, 0, 2)
+	if coverage.enclosingAAS && !coverage.allAASIDs {
+		expressions = append(expressions, goqu.I("aas.aas_id").Eq(coverage.aasID))
+	}
 	if coverage.allSubmodelIDs {
-		return goqu.L("TRUE"), nil, true, nil
+		return andSemanticCoverageExpressions(expressions), nil, true, nil
 	}
 	field := grammar.ModelStringPattern("$sm#id")
 	value := grammar.StandardString(coverage.submodelID)
@@ -933,7 +940,8 @@ func compileSubmodelIdentifierCoverage(
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("SECURITY-CONDITIONVIEW-SUBMODELID: %w", err)
 	}
-	return expression, resolved, true, nil
+	expressions = append(expressions, expression)
+	return andSemanticCoverageExpressions(expressions), resolved, true, nil
 }
 
 func compileSMEObjectCoverage(
@@ -950,10 +958,8 @@ func compileSMEObjectCoverage(
 	if err != nil {
 		return nil, nil, false, err
 	}
-	if !coverage.allSubmodelIDs {
-		expressions = append(expressions, identifier)
-		resolved = append(resolved, paths...)
-	}
+	expressions = append(expressions, identifier)
+	resolved = append(resolved, paths...)
 	if !coverage.allSubmodelElements && targetPath == "" {
 		pathExpression, pathResolved, pathErr := submodelElementCoverageExpression(coverage)
 		if pathErr != nil {
@@ -992,6 +998,30 @@ func submodelElementCoverageExpression(
 		return submodelElementExactExpression(coverage.submodelElementPath)
 	}
 	return submodelElementSubtreeExpression(coverage.submodelElementPath)
+}
+
+func coverageCoversSubmodelField(
+	coverage semanticObjectCoverage,
+	field grammar.ModelStringPattern,
+) bool {
+	switch coverage.representation {
+	case semanticRouteFull, semanticRouteMetadata:
+		return true
+	case semanticRouteReference:
+		return field == "$sm#id"
+	default:
+		return false
+	}
+}
+
+func andSemanticCoverageExpressions(expressions []exp.Expression) exp.Expression {
+	if len(expressions) == 0 {
+		return goqu.L("TRUE")
+	}
+	if len(expressions) == 1 {
+		return expressions[0]
+	}
+	return goqu.And(expressions...)
 }
 
 func submodelElementPath(field grammar.ModelStringPattern) string {

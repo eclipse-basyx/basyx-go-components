@@ -92,11 +92,43 @@ type CompiledGrantAlternative struct {
 
 type semanticObjectCoverage struct {
 	resource            SemanticResourceKind
+	representation      semanticRouteRepresentation
+	enclosingAAS        bool
+	aasID               string
+	allAASIDs           bool
 	submodelID          string
 	allSubmodelIDs      bool
 	allSubmodelElements bool
 	submodelElementPath string
 	submodelFragment    string
+}
+
+type semanticRouteRepresentation uint8
+
+const (
+	semanticRouteFull semanticRouteRepresentation = iota
+	semanticRouteMetadata
+	semanticRouteValue
+	semanticRouteReference
+	semanticRoutePath
+)
+
+type semanticRouteScope struct {
+	representation      semanticRouteRepresentation
+	enclosingAAS        bool
+	aasID               string
+	allAASIDs           bool
+	submodelID          string
+	allSubmodelIDs      bool
+	coversSubmodel      bool
+	coversElements      bool
+	allSubmodelElements bool
+	submodelElementPath string
+}
+
+type compiledSemanticReadRule struct {
+	ruleIndex int
+	coverages []semanticObjectCoverage
 }
 
 // SemanticAccessView is the immutable policy view applicable to one semantic
@@ -185,12 +217,15 @@ func (s *AuthorizationSession) evaluate(method string, requestPath string) Autho
 	}, s.options)
 }
 
-func (s *AuthorizationSession) semanticView(resource SemanticResourceKind) SemanticAccessView {
+func (s *AuthorizationSession) semanticView(
+	resource SemanticResourceKind,
+	outerResource SemanticResourceKind,
+) SemanticAccessView {
 	if s == nil || s.model == nil {
 		return SemanticAccessView{resource: resource, decision: AccessViewUnrestricted}
 	}
 	if resource == SemanticResourceSM || resource == SemanticResourceSME {
-		return s.semanticReadView(resource)
+		return s.semanticReadView(resource, outerResource)
 	}
 	route, ok := semanticReadRoute(resource)
 	if !ok {
@@ -201,13 +236,16 @@ func (s *AuthorizationSession) semanticView(resource SemanticResourceKind) Seman
 	return accessViewFromEvaluation(resource, evaluation)
 }
 
-func (s *AuthorizationSession) semanticReadView(resource SemanticResourceKind) SemanticAccessView {
+func (s *AuthorizationSession) semanticReadView(
+	resource SemanticResourceKind,
+	outerResource SemanticResourceKind,
+) SemanticAccessView {
 	resolver := func(attribute grammar.AttributeValue) any {
 		return resolveAttributeValue(attribute, s.claims, s.globals)
 	}
 	var alternatives []CompiledGrantAlternative
-	for _, ruleIndex := range s.model.semanticReadRuleIndexes[resource] {
-		rule := s.model.rules[ruleIndex]
+	for _, compiledRule := range s.model.semanticReadRules[resource] {
+		rule := s.model.rules[compiledRule.ruleIndex]
 		if rule.acl.ACCESS == grammar.ACLACCESSDISABLED ||
 			!ruleAllowsRight(rule.acl.RIGHTS, grammar.RightsEnumREAD) ||
 			!attributesSatisfiedAll(rule.attrs, s.claims) ||
@@ -219,7 +257,7 @@ func (s *AuthorizationSession) semanticReadView(resource SemanticResourceKind) S
 			continue
 		}
 		filters := simplifyRuleFragmentFilters(rule.filterList, resolver, s.options)
-		coverages := semanticCoveragesForRule(rule, resource, s.model.basePath)
+		coverages := semanticCoveragesForOuter(compiledRule.coverages, outerResource)
 		if len(coverages) == 0 {
 			continue
 		}
@@ -241,17 +279,35 @@ func (s *AuthorizationSession) semanticReadView(resource SemanticResourceKind) S
 	}
 }
 
-func buildSemanticReadRuleIndexes(
+func buildSemanticReadRules(
 	rules []materializedRule,
 	basePath string,
-) map[SemanticResourceKind][]int {
-	result := make(map[SemanticResourceKind][]int)
+) map[SemanticResourceKind][]compiledSemanticReadRule {
+	result := make(map[SemanticResourceKind][]compiledSemanticReadRule)
 	for index, rule := range rules {
 		for _, resource := range []SemanticResourceKind{SemanticResourceSM, SemanticResourceSME} {
-			if len(semanticCoveragesForRule(rule, resource, basePath)) > 0 {
-				result[resource] = append(result[resource], index)
+			coverages := semanticCoveragesForRule(rule, resource, basePath)
+			if len(coverages) > 0 {
+				result[resource] = append(result[resource], compiledSemanticReadRule{
+					ruleIndex: index,
+					coverages: coverages,
+				})
 			}
 		}
+	}
+	return result
+}
+
+func semanticCoveragesForOuter(
+	coverages []semanticObjectCoverage,
+	outerResource SemanticResourceKind,
+) []semanticObjectCoverage {
+	result := make([]semanticObjectCoverage, 0, len(coverages))
+	for _, coverage := range coverages {
+		if coverage.enclosingAAS && outerResource != SemanticResourceAAS {
+			continue
+		}
+		result = append(result, coverage)
 	}
 	return result
 }
@@ -324,14 +380,6 @@ func fragmentObjectCoverages(
 	return coverages
 }
 
-func allSubmodelCoverage(resource SemanticResourceKind) semanticObjectCoverage {
-	return semanticObjectCoverage{
-		resource:            resource,
-		allSubmodelIDs:      true,
-		allSubmodelElements: resource == SemanticResourceSME,
-	}
-}
-
 func identifierSubmodelCoverage(
 	resource SemanticResourceKind,
 	identifier grammar.Identifier,
@@ -349,100 +397,178 @@ func semanticSubmodelRouteCoverage(
 	resource SemanticResourceKind,
 	basePath string,
 ) (semanticObjectCoverage, bool) {
-	normalized := stripBasePath(basePath, normalize(route))
-	if normalized == "*" || normalized == "/*" {
-		return allSubmodelCoverage(resource), true
+	scope, parsed := parseSemanticSubmodelRoute(route, basePath)
+	if !parsed || !semanticRouteCoversResource(scope, resource) {
+		return semanticObjectCoverage{}, false
 	}
-	if normalized == "/query/submodels" {
-		return allSubmodelCoverage(resource), true
-	}
-	if normalized == "/submodels" || strings.HasPrefix(normalized, "/submodels/") {
-		return submodelPathCoverage(strings.TrimPrefix(normalized, "/submodels"), resource)
-	}
-	if strings.HasPrefix(normalized, "/shells/") {
-		segments := strings.Split(strings.Trim(normalized, "/"), "/")
-		for index, segment := range segments {
-			if segment != "submodels" {
-				continue
-			}
-			return submodelPathCoverage(strings.Join(segments[index+1:], "/"), resource)
-		}
-	}
-	return semanticObjectCoverage{}, false
+	return semanticObjectCoverage{
+		resource:            resource,
+		representation:      scope.representation,
+		enclosingAAS:        scope.enclosingAAS,
+		aasID:               scope.aasID,
+		allAASIDs:           scope.allAASIDs,
+		submodelID:          scope.submodelID,
+		allSubmodelIDs:      scope.allSubmodelIDs,
+		allSubmodelElements: scope.allSubmodelElements,
+		submodelElementPath: scope.submodelElementPath,
+	}, true
 }
 
-func submodelPathCoverage(
-	suffix string,
-	resource SemanticResourceKind,
-) (semanticObjectCoverage, bool) {
-	suffix = strings.Trim(suffix, "/")
-	if suffix == "" {
-		return allSubmodelCoverage(resource), true
-	}
-	segments := strings.Split(suffix, "/")
-	if len(segments) == 0 {
-		return semanticObjectCoverage{}, false
-	}
-	if strings.HasPrefix(segments[0], "$") {
-		if resource == SemanticResourceSME {
-			return semanticObjectCoverage{}, false
-		}
-		return allSubmodelCoverage(resource), true
-	}
-	submodelID, allSubmodels, valid := decodeSemanticRouteSegment(segments[0])
-	if !valid {
-		return semanticObjectCoverage{}, false
-	}
-	elementIndex := -1
-	for index, segment := range segments {
-		if segment == "submodel-elements" {
-			elementIndex = index
-			break
-		}
-	}
-	if resource == SemanticResourceSM {
-		if elementIndex >= 0 {
-			return semanticObjectCoverage{}, false
-		}
-		return semanticObjectCoverage{
-			resource:       resource,
-			submodelID:     submodelID,
-			allSubmodelIDs: allSubmodels,
+func parseSemanticSubmodelRoute(route string, basePath string) (semanticRouteScope, bool) {
+	normalized := stripBasePath(basePath, normalize(route))
+	if normalized == "*" || normalized == "/*" || normalized == "/query/submodels" {
+		return semanticRouteScope{
+			allAASIDs:           true,
+			allSubmodelIDs:      true,
+			coversSubmodel:      true,
+			coversElements:      true,
+			allSubmodelElements: true,
 		}, true
 	}
-	if resource != SemanticResourceSME {
-		return semanticObjectCoverage{}, false
+	segments := strings.Split(strings.Trim(normalized, "/"), "/")
+	if len(segments) == 1 && segments[0] == "submodels" {
+		return allSubmodelRouteScope(), true
 	}
-	if elementIndex < 0 && len(segments) > 1 && segments[1] != "**" {
-		return semanticObjectCoverage{}, false
+	if len(segments) > 1 && segments[0] == "submodels" {
+		return parseSubmodelRouteSegments(segments[1:], true)
 	}
-	coverage := semanticObjectCoverage{
-		resource:            resource,
-		submodelID:          submodelID,
-		allSubmodelIDs:      allSubmodels,
-		allSubmodelElements: true,
-	}
-	if elementIndex < 0 || elementIndex+1 >= len(segments) {
-		return coverage, true
-	}
-	if elementIndex+2 < len(segments) && segments[elementIndex+2] != "**" {
-		return semanticObjectCoverage{}, false
-	}
-	elementPath, allElements, elementValid := decodeSemanticRouteSegment(segments[elementIndex+1])
-	if !elementValid {
-		return semanticObjectCoverage{}, false
-	}
-	coverage.allSubmodelElements = allElements
-	coverage.submodelElementPath = elementPath
-	return coverage, true
+	return parseNestedSubmodelRouteSegments(segments)
 }
 
-func decodeSemanticRouteSegment(segment string) (string, bool, bool) {
+func allSubmodelRouteScope() semanticRouteScope {
+	return semanticRouteScope{
+		allAASIDs:           true,
+		allSubmodelIDs:      true,
+		coversSubmodel:      true,
+		coversElements:      true,
+		allSubmodelElements: true,
+	}
+}
+
+func parseNestedSubmodelRouteSegments(segments []string) (semanticRouteScope, bool) {
+	if len(segments) < 4 || segments[0] != "shells" || segments[2] != "submodels" {
+		return semanticRouteScope{}, false
+	}
+	aasID, allAASIDs, valid := decodeSemanticIdentifierSegment(segments[1])
+	if !valid {
+		return semanticRouteScope{}, false
+	}
+	scope, parsed := parseSubmodelRouteSegments(segments[3:], false)
+	if !parsed {
+		return semanticRouteScope{}, false
+	}
+	scope.enclosingAAS = true
+	scope.aasID = aasID
+	scope.allAASIDs = allAASIDs
+	return scope, true
+}
+
+func parseSubmodelRouteSegments(segments []string, collectionAllowed bool) (semanticRouteScope, bool) {
+	if len(segments) == 0 {
+		if collectionAllowed {
+			return allSubmodelRouteScope(), true
+		}
+		return semanticRouteScope{}, false
+	}
+	if representation, represented := semanticRepresentation(segments[0]); represented {
+		if !collectionAllowed || len(segments) != 1 {
+			return semanticRouteScope{}, false
+		}
+		scope := allSubmodelRouteScope()
+		scope.representation = representation
+		return scope, true
+	}
+	submodelID, allSubmodels, valid := decodeSemanticIdentifierSegment(segments[0])
+	if !valid {
+		return semanticRouteScope{}, false
+	}
+	scope := semanticRouteScope{
+		submodelID:          submodelID,
+		allSubmodelIDs:      allSubmodels,
+		coversSubmodel:      true,
+		coversElements:      true,
+		allSubmodelElements: true,
+	}
+	if len(segments) == 1 {
+		return scope, true
+	}
+	return parseSubmodelRouteSuffix(scope, segments[1:])
+}
+
+func parseSubmodelRouteSuffix(scope semanticRouteScope, segments []string) (semanticRouteScope, bool) {
+	if len(segments) == 1 && segments[0] == "**" {
+		return scope, true
+	}
+	if representation, represented := semanticRepresentation(segments[0]); represented {
+		if len(segments) != 1 {
+			return semanticRouteScope{}, false
+		}
+		scope.representation = representation
+		scope.coversElements = false
+		return scope, true
+	}
+	if segments[0] != "submodel-elements" {
+		return semanticRouteScope{}, false
+	}
+	scope.coversSubmodel = false
+	return parseSubmodelElementRouteSuffix(scope, segments[1:])
+}
+
+func parseSubmodelElementRouteSuffix(scope semanticRouteScope, segments []string) (semanticRouteScope, bool) {
+	if len(segments) == 0 {
+		return scope, true
+	}
+	if representation, represented := semanticRepresentation(segments[0]); represented {
+		if len(segments) != 1 {
+			return semanticRouteScope{}, false
+		}
+		scope.representation = representation
+		return scope, true
+	}
+	elementPath, allElements, valid := semanticElementPathSegment(segments[0])
+	if !valid || len(segments) > 2 || len(segments) == 2 && segments[1] != "**" {
+		return semanticRouteScope{}, false
+	}
+	scope.allSubmodelElements = allElements
+	scope.submodelElementPath = elementPath
+	return scope, true
+}
+
+func semanticRepresentation(segment string) (semanticRouteRepresentation, bool) {
+	switch segment {
+	case "$metadata":
+		return semanticRouteMetadata, true
+	case "$value":
+		return semanticRouteValue, true
+	case "$reference":
+		return semanticRouteReference, true
+	case "$path":
+		return semanticRoutePath, true
+	default:
+		return semanticRouteFull, false
+	}
+}
+
+func semanticRouteCoversResource(scope semanticRouteScope, resource SemanticResourceKind) bool {
+	switch resource {
+	case SemanticResourceSM:
+		return scope.coversSubmodel &&
+			(scope.representation == semanticRouteFull ||
+				scope.representation == semanticRouteMetadata ||
+				scope.representation == semanticRouteReference)
+	case SemanticResourceSME:
+		return scope.coversElements && scope.representation == semanticRouteFull
+	default:
+		return false
+	}
+}
+
+func decodeSemanticIdentifierSegment(segment string) (string, bool, bool) {
 	segment = strings.TrimSpace(segment)
-	if segment == "*" || segment == "**" || strings.HasPrefix(segment, "{") {
+	if segment == "*" || segment == "**" {
 		return "", true, true
 	}
-	if segment == "" || strings.HasPrefix(segment, "$") {
+	if segment == "" || strings.HasPrefix(segment, "$") || strings.ContainsAny(segment, "*{}") {
 		return "", false, false
 	}
 	decoded, err := common.DecodeString(segment)
@@ -450,6 +576,17 @@ func decodeSemanticRouteSegment(segment string) (string, bool, bool) {
 		return "", false, false
 	}
 	return decoded, false, true
+}
+
+func semanticElementPathSegment(segment string) (string, bool, bool) {
+	segment = strings.TrimSpace(segment)
+	if segment == "*" || segment == "**" {
+		return "", true, true
+	}
+	if segment == "" || strings.HasPrefix(segment, "$") || strings.ContainsAny(segment, "*{}") {
+		return "", false, false
+	}
+	return segment, false, true
 }
 
 func simplifyRuleFragmentFilters(
@@ -570,7 +707,7 @@ func WithAuthorizedQuery(
 			related[resource] = SemanticAccessView{resource: resource, decision: AccessViewUnrestricted}
 			continue
 		}
-		related[resource] = session.semanticView(resource)
+		related[resource] = session.semanticView(resource, outerResource)
 	}
 
 	authorized := &AuthorizedQuery{

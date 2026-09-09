@@ -33,6 +33,7 @@ import (
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/go-chi/chi/v5"
 )
@@ -247,7 +248,7 @@ func TestReferableGrantBuildsSegmentAwareSMESubtreeView(t *testing.T) {
 		nil,
 		grammar.DefaultSimplifyOptions(),
 	)
-	view := session.semanticView(SemanticResourceSME)
+	view := session.semanticView(SemanticResourceSME, SemanticResourceAAS)
 	if view.Decision() == AccessViewDenied {
 		t.Fatal("REFERABLE read grant did not produce an SME access view")
 	}
@@ -363,10 +364,10 @@ func TestSemanticReadIndexRecognizesQueryOnlySubmodelRoute(t *testing.T) {
 		t.Fatalf("parse access model: %v", err)
 	}
 	session := newAuthorizationSession(model, Claims{"role": "viewer"}, nil, grammar.DefaultSimplifyOptions())
-	if session.semanticView(SemanticResourceSM).Decision() == AccessViewDenied {
+	if session.semanticView(SemanticResourceSM, SemanticResourceAAS).Decision() == AccessViewDenied {
 		t.Fatal("query-only Submodel route was absent from the semantic READ index")
 	}
-	if session.semanticView(SemanticResourceSME).Decision() == AccessViewDenied {
+	if session.semanticView(SemanticResourceSME, SemanticResourceAAS).Decision() == AccessViewDenied {
 		t.Fatal("query-only Submodel route did not cover its SME condition view")
 	}
 }
@@ -511,6 +512,201 @@ func TestMetadataOnlyRouteDoesNotGrantSMEConditionAccess(t *testing.T) {
 	}
 }
 
+func TestSemanticRoutePreservesLiteralSubmodelElementPath(t *testing.T) {
+	t.Parallel()
+
+	submodelID := "urn:sm:literal-path"
+	encodedSubmodelID := common.EncodeString(submodelID)
+	literalPath := "U2VjcmV0"
+	route := "/submodels/" + encodedSubmodelID + "/submodel-elements/" + literalPath
+	coverage, covered := semanticSubmodelRouteCoverage(route, SemanticResourceSME, "")
+	if !covered {
+		t.Fatal("full SubmodelElement route did not produce semantic coverage")
+	}
+
+	literalField := grammar.ModelStringPattern("$sme." + literalPath + "#value")
+	if !coverageCoversSMEField(coverage, literalField, submodelElementPath(literalField)) {
+		t.Fatalf("semantic coverage did not preserve literal idShort path %q", literalPath)
+	}
+	decodedField := grammar.ModelStringPattern("$sme.Secret#value")
+	if coverageCoversSMEField(coverage, decodedField, submodelElementPath(decodedField)) {
+		t.Fatal("base64-looking idShort path granted a different decoded SubmodelElement")
+	}
+
+	object := grammar.ObjectItem{Kind: grammar.Route, Route: &grammar.RouteValue{Route: route}}
+	if !matchRouteObjectsObjItem([]grammar.ObjectItem{object}, route, "").access {
+		t.Fatal("direct route authorization did not grant the literal SubmodelElement path")
+	}
+	decodedRoute := "/submodels/" + encodedSubmodelID + "/submodel-elements/Secret"
+	if matchRouteObjectsObjItem([]grammar.ObjectItem{object}, decodedRoute, "").access {
+		t.Fatal("direct route authorization granted the decoded SubmodelElement path")
+	}
+}
+
+func TestNestedSemanticRouteRetainsEnclosingAASConstraint(t *testing.T) {
+	t.Parallel()
+
+	aasID := "urn:aas:allowed"
+	route := "/shells/" + common.EncodeString(aasID) + "/submodels/*"
+	coverage, covered := semanticSubmodelRouteCoverage(route, SemanticResourceSM, "")
+	if !covered {
+		t.Fatal("nested Submodel route did not produce semantic coverage")
+	}
+	expression, _, applicable, err := compileSemanticObjectCoverage(coverage, SemanticAccessTarget{
+		Resource: SemanticResourceSM,
+		Field:    grammar.ModelStringPattern("$sm#idShort"),
+	})
+	if err != nil {
+		t.Fatalf("compile nested Submodel route coverage: %v", err)
+	}
+	if !applicable {
+		t.Fatal("nested Submodel route coverage was not applicable")
+	}
+	sql, args, err := goqu.Dialect("postgres").From("submodel").Where(expression).Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("render nested Submodel route coverage: %v", err)
+	}
+	if !strings.Contains(sql, `"aas"."aas_id"`) {
+		t.Fatalf("nested route coverage lost its enclosing AAS restriction:\n%s", sql)
+	}
+	if len(args) != 1 || args[0] != aasID {
+		t.Fatalf("nested route coverage used unexpected AAS arguments: %#v", args)
+	}
+}
+
+func TestNestedSemanticRouteConstraintSharesRelatedSubmodelWitness(t *testing.T) {
+	t.Parallel()
+
+	aasID := "urn:aas:allowed"
+	route := "/shells/" + common.EncodeString(aasID) + "/submodels/*"
+	session := semanticRouteTestSession(t, route).withOuterAccess(SemanticAccessView{
+		resource: SemanticResourceAAS,
+		decision: AccessViewUnrestricted,
+	})
+	field := grammar.ModelStringPattern("$sm#idShort")
+	requested := grammar.StandardString("requested")
+	ctx := context.WithValue(t.Context(), authorizationSessionContextKey{}, session)
+	ctx = mustAuthorizedQueryContext(ctx, t, grammar.Query{
+		Condition: &grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &requested}}},
+	})
+	ctx = grammar.ContextWithAASHierarchyQueries(ctx)
+
+	sql, args := buildAuthorizedAASSelectionSQLWithArgs(ctx, t)
+	if count := strings.Count(sql, "EXISTS"); count != 1 {
+		t.Fatalf("AAS route constraint and caller predicate must use one related-row witness, got %d EXISTS clauses:\n%s", count, sql)
+	}
+	if !strings.Contains(sql, `"aas"."aas_id"`) || !containsSQLArgument(args, aasID) {
+		t.Fatalf("related Submodel witness lost its enclosing AAS restriction:\n%s\nargs: %#v", sql, args)
+	}
+}
+
+func TestNestedAASRouteCannotAuthorizeStandaloneSubmodelSMECondition(t *testing.T) {
+	t.Parallel()
+
+	route := "/shells/" + common.EncodeString("urn:aas:allowed") + "/submodels/*"
+	session := semanticRouteTestSession(t, route)
+	session = session.withOuterAccess(SemanticAccessView{
+		resource: SemanticResourceSM,
+		decision: AccessViewUnrestricted,
+	})
+	field := grammar.ModelStringPattern("$sme#value")
+	value := grammar.StandardString("secret")
+	ctx := context.WithValue(t.Context(), authorizationSessionContextKey{}, session)
+	ctx, err := WithAuthorizedQuery(ctx, SemanticResourceSM, grammar.Query{
+		Condition: &grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}},
+	})
+	if err != nil {
+		t.Fatalf("authorize standalone Submodel query: %v", err)
+	}
+	view, found := AuthorizedQueryFromContext(ctx).accessView(SemanticResourceSME)
+	if !found || view.Decision() != AccessViewDenied {
+		t.Fatal("AAS-scoped nested route authorized an SME condition without an AAS correlation")
+	}
+}
+
+func TestRepresentationSpecificRoutesKeepTheirSemanticFieldBoundary(t *testing.T) {
+	t.Parallel()
+
+	encodedID := common.EncodeString("urn:sm:representation")
+	for _, route := range []string{
+		"/submodels/$value",
+		"/submodels/$path",
+		"/submodels/" + encodedID + "/$value",
+		"/submodels/" + encodedID + "/$path",
+	} {
+		route := route
+		t.Run(route, func(t *testing.T) {
+			t.Parallel()
+			for _, resource := range []SemanticResourceKind{SemanticResourceSM, SemanticResourceSME} {
+				if _, covered := semanticSubmodelRouteCoverage(route, resource, ""); covered {
+					t.Fatalf("representation-specific route %q granted full %s condition coverage", route, resource)
+				}
+			}
+		})
+	}
+
+	for _, route := range []string{
+		"/submodels/$metadata",
+		"/submodels/" + encodedID + "/$metadata",
+	} {
+		if _, covered := semanticSubmodelRouteCoverage(route, SemanticResourceSM, ""); !covered {
+			t.Fatalf("metadata route %q did not expose Submodel metadata fields", route)
+		}
+		if _, covered := semanticSubmodelRouteCoverage(route, SemanticResourceSME, ""); covered {
+			t.Fatalf("metadata route %q exposed SubmodelElement fields", route)
+		}
+	}
+
+	for _, route := range []string{
+		"/submodels/$reference",
+		"/submodels/" + encodedID + "/$reference",
+	} {
+		coverage, covered := semanticSubmodelRouteCoverage(route, SemanticResourceSM, "")
+		if !covered {
+			t.Fatalf("reference route %q did not expose the referenced Submodel identifier", route)
+		}
+		if coverageCoversSubmodelField(coverage, grammar.ModelStringPattern("$sm#idShort")) {
+			t.Fatalf("reference route %q exposed Submodel idShort", route)
+		}
+		if !coverageCoversSubmodelField(coverage, grammar.ModelStringPattern("$sm#id")) {
+			t.Fatalf("reference route %q did not expose Submodel id", route)
+		}
+	}
+}
+
+func TestSemanticRouteParserRejectsUnknownAndTemplateShapes(t *testing.T) {
+	t.Parallel()
+
+	encodedID := common.EncodeString("urn:sm:known")
+	for _, route := range []string{
+		"/submodels/{submodelIdentifier}",
+		"/submodels/" + encodedID + "/not-an-endpoint",
+		"/shells/" + common.EncodeString("urn:aas:known") + "/submodels",
+	} {
+		if _, covered := semanticSubmodelRouteCoverage(route, SemanticResourceSM, ""); covered {
+			t.Fatalf("unsupported route shape %q produced semantic coverage", route)
+		}
+	}
+}
+
+func semanticRouteTestSession(t *testing.T, route string) *AuthorizationSession {
+	t.Helper()
+
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"DEFATTRIBUTES": [{"name":"role","attributes":[{"CLAIM":"role"}]}],
+			"DEFOBJECTS": [{"name":"route","objects":[{"ROUTE":"`+route+`"}]}],
+			"DEFACLS": [{"name":"read","acl":{"USEATTRIBUTES":"role","RIGHTS":["READ"],"ACCESS":"ALLOW"}}],
+			"DEFFORMULAS": [{"name":"viewer","formula":{"$eq":[{"$attribute":{"CLAIM":"role"}},{"$strVal":"viewer"}]}}],
+			"rules": [{"USEACL":"read","USEOBJECTS":["route"],"USEFORMULA":"viewer"}]
+		}
+	}`), chi.NewRouter(), "")
+	if err != nil {
+		t.Fatalf("parse semantic route policy: %v", err)
+	}
+	return newAuthorizationSession(model, Claims{"role": "viewer"}, nil, grammar.DefaultSimplifyOptions())
+}
+
 func TestAuthorizationSessionPinsClaimsGlobalsAndPolicy(t *testing.T) {
 	t.Parallel()
 
@@ -535,7 +731,7 @@ func TestAuthorizationSessionPinsClaimsGlobalsAndPolicy(t *testing.T) {
 	claims["nested"].(map[string]any)["value"] = "mutated"
 	model.WithPolicyID("policy-b")
 
-	view := session.semanticView(SemanticResourceSM)
+	view := session.semanticView(SemanticResourceSM, SemanticResourceAAS)
 	if view.Decision() == AccessViewDenied {
 		t.Fatal("session observed claims mutated after request authorization")
 	}
@@ -735,6 +931,12 @@ func queryFilterHidingField(fragment grammar.FragmentStringPattern) *QueryFilter
 
 func buildAuthorizedAASSelectionSQL(ctx context.Context, t *testing.T) string {
 	t.Helper()
+	sql, _ := buildAuthorizedAASSelectionSQLWithArgs(ctx, t)
+	return sql
+}
+
+func buildAuthorizedAASSelectionSQLWithArgs(ctx context.Context, t *testing.T) (string, []interface{}) {
+	t.Helper()
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
 	if err != nil {
 		t.Fatalf("create collector: %v", err)
@@ -744,11 +946,20 @@ func buildAuthorizedAASSelectionSQL(ctx context.Context, t *testing.T) string {
 	if err != nil {
 		t.Fatalf("add authorized condition: %v", err)
 	}
-	sql, _, err := secured.Prepared(true).ToSQL()
+	sql, args, err := secured.Prepared(true).ToSQL()
 	if err != nil {
 		t.Fatalf("render authorized query: %v", err)
 	}
-	return sql
+	return sql, args
+}
+
+func containsSQLArgument(args []interface{}, expected string) bool {
+	for _, argument := range args {
+		if argument == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func mustAuthorizedQueryContext(ctx context.Context, t *testing.T, query grammar.Query) context.Context {

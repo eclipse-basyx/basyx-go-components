@@ -42,12 +42,12 @@ import (
 // (ARM) used by the ABAC engine. It holds the generated schema and provides
 // evaluation helpers.
 type AccessModel struct {
-	gen                     grammar.AccessRuleModelSchemaJSON
-	apiRouter               *api.Mux
-	rules                   []materializedRule
-	semanticReadRuleIndexes map[SemanticResourceKind][]int
-	basePath                string
-	policyID                string
+	gen               grammar.AccessRuleModelSchemaJSON
+	apiRouter         *api.Mux
+	rules             []materializedRule
+	semanticReadRules map[SemanticResourceKind][]compiledSemanticReadRule
+	basePath          string
+	policyID          string
 }
 
 type materializedRule struct {
@@ -101,7 +101,7 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessMod
 		rules:     rules,
 		basePath:  basePath,
 	}
-	model.semanticReadRuleIndexes = buildSemanticReadRuleIndexes(rules, basePath)
+	model.semanticReadRules = buildSemanticReadRules(rules, basePath)
 	return model, nil
 }
 
