@@ -143,7 +143,7 @@ func TestLogicalExpressionAASStandaloneBoolCastBuildsSubmodelExists(t *testing.T
 
 	sql := buildAASHierarchySQL(t, expression)
 
-	assertSQLContainsAll(t, sql, "EXISTS", "submodel", "pg_input_is_valid")
+	assertSQLContainsAll(t, sql, "EXISTS", "submodel", "basyx_validated_cast_input")
 	if strings.Contains(sql, "COALESCE") {
 		t.Fatalf("indeterminate boolean cast must remain SQL NULL: %s", sql)
 	}
@@ -156,7 +156,7 @@ func TestLogicalExpressionAASStandaloneBoolCastBuildsSMEExists(t *testing.T) {
 
 	sql := buildAASHierarchySQL(t, expression)
 
-	assertSQLContainsAll(t, sql, "EXISTS", "property_element", "Enabled", "pg_input_is_valid")
+	assertSQLContainsAll(t, sql, "EXISTS", "property_element", "Enabled", "basyx_validated_cast_input")
 }
 
 func TestLogicalExpressionAASHierarchyStructuredScopePreservesPreparedLiteral(t *testing.T) {

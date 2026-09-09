@@ -2921,10 +2921,9 @@ func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 
 func totalCastSQLValue(sqlValue interface{}, targetType string, validationType string) exp.Expression {
 	return goqu.L(
-		"CASE WHEN pg_input_is_valid(?::text, ?) THEN (?::"+targetType+") END",
+		"basyx_validated_cast_input(?::text, ?)::"+targetType,
 		sqlValue,
 		validationType,
-		sqlValue,
 	)
 }
 

@@ -415,7 +415,10 @@ func semanticSubmodelRouteCoverage(
 }
 
 func parseSemanticSubmodelRoute(route string, basePath string) (semanticRouteScope, bool) {
-	normalized := stripBasePath(basePath, joinBasePath(basePath, normalize(route)))
+	normalized, mounted := semanticRouteWithinBasePath(route, basePath)
+	if !mounted {
+		return semanticRouteScope{}, false
+	}
 	if normalized == "*" || normalized == "/*" || normalized == "/query/submodels" {
 		return semanticRouteScope{
 			allAASIDs:           true,
@@ -433,6 +436,22 @@ func parseSemanticSubmodelRoute(route string, basePath string) (semanticRouteSco
 		return parseSubmodelRouteSegments(segments[1:], true)
 	}
 	return parseNestedSubmodelRouteSegments(segments)
+}
+
+func semanticRouteWithinBasePath(route string, basePath string) (string, bool) {
+	mountedRoute := normalize(joinBasePath(basePath, route))
+	base := normalize(common.NormalizeBasePath(basePath))
+	if base == "/" {
+		return mountedRoute, true
+	}
+	if mountedRoute == base {
+		return "/", true
+	}
+	relativeRoute, mounted := strings.CutPrefix(mountedRoute, base+"/")
+	if !mounted {
+		return "", false
+	}
+	return "/" + relativeRoute, true
 }
 
 func allSubmodelRouteScope() semanticRouteScope {

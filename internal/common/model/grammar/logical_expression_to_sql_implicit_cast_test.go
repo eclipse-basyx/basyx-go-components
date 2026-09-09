@@ -169,7 +169,7 @@ func TestLogicalExpression_SimplifyForBackendFilter_CreatedAfterUsesPostgresInpu
 	if !strings.Contains(sql, "::timestamptz") {
 		t.Fatalf("expected SQL to contain timestamptz cast, got: %s", sql)
 	}
-	if !strings.Contains(sql, "pg_input_is_valid") || !argListContains(args, "timestamp with time zone") {
+	if !strings.Contains(sql, "basyx_validated_cast_input") || !argListContains(args, "timestamp with time zone") {
 		t.Fatalf("expected PostgreSQL timestamp input validation, got SQL %s with args %#v", sql, args)
 	}
 }

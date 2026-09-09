@@ -1,0 +1,7 @@
+kind: changed
+body: Database schema `v1.1.20` installs the `basyx_validated_cast_input` helper for safe nested query casts. Run the configuration service to migrate existing databases before starting updated services. PostgreSQL 16 or newer remains required.
+time: 2026-09-09T15:22:41.635906+02:00
+custom:
+  Impact: High
+  PullRequest: 654
+  SecurityImpact: Nested casts validate and convert the same textual value without duplicating inner SQL expressions.

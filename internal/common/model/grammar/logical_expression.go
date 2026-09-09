@@ -141,6 +141,9 @@ type LogicalExpression struct {
 //   - error: An error if the JSON is invalid or if array constraints are violated.
 //     Returns nil on successful unmarshaling and validation.
 func (le *LogicalExpression) UnmarshalJSON(value []byte) error {
+	if err := validateExpressionJSONComplexity(value); err != nil {
+		return err
+	}
 	if _, err := singleJSONMember(value, "logical-expression"); err != nil {
 		return err
 	}

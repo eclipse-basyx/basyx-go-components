@@ -95,7 +95,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "ge number with explicit $numCast is guarded",
 			expr:    LogicalExpression{Ge: ComparisonItems{Value{NumCast: valuePtr(field("$aasdesc#id"))}, Value{NumVal: floatPtr(10)}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::double precision", ">= ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "basyx_validated_cast_input", "::double precision", ">= ?"},
 			wantArgs: []interface{}{
 				float64(10),
 			},

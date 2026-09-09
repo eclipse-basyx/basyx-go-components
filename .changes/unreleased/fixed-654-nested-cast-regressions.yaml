@@ -1,0 +1,7 @@
+kind: fixed
+body: Nested query casts preserve authorization checks without exponential SQL expansion or unsupported PostgreSQL casts. Policy routes containing parent segments derive query permissions from the same mounted path as direct authorization. Queries and policy expressions now enforce 64 JSON container levels and 8,192 JSON tokens before recursive decoding.
+time: 2026-09-09T15:22:41.635543+02:00
+custom:
+  Impact: High
+  PullRequest: 654
+  SecurityImpact: Bounds expression complexity and SQL expansion, prevents nested cast database errors, and prevents semantic permissions from escaping the configured route mount. Existing oversized expressions must be reduced.

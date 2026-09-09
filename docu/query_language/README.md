@@ -36,6 +36,18 @@ and representative data; correctness tests do not establish throughput or latenc
 equivalence. Measure item reads, filtered queries, large hierarchies, and restricted
 value updates with ABAC enabled and disabled before setting deployment capacity.
 
+Queries and policy expressions are limited to 64 nested JSON container levels
+and 8,192 JSON tokens (including keys and delimiters), checked before recursive
+expression decoding. Query limits include all response filters together. Split
+larger requests or policies into smaller expressions when upgrading; query
+requests exceeding these limits return HTTP 400.
+
+Updated services require database schema `v1.1.20`. Run the configuration service
+to install `basyx_validated_cast_input` before starting the updated services.
+The helper validates each textual cast input once; nested casts generate SQL
+whose size grows linearly with nesting depth. Its PostgreSQL function-call cost
+still needs representative workload measurement.
+
 ## Quick mental model (no background required)
 
 - A query is a tree of logical operators (AND/OR/NOT) and comparisons (EQ/GT/etc).

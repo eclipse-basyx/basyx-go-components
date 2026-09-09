@@ -26,7 +26,9 @@
 package grammar
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -69,7 +71,7 @@ func TestFallibleCastsUsePostgreSQLTotalInputValidation(t *testing.T) {
 			}
 
 			sql := renderLogicalExpressionSQL(t, expression)
-			if !strings.Contains(sql, "pg_input_is_valid") {
+			if !strings.Contains(sql, "basyx_validated_cast_input") {
 				t.Fatalf("fallible %s cast is not total:\n%s", test.name, sql)
 			}
 			if strings.Contains(sql, " ~ ") {
@@ -88,7 +90,7 @@ func TestDatePartUsesTotalDateTimeCast(t *testing.T) {
 		{NumVal: &one},
 	}}
 	sql := renderLogicalExpressionSQL(t, expression)
-	if !strings.Contains(sql, "pg_input_is_valid") || !strings.Contains(sql, "EXTRACT(YEAR") {
+	if !strings.Contains(sql, "basyx_validated_cast_input") || !strings.Contains(sql, "EXTRACT(YEAR") {
 		t.Fatalf("date-part extraction can still throw on stored input:\n%s", sql)
 	}
 }
@@ -196,4 +198,33 @@ func renderLogicalExpressionSQL(t *testing.T, expression LogicalExpression) stri
 		t.Fatalf("render expression: %v", err)
 	}
 	return sql
+}
+
+func TestNestedCastSQLSizeIsLinear(t *testing.T) {
+	for _, depth := range []int{2, 4, 8, 12} {
+		t.Run(fmt.Sprint(depth), func(t *testing.T) {
+			raw := `{"$eq":[` + strings.Repeat(`{"$numCast":`, depth) + `{"$field":"$aas#idShort"}` + strings.Repeat(`}`, depth) + `,{"$numVal":1}]}`
+			var expression LogicalExpression
+			if err := json.Unmarshal([]byte(raw), &expression); err != nil {
+				t.Fatal(err)
+			}
+			expression, _ = expression.SimplifyForBackendFilter(nil)
+			collector, err := NewResolvedFieldPathCollectorForRoot(CollectorRootAAS)
+			if err != nil {
+				t.Fatal(err)
+			}
+			predicate, _, err := expression.EvaluateToExpression(collector)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sql, _, err := goqu.Dialect("postgres").From("aas").Select("aas_id").Where(predicate).ToSQL()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("depth=%d input=%d SQL=%d", depth, len(raw), len(sql))
+			if len(sql) > 256+depth*128 {
+				t.Errorf("nested cast SQL exceeds linear size budget: %d bytes", len(sql))
+			}
+		})
+	}
 }

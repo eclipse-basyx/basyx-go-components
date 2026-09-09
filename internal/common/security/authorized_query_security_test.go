@@ -744,6 +744,16 @@ func TestSemanticPolicyRoutesAgreeWithDirectAuthorizationUnderBasePath(t *testin
 		{"/api", "/api/submodels/*", false},
 		{"/sub", "/sub/submodels/*", false},
 		{"/sub", "/*", true},
+		{"/api", "/../submodels/*", false},
+		{"/api", "../submodels/*", false},
+		{"/api", "/./../submodels/*", false},
+		{"/api/v1", "/../submodels/*", false},
+		{"/api", "/../api2/submodels/*", false},
+		{"/api", "/../api/submodels/*", true},
+		{"/api/v1", "/../v1/submodels/*", true},
+		{"/api", "/temporary/../submodels/*", true},
+		{"", "/../submodels/*", true},
+		{"/", "../submodels/*", true},
 	} {
 		t.Run(test.basePath+test.route, func(t *testing.T) {
 			t.Parallel()

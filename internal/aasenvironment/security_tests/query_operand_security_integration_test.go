@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,6 +67,8 @@ func TestQueryNestedOperandsRespectFieldVisibility(t *testing.T) {
 	validatePolicyVersion(t, hiddenVersion, adminToken)
 	activatePolicyVersion(t, hiddenVersion, adminToken)
 	assertQueryOperandProjection(t, editorToken, aasID)
+	tooDeep := strings.Repeat(`{"$not":`, 65) + `{"$boolean":true}` + strings.Repeat(`}`, 65)
+	assertStatus(t, http.MethodPost, testBaseURL+"/query/shells", `{"$condition":`+tooDeep+`}`, editorToken, http.StatusBadRequest)
 
 	for _, hidden := range []bool{true, false} {
 		if !hidden {
@@ -123,6 +126,11 @@ func checkQueryOperandConditions(t *testing.T, token, aasID string, hidden bool)
 		condition string
 		matches   bool
 	}{
+		{"numeric month to boolean", `{"$boolCast":{"$numCast":{"$month":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}}}}`, true},
+		{"datetime to time", `{"$eq":[{"$timeCast":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}},{"$timeVal":"00:00:00Z"}]}`, true},
+		{"deep numeric casts", `{"$eq":[` + strings.Repeat(`{"$numCast":`, 12) + `{"$year":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}}` + strings.Repeat(`}`, 12) + `,{"$numVal":2026}]}`, true},
+		{"boolean to number", `{"$eq":[{"$numCast":{"$boolCast":{"$field":"$aas#assetInformation.assetType"}}},{"$numVal":1}]}`, false},
+		{"datetime to number", `{"$eq":[{"$numCast":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}},{"$numVal":2026}]}`, false},
 		{"direct", `{"$eq":[{"$field":"$aas#assetInformation.assetType"},{"$strVal":"2026-01-01T00:00:00Z"}]}`, true},
 		{"year matches", `{"$eq":[{"$numCast":{"$year":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}}},{"$numVal":2026}]}`, true},
 		{"year with existing join", `{"$and":[{"$eq":[{"$field":"$aas#assetInformation.assetKind"},{"$strVal":"Instance"}]},{"$eq":[{"$numCast":{"$year":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}}},{"$numVal":2026}]}]}`, true},
