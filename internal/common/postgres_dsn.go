@@ -45,7 +45,7 @@ func BuildPostgresDSN(cfg PostgresConfig) string {
 		Path:   cfg.DBName,
 	}
 	postgresURL.User = url.UserPassword(cfg.User, cfg.Password)
-	postgresURL.RawQuery = buildPostgresQuery(cfg).Encode()
+	postgresURL.RawQuery = encodePostgresQuery(buildPostgresQuery(cfg))
 
 	return postgresURL.String()
 }
@@ -87,14 +87,20 @@ func addPostgresApplicationName(dsn string, applicationName string) (string, err
 		if err != nil {
 			return "", fmt.Errorf("COMMON-POSTGRESDSN-PARSEURL postgres.dsn URL is invalid")
 		}
-		query := parsed.Query()
-		query.Set("application_name", applicationName)
-		parsed.RawQuery = query.Encode()
+		query := url.Values{"application_name": {applicationName}}
+		if parsed.RawQuery != "" {
+			parsed.RawQuery += "&"
+		}
+		parsed.RawQuery += encodePostgresQuery(query)
 		return parsed.String(), nil
 	}
 
 	escapedApplicationName := strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(applicationName)
 	return strings.TrimSpace(dsn) + " application_name='" + escapedApplicationName + "'", nil
+}
+
+func encodePostgresQuery(query url.Values) string {
+	return strings.ReplaceAll(query.Encode(), "+", "%20")
 }
 
 func buildPostgresQuery(cfg PostgresConfig) url.Values {
