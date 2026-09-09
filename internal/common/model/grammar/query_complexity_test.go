@@ -74,3 +74,11 @@ func TestJSONComplexityBoundariesAndStringContents(t *testing.T) {
 		}
 	}
 }
+
+func TestExternalLogicalExpressionStillRejectsSingletonAnd(t *testing.T) {
+	var expression LogicalExpression
+	err := json.Unmarshal([]byte(`{"$and":[{"$boolean":true}]}`), &expression)
+	if err == nil || !strings.Contains(err.Error(), "field $and length") {
+		t.Fatalf("external expression bypassed logical operator validation: %v", err)
+	}
+}

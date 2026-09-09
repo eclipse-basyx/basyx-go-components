@@ -28,8 +28,6 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
@@ -48,111 +46,54 @@ func WithoutQueryFilter(ctx context.Context) context.Context {
 	return context.WithValue(ctx, filterKey, struct{}{})
 }
 
-// CloneQueryFilter returns a deep copy of the provided query filter.
+// CloneQueryFilter returns a deep copy of an already compiled query filter.
+// It preserves internal metadata without reapplying external JSON input limits.
 func CloneQueryFilter(queryFilter *QueryFilter) (*QueryFilter, error) {
 	if queryFilter == nil {
 		return nil, nil
 	}
-
-	b, err := json.Marshal(queryFilter)
-	if err != nil {
-		return nil, err
+	cloned := *queryFilter
+	if queryFilter.Formula != nil {
+		formula := cloneLogicalExpression(*queryFilter.Formula)
+		cloned.Formula = &formula
 	}
-
-	var cloned QueryFilter
-	if err := json.Unmarshal(b, &cloned); err != nil {
-		return nil, err
-	}
-	restoreQueryFilterIndeterminateMarkers(&cloned, queryFilter)
-	for fragment, predicate := range queryFilter.Filters {
-		clonedPredicate, ok := cloned.Filters[fragment]
-		if !ok {
-			continue
+	if queryFilter.FormulasByRight != nil {
+		cloned.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression, len(queryFilter.FormulasByRight))
+		for right, formula := range queryFilter.FormulasByRight {
+			cloned.FormulasByRight[right] = cloneLogicalExpression(formula)
 		}
-		clonedPredicate, err = restoreFragmentFilterPredicateMetadata(clonedPredicate, predicate)
-		if err != nil {
-			return nil, err
-		}
-		cloned.Filters[fragment] = clonedPredicate
 	}
-
+	if queryFilter.Filters != nil {
+		cloned.Filters = make(FragmentFilters, len(queryFilter.Filters))
+		for fragment, predicate := range queryFilter.Filters {
+			cloned.Filters[fragment] = cloneFragmentFilterPredicate(predicate)
+		}
+	}
 	return &cloned, nil
 }
 
-func restoreQueryFilterIndeterminateMarkers(cloned, source *QueryFilter) {
-	if cloned.Formula != nil && source.Formula != nil {
-		restoreLogicalIndeterminateMarkers(cloned.Formula, *source.Formula)
+func cloneFragmentFilterPredicate(predicate FragmentFilterPredicate) FragmentFilterPredicate {
+	cloned := predicate
+	if predicate.Condition != nil {
+		condition := cloneLogicalExpression(*predicate.Condition)
+		cloned.Condition = &condition
 	}
-	for right, sourceFormula := range source.FormulasByRight {
-		clonedFormula, ok := cloned.FormulasByRight[right]
-		if !ok {
-			continue
-		}
-		restoreLogicalIndeterminateMarkers(&clonedFormula, sourceFormula)
-		cloned.FormulasByRight[right] = clonedFormula
+	if predicate.fragment != nil {
+		fragment := *predicate.fragment
+		cloned.fragment = &fragment
 	}
+	cloned.And = cloneFragmentFilterPredicates(predicate.And)
+	cloned.Or = cloneFragmentFilterPredicates(predicate.Or)
+	return cloned
 }
 
-func restoreLogicalIndeterminateMarkers(cloned *grammar.LogicalExpression, source grammar.LogicalExpression) {
-	if source.Indeterminate {
-		*cloned = source
-		return
+func cloneFragmentFilterPredicates(predicates []FragmentFilterPredicate) []FragmentFilterPredicate {
+	if predicates == nil {
+		return nil
 	}
-	for index := range source.And {
-		restoreLogicalIndeterminateMarkers(&cloned.And[index], source.And[index])
+	cloned := make([]FragmentFilterPredicate, len(predicates))
+	for index, predicate := range predicates {
+		cloned[index] = cloneFragmentFilterPredicate(predicate)
 	}
-	for index := range source.Or {
-		restoreLogicalIndeterminateMarkers(&cloned.Or[index], source.Or[index])
-	}
-	if source.Not != nil && cloned.Not != nil {
-		restoreLogicalIndeterminateMarkers(cloned.Not, *source.Not)
-	}
-	for index := range source.Match {
-		restoreMatchIndeterminateMarkers(&cloned.Match[index], source.Match[index])
-	}
-}
-
-func restoreMatchIndeterminateMarkers(cloned *grammar.MatchExpression, source grammar.MatchExpression) {
-	if source.Indeterminate {
-		*cloned = source
-		return
-	}
-	for index := range source.Match {
-		restoreMatchIndeterminateMarkers(&cloned.Match[index], source.Match[index])
-	}
-}
-
-func restoreFragmentFilterPredicateMetadata(
-	cloned FragmentFilterPredicate,
-	source FragmentFilterPredicate,
-) (FragmentFilterPredicate, error) {
-	if (cloned.Condition == nil) != (source.Condition == nil) ||
-		len(cloned.And) != len(source.And) ||
-		len(cloned.Or) != len(source.Or) {
-		return FragmentFilterPredicate{}, fmt.Errorf("AUTH-CLONEQF-SCOPEMISMATCH fragment predicate shape changed during clone")
-	}
-	cloned.global = source.global
-	cloned.caller = source.caller
-	if cloned.Condition != nil && source.Condition != nil {
-		restoreLogicalIndeterminateMarkers(cloned.Condition, *source.Condition)
-	}
-	if source.fragment != nil {
-		fragmentCopy := *source.fragment
-		cloned.fragment = &fragmentCopy
-	}
-	for i := range cloned.And {
-		var err error
-		cloned.And[i], err = restoreFragmentFilterPredicateMetadata(cloned.And[i], source.And[i])
-		if err != nil {
-			return FragmentFilterPredicate{}, err
-		}
-	}
-	for i := range cloned.Or {
-		var err error
-		cloned.Or[i], err = restoreFragmentFilterPredicateMetadata(cloned.Or[i], source.Or[i])
-		if err != nil {
-			return FragmentFilterPredicate{}, err
-		}
-	}
-	return cloned, nil
+	return cloned
 }

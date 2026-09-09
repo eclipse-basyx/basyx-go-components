@@ -120,11 +120,11 @@ func TestSelectPutFormulaByExistence_DefaultsToFalseIfMapIsNil(t *testing.T) {
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumCREATE, false)
 }
 
-func TestSelectPutFormulaByExistence_FailsClosedOnCloneError(t *testing.T) {
+func TestSelectPutFormulaByExistence_DeniesMissingRightWithIndeterminateFormula(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
-		Formula: invalidCloneFormula(),
+		Formula: &grammar.LogicalExpression{Indeterminate: true},
 	})
 	updateCtx := SelectPutFormulaByExistence(ctx, true)
 	qf := GetQueryFilter(updateCtx)
@@ -173,26 +173,30 @@ func TestSelectFormulaForRight_DefaultsToFalseIfMissing(t *testing.T) {
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumREAD, false)
 }
 
-func TestMergeQueryFilter_FailsClosedOnCloneError(t *testing.T) {
+func TestMergeQueryFilterPreservesDeniedPolicy(t *testing.T) {
 	t.Parallel()
-
-	queryExpr := boolExpression(true)
-	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
-		Formula: invalidCloneFormula(),
-	})
-	mergedCtx := MergeQueryFilter(ctx, grammar.Query{Condition: &queryExpr})
-	qf := GetQueryFilter(mergedCtx)
-	if qf == nil {
-		t.Fatalf("expected query filter in context")
-		return
+	for _, policy := range []grammar.LogicalExpression{boolExpression(false), {Indeterminate: true}} {
+		queryExpr := boolExpression(true)
+		ctx := WithQueryFilter(t.Context(), &QueryFilter{Formula: &policy})
+		mergedCtx := MergeQueryFilter(ctx, grammar.Query{Condition: &queryExpr})
+		qf := GetQueryFilter(mergedCtx)
+		if qf == nil || qf.Formula == nil {
+			t.Fatal("expected a restricting query filter in context")
+		}
+		_, expected := policy.SimplifyForBackendFilterNoResolver()
+		_, actual := qf.Formula.SimplifyForBackendFilterNoResolver()
+		if actual != expected {
+			t.Fatalf("caller query changed denied policy decision: got %v, want %v", actual, expected)
+		}
+		read, ok := qf.FormulasByRight[grammar.RightsEnumREAD]
+		if !ok {
+			t.Fatal("missing READ restriction")
+		}
+		_, actual = read.SimplifyForBackendFilterNoResolver()
+		if actual != expected {
+			t.Fatalf("caller query changed READ restriction: got %v, want %v", actual, expected)
+		}
 	}
-	assertBooleanFormulaPointer(t, qf.Formula, false)
-	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumREAD, false)
-}
-
-func invalidCloneFormula() *grammar.LogicalExpression {
-	expr := grammar.LogicalExpression{And: []grammar.LogicalExpression{boolExpression(true)}}
-	return &expr
 }
 
 func mustParsePUTAccessModelWithSingleRight(t *testing.T, right grammar.RightsEnum) *AccessModel {
