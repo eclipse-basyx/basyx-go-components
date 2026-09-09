@@ -336,13 +336,14 @@ type EventingConfig struct {
 
 // EventFeedConfig configures the REST Event Feed module.
 type EventFeedConfig struct {
-	Enabled              bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	MaxAgeDays           int    `mapstructure:"maxAgeDays" yaml:"maxAgeDays" json:"maxAgeDays"`
-	HardDeleteGraceDays  int    `mapstructure:"hardDeleteGraceDays" yaml:"hardDeleteGraceDays" json:"hardDeleteGraceDays"`
-	MaxPageSize          int    `mapstructure:"maxPageSize" yaml:"maxPageSize" json:"maxPageSize"`
-	SourceBaseURL        string `mapstructure:"sourceBaseUrl" yaml:"sourceBaseUrl" json:"sourceBaseUrl"`
-	SchemaBaseURL        string `mapstructure:"schemaBaseUrl" yaml:"schemaBaseUrl" json:"schemaBaseUrl"`
-	CleanupIntervalHours int    `mapstructure:"cleanupIntervalHours" yaml:"cleanupIntervalHours" json:"cleanupIntervalHours"`
+	Enabled               bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	MaxAgeDays            int    `mapstructure:"maxAgeDays" yaml:"maxAgeDays" json:"maxAgeDays"`
+	HardDeleteGraceDays   int    `mapstructure:"hardDeleteGraceDays" yaml:"hardDeleteGraceDays" json:"hardDeleteGraceDays"`
+	MaxPageSize           int    `mapstructure:"maxPageSize" yaml:"maxPageSize" json:"maxPageSize"`
+	SourceBaseURL         string `mapstructure:"sourceBaseUrl" yaml:"sourceBaseUrl" json:"sourceBaseUrl"`
+	SchemaBaseURL         string `mapstructure:"schemaBaseUrl" yaml:"schemaBaseUrl" json:"schemaBaseUrl"`
+	CleanupIntervalHours  int    `mapstructure:"cleanupIntervalHours" yaml:"cleanupIntervalHours" json:"cleanupIntervalHours"`
+	PublishIntervalMillis int    `mapstructure:"publishIntervalMillis" yaml:"publishIntervalMillis" json:"publishIntervalMillis"`
 }
 
 // SwaggerConfig contains Swagger/OpenAPI documentation configuration parameters.
@@ -949,6 +950,7 @@ func applyEventingEnvOverrides(cfg *Config) {
 		cfg.Eventing.Feed.SchemaBaseURL = value
 	}
 	applyIntEnv("BASYX_EVENTING_FEED_CLEANUP_INTERVAL_HOURS", func(value int) { cfg.Eventing.Feed.CleanupIntervalHours = value })
+	applyIntEnv("BASYX_EVENTING_FEED_PUBLISH_INTERVAL_MILLIS", func(value int) { cfg.Eventing.Feed.PublishIntervalMillis = value })
 }
 
 func validateHistoryAndEventingConfig(cfg *Config) error {
@@ -1077,11 +1079,14 @@ func validateEventingConfig(cfg EventingConfig) error {
 	if cfg.Feed.HardDeleteGraceDays < 0 {
 		return fmt.Errorf("CONFIG-EVENTING-FEED-HARDDELETE eventing.feed.hardDeleteGraceDays must not be negative")
 	}
+	if cfg.Feed.PublishIntervalMillis < 0 {
+		return fmt.Errorf("CONFIG-EVENTING-FEED-PUBLISHINTERVAL eventing.feed.publishIntervalMillis must not be negative")
+	}
 	return nil
 }
 
 // EventFeedRuntimeConfig maps service configuration to the eventfeed module config.
-func EventFeedRuntimeConfig(cfg EventingConfig) (maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours int, sourceBaseURL, schemaBaseURL string, enabled bool) {
+func EventFeedRuntimeConfig(cfg EventingConfig) (maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours, publishIntervalMillis int, sourceBaseURL, schemaBaseURL string, enabled bool) {
 	maxAgeDays = cfg.Feed.MaxAgeDays
 	if maxAgeDays <= 0 {
 		maxAgeDays = 30
@@ -1101,6 +1106,10 @@ func EventFeedRuntimeConfig(cfg EventingConfig) (maxAgeDays, hardDeleteGraceDays
 	if cleanupHours <= 0 {
 		cleanupHours = 24
 	}
+	publishIntervalMillis = cfg.Feed.PublishIntervalMillis
+	if publishIntervalMillis <= 0 {
+		publishIntervalMillis = 250
+	}
 	sourceBaseURL = strings.TrimSpace(cfg.Feed.SourceBaseURL)
 	if sourceBaseURL == "" {
 		sourceBaseURL = "http://localhost"
@@ -1109,7 +1118,7 @@ func EventFeedRuntimeConfig(cfg EventingConfig) (maxAgeDays, hardDeleteGraceDays
 	if schemaBaseURL == "" {
 		schemaBaseURL = "https://admin-shell.io/events/schemas"
 	}
-	return maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours, sourceBaseURL, schemaBaseURL, cfg.Feed.Enabled
+	return maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours, publishIntervalMillis, sourceBaseURL, schemaBaseURL, cfg.Feed.Enabled
 }
 
 func normalizeProvider(provider string) string {
@@ -1346,6 +1355,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("eventing.feed.sourceBaseUrl", "http://localhost")
 	v.SetDefault("eventing.feed.schemaBaseUrl", "https://admin-shell.io/events/schemas")
 	v.SetDefault("eventing.feed.cleanupIntervalHours", 24)
+	v.SetDefault("eventing.feed.publishIntervalMillis", 250)
 
 	// Swagger defaults
 	v.SetDefault("swagger.enabled", DefaultConfig.SwaggerEnabled)

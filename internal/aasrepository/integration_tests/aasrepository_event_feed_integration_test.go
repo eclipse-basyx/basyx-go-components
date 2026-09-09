@@ -81,7 +81,10 @@ func TestAASRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
 		require.Equal(t, http.StatusNoContent, putStatus)
 	}
 
-	created, updated := countAASFeedEventTypes(t, baseURL, aasID)
+	// publish_seq assignment runs on a background ticker, so a just-written
+	// event isn't necessarily visible through the feed instantly - poll
+	// until it shows up rather than asserting on the first response.
+	created, updated := waitForAASFeedEventCounts(t, baseURL, aasID, 1, 0, 5*time.Second)
 	require.Equal(t, 1, created, "expected exactly one aas.created event")
 	require.Equal(t, 0, updated, "identical PUTs must not emit aas.updated events")
 
@@ -89,9 +92,30 @@ func TestAASRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, putStatus)
 
-	created, updated = countAASFeedEventTypes(t, baseURL, aasID)
+	created, updated = waitForAASFeedEventCounts(t, baseURL, aasID, 1, 1, 5*time.Second)
 	require.Equal(t, 1, created, "expected exactly one aas.created event")
 	require.Equal(t, 1, updated, "a content change must still emit exactly one aas.updated event")
+}
+
+// waitForAASFeedEventCounts polls the event feed until at least wantCreated
+// created and wantUpdated updated events for subject are visible, or
+// timeout elapses, returning whatever counts it last observed. Necessary
+// because publish_seq assignment (see docu/user/event_feed.md) runs on a
+// background interval, so a just-written event is not guaranteed to be
+// visible through the feed immediately.
+func waitForAASFeedEventCounts(t *testing.T, baseURL, subject string, wantCreated, wantUpdated int, timeout time.Duration) (created, updated int) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		created, updated = countAASFeedEventTypes(t, baseURL, subject)
+		if created >= wantCreated && updated >= wantUpdated {
+			return created, updated
+		}
+		if time.Now().After(deadline) {
+			return created, updated
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func countAASFeedEventTypes(t *testing.T, baseURL string, subject string) (created int, updated int) {
@@ -175,35 +199,10 @@ func TestAASRepositoryEventFeedCreateAndRead(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, status)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	eventsURL := baseURL + "/events?" + url.Values{
-		"limit":  []string{"100"},
-		"filter": []string{"rsql:event.subject=='" + aasID + "'"},
-	}.Encode()
-	req, err := http.NewRequest(http.MethodGet, eventsURL, nil)
-	require.NoError(t, err)
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	var feed struct {
-		Records []struct {
-			Type    string `json:"type"`
-			Subject string `json:"subject"`
-		} `json:"records"`
-	}
-	require.NoError(t, json.Unmarshal(body, &feed))
-	require.NotEmpty(t, feed.Records)
-	foundCreated := false
-	for _, rec := range feed.Records {
-		if rec.Subject == aasID && rec.Type == "io.admin-shell.aas.created.v1" {
-			foundCreated = true
-			break
-		}
-	}
-	require.True(t, foundCreated, "missing aas.created event: %s", body)
+	// publish_seq assignment runs on a background ticker, so poll until the
+	// created event is visible rather than asserting on the first response.
+	created, _ := waitForAASFeedEventCounts(t, baseURL, aasID, 1, 0, 5*time.Second)
+	require.Equal(t, 1, created, "missing aas.created event for %s", aasID)
 
 	db, err := sql.Open("pgx", integrationTestDSN)
 	require.NoError(t, err)

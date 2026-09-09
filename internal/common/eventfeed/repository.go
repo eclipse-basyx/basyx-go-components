@@ -38,6 +38,9 @@ import (
 const (
 	retentionBatchSize = 1000
 	retentionLockKey   = int64(6471200)
+
+	publishBatchSize = 500
+	publishLockKey   = int64(6471201)
 )
 
 type queryExecer interface {
@@ -96,10 +99,13 @@ func (r *Repository) save(ctx context.Context, exec queryExecer, event FeedEvent
 	return event, nil
 }
 
-// FindByID looks up a single event by its CloudEvents id. found is false if no such event exists.
+// FindByID looks up a single event by its CloudEvents id. found is false if
+// no such event exists. e.PublishSeq is 0 if the event has not yet been
+// assigned a publish_seq (see Service.RunPublishAssignment) - callers must
+// not treat such an event as safe to resume from.
 func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, error) {
 	query, args, err := r.dialect.From("feed_events").
-		Select("seq", "id", "event_type", "subject", "source", "time",
+		Select("seq", "publish_seq", "id", "event_type", "subject", "source", "time",
 			"dataschema_full", "dataschema_compact", "data_full", "data_compact").
 		Where(goqu.C("id").Eq(id)).
 		ToSQL()
@@ -107,8 +113,9 @@ func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, 
 		return FeedEvent{}, false, fmt.Errorf("EVENTFEED-FINDBYID-BUILDSQL: %w", err)
 	}
 	var e FeedEvent
+	var publishSeq sql.NullInt64
 	err = r.db.QueryRowContext(ctx, query, args...).Scan(
-		&e.Seq, &e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
+		&e.Seq, &publishSeq, &e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
 		&e.DataSchemaFull, &e.DataSchemaCompact, &e.DataFull, &e.DataCompact,
 	)
 	if err == sql.ErrNoRows {
@@ -117,6 +124,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, 
 	if err != nil {
 		return FeedEvent{}, false, fmt.Errorf("EVENTFEED-FINDBYID-SCAN: %w", err)
 	}
+	e.PublishSeq = publishSeq.Int64
 	return e, true, nil
 }
 
@@ -132,14 +140,18 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 		dataCol = "data_compact"
 	}
 	ds := r.dialect.From("feed_events").
-		Select("seq", "id", "event_type", "subject", "source", "time",
+		Select("publish_seq", "id", "event_type", "subject", "source", "time",
 			goqu.C(schemaCol), goqu.C(dataCol))
 
 	retentionFloor := r.now().Add(-r.maxAge)
 	ds = ds.Where(goqu.C("time").Gte(retentionFloor))
 
+	// Only rows that have been assigned a publish_seq (i.e. whose writer
+	// transaction was already visible to a RunPublishAssignment pass) are
+	// ever returned - see database/patches/1_2_0.sql.
+	ds = ds.Where(goqu.C("publish_seq").IsNotNull())
 	if q.AfterSeq > 0 {
-		ds = ds.Where(goqu.C("seq").Gt(q.AfterSeq))
+		ds = ds.Where(goqu.C("publish_seq").Gt(q.AfterSeq))
 	}
 	if q.Since != nil {
 		ds = ds.Where(goqu.C("time").Gte(*q.Since))
@@ -158,7 +170,7 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 		}
 	}
 
-	ds = ds.Order(goqu.C("seq").Asc()).Limit(uint(q.Limit + 1))
+	ds = ds.Order(goqu.C("publish_seq").Asc()).Limit(uint(q.Limit + 1))
 	query, args, err := ds.ToSQL()
 	if err != nil {
 		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-BUILDSQL: %w", err)
@@ -174,7 +186,7 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 		var e FeedEvent
 		var schema, data string
 		if err = rows.Scan(
-			&e.Seq, &e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
+			&e.PublishSeq, &e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
 			&schema, &data,
 		); err != nil {
 			return nil, fmt.Errorf("EVENTFEED-FINDPAGE-SCAN: %w", err)
@@ -192,6 +204,72 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-ROWS: %w", err)
 	}
 	return events, nil
+}
+
+// TryPublishLock acquires a session advisory lock so only one replica assigns publish_seq at a time.
+func (r *Repository) TryPublishLock(ctx context.Context) (bool, error) {
+	var locked bool
+	if err := r.db.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", publishLockKey).Scan(&locked); err != nil {
+		return false, fmt.Errorf("EVENTFEED-PUBLISH-LOCK: %w", err)
+	}
+	return locked, nil
+}
+
+// ReleasePublishLock releases the advisory lock acquired by TryPublishLock.
+func (r *Repository) ReleasePublishLock(ctx context.Context) {
+	_, _ = r.db.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", publishLockKey)
+}
+
+// AssignPublishSeq assigns publish_seq values, in original seq order, to up
+// to batchSize rows that have become visible (i.e. their writer transaction
+// committed) since the last run and don't have one yet. It returns the
+// number of rows assigned. Because the candidate SELECT runs under normal
+// MVCC visibility, a row can only be selected once its own transaction has
+// committed - so publish_seq is never assigned to a row "ahead of" an
+// earlier-committing one that a caller hasn't seen yet. Call with the
+// advisory lock held (see TryPublishLock) so only one instance assigns at a
+// time.
+func (r *Repository) AssignPublishSeq(ctx context.Context, batchSize int) (int64, error) {
+	query, args, err := r.dialect.From("feed_events").
+		Select("id").
+		Where(goqu.C("publish_seq").IsNull()).
+		Order(goqu.C("seq").Asc()).
+		Limit(uint(batchSize)).
+		ToSQL()
+	if err != nil {
+		return 0, fmt.Errorf("EVENTFEED-PUBLISH-BUILDSQL: %w", err)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("EVENTFEED-PUBLISH-SELECT: %w", err)
+	}
+	ids := make([]string, 0, batchSize)
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("EVENTFEED-PUBLISH-SCAN: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err = rows.Err(); err != nil {
+		_ = rows.Close()
+		return 0, fmt.Errorf("EVENTFEED-PUBLISH-ROWS: %w", err)
+	}
+	_ = rows.Close()
+
+	var assigned int64
+	for _, id := range ids {
+		res, err := r.db.ExecContext(ctx,
+			`UPDATE feed_events SET publish_seq = nextval('feed_events_publish_seq_seq') WHERE id = $1 AND publish_seq IS NULL`,
+			id)
+		if err != nil {
+			return assigned, fmt.Errorf("EVENTFEED-PUBLISH-ASSIGN: %w", err)
+		}
+		n, _ := res.RowsAffected()
+		assigned += n
+	}
+	return assigned, nil
 }
 
 // TryRetentionLock acquires a session advisory lock so only one replica cleans up.

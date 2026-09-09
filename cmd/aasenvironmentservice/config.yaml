@@ -91,3 +91,4 @@ eventing:
     sourceBaseUrl: "http://localhost:5004"
     schemaBaseUrl: "https://admin-shell.io/events/schemas"
     cleanupIntervalHours: 24
+    publishIntervalMillis: 250

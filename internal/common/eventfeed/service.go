@@ -101,7 +101,7 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 	var cursor string
 	if hasMore && len(events) > 0 {
 		last := events[len(events)-1]
-		cursor, err = encodeCursor(last.Seq)
+		cursor, err = encodeCursor(last.PublishSeq)
 		if err != nil {
 			return FeedResponse{}, err
 		}
@@ -170,6 +170,29 @@ func (s *Service) RunRetention(ctx context.Context) (int64, error) {
 	return n, nil
 }
 
+// RunPublishAssignment assigns publish_seq to newly committed feed rows,
+// using an advisory lock so only one replica assigns at a time. It returns
+// the number of rows assigned. Called periodically by Module.StartPublishLoop.
+func (s *Service) RunPublishAssignment(ctx context.Context) (int64, error) {
+	locked, err := s.repo.TryPublishLock(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if !locked {
+		return 0, nil
+	}
+	defer s.repo.ReleasePublishLock(ctx)
+
+	n, err := s.repo.AssignPublishSeq(ctx, publishBatchSize)
+	if err != nil {
+		return 0, err
+	}
+	if n > 0 {
+		s.logger.DebugContext(ctx, "event feed publish assignment completed", "assigned", n)
+	}
+	return n, nil
+}
+
 func (s *Service) findAuthorizedPage(ctx context.Context, domain domainQuery, presentation Presentation, limit int) ([]FeedEvent, bool, error) {
 	authorizer := currentRecordAuthorizer()
 	if authorizer == nil {
@@ -202,7 +225,7 @@ func (s *Service) collectAuthorizedEvents(ctx context.Context, domain domainQuer
 			break
 		}
 		for _, event := range page {
-			domain.AfterSeq = event.Seq
+			domain.AfterSeq = event.PublishSeq
 			if !authorizer.Allow(ctx, event.Type, event.Subject) {
 				continue
 			}
@@ -271,8 +294,12 @@ func (s *Service) buildDomainQuery(ctx context.Context, query FeedQuery, filter 
 		if !found {
 			return domainQuery{}, newQueryError("EVENTFEED-QUERY-LASTEVENT", "unknown lastEventId: "+query.LastEventID)
 		}
+		if event.PublishSeq == 0 {
+			return domainQuery{}, newQueryError("EVENTFEED-QUERY-LASTEVENT-PENDING",
+				"event "+query.LastEventID+" is not yet available to resume from; retry shortly or use the response's cursor")
+		}
 		return domainQuery{
-			AfterSeq: event.Seq,
+			AfterSeq: event.PublishSeq,
 			Filter:   filter,
 			Limit:    query.Limit,
 		}, nil

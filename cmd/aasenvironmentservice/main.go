@@ -196,6 +196,7 @@ func runServer(ctx context.Context, configPath string) error {
 	eventfeedsetup.Bind(eventFeedModule)
 	defer eventFeedModule.Stop()
 	eventFeedModule.StartRetentionLoop(ctx)
+	eventFeedModule.StartPublishLoop(ctx)
 
 	customAASRegistry := aasenvironment.NewCustomAASRegistryService(
 		aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*aasRegistryPersistence),

@@ -33,7 +33,7 @@ import (
 
 // NewEventFeedConfig maps process configuration onto the eventfeed module config.
 func NewEventFeedConfig(cfg EventingConfig) eventfeed.Config {
-	maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours, sourceBaseURL, schemaBaseURL, enabled := EventFeedRuntimeConfig(cfg)
+	maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours, publishIntervalMillis, sourceBaseURL, schemaBaseURL, enabled := EventFeedRuntimeConfig(cfg)
 	return eventfeed.Config{
 		Enabled:         enabled,
 		MaxAge:          time.Duration(maxAgeDays) * 24 * time.Hour,
@@ -42,5 +42,6 @@ func NewEventFeedConfig(cfg EventingConfig) eventfeed.Config {
 		SchemaBaseURL:   schemaBaseURL,
 		HardDeleteGrace: time.Duration(hardDeleteGraceDays) * 24 * time.Hour,
 		CleanupInterval: time.Duration(cleanupHours) * time.Hour,
+		PublishInterval: time.Duration(publishIntervalMillis) * time.Millisecond,
 	}
 }

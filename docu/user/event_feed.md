@@ -24,6 +24,7 @@ eventing:
     sourceBaseUrl: "http://localhost:5004"
     schemaBaseUrl: "https://admin-shell.io/events/schemas"
     cleanupIntervalHours: 24
+    publishIntervalMillis: 250
 ```
 
 | Setting | Environment variable | Meaning |
@@ -36,6 +37,7 @@ eventing:
 | `eventing.feed.sourceBaseUrl` | `BASYX_EVENTING_FEED_SOURCE_BASE_URL` | CloudEvents `source` prefix. |
 | `eventing.feed.schemaBaseUrl` | `BASYX_EVENTING_FEED_SCHEMA_BASE_URL` | CloudEvents `dataschema` prefix. |
 | `eventing.feed.cleanupIntervalHours` | `BASYX_EVENTING_FEED_CLEANUP_INTERVAL_HOURS` | Retention worker interval (also runs once at startup). |
+| `eventing.feed.publishIntervalMillis` | `BASYX_EVENTING_FEED_PUBLISH_INTERVAL_MILLIS` | How often the `publish_seq` assignment job runs (also runs once at startup). Bounds delivery latency, not correctness. See "Delivery, ordering, retention" below. Default `250`. |
 
 Requires database schema `v1.2.0` (`feed_events`). Sample `config.yaml` files
 ship with `eventing.feed.enabled: false`.
@@ -69,8 +71,39 @@ absent.
 
 - Feed rows are written in the **same PostgreSQL transaction** as the model
   mutation (`history.AppendVersionTx` / `AppendMutatedVersionTx`). A rolled-back
-  write produces no event. A committed write always has the matching feed rows.
-- Ordering and cursors use the table `seq` (`BIGSERIAL`), not wall-clock time.
+  write produces no event. A committed write always has the matching feed row.
+- Two ordering keys exist on `feed_events`:
+  - `seq` (`BIGSERIAL`) is an **internal write-order id**, allocated before
+    commit. Two concurrent writer transactions can commit in the opposite
+    order to the one in which they were allocated a `seq` value, so `seq` is
+    never used for client-facing ordering or cursors.
+  - `publish_seq` is the **client-facing cursor/order key**. It starts out
+    `NULL` and is assigned by a periodic background job
+    (`Service.RunPublishAssignment`, every `publishIntervalMillis`) that only
+    ever selects rows that are already visible under normal PostgreSQL MVCC -
+    i.e. already committed. A row still inside an open writer transaction is
+    invisible to that job and simply cannot receive a `publish_seq` yet, so
+    there is no window in which a `publish_seq`-based cursor can move past a
+    row that later turns out to have committed earlier. `GET /events` only
+    ever returns rows that already have a `publish_seq`, ordered by it.
+- Because assignment happens strictly after a row becomes visible, delivery
+  order via `publish_seq` reflects true commit order, not raw write order -
+  a transaction that mints a lower `seq` but commits later is delivered
+  *after* transactions that committed first, exactly matching when each
+  became visible.
+- `lastEventId` and `cursor` both resolve to a `publish_seq` position and
+  carry the same guarantee: repeated polling can never permanently skip an
+  event. If `lastEventId` names an event that exists but has not yet been
+  assigned a `publish_seq` (i.e. it hasn't been picked up by the assignment
+  job), the request is rejected with `EVENTFEED-QUERY-LASTEVENT-PENDING` -
+  retry shortly, or resume from the response's `cursor` instead.
+- The `since` query parameter is a convenience filter only, not a resumable
+  position - it does not carry any completeness guarantee and must not be
+  used for polling.
+- `publishIntervalMillis` only bounds **delivery latency** (how soon a
+  committed event becomes visible through the feed), not correctness -
+  unlike the old wall-clock-based design, there is no timing assumption a
+  misconfigured value could silently violate.
 - Equal PUT/update snapshots do not emit `updated` events.
 - Coverage includes create/update/delete of AAS and Submodels, including PATCH,
   SubmodelElement, file, thumbnail, AssetInformation, and AAS Environment

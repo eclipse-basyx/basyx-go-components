@@ -179,6 +179,7 @@ func runServer(ctx context.Context, configPath string) error {
 	eventfeedsetup.Bind(eventFeedModule)
 	defer eventFeedModule.Stop()
 	eventFeedModule.StartRetentionLoop(ctx)
+	eventFeedModule.StartPublishLoop(ctx)
 
 	aasSvc := aasenvironment.NewCustomAASRepositoryService(
 		api.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasDatabase, submodelDatabase, asyncJobManager),

@@ -32,7 +32,19 @@
 -- ----------------------------------------------------------------------------
 -- Description:
 --   Adds feed_events table for the CloudEvents Event Feed REST API.
---   Cursor/order key is BIGSERIAL seq assigned in the writer transaction.
+--
+--   seq (BIGSERIAL) is an internal write-order id, assigned before commit -
+--   it is never used for client-facing ordering or cursors, because two
+--   concurrent writer transactions can commit in the opposite order to the
+--   one in which they were allocated a seq value.
+--
+--   publish_seq is the client-facing cursor/order key. It starts NULL and is
+--   assigned by a periodic background job (Service.RunPublishAssignment)
+--   that only ever selects already-committed (i.e. visible) rows. Because
+--   assignment can only happen after a row is visible, a client resuming
+--   from any already-issued publish_seq can never have an earlier-committed
+--   row appear after it - unlike seq, publish_seq reflects true commit
+--   (visibility) order.
 --
 -- Copyright (c) Eclipse BaSyx Authors and Fraunhofer IESE
 -- SPDX-License-Identifier: MIT
@@ -40,6 +52,7 @@
 
 CREATE TABLE IF NOT EXISTS feed_events (
     seq                 BIGSERIAL    NOT NULL,
+    publish_seq         BIGINT,
     id                  VARCHAR(64)  PRIMARY KEY,
     event_type          TEXT         NOT NULL,
     subject             TEXT         NOT NULL,
@@ -52,23 +65,35 @@ CREATE TABLE IF NOT EXISTS feed_events (
     CONSTRAINT ux_feed_events_seq UNIQUE (seq)
 );
 
+CREATE SEQUENCE IF NOT EXISTS feed_events_publish_seq_seq;
+
 CREATE INDEX IF NOT EXISTS ix_feed_events_seq
     ON feed_events (seq ASC);
 
-CREATE INDEX IF NOT EXISTS ix_feed_events_event_type_seq
-    ON feed_events (event_type ASC, seq ASC);
+-- Lets the publish-assignment background job find newly committed,
+-- not-yet-assigned rows without scanning the whole table.
+CREATE INDEX IF NOT EXISTS ix_feed_events_unpublished_seq
+    ON feed_events (seq ASC) WHERE publish_seq IS NULL;
 
-CREATE INDEX IF NOT EXISTS ix_feed_events_subject_seq
-    ON feed_events (subject ASC, seq ASC);
+-- Client-facing ordering index and uniqueness guard; only assigned rows are
+-- ever queried by clients.
+CREATE UNIQUE INDEX IF NOT EXISTS ix_feed_events_publish_seq
+    ON feed_events (publish_seq ASC) WHERE publish_seq IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS ix_feed_events_source_seq
-    ON feed_events (source ASC, seq ASC);
+CREATE INDEX IF NOT EXISTS ix_feed_events_event_type_publish_seq
+    ON feed_events (event_type ASC, publish_seq ASC) WHERE publish_seq IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS ix_feed_events_dataschema_full_seq
-    ON feed_events (dataschema_full ASC, seq ASC);
+CREATE INDEX IF NOT EXISTS ix_feed_events_subject_publish_seq
+    ON feed_events (subject ASC, publish_seq ASC) WHERE publish_seq IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS ix_feed_events_dataschema_compact_seq
-    ON feed_events (dataschema_compact ASC, seq ASC);
+CREATE INDEX IF NOT EXISTS ix_feed_events_source_publish_seq
+    ON feed_events (source ASC, publish_seq ASC) WHERE publish_seq IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS ix_feed_events_dataschema_full_publish_seq
+    ON feed_events (dataschema_full ASC, publish_seq ASC) WHERE publish_seq IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS ix_feed_events_dataschema_compact_publish_seq
+    ON feed_events (dataschema_compact ASC, publish_seq ASC) WHERE publish_seq IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS ix_feed_events_time_seq
     ON feed_events (time ASC, seq ASC);

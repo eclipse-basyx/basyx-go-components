@@ -102,15 +102,39 @@ func TestSubmodelRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
 		putSubmodel("NoOpPutITSM")
 	}
 
-	created, updated := countSubmodelFeedEventTypes(t, client, baseURL, smID)
+	// publish_seq assignment runs on a background ticker, so a just-written
+	// event isn't necessarily visible through the feed instantly - poll
+	// until it shows up rather than asserting on the first response.
+	created, updated := waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, 0, 5*time.Second)
 	require.Equal(t, 1, created, "expected exactly one submodel.created event")
 	require.Equal(t, 0, updated, "identical PUTs must not emit submodel.updated events")
 
 	putSubmodel("NoOpPutITSMChanged")
 
-	created, updated = countSubmodelFeedEventTypes(t, client, baseURL, smID)
+	created, updated = waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, 1, 5*time.Second)
 	require.Equal(t, 1, created, "expected exactly one submodel.created event")
 	require.Equal(t, 1, updated, "a content change must still emit exactly one submodel.updated event")
+}
+
+// waitForSubmodelFeedEventCounts polls the event feed until at least
+// wantCreated created and wantUpdated updated events for subject are
+// visible, or timeout elapses, returning whatever counts it last observed.
+// Necessary because publish_seq assignment (see docu/user/event_feed.md)
+// runs on a background interval, so a just-written event is not guaranteed
+// to be visible through the feed immediately.
+func waitForSubmodelFeedEventCounts(t *testing.T, client *http.Client, baseURL, subject string, wantCreated, wantUpdated int, timeout time.Duration) (created, updated int) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		created, updated = countSubmodelFeedEventTypes(t, client, baseURL, subject)
+		if created >= wantCreated && updated >= wantUpdated {
+			return created, updated
+		}
+		if time.Now().After(deadline) {
+			return created, updated
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func countSubmodelFeedEventTypes(t *testing.T, client *http.Client, baseURL string, subject string) (created int, updated int) {
@@ -190,30 +214,8 @@ func TestSubmodelRepositoryEventFeedCreateAndRead(t *testing.T) {
 	_ = postResp.Body.Close()
 	require.Equal(t, http.StatusCreated, postResp.StatusCode)
 
-	eventsURL := baseURL + "/events?" + url.Values{
-		"limit":  []string{"100"},
-		"filter": []string{"rsql:event.subject=='" + smID + "'"},
-	}.Encode()
-	resp, err := client.Get(eventsURL)
-	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	var feed struct {
-		Records []struct {
-			Type    string `json:"type"`
-			Subject string `json:"subject"`
-		} `json:"records"`
-	}
-	require.NoError(t, json.Unmarshal(body, &feed))
-	require.NotEmpty(t, feed.Records)
-	foundCreated := false
-	for _, rec := range feed.Records {
-		if rec.Subject == smID && rec.Type == "io.admin-shell.submodel.created.v1" {
-			foundCreated = true
-			break
-		}
-	}
-	require.True(t, foundCreated, "missing submodel.created event: %s", body)
+	// publish_seq assignment runs on a background ticker, so poll until the
+	// created event is visible rather than asserting on the first response.
+	created, _ := waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, 0, 5*time.Second)
+	require.Equal(t, 1, created, "missing submodel.created event for %s", smID)
 }

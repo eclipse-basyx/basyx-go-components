@@ -41,6 +41,12 @@ type Config struct {
 	HardDeleteGrace time.Duration
 	RetentionCron   string // informational; Go uses ticker interval
 	CleanupInterval time.Duration
+
+	// PublishInterval is how often the publish_seq background assignment job
+	// (Service.RunPublishAssignment) runs. It only ever assigns publish_seq
+	// to rows already visible (i.e. committed), so it bounds delivery
+	// latency, not correctness - see database/patches/1_2_0.sql.
+	PublishInterval time.Duration
 }
 
 // DefaultConfig returns safe defaults aligned with the Java reference tests.
@@ -53,6 +59,7 @@ func DefaultConfig() Config {
 		SchemaBaseURL:   "https://admin-shell.io/events/schemas",
 		HardDeleteGrace: 10 * 24 * time.Hour,
 		CleanupInterval: 24 * time.Hour,
+		PublishInterval: 250 * time.Millisecond,
 	}
 }
 
@@ -69,6 +76,9 @@ func (c Config) Validate() error {
 	}
 	if c.HardDeleteGrace < 0 {
 		return fmt.Errorf("EVENTFEED-CFG-HARDDELETE hardDeleteGrace must not be negative")
+	}
+	if c.PublishInterval <= 0 {
+		return fmt.Errorf("EVENTFEED-CFG-PUBLISHINTERVAL publishInterval must be positive")
 	}
 	if strings.TrimSpace(c.SourceBaseURL) == "" {
 		return fmt.Errorf("EVENTFEED-CFG-SOURCE sourceBaseUrl must not be blank")

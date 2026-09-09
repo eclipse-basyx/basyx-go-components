@@ -103,6 +103,39 @@ func (m *Module) StartRetentionLoop(ctx context.Context) {
 	}()
 }
 
+// StartPublishLoop runs the publish_seq assignment job immediately, then on
+// cfg.PublishInterval until ctx is done or Stop is called.
+func (m *Module) StartPublishLoop(ctx context.Context) {
+	if m == nil || !m.Enabled() {
+		return
+	}
+	interval := m.cfg.PublishInterval
+	if interval <= 0 {
+		interval = 250 * time.Millisecond
+	}
+	go func() {
+		run := func() {
+			if _, err := m.Service.RunPublishAssignment(ctx); err != nil {
+				slog.WarnContext(ctx, "event feed publish assignment failed",
+					"error.code", "EVENTFEED-PUBLISH-RUN", "error", err)
+			}
+		}
+		run()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-m.stop:
+				return
+			case <-ticker.C:
+				run()
+			}
+		}
+	}()
+}
+
 // SetOnStop registers a callback invoked when the module stops.
 func (m *Module) SetOnStop(fn func()) {
 	if m == nil {

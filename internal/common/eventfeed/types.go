@@ -66,7 +66,13 @@ type SubmodelRef struct {
 
 // FeedEvent is a persisted CloudEvents feed record with both presentation variants.
 type FeedEvent struct {
-	Seq               int64
+	// Seq is the internal write-order id (assigned before commit). It is
+	// never used for client-facing ordering or cursors.
+	Seq int64
+	// PublishSeq is the client-facing cursor/order key, assigned after the
+	// row becomes visible (see database/patches/1_2_0.sql). Zero means not
+	// yet assigned.
+	PublishSeq        int64
 	ID                string
 	Type              string
 	Subject           string
@@ -156,6 +162,7 @@ type cursorData struct {
 
 // domainQuery is the internal repository query after validation/cursor resolution.
 type domainQuery struct {
+	// AfterSeq filters on publish_seq (see FeedEvent.PublishSeq), not seq.
 	AfterSeq int64
 	Since    *time.Time
 	Filter   *parsedFilter

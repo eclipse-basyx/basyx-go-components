@@ -101,7 +101,7 @@ func TestReadWithSQLMock(t *testing.T) {
 	ts1 := fixedNow.Add(-2 * time.Hour)
 	ts2 := fixedNow.Add(-1 * time.Hour)
 	rows := sqlmock.NewRows([]string{
-		"seq", "id", "event_type", "subject", "source", "time",
+		"publish_seq", "id", "event_type", "subject", "source", "time",
 		"dataschema_compact", "data_compact",
 	}).
 		AddRow(int64(1), "e1", TypeAASCreated, "aas-1", "http://localhost/shells", ts1,
@@ -135,6 +135,42 @@ func TestReadWithSQLMock(t *testing.T) {
 	}
 }
 
+// TestReadLastEventIDRejectsUnpublishedEvent proves that resuming via
+// lastEventId is gated the same way as the cursor: an event that exists but
+// has not yet been assigned a publish_seq (PublishSeq == 0, i.e. its writer
+// transaction has not yet been picked up by RunPublishAssignment) must not
+// be usable as a resume point - a client naively using the id of the event
+// it just received could otherwise skip an earlier-committing, not-yet-seen
+// event forever.
+func TestReadLastEventIDRejectsUnpublishedEvent(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	repo := NewRepository(db, cfg.MaxAge)
+	svc := NewService(repo, cfg)
+
+	rows := sqlmock.NewRows([]string{
+		"seq", "publish_seq", "id", "event_type", "subject", "source", "time",
+		"dataschema_full", "dataschema_compact", "data_full", "data_compact",
+	}).AddRow(int64(5), nil, "e5", TypeAASCreated, "aas-1", "http://localhost/shells", time.Now().UTC(),
+		"https://s/full", "https://s/compact", `{}`, `{}`)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
+
+	_, err = svc.Read(context.Background(), FeedQuery{
+		LastEventID:  "e5",
+		Presentation: PresentationRegular,
+		Limit:        10,
+	})
+	if !IsQueryError(err) {
+		t.Fatalf("expected query error for unpublished lastEventId, got %v", err)
+	}
+}
+
 func TestHTTPHandlers(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -154,7 +190,7 @@ func TestHTTPHandlers(t *testing.T) {
 	RegisterRoutes(r, svc)
 
 	rows := sqlmock.NewRows([]string{
-		"seq", "id", "event_type", "subject", "source", "time",
+		"publish_seq", "id", "event_type", "subject", "source", "time",
 		"dataschema_full", "data_full",
 	}).AddRow(int64(1), "e1", TypeAASCreated, "aas-1", "http://localhost/shells", fixedNow.Add(-time.Hour),
 		"https://s/full", `{"aasId":"aas-1"}`)
@@ -259,6 +295,43 @@ func TestSaveAndRetentionSQL(t *testing.T) {
 	}
 }
 
+func TestRunPublishAssignmentSQL(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	repo := NewRepository(db, cfg.MaxAge)
+	svc := NewService(repo, cfg)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_lock`)).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
+	mock.ExpectQuery(`SELECT "id" FROM "feed_events" WHERE \("publish_seq" IS NULL\) ORDER BY "seq" ASC LIMIT 500`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("e1").AddRow("e2"))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE feed_events SET publish_seq = nextval('feed_events_publish_seq_seq') WHERE id = $1 AND publish_seq IS NULL`)).
+		WithArgs("e1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE feed_events SET publish_seq = nextval('feed_events_publish_seq_seq') WHERE id = $1 AND publish_seq IS NULL`)).
+		WithArgs("e2").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	n, err := svc.RunPublishAssignment(context.Background())
+	if err != nil {
+		t.Fatalf("publish assignment: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("assigned=%d", n)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql: %v", err)
+	}
+}
+
 func TestRegisterRoutesDisabled(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Enabled = false
@@ -295,7 +368,7 @@ func TestHTTPOmittedLimitUsesMaxPageSize(t *testing.T) {
 	RegisterRoutes(r, svc)
 
 	rows := sqlmock.NewRows([]string{
-		"seq", "id", "event_type", "subject", "source", "time",
+		"publish_seq", "id", "event_type", "subject", "source", "time",
 		"dataschema_full", "data_full",
 	})
 	mock.ExpectQuery(`LIMIT 51`).WillReturnRows(rows)
@@ -329,7 +402,7 @@ func TestReadHidesUnauthorizedSubjects(t *testing.T) {
 	svc.now = func() time.Time { return fixedNow }
 
 	rows := sqlmock.NewRows([]string{
-		"seq", "id", "event_type", "subject", "source", "time",
+		"publish_seq", "id", "event_type", "subject", "source", "time",
 		"dataschema_full", "data_full",
 	}).
 		AddRow(int64(1), "e1", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Hour),
@@ -365,10 +438,10 @@ func TestFindPageSQLShape(t *testing.T) {
 	repo.now = func() time.Time { return fixedNow }
 
 	rows := sqlmock.NewRows([]string{
-		"seq", "id", "event_type", "subject", "source", "time",
+		"publish_seq", "id", "event_type", "subject", "source", "time",
 		"dataschema_compact", "data_compact",
 	})
-	mock.ExpectQuery(`SELECT .*"dataschema_compact", "data_compact" FROM "feed_events".*ORDER BY "seq" ASC`).
+	mock.ExpectQuery(`SELECT .*"dataschema_compact", "data_compact" FROM "feed_events".*"publish_seq" IS NOT NULL.*ORDER BY "publish_seq" ASC`).
 		WillReturnRows(rows)
 
 	if _, err = repo.FindPage(context.Background(), domainQuery{Limit: 10, Filter: &parsedFilter{
