@@ -298,3 +298,45 @@ func TestNormalizePostgresDSN_EncodesUserInfoAndPreservesQuery(t *testing.T) {
 		t.Fatalf("unexpected application_name: %s", appName)
 	}
 }
+
+func TestPostgresDSNRuntimeParametersRoundTrip(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         PostgresConfig
+		wantOptions string
+	}{
+		{
+			name:        "connection fields preserve spaces and literal plus",
+			cfg:         PostgresConfig{Host: "localhost", Port: 5432, User: "user", DBName: "basyx", Options: "-c default_transaction_read_only=on -c application_name=reader+worker"},
+			wantOptions: "-c default_transaction_read_only=on -c application_name=reader+worker",
+		},
+		{
+			name:        "URL options survive application name injection",
+			cfg:         PostgresConfig{DSN: "postgres://user@localhost/basyx?sslmode=disable&options=-c%20default_transaction_read_only%3Don"},
+			wantOptions: "-c default_transaction_read_only=on",
+		},
+		{
+			name:        "URL literal plus survives application name injection",
+			cfg:         PostgresConfig{DSN: "postgres://user@localhost/basyx?sslmode=disable&options=-c%20application_name%3Dreader+worker"},
+			wantOptions: "-c application_name=reader+worker",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dsn, _, err := BuildPostgresDSNForService(tt.cfg, "reader service+worker")
+			if err != nil {
+				t.Fatal(err)
+			}
+			config, err := pgconn.ParseConfig(dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := config.RuntimeParams["options"]; got != tt.wantOptions {
+				t.Errorf("options = %q, want %q", got, tt.wantOptions)
+			}
+			if got := config.RuntimeParams["application_name"]; got != "reader service+worker" {
+				t.Errorf("application_name = %q, want %q", got, "reader service+worker")
+			}
+		})
+	}
+}
