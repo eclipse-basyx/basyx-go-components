@@ -47,6 +47,28 @@ EXCEPTION
 END
 $safe_regex$;
 
+CREATE OR REPLACE FUNCTION basyx_validated_cast_input(input_value text, type_name text)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+PARALLEL SAFE
+STRICT
+AS $validated_cast$
+BEGIN
+  -- Keep each validator type constant across cached PL/pgSQL executions.
+  IF (CASE type_name
+    WHEN 'double precision' THEN pg_catalog.pg_input_is_valid(input_value, 'double precision')
+    WHEN 'boolean' THEN pg_catalog.pg_input_is_valid(input_value, 'boolean')
+    WHEN 'timestamp with time zone' THEN pg_catalog.pg_input_is_valid(input_value, 'timestamp with time zone')
+    WHEN 'time without time zone' THEN pg_catalog.pg_input_is_valid(input_value, 'time without time zone')
+    ELSE false
+  END) THEN
+    RETURN input_value;
+  END IF;
+  RETURN NULL;
+END
+$validated_cast$;
+
 UPDATE basyxsystem
 SET schema_version = 'v1.1.19',
     state = 'clean'

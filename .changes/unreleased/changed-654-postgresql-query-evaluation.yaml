@@ -1,7 +1,7 @@
 kind: changed
-body: Database schema `v1.1.19` requires PostgreSQL 16 or newer and installs the `basyx_safe_regex_pattern` helper for total regular-expression evaluation. Deployments using an older PostgreSQL version must upgrade before applying this schema patch.
+body: Database schema `v1.1.19` requires PostgreSQL 16 or newer and installs `basyx_safe_regex_pattern` for total regular-expression evaluation and `basyx_validated_cast_input` for safe nested query casts. Run the configuration service before starting updated services. Deployments using an older PostgreSQL version must upgrade before applying this schema patch.
 time: 2026-09-07T14:36:00.000000000+02:00
 custom:
   Impact: High
   PullRequest: 654
-  SecurityImpact: Invalid regular-expression inputs now use consistent no-match semantics.
+  SecurityImpact: Invalid regular-expression and cast inputs use consistent no-match semantics. Nested casts validate and convert the same textual value without duplicating inner SQL expressions.
