@@ -222,6 +222,60 @@ func TestClaimComparisonsAndCastsPreserveJSONTypes(t *testing.T) {
 	}
 }
 
+func TestStandaloneBooleanAndDatePartClaimCastsPreserveJSONTypes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		formula string
+		claims  Claims
+		want    grammar.SimplifyDecision
+	}{
+		{
+			name:    "standalone bool cast from claim",
+			formula: `{"$boolCast":{"$attribute":{"CLAIM":"enabled"}}}`,
+			claims:  Claims{"enabled": true},
+			want:    grammar.SimplifyTrue,
+		},
+		{
+			name:    "standalone bool cast from claim path",
+			formula: `{"$boolCast":{"$attribute":{"CLAIMPATH":"/settings/enabled"}}}`,
+			claims:  Claims{"settings": map[string]any{"enabled": true}},
+			want:    grammar.SimplifyTrue,
+		},
+		{
+			name:    "year from claim date",
+			formula: `{"$eq":[{"$year":{"$dateTimeCast":{"$attribute":{"CLAIM":"date"}}}},{"$numVal":2026}]}`,
+			claims:  Claims{"date": "2026-09-03T09:00:00Z"},
+			want:    grammar.SimplifyTrue,
+		},
+		{
+			name:    "month from claim path date",
+			formula: `{"$eq":[{"$month":{"$dateTimeCast":{"$attribute":{"CLAIMPATH":"/timestamps/created"}}}},{"$numVal":9}]}`,
+			claims:  Claims{"timestamps": map[string]any{"created": "2026-09-03T09:00:00Z"}},
+			want:    grammar.SimplifyTrue,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			var expression grammar.LogicalExpression
+			if err := json.Unmarshal([]byte(test.formula), &expression); err != nil {
+				t.Fatalf("unmarshal formula: %v", err)
+			}
+			resolver := func(attribute grammar.AttributeValue) any {
+				return resolveAttributeValue(attribute, test.claims, nil)
+			}
+			_, decision := expression.SimplifyForBackendFilter(resolver)
+			if decision != test.want {
+				t.Fatalf("decision = %v, want %v", decision, test.want)
+			}
+		})
+	}
+}
+
 func TestClaimPathContainsArrayEdgeCases(t *testing.T) {
 	t.Parallel()
 

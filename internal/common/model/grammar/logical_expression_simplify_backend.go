@@ -442,12 +442,8 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 		return &me, SimplifyUndecided
 	}
 
-	left := items[0]
-	if op != "$contains" || !valueIsDirectClaimPath(left) {
-		left = replaceAttribute(left, resolve)
-	}
-	right := replaceAttribute(items[1], resolve)
-	if op != "$contains" && (valueContainsAttribute(left) || valueContainsAttribute(right)) {
+	left, right, attributesResolved := resolveComparisonAttributes(items[0], items[1], op, resolve)
+	if !attributesResolved {
 		invalid, decision := invalidMatchExpression()
 		return &invalid, decision
 	}
@@ -522,12 +518,8 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 		return &le, SimplifyUndecided
 	}
 
-	left := items[0]
-	if op != "$contains" || !valueIsDirectClaimPath(left) {
-		left = replaceAttribute(left, resolve)
-	}
-	right := replaceAttribute(items[1], resolve)
-	if op != "$contains" && (valueContainsAttribute(left) || valueContainsAttribute(right)) {
+	left, right, attributesResolved := resolveComparisonAttributes(items[0], items[1], op, resolve)
+	if !attributesResolved {
 		invalid, decision := invalidLogicalExpression()
 		return &invalid, decision
 	}
@@ -562,6 +554,23 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 	}
 
 	return &out, SimplifyUndecided
+}
+
+func resolveComparisonAttributes(
+	left Value,
+	right Value,
+	op string,
+	resolve AttributeResolver,
+) (Value, Value, bool) {
+	directClaimPathContains := op == "$contains" && valueIsDirectClaimPath(left)
+	if !directClaimPathContains {
+		left = replaceAttribute(left, resolve)
+	}
+	right = replaceAttribute(right, resolve)
+	if valueContainsAttribute(right) || !directClaimPathContains && valueContainsAttribute(left) {
+		return left, right, false
+	}
+	return left, right, true
 }
 
 func isStringComparisonOperator(op string) bool {
@@ -1222,7 +1231,7 @@ func resolveStringItem(s StringValue, resolve AttributeResolver) (string, bool) 
 		return string(*s.StrVal), true
 	}
 	if s.StrCast != nil {
-		return stringOperandValue(resolveValue(*s.StrCast, resolve))
+		return resolveStringValue(Value{StrCast: s.StrCast}, resolve)
 	}
 	if s.Field != nil {
 		return "", false
@@ -1434,7 +1443,7 @@ func resolveDateTimeValue(v Value, resolve AttributeResolver) (time.Time, bool) 
 	case v.DateTimeVal != nil:
 		return time.Time(*v.DateTimeVal), true
 	case v.DateTimeCast != nil:
-		return toDateTime(resolveValue(*v.DateTimeCast, resolve))
+		return toDateTime(resolveCastValue(v, resolve))
 	default:
 		return toDateTime(resolveValue(v, resolve))
 	}
@@ -1471,7 +1480,8 @@ func resolveBoolValue(v Value, resolve AttributeResolver) (bool, bool) {
 	case v.Boolean != nil:
 		return *v.Boolean, true
 	case v.BoolCast != nil:
-		return boolOperandValue(resolveValue(*v.BoolCast, resolve))
+		boolean, ok := resolveCastValue(v, resolve).(bool)
+		return boolean, ok
 	default:
 		return false, false
 	}
@@ -1482,7 +1492,8 @@ func resolveStringValue(v Value, resolve AttributeResolver) (string, bool) {
 	case v.StrVal != nil:
 		return string(*v.StrVal), true
 	case v.StrCast != nil:
-		return stringOperandValue(resolveValue(*v.StrCast, resolve))
+		text, ok := resolveCastValue(v, resolve).(string)
+		return text, ok
 	case v.Attribute != nil:
 		return stringOperandValue(resolve(v.Attribute))
 	case v.Field != nil:

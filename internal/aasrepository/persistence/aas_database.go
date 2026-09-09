@@ -680,15 +680,14 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	}
 	keys := submodelRef.Keys()
 	if len(keys) > 0 && keys[0].Value() != "" {
-		submodelIdentifier := keys[0].Value()
-		exists, existsErr := submodelReferenceExistsInAssetAdministrationShellInTransaction(
-			tx, aasDBID, submodelIdentifier, "AASREPO-NEWSMREFINAAS",
-		)
-		if existsErr != nil {
-			return existsErr
-		}
-		if exists {
-			return common.NewErrConflict("AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + submodelIdentifier + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'")
+		if err := s.ensureVisibleSubmodelReferenceCreateDoesNotExist(
+			ctx,
+			tx,
+			aasDBID,
+			aasIdentifier,
+			keys[0].Value(),
+		); err != nil {
+			return err
 		}
 	}
 	previousSnapshot, err := s.loadAASHistorySnapshotByDBIDBeforeMutationTx(ctx, tx, aasDBID)
@@ -712,6 +711,46 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 		}
 	}
 	return s.appendAddedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelRef)
+}
+
+func (s *AssetAdministrationShellDatabase) ensureVisibleSubmodelReferenceCreateDoesNotExist(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasDBID int64,
+	aasIdentifier string,
+	submodelIdentifier string,
+) error {
+	exists, err := submodelReferenceExistsInAssetAdministrationShellInTransaction(
+		tx,
+		aasDBID,
+		submodelIdentifier,
+		"AASREPO-NEWSMREFINAAS",
+	)
+	if err != nil {
+		return err
+	}
+
+	conflictMessage := "AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + submodelIdentifier + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'"
+	deniedMessage := "AASREPO-NEWSMREFINAAS-CHKDUP-ABACDENIED existing Submodel reference is not accessible under ABAC constraints"
+	return createprecheck.EnsureVisibleDuplicate(
+		ctx,
+		exists,
+		func(readCtx context.Context) error {
+			exists, visible, visibilityErr := s.checkAASVisibilityInTx(readCtx, tx, aasIdentifier)
+			if visibilityErr != nil {
+				return visibilityErr
+			}
+			if !exists {
+				return common.NewErrNotFound("AASREPO-NEWSMREFINAAS-CHKDUP-NOTFOUND existing AAS not found")
+			}
+			if !visible {
+				return common.NewErrDenied(deniedMessage)
+			}
+			return nil
+		},
+		conflictMessage,
+		deniedMessage,
+	)
 }
 
 func appendSubmodelReferenceInAssetAdministrationShellTx(ctx context.Context, tx *sql.Tx, aasDBID int64, submodelRef types.IReference) error {

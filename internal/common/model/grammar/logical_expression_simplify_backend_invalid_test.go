@@ -118,6 +118,51 @@ func TestSimplifyForBackendFilterClaimPathContainsRequiresStringArray(t *testing
 	}
 }
 
+func TestSimplifyForBackendFilterContainsRejectsInvalidClaimStringCast(t *testing.T) {
+	t.Parallel()
+
+	attribute := map[string]any{"CLAIM": "number"}
+	cast := Value{Attribute: attribute}
+	printedWrapper := StandardString("{3}")
+	stringItems := StringItems{
+		{StrCast: &cast},
+		{StrVal: &printedWrapper},
+	}
+	resolver := func(AttributeValue) any {
+		return ClaimValue{Value: 3}
+	}
+
+	tests := []struct {
+		name       string
+		expression LogicalExpression
+	}{
+		{
+			name:       "logical expression",
+			expression: LogicalExpression{Contains: stringItems},
+		},
+		{
+			name: "match expression",
+			expression: LogicalExpression{Match: []MatchExpression{{
+				Contains: stringItems,
+			}}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			simplified, decision := test.expression.SimplifyForBackendFilter(resolver)
+			if decision != SimplifyIndeterminate {
+				t.Fatalf("decision = %v, want %v", decision, SimplifyIndeterminate)
+			}
+			if !simplified.Indeterminate {
+				t.Fatalf("expected indeterminate expression, got %#v", simplified)
+			}
+		})
+	}
+}
+
 func TestSimplifyForBackendFilterThreeValuedTruthTables(t *testing.T) {
 	t.Parallel()
 

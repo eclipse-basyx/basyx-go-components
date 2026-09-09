@@ -1,5 +1,5 @@
 kind: changed
-body: Database schema `v1.1.18` requires PostgreSQL 16 or newer and installs a database helper for total regular-expression evaluation. Deployments using an older PostgreSQL version must upgrade before applying this schema patch.
+body: Database schema `v1.1.19` requires PostgreSQL 16 or newer and installs the `basyx_safe_regex_pattern` helper for total regular-expression evaluation. Deployments using an older PostgreSQL version must upgrade before applying this schema patch.
 time: 2026-09-07T14:36:00.000000000+02:00
 custom:
   Impact: High
