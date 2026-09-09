@@ -28,6 +28,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -56,6 +57,40 @@ func TestCallerConditionReadsSecurityHiddenFieldThroughGuard(t *testing.T) {
 	}
 	if strings.Contains(sql, "CASE") {
 		t.Fatalf("ordinary caller fields must remain unwrapped and indexable:\n%s", sql)
+	}
+}
+
+func TestNestedCallerOperandsRetainHiddenFieldVisibility(t *testing.T) {
+	t.Parallel()
+
+	for _, operand := range []string{
+		`{"$numCast":{"$year":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}}}`,
+		`{"$strCast":{"$month":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}}}`,
+		`{"$hexCast":{"$dayOfMonth":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}}}`,
+		`{"$boolCast":{"$numCast":{"$dayOfWeek":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}}}}`,
+		`{"$year":{"$dateTimeCast":{"$strCast":{"$field":"$aas#assetInformation.assetType"}}}}`,
+		`{"$year":{"$dateTimeCast":{"$strCast":{"$year":{"$dateTimeCast":{"$field":"$aas#assetInformation.assetType"}}}}}}`,
+	} {
+		t.Run(operand, func(t *testing.T) {
+			t.Parallel()
+			var value grammar.Value
+			if err := json.Unmarshal([]byte(operand), &value); err != nil {
+				t.Fatal(err)
+			}
+			literal := grammar.StandardString("2026")
+			condition := grammar.LogicalExpression{Eq: grammar.ComparisonItems{
+				{StrCast: &value}, {StrVal: &literal},
+			}}
+			ctx := WithQueryFilter(t.Context(), queryFilterHidingField("$aas#assetInformation.assetType"))
+			ctx = mustAuthorizedQueryContext(ctx, t, grammar.Query{Condition: &condition})
+			sql, args := buildAuthorizedAASSelectionSQLWithArgs(ctx, t)
+			if !containsSQLArgument(args, false) && !strings.Contains(strings.ToLower(sql), "false") {
+				t.Fatalf("nested caller operand lost its denying visibility guard:\n%s\n%v", sql, args)
+			}
+			if !strings.Contains(sql, `"asset_information"`) {
+				t.Fatalf("nested caller operand lost its asset-information dependency:\n%s", sql)
+			}
+		})
 	}
 }
 
@@ -691,7 +726,50 @@ func TestSemanticRouteParserRejectsUnknownAndTemplateShapes(t *testing.T) {
 
 func semanticRouteTestSession(t *testing.T, route string) *AuthorizationSession {
 	t.Helper()
+	return semanticRouteTestSessionWithBasePath(t, route, "")
+}
 
+func TestSemanticPolicyRoutesAgreeWithDirectAuthorizationUnderBasePath(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		basePath string
+		route    string
+		allowed  bool
+	}{
+		{"", "/submodels/*", true},
+		{"/sub", "/submodels/*", true},
+		{"/submodels", "/submodels/*", true},
+		{"/api", "/submodels/*", true},
+		{"/api/", "/submodels/*", true},
+		{"/api", "/api/submodels/*", false},
+		{"/sub", "/sub/submodels/*", false},
+		{"/sub", "/*", true},
+	} {
+		t.Run(test.basePath+test.route, func(t *testing.T) {
+			t.Parallel()
+			session := semanticRouteTestSessionWithBasePath(t, test.route, test.basePath)
+			path := joinBasePath(test.basePath, "/submodels/"+common.EncodeString("urn:sm:prefix"))
+			allowed, reason, _ := session.model.AuthorizeWithFilter(EvalInput{
+				Method: http.MethodGet, Path: path, Claims: Claims{"role": "viewer"},
+			})
+			if allowed != test.allowed {
+				t.Fatalf("direct authorization = %v (%s), want %v", allowed, reason, test.allowed)
+			}
+			for _, resource := range []SemanticResourceKind{SemanticResourceSM, SemanticResourceSME} {
+				covered := session.semanticView(resource, SemanticResourceAAS).Decision() != AccessViewDenied
+				if covered != test.allowed {
+					t.Errorf("semantic %s coverage = %v, want %v", resource, covered, test.allowed)
+				}
+			}
+		})
+	}
+}
+
+func semanticRouteTestSessionWithBasePath(t *testing.T, route string, basePath string) *AuthorizationSession {
+	t.Helper()
+
+	router := chi.NewRouter()
+	router.Get("/submodels/{submodelIdentifier}", func(http.ResponseWriter, *http.Request) {})
 	model, err := ParseAccessModel([]byte(`{
 		"AllAccessPermissionRules": {
 			"DEFATTRIBUTES": [{"name":"role","attributes":[{"CLAIM":"role"}]}],
@@ -700,7 +778,7 @@ func semanticRouteTestSession(t *testing.T, route string) *AuthorizationSession 
 			"DEFFORMULAS": [{"name":"viewer","formula":{"$eq":[{"$attribute":{"CLAIM":"role"}},{"$strVal":"viewer"}]}}],
 			"rules": [{"USEACL":"read","USEOBJECTS":["route"],"USEFORMULA":"viewer"}]
 		}
-	}`), chi.NewRouter(), "")
+	}`), router, basePath)
 	if err != nil {
 		t.Fatalf("parse semantic route policy: %v", err)
 	}
@@ -953,7 +1031,7 @@ func buildAuthorizedAASSelectionSQLWithArgs(ctx context.Context, t *testing.T) (
 	return sql, args
 }
 
-func containsSQLArgument(args []interface{}, expected string) bool {
+func containsSQLArgument(args []interface{}, expected any) bool {
 	for _, argument := range args {
 		if argument == expected {
 			return true

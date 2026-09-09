@@ -1677,21 +1677,44 @@ func descriptorIDForBaseAlias(base string) (exp.IdentifierExpression, error) {
 
 func toSQLResolvedFieldOrValue(
 	operand *Value,
-	explicitCastType string,
 	position string,
 	collector *ResolvedFieldPathCollector,
 ) (interface{}, []ResolvedFieldPath, error) {
-	fieldOperand, _ := extractFieldOperandAndCast(operand)
-	datePart := ""
-	if fieldOperand == nil {
-		fieldOperand, datePart = extractDatePartFieldOperand(operand)
+	if operand == nil {
+		return nil, nil, fmt.Errorf("GRAMMAR-SQLOPERAND-NIL: %s operand is nil", position)
 	}
-	if fieldOperand == nil || fieldOperand.Field == nil {
-		val, err := toSQLComponent(operand, position)
-		return val, nil, err
+	if operand.Attribute != nil {
+		return nil, nil, fmt.Errorf("GRAMMAR-SQLOPERAND-ATTRIBUTE: attribute operands are not supported in SQL evaluation")
 	}
-	fieldStr := string(*fieldOperand.Field)
-	f := ModelStringPattern(fieldStr)
+	switch {
+	case operand.StrCast != nil:
+		return castResolvedOperandToSQL(operand.StrCast, position, "text", collector)
+	case operand.NumCast != nil:
+		return castResolvedOperandToSQL(operand.NumCast, position, "double precision", collector)
+	case operand.BoolCast != nil:
+		return castResolvedOperandToSQL(operand.BoolCast, position, "boolean", collector)
+	case operand.TimeCast != nil:
+		return castResolvedOperandToSQL(operand.TimeCast, position, "time", collector)
+	case operand.DateTimeCast != nil:
+		return castResolvedOperandToSQL(operand.DateTimeCast, position, "timestamptz", collector)
+	case operand.HexCast != nil:
+		return castResolvedOperandToSQL(operand.HexCast, position, "text", collector)
+	case operand.Year != nil:
+		return datePartResolvedOperandToSQL(operand.Year, position, "YEAR", collector)
+	case operand.Month != nil:
+		return datePartResolvedOperandToSQL(operand.Month, position, "MONTH", collector)
+	case operand.DayOfMonth != nil:
+		return datePartResolvedOperandToSQL(operand.DayOfMonth, position, "DAY", collector)
+	case operand.DayOfWeek != nil:
+		return datePartResolvedOperandToSQL(operand.DayOfWeek, position, "DOW", collector)
+	case operand.Field != nil:
+		return decoratedFieldToSQL(*operand.Field, collector)
+	default:
+		return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil, nil
+	}
+}
+
+func decoratedFieldToSQL(f ModelStringPattern, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
 	resolved, err := ResolveScalarFieldToSQL(&f)
 	if err != nil {
 		return nil, nil, err
@@ -1716,38 +1739,26 @@ func toSQLResolvedFieldOrValue(
 		}
 		resolvedPaths = append(resolvedPaths, decoration.AdditionalResolved...)
 	}
-	if datePart != "" {
-		return goqu.L("EXTRACT("+datePart+" FROM ?)", safeCastSQLValue(sqlValue, "timestamptz")), resolvedPaths, nil
-	}
-	if explicitCastType != "" {
-		return safeCastSQLValue(sqlValue, explicitCastType), resolvedPaths, nil
-	}
 	return sqlValue, resolvedPaths, nil
 }
 
-func extractDatePartFieldOperand(operand *Value) (*Value, string) {
-	if operand == nil {
-		return nil, ""
+func castResolvedOperandToSQL(inner *Value, position, targetType string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
 	}
-	parts := []struct {
-		value *Value
-		part  string
-	}{
-		{value: operand.Year, part: "YEAR"},
-		{value: operand.Month, part: "MONTH"},
-		{value: operand.DayOfMonth, part: "DAY"},
-		{value: operand.DayOfWeek, part: "DOW"},
+	return safeCastSQLValue(sqlValue, targetType), resolved, nil
+}
+
+func datePartResolvedOperandToSQL(inner *Value, position, part string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
 	}
-	for _, candidate := range parts {
-		if candidate.value == nil {
-			continue
-		}
-		field, _ := extractFieldOperandAndCast(candidate.value)
-		if field != nil {
-			return field, candidate.part
-		}
+	if inner.DateTimeCast == nil {
+		sqlValue = safeCastSQLValue(sqlValue, "timestamptz")
 	}
-	return nil, ""
+	return goqu.L("EXTRACT("+part+" FROM ?)", sqlValue), resolved, nil
 }
 
 func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
@@ -2264,39 +2275,15 @@ func handleBinaryOperationWithoutApply(
 	normalizeSemanticShorthand(leftOperand)
 	normalizeSemanticShorthand(rightOperand)
 
-	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
-	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
-
-	// Field-to-field operations are forbidden by the query language.
-	// We can safely assume operations have either 0 or 1 field operands.
-	if leftField != nil && rightField != nil {
+	if valueContainsField(*leftOperand) && valueContainsField(*rightOperand) {
 		return nil, nil, fieldToFieldErr
 	}
 
-	// Fast-path: both are values (no FieldIdentifiers involved).
-	if leftField == nil && rightField == nil {
-		leftSQL, err := toSQLComponent(leftOperand, "left")
-		if err != nil {
-			return nil, nil, err
-		}
-		rightSQL, err := toSQLComponent(rightOperand, "right")
-		if err != nil {
-			return nil, nil, err
-		}
-		if validate != nil {
-			if err := validate(leftOperand, rightOperand); err != nil {
-				return nil, nil, err
-			}
-		}
-		expr, err := build(leftSQL, rightSQL, operation)
-		return expr, nil, err
-	}
-
-	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left", collector)
+	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, "left", collector)
 	if err != nil {
 		return nil, nil, err
 	}
-	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right", collector)
+	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, "right", collector)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2324,65 +2311,11 @@ func handleBinaryOperationWithCollector(
 	build func(left interface{}, right interface{}, operation string) (exp.Expression, error),
 	validate binaryOperationValidator,
 ) (exp.Expression, []ResolvedFieldPath, error) {
-	if leftOperand == nil || rightOperand == nil {
-		return nil, nil, fmt.Errorf("binary operation operands must not be nil")
-	}
-
-	leftOperand = cloneValueForSQL(leftOperand)
-	rightOperand = cloneValueForSQL(rightOperand)
-	normalizeSemanticShorthand(leftOperand)
-	normalizeSemanticShorthand(rightOperand)
-
-	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
-	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
-
-	// Field-to-field operations are forbidden by the query language.
-	// We can safely assume operations have either 0 or 1 field operands.
-	if leftField != nil && rightField != nil {
-		return nil, nil, fieldToFieldErr
-	}
-
-	// Fast-path: both are values (no FieldIdentifiers involved).
-	if leftField == nil && rightField == nil {
-		leftSQL, err := toSQLComponent(leftOperand, "left")
-		if err != nil {
-			return nil, nil, err
-		}
-		rightSQL, err := toSQLComponent(rightOperand, "right")
-		if err != nil {
-			return nil, nil, err
-		}
-		if validate != nil {
-			if err := validate(leftOperand, rightOperand); err != nil {
-				return nil, nil, err
-			}
-		}
-		expr, err := build(leftSQL, rightSQL, operation)
-		return expr, nil, err
-	}
-
-	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left", collector)
+	expression, resolved, err := handleBinaryOperationWithoutApply(leftOperand, rightOperand, operation, collector, fieldToFieldErr, build, validate)
 	if err != nil {
 		return nil, nil, err
 	}
-	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right", collector)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if validate != nil {
-		if err := validate(leftOperand, rightOperand); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	opExpr, err := build(leftSQL, rightSQL, operation)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
-	return applyCollectorToResolvedExpression(opExpr, resolved, collector)
+	return applyCollectorToResolvedExpression(expression, resolved, collector)
 }
 
 func applyCollectorToResolvedExpression(
@@ -2431,8 +2364,7 @@ func evaluateStandaloneBoolCast(
 	collector *ResolvedFieldPathCollector,
 ) (exp.Expression, []ResolvedFieldPath, error) {
 	boolOperand := Value{BoolCast: operand}
-	_, castType := extractFieldOperandAndCast(&boolOperand)
-	sqlValue, resolved, err := toSQLResolvedFieldOrValue(&boolOperand, castType, "$boolCast", collector)
+	sqlValue, resolved, err := toSQLResolvedFieldOrValue(&boolOperand, "$boolCast", collector)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2900,12 +2832,17 @@ func cloneValueForSQL(value *Value) *Value {
 
 // normalizeSemanticShorthand expands known shorthand fields to their explicit keys[0].value form.
 func normalizeSemanticShorthand(operand *Value) {
-	inner, _ := extractFieldOperandAndCast(operand)
-	if inner == nil || inner.Field == nil {
+	if operand == nil {
+		return
+	}
+	for _, child := range valueChildren(*operand) {
+		normalizeSemanticShorthand(child)
+	}
+	if operand.Field == nil {
 		return
 	}
 
-	field := string(*inner.Field)
+	field := string(*operand.Field)
 
 	parts := strings.SplitN(field, "#", 2)
 	if len(parts) != 2 {
@@ -2922,7 +2859,7 @@ func normalizeSemanticShorthand(operand *Value) {
 
 	if strings.HasSuffix(suffix, "semanticId") || strings.HasSuffix(suffix, "externalSubjectId") {
 		suffix += ".keys[0].value"
-		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		*operand.Field = ModelStringPattern(prefix + "#" + suffix)
 		return
 	}
 
@@ -2932,69 +2869,13 @@ func normalizeSemanticShorthand(operand *Value) {
 	}
 	if lastSegment == "supplementalSemanticIds" {
 		suffix += "[].keys[0].value"
-		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		*operand.Field = ModelStringPattern(prefix + "#" + suffix)
 		return
 	}
 	if strings.HasPrefix(lastSegment, "supplementalSemanticIds[") && strings.HasSuffix(lastSegment, "]") {
 		suffix += ".keys[0].value"
-		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		*operand.Field = ModelStringPattern(prefix + "#" + suffix)
 	}
-}
-
-func toSQLComponent(operand *Value, position string) (interface{}, error) {
-	if operand == nil {
-		return nil, fmt.Errorf("%s operand is nil", position)
-	}
-	if operand.Attribute != nil {
-		return nil, fmt.Errorf("attribute operands are not supported in SQL evaluation")
-	}
-
-	// Handle casts first so they take precedence over any accidentally set literal/field.
-	if operand.StrCast != nil {
-		return castOperandToSQLType(operand.StrCast, position, "text")
-	}
-	if operand.NumCast != nil {
-		return castOperandToSQLType(operand.NumCast, position, "double precision")
-	}
-	if operand.BoolCast != nil {
-		return castOperandToSQLType(operand.BoolCast, position, "boolean")
-	}
-	if operand.TimeCast != nil {
-		return castOperandToSQLType(operand.TimeCast, position, "time")
-	}
-	if operand.DateTimeCast != nil {
-		return castOperandToSQLType(operand.DateTimeCast, position, "timestamptz")
-	}
-	if operand.HexCast != nil {
-		return castOperandToSQLType(operand.HexCast, position, "text")
-	}
-	if operand.Year != nil {
-		return datePartOperandToSQL(operand.Year, position, "YEAR")
-	}
-	if operand.Month != nil {
-		return datePartOperandToSQL(operand.Month, position, "MONTH")
-	}
-	if operand.DayOfMonth != nil {
-		return datePartOperandToSQL(operand.DayOfMonth, position, "DAY")
-	}
-	if operand.DayOfWeek != nil {
-		return datePartOperandToSQL(operand.DayOfWeek, position, "DOW")
-	}
-
-	if operand.IsField() {
-		if operand.Field == nil {
-			return nil, fmt.Errorf("%s operand is not a valid field", position)
-		}
-		fieldName := string(*operand.Field)
-		f := ModelStringPattern(fieldName)
-		resolved, err := ResolveScalarFieldToSQL(&f)
-		if err != nil {
-			return nil, err
-		}
-		return columnToExpression(resolved.Column), nil
-	}
-
-	return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil
 }
 
 // buildComparisonExpression is a helper function to build comparison expressions
@@ -3045,23 +2926,6 @@ func totalCastSQLValue(sqlValue interface{}, targetType string, validationType s
 		validationType,
 		sqlValue,
 	)
-}
-
-// castOperandToSQLType recursively converts an operand to SQL and applies a PostgreSQL cast.
-func castOperandToSQLType(inner *Value, position string, targetType string) (exp.Expression, error) {
-	sqlValue, err := toSQLComponent(inner, position)
-	if err != nil {
-		return nil, err
-	}
-	return safeCastSQLValue(sqlValue, targetType), nil
-}
-
-func datePartOperandToSQL(inner *Value, position string, part string) (exp.Expression, error) {
-	sqlValue, err := toSQLComponent(inner, position)
-	if err != nil {
-		return nil, err
-	}
-	return goqu.L("EXTRACT("+part+" FROM ?)", safeCastSQLValue(sqlValue, "timestamptz")), nil
 }
 
 // normalizeLiteralForSQL converts grammar literals to safe SQL encodable values.

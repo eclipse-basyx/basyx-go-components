@@ -8,6 +8,34 @@ see [Query Language Examples](examples.md).
 For the planned cross-resource authorization model for AAS hierarchy queries,
 see [AAS Hierarchy Query Authorization Plan](aas_hierarchy_authorization/README.md).
 
+## Policy dialect and deployment compatibility
+
+This implementation uses a BaSyx policy dialect; it does not claim complete
+IDTA Part 4 conformance. `CLAIMPATH` is an extension. Claim casts retain the
+JWT JSON types described below, and REFERABLE grants cover the target and its
+descendants at SME segment boundaries. Audit existing policies and actual token
+types when upgrading, including rights inherited by descendants.
+
+The current evaluator preserves its existing indeterminate semantics:
+`OR(true, indeterminate)` is true, and `NOT(AND(false, indeterminate))` is true.
+This differs from the whole-expression invalidity rule in
+[IDTA Part 4 v3.1](https://industrialdigitaltwin.io/aas-specifications/IDTA-01004/v3.1/access-rule-model.html#_formulas_and_logical_expressions).
+Full conformance requires a separate evaluator change and migration decision;
+the query-visibility fixes do not establish it.
+
+Policy `ROUTE` literals are relative to `server.contextPath`. With context path
+`/sub`, `/submodels/*` covers direct requests under `/sub/submodels/*` and the
+same Submodel scope in queries. Do not include the context path in a policy
+literal: `/api/submodels/*` with context path `/api` means
+`/api/api/submodels/*`, and does not grant the standard Submodel query scope.
+
+Caller expressions resolve every field through its visibility checks, including
+fields inside nested casts and date-part operators. Hidden fields cannot select
+returned resources through these operators. Test upgrades with existing policies
+and representative data; correctness tests do not establish throughput or latency
+equivalence. Measure item reads, filtered queries, large hierarchies, and restricted
+value updates with ABAC enabled and disabled before setting deployment capacity.
+
 ## Quick mental model (no background required)
 
 - A query is a tree of logical operators (AND/OR/NOT) and comparisons (EQ/GT/etc).

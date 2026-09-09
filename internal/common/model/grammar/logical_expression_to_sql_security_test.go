@@ -26,6 +26,7 @@
 package grammar
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -104,6 +105,74 @@ func TestRegexUsesSafeDatabaseFunctionForFieldDerivedPattern(t *testing.T) {
 	sql := renderLogicalExpressionSQL(t, expression)
 	if !strings.Contains(sql, " ~ basyx_safe_regex_pattern(") {
 		t.Fatalf("field-derived regular expression is not safely validated at the regex operand:\n%s", sql)
+	}
+}
+
+func TestNestedSQLOperandsAlwaysUseFieldDecorator(t *testing.T) {
+	t.Parallel()
+	wrappers := []struct {
+		name string
+		wrap func(*Value) Value
+	}{
+		{"string", func(v *Value) Value { return Value{StrCast: v} }},
+		{"number", func(v *Value) Value { return Value{NumCast: v} }},
+		{"boolean", func(v *Value) Value { return Value{BoolCast: v} }},
+		{"datetime", func(v *Value) Value { return Value{DateTimeCast: v} }},
+		{"time", func(v *Value) Value { return Value{TimeCast: v} }},
+		{"hex", func(v *Value) Value { return Value{HexCast: v} }},
+		{"year", func(v *Value) Value { return Value{Year: v} }},
+		{"month", func(v *Value) Value { return Value{Month: v} }},
+		{"day", func(v *Value) Value { return Value{DayOfMonth: v} }},
+		{"weekday", func(v *Value) Value { return Value{DayOfWeek: v} }},
+	}
+	for _, outer := range wrappers {
+		for _, inner := range wrappers {
+			t.Run(outer.name+"/"+inner.name, func(t *testing.T) {
+				t.Parallel()
+				child := inner.wrap(fieldValue("$aas#assetInformation.assetType"))
+				operand := outer.wrap(&child)
+				assertNestedSQLOperandDecoration(t, &operand)
+			})
+		}
+	}
+}
+
+func assertNestedSQLOperandDecoration(t *testing.T, operand *Value) {
+	t.Helper()
+	collector, err := NewResolvedFieldPathCollectorForRoot(CollectorRootAAS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	denied := collector.WithFieldValueDecorator(func(SemanticFieldAccess) (FieldValueDecoration, error) {
+		return FieldValueDecoration{SQLValue: goqu.L("NULL")}, nil
+	})
+	value, resolved, err := toSQLResolvedFieldOrValue(operand, "test", denied)
+	if err != nil || len(resolved) != 0 {
+		t.Fatalf("denied field retained dependencies: %v, %v", resolved, err)
+	}
+	sql, _, err := goqu.Dialect("postgres").From("aas").Select(value).ToSQL()
+	if err != nil || !strings.Contains(sql, "NULL") || strings.Contains(sql, "asset_type") {
+		t.Fatalf("denied nested field did not become NULL: %s, %v", sql, err)
+	}
+	_, resolved, err = toSQLResolvedFieldOrValue(operand, "test", collector)
+	if err != nil || len(resolved) != 1 {
+		t.Fatalf("visible nested field lost its join dependency: %v, %v", resolved, err)
+	}
+}
+
+func TestNestedSQLOperandPropagatesAuthorizationError(t *testing.T) {
+	t.Parallel()
+	collector, err := NewResolvedFieldPathCollectorForRoot(CollectorRootAAS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizationError := errors.New("GRAMMAR-TEST-AUTHORIZATION")
+	collector = collector.WithFieldValueDecorator(func(SemanticFieldAccess) (FieldValueDecoration, error) {
+		return FieldValueDecoration{}, authorizationError
+	})
+	operand := Value{NumCast: &Value{Year: &Value{DateTimeCast: fieldValue("$aas#assetInformation.assetType")}}}
+	if _, _, err := toSQLResolvedFieldOrValue(&operand, "test", collector); !errors.Is(err, authorizationError) {
+		t.Fatalf("nested operand suppressed authorization error: %v", err)
 	}
 }
 

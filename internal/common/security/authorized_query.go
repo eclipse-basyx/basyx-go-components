@@ -415,7 +415,7 @@ func semanticSubmodelRouteCoverage(
 }
 
 func parseSemanticSubmodelRoute(route string, basePath string) (semanticRouteScope, bool) {
-	normalized := stripBasePath(basePath, normalize(route))
+	normalized := stripBasePath(basePath, joinBasePath(basePath, normalize(route)))
 	if normalized == "*" || normalized == "/*" || normalized == "/query/submodels" {
 		return semanticRouteScope{
 			allAASIDs:           true,
