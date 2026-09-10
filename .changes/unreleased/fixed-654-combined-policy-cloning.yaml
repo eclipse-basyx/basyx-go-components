@@ -1,7 +1,0 @@
-kind: fixed
-body: Compiled query policies are copied structurally so many individually valid access rules retain their grants when combined. External query and policy-expression limits remain enforced.
-time: 2026-09-09T17:00:00+02:00
-custom:
-  Impact: High
-  PullRequest: 654
-  SecurityImpact: Prevents valid combined allow rules from silently becoming deny-all while preserving fragment scope, indeterminate conditions, and request policy isolation.

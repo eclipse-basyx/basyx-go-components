@@ -1,7 +1,0 @@
-kind: fixed
-body: Query conditions now evaluate fields and related resources through their effective semantic access view, including negated conditions, nested `$match`, response filters, list selectors, casts, and regular expressions. AAS object grants no longer authorize nested Submodel data, Fragment objects constrain exact SME fields, and list selectors are emitted only once. Incompatible cast values and invalid regular expressions return no match without hiding PostgreSQL's regex operator from index planning, and Basic Discovery global asset identifier lookups use the Basic Discovery semantic field.
-time: 2026-09-07T14:37:00.000000000+02:00
-custom:
-  Impact: Low
-  PullRequest: 654
-  SecurityImpact: Caller and policy expressions now use consistent per-resource authorization and query-evaluation semantics. Nested AAS Environment Submodel routes require dedicated Submodel or Submodel Element grants.
