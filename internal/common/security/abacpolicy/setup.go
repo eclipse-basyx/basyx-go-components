@@ -98,7 +98,7 @@ func SetupSecurityWithABACRepository(
 	}
 	if common.ResourceBoundEnabled(cfg) {
 		switch serviceType {
-		case "aasenvironmentservice", "aasrepositoryservice", "submodelrepositoryservice":
+		case "aasenvironmentservice", "aasrepositoryservice", "submodelrepositoryservice", "aasregistryservice", "submodelregistryservice", "discoveryservice", "conceptdescriptionrepositoryservice":
 		default:
 			return nil, fmt.Errorf("REBAC-SETUP-SERVICE resource-bound mode is unsupported for %s", serviceType)
 		}

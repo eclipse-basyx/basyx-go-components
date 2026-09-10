@@ -1,0 +1,88 @@
+{
+  "ResourceBoundAccessRuleModels": [
+    {
+      "RESOURCE": { "ROUTE": "/shells" },
+      "rules": [
+        {
+          "ACL": { "ATTRIBUTES": [{ "CLAIM": "iss" }, { "CLAIM": "sub" }], "RIGHTS": ["ALL"], "ACCESS": "ALLOW" },
+          "FORMULA": {
+            "$and": [
+              { "$eq": [{ "$attribute": { "CLAIM": "iss" } }, { "$strVal": "http://keycloak.localhost:8180/realms/basyx" }] },
+              { "$eq": [{ "$attribute": { "CLAIM": "sub" } }, { "$strVal": "32103f0d-1d0e-4d94-b720-bcd22e1c7709" }] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "RESOURCE": { "ROUTE": "/submodels" },
+      "rules": [
+        {
+          "ACL": { "ATTRIBUTES": [{ "CLAIM": "iss" }, { "CLAIM": "sub" }], "RIGHTS": ["ALL"], "ACCESS": "ALLOW" },
+          "FORMULA": {
+            "$and": [
+              { "$eq": [{ "$attribute": { "CLAIM": "iss" } }, { "$strVal": "http://keycloak.localhost:8180/realms/basyx" }] },
+              { "$eq": [{ "$attribute": { "CLAIM": "sub" } }, { "$strVal": "32103f0d-1d0e-4d94-b720-bcd22e1c7709" }] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "RESOURCE": { "ROUTE": "/shell-descriptors" },
+      "rules": [
+        {
+          "ACL": { "ATTRIBUTES": [{ "CLAIM": "iss" }, { "CLAIM": "sub" }], "RIGHTS": ["ALL"], "ACCESS": "ALLOW" },
+          "FORMULA": {
+            "$and": [
+              { "$eq": [{ "$attribute": { "CLAIM": "iss" } }, { "$strVal": "http://keycloak.localhost:8180/realms/basyx" }] },
+              { "$eq": [{ "$attribute": { "CLAIM": "sub" } }, { "$strVal": "32103f0d-1d0e-4d94-b720-bcd22e1c7709" }] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "RESOURCE": { "ROUTE": "/submodel-descriptors" },
+      "rules": [
+        {
+          "ACL": { "ATTRIBUTES": [{ "CLAIM": "iss" }, { "CLAIM": "sub" }], "RIGHTS": ["ALL"], "ACCESS": "ALLOW" },
+          "FORMULA": {
+            "$and": [
+              { "$eq": [{ "$attribute": { "CLAIM": "iss" } }, { "$strVal": "http://keycloak.localhost:8180/realms/basyx" }] },
+              { "$eq": [{ "$attribute": { "CLAIM": "sub" } }, { "$strVal": "32103f0d-1d0e-4d94-b720-bcd22e1c7709" }] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "RESOURCE": { "ROUTE": "/concept-descriptions" },
+      "rules": [
+        {
+          "ACL": { "ATTRIBUTES": [{ "CLAIM": "iss" }, { "CLAIM": "sub" }], "RIGHTS": ["ALL"], "ACCESS": "ALLOW" },
+          "FORMULA": {
+            "$and": [
+              { "$eq": [{ "$attribute": { "CLAIM": "iss" } }, { "$strVal": "http://keycloak.localhost:8180/realms/basyx" }] },
+              { "$eq": [{ "$attribute": { "CLAIM": "sub" } }, { "$strVal": "32103f0d-1d0e-4d94-b720-bcd22e1c7709" }] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "RESOURCE": { "ROUTE": "/lookup/shells" },
+      "rules": [
+        {
+          "ACL": { "ATTRIBUTES": [{ "CLAIM": "iss" }, { "CLAIM": "sub" }], "RIGHTS": ["ALL"], "ACCESS": "ALLOW" },
+          "FORMULA": {
+            "$and": [
+              { "$eq": [{ "$attribute": { "CLAIM": "iss" } }, { "$strVal": "http://keycloak.localhost:8180/realms/basyx" }] },
+              { "$eq": [{ "$attribute": { "CLAIM": "sub" } }, { "$strVal": "32103f0d-1d0e-4d94-b720-bcd22e1c7709" }] }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

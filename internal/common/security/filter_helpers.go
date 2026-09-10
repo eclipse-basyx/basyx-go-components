@@ -422,12 +422,16 @@ func buildFragmentMaskCondition(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (exp.Expression, bool, error) {
-	if state := boundRequestFromContext(ctx); state != nil && GetQueryFilter(ctx) != nil {
+	queryFilter := GetQueryFilter(ctx)
+	if state := boundRequestFromContext(ctx); state != nil && queryFilter != nil {
+		if len(queryFilter.FilterPredicateEntriesFor(fragment)) == 0 {
+			return nil, false, nil
+		}
 		predicate, err := state.expression(collector, fragment)
 		return predicate, true, err
 	}
 
-	p := GetQueryFilter(ctx)
+	p := queryFilter
 	if p == nil {
 		return nil, false, nil
 	}

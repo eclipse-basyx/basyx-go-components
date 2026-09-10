@@ -65,3 +65,30 @@ func TestSMECollectorCorrelatesExistsToSubmodelElementAlias(t *testing.T) {
 		t.Fatalf("expected submodel_element correlation in SQL: %s", sql)
 	}
 }
+
+func TestAuthorizationResourceSupportsEveryResourceBoundComponentRoot(t *testing.T) {
+	tests := []struct {
+		root CollectorRoot
+		kind string
+	}{
+		{CollectorRootAASDesc, "aas_descriptor"},
+		{CollectorRootSMDesc, "submodel_descriptor"},
+		{CollectorRootCD, "concept_description"},
+		{CollectorRootBD, "aas_identifier"},
+	}
+	for _, test := range tests {
+		t.Run(string(test.root), func(t *testing.T) {
+			collector, err := NewResolvedFieldPathCollectorForRoot(test.root)
+			if err != nil {
+				t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+			}
+			kind, key, err := collector.AuthorizationResource()
+			if err != nil {
+				t.Fatalf("AuthorizationResource returned error: %v", err)
+			}
+			if kind != test.kind || key == nil {
+				t.Fatalf("got kind %q and key %#v, want %q and a key", kind, key, test.kind)
+			}
+		})
+	}
+}

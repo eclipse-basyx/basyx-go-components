@@ -26,6 +26,8 @@
 package common
 
 import (
+	"encoding/json"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v3"
@@ -46,6 +48,9 @@ func TestResourceBoundConfigurationIsOptIn(t *testing.T) {
 	require.True(t, ResourceBoundEnabled(cfg))
 	cfg.Security.AuthorizationMode = "invalid"
 	require.Error(t, validateResourceBoundConfig(cfg))
+	cfg.Security.AuthorizationMode = AuthorizationResourceBoundFirst
+	cfg.ReBAC.BootstrapOwner.Subject = " \t"
+	require.ErrorContains(t, validateResourceBoundConfig(cfg), "CONFIG-REBAC-OWNER")
 }
 
 func TestResourceBoundEnvironmentOverrides(t *testing.T) {
@@ -63,6 +68,7 @@ func TestResourceBoundEnvironmentOverrides(t *testing.T) {
 func TestResourceBoundOpenAPIMatchesAvailableResources(t *testing.T) {
 	input := []byte(`openapi: 3.0.3
 paths:
+  /shells/{aasIdentifier}: {}
   /submodels: {}
   /submodels/{submodelIdentifier}: {}
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}: {}
@@ -75,10 +81,29 @@ paths:
 	require.Contains(t, paths, "/submodels/$access/policy")
 	require.Contains(t, paths, "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$access/grants/{grantId}")
 	require.NotContains(t, paths, "/shells/$access")
+	capability := paths["/shells/{aasIdentifier}/$access/capabilities"].(map[string]any)["get"].(map[string]any)
+	capabilityJSON := string(mustJSON(t, capability))
+	require.Contains(t, capabilityJSON, "AASAccessCapabilities")
+	require.Contains(t, capabilityJSON, "no-store")
+	require.NotContains(t, capabilityJSON, "ETag")
+	require.NotContains(t, capabilityJSON, "If-Match")
 	operation := paths["/submodels/{submodelIdentifier}/$access/owners"].(map[string]any)["put"].(map[string]any)
 	require.Contains(t, operation["responses"], "428")
 	require.Contains(t, operation["responses"], "412")
+	require.Contains(t, operation["responses"], "413")
+	require.Contains(t, operation["responses"], "405")
 	require.Contains(t, string(output), "If-Match")
+	grantOperation := paths["/submodels/{submodelIdentifier}/$access/grants"].(map[string]any)["post"].(map[string]any)
+	require.Contains(t, string(mustJSON(t, grantOperation)), "Location")
+	require.Contains(t, string(output), "uniqueItems: true")
+	require.Contains(t, string(output), `pattern: .*\S.*`)
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	data, err := json.Marshal(value)
+	require.NoError(t, err)
+	return data
 }
 
 func TestResourceBoundCORSAllowsAccessPreconditions(t *testing.T) {

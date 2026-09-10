@@ -71,7 +71,7 @@ func boundActor(ctx context.Context) (common.AccessPrincipal, error) {
 	claims := ClaimsFromContext(ctx)
 	issuer, _ := claims.GetString("iss")
 	subject, _ := claims.GetString("sub")
-	if issuer == "" || subject == "" {
+	if strings.TrimSpace(issuer) == "" || strings.TrimSpace(subject) == "" {
 		return common.AccessPrincipal{}, boundError(http.StatusUnauthorized, "IDENTITY authenticated issuer and subject required")
 	}
 	return common.AccessPrincipal{Issuer: issuer, Subject: subject}, nil
@@ -94,7 +94,14 @@ func (repo *resourceBoundRepository) serveAccess(w http.ResponseWriter, r *http.
 	if tag != "" {
 		w.Header().Set("ETag", tag)
 	}
-	w.Header().Set("Content-Type", "application/json")
+	if status == http.StatusCreated {
+		if grant, ok := value.(boundGrant); ok {
+			w.Header().Set("Location", strings.TrimRight(r.URL.Path, "/")+"/"+grant.ID)
+		}
+	}
+	if value != nil {
+		w.Header().Set("Content-Type", "application/json")
+	}
 	w.WriteHeader(status)
 	if value != nil {
 		if err = json.NewEncoder(w).Encode(value); err != nil {
@@ -357,10 +364,27 @@ func validateBoundPrincipals(principals []common.AccessPrincipal, requireOwner b
 	}
 	seen := map[common.AccessPrincipal]bool{}
 	for _, principal := range principals {
-		if principal.Issuer == "" || principal.Subject == "" || seen[principal] {
-			return boundError(http.StatusBadRequest, "PRINCIPALS empty or duplicate principal")
+		if strings.TrimSpace(principal.Issuer) == "" || strings.TrimSpace(principal.Subject) == "" {
+			return boundError(http.StatusBadRequest, "PRINCIPALS issuer and subject must contain non-whitespace characters")
+		}
+		if seen[principal] {
+			return boundError(http.StatusBadRequest, "PRINCIPALS duplicate principal")
 		}
 		seen[principal] = true
+	}
+	return nil
+}
+
+func validateBoundRights(rights []grammar.RightsEnum) error {
+	if len(rights) == 0 {
+		return boundError(http.StatusBadRequest, "RIGHTS at least one right required")
+	}
+	seen := make(map[grammar.RightsEnum]bool, len(rights))
+	for _, right := range rights {
+		if seen[right] {
+			return boundError(http.StatusBadRequest, "RIGHTS duplicate right "+string(right))
+		}
+		seen[right] = true
 	}
 	return nil
 }
@@ -403,8 +427,8 @@ func mutateBoundGrant(r *http.Request, tx *sql.Tx, access *boundAccess, id strin
 	if err := validateBoundPrincipals([]common.AccessPrincipal{input.Principal}, false); err != nil {
 		return 0, nil, err
 	}
-	if len(input.Rights) == 0 {
-		return 0, nil, boundError(http.StatusBadRequest, "RIGHTS at least one right required")
+	if err := validateBoundRights(input.Rights); err != nil {
+		return 0, nil, err
 	}
 	status := http.StatusOK
 	if id == "" {

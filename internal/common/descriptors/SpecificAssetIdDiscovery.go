@@ -29,6 +29,7 @@ package descriptors
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -247,22 +248,28 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 	specificAssetIDs []types.ISpecificAssetID,
 ) error {
 	return WithTx(ctx, db, func(tx *sql.Tx) error {
-		aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
-		if err != nil {
-			return err
-		}
-
-		if _, err := tx.ExecContext(ctx, `DELETE FROM specific_asset_id WHERE aasRef = $1`, aasRef); err != nil {
-			return err
-		}
-		return common.InsertSpecificAssetIDs(
-			tx,
-			sql.NullInt64{},
-			sql.NullInt64{},
-			sql.NullInt64{Int64: aasRef, Valid: true},
-			specificAssetIDs,
-		)
+		return ReplaceSpecificAssetIDsByAASIdentifierTx(ctx, tx, aasID, specificAssetIDs)
 	})
+}
+
+// ReplaceSpecificAssetIDsByAASIdentifierTx replaces discovery links in the provided transaction.
+func ReplaceSpecificAssetIDsByAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
+	aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
+	if err != nil {
+		return fmt.Errorf("DESCRIPTOR-REPLACESAID-ENSUREAAS %w", err)
+	}
+	d := goqu.Dialect(common.Dialect)
+	query, args, err := d.Delete(common.TblSpecificAssetID).Where(goqu.C(common.ColAASRef).Eq(aasRef)).Prepared(true).ToSQL()
+	if err != nil {
+		return fmt.Errorf("DESCRIPTOR-REPLACESAID-BUILDDELETE %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("DESCRIPTOR-REPLACESAID-EXECDELETE %w", err)
+	}
+	if err = common.InsertSpecificAssetIDs(tx, sql.NullInt64{}, sql.NullInt64{}, sql.NullInt64{Int64: aasRef, Valid: true}, specificAssetIDs); err != nil {
+		return fmt.Errorf("DESCRIPTOR-REPLACESAID-INSERT %w", err)
+	}
+	return nil
 }
 
 // AddSpecificAssetIDsByAASIdentifier upserts aas_identifier and adds only
@@ -274,37 +281,34 @@ func AddSpecificAssetIDsByAASIdentifier(
 	specificAssetIDs []types.ISpecificAssetID,
 ) error {
 	return WithTx(ctx, db, func(tx *sql.Tx) error {
-		if len(specificAssetIDs) == 0 {
-			return nil
-		}
-
-		aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
-		if err != nil {
-			return err
-		}
-
-		descriptorID := sql.NullInt64{}
-		if !discoveryOnlySpecificAssetIDsFromContext(ctx) {
-			descriptorID, err = descriptorIDForAASIDTx(ctx, tx, aasID)
-			if err != nil {
-				return err
-			}
-		}
-
-		positionStart, err := nextSpecificAssetIDPositionByAASRefTx(ctx, tx, aasRef)
-		if err != nil {
-			return err
-		}
-
-		return common.InsertSpecificAssetIDsWithPositionStart(
-			tx,
-			descriptorID,
-			sql.NullInt64{},
-			sql.NullInt64{Int64: aasRef, Valid: true},
-			specificAssetIDs,
-			positionStart,
-		)
+		return AddSpecificAssetIDsByAASIdentifierTx(ctx, tx, aasID, specificAssetIDs)
 	})
+}
+
+// AddSpecificAssetIDsByAASIdentifierTx adds discovery links in the provided transaction.
+func AddSpecificAssetIDsByAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
+	if len(specificAssetIDs) == 0 {
+		return nil
+	}
+	aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
+	if err != nil {
+		return fmt.Errorf("DESCRIPTOR-ADDSAID-ENSUREAAS %w", err)
+	}
+	descriptorID := sql.NullInt64{}
+	if !discoveryOnlySpecificAssetIDsFromContext(ctx) {
+		descriptorID, err = descriptorIDForAASIDTx(ctx, tx, aasID)
+		if err != nil {
+			return fmt.Errorf("DESCRIPTOR-ADDSAID-GETDESCRIPTOR %w", err)
+		}
+	}
+	positionStart, err := nextSpecificAssetIDPositionByAASRefTx(ctx, tx, aasRef)
+	if err != nil {
+		return fmt.Errorf("DESCRIPTOR-ADDSAID-GETPOSITION %w", err)
+	}
+	if err = common.InsertSpecificAssetIDsWithPositionStart(tx, descriptorID, sql.NullInt64{}, sql.NullInt64{Int64: aasRef, Valid: true}, specificAssetIDs, positionStart); err != nil {
+		return fmt.Errorf("DESCRIPTOR-ADDSAID-INSERT %w", err)
+	}
+	return nil
 }
 
 func descriptorIDForAASIDTx(ctx context.Context, tx *sql.Tx, aasID string) (sql.NullInt64, error) {

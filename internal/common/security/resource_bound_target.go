@@ -82,6 +82,16 @@ func parseBoundRoot(parts []string) (boundTarget, int, error) {
 		target.Kind = "aas"
 	case "submodels":
 		target.Kind = "submodel"
+	case "shell-descriptors":
+		target.Kind = "aas_descriptor"
+	case "submodel-descriptors":
+		target.Kind = "submodel_descriptor"
+	case "concept-descriptions":
+		target.Kind = "concept_description"
+	case "lookup":
+		return parseDiscoveryTarget(parts)
+	case "query":
+		return parseBoundQueryTarget(parts)
 	default:
 		return target, 0, fmt.Errorf("REBAC-TARGET-ROUTE unsupported route")
 	}
@@ -93,7 +103,7 @@ func parseBoundRoot(parts []string) (boundTarget, int, error) {
 	if err != nil {
 		return target, 0, fmt.Errorf("REBAC-TARGET-IDENTIFIER %w", err)
 	}
-	if target.Kind == "aas" {
+	if target.Kind == "aas" || target.Kind == "aas_descriptor" {
 		target.AAS = id
 	} else {
 		target.Submodel = id
@@ -114,6 +124,18 @@ func parseBoundChildren(target boundTarget, parts []string, index int) (boundTar
 		target.Submodel = id
 		index += 2
 	}
+	if target.Kind == "aas_descriptor" && index < len(parts) && parts[index] == "submodel-descriptors" {
+		if index+1 >= len(parts) || strings.HasPrefix(parts[index+1], "$") {
+			return target, index, nil
+		}
+		id, err := common.DecodeString(parts[index+1])
+		if err != nil {
+			return target, index, fmt.Errorf("REBAC-TARGET-IDENTIFIER %w", err)
+		}
+		target.Kind = "submodel_descriptor"
+		target.Submodel = id
+		index += 2
+	}
 	if target.Kind == "submodel" && index < len(parts) && parts[index] == "submodel-elements" {
 		index++
 		if index < len(parts) && !strings.HasPrefix(parts[index], "$") {
@@ -123,6 +145,34 @@ func parseBoundChildren(target boundTarget, parts []string, index int) (boundTar
 		}
 	}
 	return target, index, nil
+}
+
+func parseDiscoveryTarget(parts []string) (boundTarget, int, error) {
+	if len(parts) < 2 || (parts[1] != "shells" && parts[1] != "shellsByAssetLink") {
+		return boundTarget{}, 0, fmt.Errorf("REBAC-TARGET-DISCOVERY unsupported route")
+	}
+	target := boundTarget{Kind: "lookup/shells"}
+	if len(parts) == 2 || parts[1] == "shellsByAssetLink" || strings.HasPrefix(parts[2], "$") {
+		return target, 2, nil
+	}
+	id, err := common.DecodeString(parts[2])
+	if err != nil {
+		return target, 0, fmt.Errorf("REBAC-TARGET-IDENTIFIER %w", err)
+	}
+	target.Kind, target.AAS = "discovery", id
+	return target, 3, nil
+}
+
+func parseBoundQueryTarget(parts []string) (boundTarget, int, error) {
+	if len(parts) != 2 {
+		return boundTarget{}, 0, fmt.Errorf("REBAC-TARGET-QUERY unsupported route")
+	}
+	switch parts[1] {
+	case "shell-descriptors", "submodel-descriptors", "concept-descriptions":
+		return boundTarget{Kind: parts[1]}, 2, nil
+	default:
+		return boundTarget{}, 0, fmt.Errorf("REBAC-TARGET-QUERY unsupported route")
+	}
 }
 
 func boundTargetFromObject(object grammar.ObjectItem) (boundTarget, error) {
@@ -136,7 +186,15 @@ func boundTargetFromObject(object grammar.ObjectItem) (boundTarget, error) {
 		if object.Identifiable.Scope == "$aas" {
 			return boundTarget{Kind: "aas", AAS: object.Identifiable.ID.ID}, nil
 		}
+		if object.Identifiable.Scope == "$cd" {
+			return boundTarget{Kind: "concept_description", Submodel: object.Identifiable.ID.ID}, nil
+		}
 		return boundTarget{Kind: "submodel", Submodel: object.Identifiable.ID.ID}, nil
+	case grammar.Descriptor:
+		if object.Descriptor.Scope == "$aasdesc" {
+			return boundTarget{Kind: "aas_descriptor", AAS: object.Descriptor.ID.ID}, nil
+		}
+		return boundTarget{Kind: "submodel_descriptor", Submodel: object.Descriptor.ID.ID}, nil
 	case grammar.Referable:
 		return boundTarget{Kind: "sme", Submodel: object.Referable.ID.ID, Path: object.Referable.IDShortPath}, nil
 	}
@@ -144,8 +202,21 @@ func boundTargetFromObject(object grammar.ObjectItem) (boundTarget, error) {
 }
 
 func (target boundTarget) object() grammar.ObjectItem {
-	if target.Kind == "shells" || target.Kind == "submodels" {
+	if isBoundCollection(target.Kind) {
 		return grammar.ObjectItem{Kind: grammar.Route, Route: &grammar.RouteValue{Route: "/" + target.Kind}}
+	}
+	if target.Kind == "discovery" {
+		return grammar.ObjectItem{Kind: grammar.Route, Route: &grammar.RouteValue{Route: "/lookup/shells/" + common.EncodeString(target.AAS)}}
+	}
+	if target.Kind == "aas_descriptor" || target.Kind == "submodel_descriptor" {
+		scope, id := "$smdesc", target.Submodel
+		if target.Kind == "aas_descriptor" {
+			scope, id = "$aasdesc", target.AAS
+		}
+		return grammar.ObjectItem{Kind: grammar.Descriptor, Descriptor: &grammar.DescriptorValue{Scope: scope, ID: grammar.Identifier{ID: id}}}
+	}
+	if target.Kind == "concept_description" {
+		return grammar.ObjectItem{Kind: grammar.Identifiable, Identifiable: &grammar.IdentifiableValue{Scope: "$cd", ID: grammar.Identifier{ID: target.Submodel}}}
 	}
 	if target.Kind == "sme" {
 		return grammar.ObjectItem{Kind: grammar.Referable, Referable: &grammar.ReferableValue{Scope: "$sme", ID: grammar.Identifier{ID: target.Submodel}, IDShortPath: target.Path}}
@@ -160,7 +231,7 @@ func (target boundTarget) object() grammar.ObjectItem {
 func (target boundTarget) condition() (exp.Expression, error) {
 	dialect := goqu.Dialect("postgres")
 	switch target.Kind {
-	case "shells", "submodels":
+	case "shells", "submodels", "shell-descriptors", "submodel-descriptors", "concept-descriptions", "lookup/shells":
 		return goqu.C("collection").Eq("/" + target.Kind), nil
 	case "aas":
 		return goqu.C("aas_id").Eq(dialect.From("aas").Select("id").Where(goqu.Ex{"aas_id": target.AAS})), nil
@@ -169,6 +240,20 @@ func (target boundTarget) condition() (exp.Expression, error) {
 	case "sme":
 		ds := dialect.From(goqu.T("submodel_element").As("sme")).Join(goqu.T("submodel").As("sm"), goqu.On(goqu.I("sm.id").Eq(goqu.I("sme.submodel_id")))).Select(goqu.I("sme.id")).Where(goqu.Ex{"sm.submodel_identifier": target.Submodel, "sme.idshort_path": target.Path})
 		return goqu.C("sme_id").Eq(ds), nil
+	case "aas_descriptor":
+		return goqu.C("aas_descriptor_id").Eq(dialect.From("aas_descriptor").Select("descriptor_id").Where(goqu.Ex{"id": target.AAS})), nil
+	case "submodel_descriptor":
+		ds := dialect.From("submodel_descriptor").Select("descriptor_id").Where(goqu.Ex{"id": target.Submodel})
+		if target.AAS != "" {
+			ds = ds.Where(goqu.C("aas_descriptor_id").Eq(dialect.From("aas_descriptor").Select("descriptor_id").Where(goqu.Ex{"id": target.AAS})))
+		} else {
+			ds = ds.Where(goqu.C("aas_descriptor_id").IsNull())
+		}
+		return goqu.C("submodel_descriptor_id").Eq(ds), nil
+	case "concept_description":
+		return goqu.C("concept_description_id").Eq(target.Submodel), nil
+	case "discovery":
+		return goqu.C("discovery_aas_id").Eq(dialect.From("aas_identifier").Select("id").Where(goqu.Ex{"aasid": target.AAS})), nil
 	}
 	return nil, fmt.Errorf("REBAC-TARGET-KIND unsupported resource kind")
 }
@@ -202,8 +287,57 @@ func (target boundTarget) parent(ctx context.Context, db boundQueryer) (boundTar
 		return target.aasParent(ctx, db)
 	case "sme":
 		return target.smeParent(ctx, db)
+	case "aas_descriptor":
+		return matchingAASParent(ctx, db, target.AAS, "shell-descriptors")
+	case "submodel_descriptor":
+		return matchingSubmodelParent(ctx, db, target.Submodel)
+	case "concept_description":
+		return boundTarget{Kind: "concept-descriptions"}, true, nil
+	case "discovery":
+		return matchingAASParent(ctx, db, target.AAS, "lookup/shells")
 	}
 	return boundTarget{}, false, nil
+}
+
+func matchingAASParent(ctx context.Context, db boundQueryer, id, fallback string) (boundTarget, bool, error) {
+	query, args, err := goqu.Dialect("postgres").From("aas").Select(goqu.L("1")).Where(goqu.Ex{"aas_id": id}).Limit(1).Prepared(true).ToSQL()
+	if err != nil {
+		return boundTarget{}, false, fmt.Errorf("REBAC-PARENT-AAS-BUILD %w", err)
+	}
+	var found int
+	err = db.QueryRowContext(ctx, query, args...).Scan(&found)
+	if err == nil {
+		return boundTarget{Kind: "aas", AAS: id}, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return boundTarget{}, false, fmt.Errorf("REBAC-PARENT-AAS-QUERY %w", err)
+	}
+	return boundTarget{Kind: fallback}, true, nil
+}
+
+func matchingSubmodelParent(ctx context.Context, db boundQueryer, id string) (boundTarget, bool, error) {
+	query, args, err := goqu.Dialect("postgres").From("submodel").Select(goqu.L("1")).Where(goqu.Ex{"submodel_identifier": id}).Limit(1).Prepared(true).ToSQL()
+	if err != nil {
+		return boundTarget{}, false, fmt.Errorf("REBAC-PARENT-SM-BUILD %w", err)
+	}
+	var found int
+	err = db.QueryRowContext(ctx, query, args...).Scan(&found)
+	if err == nil {
+		return boundTarget{Kind: "submodel", Submodel: id}, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return boundTarget{}, false, fmt.Errorf("REBAC-PARENT-SM-QUERY %w", err)
+	}
+	return boundTarget{Kind: "submodel-descriptors"}, true, nil
+}
+
+func isBoundCollection(kind string) bool {
+	switch kind {
+	case "shells", "submodels", "shell-descriptors", "submodel-descriptors", "concept-descriptions", "lookup/shells":
+		return true
+	default:
+		return false
+	}
 }
 
 func (target boundTarget) aasParent(ctx context.Context, db boundQueryer) (boundTarget, bool, error) {

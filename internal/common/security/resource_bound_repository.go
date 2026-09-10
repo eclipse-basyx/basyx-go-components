@@ -108,7 +108,7 @@ func (repo *resourceBoundRepository) initialize(ctx context.Context, cfg common.
 	if err = repo.adoptResources(ctx, tx, cfg.BootstrapOwner); err != nil {
 		return err
 	}
-	if inserted != "" && cfg.ModelPath != "" {
+	if cfg.ModelPath != "" {
 		if err = repo.importInitial(ctx, tx, cfg); err != nil {
 			return err
 		}
@@ -120,12 +120,12 @@ func (repo *resourceBoundRepository) initialize(ctx context.Context, cfg common.
 }
 
 func (repo *resourceBoundRepository) adoptResources(ctx context.Context, tx *sql.Tx, owner common.AccessPrincipal) error {
-	for _, collection := range []string{"/shells", "/submodels"} {
+	for _, collection := range []string{"/shells", "/submodels", "/shell-descriptors", "/submodel-descriptors", "/concept-descriptions", "/lookup/shells"} {
 		if err := repo.seedCollection(ctx, tx, collection, owner); err != nil {
 			return err
 		}
 	}
-	for _, table := range []string{"aas", "submodel", "submodel_element"} {
+	for _, table := range []string{"aas", "submodel", "submodel_element", "aas_descriptor", "submodel_descriptor", "concept_description", "aas_identifier"} {
 		if err := seedBoundResources(ctx, tx, repo.scope, table, nil, owner); err != nil {
 			return err
 		}
@@ -151,6 +151,19 @@ func (repo *resourceBoundRepository) lock(ctx context.Context, tx *sql.Tx, write
 	return revision, nil
 }
 
+func (repo *resourceBoundRepository) readRevision(ctx context.Context, db boundQueryer) (int64, error) {
+	ds := goqu.Dialect("postgres").From("rebac_scope").Select("revision").Where(goqu.Ex{"scope": repo.scope})
+	query, args, err := ds.Prepared(true).ToSQL()
+	if err != nil {
+		return 0, fmt.Errorf("REBAC-REVISION-BUILD %w", err)
+	}
+	var revision int64
+	if err = db.QueryRowContext(ctx, query, args...).Scan(&revision); err != nil {
+		return 0, fmt.Errorf("REBAC-REVISION-READ %w", err)
+	}
+	return revision, nil
+}
+
 func (repo *resourceBoundRepository) seedCollection(ctx context.Context, tx *sql.Tx, collection string, owner common.AccessPrincipal) error {
 	ds := goqu.Dialect("postgres").Insert("rebac_access").Rows(goqu.Record{"scope": repo.scope, "collection": collection}).OnConflict(goqu.DoNothing()).Returning("id").Prepared(true)
 	query, args, err := ds.ToSQL()
@@ -169,10 +182,24 @@ func (repo *resourceBoundRepository) seedCollection(ctx context.Context, tx *sql
 }
 
 func boundForeignKey(table string) string {
-	if table == "submodel_element" {
+	switch table {
+	case "submodel_element":
 		return "sme_id"
+	case "concept_description":
+		return "concept_description_id"
+	case "aas_identifier":
+		return "discovery_aas_id"
+	case "aas_descriptor", "submodel_descriptor":
+		return table + "_id"
 	}
 	return table + "_id"
+}
+
+func boundSourceID(table string) string {
+	if table == "aas_descriptor" || table == "submodel_descriptor" {
+		return "descriptor_id"
+	}
+	return "id"
 }
 
 func seedBoundResources(ctx context.Context, tx *sql.Tx, scope, table string, submodelID *int64, owner common.AccessPrincipal) error {
@@ -196,8 +223,9 @@ func seedBoundResources(ctx context.Context, tx *sql.Tx, scope, table string, su
 func insertBoundResourceBatch(ctx context.Context, tx *sql.Tx, scope, table string, submodelID *int64) ([]int64, error) {
 	dialect := goqu.Dialect("postgres")
 	column := boundForeignKey(table)
-	existing := dialect.From("rebac_access").Select(goqu.L("1")).Where(goqu.Ex{"scope": scope}, goqu.C(column).Eq(goqu.I("source.id")))
-	source := dialect.From(goqu.T(table).As("source")).Select(goqu.V(scope), goqu.I("source.id")).Where(goqu.L("NOT EXISTS ?", existing)).Limit(1000)
+	sourceID := boundSourceID(table)
+	existing := dialect.From("rebac_access").Select(goqu.L("1")).Where(goqu.Ex{"scope": scope}, goqu.C(column).Eq(goqu.I("source."+sourceID)))
+	source := dialect.From(goqu.T(table).As("source")).Select(goqu.V(scope), goqu.I("source."+sourceID)).Where(goqu.L("NOT EXISTS ?", existing)).Limit(1000)
 	if submodelID != nil {
 		field := "source.id"
 		if table == "submodel_element" {
@@ -255,12 +283,36 @@ func (repo *resourceBoundRepository) importInitial(ctx context.Context, tx *sql.
 		if err != nil {
 			return err
 		}
+		claimed, err := claimInitialPolicyImport(ctx, tx, repo.scope, access.ID)
+		if err != nil {
+			return err
+		}
+		if !claimed {
+			continue
+		}
 		access.Policy = &model
 		if err = repo.save(ctx, tx, access, cfg.BootstrapOwner); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func claimInitialPolicyImport(ctx context.Context, tx *sql.Tx, scope string, accessID int64) (bool, error) {
+	ds := goqu.Dialect("postgres").Insert("rebac_policy_import").Rows(goqu.Record{"scope": scope, "access_id": accessID}).OnConflict(goqu.DoNothing()).Returning("access_id").Prepared(true)
+	query, args, err := ds.ToSQL()
+	if err != nil {
+		return false, fmt.Errorf("REBAC-IMPORT-BUILD %w", err)
+	}
+	var claimed int64
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&claimed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("REBAC-IMPORT-CLAIM %w", err)
+	}
+	return true, nil
 }
 
 func (repo *resourceBoundRepository) load(ctx context.Context, db boundQueryer, target boundTarget) (*boundAccess, error) {

@@ -55,7 +55,17 @@ func injectResourceBoundAPI(content []byte) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("SWAGGER-REBAC-PATHS missing paths")
 	}
-	roots := []string{"/shells", "/submodels", "/shells/{aasIdentifier}", "/submodels/{submodelIdentifier}", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}", "/shells/{aasIdentifier}/submodels/{submodelIdentifier}", "/shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}"}
+	roots := []string{
+		"/shells", "/submodels", "/shells/{aasIdentifier}", "/submodels/{submodelIdentifier}",
+		"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
+		"/shells/{aasIdentifier}/submodels/{submodelIdentifier}",
+		"/shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
+		"/shell-descriptors", "/shell-descriptors/{aasIdentifier}",
+		"/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}",
+		"/submodel-descriptors", "/submodel-descriptors/{submodelIdentifier}",
+		"/concept-descriptions", "/concept-descriptions/{conceptDescriptionIdentifier}",
+		"/lookup/shells", "/lookup/shells/{aasIdentifier}",
+	}
 	for _, root := range roots {
 		if _, exists := paths[root]; !exists {
 			continue
@@ -68,6 +78,11 @@ func injectResourceBoundAPI(content []byte) ([]byte, error) {
 			}
 			item[operation.method] = resourceAccessOpenAPIOperation(path, operation)
 			paths[path] = item
+		}
+	}
+	if _, exists := paths["/shells/{aasIdentifier}"]; exists {
+		paths["/shells/{aasIdentifier}/$access/capabilities"] = map[string]any{
+			"get": resourceCapabilitiesOpenAPIOperation(),
 		}
 	}
 	components, _ := document["components"].(map[string]any)
@@ -90,6 +105,29 @@ func injectResourceBoundAPI(content []byte) ([]byte, error) {
 	return result, nil
 }
 
+func resourceCapabilitiesOpenAPIOperation() map[string]any {
+	return map[string]any{
+		"tags":        []string{"Resource Access"},
+		"summary":     "Check the current user's AAS update capability",
+		"description": "Side-effect-free preflight for the authenticated caller. The AAS must first be visible through the normal READ authorization decision. A true result reflects the current AAS UPDATE decision but does not reserve permission or guarantee that later reference, subtree, validation, or concurrency checks succeed.",
+		"parameters": []any{
+			map[string]any{"name": "aasIdentifier", "in": "path", "required": true, "schema": map[string]any{"type": "string"}},
+		},
+		"responses": map[string]any{
+			"200": map[string]any{
+				"description": "Current AAS update capability",
+				"headers": map[string]any{
+					"Cache-Control": map[string]any{"schema": map[string]any{"type": "string", "example": "no-store"}},
+				},
+				"content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/AASAccessCapabilities"}}},
+			},
+			"401": map[string]any{"description": "Authentication required"},
+			"404": map[string]any{"description": "AAS is unknown or not visible to the caller"},
+			"500": map[string]any{"description": "Capability evaluation failed"},
+		},
+	}
+}
+
 func resourceAccessOpenAPIOperation(path string, operation resourceAccessOperation) map[string]any {
 	parameters := []any{}
 	for _, part := range strings.Split(path, "/") {
@@ -101,7 +139,7 @@ func resourceAccessOpenAPIOperation(path string, operation resourceAccessOperati
 		parameters = append(parameters, map[string]any{"name": "If-Match", "in": "header", "required": true, "schema": map[string]any{"type": "string"}, "description": "ETag from this resource's access overview."})
 	}
 	responses := map[string]any{}
-	for code, description := range map[string]string{"200": "Access state or updated value", "201": "Managed grant created", "204": "Removed", "400": "Invalid policy or principals", "401": "Authentication required", "403": "Access administration denied", "404": "Resource, local policy or grant not found", "409": "Explicit local policy required or protected manager rule changed", "412": "Stale access revision", "428": "If-Match required"} {
+	for code, description := range map[string]string{"200": "Access state or updated value", "201": "Managed grant created", "204": "Removed", "400": "Invalid policy, principals, or rights", "401": "Authentication required", "403": "Access administration denied", "404": "Resource, local policy or grant not found", "405": "Method not supported by this access endpoint", "409": "Explicit local policy required or protected manager rule changed", "412": "Stale access revision", "413": "Request body exceeds 1 MiB", "428": "If-Match required"} {
 		responses[code] = map[string]any{"description": description}
 	}
 	responseSchema := "ResourceAccessOverview"
@@ -116,6 +154,7 @@ func resourceAccessOpenAPIOperation(path string, operation resourceAccessOperati
 	response := map[string]any{"description": "Result", "headers": map[string]any{"ETag": map[string]any{"schema": map[string]any{"type": "string"}}}, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/" + responseSchema}}}}
 	responses["200"] = response
 	if operation.method == "post" {
+		response["headers"].(map[string]any)["Location"] = map[string]any{"description": "URL of the created managed grant", "schema": map[string]any{"type": "string"}}
 		responses["201"] = response
 	}
 
@@ -127,9 +166,13 @@ func resourceAccessOpenAPIOperation(path string, operation resourceAccessOperati
 }
 
 func resourceAccessSchemas() map[string]any {
-	principal := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"issuer", "subject"}, "properties": map[string]any{"issuer": map[string]any{"type": "string", "minLength": 1}, "subject": map[string]any{"type": "string", "minLength": 1}}}
-	rights := map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"CREATE", "READ", "UPDATE", "DELETE", "EXECUTE", "VIEW", "ALL"}}}
+	nonBlank := map[string]any{"type": "string", "minLength": 1, "pattern": `.*\S.*`}
+	principal := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"issuer", "subject"}, "properties": map[string]any{"issuer": nonBlank, "subject": nonBlank}}
+	rights := map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": map[string]any{"type": "string", "enum": []string{"CREATE", "READ", "UPDATE", "DELETE", "EXECUTE", "VIEW", "ALL"}}}
 	return map[string]any{
+		"AASAccessCapabilities": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"canUpdate"}, "properties": map[string]any{
+			"canUpdate": map[string]any{"type": "boolean"},
+		}},
 		"ResourceAccessOverview": map[string]any{"type": "object", "required": []string{"revision", "resource", "localPolicy", "owners", "managers", "grants", "effectivePolicy"}, "properties": map[string]any{
 			"revision":        map[string]any{"type": "integer", "format": "int64"},
 			"resource":        map[string]any{"type": "object"},
@@ -147,7 +190,7 @@ func resourceAccessSchemas() map[string]any {
 			"rights":    rights,
 		}},
 		"ResourceBoundPolicy": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"RESOURCE", "rules"}, "example": map[string]any{"RESOURCE": map[string]string{"IDENTIFIABLE": "$sm(\"urn:bridge:inspection\")"}, "rules": []any{}}, "description": "Single resource-bound model from Part 4 PR #108 (07c8bb6). RESOURCE must identify the addressed resource. Definitions are local; rules prohibit OBJECTS and USEOBJECTS.", "properties": map[string]any{
-			"RESOURCE":      map[string]any{"type": "object", "minProperties": 1, "maxProperties": 1, "additionalProperties": false, "properties": map[string]any{"ROUTE": map[string]any{"type": "string"}, "IDENTIFIABLE": map[string]any{"type": "string"}, "REFERABLE": map[string]any{"type": "string"}}},
+			"RESOURCE":      map[string]any{"type": "object", "minProperties": 1, "maxProperties": 1, "additionalProperties": false, "properties": map[string]any{"ROUTE": map[string]any{"type": "string"}, "IDENTIFIABLE": map[string]any{"type": "string"}, "REFERABLE": map[string]any{"type": "string"}, "DESCRIPTOR": map[string]any{"type": "string"}}},
 			"rules":         map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
 			"DEFATTRIBUTES": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
 			"DEFACLS":       map[string]any{"type": "array", "items": map[string]any{"type": "object"}},

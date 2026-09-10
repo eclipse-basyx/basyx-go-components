@@ -164,19 +164,34 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasI
 // The deletion is performed atomically. If the AAS identifier is not found (no rows affected),
 // an ErrNotFound error is returned.
 func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, aasID string) error {
-	d := goqu.Dialect("postgres")
-	sqlStr, args, err := d.Delete("aas_identifier").
-		Where(goqu.C("aasid").Eq(aasID)).
-		ToSQL()
+	var deleted bool
+	err := common.ExecuteInTransaction(p.writerDB, "DISC-DELETE-STARTTX", "DISC-DELETE-COMMIT", func(tx *sql.Tx) error {
+		if prepareErr := auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas_identifier", aasID); prepareErr != nil {
+			return prepareErr
+		}
+		ds := goqu.Dialect("postgres").Delete("aas_identifier").Where(goqu.C("aasid").Eq(aasID)).Prepared(true)
+		query, args, buildErr := ds.ToSQL()
+		if buildErr != nil {
+			return fmt.Errorf("DISC-DELETE-BUILDQUERY %w", buildErr)
+		}
+		result, execErr := tx.ExecContext(ctx, query, args...)
+		if execErr != nil {
+			return fmt.Errorf("DISC-DELETE-EXECQUERY %w", execErr)
+		}
+		rows, rowsErr := result.RowsAffected()
+		deleted = rowsErr == nil && rows > 0
+		if rowsErr != nil {
+			return fmt.Errorf("DISC-DELETE-ROWSAFFECTED %w", rowsErr)
+		}
+		return nil
+	})
 	if err != nil {
-		slog.ErrorContext(ctx, "delete query construction failed", "error.code", "DISCOVERY-DELETE-BUILDQUERY", "error", err)
+		if common.IsErrDenied(err) {
+			return err
+		}
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
-	result, err := p.writerDB.ExecContext(ctx, sqlStr, args...)
-	if err != nil {
-		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
-	}
-	if rows, _ := result.RowsAffected(); rows == 0 {
+	if !deleted {
 		return common.NewErrNotFound(fmt.Sprintf("AAS identifier %s not found. See console for information.", aasID))
 	}
 	return nil
@@ -202,7 +217,12 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 //
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
 func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
-	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.writerDB, aasID, specificAssetIDs); err != nil {
+	if err := p.mutateAssetLinks(ctx, aasID, func(tx *sql.Tx) error {
+		return descriptors.ReplaceSpecificAssetIDsByAASIdentifierTx(ctx, tx, aasID, specificAssetIDs)
+	}); err != nil {
+		if common.IsErrDenied(err) {
+			return err
+		}
 		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
 	}
 	return nil
@@ -210,10 +230,50 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, a
 
 // AddAllAssetLinks appends missing asset links for an existing aas identifier.
 func (p *PostgreSQLDiscoveryDatabase) AddAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
-	if err := descriptors.AddSpecificAssetIDsByAASIdentifier(ctx, p.writerDB, aasID, specificAssetIDs); err != nil {
+	if err := p.mutateAssetLinks(ctx, aasID, func(tx *sql.Tx) error {
+		return descriptors.AddSpecificAssetIDsByAASIdentifierTx(ctx, tx, aasID, specificAssetIDs)
+	}); err != nil {
+		if common.IsErrDenied(err) {
+			return err
+		}
 		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
 	}
 	return nil
+}
+
+func (p *PostgreSQLDiscoveryDatabase) mutateAssetLinks(ctx context.Context, aasID string, mutate func(*sql.Tx) error) error {
+	return common.ExecuteInTransaction(p.writerDB, "DISC-MUTATE-STARTTX", "DISC-MUTATE-COMMIT", func(tx *sql.Tx) error {
+		exists, err := discoveryAASExistsTx(ctx, tx, aasID)
+		if err != nil {
+			return err
+		}
+		if exists {
+			if err = auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas_identifier", aasID); err != nil {
+				return err
+			}
+		}
+		if err = mutate(tx); err != nil {
+			return err
+		}
+		return auth.ResourceBoundCreatedTx(ctx, tx, "aas_identifier", aasID)
+	})
+}
+
+func discoveryAASExistsTx(ctx context.Context, tx *sql.Tx, aasID string) (bool, error) {
+	ds := goqu.Dialect("postgres").From("aas_identifier").Select(goqu.L("1")).Where(goqu.Ex{"aasid": aasID}).ForUpdate(goqu.Wait).Prepared(true)
+	query, args, err := ds.ToSQL()
+	if err != nil {
+		return false, fmt.Errorf("DISC-EXISTS-BUILDQUERY %w", err)
+	}
+	var found int
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&found)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("DISC-EXISTS-EXECQUERY %w", err)
+	}
+	return true, nil
 }
 
 // SearchAASIDsByAssetLinks searches for AAS identifiers that match the specified asset links.

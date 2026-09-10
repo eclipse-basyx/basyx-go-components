@@ -74,9 +74,6 @@ func (repo *resourceBoundRepository) requestState(ctx context.Context, db boundQ
 	opts.EnableImplicitCasts = repo.implicitCasts
 	if repo.fallback != nil {
 		if model := repo.fallback.ActiveAccessModel(); model != nil {
-			if model.gen.AllAccessPermissionRules.Rules == nil {
-				return nil, fmt.Errorf("REBAC-FALLBACK-DOCUMENT object-based rules must be an array")
-			}
 			state.fallback = model.AuthorizeWithFilterWithOptions(input, opts)
 		}
 	}
@@ -147,6 +144,25 @@ func (state *boundRequest) queryFilter() *QueryFilter {
 
 func (state *boundRequest) selectedPolicy(kind string, key exp.Expression) *goqu.SelectDataset {
 	dialect := goqu.Dialect("postgres")
+	binding := state.selectedAccessBinding(kind, key)
+	var aas exp.Expression = goqu.L("NULL::BIGINT")
+	if state.target.AAS != "" {
+		aas = dialect.From("aas").Select("id").Where(goqu.Ex{"aas_id": state.target.AAS})
+	}
+	if state.aasContext != nil {
+		aas = state.aasContext
+	}
+	return dialect.From("rebac_access").Select(goqu.Func("rebac_effective_policy", goqu.C("id"), aas)).Where(goqu.Ex{"scope": state.repo.scope}, binding)
+}
+
+func (state *boundRequest) selectedAccess(kind string, key exp.Expression) *goqu.SelectDataset {
+	return goqu.Dialect("postgres").From("rebac_access").Select("id").Where(
+		goqu.Ex{"scope": state.repo.scope},
+		state.selectedAccessBinding(kind, key),
+	)
+}
+
+func (state *boundRequest) selectedAccessBinding(kind string, key exp.Expression) exp.Expression {
 	column := boundForeignKey(kind)
 	if kind == "sme" {
 		column = "sme_id"
@@ -160,14 +176,25 @@ func (state *boundRequest) selectedPolicy(kind string, key exp.Expression) *goqu
 			binding = goqu.L("FALSE")
 		}
 	}
-	var aas exp.Expression = goqu.L("NULL::BIGINT")
-	if state.target.AAS != "" {
-		aas = dialect.From("aas").Select("id").Where(goqu.Ex{"aas_id": state.target.AAS})
+	return binding
+}
+
+func (state *boundRequest) ownerGrant(kind string, key exp.Expression) exp.Expression {
+	issuer, issuerOK := state.input.Claims.GetString("iss")
+	subject, subjectOK := state.input.Claims.GetString("sub")
+	if !issuerOK || !subjectOK {
+		return goqu.L("FALSE")
 	}
-	if state.aasContext != nil {
-		aas = state.aasContext
-	}
-	return dialect.From("rebac_access").Select(goqu.Func("rebac_effective_policy", goqu.C("id"), aas)).Where(goqu.Ex{"scope": state.repo.scope}, binding)
+	owner := goqu.T("rebac_principal").As("rebac_owner")
+	query := goqu.Dialect("postgres").From(owner).Select(goqu.L("1")).Where(
+		goqu.I("rebac_owner.access_id").In(state.selectedAccess(kind, key)),
+		goqu.Ex{
+			"rebac_owner.issuer":   issuer,
+			"rebac_owner.subject":  subject,
+			"rebac_owner.relation": "owner",
+		},
+	)
+	return goqu.L("EXISTS ?", query)
 }
 
 func boundFormula(evaluation AuthorizationEvaluation, collector *grammar.ResolvedFieldPathCollector) (exp.Expression, error) {
@@ -213,8 +240,8 @@ func (state *boundRequest) expression(collector *grammar.ResolvedFieldPathCollec
 	}
 
 	selected := goqu.COALESCE(state.selectedPolicy(kind, key), int64(0))
-	grants := make([]exp.Expression, 0, len(state.policies))
-	visible := make([]exp.Expression, 0, len(state.policies))
+	visible := make([]exp.Expression, 0, len(state.policies)+2)
+	visible = append(visible, state.ownerGrant(kind, key))
 	for _, policy := range state.policies {
 		if !policy.evaluation.Allowed {
 			continue
@@ -224,14 +251,12 @@ func (state *boundRequest) expression(collector *grammar.ResolvedFieldPathCollec
 			return nil, err
 		}
 		matches := goqu.And(goqu.L("? = ?", selected, policy.id), formula)
-		grants = append(grants, matches)
 		filter, err := boundFragment(policy.evaluation, fragment, collector)
 		if err != nil {
 			return nil, err
 		}
 		visible = append(visible, goqu.And(matches, filter))
 	}
-	granted := boundOr(grants)
 	fallback, err := boundFormula(state.fallback, collector)
 	if err != nil {
 		return nil, err
@@ -240,7 +265,7 @@ func (state *boundRequest) expression(collector *grammar.ResolvedFieldPathCollec
 	if err != nil {
 		return nil, err
 	}
-	visible = append(visible, goqu.And(goqu.L("NOT (?)", granted), fallback, filter))
+	visible = append(visible, goqu.And(fallback, filter))
 	return boundOr(visible), nil
 }
 func boundOr(expressions []exp.Expression) exp.Expression {
@@ -268,8 +293,8 @@ func (state *boundRequest) provenance(collector *grammar.ResolvedFieldPathCollec
 		return nil, err
 	}
 	selected := goqu.COALESCE(state.selectedPolicy(kind, key), int64(0))
-	result := goqu.Case()
-	matched := false
+	result := goqu.Case().When(state.ownerGrant(kind, key), "rebac-owner:"+state.repo.scope)
+	matched := true
 	for _, policy := range state.policies {
 		if !policy.evaluation.Allowed {
 			continue

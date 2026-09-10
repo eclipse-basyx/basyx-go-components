@@ -25,7 +25,10 @@
 
 package common
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // AuthorizationResourceBoundFirst selects resource policies before object-based ABAC.
 const AuthorizationResourceBoundFirst = "resource-bound-first"
@@ -87,7 +90,7 @@ func validateResourceBoundConfig(cfg *Config) error {
 		return fmt.Errorf("CONFIG-REBAC-SCOPE %w", err)
 	}
 	cfg.ReBAC.PolicyScope = scope
-	if cfg.ReBAC.BootstrapOwner.Issuer == "" || cfg.ReBAC.BootstrapOwner.Subject == "" {
+	if strings.TrimSpace(cfg.ReBAC.BootstrapOwner.Issuer) == "" || strings.TrimSpace(cfg.ReBAC.BootstrapOwner.Subject) == "" {
 		return fmt.Errorf("CONFIG-REBAC-OWNER bootstrap issuer and subject are required")
 	}
 	return nil

@@ -156,7 +156,8 @@ func AddResourceBoundReferenceFilter(ctx context.Context, ds *goqu.SelectDataset
 	if state == nil || (state.right != grammar.RightsEnumREAD && state.right != grammar.RightsEnumVIEW) {
 		return ds, nil
 	}
-	view, err := state.repo.requestState(ctx, state.repo.db, boundTarget{Kind: "submodel"}, state.input, grammar.RightsEnumVIEW, state.revision)
+	input := resourceBoundReferenceInput(state)
+	view, err := state.repo.requestState(ctx, state.repo.db, boundTarget{Kind: "submodel"}, input, grammar.RightsEnumVIEW, state.revision)
 	if err != nil {
 		return nil, err
 	}
@@ -172,4 +173,13 @@ func AddResourceBoundReferenceFilter(ctx context.Context, ds *goqu.SelectDataset
 	keys := goqu.Dialect("postgres").From(goqu.T("aas_submodel_reference_key").As("rb_reference_key")).Select(goqu.I("rb_reference_key.value")).Where(goqu.I("rb_reference_key.reference_id").Eq(goqu.I(alias+".id")), goqu.Ex{"rb_reference_key.type": int(types.KeyTypesSubmodel), "rb_reference_key.position": 0})
 	visible := goqu.Dialect("postgres").From("submodel").Select(goqu.L("1")).Where(goqu.I("submodel.submodel_identifier").In(keys), expression)
 	return ds.Where(goqu.I(alias+".type").Eq(int(types.ReferenceTypesModelReference)), goqu.L("EXISTS ?", visible)), nil
+}
+
+func resourceBoundReferenceInput(state *boundRequest) EvalInput {
+	input := state.input
+	if input.RoutePath == "" {
+		input.RoutePath = input.Path
+	}
+	input.Path = joinBasePath(state.repo.basePath, "/submodels")
+	return input
 }

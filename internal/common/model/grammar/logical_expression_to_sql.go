@@ -2670,6 +2670,14 @@ func (c *ResolvedFieldPathCollector) AuthorizationResource() (string, exp.Identi
 		return "aas", cfg.RootJoinKey(), nil
 	case "s", "submodel_element":
 		return "submodel", cfg.RootJoinKey(), nil
+	case "aas_descriptor":
+		return "aas_descriptor", cfg.RootJoinKey(), nil
+	case "submodel_descriptor":
+		return "submodel_descriptor", cfg.RootJoinKey(), nil
+	case "concept_description":
+		return "concept_description", cfg.RootJoinKey(), nil
+	case "specific_asset_id":
+		return "aas_identifier", cfg.RootJoinKey(), nil
 	}
 	return "", nil, fmt.Errorf("GRAMMAR-AUTHRESOURCE-ROOT unsupported root %q", cfg.PreferredBase)
 }

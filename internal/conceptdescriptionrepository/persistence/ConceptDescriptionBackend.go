@@ -420,6 +420,9 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 	if err = b.createConceptDescriptionInTx(ctx, tx, cd); err != nil {
 		return err
 	}
+	if err = auth.ResourceBoundCreatedTx(ctx, tx, "concept_description", cd.ID()); err != nil {
+		return err
+	}
 
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
@@ -663,6 +666,9 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 	if existsErr != nil {
 		return false, existsErr
 	}
+	if err = auth.ResourceBoundPrepareMutationTx(ctx, tx, "concept_description", id); err != nil {
+		return false, err
+	}
 
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
@@ -695,6 +701,9 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		}
 	} else {
 		if err = b.createConceptDescriptionInTx(ctx, tx, cd); err != nil {
+			return false, err
+		}
+		if err = auth.ResourceBoundCreatedTx(ctx, tx, "concept_description", cd.ID()); err != nil {
 			return false, err
 		}
 	}
@@ -735,6 +744,9 @@ func (b *ConceptDescriptionBackend) DeleteConceptDescription(ctx context.Context
 	}
 	defer cleanup(&err)
 	if err = history.LockMutationTx(ctx, tx, history.TableConcept, id); err != nil {
+		return err
+	}
+	if err = auth.ResourceBoundPrepareMutationTx(ctx, tx, "concept_description", id); err != nil {
 		return err
 	}
 

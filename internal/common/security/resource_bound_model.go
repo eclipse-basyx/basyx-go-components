@@ -28,6 +28,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -111,21 +112,25 @@ func ResourceBoundKey(object grammar.ObjectItem) (string, error) {
 		return boundRouteKey(object.Route)
 	case grammar.Identifiable:
 		if object.Identifiable != nil && !object.Identifiable.ID.IsAll && object.Identifiable.ID.ID != "" {
-			if object.Identifiable.Scope == "$aas" || object.Identifiable.Scope == "$sm" {
+			if object.Identifiable.Scope == "$aas" || object.Identifiable.Scope == "$sm" || object.Identifiable.Scope == "$cd" {
 				return object.Identifiable.Scope + ":" + object.Identifiable.ID.ID, nil
 			}
 		}
 	case grammar.Referable:
 		return boundReferableKey(object.Referable)
+	case grammar.Descriptor:
+		if object.Descriptor != nil && !object.Descriptor.ID.IsAll && object.Descriptor.ID.ID != "" && (object.Descriptor.Scope == "$aasdesc" || object.Descriptor.Scope == "$smdesc") {
+			return object.Descriptor.Scope + ":" + object.Descriptor.ID.ID, nil
+		}
 	}
-	return "", fmt.Errorf("REBAC-RESOURCEKEY-UNSUPPORTED expected a concrete AAS, Submodel, SME or repository collection")
+	return "", fmt.Errorf("REBAC-RESOURCEKEY-UNSUPPORTED expected a concrete supported resource or collection")
 }
 
 func boundRouteKey(route *grammar.RouteValue) (string, error) {
 	if route == nil {
 		return "", fmt.Errorf("REBAC-RESOURCEKEY-ROUTE missing route")
 	}
-	if route.Route == "/shells" || route.Route == "/submodels" {
+	if isBoundCollection(strings.TrimPrefix(route.Route, "/")) {
 		return "collection:" + route.Route, nil
 	}
 	target, err := parseBoundTarget(route.Route, "")
@@ -134,6 +139,9 @@ func boundRouteKey(route *grammar.RouteValue) (string, error) {
 	}
 	if target.Access || target.Suffix != "" {
 		return "", fmt.Errorf("REBAC-RESOURCEKEY-ROUTE expected a resource root")
+	}
+	if target.Kind == "discovery" {
+		return "discovery:" + target.AAS, nil
 	}
 	return ResourceBoundKey(target.object())
 }

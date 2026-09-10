@@ -22,6 +22,12 @@ Each resource uses its own policy or the first policy found walking upward throu
 
 Resource-bound rules are evaluated first. Object-based ABAC is evaluated when they do not grant the action. Consequently, an ABAC grant can allow access past a resource-bound override. Evaluation/storage errors fail closed. Filters attached to a successful resource-bound grant remain mandatory and cannot trigger fallback to restore excluded content.
 
+### Migrating an existing ABAC deployment
+
+Keep the existing `ABAC_ENABLED=true` and ABAC model configuration, then set `SECURITY_AUTHORIZATION_MODE=resource-bound-first` on each component. Give all components the same `REBAC_POLICY_SCOPE`, configure one trusted bootstrap owner's token `iss` and `sub`, and run the configuration service so schema v1.1.19 is applied before the components start. Existing resources are adopted without replacing their access settings, and initial collection policies are imported once. This makes ReBAC the first decision while ABAC remains a compatibility fallback.
+
+Migrate incrementally by granting collection CREATE rights and resource-specific access through `/$access`. Remove the equivalent ABAC object rules only after the ReBAC policy has been verified. If ABAC remains able to grant an operation, a ReBAC denial alone does not make that resource exclusive.
+
 Composite reads authorize descendants separately. Hidden branches are omitted using the existing structured filtering machinery. Data UPDATE and DELETE check affected subtrees. Technical snapshots retain resource authorization even when ABAC query projections are suppressed. AAS Submodel references require VIEW or READ on their targets and are filtered before pagination. Full SubmodelElement representations omit VIEW-only elements because a reference cannot replace an element in that representation.
 
 Changing AAS-to-Submodel associations requires administration of the affected local Submodel; unresolved external references cannot establish inheritance. This BaSyx restriction prevents linking a resource beneath a permissive ancestor to obtain access.
@@ -30,7 +36,7 @@ Database identities retain ownership and policy across ordinary reconciliation a
 
 ## Resource APIs
 
-Append `/$access` to `/shells/{aasIdentifier}`, `/submodels/{submodelIdentifier}`, or a SubmodelElement path. AAS-nested aliases address the same policy while supplying AAS context. Identifiers retain the existing base64url encoding. `/shells/$access` and `/submodels/$access` govern collection creation rights.
+Append `/$access` to a resource or collection path. Supported roots are `/shells`, `/submodels`, `/shell-descriptors`, `/submodel-descriptors`, `/concept-descriptions`, and `/lookup/shells`, including concrete resources and supported nested aliases. Identifiers retain the existing base64url encoding. Collection access governs creation rights.
 
 | Method and suffix | Body / result |
 |---|---|
@@ -46,11 +52,48 @@ Append `/$access` to `/shells/{aasIdentifier}`, `/submodels/{submodelIdentifier}
 
 Mutations require the ETag from the access overview in `If-Match`: missing headers return 428; stale revisions return 412. ETags include the persistent binding identity, scope revision, and effective policy. They change on resource recreation and may differ across aliases with different inheritance contexts. Scope revisions conservatively invalidate ETags after any access change. First-time sharing requires explicit local-policy creation (otherwise 409). A full policy replacement must retain protected manager rules; change those through `/managers`.
 
-Creators become direct owners transactionally, without a policy override or implicit data READ. Only direct owners change owners, and one must remain. Managers receive full data grants plus policy administration, but inherited management stops at overrides. Ordinary data grants, including ALL, do not permit access administration. Access administration and writes require a verified issuer and subject. Read policies can retain the existing ANONYMOUS attribute semantics.
+### AAS update capability preflight
+
+In `resource-bound-first` mode, an authenticated client can check its current permission to update one visible AAS without administering its policy:
+
+```http
+GET /shells/{base64url-aas-identifier}/$access/capabilities
+Authorization: Bearer <current-user-token>
+```
+
+A visible, existing AAS returns exactly `{"canUpdate":true}` or `{"canUpdate":false}` with `Cache-Control: no-store`. The decision uses the same ownership, managers, effective ReBAC policy, inheritance, filters, and configured ABAC fallback as an AAS UPDATE. It does not expose policy data or return an ETag. Missing authentication returns 401. An unknown AAS and an AAS hidden from the caller both return the same neutral 404 response. Evaluation failures return a generic 500 response and always fail closed.
+
+An AAS editor should call this endpoint immediately before its first write in a workflow that creates and then attaches a Submodel. When the result is false, the response is 404, or the check fails, the editor must not create the Submodel. A true result does not reserve the permission and does not guarantee later reference, subtree, validation, or concurrency checks; authorization is enforced again on the actual write. An atomic server operation remains the stronger solution for creating and attaching a Submodel together.
+
+Successful grant creation returns the new grant URL in `Location`. Request bodies are limited to 1 MiB and accept exactly one JSON value. Principal lists reject unknown fields, blank identities, and duplicates; managed grants also reject duplicate rights. Rejected mutations leave the policy and ETag unchanged.
+
+Creators become direct owners transactionally, without a policy override. Direct ownership implicitly grants `ALL` on that resource and bypasses inherited data filters. Only direct owners change owners, and one must remain. Managers receive full data grants plus policy administration, but inherited management stops at overrides. Ordinary data grants, including ALL, do not permit access administration. Access administration and writes require a verified issuer and subject. Read policies can retain the existing ANONYMOUS attribute semantics.
+
+To let a user create an AAS, add a `CREATE` grant to the `/shells` collection. First read `/shells/$access` to obtain its ETag, then create the grant with that ETag:
+
+```sh
+curl -i -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8090/shells/\$access
+curl -i -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -H 'If-Match: "ETAG_FROM_THE_PREVIOUS_RESPONSE"' \
+  --data '{"principal":{"issuer":"https://issuer.example","subject":"user-id"},"rights":["CREATE"]}' \
+  http://localhost:8090/shells/\$access/grants
+```
+
+Use the stable token `iss` and `sub` values, not a display name. Granting `CREATE` on `/shells` permits AAS creation; it does not make the user a manager or grant access to AAS resources created by others. A successful creation transaction makes that user a direct owner with implicit `ALL` on the new AAS.
+
+## Registry and discovery inheritance
+
+- An AAS Descriptor inherits from the AAS with the same identifier. If no AAS exists, it inherits from `/shell-descriptors`.
+- A Submodel Descriptor inherits from the Submodel with the same identifier. If no Submodel exists, it inherits from `/submodel-descriptors`.
+- A Discovery record inherits from the AAS with the same identifier. If no AAS exists, it inherits from `/lookup/shells`.
+- Concept Descriptions inherit from `/concept-descriptions`.
+- A nested Submodel Descriptor under an AAS Descriptor requires access through both dimensions: the containing AAS Descriptor and the matching Submodel policy when that Submodel exists.
+
+Local policies on descriptors or discovery records override only their inheritance path. Descriptor synchronization performed during repository writes runs in the same database transaction and enforces those local policies; a denied registry update rolls the repository write back.
 
 ## Supported services and checks
 
-AAS Environment and standalone AAS/Submodel repositories support core resource APIs, representations, attachments, and synchronous invocation. Query, history, bulk, import/export, signed representations, and asynchronous routes are rejected in resource-bound-first mode. Legacy ABAC retains its existing surface. OpenAPI adds resource-access paths when the mode is enabled.
+AAS Environment, standalone AAS/Submodel repositories, AAS Registry, Submodel Registry, Discovery, and Concept Description Repository support their core CRUD, list, search, and query routes. Repository representations, attachments, and synchronous invocation are also supported. History, bulk, import/export, signed representations, and asynchronous routes are rejected in resource-bound-first mode. Legacy ABAC retains its existing surface. OpenAPI adds resource-access paths when the mode is enabled.
 
 Run the database-backed access tests against a migrated isolated database:
 
@@ -60,4 +103,4 @@ BASYX_REBAC_TEST_DSN='postgres://user:password@localhost/database?sslmode=disabl
 
 The integration suite uses test-only identity injection after OIDC middleware and the real repository controllers and PostgreSQL. Run the existing OIDC security suites separately to verify token handling. Without the database variable these additional tests report a skip. The mandatory regression command remains `go clean -testcache` followed by `go test -v ./internal/submodelrepository/integration_tests`.
 
-See the [bridge example](../../examples/BaSyxResourceBoundExample/README.md).
+See the activated [secured example](../../examples/BaSyxSecuredExample/README.md).

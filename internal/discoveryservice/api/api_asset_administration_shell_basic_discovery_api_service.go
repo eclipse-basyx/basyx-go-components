@@ -207,6 +207,8 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 	err := s.discoveryBackend.CreateAllAssetLinks(ctx, string(decodeDiscoveryIdentifier), specificAssetID)
 	if err != nil {
 		switch {
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "PostAllAssetLinksById", "Denied"), nil
 		case common.IsErrBadRequest(err):
 			slog.ErrorContext(ctx, "Error PostAllAssetLinksById: bad request", "error.code", "API-POSTALLASSETLINKSBYID-VALIDATE", "error", err, "component", componentName, "decode_discovery_identifier", string(decodeDiscoveryIdentifier))
 			return common.NewErrorResponse(
@@ -266,6 +268,8 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 	err := s.discoveryBackend.AddAllAssetLinks(ctx, string(decodeDiscoveryIdentifier), specificAssetID)
 	if err != nil {
 		switch {
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "AddAllAssetLinksById", "Denied"), nil
 		case common.IsErrBadRequest(err):
 			slog.ErrorContext(ctx, "Error AddAllAssetLinksById: bad request", "error.code", "API-ADDALLASSETLINKSBYID-VALIDATE", "error", err, "component", componentName, "decode_discovery_identifier", string(decodeDiscoveryIdentifier))
 			return common.NewErrorResponse(
@@ -327,6 +331,8 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLink
 	err := s.discoveryBackend.DeleteAllAssetLinks(ctx, string(decoded))
 	if err != nil {
 		switch {
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "DeleteAllAssetLinksById", "Denied"), nil
 		case common.IsErrNotFound(err):
 			slog.ErrorContext(ctx, "Error DeleteAllAssetLinksById: not found", "error.code", "API-DELETEALLASSETLINKSBYID-FIND", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(

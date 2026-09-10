@@ -54,6 +54,7 @@ import (
 
 type accessClient struct {
 	t       *testing.T
+	db      *sql.DB
 	server  *httptest.Server
 	restart func() accessClient
 }
@@ -66,6 +67,12 @@ func (c accessClient) request(method, path, user string, body any, etag string, 
 		raw, err = json.Marshal(body)
 		require.NoError(c.t, err)
 	}
+	data, headers := c.requestRaw(method, path, user, raw, etag, status)
+	return data, headers.Get("ETag")
+}
+
+func (c accessClient) requestRaw(method, path, user string, raw []byte, etag string, status int) ([]byte, http.Header) {
+	c.t.Helper()
 	req, err := http.NewRequestWithContext(c.t.Context(), method, c.server.URL+path, bytes.NewReader(raw))
 	require.NoError(c.t, err)
 	req.Header.Set("X-Test-Subject", user)
@@ -79,7 +86,7 @@ func (c accessClient) request(method, path, user string, body any, etag string, 
 	data, err := io.ReadAll(response.Body)
 	require.NoError(c.t, err)
 	require.Equal(c.t, status, response.StatusCode, "%s %s: %s", method, path, data)
-	return data, response.Header.Get("ETag")
+	return data, response.Header
 }
 func (c accessClient) mutate(method, path, user string, body any, status int) []byte {
 	c.t.Helper()
@@ -127,6 +134,7 @@ func newAccessClientWithBasePath(t *testing.T, basePath string) accessClient {
 	doc := map[string]any{"ResourceBoundAccessRuleModels": []any{
 		policy(map[string]string{"ROUTE": "/submodels"}, rule("admin", "ALL"), rule("creator", "CREATE")),
 		policy(map[string]string{"ROUTE": "/shells"}, rule("admin", "ALL")),
+		policy(map[string]string{"ROUTE": "/lookup/shells"}, rule("admin", "ALL")),
 	}}
 	initial, err := json.Marshal(doc)
 	require.NoError(t, err)
@@ -152,7 +160,9 @@ func startAccessClient(t *testing.T, cfg *common.Config, db *sql.DB) accessClien
 	fallbackRule["OBJECTS"] = []any{map[string]string{"ROUTE": "/*"}}
 	fallbackData, err := json.Marshal(map[string]any{"AllAccessPermissionRules": map[string]any{"rules": []any{fallbackRule}}})
 	require.NoError(t, err)
-	fallback, err := auth.ParseAccessModel(fallbackData, router, basePath)
+	materializedFallback, err := auth.MaterializeABACPolicy(fallbackData, router, basePath)
+	require.NoError(t, err)
+	fallback, err := auth.AccessModelFromMaterializedRules(materializedFallback.PolicyID, materializedFallback.Rules, router, basePath)
 	require.NoError(t, err)
 	require.NoError(t, auth.SetupResourceBoundSecurity(ctx, cfg, router, db, fallbackProvider{fallback}, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -176,6 +186,9 @@ func startAccessClient(t *testing.T, cfg *common.Config, db *sql.DB) accessClien
 	for _, route := range aasController.Routes() {
 		router.Method(route.Method, route.Pattern, route.HandlerFunc)
 	}
+	router.Method(http.MethodPost, "/lookup/shells/{aasIdentifier}", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
 	var handler http.Handler = router
 	if basePath != "" {
 		root := chi.NewRouter()
@@ -184,7 +197,14 @@ func startAccessClient(t *testing.T, cfg *common.Config, db *sql.DB) accessClien
 	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return accessClient{t: t, server: server, restart: func() accessClient { return startAccessClient(t, cfg, db) }}
+	return accessClient{t: t, db: db, server: server, restart: func() accessClient { return startAccessClient(t, cfg, db) }}
+}
+
+func TestResourceBoundDiscoveryPostUsesCollectionCreationPolicy(t *testing.T) {
+	c := newAccessClient(t)
+	path := "/lookup/shells/" + encoded("urn:rebac:discovery:"+uuid.NewString())
+	c.request(http.MethodPost, path, "admin", []any{map[string]string{"name": "serial", "value": "1"}}, "", http.StatusCreated)
+	c.request(http.MethodPost, path, "outsider", []any{map[string]string{"name": "serial", "value": "1"}}, "", http.StatusForbidden)
 }
 
 func TestResourceBoundAccessLifecycle(t *testing.T) {
@@ -203,7 +223,7 @@ func TestResourceBoundAccessLifecycle(t *testing.T) {
 	client.mutate("POST", access+"/grants", "admin", grant("reader", "READ"), 409)
 	client.request("PUT", access+"/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}), "", 428)
 	client.mutate("PUT", access+"/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}), 200)
-	client.request("GET", path, "admin", nil, "", 403)
+	client.request("GET", path, "admin", nil, "", 200)
 	client.mutate("POST", access+"/grants", "admin", grant("admin", "ALL"), 201)
 	client.mutate("POST", access+"/grants", "admin", grant("reader", "READ"), 201)
 	client.request("GET", path, "reader", nil, "", 200)
@@ -239,8 +259,6 @@ func TestResourceBoundCreatorAndRecreation(t *testing.T) {
 	model := map[string]any{"modelType": "Submodel", "id": id, "idShort": "Created"}
 	c.request("PUT", path, "creator", model, "", 201)
 	c.request("GET", access, "creator", nil, "", 200)
-	c.request("GET", path, "creator", nil, "", 403)
-	c.mutate("PUT", access+"/policy", "creator", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}, rule("creator", "ALL")), 200)
 	c.request("GET", path, "creator", nil, "", 200)
 	c.request("DELETE", path, "creator", nil, "", 204)
 	c.request("POST", "/submodels", "admin", model, "", 201)
@@ -278,7 +296,7 @@ func TestResourceBoundNestedAliasesAndAmbiguousInheritance(t *testing.T) {
 	}
 }
 
-func TestResourceBoundFallbackDoesNotWidenFilters(t *testing.T) {
+func TestResourceBoundAndABACPermissionsAreCombined(t *testing.T) {
 	c := newAccessClient(t)
 	id := "urn:filter:" + uuid.NewString()
 	path := "/submodels/" + encoded(id)
@@ -288,7 +306,7 @@ func TestResourceBoundFallbackDoesNotWidenFilters(t *testing.T) {
 	filtered["FILTER"] = map[string]any{"FRAGMENT": "$sme#value", "CONDITION": map[string]any{"$boolean": false}}
 	c.mutate("PUT", access+"/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}, filtered), 200)
 	data, _ := c.request("GET", path, "auditor", nil, "", 200)
-	require.NotContains(t, string(data), "hidden")
+	require.Contains(t, string(data), "hidden")
 	conditional := rule("auditor", "READ")
 	conditional["FORMULA"] = map[string]any{"$and": []any{conditional["FORMULA"], map[string]any{"$eq": []any{map[string]any{"$field": "$sm#idShort"}, map[string]any{"$strVal": "Different"}}}}}
 	c.mutate("PUT", access+"/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}, conditional), 200)
@@ -296,6 +314,209 @@ func TestResourceBoundFallbackDoesNotWidenFilters(t *testing.T) {
 	require.Contains(t, string(data), "hidden")
 	c.mutate("DELETE", access+"/policy", "admin", nil, 204)
 	c.request("DELETE", path, "admin", nil, "", 204)
+}
+
+func TestAdminCreatedAASIsHiddenWithoutReBACOrABACRead(t *testing.T) {
+	c := newAccessClient(t)
+	c.mutate(http.MethodPost, "/shells/$access/grants", "admin", grant("creator", "CREATE"), http.StatusCreated)
+	adminID := "urn:admin-owned:" + uuid.NewString()
+	adminPath := "/shells/" + encoded(adminID)
+	shell := map[string]any{
+		"modelType":        "AssetAdministrationShell",
+		"id":               adminID,
+		"idShort":          "AdminOwned",
+		"assetInformation": map[string]string{"assetKind": "Instance"},
+	}
+	c.request(http.MethodPost, "/shells", "admin", shell, "", http.StatusCreated)
+	c.request(http.MethodGet, adminPath, "creator", nil, "", http.StatusForbidden)
+
+	creatorID := "urn:creator-owned:" + uuid.NewString()
+	creatorPath := "/shells/" + encoded(creatorID)
+	shell["id"] = creatorID
+	shell["idShort"] = "CreatorOwned"
+	c.request(http.MethodPost, "/shells", "creator", shell, "", http.StatusCreated)
+	c.request(http.MethodGet, creatorPath, "creator", nil, "", http.StatusOK)
+
+	data, _ := c.request(http.MethodGet, "/shells", "creator", nil, "", http.StatusOK)
+	require.Contains(t, string(data), creatorID)
+	require.NotContains(t, string(data), adminID)
+	data, _ = c.request(http.MethodGet, "/shells", "auditor", nil, "", http.StatusOK)
+	require.Contains(t, string(data), creatorID)
+	require.Contains(t, string(data), adminID)
+
+	c.request(http.MethodDelete, creatorPath, "creator", nil, "", http.StatusNoContent)
+	c.request(http.MethodDelete, adminPath, "admin", nil, "", http.StatusNoContent)
+}
+
+func TestAASUpdateCapabilitiesUseEffectiveAuthorization(t *testing.T) {
+	c := newAccessClient(t)
+	c.mutate(http.MethodPost, "/shells/$access/grants", "admin", grant("builder", "CREATE"), http.StatusCreated)
+	c.mutate(http.MethodPost, "/submodels/$access/grants", "admin", grant("builder", "CREATE"), http.StatusCreated)
+
+	id := "urn:capabilities:" + uuid.NewString()
+	path := "/shells/" + encoded(id)
+	access := path + "/$access"
+	capabilities := access + "/capabilities"
+	shell := map[string]any{
+		"modelType":        "AssetAdministrationShell",
+		"id":               id,
+		"idShort":          "CapabilityTarget",
+		"assetInformation": map[string]string{"assetKind": "Instance"},
+	}
+	c.request(http.MethodPost, "/shells", "admin", shell, "", http.StatusCreated)
+	filteredUpdate := rule("filtered", "UPDATE")
+	filteredUpdate["FORMULA"] = map[string]any{"$and": []any{
+		filteredUpdate["FORMULA"],
+		map[string]any{"$eq": []any{map[string]any{"$field": "$aas#idShort"}, map[string]string{"$strVal": "Different"}}},
+	}}
+	binding := map[string]string{"IDENTIFIABLE": "$aas(" + strconvQuote(id) + ")"}
+	c.mutate(http.MethodPut, access+"/policy", "admin", policy(binding, rule("admin", "ALL"), rule("builder", "READ"), rule("filtered", "READ"), filteredUpdate), http.StatusOK)
+
+	assertAASCapability(t, c, capabilities, "builder", false)
+	c.request(http.MethodGet, access, "builder", nil, "", http.StatusForbidden)
+	shell["idShort"] = "ForbiddenUpdate"
+	c.request(http.MethodPut, path, "builder", shell, "", http.StatusForbidden)
+	shell["idShort"] = "CapabilityTarget"
+
+	c.mutate(http.MethodPost, access+"/grants", "admin", grant("builder", "UPDATE"), http.StatusCreated)
+	assertAASCapability(t, c, capabilities, "builder", true)
+	assertAASCapability(t, c, capabilities, "auditor", true)
+	assertAASCapability(t, c, capabilities, "filtered", false)
+
+	filteredUpdate = rule("filtered", "UPDATE")
+	filteredUpdate["FORMULA"] = map[string]any{"$and": []any{
+		filteredUpdate["FORMULA"],
+		map[string]any{"$eq": []any{map[string]any{"$field": "$aas#idShort"}, map[string]string{"$strVal": "CapabilityTarget"}}},
+	}}
+	c.mutate(http.MethodPut, access+"/policy", "admin", policy(binding, rule("admin", "ALL"), rule("builder", "READ", "UPDATE"), rule("filtered", "READ"), filteredUpdate), http.StatusOK)
+	assertAASCapability(t, c, capabilities, "filtered", true)
+
+	c.mutate(http.MethodPut, access+"/managers", "admin", []any{principal("manager")}, http.StatusOK)
+	assertAASCapability(t, c, capabilities, "manager", true)
+	c.request(http.MethodDelete, path, "admin", nil, "", http.StatusNoContent)
+}
+
+func TestAASUpdateCapabilitiesRespectOwnershipInheritanceAndHaveNoSideEffects(t *testing.T) {
+	c := newAccessClient(t)
+	c.mutate(http.MethodPost, "/shells/$access/grants", "admin", grant("creator", "CREATE"), http.StatusCreated)
+
+	ownedID := "urn:capabilities:owned:" + uuid.NewString()
+	ownedPath := "/shells/" + encoded(ownedID)
+	ownedAccess := ownedPath + "/$access"
+	shell := map[string]any{
+		"modelType":        "AssetAdministrationShell",
+		"id":               ownedID,
+		"idShort":          "OwnedCapabilityTarget",
+		"assetInformation": map[string]string{"assetKind": "Instance"},
+	}
+	c.request(http.MethodPost, "/shells", "creator", shell, "", http.StatusCreated)
+	resourceBefore, _ := c.request(http.MethodGet, ownedPath, "creator", nil, "", http.StatusOK)
+	before, beforeETag := c.request(http.MethodGet, ownedAccess, "creator", nil, "", http.StatusOK)
+	capabilityBody, headers := c.requestRaw(http.MethodGet, ownedAccess+"/capabilities", "creator", nil, "", http.StatusOK)
+	require.JSONEq(t, `{"canUpdate":true}`, string(capabilityBody))
+	require.Equal(t, "no-store", headers.Get("Cache-Control"))
+	require.Empty(t, headers.Get("ETag"))
+	after, afterETag := c.request(http.MethodGet, ownedAccess, "creator", nil, "", http.StatusOK)
+	resourceAfter, _ := c.request(http.MethodGet, ownedPath, "creator", nil, "", http.StatusOK)
+	require.JSONEq(t, string(resourceBefore), string(resourceAfter))
+	require.JSONEq(t, string(before), string(after))
+	require.Equal(t, beforeETag, afterETag)
+
+	c.mutate(http.MethodPost, "/shells/$access/grants", "admin", grant("inherited", "READ", "UPDATE"), http.StatusCreated)
+	inheritedID := "urn:capabilities:inherited:" + uuid.NewString()
+	inheritedPath := "/shells/" + encoded(inheritedID)
+	shell["id"] = inheritedID
+	shell["idShort"] = "InheritedCapabilityTarget"
+	c.request(http.MethodPost, "/shells", "admin", shell, "", http.StatusCreated)
+	assertAASCapability(t, c, inheritedPath+"/$access/capabilities", "inherited", true)
+	c.mutate(http.MethodPut, inheritedPath+"/$access/policy", "admin", policy(
+		map[string]string{"IDENTIFIABLE": "$aas(" + strconvQuote(inheritedID) + ")"},
+		rule("admin", "ALL"),
+		rule("inherited", "READ"),
+	), http.StatusOK)
+	assertAASCapability(t, c, inheritedPath+"/$access/capabilities", "inherited", false)
+
+	c.request(http.MethodDelete, ownedPath, "creator", nil, "", http.StatusNoContent)
+	c.request(http.MethodDelete, inheritedPath, "admin", nil, "", http.StatusNoContent)
+}
+
+func TestAASUpdateCapabilitiesHideUnknownAndInvisibleResources(t *testing.T) {
+	c := newAccessClient(t)
+	id := "urn:capabilities:hidden:" + uuid.NewString()
+	path := "/shells/" + encoded(id)
+	shell := map[string]any{
+		"modelType":        "AssetAdministrationShell",
+		"id":               id,
+		"idShort":          "HiddenCapabilityTarget",
+		"assetInformation": map[string]string{"assetKind": "Instance"},
+	}
+	c.request(http.MethodPost, "/shells", "admin", shell, "", http.StatusCreated)
+
+	hiddenBody, hiddenHeaders := c.requestRaw(http.MethodGet, path+"/$access/capabilities", "outsider", nil, "", http.StatusNotFound)
+	unknownPath := "/shells/" + encoded("urn:capabilities:unknown:"+uuid.NewString()) + "/$access/capabilities"
+	unknownBody, unknownHeaders := c.requestRaw(http.MethodGet, unknownPath, "outsider", nil, "", http.StatusNotFound)
+	require.Equal(t, hiddenBody, unknownBody)
+	assertNeutralCapabilityHeaders(t, hiddenHeaders)
+	assertNeutralCapabilityHeaders(t, unknownHeaders)
+	require.Equal(t, hiddenHeaders.Get("Cache-Control"), unknownHeaders.Get("Cache-Control"))
+	require.Equal(t, hiddenHeaders.Get("Content-Type"), unknownHeaders.Get("Content-Type"))
+
+	unauthenticatedExisting, existingHeaders := c.requestRaw(http.MethodGet, path+"/$access/capabilities", "", nil, "", http.StatusUnauthorized)
+	unauthenticatedUnknown, missingHeaders := c.requestRaw(http.MethodGet, unknownPath, "", nil, "", http.StatusUnauthorized)
+	require.Equal(t, unauthenticatedExisting, unauthenticatedUnknown)
+	require.Equal(t, existingHeaders.Get("Cache-Control"), missingHeaders.Get("Cache-Control"))
+	require.Equal(t, existingHeaders.Get("Content-Type"), missingHeaders.Get("Content-Type"))
+	c.request(http.MethodDelete, path, "admin", nil, "", http.StatusNoContent)
+}
+
+func TestAASUpdateCapabilitiesFailClosedAndAuthenticateBeforeEvaluation(t *testing.T) {
+	c := newAccessClient(t)
+	id := "urn:capabilities:failure:" + uuid.NewString()
+	path := "/shells/" + encoded(id)
+	shell := map[string]any{
+		"modelType":        "AssetAdministrationShell",
+		"id":               id,
+		"idShort":          "FailedCapabilityTarget",
+		"assetInformation": map[string]string{"assetKind": "Instance"},
+	}
+	c.request(http.MethodPost, "/shells", "admin", shell, "", http.StatusCreated)
+	invalidRequest, err := http.NewRequestWithContext(t.Context(), http.MethodGet, c.server.URL+path+"/$access/capabilities", nil)
+	require.NoError(t, err)
+	invalidRequest.Header.Set("Authorization", "Bearer invalid")
+	invalidResponse, err := c.server.Client().Do(invalidRequest)
+	require.NoError(t, err)
+	defer func() { _ = invalidResponse.Body.Close() }()
+	require.Equal(t, http.StatusUnauthorized, invalidResponse.StatusCode)
+	require.Equal(t, "no-store", invalidResponse.Header.Get("Cache-Control"))
+
+	require.NoError(t, c.db.Close())
+
+	unknownPath := "/shells/" + encoded("urn:capabilities:unknown:"+uuid.NewString()) + "/$access/capabilities"
+	c.requestRaw(http.MethodGet, unknownPath, "", nil, "", http.StatusUnauthorized)
+	body, headers := c.requestRaw(http.MethodGet, path+"/$access/capabilities", "admin", nil, "", http.StatusInternalServerError)
+	require.JSONEq(t, `{"message":"capability check failed"}`, string(body))
+	require.NotContains(t, string(body), id)
+	require.NotContains(t, string(body), "canUpdate")
+	assertNeutralCapabilityHeaders(t, headers)
+}
+
+func assertAASCapability(t *testing.T, c accessClient, path, user string, expected bool) {
+	t.Helper()
+	data, headers := c.requestRaw(http.MethodGet, path, user, nil, "", http.StatusOK)
+	var response map[string]bool
+	require.NoError(t, json.Unmarshal(data, &response))
+	require.Equal(t, map[string]bool{"canUpdate": expected}, response)
+	require.Equal(t, "no-store", headers.Get("Cache-Control"))
+	require.Empty(t, headers.Get("ETag"))
+	require.Empty(t, headers.Get("Last-Modified"))
+}
+
+func assertNeutralCapabilityHeaders(t *testing.T, headers http.Header) {
+	t.Helper()
+	require.Equal(t, "no-store", headers.Get("Cache-Control"))
+	require.Equal(t, "application/json", headers.Get("Content-Type"))
+	require.Empty(t, headers.Get("ETag"))
+	require.Empty(t, headers.Get("Last-Modified"))
 }
 
 func TestResourceBoundGrantRoundTripAndContextPath(t *testing.T) {
@@ -351,7 +572,9 @@ func TestResourceBoundCompoundPutRequiresLifecycleRights(t *testing.T) {
 	c.request("PUT", path, "editor", root, "", 403)
 	c.mutate("PUT", path+"/$access/policy", "admin", policy(binding, rule("editor", "UPDATE", "CREATE")), 200)
 	c.request("PUT", path, "editor", root, "", 204)
-	c.request("GET", path+"/submodel-elements/Added/$access", "editor", nil, "", 200)
+	childAccess := path + "/submodel-elements/Added/$access"
+	c.request("GET", childAccess, "editor", nil, "", 200)
+	c.mutate("PUT", childAccess+"/owners", "editor", []any{principal("admin")}, 200)
 	delete(root, "submodelElements")
 	c.request("PUT", path, "editor", root, "", 403)
 	c.mutate("PUT", path+"/$access/policy", "admin", policy(binding, rule("editor", "UPDATE", "DELETE")), 200)
@@ -514,4 +737,61 @@ func TestResourceBoundAnonymousReadKeepsAdministrationProtected(t *testing.T) {
 	c.mutate("PUT", path+"/$access/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}, anonymous), 200)
 	c.request("GET", path, "", nil, "", 200)
 	c.request("GET", path+"/$access", "", nil, "", 401)
+}
+
+func TestResourceBoundAccessInputValidationAndResponseMetadata(t *testing.T) {
+	c := newAccessClient(t)
+	id := "urn:rebac:validation:" + uuid.NewString()
+	path := "/submodels/" + encoded(id)
+	access := path + "/$access"
+	c.request("POST", "/submodels", "admin", map[string]any{"modelType": "Submodel", "id": id}, "", http.StatusCreated)
+	c.mutate("PUT", access+"/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}, rule("admin", "ALL")), http.StatusOK)
+	baseline, baselineETag := c.request("GET", access, "admin", nil, "", http.StatusOK)
+
+	cases := []struct {
+		name, method, suffix, body, message string
+		status                              int
+	}{
+		{"trailing JSON", http.MethodPost, "/grants", `{"principal":{"issuer":"https://rebac.test","subject":"reader"},"rights":["READ"]}{}`, "multiple JSON values", http.StatusBadRequest},
+		{"whitespace principal", http.MethodPost, "/grants", `{"principal":{"issuer":"https://rebac.test","subject":" "},"rights":["READ"]}`, "non-whitespace", http.StatusBadRequest},
+		{"duplicate rights", http.MethodPost, "/grants", `{"principal":{"issuer":"https://rebac.test","subject":"reader"},"rights":["READ","READ"]}`, "duplicate right READ", http.StatusBadRequest},
+		{"duplicate managers", http.MethodPut, "/managers", `[{"issuer":"https://rebac.test","subject":"manager"},{"issuer":"https://rebac.test","subject":"manager"}]`, "duplicate principal", http.StatusBadRequest},
+		{"invalid grant ID", http.MethodPut, "/grants/not-a-uuid", `{"principal":{"issuer":"https://rebac.test","subject":"reader"},"rights":["READ"]}`, "invalid grant ID", http.StatusBadRequest},
+		{"unknown grant", http.MethodDelete, "/grants/" + uuid.NewString(), "", "unknown managed grant", http.StatusNotFound},
+		{"unsupported method", http.MethodPost, "/policy", `{}`, "expected PUT or DELETE", http.StatusMethodNotAllowed},
+		{"mismatched resource", http.MethodPut, "/policy", `{"RESOURCE":{"ROUTE":"/submodels"},"rules":[]}`, "binding differs", http.StatusBadRequest},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			local := c
+			local.t = t
+			data, _ := local.requestRaw(test.method, access+test.suffix, "admin", []byte(test.body), baselineETag, test.status)
+			require.Contains(t, string(data), test.message)
+			current, currentETag := local.request("GET", access, "admin", nil, "", http.StatusOK)
+			require.JSONEq(t, string(baseline), string(current))
+			require.Equal(t, baselineETag, currentETag)
+		})
+	}
+
+	oversized := bytes.Repeat([]byte(" "), (1<<20)+1)
+	data, _ := c.requestRaw(http.MethodPost, access+"/grants", "admin", oversized, baselineETag, http.StatusRequestEntityTooLarge)
+	require.Contains(t, string(data), "exceeds 1 MiB")
+
+	createdData, headers := c.requestRaw(http.MethodPost, access+"/grants", "admin", mustMarshal(t, grant("reader", "READ")), baselineETag, http.StatusCreated)
+	var created struct {
+		ID string `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(createdData, &created))
+	require.Equal(t, access+"/grants/"+created.ID, headers.Get("Location"))
+	require.NotEmpty(t, headers.Get("ETag"))
+	require.Equal(t, "application/json", headers.Get("Content-Type"))
+
+	c.request("POST", "/submodels", " ", map[string]any{"modelType": "Submodel", "id": "urn:rebac:blank:" + uuid.NewString()}, "", http.StatusUnauthorized)
+}
+
+func mustMarshal(t *testing.T, value any) []byte {
+	t.Helper()
+	data, err := json.Marshal(value)
+	require.NoError(t, err)
+	return data
 }

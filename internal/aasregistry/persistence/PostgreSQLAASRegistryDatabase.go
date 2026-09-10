@@ -180,6 +180,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 ) (model.AssetAdministrationShellDescriptor, error) {
 	if common.SupportsPostgreSQLBatch(p.writerDB) &&
 		!history.MutationRecordingEnabled() &&
+		!auth.ResourceBoundRequestActive(ctx) &&
 		descriptors.CanSkipPostInsertReadback(ctx) {
 		return p.insertAdministrationShellDescriptorBatch(ctx, aasd)
 	}
@@ -196,6 +197,12 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 		}
 		if batchErr := common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); batchErr != nil {
 			return mapInsertAASDescriptorError(batchErr)
+		}
+		if rebacErr := auth.ResourceBoundCreatedTx(ctx, tx, "aas_descriptor", aasd.Id); rebacErr != nil {
+			return rebacErr
+		}
+		if rebacErr := auth.ResourceBoundDiscoveryCreatedTx(ctx, tx, aasd.Id); rebacErr != nil {
+			return rebacErr
 		}
 
 		stored, getErr := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
@@ -285,6 +292,12 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 	}
 	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
 		return mapInsertAASDescriptorError(err)
+	}
+	if err = auth.ResourceBoundCreatedTx(ctx, tx, "aas_descriptor", aasd.Id); err != nil {
+		return err
+	}
+	if err = auth.ResourceBoundDiscoveryCreatedTx(ctx, tx, aasd.Id); err != nil {
+		return err
 	}
 
 	if descriptors.CanSkipCreateReadback(ctx) && !history.MutationRecordingEnabled() {
@@ -464,6 +477,9 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	aasIdentifier string,
 ) error {
 	return common.ExecuteInTransaction(p.writerDB, "AASREG-DELAASDESC-STARTTX", "AASREG-DELAASDESC-COMMIT", func(tx *sql.Tx) error {
+		if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas_descriptor", aasIdentifier); err != nil {
+			return err
+		}
 		if !history.MutationRecordingEnabled() && descriptors.CanSkipDeleteReadback(ctx) {
 			return descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 		}
@@ -553,6 +569,9 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 ) (model.AssetAdministrationShellDescriptor, error) {
 	var result model.AssetAdministrationShellDescriptor
 	err := common.ExecuteInTransaction(p.writerDB, "AASREG-REPLACEAASDESC-STARTTX", "AASREG-REPLACEAASDESC-COMMIT", func(tx *sql.Tx) error {
+		if rebacErr := auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas_descriptor", aasd.Id); rebacErr != nil {
+			return rebacErr
+		}
 		previousSnapshot, snapshotErr := loadAuthorizedAASDescriptorEvidenceSnapshotTx(ctx, tx, aasd.Id, false)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -615,6 +634,9 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 	descriptorID, lockErr := descriptors.LockAdministrationShellDescriptorForUpdateTx(ctx, tx, aasd.Id)
 	switch {
 	case lockErr == nil:
+		if rebacErr := auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas_descriptor", aasd.Id); rebacErr != nil {
+			return rebacErr
+		}
 		previous, getErr := loadAASDescriptorForUpdateTx(ctx, tx, aasd.Id)
 		if getErr != nil {
 			return getErr
@@ -631,6 +653,12 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 	case common.IsErrNotFound(lockErr):
 		created = true
 		if insertErr := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); insertErr != nil {
+			return insertErr
+		}
+		if insertErr := auth.ResourceBoundCreatedTx(ctx, tx, "aas_descriptor", aasd.Id); insertErr != nil {
+			return insertErr
+		}
+		if insertErr := auth.ResourceBoundDiscoveryCreatedTx(ctx, tx, aasd.Id); insertErr != nil {
 			return insertErr
 		}
 	default:
@@ -668,6 +696,9 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 ) error {
 	if tx == nil {
 		return common.NewInternalServerError("AASREG-DELAASDESC-NILTX transaction must not be nil")
+	}
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas_descriptor", aasIdentifier); err != nil {
+		return err
 	}
 	if !history.MutationRecordingEnabled() && descriptors.CanSkipDeleteReadback(ctx) {
 		return descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
@@ -800,6 +831,9 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 		if err != nil {
 			return err
 		}
+		if err = auth.ResourceBoundCreatedTx(ctx, tx, "submodel_descriptor", submodel.Id, aasID); err != nil {
+			return err
+		}
 		if err := p.appendAddedSubmodelDescriptorHistoryTx(ctx, tx, aasID, previousSnapshot, stored); err != nil {
 			return err
 		}
@@ -834,6 +868,9 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.writerDB, "AASREG-REPLACESMDESCFORAAS-STARTTX", "AASREG-REPLACESMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		if rebacErr := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel_descriptor", submodel.Id, aasID); rebacErr != nil {
+			return rebacErr
+		}
 		previousSnapshot, snapshotErr := loadAuthorizedEmbeddedDescriptorEvidenceSnapshotTx(
 			ctx, tx, aasID, submodel.Id, descriptors.CanSkipUpdateReadback(ctx),
 		)
@@ -903,6 +940,9 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteSubmodelDescriptorForAASByID(
 	submodelID string,
 ) error {
 	return common.ExecuteInTransaction(p.writerDB, "AASREG-DELSMDESCFORAAS-STARTTX", "AASREG-DELSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		if rebacErr := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel_descriptor", submodelID, aasID); rebacErr != nil {
+			return rebacErr
+		}
 		previousSnapshot, snapshotErr := loadAuthorizedEmbeddedDescriptorEvidenceSnapshotTx(
 			ctx, tx, aasID, submodelID, descriptors.CanSkipDeleteReadback(ctx),
 		)

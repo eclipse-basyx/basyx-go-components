@@ -55,6 +55,8 @@ func TestResourceBoundDocumentValidation(t *testing.T) {
 	for _, input := range cases {
 		t.Run(input, func(t *testing.T) { _, err := ParseResourceBoundDocument([]byte(input)); require.Error(t, err) })
 	}
+	_, err = ParseResourceBoundDocument([]byte(valid + `{}`))
+	require.ErrorContains(t, err, "COMMON-JSON-TRAILING")
 }
 
 func TestResourceBoundRulesRejectObjectBindingsAndMissingAlternatives(t *testing.T) {
@@ -123,4 +125,51 @@ func TestResourceBoundRouteAndIdentifiableDuplicates(t *testing.T) {
 	document := `{"ResourceBoundAccessRuleModels":[{"RESOURCE":{"ROUTE":"/submodels/c20"},"rules":[]},{"RESOURCE":{"IDENTIFIABLE":"$sm(\"sm\")"},"rules":[]}]}`
 	_, err := ParseResourceBoundDocument([]byte(document))
 	require.ErrorContains(t, err, "DUPLICATE")
+}
+
+func TestResourceBoundReferenceInputUsesSubmodelObjectsAndOriginalRoute(t *testing.T) {
+	state := &boundRequest{
+		repo:  &resourceBoundRepository{basePath: "/api"},
+		input: EvalInput{Path: "/api/shells", RoutePath: "/api/shells"},
+	}
+	input := resourceBoundReferenceInput(state)
+	require.Equal(t, "/api/submodels", input.Path)
+	require.Equal(t, "/api/shells", input.RoutePath)
+
+	state.input.RoutePath = ""
+	input = resourceBoundReferenceInput(state)
+	require.Equal(t, "/api/shells", input.RoutePath)
+}
+
+func TestResourceBoundTargetsCoverRegistriesDiscoveryAndConceptDescriptions(t *testing.T) {
+	tests := []struct {
+		path, kind, aas, submodel, suffix string
+	}{
+		{"/shell-descriptors", "shell-descriptors", "", "", ""},
+		{"/shell-descriptors/YWFz", "aas_descriptor", "aas", "", ""},
+		{"/shell-descriptors/YWFz/submodel-descriptors/c20", "submodel_descriptor", "aas", "sm", ""},
+		{"/shell-descriptors/YWFz/submodel-descriptors", "aas_descriptor", "aas", "", "submodel-descriptors"},
+		{"/submodel-descriptors/c20", "submodel_descriptor", "", "sm", ""},
+		{"/concept-descriptions/Y2Q", "concept_description", "", "cd", ""},
+		{"/lookup/shells/YWFz", "discovery", "aas", "", ""},
+		{"/lookup/shellsByAssetLink", "lookup/shells", "", "", ""},
+		{"/query/shell-descriptors", "shell-descriptors", "", "", ""},
+	}
+	for _, test := range tests {
+		t.Run(test.path, func(t *testing.T) {
+			target, err := parseBoundTarget(test.path, "")
+			require.NoError(t, err)
+			require.Equal(t, test.kind, target.Kind)
+			require.Equal(t, test.aas, target.AAS)
+			require.Equal(t, test.submodel, target.Submodel)
+			require.Equal(t, test.suffix, target.Suffix)
+		})
+	}
+}
+
+func TestResourceBoundDiscoveryRouteHasStableNonRecursiveKey(t *testing.T) {
+	object := grammar.ObjectItem{Kind: grammar.Route, Route: &grammar.RouteValue{Route: "/lookup/shells/YWFz"}}
+	key, err := ResourceBoundKey(object)
+	require.NoError(t, err)
+	require.Equal(t, "discovery:aas", key)
 }

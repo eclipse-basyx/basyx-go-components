@@ -53,14 +53,30 @@ func SetupResourceBoundSecurity(ctx context.Context, cfg *common.Config, router 
 	if err != nil {
 		return err
 	}
-	applySecurityMiddleware(router, oidc.Middleware, repo.middleware, claimsMiddleware...)
+	oidcWithCapabilityHeaders := func(next http.Handler) http.Handler {
+		return repo.capabilityHeaders(oidc.Middleware(next))
+	}
+	applySecurityMiddleware(router, oidcWithCapabilityHeaders, repo.middleware, claimsMiddleware...)
 	return nil
+}
+
+func (repo *resourceBoundRepository) capabilityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isAASCapabilitiesPath(stripBasePath(repo.basePath, r.URL.EscapedPath())) {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (repo *resourceBoundRepository) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := stripBasePath(repo.basePath, r.URL.Path)
 		if repo.serveFallbackRoute(next, w, r, path) {
+			return
+		}
+		if isAASCapabilitiesPath(stripBasePath(repo.basePath, r.URL.EscapedPath())) {
+			repo.serveAASCapabilities(w, r)
 			return
 		}
 		pattern := repo.router.Find(chi.NewRouteContext(), r.Method, stripBasePath(repo.basePath, r.URL.EscapedPath()))
@@ -71,10 +87,6 @@ func (repo *resourceBoundRepository) middleware(next http.Handler) http.Handler 
 		target, err := parseBoundTarget(r.URL.EscapedPath(), repo.basePath)
 		if err != nil {
 			writeBoundError(w, boundError(http.StatusNotFound, "ROUTE unsupported resource path"))
-			return
-		}
-		if err := checkBoundWriteIdentity(r); err != nil {
-			writeBoundError(w, err)
 			return
 		}
 		if target.Access {
@@ -89,11 +101,11 @@ func (repo *resourceBoundRepository) middleware(next http.Handler) http.Handler 
 		repo.serveResource(next, w, r, target)
 	})
 }
-func checkBoundWriteIdentity(r *http.Request) error {
-	if r.Method == http.MethodGet {
+func checkBoundWriteIdentity(ctx context.Context, right grammar.RightsEnum) error {
+	if right == grammar.RightsEnumREAD || right == grammar.RightsEnumVIEW {
 		return nil
 	}
-	_, err := boundActor(r.Context())
+	_, err := boundActor(ctx)
 	return err
 }
 
@@ -110,7 +122,7 @@ func (repo *resourceBoundRepository) serveFallbackRoute(next http.Handler, w htt
 }
 
 func boundExcludedRoute(path string) bool {
-	for _, part := range []string{"/$history", "/$recent-changes", "/$signed", "/invoke-async", "/operation-status/", "/operation-results/", "/query", "/bulk", "/serialization", "/upload", "/packages"} {
+	for _, part := range []string{"/$history", "/$recent-changes", "/$signed", "/invoke-async", "/operation-status/", "/operation-results/", "/bulk", "/serialization", "/upload", "/packages"} {
 		if strings.Contains(path, part) {
 			return true
 		}
@@ -148,12 +160,15 @@ func (repo *resourceBoundRepository) authorizeRequest(r *http.Request, tx *sql.T
 	if err != nil {
 		return nil, err
 	}
+	if err = checkBoundWriteIdentity(r.Context(), right); err != nil {
+		return nil, err
+	}
 	state, err := repo.requestState(r.Context(), tx, target, input, right, revision)
 	if err != nil {
 		return nil, err
 	}
 	selected := target
-	if !exists && r.Method == http.MethodPut {
+	if !exists && right == grammar.RightsEnumCREATE {
 		selected, err = creationBoundParent(target)
 		if err != nil {
 			return nil, err
@@ -162,12 +177,37 @@ func (repo *resourceBoundRepository) authorizeRequest(r *http.Request, tx *sql.T
 	if right == grammar.RightsEnumCREATE {
 		state.creationTarget = &selected
 	}
-	collectionRead := r.Method == http.MethodGet && (target.Kind == "shells" || target.Kind == "submodels")
+	collectionRead := (right == grammar.RightsEnumREAD || right == grammar.RightsEnumVIEW) && isBoundCollection(target.Kind)
 	if !collectionRead {
 		err = state.checkTarget(r.Context(), tx, selected)
 	}
 	if err != nil {
 		return nil, err
+	}
+	if target.Kind == "submodel_descriptor" && target.AAS != "" {
+		aasTarget := boundTarget{Kind: "aas_descriptor", AAS: target.AAS}
+		aasState, stateErr := repo.requestState(r.Context(), tx, aasTarget, input, right, revision)
+		if stateErr != nil {
+			return nil, stateErr
+		}
+		if stateErr = aasState.checkTarget(r.Context(), tx, aasTarget); stateErr != nil {
+			return nil, stateErr
+		}
+		if right == grammar.RightsEnumCREATE {
+			matching, _, parentErr := matchingSubmodelParent(r.Context(), tx, target.Submodel)
+			if parentErr != nil {
+				return nil, parentErr
+			}
+			if matching.Kind == "submodel" {
+				submodelState, stateErr := repo.requestState(r.Context(), tx, matching, input, right, revision)
+				if stateErr != nil {
+					return nil, stateErr
+				}
+				if stateErr = submodelState.checkTarget(r.Context(), tx, matching); stateErr != nil {
+					return nil, stateErr
+				}
+			}
+		}
 	}
 	if right == grammar.RightsEnumUPDATE || right == grammar.RightsEnumDELETE {
 		if err = state.checkDescendants(r.Context(), tx, target); err != nil {
@@ -188,9 +228,10 @@ func (repo *resourceBoundRepository) requestRight(ctx context.Context, db boundQ
 	}
 	right := alternatives[0][0]
 	exists := true
-	if input.Method == http.MethodPut && (right == grammar.RightsEnumCREATE || right == grammar.RightsEnumUPDATE) {
+	upsert := input.Method == http.MethodPut || (target.Kind == "discovery" && input.Method == http.MethodPost)
+	if upsert && (right == grammar.RightsEnumCREATE || right == grammar.RightsEnumUPDATE) {
 		lookup := target
-		if lookup.Submodel != "" {
+		if lookup.Kind == "submodel" {
 			lookup.AAS = ""
 		}
 		_, err := repo.load(ctx, db, lookup)
@@ -227,6 +268,17 @@ func creationBoundParent(target boundTarget) (boundTarget, error) {
 			target.Path = target.Path[:index]
 		}
 		return target, nil
+	case "aas_descriptor":
+		return boundTarget{Kind: "shell-descriptors"}, nil
+	case "submodel_descriptor":
+		if target.AAS != "" {
+			return boundTarget{Kind: "aas_descriptor", AAS: target.AAS}, nil
+		}
+		return boundTarget{Kind: "submodel-descriptors"}, nil
+	case "concept_description":
+		return boundTarget{Kind: "concept-descriptions"}, nil
+	case "discovery":
+		return boundTarget{Kind: "lookup/shells"}, nil
 	}
 	return target, boundError(http.StatusBadRequest, "CREATE invalid creation target")
 }
@@ -247,6 +299,23 @@ func boundTargetDataset(target boundTarget) (*goqu.SelectDataset, *grammar.Resol
 		sm := dialect.From("submodel").Select("id").Where(goqu.Ex{"submodel_identifier": target.Submodel})
 		ds = dialect.From(goqu.T("submodel_element").As("sme")).Where(goqu.Ex{"sme.idshort_path": target.Path}, goqu.I("sme.submodel_id").Eq(sm))
 		collector, err = grammar.NewResolvedFieldPathCollectorForSMERow("sme")
+	case "aas_descriptor":
+		ds = dialect.From(goqu.T("descriptor").As("descriptor")).Join(goqu.T("aas_descriptor").As("aas_descriptor"), goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id")))).Where(goqu.Ex{"aas_descriptor.id": target.AAS})
+		collector, err = grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	case "submodel_descriptor":
+		ds = dialect.From("submodel_descriptor").Where(goqu.Ex{"id": target.Submodel})
+		if target.AAS != "" {
+			ds = ds.Where(goqu.C("aas_descriptor_id").Eq(dialect.From("aas_descriptor").Select("descriptor_id").Where(goqu.Ex{"id": target.AAS})))
+		} else {
+			ds = ds.Where(goqu.C("aas_descriptor_id").IsNull())
+		}
+		collector, err = grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+	case "concept_description":
+		ds = dialect.From("concept_description").Where(goqu.Ex{"id": target.Submodel})
+		collector, err = grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootCD)
+	case "discovery":
+		ds = dialect.From("aas_identifier").Where(goqu.Ex{"aasid": target.AAS})
+		collector, err = grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
 	default:
 		return nil, nil, fmt.Errorf("REBAC-CHECK-KIND unsupported data resource")
 	}
@@ -257,7 +326,7 @@ func (state *boundRequest) checkTarget(ctx context.Context, db boundQueryer, tar
 	if err := validateBoundContext(ctx, db, target); err != nil {
 		return err
 	}
-	if target.Kind == "shells" || target.Kind == "submodels" {
+	if isBoundCollection(target.Kind) {
 		return state.checkCollection(ctx, db, target)
 	}
 	ds, collector, err := boundTargetDataset(target)
@@ -291,6 +360,11 @@ func (state *boundRequest) checkCollection(ctx context.Context, db boundQueryer,
 		return err
 	}
 	if effective != nil {
+		actor, actorErr := boundActor(ctx)
+		if actorErr == nil && containsBoundPrincipal(effective.Owners, actor) {
+			state.policyID = "rebac-owner:" + state.repo.scope
+			return nil
+		}
 		for _, decision := range state.policies {
 			if decision.id == effective.ID && decision.evaluation.Allowed {
 				state.policyID = decision.evaluation.PolicyID
