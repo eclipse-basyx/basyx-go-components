@@ -28,6 +28,7 @@ package eventfeed
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -281,8 +282,8 @@ func TestSaveAndRetentionSQL(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM`)).
 		WillReturnResult(sqlmock.NewResult(0, 3))
-	mock.ExpectExec(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
-		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_unlock"}).AddRow(true))
 	n, err := svc.RunRetention(context.Background())
 	if err != nil {
 		t.Fatalf("retention: %v", err)
@@ -317,8 +318,8 @@ func TestRunPublishAssignmentSQL(t *testing.T) {
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE feed_events SET publish_seq = nextval('feed_events_publish_seq_seq') WHERE id = $1 AND publish_seq IS NULL`)).
 		WithArgs("e2").
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
-		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_unlock"}).AddRow(true))
 
 	n, err := svc.RunPublishAssignment(context.Background())
 	if err != nil {
@@ -426,6 +427,56 @@ func (d denySubjectAuthorizer) Allow(_ context.Context, _, subject string) bool 
 	return subject != d.deny
 }
 
+type denyAllAuthorizer struct{}
+
+func (denyAllAuthorizer) Allow(context.Context, string, string) bool { return false }
+
+func TestReadKeepsCursorWhenAuthScanBudgetExhausted(t *testing.T) {
+	t.Cleanup(func() { SetRecordAuthorizer(nil) })
+	SetRecordAuthorizer(denyAllAuthorizer{})
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	repo := NewRepository(db, cfg.MaxAge)
+	fixedNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	repo.now = func() time.Time { return fixedNow }
+	svc := NewService(repo, cfg)
+	svc.now = func() time.Time { return fixedNow }
+
+	for round := 0; round < authScanRounds; round++ {
+		seq := int64(round*2 + 1)
+		rows := sqlmock.NewRows([]string{
+			"publish_seq", "id", "event_type", "subject", "source", "time",
+			"dataschema_full", "data_full",
+		}).
+			AddRow(seq, "e-hidden", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Hour),
+				"https://s/full", `{"aasId":"hidden"}`).
+			AddRow(seq+1, "e-hidden-more", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Minute),
+				"https://s/full", `{"aasId":"hidden"}`)
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
+	}
+
+	result, err := svc.Read(context.Background(), FeedQuery{Presentation: PresentationRegular, Limit: 1})
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(result.Records) != 0 {
+		t.Fatalf("records=%d", len(result.Records))
+	}
+	if result.Cursor == "" {
+		t.Fatal("expected continuation cursor after auth scan budget")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql: %v", err)
+	}
+}
+
 func TestFindPageSQLShape(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -466,5 +517,119 @@ func TestCapabilitiesAdvertiseDraftOperators(t *testing.T) {
 		if !want[op] {
 			t.Fatalf("unexpected operator %q", op)
 		}
+	}
+}
+
+// TestReadCursorReachesEventAfterHiddenPrefix replays the reviewer's scenario:
+// with limit=1, a prefix of hidden events longer than the authorization scan
+// budget must not report end of feed. Reading again with the returned cursor
+// has to reach the first readable event instead of restarting at the same
+// hidden prefix.
+func TestReadCursorReachesEventAfterHiddenPrefix(t *testing.T) {
+	t.Cleanup(func() { SetRecordAuthorizer(nil) })
+	SetRecordAuthorizer(denySubjectAuthorizer{deny: "hidden"})
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	repo := NewRepository(db, cfg.MaxAge)
+	fixedNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	repo.now = func() time.Time { return fixedNow }
+	svc := NewService(repo, cfg)
+	svc.now = func() time.Time { return fixedNow }
+
+	feedRows := func() *sqlmock.Rows {
+		return sqlmock.NewRows([]string{
+			"publish_seq", "id", "event_type", "subject", "source", "time",
+			"dataschema_full", "data_full",
+		})
+	}
+
+	// Every round returns limit+1 rows so the scan keeps going until the
+	// budget is exhausted; seq 1..2*authScanRounds are all hidden. Only the
+	// first row of each round is scanned, the extra row just signals that more
+	// rows exist, so the last scanned row is the first row of the last round.
+	var lastScannedSeq int64
+	for round := 0; round < authScanRounds; round++ {
+		seq := int64(round*2 + 1)
+		lastScannedSeq = seq
+		rows := feedRows().
+			AddRow(seq, "e-hidden", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Hour),
+				"https://s/full", `{"aasId":"hidden"}`).
+			AddRow(seq+1, "e-hidden-more", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Minute),
+				"https://s/full", `{"aasId":"hidden"}`)
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
+	}
+
+	first, err := svc.Read(context.Background(), FeedQuery{Presentation: PresentationRegular, Limit: 1})
+	if err != nil {
+		t.Fatalf("first read: %v", err)
+	}
+	if len(first.Records) != 0 {
+		t.Fatalf("records=%d want 0", len(first.Records))
+	}
+	if first.Cursor == "" {
+		t.Fatal("expected a continuation cursor after the scan budget was exhausted")
+	}
+	decoded, err := decodeCursor(first.Cursor)
+	if err != nil {
+		t.Fatalf("decode cursor: %v", err)
+	}
+	if decoded.AfterSeq != lastScannedSeq {
+		t.Fatalf("cursor afterSeq=%d want %d (last scanned row)", decoded.AfterSeq, lastScannedSeq)
+	}
+
+	// Continuing from that cursor reaches the readable event instead of
+	// restarting at the hidden prefix.
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(
+		feedRows().AddRow(lastScannedSeq+1, "e-visible", TypeAASCreated, "visible", "http://localhost/shells",
+			fixedNow, "https://s/full", `{"aasId":"visible"}`))
+
+	second, err := svc.Read(context.Background(), FeedQuery{Presentation: PresentationRegular, Limit: 1, Cursor: first.Cursor})
+	if err != nil {
+		t.Fatalf("second read: %v", err)
+	}
+	if len(second.Records) != 1 || second.Records[0].Subject != "visible" {
+		t.Fatalf("records=%v", second.Records)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql: %v", err)
+	}
+}
+
+// TestRunRetentionUnlocksAfterCancelledCleanup ensures a cancelled cleanup
+// cannot leave a locked session in the pool: the advisory unlock is issued on
+// the same pinned connection even when the work under the lock fails, and it
+// runs on a context detached from the caller's cancellation.
+func TestRunRetentionUnlocksAfterCancelledCleanup(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	repo := NewRepository(db, cfg.MaxAge)
+	svc := NewService(repo, cfg)
+	svc.now = func() time.Time { return time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC) }
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_lock`)).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM`)).
+		WillReturnError(context.Canceled)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_unlock"}).AddRow(true))
+
+	if _, err = svc.RunRetention(context.Background()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("retention err=%v want context.Canceled", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql: %v", err)
 	}
 }

@@ -39,8 +39,10 @@ const (
 	schemaAASCompact      = "metamodel-aasChangeEventCompact.v1.schema.json"
 	schemaSubmodelFull    = "metamodel-submodelChangeEvent.v1.schema.json"
 	schemaSubmodelCompact = "metamodel-submodelChangeEventCompact.v1.schema.json"
-	schemaPCNFull         = "pcnNotificationEvent.v1.schema.json"
-	schemaPCNCompact      = "pcnNotificationEventCompact.v1.schema.json"
+	// PCN events advertise a single schema for both presentations: the
+	// compact payload is the identification subset of the full one, and the
+	// schema leaves "record" optional.
+	schemaPCN = "pcnNotificationEvent.v1.schema.json"
 
 	sourceSuffixAsset    = "/lookup/shells"
 	sourceSuffixAAS      = "/shells"
@@ -113,15 +115,19 @@ func (b *Builder) SubmodelDeleted(submodelID, semanticID string, globalAssetIDs 
 func (b *Builder) PCN(submodelID string, globalAssetIDs []string, record any) (FeedEvent, error) {
 	ids := normalizeGlobalAssetIDs(globalAssetIDs)
 	full := map[string]any{
-		"submodelId":     submodelID,
-		"globalAssetIds": ids,
-		"record":         record,
+		"submodelId": submodelID,
+		"record":     record,
 	}
 	compact := map[string]any{
-		"submodelId":     submodelID,
-		"globalAssetIds": ids,
+		"submodelId": submodelID,
 	}
-	return b.build(TypePCN, submodelID, sourceSuffixSubmodel, schemaPCNFull, schemaPCNCompact, full, compact)
+	// globalAssetIds is optional and must not be an empty array: a submodel
+	// that is not attached to any AAS carries no asset ids at all.
+	if len(ids) > 0 {
+		full["globalAssetIds"] = ids
+		compact["globalAssetIds"] = ids
+	}
+	return b.build(TypePCN, submodelID, sourceSuffixSubmodel, schemaPCN, schemaPCN, full, compact)
 }
 
 // IsPCNSemanticID reports whether semanticID refers to the IDTA Product
@@ -159,9 +165,13 @@ func (b *Builder) assetEvent(eventType, globalAssetID, aasID string, submodels [
 
 func (b *Builder) aasEvent(eventType, aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
 	full := map[string]any{
-		"aasId":         aasID,
-		"globalAssetId": globalAssetID,
-		"submodels":     submodelReferences(submodels),
+		"aasId":     aasID,
+		"submodels": submodelReferences(submodels),
+	}
+	// globalAssetId is optional for an AAS event and must not be an empty
+	// string: the schema types it as a URI.
+	if globalAssetID != "" {
+		full["globalAssetId"] = globalAssetID
 	}
 	compact := map[string]any{"aasId": aasID}
 	return b.build(eventType, aasID, sourceSuffixAAS, schemaAASFull, schemaAASCompact, full, compact)
@@ -219,22 +229,16 @@ func normalizeGlobalAssetIDs(ids []string) []string {
 }
 
 // submodelReferences renders the "submodels" array shared by AAS and asset
-// change events: one ExternalReference entry per submodel, pointing at the
-// submodel itself, with an optional referredSemanticId. A submodel that has
-// no semantic id recorded in the database is still listed, just without a
-// referredSemanticId field.
+// change events: one ModelReference entry per submodel, with an optional
+// referredSemanticId. A submodel that has no semantic id recorded in the
+// database is still listed, just without a referredSemanticId field.
 func submodelReferences(submodels []SubmodelRef) []any {
 	out := make([]any, 0, len(submodels))
 	for _, submodel := range submodels {
 		if submodel.SubmodelID == "" {
 			continue
 		}
-		entry := map[string]any{
-			"type": "ExternalReference",
-			"keys": []map[string]any{
-				{"type": "Submodel", "value": submodel.SubmodelID},
-			},
-		}
+		entry := modelReference("Submodel", submodel.SubmodelID)
 		if semRef := externalReference(submodel.SemanticID); semRef != nil {
 			entry["referredSemanticId"] = semRef
 		}
@@ -252,8 +256,12 @@ func modelReference(keyType, value string) map[string]any {
 	}
 }
 
+// externalReference renders an ExternalReference with a single GlobalReference
+// key. It returns nil for a blank value: an AAS Key must carry a non-empty
+// value, so an unknown semantic id is represented by omitting the field.
 func externalReference(value string) map[string]any {
-	if strings.TrimSpace(value) == "" {
+	value = strings.TrimSpace(value)
+	if value == "" {
 		return nil
 	}
 	return map[string]any{
@@ -287,7 +295,8 @@ func schemaPairForType(eventType, schemaBase string) (full, compact string) {
 	case TypeAASCreated, TypeAASUpdated, TypeAASDeleted:
 		return base + "/" + schemaAASFull, base + "/" + schemaAASCompact
 	case TypePCN:
-		return base + "/" + schemaPCNFull, base + "/" + schemaPCNCompact
+		pcn := base + "/" + schemaPCN
+		return pcn, pcn
 	default:
 		return base + "/" + schemaSubmodelFull, base + "/" + schemaSubmodelCompact
 	}

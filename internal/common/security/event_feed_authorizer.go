@@ -61,7 +61,7 @@ func (a EventRecordAuthorizer) Allow(ctx context.Context, eventType, subject str
 	if claims == nil {
 		return false
 	}
-	path := eventReadPath(eventType, subject)
+	path := eventReadPath(model.BasePath(), eventType, subject)
 	if path == "" {
 		return false
 	}
@@ -73,25 +73,53 @@ func (a EventRecordAuthorizer) Allow(ctx context.Context, eventType, subject str
 		RoutePath: path,
 		Claims:    claims,
 	}, opts)
-	return evaluation.Allowed
+	return evaluation.Allowed && !queryFilterRestricts(evaluation.QueryFilter)
 }
 
 const httpMethodGet = "GET"
 
-func eventReadPath(eventType, subject string) string {
+func eventReadPath(basePath, eventType, subject string) string {
 	subject = strings.TrimSpace(subject)
 	if subject == "" {
 		return ""
 	}
 	encoded := common.EncodeString(subject)
+	var route string
 	switch {
 	case strings.HasPrefix(eventType, "io.admin-shell.aas."):
-		return "/shells/" + encoded
+		route = "/shells/" + encoded
 	case strings.HasPrefix(eventType, "io.admin-shell.submodel."), eventType == eventfeed.TypePCN:
-		return "/submodels/" + encoded
+		route = "/submodels/" + encoded
 	case strings.HasPrefix(eventType, "io.admin-shell.asset."):
-		return "/lookup/shells"
+		route = "/lookup/shells"
 	default:
 		return ""
 	}
+	return joinBasePath(basePath, route)
+}
+
+func queryFilterRestricts(filter *QueryFilter) bool {
+	if filter == nil {
+		return false
+	}
+	if len(filter.Filters) > 0 {
+		return true
+	}
+	if formulaRestricts(filter.Formula) {
+		return true
+	}
+	for _, expr := range filter.FormulasByRight {
+		e := expr
+		if formulaRestricts(&e) {
+			return true
+		}
+	}
+	return false
+}
+
+func formulaRestricts(expr *grammar.LogicalExpression) bool {
+	if expr == nil {
+		return false
+	}
+	return expr.Boolean == nil || !*expr.Boolean
 }

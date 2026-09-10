@@ -90,7 +90,7 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 	}
 	presentation := normalizePresentation(query.Presentation)
 	query.Presentation = presentation
-	events, hasMore, err := s.findAuthorizedPage(ctx, domain, presentation, query.Limit)
+	events, hasMore, resumeSeq, err := s.findAuthorizedPage(ctx, domain, presentation, query.Limit)
 	if err != nil {
 		return FeedResponse{}, err
 	}
@@ -99,9 +99,8 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 		return FeedResponse{}, err
 	}
 	var cursor string
-	if hasMore && len(events) > 0 {
-		last := events[len(events)-1]
-		cursor, err = encodeCursor(last.PublishSeq)
+	if hasMore {
+		cursor, err = encodeCursor(resumeSeq)
 		if err != nil {
 			return FeedResponse{}, err
 		}
@@ -151,22 +150,21 @@ func (s *Service) Capabilities() CapabilitiesResponse {
 // advisory lock so only one replica performs the cleanup at a time. It
 // returns the number of deleted events.
 func (s *Service) RunRetention(ctx context.Context) (int64, error) {
-	locked, err := s.repo.TryRetentionLock(ctx)
-	if err != nil {
-		return 0, err
+	var n int64
+	locked, err := s.repo.WithRetentionLock(ctx, func(ctx context.Context) error {
+		cutoff := s.now().Add(-(s.cfg.MaxAge + s.cfg.HardDeleteGrace))
+		deleted, delErr := s.repo.DeleteOlderThan(ctx, cutoff)
+		if delErr != nil {
+			return delErr
+		}
+		n = deleted
+		s.logger.InfoContext(ctx, "event feed retention completed",
+			"deleted", n, "cutoff", cutoff.Format(time.RFC3339))
+		return nil
+	})
+	if err != nil || !locked {
+		return n, err
 	}
-	if !locked {
-		return 0, nil
-	}
-	defer s.repo.ReleaseRetentionLock(ctx)
-
-	cutoff := s.now().Add(-(s.cfg.MaxAge + s.cfg.HardDeleteGrace))
-	n, err := s.repo.DeleteOlderThan(ctx, cutoff)
-	if err != nil {
-		return 0, err
-	}
-	s.logger.InfoContext(ctx, "event feed retention completed",
-		"deleted", n, "cutoff", cutoff.Format(time.RFC3339))
 	return n, nil
 }
 
@@ -174,71 +172,74 @@ func (s *Service) RunRetention(ctx context.Context) (int64, error) {
 // using an advisory lock so only one replica assigns at a time. It returns
 // the number of rows assigned. Called periodically by Module.StartPublishLoop.
 func (s *Service) RunPublishAssignment(ctx context.Context) (int64, error) {
-	locked, err := s.repo.TryPublishLock(ctx)
-	if err != nil {
-		return 0, err
-	}
-	if !locked {
-		return 0, nil
-	}
-	defer s.repo.ReleasePublishLock(ctx)
-
-	n, err := s.repo.AssignPublishSeq(ctx, publishBatchSize)
-	if err != nil {
-		return 0, err
-	}
-	if n > 0 {
-		s.logger.DebugContext(ctx, "event feed publish assignment completed", "assigned", n)
+	var n int64
+	locked, err := s.repo.WithPublishLock(ctx, func(ctx context.Context) error {
+		assigned, assignErr := s.repo.AssignPublishSeq(ctx, publishBatchSize)
+		if assignErr != nil {
+			return assignErr
+		}
+		n = assigned
+		if n > 0 {
+			s.logger.DebugContext(ctx, "event feed publish assignment completed", "assigned", n)
+		}
+		return nil
+	})
+	if err != nil || !locked {
+		return n, err
 	}
 	return n, nil
 }
 
-func (s *Service) findAuthorizedPage(ctx context.Context, domain domainQuery, presentation Presentation, limit int) ([]FeedEvent, bool, error) {
+const authScanRounds = 32
+
+func (s *Service) findAuthorizedPage(ctx context.Context, domain domainQuery, presentation Presentation, limit int) ([]FeedEvent, bool, int64, error) {
 	authorizer := currentRecordAuthorizer()
 	if authorizer == nil {
 		events, err := s.repo.FindPage(ctx, domain, presentation)
 		if err != nil {
-			return nil, false, err
+			return nil, false, 0, err
 		}
 		hasMore := len(events) > limit
 		if hasMore {
 			events = events[:limit]
+			return events, true, events[len(events)-1].PublishSeq, nil
 		}
-		return events, hasMore, nil
+		return events, false, 0, nil
 	}
 	return s.collectAuthorizedEvents(ctx, domain, presentation, limit, authorizer)
 }
 
-func (s *Service) collectAuthorizedEvents(ctx context.Context, domain domainQuery, presentation Presentation, limit int, authorizer RecordAuthorizer) ([]FeedEvent, bool, error) {
+func (s *Service) collectAuthorizedEvents(ctx context.Context, domain domainQuery, presentation Presentation, limit int, authorizer RecordAuthorizer) ([]FeedEvent, bool, int64, error) {
 	out := make([]FeedEvent, 0, limit)
-	hasMore := false
-	for round := 0; round < 32; round++ {
+	lastScanned := int64(0)
+	for round := 0; round < authScanRounds; round++ {
 		page, err := s.repo.FindPage(ctx, domain, presentation)
 		if err != nil {
-			return nil, false, err
+			return nil, false, 0, err
 		}
 		rawHasMore := len(page) > limit
 		if rawHasMore {
 			page = page[:limit]
 		}
 		if len(page) == 0 {
-			break
+			return out, false, 0, nil
 		}
 		for _, event := range page {
+			lastScanned = event.PublishSeq
 			domain.AfterSeq = event.PublishSeq
 			if !authorizer.Allow(ctx, event.Type, event.Subject) {
 				continue
 			}
 			if len(out) == limit {
-				return out, true, nil
+				return out, true, out[len(out)-1].PublishSeq, nil
 			}
 			out = append(out, event)
 		}
 		if !rawHasMore {
-			break
+			return out, false, 0, nil
 		}
 	}
-	return out, hasMore, nil
+	return out, true, lastScanned, nil
 }
 
 func (s *Service) validateQuery(query FeedQuery) error {

@@ -63,15 +63,20 @@ func pcnSubmodelWithCollectionRecords(t *testing.T, records ...*types.SubmodelEl
 
 func pcnSubmodelWithListRecords(t *testing.T, changeIDs ...string) types.ISubmodel {
 	t.Helper()
+	records := make([]types.ISubmodelElement, 0, len(changeIDs))
+	for _, id := range changeIDs {
+		records = append(records, pcnRecord("", id))
+	}
+	return pcnSubmodelWithListRecordElements(t, records...)
+}
+
+func pcnSubmodelWithListRecordElements(t *testing.T, records ...types.ISubmodelElement) types.ISubmodel {
+	t.Helper()
 	sm := types.NewSubmodel("sm-pcn")
 	recordsIDShort := "Records"
-	values := make([]types.ISubmodelElement, 0, len(changeIDs))
-	for _, id := range changeIDs {
-		values = append(values, pcnRecord("", id))
-	}
 	recordsElement := types.NewSubmodelElementList(types.AASSubmodelElementsSubmodelElementCollection)
 	recordsElement.SetIDShort(&recordsIDShort)
-	recordsElement.SetValue(values)
+	recordsElement.SetValue(records)
 	sm.SetSubmodelElements([]types.ISubmodelElement{recordsElement})
 	return sm
 }
@@ -112,5 +117,35 @@ func TestPCNNewRecordValuesFromSubmodelOnUpdateByPositionForListWithoutIDShorts(
 	values := PCNNewRecordValuesFromSubmodel(previous, current)
 	if len(values) != 1 {
 		t.Fatalf("expected exactly 1 new record appended past previous length, got %d", len(values))
+	}
+}
+
+func TestPCNNewRecordValuesFromSubmodelListReorderDoesNotEmitExisting(t *testing.T) {
+	previous := pcnSubmodelWithListRecords(t, "CN1")
+	current := pcnSubmodelWithListRecords(t, "CN2", "CN1")
+
+	values := PCNNewRecordValuesFromSubmodel(previous, current)
+	if len(values) != 1 {
+		t.Fatalf("expected only the inserted record, got %d: %v", len(values), values)
+	}
+}
+
+func TestPCNNewRecordValuesFromSubmodelPureReorderEmitsNothing(t *testing.T) {
+	previous := pcnSubmodelWithListRecords(t, "CN1", "CN2")
+	current := pcnSubmodelWithListRecords(t, "CN2", "CN1")
+
+	values := PCNNewRecordValuesFromSubmodel(previous, current)
+	if len(values) != 0 {
+		t.Fatalf("expected no new records for a pure reorder, got %d: %v", len(values), values)
+	}
+}
+
+func TestPCNNewRecordValuesFromSubmodelDuplicateRecordEmitsOnce(t *testing.T) {
+	previous := pcnSubmodelWithListRecords(t, "CN1")
+	current := pcnSubmodelWithListRecords(t, "CN1", "CN1")
+
+	values := PCNNewRecordValuesFromSubmodel(previous, current)
+	if len(values) != 1 {
+		t.Fatalf("expected exactly 1 new record for an added duplicate, got %d: %v", len(values), values)
 	}
 }

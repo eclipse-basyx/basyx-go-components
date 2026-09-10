@@ -36,17 +36,29 @@ import (
 )
 
 func TestEventReadPath(t *testing.T) {
-	if got := eventReadPath(eventfeed.TypeAASCreated, "aas-1"); got != "/shells/"+common.EncodeString("aas-1") {
+	if got := eventReadPath("", eventfeed.TypeAASCreated, "aas-1"); got != "/shells/"+common.EncodeString("aas-1") {
 		t.Fatalf("aas path=%s", got)
 	}
-	if got := eventReadPath(eventfeed.TypeSubmodelUpdated, "sm-1"); got != "/submodels/"+common.EncodeString("sm-1") {
+	if got := eventReadPath("", eventfeed.TypeSubmodelUpdated, "sm-1"); got != "/submodels/"+common.EncodeString("sm-1") {
 		t.Fatalf("sm path=%s", got)
 	}
-	if got := eventReadPath(eventfeed.TypePCN, "sm-1"); got != "/submodels/"+common.EncodeString("sm-1") {
+	if got := eventReadPath("", eventfeed.TypePCN, "sm-1"); got != "/submodels/"+common.EncodeString("sm-1") {
 		t.Fatalf("pcn path=%s", got)
 	}
-	if got := eventReadPath(eventfeed.TypeAssetDeleted, "asset-1"); got != "/lookup/shells" {
+	if got := eventReadPath("", eventfeed.TypeAssetDeleted, "asset-1"); got != "/lookup/shells" {
 		t.Fatalf("asset path=%s", got)
+	}
+	if got := eventReadPath("/api/v3", eventfeed.TypeAASCreated, "aas-1"); got != "/api/v3/shells/"+common.EncodeString("aas-1") {
+		t.Fatalf("context path aas=%s", got)
+	}
+	if got := eventReadPath("/api/v3", eventfeed.TypeSubmodelUpdated, "sm-1"); got != "/api/v3/submodels/"+common.EncodeString("sm-1") {
+		t.Fatalf("context path sm=%s", got)
+	}
+	if got := eventReadPath("/api/v3", eventfeed.TypePCN, "sm-1"); got != "/api/v3/submodels/"+common.EncodeString("sm-1") {
+		t.Fatalf("context path pcn=%s", got)
+	}
+	if got := eventReadPath("/api/v3", eventfeed.TypeAssetDeleted, "asset-1"); got != "/api/v3/lookup/shells" {
+		t.Fatalf("context path asset=%s", got)
 	}
 }
 
@@ -94,5 +106,111 @@ func TestEventRecordAuthorizerDisabledAllows(t *testing.T) {
 	authorizer := EventRecordAuthorizer{Settings: ABACSettings{Enabled: false}}
 	if !authorizer.Allow(context.Background(), eventfeed.TypeAASCreated, "aas-1") {
 		t.Fatal("expected allow when ABAC is off")
+	}
+}
+
+func TestEventRecordAuthorizerFailsClosedOnRemainingQueryFilter(t *testing.T) {
+	router := api.NewRouter()
+	noop := func(http.ResponseWriter, *http.Request) {}
+	router.Get("/shells/{aasIdentifier}", noop)
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"DEFATTRIBUTES": [
+				{ "name": "sub_claim", "attributes": [ { "CLAIM": "sub" } ] }
+			],
+			"DEFOBJECTS": [
+				{ "name": "shells_api", "objects": [ { "IDENTIFIABLE": "$aas(\"*\")" } ] }
+			],
+			"DEFACLS": [
+				{ "name": "read_access", "acl": { "USEATTRIBUTES": "sub_claim", "RIGHTS": [ "READ" ], "ACCESS": "ALLOW" } }
+			],
+			"DEFFORMULAS": [
+				{ "name": "id_short_eq", "formula": { "$eq": [ { "$field": "$aas#idShort" }, { "$strVal": "visible" } ] } }
+			],
+			"rules": [
+				{ "USEACL": "read_access", "USEOBJECTS": [ "shells_api" ], "USEFORMULA": "id_short_eq" }
+			]
+		}
+	}`), router, "/api/v3")
+	if err != nil {
+		t.Fatalf("model: %v", err)
+	}
+	authorizer := EventRecordAuthorizer{Settings: ABACSettings{Enabled: true, Model: model}}
+	ctx := context.WithValue(context.Background(), ClaimsKey, Claims{"sub": "user"})
+	if authorizer.Allow(ctx, eventfeed.TypeAASCreated, "aas-1") {
+		t.Fatal("expected deny when allow still requires a remaining QueryFilter")
+	}
+}
+
+func TestEventRecordAuthorizerUsesContextPath(t *testing.T) {
+	router := api.NewRouter()
+	noop := func(http.ResponseWriter, *http.Request) {}
+	router.Get("/shells/{aasIdentifier}", noop)
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"DEFATTRIBUTES": [
+				{ "name": "sub_claim", "attributes": [ { "CLAIM": "sub" } ] }
+			],
+			"DEFOBJECTS": [
+				{ "name": "shells_api", "objects": [ { "IDENTIFIABLE": "$aas(\"*\")" } ] }
+			],
+			"DEFACLS": [
+				{ "name": "read_access", "acl": { "USEATTRIBUTES": "sub_claim", "RIGHTS": [ "READ" ], "ACCESS": "ALLOW" } }
+			],
+			"DEFFORMULAS": [
+				{ "name": "always_true", "formula": { "$boolean": true } }
+			],
+			"rules": [
+				{ "USEACL": "read_access", "USEOBJECTS": [ "shells_api" ], "USEFORMULA": "always_true" }
+			]
+		}
+	}`), router, "/api/v3")
+	if err != nil {
+		t.Fatalf("model: %v", err)
+	}
+	authorizer := EventRecordAuthorizer{Settings: ABACSettings{Enabled: true, Model: model}}
+	ctx := context.WithValue(context.Background(), ClaimsKey, Claims{"sub": "user"})
+	if !authorizer.Allow(ctx, eventfeed.TypeAASCreated, "aas-1") {
+		t.Fatal("expected allow when policy matches /api/v3/shells/*")
+	}
+}
+
+// TestEventRecordAuthorizerUsesContextPathForSubmodelRoutes covers the
+// submodel and PCN routes behind a configured server.contextPath: the
+// synthetic read request must carry the same prefix the IDENTIFIABLE policy
+// mapping does, otherwise an authorized caller sees an empty feed.
+func TestEventRecordAuthorizerUsesContextPathForSubmodelRoutes(t *testing.T) {
+	router := api.NewRouter()
+	noop := func(http.ResponseWriter, *http.Request) {}
+	router.Get("/submodels/{submodelIdentifier}", noop)
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"DEFATTRIBUTES": [
+				{ "name": "sub_claim", "attributes": [ { "CLAIM": "sub" } ] }
+			],
+			"DEFOBJECTS": [
+				{ "name": "submodels_api", "objects": [ { "IDENTIFIABLE": "$sm(\"*\")" } ] }
+			],
+			"DEFACLS": [
+				{ "name": "read_access", "acl": { "USEATTRIBUTES": "sub_claim", "RIGHTS": [ "READ" ], "ACCESS": "ALLOW" } }
+			],
+			"DEFFORMULAS": [
+				{ "name": "always_true", "formula": { "$boolean": true } }
+			],
+			"rules": [
+				{ "USEACL": "read_access", "USEOBJECTS": [ "submodels_api" ], "USEFORMULA": "always_true" }
+			]
+		}
+	}`), router, "/api/v3")
+	if err != nil {
+		t.Fatalf("model: %v", err)
+	}
+	authorizer := EventRecordAuthorizer{Settings: ABACSettings{Enabled: true, Model: model}}
+	ctx := context.WithValue(context.Background(), ClaimsKey, Claims{"sub": "user"})
+	if !authorizer.Allow(ctx, eventfeed.TypeSubmodelUpdated, "sm-1") {
+		t.Fatal("expected allow for submodel event when policy matches /api/v3/submodels/*")
+	}
+	if !authorizer.Allow(ctx, eventfeed.TypePCN, "sm-1") {
+		t.Fatal("expected allow for PCN event when policy matches /api/v3/submodels/*")
 	}
 }

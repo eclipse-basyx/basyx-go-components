@@ -26,6 +26,8 @@
 package eventfeed
 
 import (
+	"encoding/json"
+
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -73,33 +75,24 @@ func PCNNewRecordValuesFromSubmodel(previous, submodel types.ISubmodel) []model.
 		return nil
 	}
 
-	var previousIDShorts map[string]struct{}
-	var previousCount int
+	previousCounts := map[string]int{}
 	if previous != nil {
-		previousRecords := pcnRecordElements(previous)
-		previousCount = len(previousRecords)
-		previousIDShorts = make(map[string]struct{}, previousCount)
-		for _, r := range previousRecords {
-			if r == nil || r.IDShort() == nil || *r.IDShort() == "" {
-				continue
+		for _, record := range pcnRecordElements(previous) {
+			if key := pcnRecordIdentity(record); key != "" {
+				previousCounts[key]++
 			}
-			previousIDShorts[*r.IDShort()] = struct{}{}
 		}
 	}
 
 	values := make([]model.SubmodelElementValue, 0, len(currentRecords))
-	for i, record := range currentRecords {
+	for _, record := range currentRecords {
 		if record == nil {
 			continue
 		}
-		if previous != nil {
-			if idShort := record.IDShort(); idShort != nil && *idShort != "" {
-				if _, exists := previousIDShorts[*idShort]; exists {
-					continue
-				}
-			} else if i < previousCount {
-				continue
-			}
+		key := pcnRecordIdentity(record)
+		if key != "" && previousCounts[key] > 0 {
+			previousCounts[key]--
+			continue
 		}
 		value, err := model.SubmodelElementToValueOnly(record)
 		if err != nil || value == nil {
@@ -108,4 +101,19 @@ func PCNNewRecordValuesFromSubmodel(previous, submodel types.ISubmodel) []model.
 		values = append(values, value)
 	}
 	return values
+}
+
+func pcnRecordIdentity(record types.ISubmodelElement) string {
+	if record == nil {
+		return ""
+	}
+	value, err := model.SubmodelElementToValueOnly(record)
+	if err != nil || value == nil {
+		return ""
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
 }

@@ -70,3 +70,126 @@ func TestParseFilterAnd(t *testing.T) {
 		t.Fatalf("comparisons=%d", len(f.Comparisons))
 	}
 }
+
+func TestParseFilterQuotedSemicolonAndComma(t *testing.T) {
+	f, err := parseFilterParam("rsql:event.subject=='urn:example:sm;v1'")
+	if err != nil {
+		t.Fatalf("parse quoted subject: %v", err)
+	}
+	if len(f.Comparisons) != 1 || f.Comparisons[0].Values[0] != "urn:example:sm;v1" {
+		t.Fatalf("subject=%+v", f.Comparisons)
+	}
+
+	f, err = parseFilterParam("rsql:event.subject=in=('a,b','c,d')")
+	if err != nil {
+		t.Fatalf("parse quoted in: %v", err)
+	}
+	if len(f.Comparisons[0].Values) != 2 || f.Comparisons[0].Values[0] != "a,b" || f.Comparisons[0].Values[1] != "c,d" {
+		t.Fatalf("in values=%v", f.Comparisons[0].Values)
+	}
+}
+
+func TestParseFilterQuotedDelimitersInsideValues(t *testing.T) {
+	cases := []struct {
+		name  string
+		expr  string
+		field string
+		op    string
+		want  []string
+	}{
+		{
+			name:  "semicolon inside quoted subject",
+			expr:  "rsql:event.subject=='urn:example:sm;v1'",
+			field: "event.subject",
+			op:    "==",
+			want:  []string{"urn:example:sm;v1"},
+		},
+		{
+			name:  "not-equals operator inside quoted subject",
+			expr:  "rsql:event.subject=='urn:example:sm!=v1'",
+			field: "event.subject",
+			op:    "==",
+			want:  []string{"urn:example:sm!=v1"},
+		},
+		{
+			name:  "in operator inside quoted subject",
+			expr:  "rsql:event.subject=='urn:example:sm=in=v1'",
+			field: "event.subject",
+			op:    "==",
+			want:  []string{"urn:example:sm=in=v1"},
+		},
+		{
+			name:  "and separator inside quoted subject",
+			expr:  "rsql:event.subject=='urn:example:a and b'",
+			field: "event.subject",
+			op:    "==",
+			want:  []string{"urn:example:a and b"},
+		},
+		{
+			name:  "commas inside quoted list values",
+			expr:  "rsql:event.subject=in=('urn:example:sm,a','urn:example:sm,b')",
+			field: "event.subject",
+			op:    "=in=",
+			want:  []string{"urn:example:sm,a", "urn:example:sm,b"},
+		},
+		{
+			name:  "doubled quote escape",
+			expr:  "rsql:event.subject=='urn:example:it''s'",
+			field: "event.subject",
+			op:    "==",
+			want:  []string{"urn:example:it's"},
+		},
+		{
+			name:  "backslash quote escape",
+			expr:  `rsql:event.subject=='urn:example:it\'s'`,
+			field: "event.subject",
+			op:    "==",
+			want:  []string{"urn:example:it's"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := parseFilterParam(tc.expr)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if len(f.Comparisons) != 1 {
+				t.Fatalf("comparisons=%d want 1: %+v", len(f.Comparisons), f.Comparisons)
+			}
+			cmp := f.Comparisons[0]
+			if cmp.Field != tc.field || cmp.Operator != tc.op {
+				t.Fatalf("field=%s operator=%s", cmp.Field, cmp.Operator)
+			}
+			if len(cmp.Values) != len(tc.want) {
+				t.Fatalf("values=%v want %v", cmp.Values, tc.want)
+			}
+			for i, want := range tc.want {
+				if cmp.Values[i] != want {
+					t.Fatalf("values[%d]=%q want %q", i, cmp.Values[i], want)
+				}
+			}
+		})
+	}
+}
+
+func TestParseFilterQuotedValueDoesNotBreakConjunction(t *testing.T) {
+	f, err := parseFilterParam("rsql:event.subject=='urn:example:sm;v1';event.type=='" + TypeSubmodelUpdated + "'")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(f.Comparisons) != 2 {
+		t.Fatalf("comparisons=%d want 2: %+v", len(f.Comparisons), f.Comparisons)
+	}
+	if f.Comparisons[0].Values[0] != "urn:example:sm;v1" {
+		t.Fatalf("subject=%v", f.Comparisons[0].Values)
+	}
+	if f.Comparisons[1].Values[0] != TypeSubmodelUpdated {
+		t.Fatalf("type=%v", f.Comparisons[1].Values)
+	}
+}
+
+func TestParseFilterUnterminatedQuoteIsRejected(t *testing.T) {
+	if _, err := parseFilterParam("rsql:event.subject=='urn:example:sm"); err == nil {
+		t.Fatal("expected an error for an unterminated quoted value")
+	}
+}

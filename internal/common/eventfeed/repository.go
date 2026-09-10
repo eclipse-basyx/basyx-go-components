@@ -29,6 +29,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -206,18 +207,10 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 	return events, nil
 }
 
-// TryPublishLock acquires a session advisory lock so only one replica assigns publish_seq at a time.
-func (r *Repository) TryPublishLock(ctx context.Context) (bool, error) {
-	var locked bool
-	if err := r.db.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", publishLockKey).Scan(&locked); err != nil {
-		return false, fmt.Errorf("EVENTFEED-PUBLISH-LOCK: %w", err)
-	}
-	return locked, nil
-}
-
-// ReleasePublishLock releases the advisory lock acquired by TryPublishLock.
-func (r *Repository) ReleasePublishLock(ctx context.Context) {
-	_, _ = r.db.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", publishLockKey)
+// WithPublishLock runs fn while holding the publish_seq advisory lock on one
+// pooled connection so lock and unlock cannot land on different sessions.
+func (r *Repository) WithPublishLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	return r.withSessionLock(ctx, publishLockKey, "EVENTFEED-PUBLISH", fn)
 }
 
 // AssignPublishSeq assigns publish_seq values, in original seq order, to up
@@ -227,7 +220,7 @@ func (r *Repository) ReleasePublishLock(ctx context.Context) {
 // MVCC visibility, a row can only be selected once its own transaction has
 // committed - so publish_seq is never assigned to a row "ahead of" an
 // earlier-committing one that a caller hasn't seen yet. Call with the
-// advisory lock held (see TryPublishLock) so only one instance assigns at a
+// advisory lock held (see WithPublishLock) so only one instance assigns at a
 // time.
 func (r *Repository) AssignPublishSeq(ctx context.Context, batchSize int) (int64, error) {
 	query, args, err := r.dialect.From("feed_events").
@@ -272,18 +265,45 @@ func (r *Repository) AssignPublishSeq(ctx context.Context, batchSize int) (int64
 	return assigned, nil
 }
 
-// TryRetentionLock acquires a session advisory lock so only one replica cleans up.
-func (r *Repository) TryRetentionLock(ctx context.Context) (bool, error) {
-	var locked bool
-	if err := r.db.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", retentionLockKey).Scan(&locked); err != nil {
-		return false, fmt.Errorf("EVENTFEED-RETENTION-LOCK: %w", err)
-	}
-	return locked, nil
+// WithRetentionLock runs fn while holding the retention advisory lock on one
+// pooled connection so lock and unlock cannot land on different sessions.
+func (r *Repository) WithRetentionLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	return r.withSessionLock(ctx, retentionLockKey, "EVENTFEED-RETENTION", fn)
 }
 
-// ReleaseRetentionLock releases the advisory lock acquired by TryRetentionLock.
-func (r *Repository) ReleaseRetentionLock(ctx context.Context) {
-	_, _ = r.db.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", retentionLockKey)
+func (r *Repository) withSessionLock(ctx context.Context, key int64, errPrefix string, fn func(context.Context) error) (bool, error) {
+	conn, err := r.db.Conn(ctx)
+	if err != nil {
+		return false, fmt.Errorf("%s-LOCK-CONN: %w", errPrefix, err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	var locked bool
+	if err = conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&locked); err != nil {
+		return false, fmt.Errorf("%s-LOCK: %w", errPrefix, err)
+	}
+	if !locked {
+		return false, nil
+	}
+	defer unlockSessionLock(ctx, conn, key, errPrefix)
+	if err = fn(ctx); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func unlockSessionLock(ctx context.Context, conn *sql.Conn, key int64, errPrefix string) {
+	unlockCtx := context.WithoutCancel(ctx)
+	var unlocked bool
+	if err := conn.QueryRowContext(unlockCtx, "SELECT pg_advisory_unlock($1)", key).Scan(&unlocked); err != nil {
+		slog.WarnContext(ctx, "event feed advisory unlock failed",
+			"error.code", errPrefix+"-UNLOCK", "error", err)
+		return
+	}
+	if !unlocked {
+		slog.WarnContext(ctx, "event feed advisory unlock returned false",
+			"error.code", errPrefix+"-UNLOCK")
+	}
 }
 
 // DeleteOlderThan deletes events created before cutoff in bounded batches.

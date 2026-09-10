@@ -62,8 +62,9 @@ absent.
 - With ABAC enabled, `GET /events` and `GET /.well-known/event-feed.json` map
   to `READ` (and to `$aas` / `$sm` IDENTIFIABLE collections). Include those
   routes in ROUTE-based policies. Each returned event is re-authorized as a
-  read of `/shells/{id}`, `/submodels/{id}`, or `/lookup/shells`. Events the
-  caller cannot read are omitted. Field-based formulas that need a hydrated
+  read of `/shells/{id}`, `/submodels/{id}`, or `/lookup/shells`, prefixed with
+  the configured `server.contextPath` so it matches IDENTIFIABLE policy
+  mappings. Events the caller cannot read are omitted. Field-based formulas that need a hydrated
   AAS/Submodel body fail closed (the event is hidden).
 - Do not enable the feed on a public endpoint unless that exposure is intended.
 
@@ -119,7 +120,16 @@ absent.
 
 - CloudEvents spec version `1.0`, feed API version `1.0`.
 - Event types are versioned (`*.v1`). `dataschema` points at
-  `schemaBaseUrl` JSON Schema documents for `REGULAR` and `COMPACT`.
+  `schemaBaseUrl` JSON Schema documents for `REGULAR` and `COMPACT`. Copies of
+  those documents live in `internal/common/eventfeed/testdata/schemas`; every
+  generated payload is validated against them in the unit tests.
+- PCN events (`io.admin-shell.pcn.v1`) advertise a single schema,
+  `pcnNotificationEvent.v1.schema.json`, for both `REGULAR` and `COMPACT`: the
+  compact payload is the identification subset of the full one.
+- Submodel references inside AAS and asset events are `ModelReference` objects;
+  a semantic id is carried as an `ExternalReference`. Optional fields
+  (`semanticId`, `referredSemanticId`, `globalAssetId`, `globalAssetIds`) are
+  omitted rather than emitted empty, matching the metamodel cardinalities.
 - `presentation=FULL` is accepted as a deprecated alias of `REGULAR`.
 - Future MQTT/Kafka transports will use `eventing.enabled` / sinks, not
   `eventing.feed.enabled`.

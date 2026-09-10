@@ -26,291 +26,291 @@
 package eventfeed
 
 import (
-	"encoding/json"
-	"fmt"
+	"bytes"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/santhosh-tekuri/jsonschema/v6"
+)
+
+// schemaDir holds verbatim copies of the JSON Schema documents advertised via
+// the CloudEvents "dataschema" attribute. Payloads are validated against these
+// documents rather than against hand-written shape assertions, so a change to
+// either the builder or the published schemas shows up here.
+const schemaDir = "testdata/schemas"
+
+const (
+	testAASID      = "https://example.com/ids/aas/1"
+	testAssetID    = "https://example.com/ids/asset/1"
+	testSubmodelID = "https://example.com/ids/sm/1"
+	testSemanticID = "https://admin-shell.io/idta/ProductChangeNotifications/1/0"
 )
 
 func TestGeneratedPayloadsMatchAdvertisedSchema(t *testing.T) {
 	b := NewBuilder(DefaultConfig())
+	pcnRecordValue := pcnRecordValueOnly(t)
+
 	cases := []struct {
-		name    string
-		build   func() (FeedEvent, error)
-		regular func(map[string]any) error
-		compact func(map[string]any) error
+		name  string
+		build func() (FeedEvent, error)
 	}{
 		{
 			name: "aas",
 			build: func() (FeedEvent, error) {
-				return b.AASCreated("aas-1", "asset-1", []SubmodelRef{{SubmodelID: "sm-1", SemanticID: "sem-1"}})
+				return b.AASCreated(testAASID, testAssetID, []SubmodelRef{{SubmodelID: testSubmodelID, SemanticID: testSemanticID}})
 			},
-			regular: validateAASRegular,
-			compact: validateAASCompact,
+		},
+		{
+			name: "aas-without-asset-and-submodels",
+			build: func() (FeedEvent, error) {
+				return b.AASDeleted(testAASID, "", nil)
+			},
+		},
+		{
+			name: "aas-submodel-without-semanticId",
+			build: func() (FeedEvent, error) {
+				return b.AASUpdated(testAASID, testAssetID, []SubmodelRef{{SubmodelID: testSubmodelID}})
+			},
 		},
 		{
 			name: "asset",
 			build: func() (FeedEvent, error) {
-				return b.AssetUpdated("asset-1", "aas-1", []SubmodelRef{{SubmodelID: "sm-1", SemanticID: "sem-1"}})
+				return b.AssetUpdated(testAssetID, testAASID, []SubmodelRef{{SubmodelID: testSubmodelID, SemanticID: testSemanticID}})
 			},
-			regular: validateAssetRegular,
-			compact: validateAssetCompact,
+		},
+		{
+			name: "asset-without-aas",
+			build: func() (FeedEvent, error) {
+				return b.AssetDeleted(testAssetID, "", nil)
+			},
 		},
 		{
 			name: "submodel",
 			build: func() (FeedEvent, error) {
-				return b.SubmodelCreated("sm-1", "https://semantic", []string{"asset-1"})
+				return b.SubmodelCreated(testSubmodelID, testSemanticID, []string{testAssetID})
 			},
-			regular: validateSubmodelRegular,
-			compact: validateSubmodelCompact,
 		},
 		{
-			name: "submodel-missing-semanticId",
+			name: "submodel-without-semanticId",
 			build: func() (FeedEvent, error) {
-				return b.SubmodelUpdated("sm-1", "", nil)
+				return b.SubmodelUpdated(testSubmodelID, "", nil)
 			},
-			regular: validateSubmodelRegular,
-			compact: validateSubmodelCompact,
 		},
 		{
 			name: "pcn",
 			build: func() (FeedEvent, error) {
-				return b.PCN("sm-pcn", []string{"asset-1"}, map[string]any{"ManufacturerChangeID": "CN1"})
+				return b.PCN(testSubmodelID, []string{testAssetID}, pcnRecordValue)
 			},
-			regular: validatePCNRegular,
-			compact: validatePCNCompact,
+		},
+		{
+			name: "pcn-without-assets",
+			build: func() (FeedEvent, error) {
+				return b.PCN(testSubmodelID, nil, pcnRecordValue)
+			},
 		},
 	}
+
+	schemas := loadAdvertisedSchemas(t)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ev, err := tc.build()
 			if err != nil {
 				t.Fatalf("build: %v", err)
 			}
-			assertPayload(t, ev.DataFull, tc.regular)
-			assertPayload(t, ev.DataCompact, tc.compact)
+			schemas.assertValid(t, ev.DataSchemaFull, ev.DataFull)
+			schemas.assertValid(t, ev.DataSchemaCompact, ev.DataCompact)
 		})
 	}
 }
 
-func assertPayload(t *testing.T, raw string, validate func(map[string]any) error) {
+// TestAdvertisedSchemasAreVendored guards against a schema constant that is
+// changed without adding the matching document under testdata.
+func TestAdvertisedSchemasAreVendored(t *testing.T) {
+	schemas := loadAdvertisedSchemas(t)
+	for _, eventType := range allEventTypes() {
+		full, compact := schemaPairForType(eventType, DefaultConfig().SchemaBaseURL)
+		for _, url := range []string{full, compact} {
+			if _, ok := schemas.byName[path.Base(url)]; !ok {
+				t.Errorf("no vendored schema for %s (event type %s)", url, eventType)
+			}
+		}
+	}
+}
+
+// TestPCNAdvertisesSingleSchema pins the PCN event to one schema document:
+// the compact payload is the identification subset of the full one, so both
+// presentations advertise pcnNotificationEvent.v1 and there is no separate
+// compact schema.
+func TestPCNAdvertisesSingleSchema(t *testing.T) {
+	cfg := DefaultConfig()
+	ev, err := NewBuilder(cfg).PCN(testSubmodelID, []string{testAssetID}, pcnRecordValueOnly(t))
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if ev.DataSchemaFull != ev.DataSchemaCompact {
+		t.Fatalf("full=%s compact=%s want the same schema", ev.DataSchemaFull, ev.DataSchemaCompact)
+	}
+	if got := path.Base(ev.DataSchemaFull); got != schemaPCN {
+		t.Fatalf("dataschema=%s want %s", got, schemaPCN)
+	}
+	full, compact := schemaPairForType(TypePCN, cfg.SchemaBaseURL)
+	if full != compact {
+		t.Fatalf("capabilities advertise full=%s compact=%s want the same schema", full, compact)
+	}
+	// Both payloads must validate against that single document.
+	schemas := loadAdvertisedSchemas(t)
+	schemas.assertValid(t, ev.DataSchemaFull, ev.DataFull)
+	schemas.assertValid(t, ev.DataSchemaCompact, ev.DataCompact)
+}
+
+type advertisedSchemas struct {
+	byName map[string]*jsonschema.Schema
+}
+
+// assertValid validates payload against the schema advertised in dataschema.
+// Format assertion stays off (the draft 2020-12 default), so "format": "uri"
+// remains an annotation.
+func (s advertisedSchemas) assertValid(t *testing.T, dataschema, payload string) {
 	t.Helper()
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
-		t.Fatalf("json: %v", err)
-	}
-	if err := validate(payload); err != nil {
-		t.Fatalf("%v payload=%s", err, raw)
-	}
-}
-
-func validateAASRegular(p map[string]any) error {
-	if err := requireString(p, "aasId"); err != nil {
-		return err
-	}
-	if err := optionalString(p, "globalAssetId"); err != nil {
-		return err
-	}
-	return validateReferredSemanticIDs(p["submodels"])
-}
-
-func validateAASCompact(p map[string]any) error {
-	if err := requireExactKeys(p, "aasId"); err != nil {
-		return err
-	}
-	return requireString(p, "aasId")
-}
-
-func validateAssetRegular(p map[string]any) error {
-	if err := requireString(p, "globalAssetId"); err != nil {
-		return err
-	}
-	if err := validateReferredSemanticIDs(p["submodels"]); err != nil {
-		return err
-	}
-	refs, ok := p["aasRefs"].([]any)
+	name := path.Base(dataschema)
+	schema, ok := s.byName[name]
 	if !ok {
-		return fmt.Errorf("aasRefs must be an array")
+		t.Fatalf("no vendored schema for advertised dataschema %s", dataschema)
 	}
-	for _, ref := range refs {
-		if err := validateReference(ref, "AssetAdministrationShell"); err != nil {
-			return err
+	instance, err := jsonschema.UnmarshalJSON(strings.NewReader(payload))
+	if err != nil {
+		t.Fatalf("payload is not valid JSON: %v", err)
+	}
+	if err = schema.Validate(instance); err != nil {
+		t.Fatalf("payload does not satisfy %s: %v\npayload=%s", name, err, payload)
+	}
+}
+
+func loadAdvertisedSchemas(t *testing.T) advertisedSchemas {
+	t.Helper()
+	entries, err := os.ReadDir(schemaDir)
+	if err != nil {
+		t.Fatalf("read schema dir: %v", err)
+	}
+	compiler := jsonschema.NewCompiler()
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
 		}
-	}
-	return nil
-}
-
-func validateAssetCompact(p map[string]any) error {
-	if err := requireExactKeys(p, "globalAssetId"); err != nil {
-		return err
-	}
-	return requireString(p, "globalAssetId")
-}
-
-func validateSubmodelRegular(p map[string]any) error {
-	if err := requireString(p, "submodelId"); err != nil {
-		return err
-	}
-	if err := optionalStringArray(p, "globalAssetIds"); err != nil {
-		return err
-	}
-	if _, ok := p["semanticId"]; !ok {
-		return nil
-	}
-	return validateReference(p["semanticId"], "GlobalReference")
-}
-
-func validateSubmodelCompact(p map[string]any) error {
-	if err := requireString(p, "submodelId"); err != nil {
-		return err
-	}
-	if _, ok := p["semanticId"]; !ok {
-		return requireExactKeys(p, "submodelId")
-	}
-	if err := requireExactKeys(p, "submodelId", "semanticId"); err != nil {
-		return err
-	}
-	return validateReference(p["semanticId"], "GlobalReference")
-}
-
-func validatePCNRegular(p map[string]any) error {
-	if err := requireString(p, "submodelId"); err != nil {
-		return err
-	}
-	if err := optionalStringArray(p, "globalAssetIds"); err != nil {
-		return err
-	}
-	if _, ok := p["record"]; !ok {
-		return fmt.Errorf("record is required")
-	}
-	return nil
-}
-
-func validatePCNCompact(p map[string]any) error {
-	if err := requireExactKeys(p, "submodelId", "globalAssetIds"); err != nil {
-		return err
-	}
-	if err := requireString(p, "submodelId"); err != nil {
-		return err
-	}
-	return optionalStringArray(p, "globalAssetIds")
-}
-
-func validateReferredSemanticIDs(raw any) error {
-	items, ok := raw.([]any)
-	if !ok {
-		return fmt.Errorf("submodels must be an array")
-	}
-	for _, item := range items {
-		m, ok := item.(map[string]any)
-		if !ok {
-			return fmt.Errorf("submodels entry must be an object")
+		raw, readErr := os.ReadFile(filepath.Join(schemaDir, entry.Name()))
+		if readErr != nil {
+			t.Fatalf("read %s: %v", entry.Name(), readErr)
 		}
-		_, hasReferredSemanticID := m["referredSemanticId"]
-		if hasReferredSemanticID {
-			if err := requireExactKeys(m, "type", "keys", "referredSemanticId"); err != nil {
-				return err
-			}
-			if err := validateReference(m["referredSemanticId"], "GlobalReference"); err != nil {
-				return err
-			}
-		} else if err := requireExactKeys(m, "type", "keys"); err != nil {
-			return err
+		doc, unmarshalErr := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+		if unmarshalErr != nil {
+			t.Fatalf("parse %s: %v", entry.Name(), unmarshalErr)
 		}
-		if err := validateReferenceShape(m, "Submodel"); err != nil {
-			return err
+		if addErr := compiler.AddResource(schemaResourceURL(entry.Name()), doc); addErr != nil {
+			t.Fatalf("add %s: %v", entry.Name(), addErr)
 		}
+		names = append(names, entry.Name())
 	}
-	return nil
-}
-
-func validateReference(raw any, keyType string) error {
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return fmt.Errorf("reference must be an object")
-	}
-	if err := requireExactKeys(m, "type", "keys"); err != nil {
-		return err
-	}
-	return validateReferenceShape(m, keyType)
-}
-
-// validateReferenceShape checks a reference's "type"/"keys" fields without
-// requiring that those be the object's only keys, so it can also validate a
-// "submodels" entry that carries an extra optional "referredSemanticId".
-func validateReferenceShape(m map[string]any, keyType string) error {
-	keys, ok := m["keys"].([]any)
-	if !ok || len(keys) < 1 {
-		return fmt.Errorf("keys must have at least one entry")
-	}
-	for _, key := range keys {
-		km, ok := key.(map[string]any)
-		if !ok {
-			return fmt.Errorf("key must be an object")
+	out := advertisedSchemas{byName: make(map[string]*jsonschema.Schema, len(names))}
+	for _, name := range names {
+		schema, compileErr := compiler.Compile(schemaResourceURL(name))
+		if compileErr != nil {
+			t.Fatalf("compile %s: %v", name, compileErr)
 		}
-		if err := requireExactKeys(km, "type", "value"); err != nil {
-			return err
-		}
-		if km["type"] != keyType {
-			return fmt.Errorf("key type=%v want %s", km["type"], keyType)
-		}
-		if _, ok := km["value"].(string); !ok {
-			return fmt.Errorf("key value must be a string")
-		}
-	}
-	return nil
-}
-
-func requireString(m map[string]any, key string) error {
-	v, ok := m[key].(string)
-	if !ok || v == "" {
-		return fmt.Errorf("%s must be a non-empty string", key)
-	}
-	return nil
-}
-
-func optionalString(m map[string]any, key string) error {
-	if _, ok := m[key]; !ok {
-		return nil
-	}
-	if _, ok := m[key].(string); !ok {
-		return fmt.Errorf("%s must be a string", key)
-	}
-	return nil
-}
-
-func optionalStringArray(m map[string]any, key string) error {
-	raw, ok := m[key]
-	if !ok {
-		return nil
-	}
-	items, ok := raw.([]any)
-	if !ok {
-		return fmt.Errorf("%s must be an array", key)
-	}
-	for _, item := range items {
-		if _, ok := item.(string); !ok {
-			return fmt.Errorf("%s entries must be strings", key)
-		}
-	}
-	return nil
-}
-
-func requireExactKeys(m map[string]any, keys ...string) error {
-	if len(m) != len(keys) {
-		return fmt.Errorf("unexpected keys %v want %v", keysOf(m), keys)
-	}
-	for _, key := range keys {
-		if _, ok := m[key]; !ok {
-			return fmt.Errorf("missing key %s", key)
-		}
-	}
-	return nil
-}
-
-func keysOf(m map[string]any) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
+		out.byName[name] = schema
 	}
 	return out
+}
+
+// schemaResourceURL mirrors the "$id" of the vendored documents so intra-schema
+// "$ref"s resolve without network access.
+func schemaResourceURL(name string) string {
+	return "https://admin-shell.io/events/schemas/" + name
+}
+
+// pcnRecordValueOnly produces the Value-Only record exactly the way the
+// mutation sink does: a full PCN Record submodel element converted through
+// PCNNewRecordValuesFromSubmodel.
+func pcnRecordValueOnly(t *testing.T) any {
+	t.Helper()
+	sm := pcnSubmodelWithListRecordElements(t, fullPCNRecordElement())
+	values := PCNNewRecordValuesFromSubmodel(nil, sm)
+	if len(values) != 1 {
+		t.Fatalf("expected exactly one PCN record value, got %d", len(values))
+	}
+	return values[0]
+}
+
+func fullPCNRecordElement() *types.SubmodelElementCollection {
+	record := types.NewSubmodelElementCollection()
+	record.SetValue([]types.ISubmodelElement{
+		smeCollection("Manufacturer",
+			smeMultiLanguageProperty("ManufacturerName", "en", "Example Corp"),
+			smeCollection("PhysicalAddress",
+				smeMultiLanguageProperty("Street", "en", "Example Street 1"),
+				smeMultiLanguageProperty("CityTown", "en", "Example City"),
+			),
+		),
+		smeStringProperty("ManufacturerChangeID", "CN1"),
+		smeStringProperty("PcnType", "PCN"),
+		smeList("ReasonsOfChange",
+			smeCollection("ReasonOfChange",
+				smeStringProperty("ReasonClassificationSystem", "VDMA24903"),
+				smeStringProperty("ReasonId", "RAWM"),
+			),
+		),
+		smeList("ItemCategories",
+			smeCollection("ItemCategory",
+				smeStringProperty("ItemClassificationSystem", "VDMA24903"),
+				smeStringProperty("ItemCategory", "ELME"),
+			),
+		),
+		smeCollection("PcnChangeInformation",
+			smeMultiLanguageProperty("ChangeTitle", "en", "Material change"),
+			smeMultiLanguageProperty("ChangeDetail", "en", "Switch to lead-free solder"),
+		),
+		smeStringProperty("DateOfRecord", "2026-06-01T12:00:00Z"),
+		smeCollection("ItemOfChange",
+			smeMultiLanguageProperty("ManufacturerProductFamily", "en", "Series X"),
+			smeMultiLanguageProperty("ManufacturerProductDesignation", "en", "X-1000"),
+		),
+	})
+	return record
+}
+
+func smeStringProperty(idShort, value string) types.ISubmodelElement {
+	prop := types.NewProperty(types.DataTypeDefXSDString)
+	id := idShort
+	v := value
+	prop.SetIDShort(&id)
+	prop.SetValue(&v)
+	return prop
+}
+
+func smeMultiLanguageProperty(idShort, language, text string) types.ISubmodelElement {
+	mlp := types.NewMultiLanguageProperty()
+	id := idShort
+	mlp.SetIDShort(&id)
+	mlp.SetValue([]types.ILangStringTextType{types.NewLangStringTextType(language, text)})
+	return mlp
+}
+
+func smeCollection(idShort string, children ...types.ISubmodelElement) types.ISubmodelElement {
+	sec := types.NewSubmodelElementCollection()
+	id := idShort
+	sec.SetIDShort(&id)
+	sec.SetValue(children)
+	return sec
+}
+
+func smeList(idShort string, children ...types.ISubmodelElement) types.ISubmodelElement {
+	sel := types.NewSubmodelElementList(types.AASSubmodelElementsSubmodelElementCollection)
+	id := idShort
+	sel.SetIDShort(&id)
+	sel.SetValue(children)
+	return sel
 }

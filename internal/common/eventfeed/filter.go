@@ -65,6 +65,9 @@ func parseFilterParam(raw string) (*parsedFilter, error) {
 }
 
 func parseRSQL(expr string) (*parsedFilter, error) {
+	if err := validateRSQLQuoting(expr); err != nil {
+		return nil, err
+	}
 	parts := splitRSQLAnd(expr)
 	out := &parsedFilter{Comparisons: make([]comparison, 0, len(parts))}
 	for _, part := range parts {
@@ -85,49 +88,155 @@ func parseRSQL(expr string) (*parsedFilter, error) {
 }
 
 func splitRSQLAnd(expr string) []string {
-	if strings.Contains(strings.ToLower(expr), " and ") {
-		lower := strings.ToLower(expr)
-		var parts []string
-		start := 0
-		for {
-			idx := strings.Index(lower[start:], " and ")
-			if idx < 0 {
-				parts = append(parts, expr[start:])
-				break
-			}
-			parts = append(parts, expr[start:start+idx])
-			start = start + idx + len(" and ")
-		}
-		return parts
-	}
-	return strings.Split(expr, ";")
-}
-
-func parseComparison(expr string) (comparison, error) {
-	ops := []string{"=out=", "=in=", "!=", "=="}
-	for _, op := range ops {
-		idx := strings.Index(expr, op)
-		if idx < 0 {
+	var parts []string
+	start := 0
+	for i := 0; i < len(expr); {
+		if n := rsqlQuotedSpan(expr, i); n > 0 {
+			i += n
 			continue
 		}
-		field := strings.TrimSpace(expr[:idx])
-		valueRaw := strings.TrimSpace(expr[idx+len(op):])
-		if field == "" || valueRaw == "" {
-			return comparison{}, newQueryError("EVENTFEED-FILTER-MALFORMED", "malformed RSQL filter expression")
+		if expr[i] == '(' {
+			i = rsqlSkipParen(expr, i)
+			continue
 		}
-		if strings.HasPrefix(field, "data.") {
-			return comparison{}, newQueryError("EVENTFEED-FILTER-DATA", "filter on 'data.*' fields is not supported in v1")
+		if expr[i] == ';' {
+			parts = append(parts, expr[start:i])
+			i++
+			start = i
+			continue
 		}
-		if _, ok := filterableFields[field]; !ok {
-			return comparison{}, newQueryError("EVENTFEED-FILTER-FIELD", fmt.Sprintf("filter on field '%s' is not supported", field))
+		if rsqlHasAndSeparator(expr, i) {
+			parts = append(parts, expr[start:i])
+			i += len(" and ")
+			start = i
+			continue
 		}
-		values, err := parseRSQLValues(valueRaw)
-		if err != nil {
-			return comparison{}, err
-		}
-		return comparison{Field: field, Operator: op, Values: values}, nil
+		i++
 	}
-	return comparison{}, newQueryError("EVENTFEED-FILTER-MALFORMED", "malformed RSQL filter expression")
+	parts = append(parts, expr[start:])
+	return parts
+}
+
+func rsqlHasAndSeparator(expr string, i int) bool {
+	const sep = " and "
+	if i+len(sep) > len(expr) {
+		return false
+	}
+	return strings.EqualFold(expr[i:i+len(sep)], sep)
+}
+
+// rsqlQuotedSpan returns the length of the quoted value starting at i, or 0
+// when s[i] does not open one. An unterminated quote spans the rest of s;
+// parseRSQL rejects those up front through validateRSQLQuoting.
+func rsqlQuotedSpan(s string, i int) int {
+	n, _ := rsqlQuotedSpanEnd(s, i)
+	return n
+}
+
+// rsqlQuotedSpanEnd additionally reports whether the quote was closed. Both
+// doubled quotes (”) and backslash escapes (\') escape a quote inside a
+// quoted value.
+func rsqlQuotedSpanEnd(s string, i int) (int, bool) {
+	if i >= len(s) {
+		return 0, true
+	}
+	quote := s[i]
+	if quote != '\'' && quote != '"' {
+		return 0, true
+	}
+	for j := i + 1; j < len(s); j++ {
+		switch s[j] {
+		case '\\':
+			j++
+		case quote:
+			if j+1 < len(s) && s[j+1] == quote {
+				j++
+				continue
+			}
+			return j - i + 1, true
+		}
+	}
+	return len(s) - i, false
+}
+
+func validateRSQLQuoting(expr string) error {
+	for i := 0; i < len(expr); {
+		n, closed := rsqlQuotedSpanEnd(expr, i)
+		if n == 0 {
+			i++
+			continue
+		}
+		if !closed {
+			return newQueryError("EVENTFEED-FILTER-MALFORMED", "unterminated quoted value in RSQL filter expression")
+		}
+		i += n
+	}
+	return nil
+}
+
+func rsqlSkipParen(s string, i int) int {
+	depth := 0
+	for i < len(s) {
+		if n := rsqlQuotedSpan(s, i); n > 0 {
+			i += n
+			continue
+		}
+		switch s[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		}
+		i++
+	}
+	return i
+}
+
+var rsqlOperators = []string{"=out=", "=in=", "!=", "=="}
+
+func parseComparison(expr string) (comparison, error) {
+	idx, op := rsqlOperatorIndex(expr)
+	if idx < 0 {
+		return comparison{}, newQueryError("EVENTFEED-FILTER-MALFORMED", "malformed RSQL filter expression")
+	}
+	field := strings.TrimSpace(expr[:idx])
+	valueRaw := strings.TrimSpace(expr[idx+len(op):])
+	if field == "" || valueRaw == "" {
+		return comparison{}, newQueryError("EVENTFEED-FILTER-MALFORMED", "malformed RSQL filter expression")
+	}
+	if strings.HasPrefix(field, "data.") {
+		return comparison{}, newQueryError("EVENTFEED-FILTER-DATA", "filter on 'data.*' fields is not supported in v1")
+	}
+	if _, ok := filterableFields[field]; !ok {
+		return comparison{}, newQueryError("EVENTFEED-FILTER-FIELD", fmt.Sprintf("filter on field '%s' is not supported", field))
+	}
+	values, err := parseRSQLValues(valueRaw)
+	if err != nil {
+		return comparison{}, err
+	}
+	return comparison{Field: field, Operator: op, Values: values}, nil
+}
+
+// rsqlOperatorIndex returns the position and text of the first comparison
+// operator that starts outside a quoted value, so an operator-looking sequence
+// inside a quoted identifier is not mistaken for the comparison operator.
+func rsqlOperatorIndex(expr string) (int, string) {
+	for i := 0; i < len(expr); {
+		if n := rsqlQuotedSpan(expr, i); n > 0 {
+			i += n
+			continue
+		}
+		for _, op := range rsqlOperators {
+			if strings.HasPrefix(expr[i:], op) {
+				return i, op
+			}
+		}
+		i++
+	}
+	return -1, ""
 }
 
 func parseRSQLValues(raw string) ([]string, error) {
@@ -137,7 +246,7 @@ func parseRSQLValues(raw string) ([]string, error) {
 		if inner == "" {
 			return nil, newQueryError("EVENTFEED-FILTER-MALFORMED", "malformed RSQL filter expression")
 		}
-		parts := strings.Split(inner, ",")
+		parts := splitRSQLList(inner)
 		out := make([]string, 0, len(parts))
 		for _, p := range parts {
 			v, err := unquoteRSQL(strings.TrimSpace(p))
@@ -155,10 +264,30 @@ func parseRSQLValues(raw string) ([]string, error) {
 	return []string{v}, nil
 }
 
+func splitRSQLList(inner string) []string {
+	var parts []string
+	start := 0
+	for i := 0; i < len(inner); {
+		if n := rsqlQuotedSpan(inner, i); n > 0 {
+			i += n
+			continue
+		}
+		if inner[i] == ',' {
+			parts = append(parts, inner[start:i])
+			i++
+			start = i
+			continue
+		}
+		i++
+	}
+	parts = append(parts, inner[start:])
+	return parts
+}
+
 func unquoteRSQL(v string) (string, error) {
 	if len(v) >= 2 {
 		if (v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'') {
-			return v[1 : len(v)-1], nil
+			return unescapeRSQL(v[1:len(v)-1], v[0]), nil
 		}
 	}
 	if v == "" {
@@ -179,4 +308,24 @@ func columnForField(field string, presentation Presentation) (string, error) {
 		return "dataschema_full", nil
 	}
 	return col, nil
+}
+
+// unescapeRSQL resolves the two escape forms accepted inside a quoted value:
+// a doubled quote (”) and a backslash escape (\', \" or \\).
+func unescapeRSQL(inner string, quote byte) string {
+	var b strings.Builder
+	b.Grow(len(inner))
+	for i := 0; i < len(inner); i++ {
+		switch {
+		case inner[i] == '\\' && i+1 < len(inner):
+			i++
+			b.WriteByte(inner[i])
+		case inner[i] == quote && i+1 < len(inner) && inner[i+1] == quote:
+			i++
+			b.WriteByte(quote)
+		default:
+			b.WriteByte(inner[i])
+		}
+	}
+	return b.String()
 }

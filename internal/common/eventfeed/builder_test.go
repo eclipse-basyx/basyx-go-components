@@ -74,7 +74,7 @@ func TestBuilderAASCreatedPayloads(t *testing.T) {
 	if !ok {
 		t.Fatalf("submodels[0]=%v", submodels[0])
 	}
-	if firstSubmodel["type"] != "ExternalReference" {
+	if firstSubmodel["type"] != "ModelReference" {
 		t.Fatalf("submodels[0] type=%v", firstSubmodel["type"])
 	}
 	submodelKeys, ok := firstSubmodel["keys"].([]any)
