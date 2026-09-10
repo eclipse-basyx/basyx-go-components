@@ -1,0 +1,47 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      {
+        "name": "authenticated_role",
+        "attributes": [
+          { "CLAIM": "role" }
+        ]
+      }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "aasx_routes",
+        "objects": [
+          { "ROUTE": "/description" },
+          { "ROUTE": "/packages" },
+          { "ROUTE": "/packages/*" },
+          { "ROUTE": "/packages-async" },
+          { "ROUTE": "/packages-async/*" }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      {
+        "name": "authenticated_all",
+        "acl": {
+          "USEATTRIBUTES": "authenticated_role",
+          "RIGHTS": ["ALL"],
+          "ACCESS": "ALLOW"
+        }
+      }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "always_true",
+        "formula": { "$boolean": true }
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "authenticated_all",
+        "USEOBJECTS": ["aasx_routes"],
+        "USEFORMULA": "always_true"
+      }
+    ]
+  }
+}

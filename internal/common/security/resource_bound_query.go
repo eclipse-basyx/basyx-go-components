@@ -291,14 +291,14 @@ func boundFormula(evaluation AuthorizationEvaluation, collector *grammar.Resolve
 	return goqu.COALESCE(expression, false), nil
 }
 
-func boundFragment(evaluation AuthorizationEvaluation, fragment grammar.FragmentStringPattern, collector *grammar.ResolvedFieldPathCollector) (exp.Expression, error) {
+func boundFragment(ctx context.Context, evaluation AuthorizationEvaluation, fragment grammar.FragmentStringPattern, collector *grammar.ResolvedFieldPathCollector) (exp.Expression, error) {
 	if fragment == "" || evaluation.QueryFilter == nil {
 		return goqu.L("TRUE"), nil
 	}
 	predicates := evaluation.QueryFilter.FilterPredicateEntriesFor(fragment)
 	expressions := make([]exp.Expression, 0, len(predicates))
 	for _, predicate := range predicates {
-		expression, err := evaluateFragmentFilterPredicate(predicate.Predicate, predicate.Fragment, collector)
+		expression, err := evaluateFragmentFilterPredicate(ctx, predicate.Predicate, predicate.Fragment, collector)
 		if err != nil {
 			return nil, fmt.Errorf("REBAC-FRAGMENT-EVALUATE %w", err)
 		}
@@ -310,7 +310,7 @@ func boundFragment(evaluation AuthorizationEvaluation, fragment grammar.Fragment
 	return goqu.And(expressions...), nil
 }
 
-func (state *boundRequest) expression(collector *grammar.ResolvedFieldPathCollector, fragment grammar.FragmentStringPattern) (exp.Expression, error) {
+func (state *boundRequest) expression(ctx context.Context, collector *grammar.ResolvedFieldPathCollector, fragment grammar.FragmentStringPattern) (exp.Expression, error) {
 	kind, key, err := collector.AuthorizationResource()
 	if err != nil {
 		return nil, err
@@ -331,7 +331,7 @@ func (state *boundRequest) expression(collector *grammar.ResolvedFieldPathCollec
 			return nil, err
 		}
 		matches := goqu.And(goqu.L("? = ?", selected, policy.id), formula)
-		filter, err := boundFragment(policy.evaluation, fragment, collector)
+		filter, err := boundFragment(ctx, policy.evaluation, fragment, collector)
 		if err != nil {
 			return nil, err
 		}
@@ -341,7 +341,7 @@ func (state *boundRequest) expression(collector *grammar.ResolvedFieldPathCollec
 	if err != nil {
 		return nil, err
 	}
-	filter, err := boundFragment(state.fallback, fragment, collector)
+	filter, err := boundFragment(ctx, state.fallback, fragment, collector)
 	if err != nil {
 		return nil, err
 	}

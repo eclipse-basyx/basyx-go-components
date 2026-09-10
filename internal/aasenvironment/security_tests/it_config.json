@@ -27,6 +27,15 @@
     "expectedStatus": 200
   },
   {
+    "context": "POST query shells - inaccessible related submodel is a neutral no-match",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/shells",
+    "data": "postBody/queryDeniedRelatedSubmodel.json",
+    "shouldMatch": "expected/expectedEmpty.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "POST upload existing AASX - create-only user denied",
     "action": "UPLOAD_MULTIPART",
     "token": { "user": "usera", "password": "pwd" },

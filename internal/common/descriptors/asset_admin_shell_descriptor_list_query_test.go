@@ -332,6 +332,56 @@ func TestNestedSubmodelDescriptorListDoesNotPromoteFieldMaskToRowFilter(t *testi
 	require.Contains(t, args, "WRITTEN_BY_X")
 }
 
+func TestCallerMatchOnVisibleNestedFieldStaysCorrelatedToCurrentReference(t *testing.T) {
+	t.Parallel()
+
+	policyField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	policyValue := grammar.StandardString("WRITTEN_BY_X")
+	policyFormula := grammar.LogicalExpression{Eq: grammar.ComparisonItems{
+		{Field: &policyField},
+		{StrVal: &policyValue},
+	}}
+	callerField := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
+	callerValue := grammar.StandardString("FILTER_VISIBLE")
+	callerCondition := grammar.LogicalExpression{Eq: grammar.ComparisonItems{
+		{Field: &callerField},
+		{StrVal: &callerValue},
+	}}
+	callerFragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[]")
+	match := true
+	ctx := auth.WithQueryFilter(common.ContextWithConfig(t.Context(), &common.Config{}), &auth.QueryFilter{
+		Formula: &policyFormula,
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumREAD: policyFormula,
+		},
+	})
+	ctx, err := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceAASDesc, grammar.Query{
+		FilterConditions: []grammar.SubFilter{{
+			Condition: &callerCondition,
+			Fragment:  &callerFragment,
+			Match:     &match,
+		}},
+	})
+	require.NoError(t, err)
+
+	dataset, err := buildSingleStatementAASDescriptorListQuery(
+		ctx,
+		101,
+		"",
+		model.AssetKind(""),
+		"",
+		"",
+		time.Time{},
+		time.Time{},
+	)
+	require.NoError(t, err)
+	_, args, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+
+	require.Equal(t, 1, countArgument(args, "WRITTEN_BY_X"))
+	require.Equal(t, 1, countArgument(args, "FILTER_VISIBLE"))
+}
+
 func TestStandaloneSubmodelDescriptorListFiltersExactIdentifier(t *testing.T) {
 	t.Parallel()
 

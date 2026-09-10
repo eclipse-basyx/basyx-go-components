@@ -1,0 +1,7 @@
+kind: changed
+body: ABAC claims retain their JWT JSON types. `CLAIM` selects a top-level value and `CLAIMPATH` selects a nested value using a non-empty RFC 6901 JSON Pointer. Every declared claim must be present before its rule can become active; values are resolved and type-checked when formulas evaluate them. Uncast scalar comparisons require strings; claim casts accept only the corresponding JSON type. Exact string-array membership uses `$contains` with `CLAIMPATH` first. The branch-only `$in` operator has been removed, so policies must migrate from `{"$in":[scalar,CLAIMPATH]}` to `{"$contains":[CLAIMPATH,scalar]}`. Formula evaluation uses true/false/indeterminate logic, and CREATE/UPDATE checks are performed on staged state before commit, with UPDATE requiring both current and prospective state.
+time: 2026-08-27T09:00:46.000000000Z
+custom:
+  Impact: High
+  PullRequest: 616
+  SecurityImpact: Claim evaluation now follows the documented JSON types and paths. Missing declared claims make the rule ineligible. Present `null`, wrong-type, object, mixed-array, and unsupported values are indeterminate and fail closed when evaluated; empty string arrays evaluate false.

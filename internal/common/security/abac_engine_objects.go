@@ -47,10 +47,11 @@ type descriptorRouteMapping = scopedFilteredRouteMapping
 type identifiableRouteMapping = scopedFilteredRouteMapping
 
 type referableRouteMapping struct {
-	scope       string
-	route       string
-	hasWildcard bool
-	useFilter   bool
+	scope              string
+	route              string
+	hasWildcard        bool
+	useFilter          bool
+	includeDescendants bool
 }
 
 var descriptorRouteMappings = []descriptorRouteMapping{
@@ -169,6 +170,19 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 		filterField: "$sm#id",
 		hasWildcard: true,
 	},
+	// AAS Environment Submodel superpaths require an explicit $sm object.
+	{
+		scope:       "$sm",
+		route:       "/shells/*/submodels/%s",
+		filterField: "$sm#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$sm",
+		route:       "/shells/*/submodels/%s/**",
+		filterField: "$sm#id",
+		hasWildcard: true,
+	},
 	// AAS Repository collection/query endpoints use an additional filter
 	// on $aas#id when a concrete IDENTIFIABLE is provided.
 	{
@@ -195,7 +209,7 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 		filterField: "$aas#id",
 		hasWildcard: false,
 	},
-	// Covers all concrete AAS endpoints under /shells/{aasIdentifier}/...
+	// Concrete AAS endpoints deliberately exclude the nested Submodel API.
 	{
 		scope:       "$aas",
 		route:       "/shells/%s",
@@ -204,7 +218,43 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 	},
 	{
 		scope:       "$aas",
-		route:       "/shells/%s/**",
+		route:       "/shells/%s/$reference",
+		filterField: "$aas#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aas",
+		route:       "/shells/%s/$history",
+		filterField: "$aas#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aas",
+		route:       "/shells/%s/$signed",
+		filterField: "$aas#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aas",
+		route:       "/shells/%s/asset-information",
+		filterField: "$aas#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aas",
+		route:       "/shells/%s/asset-information/thumbnail",
+		filterField: "$aas#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aas",
+		route:       "/shells/%s/submodel-refs",
+		filterField: "$aas#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aas",
+		route:       "/shells/%s/submodel-refs/*",
 		filterField: "$aas#id",
 		hasWildcard: true,
 	},
@@ -266,18 +316,51 @@ var referableRouteMappings = []referableRouteMapping{
 		hasWildcard: true,
 		useFilter:   true,
 	},
-	// Exact element route and all element sub-resources.
+	// Element route, descendants, and element sub-resources.
+	{
+		scope:              "$sme",
+		route:              "/submodels/%s/submodel-elements/%s",
+		hasWildcard:        true,
+		useFilter:          false,
+		includeDescendants: true,
+	},
+	// AAS Environment SME superpaths require an explicit $sme object.
 	{
 		scope:       "$sme",
-		route:       "/submodels/%s/submodel-elements/%s",
+		route:       "/shells/*/submodels/%s/submodel-elements",
 		hasWildcard: true,
-		useFilter:   false,
+		useFilter:   true,
 	},
 	{
 		scope:       "$sme",
-		route:       "/submodels/%s/submodel-elements/%s/**",
+		route:       "/shells/*/submodels/%s/submodel-elements/$metadata",
 		hasWildcard: true,
-		useFilter:   false,
+		useFilter:   true,
+	},
+	{
+		scope:       "$sme",
+		route:       "/shells/*/submodels/%s/submodel-elements/$value",
+		hasWildcard: true,
+		useFilter:   true,
+	},
+	{
+		scope:       "$sme",
+		route:       "/shells/*/submodels/%s/submodel-elements/$reference",
+		hasWildcard: true,
+		useFilter:   true,
+	},
+	{
+		scope:       "$sme",
+		route:       "/shells/*/submodels/%s/submodel-elements/$path",
+		hasWildcard: true,
+		useFilter:   true,
+	},
+	{
+		scope:              "$sme",
+		route:              "/shells/*/submodels/%s/submodel-elements/%s",
+		hasWildcard:        true,
+		useFilter:          false,
+		includeDescendants: true,
 	},
 }
 
@@ -351,10 +434,24 @@ func mapReferableValueToRoute(referableValue grammar.ReferableValue, basePath st
 			continue
 		}
 
-		routes = append(routes, RouteWithFilter{route: joinBasePath(basePath, route)})
+		mappedRoute := joinBasePath(basePath, route)
+		routes = append(routes, RouteWithFilter{route: mappedRoute})
+		if mapping.includeDescendants {
+			routes = append(routes, referableRouteVariants(mappedRoute)...)
+		}
 	}
 
 	return routes
+}
+
+func referableRouteVariants(route string) []RouteWithFilter {
+	return []RouteWithFilter{
+		{route: route + "/**"},
+		{route: route + ".*"},
+		{route: route + ".*/**"},
+		{route: route + "[*"},
+		{route: route + "[*/**"},
+	}
 }
 
 func mapScopedIdentifierValueToRoute(scope string, identifier grammar.Identifier, basePath string, mappings []scopedFilteredRouteMapping) []RouteWithFilter {

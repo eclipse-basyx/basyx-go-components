@@ -336,6 +336,65 @@ func TestABACPolicyManagementRuleLifecycleStories(t *testing.T) {
 		assertStatus(t, http.MethodGet, hiddenSubmodelURL, "", editorToken, http.StatusNotFound)
 		assertSubmodelCollectionVisibility(t, editorToken, visibleSubmodelID, hiddenSubmodelID)
 	})
+
+	t.Run("route-derived query grants preserve their exact data scope", func(t *testing.T) {
+		viewerToken, tokenErr := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "usera", Password: "pwd"})
+		require.NoError(t, tokenErr)
+
+		aasAID := fmt.Sprintf("urn:test:aas:route-coverage-a:%d", testSuffix)
+		aasBID := fmt.Sprintf("urn:test:aas:route-coverage-b:%d", testSuffix)
+		submodelAID := fmt.Sprintf("urn:test:sm:route-coverage-a:%d", testSuffix)
+		submodelBID := fmt.Sprintf("urn:test:sm:route-coverage-b:%d", testSuffix)
+		submodelAIDShort := fmt.Sprintf("RouteCoverageAllowed%d", testSuffix)
+		submodelBIDShort := fmt.Sprintf("RouteCoverageHidden%d", testSuffix)
+		literalValue := fmt.Sprintf("literal-%d", testSuffix)
+		secretValue := fmt.Sprintf("secret-%d", testSuffix)
+
+		createStoryAAS(t, aasAID, "RouteCoverageA", adminToken)
+		createStoryAAS(t, aasBID, "RouteCoverageB", adminToken)
+		putStorySubmodelUnderAAS(t, aasAID, submodelAID, submodelAIDShort, literalValue, secretValue, adminToken)
+		putStorySubmodelUnderAAS(t, aasBID, submodelBID, submodelBIDShort, "other-literal", "other-secret", adminToken)
+
+		encodedAASA := base64.RawURLEncoding.EncodeToString([]byte(aasAID))
+		encodedAASB := base64.RawURLEncoding.EncodeToString([]byte(aasBID))
+		encodedSubmodelA := base64.RawURLEncoding.EncodeToString([]byte(submodelAID))
+		encodedSubmodelB := base64.RawURLEncoding.EncodeToString([]byte(submodelBID))
+
+		literalRoute := "/submodels/" + encodedSubmodelA + "/submodel-elements/U2VjcmV0"
+		literalVersionID := clonePolicyVersion(t, activePolicyVersionID(t, adminToken), adminToken)
+		literalRuleIndex := createRoleRouteReadRule(t, literalVersionID, "viewer", literalRoute, adminToken)
+		validatePolicyVersion(t, literalVersionID, adminToken)
+		activatePolicyVersion(t, literalVersionID, adminToken)
+
+		assertStatus(t, http.MethodGet, testBaseURL+literalRoute, "", viewerToken, http.StatusOK)
+		assertStatus(t, http.MethodGet, testBaseURL+"/submodels/"+encodedSubmodelA+"/submodel-elements/Secret", "", viewerToken, http.StatusForbidden)
+		assertAuthorizedAASQueryIDs(t, viewerToken, equalsQueryCondition("$sme.U2VjcmV0#value", literalValue), aasAID)
+		assertAuthorizedAASQueryIDs(t, viewerToken, equalsQueryCondition("$sme.Secret#value", secretValue))
+
+		nestedRoute := "/shells/" + encodedAASA + "/submodels/*"
+		nestedVersionID := clonePolicyVersion(t, activePolicyVersionID(t, adminToken), adminToken)
+		setPolicyRuleEnabled(t, nestedVersionID, literalRuleIndex, false, adminToken)
+		nestedRuleIndex := createRoleRouteReadRule(t, nestedVersionID, "viewer", nestedRoute, adminToken)
+		validatePolicyVersion(t, nestedVersionID, adminToken)
+		activatePolicyVersion(t, nestedVersionID, adminToken)
+
+		assertStatus(t, http.MethodGet, testBaseURL+"/shells/"+encodedAASA+"/submodels/"+encodedSubmodelA, "", viewerToken, http.StatusOK)
+		assertStatus(t, http.MethodGet, testBaseURL+"/shells/"+encodedAASB+"/submodels/"+encodedSubmodelB, "", viewerToken, http.StatusForbidden)
+		assertAuthorizedAASQueryIDs(t, viewerToken, equalsQueryCondition("$sm#idShort", submodelAIDShort), aasAID)
+		assertAuthorizedAASQueryIDs(t, viewerToken, equalsQueryCondition("$sm#idShort", submodelBIDShort))
+
+		referenceRoute := "/submodels/" + encodedSubmodelA + "/$reference"
+		referenceVersionID := clonePolicyVersion(t, activePolicyVersionID(t, adminToken), adminToken)
+		setPolicyRuleEnabled(t, referenceVersionID, nestedRuleIndex, false, adminToken)
+		createRoleRouteReadRule(t, referenceVersionID, "viewer", referenceRoute, adminToken)
+		validatePolicyVersion(t, referenceVersionID, adminToken)
+		activatePolicyVersion(t, referenceVersionID, adminToken)
+
+		assertStatus(t, http.MethodGet, testBaseURL+referenceRoute, "", viewerToken, http.StatusOK)
+		assertStatus(t, http.MethodGet, testBaseURL+"/submodels/"+encodedSubmodelA, "", viewerToken, http.StatusForbidden)
+		assertAuthorizedAASQueryIDs(t, viewerToken, equalsQueryCondition("$sm#id", submodelAID), aasAID)
+		assertAuthorizedAASQueryIDs(t, viewerToken, equalsQueryCondition("$sm#idShort", submodelAIDShort))
+	})
 }
 
 func createStorySubmodel(t *testing.T, submodelID string, idShort string, bearerToken string) string {
@@ -354,6 +413,104 @@ func createStorySubmodel(t *testing.T, submodelID string, idShort string, bearer
 
 	assertStatus(t, http.MethodPost, testBaseURL+"/submodels", createSubmodelBody, bearerToken, http.StatusCreated)
 	return submodelURL
+}
+
+func createStoryAAS(t *testing.T, aasID string, idShort string, bearerToken string) {
+	t.Helper()
+
+	body := fmt.Sprintf(`{
+		"id":%q,
+		"idShort":%q,
+		"modelType":"AssetAdministrationShell",
+		"assetInformation":{"assetKind":"Instance"}
+	}`, aasID, idShort)
+	assertStatus(t, http.MethodPost, testBaseURL+"/shells", body, bearerToken, http.StatusCreated)
+}
+
+func putStorySubmodelUnderAAS(
+	t *testing.T,
+	aasID string,
+	submodelID string,
+	idShort string,
+	literalValue string,
+	secretValue string,
+	bearerToken string,
+) {
+	t.Helper()
+
+	body := fmt.Sprintf(`{
+		"id":%q,
+		"idShort":%q,
+		"modelType":"Submodel",
+		"kind":"Instance",
+		"submodelElements":[
+			{"idShort":"U2VjcmV0","modelType":"Property","valueType":"xs:string","value":%q},
+			{"idShort":"Secret","modelType":"Property","valueType":"xs:string","value":%q}
+		]
+	}`, submodelID, idShort, literalValue, secretValue)
+	endpoint := fmt.Sprintf(
+		"%s/shells/%s/submodels/%s",
+		testBaseURL,
+		base64.RawURLEncoding.EncodeToString([]byte(aasID)),
+		base64.RawURLEncoding.EncodeToString([]byte(submodelID)),
+	)
+	assertStatus(t, http.MethodPut, endpoint, body, bearerToken, http.StatusCreated)
+}
+
+func createRoleRouteReadRule(t *testing.T, versionID int64, role string, route string, bearerToken string) int {
+	t.Helper()
+
+	ruleIndex := ruleCount(t, versionID, bearerToken) + 1
+	body := fmt.Sprintf(`{
+		"rule": {
+			"ACL": {
+				"ATTRIBUTES": [{ "CLAIM": "role" }],
+				"RIGHTS": ["READ"],
+				"ACCESS": "ALLOW"
+			},
+			"OBJECTS": [{ "ROUTE": %q }],
+			"FORMULA": {
+				"$eq": [
+					{ "$attribute": { "CLAIM": "role" } },
+					{ "$strVal": %q }
+				]
+			}
+		}
+	}`, route, role)
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/rules", testBaseURL, versionID)
+	status, response := doAuthorizedRequest(t, http.MethodPost, endpoint, body, bearerToken)
+	require.Equalf(t, http.StatusOK, status, "create route read rule failed: %s", response)
+	return ruleIndex
+}
+
+func equalsQueryCondition(field string, value string) map[string]any {
+	return map[string]any{
+		"$eq": []any{
+			map[string]any{"$field": field},
+			map[string]any{"$strVal": value},
+		},
+	}
+}
+
+func assertAuthorizedAASQueryIDs(t *testing.T, bearerToken string, condition map[string]any, expectedIDs ...string) {
+	t.Helper()
+
+	body, err := json.Marshal(map[string]any{"$condition": condition})
+	require.NoError(t, err)
+	status, response := doAuthorizedRequest(t, http.MethodPost, testBaseURL+"/query/shells", string(body), bearerToken)
+	require.Equalf(t, http.StatusOK, status, "AAS query failed: %s", response)
+
+	var page struct {
+		Result []struct {
+			ID string `json:"id"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(response), &page))
+	actualIDs := make([]string, 0, len(page.Result))
+	for _, shell := range page.Result {
+		actualIDs = append(actualIDs, shell.ID)
+	}
+	require.ElementsMatch(t, expectedIDs, actualIDs)
 }
 
 func runSuperpathRequest(t *testing.T, method string, path string, body string, contentType string, bearerToken string) (int, string) {

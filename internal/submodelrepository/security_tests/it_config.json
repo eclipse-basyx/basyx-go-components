@@ -94,11 +94,11 @@
     "expectedStatus": 404
   },
   {
-    "context": "GET annotation child - userx denied (referable-only does not grant child here)",
+    "context": "GET annotation child - userx allowed by parent Referable subtree",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement.AnnotationProperty1",
-    "expectedStatus": 403
+    "expectedStatus": 200
   },
   {
     "context": "GET relationship submodel - userx denied (referable-only user)",

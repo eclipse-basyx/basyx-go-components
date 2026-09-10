@@ -343,6 +343,8 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		sai := goqu.T(common.TblSpecificAssetID).As("sai")
 		for _, link := range uniqueLinks {
 			if link.Name == common.GlobalAssetIDAssetLinkName {
+				// DTR defines globalAssetId as a public discovery selector. Matching it may reveal
+				// the associated AAS ID independently of descriptor response-field projection.
 				ds = ds.Where(ai.Col("aasid").In(globalAssetIDLookupDataset(d, link.Value)))
 				continue
 			}

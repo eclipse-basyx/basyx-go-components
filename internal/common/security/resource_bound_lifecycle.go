@@ -353,7 +353,7 @@ func authorizeBoundCreatedBindings(ctx context.Context, tx *sql.Tx, table string
 	if err != nil {
 		return err
 	}
-	predicate, err := check.expression(collector, "")
+	predicate, err := check.expression(ctx, collector, "")
 	if err != nil {
 		return err
 	}

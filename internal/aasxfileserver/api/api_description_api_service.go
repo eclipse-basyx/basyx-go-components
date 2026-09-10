@@ -32,20 +32,29 @@ import (
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 )
 
-// DescriptionAPIAPIService provides the static self-description response.
-type DescriptionAPIAPIService struct{}
+const (
+	aasxFileServerSSP001 = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001"
+	aasxFileServerSSP002 = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002"
+)
+
+// DescriptionAPIAPIService provides the configured self-description response.
+type DescriptionAPIAPIService struct {
+	profiles []string
+}
 
 // NewDescriptionAPIAPIService creates a new description service.
-func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
-	return &DescriptionAPIAPIService{}
+func NewDescriptionAPIAPIService(asyncProfileEnabled bool) *DescriptionAPIAPIService {
+	profiles := []string{aasxFileServerSSP001}
+	if asyncProfileEnabled {
+		profiles = append(profiles, aasxFileServerSSP002)
+	}
+	return &DescriptionAPIAPIService{profiles: profiles}
 }
 
 // GetSelfDescription returns the supported profile for the AASX file server.
 func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (openapi.ImplResponse, error) {
 	_ = ctx
 	return openapi.Response(http.StatusOK, openapi.ServiceDescription{
-		Profiles: []string{
-			"https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001",
-		},
+		Profiles: s.profiles,
 	}), nil
 }

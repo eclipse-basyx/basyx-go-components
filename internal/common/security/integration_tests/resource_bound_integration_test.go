@@ -193,7 +193,7 @@ func startAccessClient(t *testing.T, cfg *common.Config, db *sql.DB) accessClien
 	shells, err := aasdb.NewAssetAdministrationShellDatabaseFromDB(db, "off")
 	require.NoError(t, err)
 	smController := smopenapi.NewSubmodelRepositoryAPIAPIController(smapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodels), "", "off")
-	aasController := aasopenapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasapi.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, shells, submodels), "", "off")
+	aasController := aasopenapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasapi.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, shells, submodels, true), "", "off")
 	for _, route := range smController.Routes() {
 		router.Method(route.Method, route.Pattern, route.HandlerFunc)
 	}
@@ -764,7 +764,7 @@ func TestResourceBoundListReplacementDoesNotReuseAccess(t *testing.T) {
 	c.request("PUT", entry+"/owners", "admin", []any{principal("admin")}, stale, 412)
 }
 
-func TestResourceBoundEvaluationFailureDoesNotFallBack(t *testing.T) {
+func TestResourceBoundInvalidPredicateUsesABACFallback(t *testing.T) {
 	c := newAccessClient(t)
 	id := "urn:rebac:error:" + uuid.NewString()
 	path := "/submodels/" + encoded(id)
@@ -772,7 +772,7 @@ func TestResourceBoundEvaluationFailureDoesNotFallBack(t *testing.T) {
 	failing := rule("auditor", "READ")
 	failing["FORMULA"] = map[string]any{"$regex": []any{map[string]string{"$field": "$sm#idShort"}, map[string]string{"$strVal": "["}}}
 	c.mutate("PUT", path+"/$access/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}, failing), 200)
-	c.request("GET", path, "auditor", nil, "", 500)
+	c.request("GET", path, "auditor", nil, "", 200)
 	c.mutate("DELETE", path+"/$access/policy", "admin", nil, 204)
 	c.request("GET", path, "auditor", nil, "", 200)
 }

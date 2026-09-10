@@ -143,6 +143,7 @@ func expectedAASEnvironmentDescriptionProfiles() []string {
 		"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-003",
 		"https://basyx.org/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001",
 		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-003",
 		"https://basyx.org/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
 		"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-001",
 		"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-005",

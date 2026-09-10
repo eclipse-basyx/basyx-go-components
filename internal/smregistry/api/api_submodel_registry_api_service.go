@@ -118,7 +118,12 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 		return *resp, err
 	}
 
-	queryCtx := auth.MergeQueryFilter(ctx, query)
+	queryCtx, queryContextErr := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceSMDesc, query)
+	if queryContextErr != nil {
+		return common.NewErrorResponse(
+			queryContextErr, http.StatusInternalServerError, componentName, "QuerySubmodelDescriptors", "BuildAuthorizedQuery",
+		), queryContextErr
+	}
 	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(queryCtx, limit, internalCursor, time.Time{}, time.Time{})
 	if err != nil {
 		slog.ErrorContext(ctx, "submodel descriptor query failed", "error.code", "API-QUERYSUBMODELDESCRIPTORS-EXECUTE", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor)

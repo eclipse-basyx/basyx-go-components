@@ -348,7 +348,7 @@ func (state *boundRequest) checkTarget(ctx context.Context, db boundQueryer, tar
 	if err != nil {
 		return err
 	}
-	expression, err := state.expression(collector, "")
+	expression, err := state.expression(ctx, collector, "")
 	if err != nil {
 		return err
 	}
@@ -395,7 +395,7 @@ func (state *boundRequest) checkDescendants(ctx context.Context, db boundQueryer
 	if err != nil {
 		return err
 	}
-	expression, err := state.expression(collector, "")
+	expression, err := state.expression(ctx, collector, "")
 	if err != nil {
 		return err
 	}

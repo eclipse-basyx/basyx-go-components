@@ -166,7 +166,7 @@ func AddResourceBoundReferenceFilter(ctx context.Context, ds *goqu.SelectDataset
 	if err != nil {
 		return nil, err
 	}
-	expression, err := view.expression(collector, "")
+	expression, err := view.expression(ctx, collector, "")
 	if err != nil {
 		return nil, err
 	}
