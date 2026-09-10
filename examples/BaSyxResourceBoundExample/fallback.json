@@ -4,6 +4,23 @@
       {
         "ACL": {
           "ATTRIBUTES": [
+            { "CLAIM": "iss" },
+            { "CLAIM": "sub" }
+          ],
+          "RIGHTS": ["ALL"],
+          "ACCESS": "ALLOW"
+        },
+        "FORMULA": {
+          "$and": [
+            { "$eq": [{ "$attribute": { "CLAIM": "iss" } }, { "$strVal": "https://issuer.example" }] },
+            { "$eq": [{ "$attribute": { "CLAIM": "sub" } }, { "$strVal": "bridge-owner" }] }
+          ]
+        },
+        "OBJECTS": [{ "ROUTE": "/*" }]
+      },
+      {
+        "ACL": {
+          "ATTRIBUTES": [
             {
               "CLAIM": "iss"
             },

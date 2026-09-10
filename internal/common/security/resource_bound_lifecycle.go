@@ -62,6 +62,7 @@ func ResourceBoundCreatedTx(ctx context.Context, tx *sql.Tx, kind, identifier st
 	if state == nil {
 		return nil
 	}
+	defer func() { state.creationTarget = nil }()
 	table, column, err := boundStorage(kind)
 	if err != nil {
 		return err
@@ -326,6 +327,11 @@ func authorizeBoundCreatedBindings(ctx context.Context, tx *sql.Tx, table string
 		return err
 	}
 	check.creationTarget = state.creationTarget
+	if isBoundCollection(state.target.Kind) {
+		check.policies = nil
+		check.fallback = state.collectionAdmission
+		check.creationTarget = nil
+	}
 	root, alias := grammar.CollectorRootSM, table
 	switch table {
 	case "aas":

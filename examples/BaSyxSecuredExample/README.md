@@ -98,9 +98,7 @@ Expected behavior:
 
 ## Authorization Setup
 
-The AAS Repository, Submodel Repository, AAS Registry, Submodel Registry, Discovery Service, and Concept Description Repository run in `resource-bound-first` mode. Their startup configuration is in [`docker-compose.yml`](docker-compose.yml), and their initial collection policies are in:
-
-- [`security_env/resource-policies.json`](security_env/resource-policies.json)
+The AAS Repository, Submodel Repository, AAS Registry, Submodel Registry, Discovery Service, and Concept Description Repository run in `resource-bound-first` mode. Their startup configuration is in [`docker-compose.yml`](docker-compose.yml). Collection access is defined by ABAC in [`security_env/access-rules.json`](security_env/access-rules.json).
 
 The imported Keycloak user `admin` is the bootstrap owner. Its issuer and stable Keycloak user ID are configured as:
 
@@ -109,28 +107,17 @@ issuer:  http://keycloak.localhost:8080/realms/basyx
 subject: 32103f0d-1d0e-4d94-b720-bcd22e1c7709
 ```
 
-The initial ReBAC policies grant this identity `ALL` rights on `/shells`, `/submodels`, `/shell-descriptors`, `/submodel-descriptors`, `/concept-descriptions`, and `/lookup/shells`. This lets the admin create resources and administer their access through `/$access`. Resource creation assigns the authenticated creator as an owner.
+The ABAC admin rule grants this identity access to collection operations. Resource creation assigns the authenticated creator as an owner, and ReBAC administration is available on concrete resources through `/$access`.
 
 All requests not granted by ReBAC are evaluated against the existing ABAC policy. This preserves the viewer and anonymous behavior described above while the example demonstrates an incremental ABAC-to-ReBAC migration.
 
-Registry and Discovery entries automatically inherit the policy of an AAS or Submodel with the same identifier. Entries without a matching repository resource inherit their component collection policy. An embedded Submodel Descriptor also requires access to its containing AAS Descriptor.
+Registry and Discovery entries automatically inherit the policy of an AAS or Submodel with the same identifier. Entries without a matching repository resource use their own ownership or policy plus ABAC fallback. An embedded Submodel Descriptor also requires access to its containing AAS Descriptor.
 
-### Grant A User Permission To Create An AAS
+### Let A User Create An AAS
 
-An administrator grants creation on the AAS collection, not on an individual AAS. Obtain the `/shells/$access` ETag and use the user's stable token `iss` and `sub` values:
+Creation on `/shells` is an ABAC decision. In this example, the `viewer` ACL grants `CREATE` and `READ` on the collection routes, so `usera` can create an AAS without a ReBAC collection grant. After creation, `usera` becomes its direct owner and receives implicit `ALL` on that AAS. Other users' AAS resources remain hidden unless an effective resource policy or object-based ABAC rule grants access.
 
-```bash
-curl -i -H "Authorization: Bearer $TOKEN" http://localhost:8090/shells/\$access
-
-curl -i -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -H 'If-Match: "ETAG_FROM_THE_PREVIOUS_RESPONSE"' \
-  --data '{"principal":{"issuer":"http://keycloak.localhost:8080/realms/basyx","subject":"USER_SUB"},"rights":["CREATE"]}' \
-  http://localhost:8090/shells/\$access/grants
-```
-
-After the user creates an AAS, that user becomes its direct owner and receives implicit `ALL` on that AAS. This does not expose AAS resources owned by other users. Repeat the same pattern on another collection—for example `/concept-descriptions/$access`—to grant creation in that component.
+Top-level collection `/$access` endpoints do not exist. Change collection rights in the ABAC policy and use `/$access` only on concrete AAS, Submodels, Submodel Elements, descriptors, Concept Descriptions, and Discovery records.
 
 ### Verify Resource Ownership
 
@@ -176,15 +163,15 @@ This file defines three fallback access levels:
 
 2. **Viewer** (`usera`, role = `viewer`)
 
-   - ACL `viewer_read` with `READ` rights
+   - ACL `viewer_read` with `CREATE` and `READ` rights
    - Formula `is_viewer` checks `role = viewer`
-   - Object group `all_api` grants read access to all API resources and submodels
+   - Object group `all_api` admits collection reads and creation; list results still require ownership, ReBAC, or object-based ABAC
 
 3. **Admin** (`admin`, role = `admin`)
 
    - ACL `admin_full` with `ALL` rights
    - Formula `is_admin` checks `role = admin`
-   - Object group `all_api` grants full CRUD access and access to the `/verify` endpoint
+   - Object groups `all_api` and `all_resources` grant collection access, full resource access, and access to `/verify`
 
 To change fallback access, update [`security_env/access-rules.json`](security_env/access-rules.json) (ACLs, formulas, and object groups). To change access for one AAS, Submodel, or Submodel Element, use that resource's `/$access` API.
 
@@ -209,6 +196,5 @@ docker compose down -v
 ## Notes
 
 - Security rules are configured in [`security_env/access-rules.json`](security_env/access-rules.json).
-- Initial resource policies are configured in [`security_env/resource-policies.json`](security_env/resource-policies.json). Each collection policy is imported once for the `secured-example-resources` scope, so an upgrade can add new component collections without overwriting administrator changes.
 - Trusted OIDC issuer/audience config is in `security_env/trustlist.json`.
-- Changing the initial resource-policy file does not overwrite policies already stored in PostgreSQL. Use `/$access` for normal changes, or run `docker compose down -v` for a complete local reset.
+- Use concrete-resource `/$access` endpoints for ReBAC changes, or run `docker compose down -v` for a complete local reset.

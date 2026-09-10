@@ -111,7 +111,7 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASXFileServerService")
 
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasxfileserverservice")
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "aasxfileserverservice")
 	if err != nil {
 		return err
 	}

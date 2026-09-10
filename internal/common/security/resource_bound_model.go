@@ -123,7 +123,7 @@ func ResourceBoundKey(object grammar.ObjectItem) (string, error) {
 			return object.Descriptor.Scope + ":" + object.Descriptor.ID.ID, nil
 		}
 	}
-	return "", fmt.Errorf("REBAC-RESOURCEKEY-UNSUPPORTED expected a concrete supported resource or collection")
+	return "", fmt.Errorf("REBAC-RESOURCEKEY-UNSUPPORTED expected a concrete supported resource")
 }
 
 func boundRouteKey(route *grammar.RouteValue) (string, error) {
@@ -131,7 +131,7 @@ func boundRouteKey(route *grammar.RouteValue) (string, error) {
 		return "", fmt.Errorf("REBAC-RESOURCEKEY-ROUTE missing route")
 	}
 	if isBoundCollection(strings.TrimPrefix(route.Route, "/")) {
-		return "collection:" + route.Route, nil
+		return "", fmt.Errorf("REBAC-RESOURCEKEY-ROUTE collection bindings are ABAC-only")
 	}
 	target, err := parseBoundTarget(route.Route, "")
 	if err != nil {

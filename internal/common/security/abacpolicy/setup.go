@@ -93,20 +93,7 @@ func SetupSecurityWithABACRepository(
 	serviceType string,
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) (*Repository, error) {
-	if cfg == nil {
-		return nil, nil
-	}
-	if common.ResourceBoundEnabled(cfg) {
-		switch serviceType {
-		case "aasenvironmentservice", "aasrepositoryservice", "submodelrepositoryservice", "aasregistryservice", "submodelregistryservice", "discoveryservice", "conceptdescriptionrepositoryservice":
-		default:
-			return nil, fmt.Errorf("REBAC-SETUP-SERVICE resource-bound mode is unsupported for %s", serviceType)
-		}
-	}
-	if common.ResourceBoundEnabled(cfg) && !cfg.ABAC.Enabled {
-		return nil, auth.SetupResourceBoundSecurity(ctx, cfg, r, db, nil, claimsMiddleware...)
-	}
-	if !cfg.ABAC.Enabled {
+	if cfg == nil || !cfg.ABAC.Enabled {
 		return nil, nil
 	}
 	policyScope, err := common.ConfiguredPolicyScope(cfg, serviceType)
@@ -124,12 +111,7 @@ func SetupSecurityWithABACRepository(
 	if err = initializeRepository(ctx, repo, cfg.ABAC.ModelPath, policyScope, mode); err != nil {
 		return nil, err
 	}
-	if common.ResourceBoundEnabled(cfg) {
-		err = auth.SetupResourceBoundSecurity(ctx, cfg, r, db, repo, claimsMiddleware...)
-	} else {
-		err = auth.SetupSecurityWithAccessModelProvider(ctx, cfg, r, repo, claimsMiddleware...)
-	}
-	if err != nil {
+	if err = auth.SetupSecurityWithAccessModelProvider(ctx, cfg, r, repo, claimsMiddleware...); err != nil {
 		return nil, err
 	}
 	return repo, nil

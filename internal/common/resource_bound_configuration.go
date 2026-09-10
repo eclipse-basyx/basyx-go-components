@@ -36,6 +36,16 @@ const AuthorizationResourceBoundFirst = "resource-bound-first"
 // AuthorizationLegacyABAC preserves the existing object-based security setup.
 const AuthorizationLegacyABAC = "legacy-abac"
 
+// AccessPrincipalType distinguishes individual users from identity-provider groups.
+type AccessPrincipalType string
+
+const (
+	// AccessPrincipalUser identifies one authenticated OIDC subject.
+	AccessPrincipalUser AccessPrincipalType = "user"
+	// AccessPrincipalGroup identifies members of one issuer-scoped group.
+	AccessPrincipalGroup AccessPrincipalType = "group"
+)
+
 // SecurityConfig selects the authorization strategy.
 type SecurityConfig struct {
 	AuthorizationMode string `mapstructure:"authorizationMode" yaml:"authorizationMode"`
@@ -43,14 +53,24 @@ type SecurityConfig struct {
 
 // AccessPrincipal identifies a verified subject within its issuer namespace.
 type AccessPrincipal struct {
-	Issuer  string `json:"issuer" mapstructure:"issuer" yaml:"issuer"`
-	Subject string `json:"subject" mapstructure:"subject" yaml:"subject"`
+	Type    AccessPrincipalType `json:"type,omitempty" mapstructure:"type" yaml:"type,omitempty"`
+	Issuer  string              `json:"issuer" mapstructure:"issuer" yaml:"issuer"`
+	Subject string              `json:"subject" mapstructure:"subject" yaml:"subject"`
+}
+
+// NormalizedType preserves backward compatibility by treating an omitted type as user.
+func (principal AccessPrincipal) NormalizedType() AccessPrincipalType {
+	if principal.Type == "" {
+		return AccessPrincipalUser
+	}
+	return principal.Type
 }
 
 // ReBACConfig configures resource policies and initial ownership.
 type ReBACConfig struct {
 	PolicyScope    string          `mapstructure:"policyScope" yaml:"policyScope"`
 	ModelPath      string          `mapstructure:"modelPath" yaml:"modelPath"`
+	GroupsClaim    string          `mapstructure:"groupsClaim" yaml:"groupsClaim"`
 	BootstrapOwner AccessPrincipal `mapstructure:"bootstrapOwner" yaml:"bootstrapOwner"`
 }
 
@@ -65,6 +85,8 @@ func applyResourceBoundEnvOverrides(cfg *Config) {
 	}{
 		{&cfg.Security.AuthorizationMode, "SECURITY_AUTHORIZATION_MODE"},
 		{&cfg.ReBAC.PolicyScope, "REBAC_POLICY_SCOPE"}, {&cfg.ReBAC.ModelPath, "REBAC_MODEL_PATH"},
+		{&cfg.ReBAC.GroupsClaim, "REBAC_GROUPS_CLAIM"},
+		{(*string)(&cfg.ReBAC.BootstrapOwner.Type), "REBAC_BOOTSTRAP_OWNER_TYPE"},
 		{&cfg.ReBAC.BootstrapOwner.Issuer, "REBAC_BOOTSTRAP_OWNER_ISSUER"},
 		{&cfg.ReBAC.BootstrapOwner.Subject, "REBAC_BOOTSTRAP_OWNER_SUBJECT"},
 	}
@@ -90,6 +112,16 @@ func validateResourceBoundConfig(cfg *Config) error {
 		return fmt.Errorf("CONFIG-REBAC-SCOPE %w", err)
 	}
 	cfg.ReBAC.PolicyScope = scope
+	if cfg.ReBAC.GroupsClaim == "" {
+		cfg.ReBAC.GroupsClaim = "groups"
+	}
+	if strings.TrimSpace(cfg.ReBAC.GroupsClaim) == "" {
+		return fmt.Errorf("CONFIG-REBAC-GROUPCLAIM group claim must contain non-whitespace characters")
+	}
+	cfg.ReBAC.BootstrapOwner.Type = cfg.ReBAC.BootstrapOwner.NormalizedType()
+	if cfg.ReBAC.BootstrapOwner.Type != AccessPrincipalUser && cfg.ReBAC.BootstrapOwner.Type != AccessPrincipalGroup {
+		return fmt.Errorf("CONFIG-REBAC-OWNERTYPE bootstrap owner type must be user or group")
+	}
 	if strings.TrimSpace(cfg.ReBAC.BootstrapOwner.Issuer) == "" || strings.TrimSpace(cfg.ReBAC.BootstrapOwner.Subject) == "" {
 		return fmt.Errorf("CONFIG-REBAC-OWNER bootstrap issuer and subject are required")
 	}

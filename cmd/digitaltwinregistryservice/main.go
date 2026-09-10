@@ -160,7 +160,7 @@ func runServer(ctx context.Context, configPath string) error {
 		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
 	}
 
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "digitaltwinregistryservice", claimsMiddleware...)
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "digitaltwinregistryservice", claimsMiddleware...)
 	if err != nil {
 		return err
 	}

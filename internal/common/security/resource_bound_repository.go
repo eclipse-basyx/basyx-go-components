@@ -57,6 +57,7 @@ type resourceBoundRepository struct {
 	basePath      string
 	fallback      AccessModelProvider
 	implicitCasts bool
+	groupsClaim   string
 }
 
 type boundAccess struct {
@@ -120,11 +121,6 @@ func (repo *resourceBoundRepository) initialize(ctx context.Context, cfg common.
 }
 
 func (repo *resourceBoundRepository) adoptResources(ctx context.Context, tx *sql.Tx, owner common.AccessPrincipal) error {
-	for _, collection := range []string{"/shells", "/submodels", "/shell-descriptors", "/submodel-descriptors", "/concept-descriptions", "/lookup/shells"} {
-		if err := repo.seedCollection(ctx, tx, collection, owner); err != nil {
-			return err
-		}
-	}
 	for _, table := range []string{"aas", "submodel", "submodel_element", "aas_descriptor", "submodel_descriptor", "concept_description", "aas_identifier"} {
 		if err := seedBoundResources(ctx, tx, repo.scope, table, nil, owner); err != nil {
 			return err
@@ -162,23 +158,6 @@ func (repo *resourceBoundRepository) readRevision(ctx context.Context, db boundQ
 		return 0, fmt.Errorf("REBAC-REVISION-READ %w", err)
 	}
 	return revision, nil
-}
-
-func (repo *resourceBoundRepository) seedCollection(ctx context.Context, tx *sql.Tx, collection string, owner common.AccessPrincipal) error {
-	ds := goqu.Dialect("postgres").Insert("rebac_access").Rows(goqu.Record{"scope": repo.scope, "collection": collection}).OnConflict(goqu.DoNothing()).Returning("id").Prepared(true)
-	query, args, err := ds.ToSQL()
-	if err != nil {
-		return fmt.Errorf("REBAC-SEED-BUILD %w", err)
-	}
-	var id int64
-	err = tx.QueryRowContext(ctx, query, args...).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("REBAC-SEED-INSERT %w", err)
-	}
-	return insertBoundOwners(ctx, tx, []int64{id}, owner)
 }
 
 func boundForeignKey(table string) string {
@@ -260,9 +239,13 @@ func insertBoundResourceBatch(ctx context.Context, tx *sql.Tx, scope, table stri
 func insertBoundOwners(ctx context.Context, tx *sql.Tx, ids []int64, owner common.AccessPrincipal) error {
 	rows := make([]goqu.Record, 0, len(ids))
 	for _, id := range ids {
-		rows = append(rows, goqu.Record{"access_id": id, "issuer": owner.Issuer, "subject": owner.Subject, "relation": "owner"})
+		rows = append(rows, boundPrincipalRecord(id, owner, "owner"))
 	}
 	return boundExec(ctx, tx, goqu.Dialect("postgres").Insert("rebac_principal").Rows(rows).Prepared(true))
+}
+
+func boundPrincipalRecord(accessID int64, principal common.AccessPrincipal, relation string) goqu.Record {
+	return goqu.Record{"access_id": accessID, "principal_type": principal.NormalizedType(), "issuer": principal.Issuer, "subject": principal.Subject, "relation": relation}
 }
 
 func (repo *resourceBoundRepository) importInitial(ctx context.Context, tx *sql.Tx, cfg common.ReBACConfig) error {
@@ -362,7 +345,7 @@ func loadBoundPolicy(raw []byte, resource grammar.ObjectItem) (*ResourceBoundPol
 }
 
 func loadBoundPrincipals(ctx context.Context, db boundQueryer, access *boundAccess) error {
-	query, args, err := goqu.Dialect("postgres").From("rebac_principal").Select("issuer", "subject", "relation").Where(goqu.Ex{"access_id": access.ID}).Order(goqu.C("issuer").Asc(), goqu.C("subject").Asc()).Prepared(true).ToSQL()
+	query, args, err := goqu.Dialect("postgres").From("rebac_principal").Select("principal_type", "issuer", "subject", "relation").Where(goqu.Ex{"access_id": access.ID}).Order(goqu.C("principal_type").Asc(), goqu.C("issuer").Asc(), goqu.C("subject").Asc()).Prepared(true).ToSQL()
 	if err != nil {
 		return fmt.Errorf("REBAC-PRINCIPALS-BUILD %w", err)
 	}
@@ -374,7 +357,7 @@ func loadBoundPrincipals(ctx context.Context, db boundQueryer, access *boundAcce
 	for rows.Next() {
 		var p common.AccessPrincipal
 		var relation string
-		if err = rows.Scan(&p.Issuer, &p.Subject, &relation); err != nil {
+		if err = rows.Scan(&p.Type, &p.Issuer, &p.Subject, &relation); err != nil {
 			return fmt.Errorf("REBAC-PRINCIPALS-SCAN %w", err)
 		}
 		if relation == "owner" {
@@ -390,7 +373,7 @@ func loadBoundPrincipals(ctx context.Context, db boundQueryer, access *boundAcce
 }
 
 func loadBoundGrants(ctx context.Context, db boundQueryer, access *boundAccess) error {
-	query, args, err := goqu.Dialect("postgres").From("rebac_grant").Select("id", "issuer", "subject", "rights", "rule").Where(goqu.Ex{"access_id": access.ID}).Order(goqu.C("id").Asc()).Prepared(true).ToSQL()
+	query, args, err := goqu.Dialect("postgres").From("rebac_grant").Select("id", "principal_type", "issuer", "subject", "rights", "rule").Where(goqu.Ex{"access_id": access.ID}).Order(goqu.C("id").Asc()).Prepared(true).ToSQL()
 	if err != nil {
 		return fmt.Errorf("REBAC-GRANTS-BUILD %w", err)
 	}
@@ -402,7 +385,7 @@ func loadBoundGrants(ctx context.Context, db boundQueryer, access *boundAccess) 
 	for rows.Next() {
 		var grant boundGrant
 		var rights []byte
-		if err = rows.Scan(&grant.ID, &grant.Principal.Issuer, &grant.Principal.Subject, &rights, &grant.Rule); err != nil {
+		if err = rows.Scan(&grant.ID, &grant.Principal.Type, &grant.Principal.Issuer, &grant.Principal.Subject, &rights, &grant.Rule); err != nil {
 			return fmt.Errorf("REBAC-GRANTS-SCAN %w", err)
 		}
 		if err = json.Unmarshal(rights, &grant.Rights); err != nil {

@@ -45,7 +45,11 @@ func SetupResourceBoundSecurity(ctx context.Context, cfg *common.Config, router 
 	if scope == "" {
 		scope = "default"
 	}
-	repo := &resourceBoundRepository{db: db, scope: scope, router: router, basePath: cfg.Server.ContextPath, fallback: fallback, implicitCasts: cfg.General.EnableImplicitCasts}
+	groupsClaim := cfg.ReBAC.GroupsClaim
+	if groupsClaim == "" {
+		groupsClaim = "groups"
+	}
+	repo := &resourceBoundRepository{db: db, scope: scope, router: router, basePath: cfg.Server.ContextPath, fallback: fallback, implicitCasts: cfg.General.EnableImplicitCasts, groupsClaim: groupsClaim}
 	if err := repo.initialize(ctx, cfg.ReBAC); err != nil {
 		return err
 	}
@@ -90,6 +94,10 @@ func (repo *resourceBoundRepository) middleware(next http.Handler) http.Handler 
 			return
 		}
 		if target.Access {
+			if isBoundCollection(target.Kind) {
+				writeBoundError(w, boundError(http.StatusNotFound, "ROUTE collection access administration is not available"))
+				return
+			}
 			resourcePath := strings.SplitN(stripBasePath(repo.basePath, r.URL.EscapedPath()), "/$access", 2)[0]
 			if repo.router.Find(chi.NewRouteContext(), http.MethodGet, resourcePath) == "" {
 				writeBoundError(w, boundError(http.StatusNotFound, "ROUTE unknown resource endpoint"))
@@ -167,6 +175,16 @@ func (repo *resourceBoundRepository) authorizeRequest(r *http.Request, tx *sql.T
 	if err != nil {
 		return nil, err
 	}
+	if isBoundCollection(target.Kind) {
+		if !state.collectionAdmission.Allowed {
+			return nil, boundError(http.StatusForbidden, "ABAC collection action not granted")
+		}
+		state.policyID = state.collectionAdmission.PolicyID
+		if right == grammar.RightsEnumCREATE {
+			state.creationTarget = &target
+		}
+		return state, nil
+	}
 	selected := target
 	if !exists && right == grammar.RightsEnumCREATE {
 		selected, err = creationBoundParent(target)
@@ -177,10 +195,7 @@ func (repo *resourceBoundRepository) authorizeRequest(r *http.Request, tx *sql.T
 	if right == grammar.RightsEnumCREATE {
 		state.creationTarget = &selected
 	}
-	collectionRead := (right == grammar.RightsEnumREAD || right == grammar.RightsEnumVIEW) && isBoundCollection(target.Kind)
-	if !collectionRead {
-		err = state.checkTarget(r.Context(), tx, selected)
-	}
+	err = state.checkTarget(r.Context(), tx, selected)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +342,7 @@ func (state *boundRequest) checkTarget(ctx context.Context, db boundQueryer, tar
 		return err
 	}
 	if isBoundCollection(target.Kind) {
-		return state.checkCollection(ctx, db, target)
+		return state.checkCollection()
 	}
 	ds, collector, err := boundTargetDataset(target)
 	if err != nil {
@@ -354,29 +369,16 @@ func (state *boundRequest) checkTarget(ctx context.Context, db boundQueryer, tar
 	return nil
 }
 
-func (state *boundRequest) checkCollection(ctx context.Context, db boundQueryer, target boundTarget) error {
-	effective, err := state.repo.effective(ctx, db, target)
-	if err != nil {
-		return err
-	}
-	if effective != nil {
-		actor, actorErr := boundActor(ctx)
-		if actorErr == nil && containsBoundPrincipal(effective.Owners, actor) {
-			state.policyID = "rebac-owner:" + state.repo.scope
-			return nil
-		}
-		for _, decision := range state.policies {
-			if decision.id == effective.ID && decision.evaluation.Allowed {
-				state.policyID = decision.evaluation.PolicyID
-				return nil
-			}
-		}
+func (state *boundRequest) checkCollection() error {
+	if state.collectionAdmission.Allowed {
+		state.policyID = state.collectionAdmission.PolicyID
+		return nil
 	}
 	if state.fallback.Allowed {
 		state.policyID = state.fallback.PolicyID
 		return nil
 	}
-	return boundError(http.StatusForbidden, "CREATE parent does not grant creation")
+	return boundError(http.StatusForbidden, "ABAC collection action not granted")
 }
 
 func (state *boundRequest) checkDescendants(ctx context.Context, db boundQueryer, target boundTarget) error {

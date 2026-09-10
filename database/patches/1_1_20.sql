@@ -22,23 +22,22 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
 
-package auth
+ALTER TABLE rebac_principal
+  ADD COLUMN principal_type TEXT NOT NULL DEFAULT 'user'
+  CHECK (principal_type IN ('user', 'group'));
 
-// EvalInput is the minimal set of request properties the ABAC engine needs to
-// evaluate a decision.
-type EvalInput struct {
-	Method    string
-	Path      string
-	RoutePath string
-	Claims    Claims
-	Globals   GlobalAttributes
-}
+ALTER TABLE rebac_principal DROP CONSTRAINT rebac_principal_pkey;
+ALTER TABLE rebac_principal
+  ADD PRIMARY KEY(access_id, principal_type, issuer, subject, relation);
 
-// Claims represents token claims extracted from a verified token.
-type Claims map[string]any
+DROP INDEX ix_rebac_principal_subject;
+CREATE INDEX ix_rebac_principal_subject
+  ON rebac_principal(principal_type, issuer, subject, relation, access_id);
 
-// GlobalAttributes represents trusted environmental values used during ABAC
-// formula evaluation.
-type GlobalAttributes map[string]any
+ALTER TABLE rebac_grant
+  ADD COLUMN principal_type TEXT NOT NULL DEFAULT 'user'
+  CHECK (principal_type IN ('user', 'group'));
+
+UPDATE basyxsystem SET schema_version = 'v1.1.20', state = 'clean'
+WHERE identifier = (SELECT identifier FROM basyxsystem ORDER BY identifier ASC LIMIT 1);

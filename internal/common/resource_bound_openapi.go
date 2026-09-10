@@ -56,15 +56,15 @@ func injectResourceBoundAPI(content []byte) ([]byte, error) {
 		return nil, fmt.Errorf("SWAGGER-REBAC-PATHS missing paths")
 	}
 	roots := []string{
-		"/shells", "/submodels", "/shells/{aasIdentifier}", "/submodels/{submodelIdentifier}",
+		"/shells/{aasIdentifier}", "/submodels/{submodelIdentifier}",
 		"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
 		"/shells/{aasIdentifier}/submodels/{submodelIdentifier}",
 		"/shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
-		"/shell-descriptors", "/shell-descriptors/{aasIdentifier}",
+		"/shell-descriptors/{aasIdentifier}",
 		"/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}",
-		"/submodel-descriptors", "/submodel-descriptors/{submodelIdentifier}",
-		"/concept-descriptions", "/concept-descriptions/{conceptDescriptionIdentifier}",
-		"/lookup/shells", "/lookup/shells/{aasIdentifier}",
+		"/submodel-descriptors/{submodelIdentifier}",
+		"/concept-descriptions/{conceptDescriptionIdentifier}",
+		"/lookup/shells/{aasIdentifier}",
 	}
 	for _, root := range roots {
 		if _, exists := paths[root]; !exists {
@@ -167,7 +167,11 @@ func resourceAccessOpenAPIOperation(path string, operation resourceAccessOperati
 
 func resourceAccessSchemas() map[string]any {
 	nonBlank := map[string]any{"type": "string", "minLength": 1, "pattern": `.*\S.*`}
-	principal := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"issuer", "subject"}, "properties": map[string]any{"issuer": nonBlank, "subject": nonBlank}}
+	principal := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"issuer", "subject"}, "properties": map[string]any{
+		"type":    map[string]any{"type": "string", "enum": []string{"user", "group"}, "default": "user", "description": "Principal kind. Omitted values remain compatible and mean user."},
+		"issuer":  nonBlank,
+		"subject": map[string]any{"type": "string", "pattern": `.*\S.*`, "description": "OIDC subject for users or exact configured group-claim value for groups."},
+	}}
 	rights := map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": map[string]any{"type": "string", "enum": []string{"CREATE", "READ", "UPDATE", "DELETE", "EXECUTE", "VIEW", "ALL"}}}
 	return map[string]any{
 		"AASAccessCapabilities": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"canUpdate"}, "properties": map[string]any{
@@ -185,7 +189,7 @@ func resourceAccessSchemas() map[string]any {
 		"ResourceAccessGrant":      map[string]any{"type": "object", "required": []string{"id", "principal", "rights"}, "properties": map[string]any{"id": map[string]any{"type": "string", "format": "uuid"}, "principal": map[string]any{"$ref": "#/components/schemas/ResourceAccessPrincipal"}, "rights": rights}},
 		"ResourceAccessPrincipal":  principal,
 		"ResourceAccessPrincipals": map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"$ref": "#/components/schemas/ResourceAccessPrincipal"}},
-		"ResourceAccessGrantInput": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"principal", "rights"}, "example": map[string]any{"principal": map[string]string{"issuer": "https://issuer.example", "subject": "bridge-inspector"}, "rights": []string{"READ"}}, "properties": map[string]any{
+		"ResourceAccessGrantInput": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"principal", "rights"}, "example": map[string]any{"principal": map[string]string{"type": "group", "issuer": "https://issuer.example", "subject": "/bridge-inspectors"}, "rights": []string{"READ"}}, "properties": map[string]any{
 			"principal": map[string]any{"$ref": "#/components/schemas/ResourceAccessPrincipal"},
 			"rights":    rights,
 		}},

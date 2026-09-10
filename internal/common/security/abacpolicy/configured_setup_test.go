@@ -22,23 +22,44 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
 
-package auth
+package abacpolicy
 
-// EvalInput is the minimal set of request properties the ABAC engine needs to
-// evaluate a decision.
-type EvalInput struct {
-	Method    string
-	Path      string
-	RoutePath string
-	Claims    Claims
-	Globals   GlobalAttributes
+import (
+	"testing"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-chi/chi/v5"
+)
+
+func TestSetupConfiguredSecurityLegacyModeUsesUnchangedABACSetup(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock setup failed: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	policyScope := "legacy-abac-proof"
+	active := testPolicyVersion(11, StatusActive, testMaterializedPolicy(t))
+	active.ServiceScope = policyScope
+	cfg := setupPolicyScopeConfig(t, policyScope)
+	router := chi.NewRouter()
+
+	mock.ExpectQuery(`FROM "abac_policy_versions".*"service_scope" = 'legacy-abac-proof'.*"status" = 'active'`).
+		WillReturnRows(policyVersionRows(active))
+	mock.ExpectQuery(`FROM "abac_policy_rules".*"service_scope" = 'legacy-abac-proof'.*"version_id" = 11`).
+		WillReturnRows(policyRuleRows())
+
+	repo, err := SetupConfiguredSecurity(t.Context(), cfg, router, db, "aasregistryservice")
+	if err != nil {
+		t.Fatalf("setup configured legacy ABAC failed: %v", err)
+	}
+	if repo == nil || repo.serviceScope != policyScope {
+		t.Fatalf("expected legacy ABAC repository scope %q", policyScope)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
 }
-
-// Claims represents token claims extracted from a verified token.
-type Claims map[string]any
-
-// GlobalAttributes represents trusted environmental values used during ABAC
-// formula evaluation.
-type GlobalAttributes map[string]any

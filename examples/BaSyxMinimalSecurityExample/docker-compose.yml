@@ -50,9 +50,10 @@ services:
       ABAC_MANAGEMENT_API_ENABLED: "true"
       SECURITY_AUTHORIZATION_MODE: resource-bound-first
       REBAC_POLICY_SCOPE: minimal-security-example
-      REBAC_MODEL_PATH: /security_env/resource-policies.json
+      REBAC_GROUPS_CLAIM: groups
+      REBAC_BOOTSTRAP_OWNER_TYPE: group
       REBAC_BOOTSTRAP_OWNER_ISSUER: http://keycloak.localhost:8180/realms/basyx
-      REBAC_BOOTSTRAP_OWNER_SUBJECT: 32103f0d-1d0e-4d94-b720-bcd22e1c7709
+      REBAC_BOOTSTRAP_OWNER_SUBJECT: /aas-admins
       OIDC_TRUSTLISTPATH: /security_env/trustlist.json
       GENERAL_AASREGISTRYINTEGRATION: "true"
       GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
@@ -88,7 +89,7 @@ services:
 
   keycloak:
     container_name: basyx-minimal-security-keycloak
-    image: keycloak/keycloak:26.0.6
+    image: keycloak/keycloak:26.7.3
     command: ["start-dev", "--import-realm", "--health-enabled=true"]
     ports:
       - "8180:8080"

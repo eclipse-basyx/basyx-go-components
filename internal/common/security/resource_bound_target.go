@@ -260,6 +260,9 @@ func (target boundTarget) condition() (exp.Expression, error) {
 
 func (repo *resourceBoundRepository) effective(ctx context.Context, db boundQueryer, target boundTarget) (*boundAccess, error) {
 	for depth := 0; depth < 256; depth++ {
+		if isBoundCollection(target.Kind) {
+			return nil, nil
+		}
 		access, err := repo.load(ctx, db, target)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
@@ -405,6 +408,9 @@ func boundObjectsEqual(left, right grammar.ObjectItem) bool {
 }
 
 func boundPrincipalRule(principal common.AccessPrincipal, rights []grammar.RightsEnum) (json.RawMessage, error) {
+	if principal.NormalizedType() == common.AccessPrincipalGroup {
+		return boundGroupPrincipalRule(principal, rights)
+	}
 	value := map[string]any{"ACL": map[string]any{"ATTRIBUTES": []any{map[string]string{"CLAIM": "iss"}, map[string]string{"CLAIM": "sub"}}, "RIGHTS": rights, "ACCESS": "ALLOW"}, "FORMULA": map[string]any{"$and": []any{
 		map[string]any{"$eq": []any{map[string]any{"$attribute": map[string]string{"CLAIM": "iss"}}, map[string]string{"$strVal": principal.Issuer}}},
 		map[string]any{"$eq": []any{map[string]any{"$attribute": map[string]string{"CLAIM": "sub"}}, map[string]string{"$strVal": principal.Subject}}},
@@ -412,6 +418,22 @@ func boundPrincipalRule(principal common.AccessPrincipal, rights []grammar.Right
 	data, err := json.Marshal(value)
 	if err != nil {
 		return nil, fmt.Errorf("REBAC-GRANTRULE-ENCODE %w", err)
+	}
+	if _, err = compileBoundRule(data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func boundGroupPrincipalRule(principal common.AccessPrincipal, rights []grammar.RightsEnum) (json.RawMessage, error) {
+	claim := boundGroupClaimName(principal)
+	value := map[string]any{
+		"ACL":     map[string]any{"ATTRIBUTES": []any{map[string]string{"CLAIM": claim}}, "RIGHTS": rights, "ACCESS": "ALLOW"},
+		"FORMULA": map[string]any{"$eq": []any{map[string]any{"$attribute": map[string]string{"CLAIM": claim}}, map[string]string{"$strVal": "true"}}},
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("REBAC-GROUPRULE-ENCODE %w", err)
 	}
 	if _, err = compileBoundRule(data); err != nil {
 		return nil, err

@@ -136,7 +136,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "AASRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasregistryservice")
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "aasregistryservice")
 	if err != nil {
 		return err
 	}

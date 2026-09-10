@@ -99,6 +99,49 @@ func TestResourceBoundGrantBindsIssuerAndSubject(t *testing.T) {
 	}
 }
 
+func TestResourceBoundGroupGrantRequiresIssuerAndMembership(t *testing.T) {
+	router := chi.NewRouter()
+	router.Get("/submodels/{submodelIdentifier}", func(http.ResponseWriter, *http.Request) {})
+	principal := common.AccessPrincipal{Type: common.AccessPrincipalGroup, Issuer: "issuer", Subject: "/inspectors"}
+	rule, err := boundPrincipalRule(principal, []grammar.RightsEnum{grammar.RightsEnumREAD})
+	require.NoError(t, err)
+	target := boundTarget{Kind: "submodel", Submodel: "bridge"}
+	model, err := CompileResourceBoundPolicy(ResourceBoundPolicy{Resource: target.object(), Rules: []json.RawMessage{rule}}, router, "")
+	require.NoError(t, err)
+
+	repo := &resourceBoundRepository{groupsClaim: "groups"}
+	for _, test := range []struct {
+		name    string
+		claims  Claims
+		allowed bool
+	}{
+		{name: "matching group", claims: Claims{"iss": "issuer", "sub": "member", "groups": []any{"/inspectors"}}, allowed: true},
+		{name: "different group", claims: Claims{"iss": "issuer", "sub": "member", "groups": []string{"/other"}}},
+		{name: "different issuer", claims: Claims{"iss": "other", "sub": "member", "groups": []string{"/inspectors"}}},
+		{name: "missing groups", claims: Claims{"iss": "issuer", "sub": "member"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			principals := repo.boundPrincipals(test.claims)
+			input := EvalInput{Method: http.MethodGet, Path: "/submodels/YnJpZGdl", Claims: withBoundGroupClaims(test.claims, principals)}
+			allowed, _, _ := model.AuthorizeWithFilter(input)
+			require.Equal(t, test.allowed, allowed)
+		})
+	}
+}
+
+func TestResourceBoundPrincipalsDefaultToUserAndDeduplicateGroups(t *testing.T) {
+	repo := &resourceBoundRepository{groupsClaim: "memberOf"}
+	principals := repo.boundPrincipals(Claims{
+		"iss":      "issuer",
+		"sub":      "subject",
+		"memberOf": []any{"/team", "/team", 17, " "},
+	})
+	require.Equal(t, []common.AccessPrincipal{
+		{Type: common.AccessPrincipalUser, Issuer: "issuer", Subject: "subject"},
+		{Type: common.AccessPrincipalGroup, Issuer: "issuer", Subject: "/team"},
+	}, principals)
+}
+
 func TestResourceBoundAliasesShareBinding(t *testing.T) {
 	direct, err := parseBoundTarget("/api/submodels/c20/submodel-elements/a.b[0]/$access/grants", "/api")
 	require.NoError(t, err)
@@ -110,11 +153,11 @@ func TestResourceBoundAliasesShareBinding(t *testing.T) {
 }
 
 func TestResourceBoundDefinitionsAreLocal(t *testing.T) {
-	model := `{"RESOURCE":{"ROUTE":"/submodels"},"DEFATTRIBUTES":[{"name":"identity","attributes":[{"CLAIM":"sub"}]}],"DEFACLS":[{"name":"reader","acl":{"USEATTRIBUTES":"identity","RIGHTS":["READ"],"ACCESS":"ALLOW"}}],"DEFFORMULAS":[{"name":"active","formula":{"$boolean":true}}],"rules":[{"USEACL":"reader","USEFORMULA":"active"}]}`
+	model := `{"RESOURCE":{"IDENTIFIABLE":"$sm(\"one\")"},"DEFATTRIBUTES":[{"name":"identity","attributes":[{"CLAIM":"sub"}]}],"DEFACLS":[{"name":"reader","acl":{"USEATTRIBUTES":"identity","RIGHTS":["READ"],"ACCESS":"ALLOW"}}],"DEFFORMULAS":[{"name":"active","formula":{"$boolean":true}}],"rules":[{"USEACL":"reader","USEFORMULA":"active"}]}`
 	document := `{"ResourceBoundAccessRuleModels":[` + model + `]}`
 	_, err := ParseResourceBoundDocument([]byte(document))
 	require.NoError(t, err)
-	leaking := `{"RESOURCE":{"ROUTE":"/shells"},"rules":[{"USEACL":"reader","USEFORMULA":"active"}]}`
+	leaking := `{"RESOURCE":{"IDENTIFIABLE":"$aas(\"two\")"},"rules":[{"USEACL":"reader","USEFORMULA":"active"}]}`
 	_, err = ParseResourceBoundDocument([]byte(`{"ResourceBoundAccessRuleModels":[` + model + `,` + leaking + `]}`))
 	require.Error(t, err)
 	_, err = ParseAccessModel([]byte(document), nil, "")
@@ -125,6 +168,64 @@ func TestResourceBoundRouteAndIdentifiableDuplicates(t *testing.T) {
 	document := `{"ResourceBoundAccessRuleModels":[{"RESOURCE":{"ROUTE":"/submodels/c20"},"rules":[]},{"RESOURCE":{"IDENTIFIABLE":"$sm(\"sm\")"},"rules":[]}]}`
 	_, err := ParseResourceBoundDocument([]byte(document))
 	require.ErrorContains(t, err, "DUPLICATE")
+}
+
+func TestResourceBoundCollectionBindingsAreRejected(t *testing.T) {
+	for _, route := range []string{"/shells", "/submodels", "/shell-descriptors", "/submodel-descriptors", "/concept-descriptions", "/lookup/shells"} {
+		_, err := ResourceBoundKey(grammar.ObjectItem{Kind: grammar.Route, Route: &grammar.RouteValue{Route: route}})
+		require.ErrorContains(t, err, "ABAC-only")
+	}
+}
+
+func TestABACCollectionAdmissionIsSeparatedFromResourceVisibility(t *testing.T) {
+	router := chi.NewRouter()
+	router.Get("/shells", func(http.ResponseWriter, *http.Request) {})
+	model, err := ParseAccessModel([]byte(`{"AllAccessPermissionRules":{"rules":[
+		{"ACL":{"ATTRIBUTES":[{"CLAIM":"sub"}],"RIGHTS":["READ"],"ACCESS":"ALLOW"},"FORMULA":{"$boolean":true},"OBJECTS":[{"ROUTE":"/shells"}]},
+		{"ACL":{"ATTRIBUTES":[{"CLAIM":"sub"}],"RIGHTS":["READ"],"ACCESS":"ALLOW"},"FORMULA":{"$boolean":true},"OBJECTS":[{"IDENTIFIABLE":"$aas(\"*\")"}]}
+	]}}`), router, "")
+	require.NoError(t, err)
+	input := EvalInput{Method: http.MethodGet, Path: "/shells", RoutePath: "/shells", Claims: Claims{"sub": "user"}}
+	admission, resources := authorizeABACCollection(model, input, grammar.DefaultSimplifyOptions())
+	require.True(t, admission.Allowed)
+	require.True(t, resources.Allowed)
+
+	routeOnly, err := ParseAccessModel([]byte(`{"AllAccessPermissionRules":{"rules":[
+		{"ACL":{"ATTRIBUTES":[{"CLAIM":"sub"}],"RIGHTS":["READ"],"ACCESS":"ALLOW"},"FORMULA":{"$boolean":true},"OBJECTS":[{"ROUTE":"/shells"}]}
+	]}}`), router, "")
+	require.NoError(t, err)
+	admission, resources = authorizeABACCollection(routeOnly, input, grammar.DefaultSimplifyOptions())
+	require.True(t, admission.Allowed)
+	require.False(t, resources.Allowed)
+}
+
+func TestResourceBoundFallbackPreservesABACEvaluation(t *testing.T) {
+	router := chi.NewRouter()
+	router.Get("/submodels/{submodelIdentifier}", func(http.ResponseWriter, *http.Request) {})
+	router.Put("/submodels/{submodelIdentifier}", func(http.ResponseWriter, *http.Request) {})
+	model, err := ParseAccessModel([]byte(`{"AllAccessPermissionRules":{"rules":[
+		{"ACL":{"ATTRIBUTES":[{"CLAIM":"sub"}],"RIGHTS":["READ","UPDATE"],"ACCESS":"ALLOW"},"FORMULA":{"$eq":[{"$attribute":{"CLAIM":"sub"}},{"$strVal":"reader"}]},"OBJECTS":[{"IDENTIFIABLE":"$sm(\"*\")"}]}
+	]}}`), router, "")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		method string
+		user   string
+	}{
+		{name: "read allow", method: http.MethodGet, user: "reader"},
+		{name: "read no match", method: http.MethodGet, user: "other"},
+		{name: "update allow", method: http.MethodPut, user: "reader"},
+		{name: "update no match", method: http.MethodPut, user: "other"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := EvalInput{Method: test.method, Path: "/submodels/c20", RoutePath: "/submodels/{submodelIdentifier}", Claims: Claims{"sub": test.user}}
+			legacy := model.AuthorizeWithFilterWithOptions(input, grammar.DefaultSimplifyOptions())
+			fallback := authorizeABACFallback(model, input, grammar.DefaultSimplifyOptions())
+			require.Equal(t, legacy, fallback)
+		})
+	}
 }
 
 func TestResourceBoundReferenceInputUsesSubmodelObjectsAndOriginalRoute(t *testing.T) {

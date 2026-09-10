@@ -10,6 +10,8 @@ For build and release supply-chain security (image signing, provenance attestati
 
 For PostgreSQL-backed ABAC policy versions, management API behavior, and ABAC policy evidence, see [ABAC_POLICY_REPOSITORY.md](ABAC_POLICY_REPOSITORY.md).
 
+For the concise proof that ABAC and ReBAC coexist without ReBAC overriding an ABAC allow, see [ABAC_REBAC_COEXISTENCE.md](ABAC_REBAC_COEXISTENCE.md).
+
 For AAS Registry-specific `CREATE`, `UPDATE`, `READ`, `DELETE`, and status-code semantics, see [REGISTRY_SECURITY.md](REGISTRY_SECURITY.md).
 
 For history evidence deployment guidance and NIS2-relevant operator responsibilities, see [NIS2_HISTORY_EVIDENCE.md](NIS2_HISTORY_EVIDENCE.md).
@@ -130,7 +132,7 @@ sequenceDiagram
 
 ## Enablement rules
 
-- Security is only active when ABAC is enabled in config. If `abac.enabled` is false, no OIDC or ABAC middleware is applied.
+- In `legacy-abac` mode, security is active only when ABAC is enabled; this path is unchanged. In `resource-bound-first` mode, ReBAC can be active without an ABAC fallback. When both are enabled, the active ABAC policy remains an independent fallback.
   - Example config: [cmd/aasregistryservice/config.yaml](../../cmd/aasregistryservice/config.yaml)
 - OIDC uses the trustlist file to allow configured issuers and audiences.
   - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](../../cmd/aasregistryservice/config/trustlist.json)

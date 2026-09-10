@@ -38,6 +38,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/doug-martin/goqu/v9"
 	aasapi "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	aasdb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -55,6 +56,7 @@ import (
 type accessClient struct {
 	t       *testing.T
 	db      *sql.DB
+	scope   string
 	server  *httptest.Server
 	restart func() accessClient
 }
@@ -131,16 +133,7 @@ func newAccessClientWithBasePath(t *testing.T, basePath string) accessClient {
 	directory := t.TempDir()
 	trust := filepath.Join(directory, "trustlist.json")
 	require.NoError(t, os.WriteFile(trust, []byte("[]"), 0600))
-	doc := map[string]any{"ResourceBoundAccessRuleModels": []any{
-		policy(map[string]string{"ROUTE": "/submodels"}, rule("admin", "ALL"), rule("creator", "CREATE")),
-		policy(map[string]string{"ROUTE": "/shells"}, rule("admin", "ALL")),
-		policy(map[string]string{"ROUTE": "/lookup/shells"}, rule("admin", "ALL")),
-	}}
-	initial, err := json.Marshal(doc)
-	require.NoError(t, err)
-	modelPath := filepath.Join(directory, "policies.json")
-	require.NoError(t, os.WriteFile(modelPath, initial, 0600))
-	cfg := &common.Config{Security: common.SecurityConfig{AuthorizationMode: common.AuthorizationResourceBoundFirst}, ReBAC: common.ReBACConfig{PolicyScope: uuid.NewString(), ModelPath: modelPath, BootstrapOwner: common.AccessPrincipal{Issuer: "https://rebac.test", Subject: "admin"}}, OIDC: common.OIDCConfig{TrustlistPath: trust}}
+	cfg := &common.Config{Security: common.SecurityConfig{AuthorizationMode: common.AuthorizationResourceBoundFirst}, ReBAC: common.ReBACConfig{PolicyScope: uuid.NewString(), GroupsClaim: "groups", BootstrapOwner: common.AccessPrincipal{Issuer: "https://rebac.test", Subject: "admin"}}, OIDC: common.OIDCConfig{TrustlistPath: trust}}
 	cfg.Server.StrictVerification = "off"
 	cfg.Server.ContextPath = basePath
 	return startAccessClient(t, cfg, db)
@@ -156,9 +149,27 @@ func startAccessClient(t *testing.T, cfg *common.Config, db *sql.DB) accessClien
 			next.ServeHTTP(w, r.WithContext(common.ContextWithConfig(r.Context(), cfg)))
 		})
 	})
-	fallbackRule := rule("auditor", "ALL")
-	fallbackRule["OBJECTS"] = []any{map[string]string{"ROUTE": "/*"}}
-	fallbackData, err := json.Marshal(map[string]any{"AllAccessPermissionRules": map[string]any{"rules": []any{fallbackRule}}})
+	allRoutes := []any{map[string]string{"ROUTE": "/*"}}
+	allResources := []any{
+		map[string]string{"IDENTIFIABLE": "$aas(\"*\")"}, map[string]string{"IDENTIFIABLE": "$sm(\"*\")"},
+		map[string]string{"IDENTIFIABLE": "$cd(\"*\")"}, map[string]string{"DESCRIPTOR": "$aasdesc(\"*\")"},
+		map[string]string{"DESCRIPTOR": "$smdesc(\"*\")"},
+	}
+	adminRoutes := rule("admin", "ALL")
+	adminRoutes["OBJECTS"] = allRoutes
+	adminResources := rule("admin", "ALL")
+	adminResources["OBJECTS"] = allResources
+	auditorRoutes := rule("auditor", "ALL")
+	auditorRoutes["OBJECTS"] = allRoutes
+	auditorResources := rule("auditor", "ALL")
+	auditorResources["OBJECTS"] = allResources
+	creatorCollections := rule("creator", "CREATE", "READ")
+	creatorCollections["OBJECTS"] = []any{map[string]string{"ROUTE": "/shells"}, map[string]string{"ROUTE": "/submodels"}, map[string]string{"ROUTE": "/submodels/*"}}
+	readerCollections := rule("reader", "READ")
+	readerCollections["OBJECTS"] = []any{map[string]string{"ROUTE": "/submodels"}}
+	fallbackData, err := json.Marshal(map[string]any{"AllAccessPermissionRules": map[string]any{"rules": []any{
+		adminRoutes, adminResources, auditorRoutes, auditorResources, creatorCollections, readerCollections,
+	}}})
 	require.NoError(t, err)
 	materializedFallback, err := auth.MaterializeABACPolicy(fallbackData, router, basePath)
 	require.NoError(t, err)
@@ -171,6 +182,9 @@ func startAccessClient(t *testing.T, cfg *common.Config, db *sql.DB) accessClien
 				return
 			}
 			claims := auth.Claims{"iss": "https://rebac.test", "sub": r.Header.Get("X-Test-Subject")}
+			if r.Header.Get("X-Test-Subject") == "group-member" {
+				claims["groups"] = []string{"/inspectors", "/bootstrap-owners"}
+			}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), auth.ClaimsKey, claims)))
 		})
 	}))
@@ -197,14 +211,34 @@ func startAccessClient(t *testing.T, cfg *common.Config, db *sql.DB) accessClien
 	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return accessClient{t: t, db: db, server: server, restart: func() accessClient { return startAccessClient(t, cfg, db) }}
+	return accessClient{t: t, db: db, scope: cfg.ReBAC.PolicyScope, server: server, restart: func() accessClient { return startAccessClient(t, cfg, db) }}
 }
 
-func TestResourceBoundDiscoveryPostUsesCollectionCreationPolicy(t *testing.T) {
+func TestResourceBoundDiscoveryPostUsesABACCreationPolicy(t *testing.T) {
 	c := newAccessClient(t)
 	path := "/lookup/shells/" + encoded("urn:rebac:discovery:"+uuid.NewString())
 	c.request(http.MethodPost, path, "admin", []any{map[string]string{"name": "serial", "value": "1"}}, "", http.StatusCreated)
 	c.request(http.MethodPost, path, "outsider", []any{map[string]string{"name": "serial", "value": "1"}}, "", http.StatusForbidden)
+}
+
+func TestPersistedCollectionPoliciesAreIgnored(t *testing.T) {
+	c := newAccessClient(t)
+	raw, err := json.Marshal(policy(map[string]string{"ROUTE": "/shells"}, rule("outsider", "ALL")))
+	require.NoError(t, err)
+	insert := goqu.Dialect("postgres").Insert("rebac_access").Rows(goqu.Record{"scope": c.scope, "collection": "/shells", "policy": raw}).Prepared(true)
+	query, args, err := insert.ToSQL()
+	require.NoError(t, err)
+	_, err = c.db.ExecContext(t.Context(), query, args...)
+	require.NoError(t, err)
+
+	c.request(http.MethodGet, "/shells", "outsider", nil, "", http.StatusForbidden)
+	c.request(http.MethodGet, "/shells/$access", "outsider", nil, "", http.StatusNotFound)
+	shell := map[string]any{
+		"modelType":        "AssetAdministrationShell",
+		"id":               "urn:ignored-collection-policy:" + uuid.NewString(),
+		"assetInformation": map[string]string{"assetKind": "Instance"},
+	}
+	c.request(http.MethodPost, "/shells", "outsider", shell, "", http.StatusForbidden)
 }
 
 func TestResourceBoundAccessLifecycle(t *testing.T) {
@@ -316,9 +350,59 @@ func TestResourceBoundAndABACPermissionsAreCombined(t *testing.T) {
 	c.request("DELETE", path, "admin", nil, "", 204)
 }
 
+func TestResourceBoundGroupGrantAndOwnerAdministration(t *testing.T) {
+	c := newAccessClient(t)
+	id := "urn:group-access:" + uuid.NewString()
+	path := "/submodels/" + encoded(id)
+	access := path + "/$access"
+	c.request(http.MethodPost, "/submodels", "admin", map[string]any{"modelType": "Submodel", "id": id, "idShort": "GroupAccess"}, "", http.StatusCreated)
+	c.mutate(http.MethodPut, access+"/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}), http.StatusOK)
+	c.mutate(http.MethodPost, access+"/grants", "admin", map[string]any{
+		"principal": map[string]string{"type": "group", "issuer": "https://rebac.test", "subject": "/inspectors"},
+		"rights":    []string{"READ"},
+	}, http.StatusCreated)
+	c.request(http.MethodGet, path, "group-member", nil, "", http.StatusOK)
+	c.request(http.MethodGet, path, "group-outsider", nil, "", http.StatusForbidden)
+	c.mutate(http.MethodPut, access+"/managers", "admin", []any{
+		map[string]string{"type": "group", "issuer": "https://rebac.test", "subject": "/inspectors"},
+	}, http.StatusOK)
+	c.request(http.MethodGet, access, "group-member", nil, "", http.StatusOK)
+	c.mutate(http.MethodPut, access+"/owners", "admin", []any{
+		principal("admin"),
+		map[string]string{"type": "group", "issuer": "https://rebac.test", "subject": "/inspectors"},
+	}, http.StatusOK)
+	c.mutate(http.MethodPut, access+"/managers", "group-member", []any{}, http.StatusOK)
+	c.request(http.MethodGet, access, "group-member", nil, "", http.StatusOK)
+	c.request(http.MethodDelete, path, "admin", nil, "", http.StatusNoContent)
+}
+
+func TestResourceBoundBootstrapGroupOwnsExistingResources(t *testing.T) {
+	c := newAccessClient(t)
+	id := "urn:bootstrap-group:" + uuid.NewString()
+	path := "/shells/" + encoded(id)
+	shell := map[string]any{"modelType": "AssetAdministrationShell", "id": id, "idShort": "BootstrapGroup", "assetInformation": map[string]string{"assetKind": "Instance"}}
+	c.request(http.MethodPost, "/shells", "admin", shell, "", http.StatusCreated)
+
+	trust := filepath.Join(t.TempDir(), "trustlist.json")
+	require.NoError(t, os.WriteFile(trust, []byte("[]"), 0600))
+	cfg := &common.Config{
+		Security: common.SecurityConfig{AuthorizationMode: common.AuthorizationResourceBoundFirst},
+		ReBAC: common.ReBACConfig{
+			PolicyScope:    uuid.NewString(),
+			GroupsClaim:    "groups",
+			BootstrapOwner: common.AccessPrincipal{Type: common.AccessPrincipalGroup, Issuer: "https://rebac.test", Subject: "/bootstrap-owners"},
+		},
+		OIDC: common.OIDCConfig{TrustlistPath: trust},
+	}
+	cfg.Server.StrictVerification = "off"
+	groupClient := startAccessClient(t, cfg, c.db)
+	groupClient.request(http.MethodGet, path, "group-member", nil, "", http.StatusOK)
+	groupClient.request(http.MethodGet, path+"/$access", "group-member", nil, "", http.StatusOK)
+	groupClient.request(http.MethodDelete, path, "group-member", nil, "", http.StatusNoContent)
+}
+
 func TestAdminCreatedAASIsHiddenWithoutReBACOrABACRead(t *testing.T) {
 	c := newAccessClient(t)
-	c.mutate(http.MethodPost, "/shells/$access/grants", "admin", grant("creator", "CREATE"), http.StatusCreated)
 	adminID := "urn:admin-owned:" + uuid.NewString()
 	adminPath := "/shells/" + encoded(adminID)
 	shell := map[string]any{
@@ -350,8 +434,6 @@ func TestAdminCreatedAASIsHiddenWithoutReBACOrABACRead(t *testing.T) {
 
 func TestAASUpdateCapabilitiesUseEffectiveAuthorization(t *testing.T) {
 	c := newAccessClient(t)
-	c.mutate(http.MethodPost, "/shells/$access/grants", "admin", grant("builder", "CREATE"), http.StatusCreated)
-	c.mutate(http.MethodPost, "/submodels/$access/grants", "admin", grant("builder", "CREATE"), http.StatusCreated)
 
 	id := "urn:capabilities:" + uuid.NewString()
 	path := "/shells/" + encoded(id)
@@ -398,7 +480,6 @@ func TestAASUpdateCapabilitiesUseEffectiveAuthorization(t *testing.T) {
 
 func TestAASUpdateCapabilitiesRespectOwnershipInheritanceAndHaveNoSideEffects(t *testing.T) {
 	c := newAccessClient(t)
-	c.mutate(http.MethodPost, "/shells/$access/grants", "admin", grant("creator", "CREATE"), http.StatusCreated)
 
 	ownedID := "urn:capabilities:owned:" + uuid.NewString()
 	ownedPath := "/shells/" + encoded(ownedID)
@@ -422,12 +503,16 @@ func TestAASUpdateCapabilitiesRespectOwnershipInheritanceAndHaveNoSideEffects(t 
 	require.JSONEq(t, string(before), string(after))
 	require.Equal(t, beforeETag, afterETag)
 
-	c.mutate(http.MethodPost, "/shells/$access/grants", "admin", grant("inherited", "READ", "UPDATE"), http.StatusCreated)
 	inheritedID := "urn:capabilities:inherited:" + uuid.NewString()
 	inheritedPath := "/shells/" + encoded(inheritedID)
 	shell["id"] = inheritedID
 	shell["idShort"] = "InheritedCapabilityTarget"
 	c.request(http.MethodPost, "/shells", "admin", shell, "", http.StatusCreated)
+	c.mutate(http.MethodPut, inheritedPath+"/$access/policy", "admin", policy(
+		map[string]string{"IDENTIFIABLE": "$aas(" + strconvQuote(inheritedID) + ")"},
+		rule("admin", "ALL"),
+		rule("inherited", "READ", "UPDATE"),
+	), http.StatusOK)
 	assertAASCapability(t, c, inheritedPath+"/$access/capabilities", "inherited", true)
 	c.mutate(http.MethodPut, inheritedPath+"/$access/policy", "admin", policy(
 		map[string]string{"IDENTIFIABLE": "$aas(" + strconvQuote(inheritedID) + ")"},
@@ -548,7 +633,9 @@ func TestResourceBoundVisibilityBeforePagination(t *testing.T) {
 	id := "urn:rebac:page:" + uuid.NewString()
 	path := "/submodels/" + encoded(id)
 	c.request("POST", "/submodels", "admin", map[string]any{"modelType": "Submodel", "id": id}, "", 201)
-	c.mutate("PUT", path+"/$access/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}, rule("reader", "READ")), 200)
+	c.mutate("PUT", path+"/$access/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}, rule("reader", "READ"), rule("direct-only", "READ")), 200)
+	c.request("GET", path, "direct-only", nil, "", http.StatusOK)
+	c.request("GET", "/submodels", "direct-only", nil, "", http.StatusForbidden)
 	data, _ := c.request("GET", "/submodels?limit=1", "reader", nil, "", 200)
 	var page struct {
 		Result []struct {
@@ -702,7 +789,10 @@ func TestResourceBoundAccessRoutesAcrossAliases(t *testing.T) {
 	ref := map[string]any{"type": "ModelReference", "keys": []any{map[string]string{"type": "Submodel", "value": id}}}
 	c.request("POST", "/shells", "admin", map[string]any{"modelType": "AssetAdministrationShell", "id": aasID, "assetInformation": map[string]string{"assetKind": "Instance"}, "submodels": []any{ref}}, "", 201)
 	childPath := smPath + "/submodel-elements/Inspection.Sensor.Reading"
-	for _, path := range []string{"/shells", "/submodels", aasPath, smPath, childPath, aasPath + smPath, aasPath + childPath} {
+	for _, path := range []string{"/shells", "/submodels", "/shell-descriptors", "/submodel-descriptors", "/concept-descriptions", "/lookup/shells"} {
+		c.request("GET", path+"/$access", "admin", nil, "", http.StatusNotFound)
+	}
+	for _, path := range []string{aasPath, smPath, childPath, aasPath + smPath, aasPath + childPath} {
 		t.Run(path, func(t *testing.T) { local := c; local.t = t; exerciseAccessRoutes(local, path) })
 	}
 }
@@ -759,7 +849,7 @@ func TestResourceBoundAccessInputValidationAndResponseMetadata(t *testing.T) {
 		{"invalid grant ID", http.MethodPut, "/grants/not-a-uuid", `{"principal":{"issuer":"https://rebac.test","subject":"reader"},"rights":["READ"]}`, "invalid grant ID", http.StatusBadRequest},
 		{"unknown grant", http.MethodDelete, "/grants/" + uuid.NewString(), "", "unknown managed grant", http.StatusNotFound},
 		{"unsupported method", http.MethodPost, "/policy", `{}`, "expected PUT or DELETE", http.StatusMethodNotAllowed},
-		{"mismatched resource", http.MethodPut, "/policy", `{"RESOURCE":{"ROUTE":"/submodels"},"rules":[]}`, "binding differs", http.StatusBadRequest},
+		{"mismatched resource", http.MethodPut, "/policy", `{"RESOURCE":{"IDENTIFIABLE":"$sm(\"different\")"},"rules":[]}`, "binding differs", http.StatusBadRequest},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {

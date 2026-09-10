@@ -11,22 +11,26 @@ Set `security.authorizationMode: resource-bound-first` to enable the resource-bo
 | `security.authorizationMode` | `SECURITY_AUTHORIZATION_MODE` |
 | `rebac.policyScope` | `REBAC_POLICY_SCOPE` |
 | `rebac.modelPath` | `REBAC_MODEL_PATH` |
+| `rebac.groupsClaim` | `REBAC_GROUPS_CLAIM` |
+| `rebac.bootstrapOwner.type` | `REBAC_BOOTSTRAP_OWNER_TYPE` |
 | `rebac.bootstrapOwner.issuer` | `REBAC_BOOTSTRAP_OWNER_ISSUER` |
 | `rebac.bootstrapOwner.subject` | `REBAC_BOOTSTRAP_OWNER_SUBJECT` |
 
-`BASYX_`-prefixed variants are accepted. Components sharing resources must use the same writer database and policy scope. Bootstrap adopts existing resources without installing individual policies; it does not restore removed grants on restart. Initial policies are imported once per scope. Apply schema migrations with the configuration service before starting components.
+`BASYX_`-prefixed variants are accepted. `groupsClaim` defaults to `groups`. Components sharing resources must use the same writer database and policy scope. Bootstrap adopts existing resources without installing individual policies; it does not restore removed grants on restart. The bootstrap owner may be a `user` (default for backward compatibility) or a `group`. Initial policies are imported once per scope. Apply schema migrations with the configuration service before starting components.
 
 ## Decisions
 
-Each resource uses its own policy or the first policy found walking upward through its operation-context AAS hierarchy. A local policy, including an empty policy, replaces the entire inherited model. A Submodel with multiple associated AAS needs explicit AAS context to inherit from one of them; directly bound policies remain usable without that context. Unassociated Submodels use the repository collection as their parent.
+Each concrete resource uses its own policy or the first policy found walking upward through its operation-context AAS hierarchy. A local policy, including an empty policy, replaces the entire inherited model. A Submodel with multiple associated AAS needs explicit AAS context to inherit from one of them; directly bound policies remain usable without that context. Inheritance stops before a top-level collection.
+
+Top-level collection operations are ABAC-only. For example, ABAC decides whether a caller may invoke `GET` or `POST /shells`; ReBAC `CREATE` or `READ` grants on `/shells` do not exist. A collection read is then filtered per result: a resource is included when ownership, effective ReBAC, or an object-based ABAC rule grants it. A route-based ABAC allow for `/shells` is only the collection admission check and does not expose every AAS by itself.
 
 Resource-bound rules are evaluated first. Object-based ABAC is evaluated when they do not grant the action. Consequently, an ABAC grant can allow access past a resource-bound override. Evaluation/storage errors fail closed. Filters attached to a successful resource-bound grant remain mandatory and cannot trigger fallback to restore excluded content.
 
 ### Migrating an existing ABAC deployment
 
-Keep the existing `ABAC_ENABLED=true` and ABAC model configuration, then set `SECURITY_AUTHORIZATION_MODE=resource-bound-first` on each component. Give all components the same `REBAC_POLICY_SCOPE`, configure one trusted bootstrap owner's token `iss` and `sub`, and run the configuration service so schema v1.1.19 is applied before the components start. Existing resources are adopted without replacing their access settings, and initial collection policies are imported once. This makes ReBAC the first decision while ABAC remains a compatibility fallback.
+Keep the existing `ABAC_ENABLED=true` and ABAC model configuration, then set `SECURITY_AUTHORIZATION_MODE=resource-bound-first` on each component. Give all components the same `REBAC_POLICY_SCOPE`, configure one trusted bootstrap user or group, and run the configuration service so schema v1.1.20 is applied before the components start. Existing resources are adopted without replacing their access settings. This makes ReBAC the first decision for concrete resources while ABAC remains a compatibility fallback.
 
-Migrate incrementally by granting collection CREATE rights and resource-specific access through `/$access`. Remove the equivalent ABAC object rules only after the ReBAC policy has been verified. If ABAC remains able to grant an operation, a ReBAC denial alone does not make that resource exclusive.
+Migrate incrementally by keeping collection access in ABAC and moving resource-specific access to `/$access`. Persisted collection policies from an older deployment are ignored. Remove equivalent ABAC object rules only after the ReBAC policy has been verified. If ABAC remains able to grant an operation, a ReBAC denial alone does not make that resource exclusive.
 
 Composite reads authorize descendants separately. Hidden branches are omitted using the existing structured filtering machinery. Data UPDATE and DELETE check affected subtrees. Technical snapshots retain resource authorization even when ABAC query projections are suppressed. AAS Submodel references require VIEW or READ on their targets and are filtered before pagination. Full SubmodelElement representations omit VIEW-only elements because a reference cannot replace an element in that representation.
 
@@ -36,7 +40,7 @@ Database identities retain ownership and policy across ordinary reconciliation a
 
 ## Resource APIs
 
-Append `/$access` to a resource or collection path. Supported roots are `/shells`, `/submodels`, `/shell-descriptors`, `/submodel-descriptors`, `/concept-descriptions`, and `/lookup/shells`, including concrete resources and supported nested aliases. Identifiers retain the existing base64url encoding. Collection access governs creation rights.
+Append `/$access` to a concrete resource path. Supported resource types are AAS, Submodels, Submodel Elements, AAS and Submodel Descriptors, Concept Descriptions, and Discovery records, including supported nested aliases. Identifiers retain the existing base64url encoding. Top-level collection `/$access` endpoints are not available and return 404.
 
 | Method and suffix | Body / result |
 |---|---|
@@ -44,11 +48,11 @@ Append `/$access` to a resource or collection path. Supported roots are `/shells
 | `GET /$access/policy` | Direct policy; 404 when absent |
 | `PUT /$access/policy` | Single PR #108 model with matching RESOURCE |
 | `DELETE /$access/policy` | Restore inheritance; remove local manager and grant metadata |
-| `POST /$access/grants` | `{ "principal": { "issuer": "…", "subject": "…" }, "rights": ["READ"] }` |
+| `POST /$access/grants` | `{ "principal": { "type": "user|group", "issuer": "…", "subject": "…" }, "rights": ["READ"] }` |
 | `PUT /$access/grants/{grantId}` | Replace an API-managed grant |
 | `DELETE /$access/grants/{grantId}` | Remove an API-managed grant |
-| `PUT /$access/managers` | Array of issuer/subject principals |
-| `PUT /$access/owners` | Nonempty array of issuer/subject principals |
+| `PUT /$access/managers` | Array of user or group principals |
+| `PUT /$access/owners` | Nonempty array of user or group principals |
 
 Mutations require the ETag from the access overview in `If-Match`: missing headers return 428; stale revisions return 412. ETags include the persistent binding identity, scope revision, and effective policy. They change on resource recreation and may differ across aliases with different inheritance contexts. Scope revisions conservatively invalidate ETags after any access change. First-time sharing requires explicit local-policy creation (otherwise 409). A full policy replacement must retain protected manager rules; change those through `/managers`.
 
@@ -69,24 +73,56 @@ Successful grant creation returns the new grant URL in `Location`. Request bodie
 
 Creators become direct owners transactionally, without a policy override. Direct ownership implicitly grants `ALL` on that resource and bypasses inherited data filters. Only direct owners change owners, and one must remain. Managers receive full data grants plus policy administration, but inherited management stops at overrides. Ordinary data grants, including ALL, do not permit access administration. Access administration and writes require a verified issuer and subject. Read policies can retain the existing ANONYMOUS attribute semantics.
 
-To let a user create an AAS, add a `CREATE` grant to the `/shells` collection. First read `/shells/$access` to obtain its ETag, then create the grant with that ETag:
+### Group principals
 
-```sh
-curl -i -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8090/shells/\$access
-curl -i -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -H 'If-Match: "ETAG_FROM_THE_PREVIOUS_RESPONSE"' \
-  --data '{"principal":{"issuer":"https://issuer.example","subject":"user-id"},"rights":["CREATE"]}' \
-  http://localhost:8090/shells/\$access/grants
+A principal without `type` remains a user. A group principal uses the token issuer as its namespace and the exact value from the configured, verified group claim as its subject:
+
+```json
+{
+  "principal": {
+    "type": "group",
+    "issuer": "https://issuer.example/realms/production",
+    "subject": "/bridge-inspectors"
+  },
+  "rights": ["READ"]
+}
 ```
 
-Use the stable token `iss` and `sub` values, not a display name. Granting `CREATE` on `/shells` permits AAS creation; it does not make the user a manager or grant access to AAS resources created by others. A successful creation transaction makes that user a direct owner with implicit `ALL` on the new AAS.
+The group claim may be a string or a string array. Group membership is never accepted from request parameters or an unverified token. Unknown or malformed group-claim entries grant nothing and do not alter the independent ABAC result. Groups can be grants, managers, and direct owners. A bootstrap group can own every resource that exists when a new policy scope is initialized:
+
+```yaml
+rebac:
+  groupsClaim: groups
+  bootstrapOwner:
+    type: group
+    issuer: https://issuer.example/realms/production
+    subject: /aas-admins
+```
+
+New resources still make the authenticated creating user their direct owner. Add a group owner explicitly when new resources should also be administered by a team.
+
+To let a user create an AAS, grant `CREATE` on the `/shells` route in the ABAC model:
+
+```json
+{
+  "ACL": {
+    "ATTRIBUTES": [{"CLAIM":"role"}],
+    "RIGHTS": ["CREATE"],
+    "ACCESS": "ALLOW"
+  },
+  "FORMULA": {"$eq":[{"$attribute":{"CLAIM":"role"}},{"$strVal":"creator"}]},
+  "OBJECTS": [{"ROUTE":"/shells"}]
+}
+```
+
+The ABAC rule may use stable roles, tenants, or other IdP-neutral claims. Granting `CREATE` on `/shells` permits AAS creation; it does not make the user a manager or grant access to AAS resources created by others. A successful creation transaction records the caller's stable `iss` and `sub` as direct owner with implicit `ALL` on the new AAS.
 
 ## Registry and discovery inheritance
 
-- An AAS Descriptor inherits from the AAS with the same identifier. If no AAS exists, it inherits from `/shell-descriptors`.
-- A Submodel Descriptor inherits from the Submodel with the same identifier. If no Submodel exists, it inherits from `/submodel-descriptors`.
-- A Discovery record inherits from the AAS with the same identifier. If no AAS exists, it inherits from `/lookup/shells`.
-- Concept Descriptions inherit from `/concept-descriptions`.
+- An AAS Descriptor inherits from the AAS with the same identifier. Without a matching AAS, only its own policy, ownership, or ABAC fallback applies.
+- A Submodel Descriptor inherits from the Submodel with the same identifier. Without a matching Submodel, only its own policy, ownership, or ABAC fallback applies.
+- A Discovery record inherits from the AAS with the same identifier. Without a matching AAS, only its own policy, ownership, or ABAC fallback applies.
+- Concept Descriptions use their own policy, ownership, or ABAC fallback.
 - A nested Submodel Descriptor under an AAS Descriptor requires access through both dimensions: the containing AAS Descriptor and the matching Submodel policy when that Submodel exists.
 
 Local policies on descriptors or discovery records override only their inheritance path. Descriptor synchronization performed during repository writes runs in the same database transaction and enforces those local policies; a denied registry update rolls the repository write back.

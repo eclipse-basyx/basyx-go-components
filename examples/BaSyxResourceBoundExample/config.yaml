@@ -27,10 +27,11 @@ security:
   authorizationMode: resource-bound-first
 rebac:
   policyScope: bridges
-  modelPath: /security/resource-policies.json
+  groupsClaim: groups
   bootstrapOwner:
+    type: group
     issuer: https://issuer.example
-    subject: bridge-owner
+    subject: /bridge-admins
 oidc:
   trustlistPath: /security/trustlist.json
 abac:

@@ -28,7 +28,6 @@ services:
       - ABAC_POLICY_FILE_IMPORT=if_missing
       - SECURITY_AUTHORIZATION_MODE=resource-bound-first
       - REBAC_POLICY_SCOPE=secured-example-resources
-      - REBAC_MODEL_PATH=/security_env/resource-policies.json
       - REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
       - REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
@@ -70,7 +69,6 @@ services:
       - ABAC_POLICY_FILE_IMPORT=if_missing
       - SECURITY_AUTHORIZATION_MODE=resource-bound-first
       - REBAC_POLICY_SCOPE=secured-example-resources
-      - REBAC_MODEL_PATH=/security_env/resource-policies.json
       - REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
       - REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
@@ -114,7 +112,6 @@ services:
       - ABAC_POLICY_FILE_IMPORT=if_missing
       - SECURITY_AUTHORIZATION_MODE=resource-bound-first
       - REBAC_POLICY_SCOPE=secured-example-resources
-      - REBAC_MODEL_PATH=/security_env/resource-policies.json
       - REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
       - REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
@@ -172,7 +169,6 @@ services:
       - ABAC_POLICY_FILE_IMPORT=if_missing
       - SECURITY_AUTHORIZATION_MODE=resource-bound-first
       - REBAC_POLICY_SCOPE=secured-example-resources
-      - REBAC_MODEL_PATH=/security_env/resource-policies.json
       - REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
       - REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
@@ -217,7 +213,6 @@ services:
       - ABAC_POLICY_FILE_IMPORT=if_missing
       - SECURITY_AUTHORIZATION_MODE=resource-bound-first
       - REBAC_POLICY_SCOPE=secured-example-resources
-      - REBAC_MODEL_PATH=/security_env/resource-policies.json
       - REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
       - REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
@@ -262,7 +257,6 @@ services:
       - ABAC_POLICY_FILE_IMPORT=if_missing
       - SECURITY_AUTHORIZATION_MODE=resource-bound-first
       - REBAC_POLICY_SCOPE=secured-example-resources
-      - REBAC_MODEL_PATH=/security_env/resource-policies.json
       - REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
       - REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json

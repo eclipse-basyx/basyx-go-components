@@ -74,11 +74,11 @@ func boundActor(ctx context.Context) (common.AccessPrincipal, error) {
 	if strings.TrimSpace(issuer) == "" || strings.TrimSpace(subject) == "" {
 		return common.AccessPrincipal{}, boundError(http.StatusUnauthorized, "IDENTITY authenticated issuer and subject required")
 	}
-	return common.AccessPrincipal{Issuer: issuer, Subject: subject}, nil
+	return common.AccessPrincipal{Type: common.AccessPrincipalUser, Issuer: issuer, Subject: subject}, nil
 }
 func containsBoundPrincipal(principals []common.AccessPrincipal, principal common.AccessPrincipal) bool {
 	for _, candidate := range principals {
-		if candidate == principal {
+		if candidate.NormalizedType() == principal.NormalizedType() && candidate.Issuer == principal.Issuer && candidate.Subject == principal.Subject {
 			return true
 		}
 	}
@@ -144,8 +144,9 @@ func (repo *resourceBoundRepository) accessRequest(r *http.Request, target bound
 	if err != nil {
 		return 0, nil, "", err
 	}
-	owner := containsBoundPrincipal(access.Owners, actor)
-	manager := effective != nil && containsBoundPrincipal(effective.Managers, actor)
+	actors := repo.boundRequestPrincipals(r.Context())
+	owner := containsAnyBoundPrincipal(access.Owners, actors)
+	manager := effective != nil && containsAnyBoundPrincipal(effective.Managers, actors)
 	if !owner && !manager {
 		return 0, nil, "", boundError(http.StatusForbidden, "DENIED access administration required")
 	}
@@ -165,6 +166,15 @@ func (repo *resourceBoundRepository) accessRequest(r *http.Request, target bound
 	}
 	etag, err := repo.commitAccess(r, tx, target, access, actor, revision+1)
 	return status, value, etag, err
+}
+
+func containsAnyBoundPrincipal(allowed, actors []common.AccessPrincipal) bool {
+	for _, actor := range actors {
+		if containsBoundPrincipal(allowed, actor) {
+			return true
+		}
+	}
+	return false
 }
 
 func (repo *resourceBoundRepository) commitAccess(r *http.Request, tx *sql.Tx, target boundTarget, access *boundAccess, actor common.AccessPrincipal, revision int64) (string, error) {
@@ -351,7 +361,7 @@ func mutateBoundPrincipals(r *http.Request, tx *sql.Tx, kind string, access *bou
 		return 0, nil, err
 	}
 	for _, principal := range principals {
-		record := goqu.Record{"access_id": access.ID, "issuer": principal.Issuer, "subject": principal.Subject, "relation": relation}
+		record := boundPrincipalRecord(access.ID, principal, relation)
 		if err := boundExec(r.Context(), tx, goqu.Dialect("postgres").Insert("rebac_principal").Rows(record).Prepared(true)); err != nil {
 			return 0, nil, err
 		}
@@ -363,14 +373,19 @@ func validateBoundPrincipals(principals []common.AccessPrincipal, requireOwner b
 		return boundError(http.StatusBadRequest, "PRINCIPALS array required; at least one owner must remain")
 	}
 	seen := map[common.AccessPrincipal]bool{}
-	for _, principal := range principals {
+	for index := range principals {
+		principal := &principals[index]
 		if strings.TrimSpace(principal.Issuer) == "" || strings.TrimSpace(principal.Subject) == "" {
 			return boundError(http.StatusBadRequest, "PRINCIPALS issuer and subject must contain non-whitespace characters")
 		}
-		if seen[principal] {
+		principal.Type = principal.NormalizedType()
+		if principal.Type != common.AccessPrincipalUser && principal.Type != common.AccessPrincipalGroup {
+			return boundError(http.StatusBadRequest, "PRINCIPALS type must be user or group")
+		}
+		if seen[*principal] {
 			return boundError(http.StatusBadRequest, "PRINCIPALS duplicate principal")
 		}
-		seen[principal] = true
+		seen[*principal] = true
 	}
 	return nil
 }
@@ -424,6 +439,7 @@ func mutateBoundGrant(r *http.Request, tx *sql.Tx, access *boundAccess, id strin
 	if err := decodeBoundBody(r, &input); err != nil {
 		return 0, nil, err
 	}
+	input.Principal.Type = input.Principal.NormalizedType()
 	if err := validateBoundPrincipals([]common.AccessPrincipal{input.Principal}, false); err != nil {
 		return 0, nil, err
 	}
@@ -444,7 +460,7 @@ func mutateBoundGrant(r *http.Request, tx *sql.Tx, access *boundAccess, id strin
 	if err != nil {
 		return 0, nil, fmt.Errorf("REBAC-GRANT-ENCODE %w", err)
 	}
-	record := goqu.Record{"id": id, "access_id": access.ID, "issuer": input.Principal.Issuer, "subject": input.Principal.Subject, "rights": string(rights), "rule": string(rule)}
+	record := goqu.Record{"id": id, "access_id": access.ID, "principal_type": input.Principal.NormalizedType(), "issuer": input.Principal.Issuer, "subject": input.Principal.Subject, "rights": string(rights), "rule": string(rule)}
 	if err = boundExec(r.Context(), tx, goqu.Dialect("postgres").Insert("rebac_grant").Rows(record).Prepared(true)); err != nil {
 		return 0, nil, err
 	}

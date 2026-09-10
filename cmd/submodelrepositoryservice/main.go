@@ -201,7 +201,7 @@ func runServer(ctx context.Context, configPath string) error {
 	if cfg.General.EnableCustomMiddlewareHeaderInjection {
 		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
 	}
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "submodelrepositoryservice", claimsMiddleware...)
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "submodelrepositoryservice", claimsMiddleware...)
 	if err != nil {
 		return err
 	}

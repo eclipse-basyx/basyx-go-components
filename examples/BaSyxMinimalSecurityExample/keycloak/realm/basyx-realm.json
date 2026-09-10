@@ -35,6 +35,18 @@
           }
         },
         {
+          "name": "Groups Mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
           "name": "BaSyx API Audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
@@ -57,6 +69,10 @@
       "directAccessGrantsEnabled": false
     }
   ],
+  "groups": [
+    { "name": "aas-admins", "path": "/aas-admins", "subGroups": [] },
+    { "name": "aas-viewers", "path": "/aas-viewers", "subGroups": [] }
+  ],
   "users": [
     {
       "id": "32103f0d-1d0e-4d94-b720-bcd22e1c7709",
@@ -67,6 +83,7 @@
       "emailVerified": true,
       "enabled": true,
       "attributes": { "role": ["admin"] },
+      "groups": ["/aas-admins"],
       "credentials": [{ "type": "password", "value": "pwd", "temporary": false }]
     },
     {
@@ -78,6 +95,7 @@
       "emailVerified": true,
       "enabled": true,
       "attributes": { "role": ["viewer"] },
+      "groups": ["/aas-viewers"],
       "credentials": [{ "type": "password", "value": "pwd", "temporary": false }]
     }
   ]

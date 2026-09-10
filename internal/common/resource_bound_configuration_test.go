@@ -45,23 +45,32 @@ func TestResourceBoundConfigurationIsOptIn(t *testing.T) {
 	cfg.ReBAC.BootstrapOwner = AccessPrincipal{Issuer: "https://issuer.example", Subject: "owner"}
 	require.NoError(t, validateResourceBoundConfig(cfg))
 	require.Equal(t, "default", cfg.ReBAC.PolicyScope)
+	require.Equal(t, "groups", cfg.ReBAC.GroupsClaim)
+	require.Equal(t, AccessPrincipalUser, cfg.ReBAC.BootstrapOwner.Type)
 	require.True(t, ResourceBoundEnabled(cfg))
 	cfg.Security.AuthorizationMode = "invalid"
 	require.Error(t, validateResourceBoundConfig(cfg))
 	cfg.Security.AuthorizationMode = AuthorizationResourceBoundFirst
 	cfg.ReBAC.BootstrapOwner.Subject = " \t"
 	require.ErrorContains(t, validateResourceBoundConfig(cfg), "CONFIG-REBAC-OWNER")
+	cfg.ReBAC.BootstrapOwner.Subject = "owner"
+	cfg.ReBAC.BootstrapOwner.Type = "service"
+	require.ErrorContains(t, validateResourceBoundConfig(cfg), "CONFIG-REBAC-OWNERTYPE")
 }
 
 func TestResourceBoundEnvironmentOverrides(t *testing.T) {
 	t.Setenv("SECURITY_AUTHORIZATION_MODE", AuthorizationResourceBoundFirst)
 	t.Setenv("REBAC_POLICY_SCOPE", "bridges")
+	t.Setenv("REBAC_GROUPS_CLAIM", "memberOf")
+	t.Setenv("REBAC_BOOTSTRAP_OWNER_TYPE", "group")
 	t.Setenv("REBAC_BOOTSTRAP_OWNER_ISSUER", "https://issuer.example")
 	t.Setenv("REBAC_BOOTSTRAP_OWNER_SUBJECT", "owner")
 	cfg := &Config{}
 	applyResourceBoundEnvOverrides(cfg)
 	require.NoError(t, validateResourceBoundConfig(cfg))
 	require.Equal(t, "bridges", cfg.ReBAC.PolicyScope)
+	require.Equal(t, "memberOf", cfg.ReBAC.GroupsClaim)
+	require.Equal(t, AccessPrincipalGroup, cfg.ReBAC.BootstrapOwner.Type)
 	require.True(t, ResourceBoundEnabled(cfg))
 }
 
@@ -78,7 +87,8 @@ paths:
 	var doc map[string]any
 	require.NoError(t, yaml.Unmarshal(output, &doc))
 	paths := doc["paths"].(map[string]any)
-	require.Contains(t, paths, "/submodels/$access/policy")
+	require.Contains(t, paths, "/submodels/{submodelIdentifier}/$access/policy")
+	require.NotContains(t, paths, "/submodels/$access/policy")
 	require.Contains(t, paths, "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$access/grants/{grantId}")
 	require.NotContains(t, paths, "/shells/$access")
 	capability := paths["/shells/{aasIdentifier}/$access/capabilities"].(map[string]any)["get"].(map[string]any)
@@ -97,6 +107,13 @@ paths:
 	require.Contains(t, string(mustJSON(t, grantOperation)), "Location")
 	require.Contains(t, string(output), "uniqueItems: true")
 	require.Contains(t, string(output), `pattern: .*\S.*`)
+	components := doc["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+	principal := schemas["ResourceAccessPrincipal"].(map[string]any)
+	principalProperties := principal["properties"].(map[string]any)
+	principalType := principalProperties["type"].(map[string]any)
+	require.Equal(t, []any{"user", "group"}, principalType["enum"])
+	require.Equal(t, "user", principalType["default"])
 }
 
 func mustJSON(t *testing.T, value any) []byte {
