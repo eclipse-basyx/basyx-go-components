@@ -33,7 +33,7 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
-	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // registers the postgres dialect with goqu
 )
 
 const (

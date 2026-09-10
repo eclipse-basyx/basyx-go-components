@@ -319,12 +319,12 @@ func unescapeRSQL(inner string, quote byte) string {
 		switch {
 		case inner[i] == '\\' && i+1 < len(inner):
 			i++
-			b.WriteByte(inner[i])
+			_ = b.WriteByte(inner[i])
 		case inner[i] == quote && i+1 < len(inner) && inner[i+1] == quote:
 			i++
-			b.WriteByte(quote)
+			_ = b.WriteByte(quote)
 		default:
-			b.WriteByte(inner[i])
+			_ = b.WriteByte(inner[i])
 		}
 	}
 	return b.String()

@@ -129,7 +129,7 @@ func TestAASRepositoryEventFeedInterleavedCommitsAreNotPermanentlyLost(t *testin
 	// AssignPublishSeq batches table-wide (500 rows/call, shared with other
 	// tests in this suite), so repeat it until B surfaces rather than
 	// assuming one call covers our rows.
-	firstPage := publishUntilRecordSeen(t, ctx, svc, query, eventB.ID)
+	firstPage := publishUntilRecordSeen(ctx, t, svc, query, eventB.ID)
 	require.NotEmpty(t, firstPage.Cursor)
 
 	// A finally resolves.
@@ -140,13 +140,13 @@ func TestAASRepositoryEventFeedInterleavedCommitsAreNotPermanentlyLost(t *testin
 	// commit order, and A is not permanently skipped just because it had
 	// the lowest raw seq.
 	query.Cursor = firstPage.Cursor
-	page2 := publishUntilRecordSeen(t, ctx, svc, query, eventC.ID)
+	page2 := publishUntilRecordSeen(ctx, t, svc, query, eventC.ID)
 	require.NotEmpty(t, page2.Cursor)
 
 	// Now A is visible too. The assignment job picks it up and gives it a
 	// publish_seq after B's and C's - not seq order, commit order.
 	query.Cursor = page2.Cursor
-	page3 := publishUntilRecordSeen(t, ctx, svc, query, eventA.ID)
+	page3 := publishUntilRecordSeen(ctx, t, svc, query, eventA.ID)
 	require.Empty(t, page3.Cursor, "no more matching events left")
 }
 
@@ -158,7 +158,7 @@ func TestAASRepositoryEventFeedInterleavedCommitsAreNotPermanentlyLost(t *testin
 // call - this must not be confused with the correctness guarantee under
 // test (that a committed row is never permanently skipped), which does not
 // depend on how many calls it takes.
-func publishUntilRecordSeen(t *testing.T, ctx context.Context, svc *eventfeed.Service, query eventfeed.FeedQuery, wantID string) eventfeed.FeedResponse {
+func publishUntilRecordSeen(ctx context.Context, t *testing.T, svc *eventfeed.Service, query eventfeed.FeedQuery, wantID string) eventfeed.FeedResponse {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
