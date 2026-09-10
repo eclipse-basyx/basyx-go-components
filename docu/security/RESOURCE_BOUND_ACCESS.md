@@ -18,6 +18,8 @@ Set `security.authorizationMode: resource-bound-first` to enable the resource-bo
 
 `BASYX_`-prefixed variants are accepted. `groupsClaim` defaults to `groups`. Components sharing resources must use the same writer database and policy scope. Bootstrap adopts existing resources without installing individual policies; it does not restore removed grants on restart. The bootstrap owner may be a `user` (default for backward compatibility) or a `group`. Initial policies are imported once per scope. Apply schema migrations with the configuration service before starting components.
 
+When resource-bound authorization is enabled, the service `/description` response includes `https://basyx.org/aas/API/3/2/ResourceBoundAccessControl/1.0` in its `profiles` array. The profile is omitted in `legacy-abac` mode so clients can detect ReBAC support without probing administrative endpoints.
+
 ## Decisions
 
 Each concrete resource uses its own policy or the first policy found walking upward through its operation-context AAS hierarchy. A local policy, including an empty policy, replaces the entire inherited model. A Submodel with multiple associated AAS needs explicit AAS context to inherit from one of them; directly bound policies remain usable without that context. Inheritance stops before a top-level collection.

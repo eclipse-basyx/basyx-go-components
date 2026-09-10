@@ -40,6 +40,7 @@ package smregistryapi
 import (
 	"context"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -47,11 +48,12 @@ import (
 // This service should implement the business logic for every endpoint for the DescriptionAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type DescriptionAPIAPIService struct {
+	resourceBoundEnabled bool
 }
 
 // NewDescriptionAPIAPIService creates a default api service
-func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
-	return &DescriptionAPIAPIService{}
+func NewDescriptionAPIAPIService(resourceBoundEnabled ...bool) *DescriptionAPIAPIService {
+	return &DescriptionAPIAPIService{resourceBoundEnabled: len(resourceBoundEnabled) > 0 && resourceBoundEnabled[0]}
 }
 
 // GetSelfDescription - Returns the self-describing information of a network resource (ServiceDescription)
@@ -69,11 +71,11 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (mode
 	// return Response(0, Result{}), nil
 
 	return model.Response(200, model.ServiceDescription{
-		Profiles: []string{
+		Profiles: common.AddResourceBoundAccessProfile([]string{
 			"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001",
 			"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-003",
 			"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-004",
 			"https://basyx.org/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001",
-		},
+		}, s.resourceBoundEnabled),
 	}), nil
 }

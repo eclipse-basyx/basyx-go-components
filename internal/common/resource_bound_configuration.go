@@ -33,6 +33,9 @@ import (
 // AuthorizationResourceBoundFirst selects resource policies before object-based ABAC.
 const AuthorizationResourceBoundFirst = "resource-bound-first"
 
+// ResourceBoundAccessProfile identifies BaSyx resource-bound access support in service descriptions.
+const ResourceBoundAccessProfile = "https://basyx.org/aas/API/3/2/ResourceBoundAccessControl/1.0"
+
 // AuthorizationLegacyABAC preserves the existing object-based security setup.
 const AuthorizationLegacyABAC = "legacy-abac"
 
@@ -77,6 +80,15 @@ type ReBACConfig struct {
 // ResourceBoundEnabled reports whether resource-bound authorization is selected.
 func ResourceBoundEnabled(cfg *Config) bool {
 	return cfg != nil && cfg.Security.AuthorizationMode == AuthorizationResourceBoundFirst
+}
+
+// AddResourceBoundAccessProfile adds the ReBAC capability profile when enabled.
+func AddResourceBoundAccessProfile(profiles []string, enabled bool) []string {
+	result := append([]string(nil), profiles...)
+	if enabled {
+		result = append(result, ResourceBoundAccessProfile)
+	}
+	return result
 }
 func applyResourceBoundEnvOverrides(cfg *Config) {
 	fields := []struct {

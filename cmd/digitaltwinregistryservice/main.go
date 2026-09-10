@@ -150,7 +150,7 @@ func runServer(ctx context.Context, configPath string) error {
 	bulkSvc := registryapiinternal.NewBulkService(registrySvc, bulkManager)
 	bulkHandler := registryapiinternal.NewBulkHTTPHandler(bulkSvc)
 	discoveryCtrl := openapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(discoverySvc)
-	descriptionSvc := digitaltwinregistry.NewDescriptionService()
+	descriptionSvc := digitaltwinregistry.NewDescriptionService(common.ResourceBoundEnabled(cfg))
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()

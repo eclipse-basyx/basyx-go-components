@@ -125,7 +125,7 @@ func runServer(ctx context.Context, configPath string) error {
 	bulkSvc := smregistryapi.NewBulkService(smSvc, bulkManager)
 	bulkHandler := smregistryapi.NewBulkHTTPHandler(bulkSvc)
 
-	descSvc := smregistryapi.NewDescriptionAPIAPIService()
+	descSvc := smregistryapi.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
 	descCtrl := smregistryopenapi.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)

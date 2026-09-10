@@ -58,6 +58,13 @@ func TestResourceBoundConfigurationIsOptIn(t *testing.T) {
 	require.ErrorContains(t, validateResourceBoundConfig(cfg), "CONFIG-REBAC-OWNERTYPE")
 }
 
+func TestResourceBoundDescriptionProfileIsOptIn(t *testing.T) {
+	profiles := []string{"standard-profile"}
+	require.Equal(t, profiles, AddResourceBoundAccessProfile(profiles, false))
+	require.Equal(t, []string{"standard-profile", ResourceBoundAccessProfile}, AddResourceBoundAccessProfile(profiles, true))
+	require.Equal(t, []string{"standard-profile"}, profiles)
+}
+
 func TestResourceBoundEnvironmentOverrides(t *testing.T) {
 	t.Setenv("SECURITY_AUTHORIZATION_MODE", AuthorizationResourceBoundFirst)
 	t.Setenv("REBAC_POLICY_SCOPE", "bridges")

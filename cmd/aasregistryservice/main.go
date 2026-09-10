@@ -126,7 +126,7 @@ func runServer(ctx context.Context, configPath string) error {
 	bulkSvc := aasregistryapi.NewBulkService(smSvc, bulkManager)
 	bulkHandler := aasregistryapi.NewBulkHTTPHandler(bulkSvc)
 
-	descSvc := aasregistryapi.NewDescriptionAPIAPIService()
+	descSvc := aasregistryapi.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
 	descCtrl := apis.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)

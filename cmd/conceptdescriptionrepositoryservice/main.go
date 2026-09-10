@@ -119,7 +119,7 @@ func runServer(ctx context.Context, configPath string) error {
 	cdCtrl := openapi.NewConceptDescriptionRepositoryAPIAPIController(cdSvc, "", cfg.Server.StrictVerification)
 
 	// ==== Description Service ====
-	descSvc := api.NewDescriptionAPIAPIService()
+	descSvc := api.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)

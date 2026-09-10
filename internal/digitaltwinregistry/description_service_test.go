@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/stretchr/testify/require"
 )
@@ -43,4 +44,16 @@ func TestDescriptionContainsSSP003Profile(t *testing.T) {
 	description, ok := resp.Body.(model.ServiceDescription)
 	require.True(t, ok)
 	require.Contains(t, description.Profiles, "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003")
+}
+
+func TestDescriptionAdvertisesResourceBoundAccessOnlyWhenEnabled(t *testing.T) {
+	legacyResponse, err := NewDescriptionService().GetDescription(t.Context())
+	require.NoError(t, err)
+	legacyDescription := legacyResponse.Body.(model.ServiceDescription)
+	require.NotContains(t, legacyDescription.Profiles, common.ResourceBoundAccessProfile)
+
+	resourceBoundResponse, err := NewDescriptionService(true).GetDescription(t.Context())
+	require.NoError(t, err)
+	resourceBoundDescription := resourceBoundResponse.Body.(model.ServiceDescription)
+	require.Contains(t, resourceBoundDescription.Profiles, common.ResourceBoundAccessProfile)
 }

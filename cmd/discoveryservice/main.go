@@ -106,7 +106,7 @@ func runServer(ctx context.Context, configPath string) error {
 	smCtrl := openapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(smSvc)
 
 	// === Description Service (public) ===
-	descSvc := openapi.NewDescriptionAPIAPIService()
+	descSvc := openapi.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
