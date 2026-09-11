@@ -27,9 +27,12 @@ package eventoutbox
 
 import (
 	"context"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -43,11 +46,12 @@ func (p testPublisher) Publish(ctx context.Context, r json.RawMessage, e []byte)
 	return p(ctx, r, e)
 }
 func TestOutboxQueryExcludesEarlierEventsAndSkipsLockedRows(t *testing.T) {
-	query, args, err := claimQuery("mqtt")
+	query, args, err := claimQuery("mqtt", "previous")
 	require.NoError(t, err)
-	require.Contains(t, query, "NOT EXISTS")
-	require.Contains(t, query, "FOR UPDATE SKIP LOCKED")
-	require.Contains(t, query, `"earlier"."ordering_key" = "pending"."ordering_key"`)
+	require.Contains(t, query, "WITH RECURSIVE")
+	require.Contains(t, query, "CROSS JOIN LATERAL")
+	require.Contains(t, query, `FOR UPDATE OF "pending" SKIP LOCKED`)
+	require.Contains(t, query, `"ordering_key" > "heads"."ordering_key"`)
 	require.Contains(t, args, "mqtt")
 }
 func TestDeliveryPersistsRetryOrDeletesAcknowledgedEntry(t *testing.T) {
@@ -55,7 +59,7 @@ func TestDeliveryPersistsRetryOrDeletesAcknowledgedEntry(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
 		mock.ExpectBegin()
-		mock.ExpectQuery("SELECT.*FOR UPDATE SKIP LOCKED").WillReturnRows(sqlmock.NewRows([]string{"seq", "envelope", "routing", "attempts"}).AddRow(1, `{"id":"stable"}`, `"topic"`, 0))
+		mock.ExpectQuery("SELECT.*FOR UPDATE.*SKIP LOCKED").WillReturnRows(sqlmock.NewRows([]string{"seq", "envelope", "routing", "attempts", "ordering_key"}).AddRow(1, `{"id":"stable"}`, `"topic"`, 0, "entity"))
 		operation := "DELETE"
 		if fail {
 			operation = "UPDATE"
@@ -94,4 +98,99 @@ func TestEnqueueFailurePropagatesToMutation(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 	mock.ExpectClose()
 	require.NoError(t, db.Close())
+}
+
+func TestWorkerWaitsAfterSlowFailedAttempt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer func() { _ = db.Close() }()
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"seq", "envelope", "routing", "attempts", "ordering_key"}).AddRow(1, `{}`, `"topic"`, 0, "entity"))
+		mock.ExpectExec("UPDATE").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"seq", "envelope", "routing", "attempts", "ordering_key"}).AddRow(2, `{}`, `"topic"`, 0, "entity"))
+		mock.ExpectRollback()
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		var attempts int
+		started := time.Now()
+		var secondAttempt time.Duration
+		publisher := testPublisher(func(context.Context, json.RawMessage, []byte) error {
+			attempts++
+			if attempts == 1 {
+				time.Sleep(time.Second)
+				return errors.New("TEST-PUBLISH-RETRY")
+			}
+			secondAttempt = time.Since(started)
+			cancel()
+			return context.Canceled
+		})
+		instruments, err := newInstruments("worker-delay-test")
+		require.NoError(t, err)
+		worker := &Worker{repository: NewRepository(db), sink: "test", publisher: publisher, metrics: instruments}
+		worker.run(ctx)
+		synctest.Wait()
+		require.Equal(t, 2, attempts)
+		require.GreaterOrEqual(t, secondAttempt, 1250*time.Millisecond)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestWorkerRotatesEntityCursorAndWraps(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer func() { _ = db.Close() }()
+		keys := []string{"a", "b", "c", "a"}
+		afterKey := ""
+		for i, key := range keys {
+			mock.ExpectBegin()
+			if i == len(keys)-1 {
+				expectOutboxClaim(t, mock, afterKey, outboxDeliveryRows())
+				afterKey = ""
+			}
+			expectOutboxClaim(t, mock, afterKey, outboxDeliveryRows().AddRow(i+1, key, `"topic"`, 0, key))
+			if i == len(keys)-1 {
+				mock.ExpectRollback()
+			} else {
+				mock.ExpectExec("DELETE").WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectCommit()
+			}
+			afterKey = key
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		var delivered []string
+		publisher := testPublisher(func(_ context.Context, _ json.RawMessage, raw []byte) error {
+			delivered = append(delivered, string(raw))
+			if len(delivered) == len(keys) {
+				cancel()
+			}
+			return nil
+		})
+		instruments, err := newInstruments("worker-cursor-test")
+		require.NoError(t, err)
+		worker := &Worker{repository: NewRepository(db), sink: "test", publisher: publisher, metrics: instruments}
+		worker.run(ctx)
+		synctest.Wait()
+		require.Equal(t, keys, delivered)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func expectOutboxClaim(t *testing.T, mock sqlmock.Sqlmock, afterKey string, rows *sqlmock.Rows) {
+	t.Helper()
+	query, args, err := claimQuery("test", afterKey)
+	require.NoError(t, err)
+	values := make([]driver.Value, len(args))
+	for i, value := range args {
+		values[i] = value
+	}
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(values...).WillReturnRows(rows)
+}
+
+func outboxDeliveryRows() *sqlmock.Rows {
+	return sqlmock.NewRows([]string{"seq", "envelope", "routing", "attempts", "ordering_key"})
 }

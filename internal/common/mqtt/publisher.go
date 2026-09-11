@@ -32,6 +32,7 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -42,9 +43,13 @@ import (
 
 // Publisher sends structured CloudEvents to one MQTT destination.
 type Publisher struct {
-	connection *autopaho.ConnectionManager
-	config     Config
-	connected  atomic.Bool
+	connection  *autopaho.ConnectionManager
+	config      Config
+	connected   atomic.Bool
+	ctx         context.Context
+	cancel      context.CancelFunc
+	transportMu sync.RWMutex
+	transport   *brokerConnection
 }
 
 // NewPublisher initializes asynchronous MQTT connection and reconnection.
@@ -79,20 +84,23 @@ func NewPublisher(ctx context.Context, cfg Config) (*Publisher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("MQTT-PUBLISHER-URL invalid broker URL")
 	}
-	publisher := &Publisher{config: cfg}
-	connection, err := autopaho.NewConnection(ctx, autopaho.ClientConfig{
+	runtimeCtx, cancel := context.WithCancel(ctx)
+	publisher := &Publisher{config: cfg, ctx: runtimeCtx, cancel: cancel}
+	connection, err := autopaho.NewConnection(runtimeCtx, autopaho.ClientConfig{
 		ServerUrls: []*url.URL{broker}, TlsCfg: tlsConfig, KeepAlive: 30, ConnectTimeout: 10 * time.Second,
 		CleanStartOnInitialConnection: true, SessionExpiryInterval: 0,
 		ConnectUsername: username, ConnectPassword: []byte(password),
-		ReconnectBackoff: events.RetryDelay,
-		OnConnectionUp:   func(_ *autopaho.ConnectionManager, _ *paho.Connack) { publisher.connected.Store(true) },
-		OnConnectionDown: func() bool { publisher.connected.Store(false); return true },
+		ReconnectBackoff:  events.RetryDelay,
+		AttemptConnection: publisher.dial,
+		OnConnectionUp:    func(_ *autopaho.ConnectionManager, _ *paho.Connack) { publisher.connected.Store(true) },
+		OnConnectionDown:  func() bool { publisher.connected.Store(false); return true },
 		OnConnectError: func(_ error) {
 			slog.WarnContext(ctx, "MQTT connection unavailable; reconnecting", "error.code", "MQTT-CONNECT-RETRY", "sink", cfg.SinkID)
 		},
 		ClientConfig: paho.ClientConfig{ClientID: cfg.ClientID},
 	})
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("MQTT-PUBLISHER-START cannot initialize connection")
 	}
 	publisher.connection = connection
@@ -103,7 +111,7 @@ func NewPublisher(ctx context.Context, cfg Config) (*Publisher, error) {
 //
 // Returns:
 //   - bool: True after connection establishment and until disconnection is reported.
-func (p *Publisher) Connected() bool { return p.connected.Load() }
+func (p *Publisher) Connected() bool { return p.connected.Load() && p.ctx.Err() == nil }
 
 // Publish sends one structured CloudEvent with the configured QoS and retained flag.
 //
@@ -111,7 +119,7 @@ func (p *Publisher) Connected() bool { return p.connected.Load() }
 // the packet was sent without a broker acknowledgment.
 //
 // Parameters:
-//   - ctx: Context bounding the publish attempt and acknowledgment wait.
+//   - ctx: Context bounding the publish attempt and acknowledgment wait, capped at ten seconds.
 //   - routing: JSON-encoded topic returned by Routing.
 //   - envelope: Serialized, valid CloudEvent; transmitted unchanged as the message payload.
 //
@@ -130,7 +138,7 @@ func (p *Publisher) Publish(ctx context.Context, routing json.RawMessage, envelo
 	case 2:
 		qos = 2
 	}
-	response, err := p.connection.Publish(ctx, &paho.Publish{Topic: topic, QoS: qos, Retain: p.config.Retained, Payload: envelope, Properties: &paho.PublishProperties{ContentType: "application/cloudevents+json", PayloadFormat: &format}})
+	response, err := p.publish(ctx, &paho.Publish{Topic: topic, QoS: qos, Retain: p.config.Retained, Payload: envelope, Properties: &paho.PublishProperties{ContentType: "application/cloudevents+json", PayloadFormat: &format}})
 	if err != nil {
 		return fmt.Errorf("MQTT-PUBLISH-DELIVERY broker delivery not acknowledged")
 	}
@@ -148,6 +156,8 @@ func (p *Publisher) Publish(ctx context.Context, routing json.RawMessage, envelo
 // Returns:
 //   - error: Coded error if shutdown cannot finish within ctx; otherwise nil.
 func (p *Publisher) Stop(ctx context.Context) error {
+	p.cancel()
+	p.connected.Store(false)
 	if err := p.connection.Disconnect(ctx); err != nil {
 		return fmt.Errorf("MQTT-PUBLISHER-STOP disconnect did not complete")
 	}

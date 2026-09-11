@@ -114,18 +114,20 @@ func Start(ctx context.Context, repository *Repository, sink string, publisher P
 }
 
 func (w *Worker) run(ctx context.Context) {
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
+	afterKey := ""
 	for ctx.Err() == nil {
-		found, err := w.repository.DeliverOne(ctx, w.sink, w.publisher)
+		found, nextKey, err := w.repository.deliverNext(ctx, w.sink, w.publisher, afterKey)
+		afterKey = nextKey
 		w.recordResult(ctx, found, err)
 		if found && err == nil {
 			continue
 		}
+		timer := time.NewTimer(250 * time.Millisecond)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 		}
 	}
 }

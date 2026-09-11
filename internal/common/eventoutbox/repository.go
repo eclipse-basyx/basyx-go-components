@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 )
 
@@ -107,32 +108,47 @@ func (r *Repository) Enqueue(ctx context.Context, tx *sql.Tx, sink, key string, 
 }
 
 type delivery struct {
-	seq      int64
-	envelope string
-	routing  json.RawMessage
-	attempts int
+	seq         int64
+	envelope    string
+	routing     json.RawMessage
+	attempts    int
+	orderingKey string
 }
 
-func claimQuery(sink string) (string, []any, error) {
-	earlier := dialect.From(goqu.T(table).As("earlier")).Select(goqu.L("1")).Where(
-		goqu.I("earlier.sink_id").Eq(goqu.I("pending.sink_id")),
-		goqu.I("earlier.ordering_key").Eq(goqu.I("pending.ordering_key")),
-		goqu.I("earlier.seq").Lt(goqu.I("pending.seq")),
-	)
-	return dialect.From(goqu.T(table).As("pending")).Select(goqu.I("pending.seq"), goqu.I("pending.envelope"), goqu.I("pending.routing"), goqu.I("pending.attempts")).Where(
-		goqu.I("pending.sink_id").Eq(sink), goqu.I("pending.next_attempt_at").Lte(goqu.Func("clock_timestamp")),
-		goqu.L("NOT EXISTS ?", earlier),
-	).Order(goqu.I("pending.seq").Asc()).Limit(1).ForUpdate(goqu.SkipLocked).Prepared(true).ToSQL()
+func claimQuery(sink, afterKey string) (string, []any, error) {
+	head := dialect.From(table).Select("ordering_key", "seq").Where(goqu.C("sink_id").Eq(sink)).
+		Order(goqu.C("ordering_key").Asc(), goqu.C("seq").Asc()).Limit(1)
+	first := head
+	if afterKey != "" {
+		first = first.Where(goqu.C("ordering_key").Gt(afterKey))
+	}
+	next := head.Where(goqu.C("ordering_key").Gt(goqu.I("heads.ordering_key")))
+	step := dialect.From("heads").CrossJoin(goqu.Lateral(next).As("next_head")).
+		Select(goqu.I("next_head.ordering_key"), goqu.I("next_head.seq"))
+	ready := dialect.From(goqu.T(table).As("pending")).
+		Select(goqu.I("pending.seq"), goqu.I("pending.envelope"), goqu.I("pending.routing"), goqu.I("pending.attempts"), goqu.I("pending.ordering_key")).
+		Where(goqu.I("pending.seq").Eq(goqu.I("heads.seq")), goqu.I("pending.next_attempt_at").Lte(goqu.Func("statement_timestamp"))).
+		Limit(1).ForUpdate(goqu.SkipLocked, goqu.T("pending"))
+	return dialect.From("heads").WithRecursive("heads", first.UnionAll(step)).
+		CrossJoin(goqu.Lateral(ready).As("ready")).Select(goqu.I("ready.*")).Limit(1).Prepared(true).ToSQL()
 }
 
-func claim(ctx context.Context, tx *sql.Tx, sink string) (delivery, error) {
-	query, args, err := claimQuery(sink)
+func claim(ctx context.Context, tx *sql.Tx, sink, afterKey string) (delivery, error) {
+	item, err := claimAfter(ctx, tx, sink, afterKey)
+	if errors.Is(err, sql.ErrNoRows) && afterKey != "" {
+		return claimAfter(ctx, tx, sink, "")
+	}
+	return item, err
+}
+
+func claimAfter(ctx context.Context, tx *sql.Tx, sink, afterKey string) (delivery, error) {
+	query, args, err := claimQuery(sink, afterKey)
 	if err != nil {
 		return delivery{}, fmt.Errorf("OUTBOX-CLAIM-SQL: %w", err)
 	}
 	var item delivery
 	var routing []byte
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&item.seq, &item.envelope, &routing, &item.attempts); err != nil {
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&item.seq, &item.envelope, &routing, &item.attempts, &item.orderingKey); err != nil {
 		return item, err
 	}
 	item.routing = routing
@@ -156,28 +172,33 @@ func claim(ctx context.Context, tx *sql.Tx, sink string) (delivery, error) {
 //   - bool: True once a row is claimed, including failed attempts; false when no row is ready or claiming fails.
 //   - error: Publish or database error; nil if no row is ready or an acknowledged deletion commits.
 func (r *Repository) DeliverOne(ctx context.Context, sink string, publisher Publisher) (bool, error) {
+	found, _, err := r.deliverNext(ctx, sink, publisher, "")
+	return found, err
+}
+
+func (r *Repository) deliverNext(ctx context.Context, sink string, publisher Publisher, afterKey string) (bool, string, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return false, fmt.Errorf("OUTBOX-DELIVER-BEGIN: %w", err)
+		return false, afterKey, fmt.Errorf("OUTBOX-DELIVER-BEGIN: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	item, err := claim(ctx, tx, sink)
+	item, err := claim(ctx, tx, sink, afterKey)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
+		return false, "", nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("OUTBOX-DELIVER-CLAIM: %w", err)
+		return false, afterKey, fmt.Errorf("OUTBOX-DELIVER-CLAIM: %w", err)
 	}
 	publishCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	publishErr := publisher.Publish(publishCtx, item.routing, []byte(item.envelope))
 	cancel()
 	if err = finishDelivery(ctx, tx, item, publishErr); err != nil {
-		return true, err
+		return true, item.orderingKey, err
 	}
 	if err = tx.Commit(); err != nil {
-		return true, fmt.Errorf("OUTBOX-DELIVER-COMMIT: %w", err)
+		return true, item.orderingKey, fmt.Errorf("OUTBOX-DELIVER-COMMIT: %w", err)
 	}
-	return true, publishErr
+	return true, item.orderingKey, publishErr
 }
 
 func finishDelivery(ctx context.Context, tx *sql.Tx, item delivery, publishErr error) error {

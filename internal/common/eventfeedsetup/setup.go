@@ -102,7 +102,7 @@ func Start(ctx context.Context, db *sql.DB, cfg *common.Config, feed *eventfeed.
 	})
 	builder := events.NewBuilder(events.Config{SourceBaseURL: feedConfig.SourceBaseURL, SchemaBaseURL: feedConfig.SchemaBaseURL})
 	history.SetMutationSink(events.NewMutationSink(builder, events.Fanout(writers...)))
-	feed.SetOnStop(func() { history.ClearMutationSink(); worker.Stop(); cancel(); stopPublisher(ctx, publisher) })
+	feed.SetOnStop(func() { history.ClearMutationSink(); cancel(); worker.Stop(); stopPublisher(ctx, publisher) })
 	return nil
 }
 
