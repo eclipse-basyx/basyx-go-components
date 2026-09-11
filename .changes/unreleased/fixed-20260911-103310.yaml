@@ -1,0 +1,7 @@
+kind: fixed
+body: Correct registry synchronization descriptor interface to use API version 3.2.
+time: 2026-09-11T10:33:10.7648376+02:00
+custom:
+    Impact: Low
+    PullRequest: "670"
+    SecurityImpact: None.
