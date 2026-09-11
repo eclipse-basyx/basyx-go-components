@@ -1,0 +1,7 @@
+kind: added
+body: Experimental MQTT 5 CloudEvents publishing for existing AAS, asset, Submodel and PCN mutations, independently of the HTTP feed and history, with a transactional per-sink outbox, retries, ordering, TLS authentication and telemetry. Apply database schema v1.2.1 before upgrading services.
+time: 2026-09-11T21:08:28.258556+02:00
+custom:
+    Impact: High
+    PullRequest: 678
+    SecurityImpact: MQTT supports authenticated, verified TLS connections. Broker ACLs govern subscribers; HTTP caller-specific ABAC remains on the feed. Effective configuration output omits credentials.
