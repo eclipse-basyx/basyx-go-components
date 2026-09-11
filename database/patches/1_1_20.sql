@@ -216,5 +216,33 @@ BEGIN
 END;
 $$;
 
+CREATE TABLE IF NOT EXISTS rebac_share_invitation (
+  id UUID PRIMARY KEY,
+  scope TEXT NOT NULL REFERENCES rebac_scope(scope) ON DELETE CASCADE,
+  access_id BIGINT NOT NULL REFERENCES rebac_access(id) ON DELETE CASCADE,
+  issued_access_revision BIGINT NOT NULL,
+  token_hash BYTEA NOT NULL UNIQUE,
+  rights JSONB NOT NULL,
+  expected_issuer TEXT,
+  expected_subject TEXT,
+  created_by_issuer TEXT NOT NULL,
+  created_by_subject TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMPTZ NOT NULL,
+  redeemed_at TIMESTAMPTZ,
+  redeemed_by_issuer TEXT,
+  redeemed_by_subject TEXT,
+  revoked_at TIMESTAMPTZ,
+  revoked_by_issuer TEXT,
+  revoked_by_subject TEXT,
+  CHECK ((expected_issuer IS NULL) = (expected_subject IS NULL)),
+  CHECK ((revoked_by_issuer IS NULL) = (revoked_by_subject IS NULL)),
+  CHECK (expires_at > created_at)
+);
+
+CREATE INDEX IF NOT EXISTS ix_rebac_share_invitation_access
+  ON rebac_share_invitation(scope, access_id, expires_at)
+  WHERE redeemed_at IS NULL AND revoked_at IS NULL;
+
 UPDATE basyxsystem SET schema_version = 'v1.1.20', state = 'clean'
 WHERE identifier = (SELECT identifier FROM basyxsystem ORDER BY identifier ASC LIMIT 1);
