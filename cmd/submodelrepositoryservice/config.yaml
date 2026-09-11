@@ -74,7 +74,7 @@ general:
 #   privateKeyPath: "./rsa-key.pem"
 #   certificateChainPath: "./rsa-cert.pem"
 
-# Event Feed (CloudEvents REST). Requires DB schema >= v1.2.1 (feed_events).
+# Event Feed (CloudEvents REST). Requires DB schema >= v1.2.0 (feed_events).
 # Set eventing.feed.enabled: true to opt in. MQTT/Kafka sinks stay unimplemented.
 eventing:
   enabled: false

@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS feed_events (
     dataschema_compact  TEXT         NOT NULL,
     data_full           JSONB        NOT NULL,
     data_compact        JSONB        NOT NULL,
+    authorization_aas_ids JSONB,
     CONSTRAINT ux_feed_events_seq UNIQUE (seq)
 );
 

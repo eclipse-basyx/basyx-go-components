@@ -39,8 +39,8 @@ eventing:
 | `eventing.feed.cleanupIntervalHours` | `BASYX_EVENTING_FEED_CLEANUP_INTERVAL_HOURS` | Cleanup interval; cleanup also runs at startup. |
 | `eventing.feed.publishIntervalMillis` | `BASYX_EVENTING_FEED_PUBLISH_INTERVAL_MILLIS` | Publish-assignment interval; assignment also runs at startup. Default `250`. |
 
-Requires database schema `v1.2.1`. The configuration service applies `v1.2.0`
-for the feed table and `v1.2.1` for capture-time authorization ownership.
+Requires database schema `v1.2.0`. The configuration service applies the single
+`v1.2.0` patch for the feed table, including capture-time authorization ownership.
 Configure the public API base URL when operating behind a proxy; event sources
 and schema URLs are produced from configuration, not caller-supplied host headers.
 
