@@ -236,10 +236,14 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 				common.PostgreSQLTextLiteral("value_id_referred"), goqu.L("'[]'::jsonb"),
 				common.PostgreSQLTextLiteral("value"),
 				dialect.From(goqu.T("multilanguage_property_value").As("mlpv")).
-					Select(goqu.Func("jsonb_agg", goqu.Func("jsonb_build_object",
-						common.PostgreSQLTextLiteral("language"), goqu.I("mlpv.language"),
-						common.PostgreSQLTextLiteral("text"), goqu.I("mlpv.text"),
-						common.PostgreSQLTextLiteral("id"), goqu.I("mlpv.id"),
+					Select(goqu.Func("jsonb_agg", goqu.L(
+						"? ORDER BY ?",
+						goqu.Func("jsonb_build_object",
+							common.PostgreSQLTextLiteral("language"), goqu.I("mlpv.language"),
+							common.PostgreSQLTextLiteral("text"), goqu.I("mlpv.text"),
+							common.PostgreSQLTextLiteral("id"), goqu.I("mlpv.id"),
+						),
+						goqu.I("mlpv.id"),
 					))).
 					Where(goqu.I("mlpv.submodel_element_id").Eq(goqu.I("sme.id"))),
 			),

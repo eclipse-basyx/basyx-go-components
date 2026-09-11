@@ -1,0 +1,13 @@
+services:
+  aas-environment:
+    image: basyx-local/aasenvironment-go:event-feed
+    pull_policy: build
+    build:
+      context: ../..
+      dockerfile: cmd/aasenvironmentservice/Dockerfile
+  basyx_configuration:
+    image: basyx-local/basyxconfigurationservice-go:event-feed
+    pull_policy: build
+    build:
+      context: ../..
+      dockerfile: cmd/basyxconfigurationservice/Dockerfile

@@ -108,6 +108,51 @@ services:
       basyx_configuration_sync_off:
         condition: service_completed_successfully
 
+  # Same service as aas_environment_it, but with the Event Feed enabled so the
+  # aasrepository/submodelrepository event feed suites can run against the
+  # AAS Environment Service too. Registry integration stays off so descriptor
+  # sync does not write extra rows into the shared basyxTestDB.
+  aas_environment_it_event_feed:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_READER_HOST=db_it
+      - POSTGRES_READER_PORT=5432
+      - POSTGRES_READER_USER=admin
+      - POSTGRES_READER_PASSWORD=admin123
+      - POSTGRES_READER_DBNAME=basyxTestDB
+      - POSTGRES_READER_OPTIONS=-c default_transaction_read_only=on
+      - POSTGRES_READER_MAXOPENCONNECTIONS=500
+      - POSTGRES_READER_MAXIDLECONNECTIONS=500
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - BASYX_HISTORY_MODE=api
+      - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
+      - SERVER_STRICTVERIFICATION=off
+      - ABAC_ENABLED=false
+      - GENERAL_AASREGISTRYINTEGRATION=false
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=false
+      - GENERAL_EXTERNALURL=
+      - BASYX_EVENTING_FEED_ENABLED=true
+      - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
+    volumes:
+      - ../../../submodelrepository/integration_tests/docker_compose/rsa-key.pem:/app/rsa-key.pem:ro
+    ports:
+      - "127.0.0.1:${BASYX_IT_EVENT_FEED_API_PORT:-6009}:5004"
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
   basyx_configuration:
     build:
       context: ../../../..

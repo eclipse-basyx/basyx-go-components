@@ -46,6 +46,7 @@ import (
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	api "github.com/go-chi/chi/v5"
 )
 
@@ -99,6 +100,7 @@ func SetupSecurityWithClaimsMiddleware(
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) error {
 	if !cfg.ABAC.Enabled {
+		eventfeed.SetRecordAuthorizer(nil)
 		return nil
 	}
 
@@ -128,6 +130,7 @@ func SetupSecurityWithClaimsMiddleware(
 	}
 
 	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), claimsMiddleware...)
+	BindEventFeedAuthorizer(abacSettings)
 	return nil
 }
 
@@ -145,6 +148,7 @@ func SetupSecurityWithAccessModelProvider(
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) error {
 	if !cfg.ABAC.Enabled {
+		eventfeed.SetRecordAuthorizer(nil)
 		return nil
 	}
 	oidc, err := setupOIDC(ctx, cfg)
@@ -158,6 +162,7 @@ func SetupSecurityWithAccessModelProvider(
 		DenyAsNotFoundPrefixes: abacDeniedAsNotFoundPrefixes(cfg.Server.ContextPath),
 	}
 	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), claimsMiddleware...)
+	BindEventFeedAuthorizer(abacSettings)
 	return nil
 }
 

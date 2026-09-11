@@ -7,12 +7,33 @@
     "expectedStatus": 403
   },
   {
+    "context": "Anonymous event feed denied",
+    "token": null,
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/events",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Anonymous event feed capabilities denied",
+    "token": null,
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/.well-known/event-feed.json",
+    "expectedStatus": 403
+  },
+  {
     "context": "POST viewer-visible aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
     "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "data": "bodies/post/viewerAllowed.json",
     "expectedStatus": 201
+  },
+  {
+    "context": "GET event feed capabilities - admin",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/.well-known/event-feed.json",
+    "expectedStatus": 200
   },
   {
     "context": "POST viewer-visible-by-key aas - admin",

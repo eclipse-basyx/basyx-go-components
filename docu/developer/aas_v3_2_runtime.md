@@ -309,11 +309,12 @@ AASX export preserves managed File and thumbnail values byte-for-byte, creates p
 | `history.evidence.signing.required` | Requires signed manifests for verifier/recovery operations and requires a private key for `-write`. |
 | `history.integrityAnchor.provider: none` | Default. Non-`none` providers such as immudb, Rekor, Trillian, or timestamping services are reserved for later work. |
 | `history.auditIdentityMode` | `none` stores no request identity metadata. `minimal` stores the canonical request and correlation IDs supplied by the shared HTTP middleware, authenticated OIDC subject/issuer/client id, ABAC allow metadata, operation, endpoint, and method. Valid client or ingress IDs are preserved; missing or invalid IDs receive generated defaults. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available. Request and correlation IDs are not authenticated identity data. |
-| Active eventing, configured event sinks, or enabled outbox processing | Fail fast until outbox publishing is implemented. |
+| `eventing.feed.enabled` | Opt-in CloudEvents REST Event Feed. Writes feed rows in the same PostgreSQL transaction as the model mutation. Default is `false`. See [event_feed.md](../user/event_feed.md). |
+| Configured event sinks or enabled outbox processing | Fail fast until MQTT/Kafka publishing is implemented. |
 
 `AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Runtime middleware now populates `AuditContext` when configured; no external ledger anchor client is invoked by the append path yet.
 
-Future mutation routes must acquire the entity evidence lock before reading the complete pre-mutation model and append evidence in the same database transaction as the live write. A future eventing implementation should consume the same committed change identity through a transactional outbox instead of adding delivery state to `mutation_evidence_state` or independently reconstructing a mutation after commit.
+Future mutation routes must acquire the entity evidence lock before reading the complete pre-mutation model and append evidence in the same database transaction as the live write. The Event Feed consumes those same transaction-scoped mutations through `history.MutationSink` instead of reconstructing them after commit. MQTT/Kafka outbox delivery remains future work.
 
 Example verifier/publisher usage:
 
@@ -361,6 +362,50 @@ go run ./cmd/historyevidenceverifier \
   -recovery-catalog ./recovery-catalog.json \
   -out ./recovered-history.json
 ```
+
+### Event Feed Runtime
+
+The opt-in feed lives in `internal/common/eventfeed`. For deployment settings
+and the HTTP consumer contract, see the [Event Feed user guide](../user/event_feed.md).
+When extending persistence paths, preserve these invariants:
+
+- Capture mutations through `history.MutationSink` and insert feed rows in the
+  same PostgreSQL transaction as the live write. A rollback must leave no event.
+  An unchanged PUT retains its history acknowledgement without emitting an update.
+- Serialize snapshot capture with the mutation even when history evidence is
+  disabled. PCN detection compares records before and after the write; concurrent
+  additions must not be reported twice.
+- Capture contributing AAS ownership inside that transaction. Authorization uses
+  this provenance and the caller's current rules, so later relationship changes
+  cannot expose previously private asset IDs. Missing provenance must fail closed
+  with ABAC enabled.
+- Keep capture, workers, routes, and OpenAPI operations gated by
+  `eventing.feed.enabled`; ordinary deployments leave it disabled.
+
+The internal `seq` is assigned before commit and cannot serve as a consumer
+checkpoint. A worker assigns `publish_seq` to committed, visible rows, serializing
+bounded batches with a transaction advisory lock. The lock and worker queries
+must use the same connection so a one-connection database pool remains usable.
+Retention uses a separate transaction lock and commits each bounded deletion
+batch separately.
+
+Pagination scans by `publish_seq`, then sorts the selected page by mutation time.
+This preserves discovery of late commits without claiming global timestamp
+ordering across pages. Keep cursor scan positions independent of presentation
+order, preserve the query context in cursors, and reauthorize every request.
+The user guide documents replay and deduplication requirements for consumers.
+
+The feed schema and capture-time ownership column are introduced together in
+`database/patches/1_2_0.sql`, registered by the configuration service. Hosted event
+schemas are embedded from `internal/common/eventfeed/schemas`; schema tests
+validate generated payloads against the documents served by the HTTP endpoint.
+
+The [example smoke test](../../examples/BaSyxEventFeedExample/smoke.py) exercises
+CRUD and PCN delivery, pagination, presentations, schemas, and the playground UI.
+The `Event Feed Example` job in the Examples Smoke Tests workflow builds the Go
+images and runs that test. Use the persistence integration tests for transaction,
+concurrency, and authorization regressions; the anonymous playground does not
+exercise secured access policies.
 
 ### Diff-Backed Storage
 

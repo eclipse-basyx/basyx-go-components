@@ -474,6 +474,36 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	return result.IsUpdate, nil
 }
 
+// PutSubmodelWithResult creates or replaces a submodel and reports whether persisted
+// content changed, including the previous submodel state for diffing.
+func (s *SubmodelDatabase) PutSubmodelWithResult(ctx context.Context, submodelID string, submodel types.ISubmodel) (PutSubmodelResult, error) {
+	if submodelID != submodel.ID() {
+		return PutSubmodelResult{}, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
+		return PutSubmodelResult{}, err
+	}
+
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return PutSubmodelResult{}, common.NewInternalServerError("SMREPO-PUTSM-STARTTX " + err.Error())
+	}
+	defer cleanup(&err)
+
+	result, err := s.putSubmodelInTransaction(ctx, tx, submodelID, submodel)
+	if err != nil {
+		return PutSubmodelResult{}, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return PutSubmodelResult{}, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
+	}
+
+	return result, nil
+}
+
 // PutSubmodelResult describes the repository mutation performed by a PUT.
 type PutSubmodelResult struct {
 	IsUpdate bool
@@ -570,7 +600,7 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 				return PutSubmodelResult{}, mapPutReadbackError(err, true, false)
 			}
 		}
-		if err = s.appendAcknowledgedSubmodelPutHistoryTx(ctx, tx, previous, persisted); err != nil {
+		if err = s.appendAcknowledgedSubmodelPutHistoryTx(ctx, tx, previous, persisted, false); err != nil {
 			return PutSubmodelResult{}, err
 		}
 		return PutSubmodelResult{IsUpdate: true, Previous: previous}, nil
@@ -586,7 +616,7 @@ func (s *SubmodelDatabase) reconcileExistingSubmodelForPutTx(ctx context.Context
 	if err != nil {
 		return PutSubmodelResult{}, mapPutReadbackError(err, shouldEnforce, false)
 	}
-	if err = s.appendAcknowledgedSubmodelPutHistoryTx(ctx, tx, previous, persisted); err != nil {
+	if err = s.appendAcknowledgedSubmodelPutHistoryTx(ctx, tx, previous, persisted, true); err != nil {
 		return PutSubmodelResult{}, err
 	}
 	return PutSubmodelResult{IsUpdate: true, Changed: true, Previous: previous}, nil
@@ -597,19 +627,19 @@ func (s *SubmodelDatabase) appendAcknowledgedSubmodelPutHistoryTx(
 	tx *sql.Tx,
 	previous types.ISubmodel,
 	persisted types.ISubmodel,
+	contentChanged bool,
 ) error {
 	if !history.MutationRecordingEnabled() {
 		return nil
 	}
-	var previousSnapshot map[string]any
-	var err error
-	if history.ActiveConfig().EvidenceEnabled {
-		previousSnapshot, err = submodelToHistorySnapshot(previous)
-		if err != nil {
-			return err
-		}
+	previousSnapshot, err := submodelToHistorySnapshot(previous)
+	if err != nil {
+		return err
 	}
-	return s.appendSubmodelHistoryTx(ctx, tx, persisted, previousSnapshot, history.ChangeUpdated, false)
+	if contentChanged {
+		return s.appendSubmodelHistoryTx(ctx, tx, persisted, previousSnapshot, history.ChangeUpdated, false)
+	}
+	return s.appendAcknowledgedSubmodelHistoryTx(ctx, tx, persisted, previousSnapshot, history.ChangeUpdated, false)
 }
 
 func (s *SubmodelDatabase) executeSubmodelReconciliationTx(

@@ -45,6 +45,14 @@ func (s *SubmodelDatabase) appendSubmodelHistoryTx(ctx context.Context, tx *sql.
 	return history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodel.ID(), changeType, previousSnapshot, snapshot, deleted)
 }
 
+func (s *SubmodelDatabase) appendAcknowledgedSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel, previousSnapshot map[string]any, changeType string, deleted bool) error {
+	snapshot, err := submodelToHistorySnapshot(submodel)
+	if err != nil {
+		return err
+	}
+	return history.AppendAcknowledgedVersionTx(ctx, tx, history.TableSubmodel, submodel.ID(), changeType, previousSnapshot, snapshot, deleted)
+}
+
 func (s *SubmodelDatabase) appendCreatedSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
 	if history.ActiveConfig().EvidenceEnabled {
 		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodel.ID(), nil, history.ChangeCreated)
@@ -68,7 +76,7 @@ func (s *SubmodelDatabase) appendCurrentSubmodelHistoryTx(ctx context.Context, t
 }
 
 func (s *SubmodelDatabase) loadSubmodelHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (map[string]any, error) {
-	if !history.ActiveConfig().EvidenceEnabled {
+	if !history.LiveSnapshotRequired() {
 		return nil, nil
 	}
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelIdentifier); err != nil {

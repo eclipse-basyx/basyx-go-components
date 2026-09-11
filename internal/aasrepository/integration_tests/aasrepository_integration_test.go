@@ -51,8 +51,10 @@ import (
 )
 
 const actionDeleteAllAAS = "DELETE_ALL_AAS"
+const actionAssertSubmodelReferencePagination = "ASSERT_SUBMODEL_REFERENCE_PAGINATION"
 
 var aasRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var aasRepositoryEventFeedBaseURL = testenv.LocalURLFromEnv("BASYX_IT_EVENT_FEED_API_PORT", 6008)
 var aasRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6006)
 var integrationTestDSN = getIntegrationTestDSN()
 
@@ -595,6 +597,7 @@ EXECUTE FUNCTION %s();`, restoreTriggerName, restoreFunctionName)
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		ActionHandlers: map[string]testenv.JSONStepAction{
+			actionAssertSubmodelReferencePagination: assertSubmodelReferencePagination,
 			actionDeleteAllAAS: func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
 				deleteAllAAS(t, runner, stepNumber)
 			},
@@ -1900,18 +1903,21 @@ func TestStandaloneStartupRejectsUnsupportedSubmodelRegistryToggle(t *testing.T)
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
 		testenv.SetEnvDefaultsOrExit(map[string]string{
-			"BASYX_IT_API_URL":         aasRepositoryBaseURL,
-			"BASYX_IT_INVALID_API_URL": aasRepositoryInvalidBaseURL,
+			"BASYX_IT_API_URL":            aasRepositoryBaseURL,
+			"BASYX_IT_EVENT_FEED_API_URL": aasRepositoryEventFeedBaseURL,
+			"BASYX_IT_INVALID_API_URL":    aasRepositoryInvalidBaseURL,
 		})
 		os.Exit(m.Run())
 	}
 
 	runtime := testenv.NewComposeRuntimeOrExit("aasrepository-it", []testenv.PortBinding{
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
 	})
 	aasRepositoryBaseURL = runtime.LocalURL("api")
+	aasRepositoryEventFeedBaseURL = runtime.LocalURL("event-feed-api")
 	aasRepositoryInvalidBaseURL = runtime.LocalhostURL("invalid-api")
 	integrationTestDSN = runtime.PostgresURL("db", "basyxTestDB")
 
@@ -1922,5 +1928,36 @@ func TestMain(m *testing.M) {
 		PreDownBeforeUp: true,
 		HealthURL:       aasRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
+		WaitForReady: func() error {
+			return testenv.WaitHealthyURL(aasRepositoryEventFeedBaseURL+"/health", 150*time.Second)
+		},
 	}))
+}
+
+func assertSubmodelReferencePagination(t *testing.T, runner *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, stepNumber int) {
+	first, err := runner.RunStep(step, stepNumber)
+	require.NoError(t, err)
+	var page map[string]any
+	require.NoError(t, json.Unmarshal([]byte(first.Body), &page))
+	metadata, ok := page["paging_metadata"].(map[string]any)
+	require.True(t, ok)
+	cursor, ok := metadata["cursor"].(string)
+	require.True(t, ok)
+	require.NotEmpty(t, cursor)
+	delete(metadata, "cursor")
+	withoutCursor, err := json.Marshal(page)
+	require.NoError(t, err)
+	expected, err := os.ReadFile(step.ShouldMatch)
+	require.NoError(t, err)
+	require.JSONEq(t, string(expected), string(withoutCursor))
+
+	endpoint, err := url.Parse(step.Endpoint)
+	require.NoError(t, err)
+	endpoint.RawQuery = url.Values{"cursor": {cursor}}.Encode()
+	step.Endpoint = endpoint.String()
+	second, err := runner.RunStep(step, stepNumber)
+	require.NoError(t, err)
+	expected, err = os.ReadFile("expected/expectedAssetAdministrationShellSubmodelReferencesFilterCursor.json")
+	require.NoError(t, err)
+	require.JSONEq(t, string(expected), second.Body)
 }

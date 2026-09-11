@@ -73,6 +73,34 @@ import (
 //		return err
 //	}
 func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool) error {
+	return appendVersionTx(ctx, tx, table, identifier, changeType, previousSnapshot, snapshot, deleted, false)
+}
+
+// AppendAcknowledgedVersionTx appends a history row for a write that was
+// accepted without changing any persisted content, such as a PUT whose
+// reconciliation plan had no live mutation.
+//
+// It records exactly the same history row as AppendVersionTx, preserving the
+// audit trail that the write was accepted. The difference is the mutation
+// handed to the sink: it is marked Acknowledged, so sinks that report content
+// changes (Event Feed) skip it instead of emitting a phantom update.
+func AppendAcknowledgedVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool) error {
+	return appendVersionTx(ctx, tx, table, identifier, changeType, previousSnapshot, snapshot, deleted, true)
+}
+
+func appendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool, acknowledged bool) error {
+	if err := notifyMutationSink(ctx, tx, Mutation{
+		Table:            table,
+		Identifier:       strings.TrimSpace(identifier),
+		ChangeType:       changeType,
+		PreviousSnapshot: previousSnapshot,
+		Snapshot:         snapshot,
+		Deleted:          deleted,
+		Acknowledged:     acknowledged,
+	}); err != nil {
+		return err
+	}
+
 	cfg := ActiveConfig()
 	if cfg.Mode == ModeOff && !cfg.EvidenceEnabled {
 		return nil
@@ -137,46 +165,31 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 //	}
 func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, mutate SnapshotMutator) error {
 	cfg := ActiveConfig()
+	if mutate == nil {
+		return common.NewInternalServerError("HISTORY-MUTATE-NILMUTATOR snapshot mutator must not be nil")
+	}
+
 	if cfg.Mode == ModeOff && !cfg.EvidenceEnabled {
-		return nil
+		return notifyMutatedSnapshot(ctx, tx, table, identifier, changeType, previousSnapshot, mutate)
 	}
 
 	identifier, err := validateAppendInputs(tx, identifier)
 	if err != nil {
 		return err
 	}
-	if mutate == nil {
-		return common.NewInternalServerError("HISTORY-MUTATE-NILMUTATOR snapshot mutator must not be nil")
-	}
 	if err = lockIdentifierTx(ctx, tx, table, identifier); err != nil {
 		return err
 	}
 
 	if cfg.EvidenceEnabled {
-		if previousSnapshot == nil {
-			return common.NewInternalServerError("HISTORY-EVIDENCE-PREVIOUS-MISSING complete pre-mutation snapshot is required")
-		}
-		currentSnapshot, cloneErr := cloneSnapshotMap(previousSnapshot)
-		if cloneErr != nil {
-			return cloneErr
-		}
-		if err = mutate(currentSnapshot); err != nil {
-			return err
-		}
-		return appendVersionWithEvidenceTx(ctx, tx, table, identifier, changeType, previousSnapshot, currentSnapshot, false, cfg)
+		return appendMutatedEvidenceVersionTx(ctx, tx, table, identifier, changeType, previousSnapshot, mutate, cfg)
 	}
 
-	var mutationBase *latestVersion
-	if mutationBase == nil && cfg.Mode != ModeOff {
-		latest, latestErr := latestVersionTx(ctx, tx, table, identifier)
-		if latestErr != nil {
-			return latestErr
-		}
-		mutationBase = &latest
+	latest, err := latestVersionTx(ctx, tx, table, identifier)
+	if err != nil {
+		return err
 	}
-	if mutationBase == nil {
-		return common.NewErrNotFound("HISTORY-MUTATE-NOBASE no prior mutation evidence is available")
-	}
+	mutationBase := &latest
 	if mutationBase.deleted {
 		return common.NewErrNotFound("HISTORY-MUTATE-DELETED latest historical version is deleted")
 	}
@@ -187,7 +200,62 @@ func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 	if err = mutate(currentSnapshot); err != nil {
 		return err
 	}
+	if err = notifyMutationSink(ctx, tx, Mutation{
+		Table:            table,
+		Identifier:       identifier,
+		ChangeType:       changeType,
+		PreviousSnapshot: previousSnapshot,
+		Snapshot:         currentSnapshot,
+		Deleted:          false,
+	}); err != nil {
+		return err
+	}
 	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, currentSnapshot, false, mutationBase, cfg)
+}
+
+func appendMutatedEvidenceVersionTx(ctx context.Context, tx *sql.Tx, table, identifier, changeType string, previousSnapshot map[string]any, mutate SnapshotMutator, cfg Config) error {
+	if previousSnapshot == nil {
+		return common.NewInternalServerError("HISTORY-EVIDENCE-PREVIOUS-MISSING complete pre-mutation snapshot is required")
+	}
+	currentSnapshot, cloneErr := cloneSnapshotMap(previousSnapshot)
+	if cloneErr != nil {
+		return cloneErr
+	}
+	if err := mutate(currentSnapshot); err != nil {
+		return err
+	}
+	if err := notifyMutationSink(ctx, tx, Mutation{
+		Table:            table,
+		Identifier:       identifier,
+		ChangeType:       changeType,
+		PreviousSnapshot: previousSnapshot,
+		Snapshot:         currentSnapshot,
+		Deleted:          false,
+	}); err != nil {
+		return err
+	}
+	return appendVersionWithEvidenceTx(ctx, tx, table, identifier, changeType, previousSnapshot, currentSnapshot, false, cfg)
+}
+
+func notifyMutatedSnapshot(ctx context.Context, tx *sql.Tx, table, identifier, changeType string, previousSnapshot map[string]any, mutate SnapshotMutator) error {
+	if tx == nil || previousSnapshot == nil {
+		return nil
+	}
+	currentSnapshot, err := cloneSnapshotMap(previousSnapshot)
+	if err != nil {
+		return err
+	}
+	if err = mutate(currentSnapshot); err != nil {
+		return err
+	}
+	return notifyMutationSink(ctx, tx, Mutation{
+		Table:            table,
+		Identifier:       strings.TrimSpace(identifier),
+		ChangeType:       changeType,
+		PreviousSnapshot: previousSnapshot,
+		Snapshot:         currentSnapshot,
+		Deleted:          false,
+	})
 }
 
 func appendVersionWithEvidenceTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool, cfg Config) error {
@@ -317,12 +385,11 @@ func validateAppendInputs(tx *sql.Tx, identifier string) (string, error) {
 	return identifier, nil
 }
 
-// LockMutationTx serializes an evidence-enabled model mutation before its
-// pre-mutation snapshot is read. The transaction keeps the lock through the
-// live-model change and evidence append.
+// LockMutationTx serializes mutations observed by evidence or a mutation sink
+// before their pre-mutation snapshots are read. The transaction keeps the lock
+// through the live-model change and all dependent event writes.
 func LockMutationTx(ctx context.Context, tx *sql.Tx, table string, identifier string) error {
-	cfg := ActiveConfig()
-	if !cfg.EvidenceEnabled {
+	if !LiveSnapshotRequired() {
 		return nil
 	}
 	identifier, err := validateAppendInputs(tx, identifier)

@@ -75,6 +75,7 @@ var (
 const actionAssertSignedSubmodel = "ASSERT_SIGNED_SUBMODEL"
 
 var submodelRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var submodelRepositoryEventFeedBaseURL = testenv.LocalURLFromEnv("BASYX_IT_EVENT_FEED_API_PORT", 6024)
 var submodelRepositoryReplicaBaseURL = testenv.LocalURLFromEnv("BASYX_IT_REPLICA_API_PORT", 6014)
 var submodelRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6007)
 var submodelRepositoryAASBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
@@ -2585,17 +2586,19 @@ func requireDescriptorEndpointInterface(t *testing.T, db *sql.DB, href string, e
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
 		testenv.SetEnvDefaultsOrExit(map[string]string{
-			"BASYX_IT_API_URL":         submodelRepositoryBaseURL,
-			"BASYX_IT_REPLICA_API_URL": submodelRepositoryReplicaBaseURL,
-			"BASYX_IT_AAS_API_URL":     submodelRepositoryAASExternalURL,
-			"BASYX_IT_SYNC_API_URL":    submodelRepositorySyncExternalURL,
-			"BASYX_IT_INVALID_API_URL": submodelRepositoryInvalidBaseURL,
+			"BASYX_IT_API_URL":            submodelRepositoryBaseURL,
+			"BASYX_IT_EVENT_FEED_API_URL": submodelRepositoryEventFeedBaseURL,
+			"BASYX_IT_REPLICA_API_URL":    submodelRepositoryReplicaBaseURL,
+			"BASYX_IT_AAS_API_URL":        submodelRepositoryAASExternalURL,
+			"BASYX_IT_SYNC_API_URL":       submodelRepositorySyncExternalURL,
+			"BASYX_IT_INVALID_API_URL":    submodelRepositoryInvalidBaseURL,
 		})
 		os.Exit(m.Run())
 	}
 
 	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 		{Name: "replica-api", EnvVar: "BASYX_IT_REPLICA_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "aas-api", EnvVar: "BASYX_IT_AAS_API_PORT"},
@@ -2603,6 +2606,7 @@ func TestMain(m *testing.M) {
 		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
 	})
 	submodelRepositoryBaseURL = runtime.LocalURL("api")
+	submodelRepositoryEventFeedBaseURL = runtime.LocalURL("event-feed-api")
 	submodelRepositoryReplicaBaseURL = runtime.LocalURL("replica-api")
 	submodelRepositoryAASBaseURL = runtime.LocalhostURL("aas-api")
 	submodelRepositoryAASExternalURL = runtime.LocalURL("aas-api")
@@ -2619,7 +2623,10 @@ func TestMain(m *testing.M) {
 		HealthURL:       submodelRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
 		WaitForReady: func() error {
-			return testenv.WaitHealthyURL(submodelRepositoryReplicaBaseURL+"/health", 150*time.Second)
+			if err := testenv.WaitHealthyURL(submodelRepositoryReplicaBaseURL+"/health", 150*time.Second); err != nil {
+				return err
+			}
+			return testenv.WaitHealthyURL(submodelRepositoryEventFeedBaseURL+"/health", 150*time.Second)
 		},
 	}))
 }

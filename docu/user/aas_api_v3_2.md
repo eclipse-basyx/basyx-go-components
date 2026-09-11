@@ -255,15 +255,10 @@ This has operational consequences:
 - If an existing entity has no history row yet, its first partial update falls back to materializing the current complete identifiable once. Later partial updates can derive snapshots from history.
 - While PostgreSQL history or WORM evidence is active, an unclassified write endpoint is rejected before its handler runs with `HISTORY-COVERAGE-UNCLASSIFIED`. This prevents a newly added endpoint from silently changing current state without recording its required mutation.
 
-Eventing placeholders:
+Eventing:
 
-- `BASYX_EVENTING_ENABLED`
-- `BASYX_EVENTING_FORMAT`, currently expected to be `cloudevents`
-- `BASYX_EVENTING_SINKS`
-- `BASYX_EVENTING_OUTBOX_ENABLED`
-- `BASYX_EVENTING_TOPIC_PREFIX`
-
-These settings reserve the configuration shape for future CloudEvents-compatible outbox/event publishing. MQTT and Kafka publishing are not implemented yet. Enabling eventing, configuring sinks, or enabling the outbox currently fails fast during configuration loading.
+- To receive AAS and Submodel changes through the experimental CloudEvents REST API, enable `eventing.feed.enabled` / `BASYX_EVENTING_FEED_ENABLED`. The feed is disabled by default. See the [Event Feed user guide](event_feed.md) for polling, filtering, and access control, or try the [local example](../../examples/BaSyxEventFeedExample/README.md).
+- MQTT and Kafka publishing are not implemented. The separate `BASYX_EVENTING_ENABLED` flag does not enable the REST feed; transport configuration limitations are covered in the user guide.
 
 Compact history storage:
 

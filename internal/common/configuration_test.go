@@ -884,6 +884,7 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	withUnsetEnv(t, "BASYX_EVENTING_SINKS")
 	withUnsetEnv(t, "BASYX_EVENTING_OUTBOX_ENABLED")
 	withUnsetEnv(t, "BASYX_EVENTING_TOPIC_PREFIX")
+	withUnsetEnv(t, "BASYX_EVENTING_FEED_ENABLED")
 	captureLogOutput(t)
 
 	cfg, err := LoadConfig("")
@@ -909,7 +910,7 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	if cfg.History.Evidence.Enabled || cfg.History.Evidence.Provider != "none" || cfg.History.IntegrityAnchor.Provider != "none" {
 		t.Fatalf("unexpected history evidence defaults: %+v", cfg.History)
 	}
-	if cfg.Eventing.Enabled || cfg.Eventing.Format != "cloudevents" || cfg.Eventing.TopicPrefix != "basyx" {
+	if cfg.Eventing.Enabled || cfg.Eventing.Feed.Enabled || cfg.Eventing.Format != "cloudevents" || cfg.Eventing.TopicPrefix != "basyx" {
 		t.Fatalf("unexpected eventing defaults: %+v", cfg.Eventing)
 	}
 }
@@ -1239,8 +1240,12 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 			}},
 		},
 		{
-			name:   "eventing",
-			config: Config{History: HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}, Eventing: EventingConfig{Enabled: true}},
+			name:   "eventing sinks",
+			config: Config{History: HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}, Eventing: EventingConfig{Enabled: true, Sinks: []string{"mqtt"}}},
+		},
+		{
+			name:   "eventing outbox",
+			config: Config{History: HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}, Eventing: EventingConfig{Enabled: true, OutboxEnabled: true}},
 		},
 	}
 
@@ -1250,5 +1255,15 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 				t.Fatal("expected unsupported configuration error")
 			}
 		})
+	}
+}
+
+func TestValidateEventingConfigAcceptsEventFeed(t *testing.T) {
+	cfg := Config{
+		History:  HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"},
+		Eventing: EventingConfig{Enabled: false, Format: "cloudevents", Feed: EventFeedConfig{Enabled: true, MaxAgeDays: 30, MaxPageSize: 100}},
+	}
+	if err := validateHistoryAndEventingConfig(&cfg); err != nil {
+		t.Fatalf("expected event feed configuration to be accepted, got %v", err)
 	}
 }

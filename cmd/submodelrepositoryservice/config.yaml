@@ -74,6 +74,21 @@ general:
 #   privateKeyPath: "./rsa-key.pem"
 #   certificateChainPath: "./rsa-cert.pem"
 
+# Event Feed (CloudEvents REST). Requires DB schema >= v1.2.0 (feed_events).
+# Set eventing.feed.enabled: true to opt in. MQTT/Kafka sinks stay unimplemented.
+eventing:
+  enabled: false
+  format: cloudevents
+  feed:
+    enabled: false
+    maxAgeDays: 30
+    hardDeleteGraceDays: 10
+    maxPageSize: 100
+    sourceBaseUrl: ""  # Defaults to general.externalUrl, then the local server URL.
+    schemaBaseUrl: ""  # Defaults to the schemas served by this API.
+    cleanupIntervalHours: 24
+    publishIntervalMillis: 250
+
 # swagger:
 #   enabled: true
 #   contactName: "Eclipse BaSyx"

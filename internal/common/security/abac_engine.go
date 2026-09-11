@@ -105,6 +105,14 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessMod
 	return model, nil
 }
 
+// BasePath returns the access-model context path used to match IDENTIFIABLE routes.
+func (m *AccessModel) BasePath() string {
+	if m == nil {
+		return ""
+	}
+	return m.basePath
+}
+
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
 // even when ACCESS=ALLOW. Controllers can use it to restrict rows, constrain
 // mutations, or redact fields. The Discovery Service currently does not require

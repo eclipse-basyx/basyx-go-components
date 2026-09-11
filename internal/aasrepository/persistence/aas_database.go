@@ -207,6 +207,14 @@ func (s *AssetAdministrationShellDatabase) appendAASHistoryTx(ctx context.Contex
 	return history.AppendVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, previousSnapshot, snapshot, deleted)
 }
 
+func (s *AssetAdministrationShellDatabase) appendAcknowledgedAASHistoryTx(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell, previousSnapshot map[string]any, changeType string, deleted bool) error {
+	snapshot, err := aasToHistorySnapshot(aas)
+	if err != nil {
+		return err
+	}
+	return history.AppendAcknowledgedVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, previousSnapshot, snapshot, deleted)
+}
+
 func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any, changeType string) error {
 	if !history.MutationRecordingEnabled() {
 		return nil
@@ -231,7 +239,7 @@ func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context
 }
 
 func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (map[string]any, error) {
-	if !history.ActiveConfig().EvidenceEnabled {
+	if !history.LiveSnapshotRequired() {
 		return nil, nil
 	}
 	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
@@ -248,7 +256,7 @@ func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotBeforeMutationT
 }
 
 func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotByDBIDBeforeMutationTx(ctx context.Context, tx *sql.Tx, aasDBID int64) (map[string]any, error) {
-	if !history.ActiveConfig().EvidenceEnabled {
+	if !history.LiveSnapshotRequired() {
 		return nil, nil
 	}
 	aas, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
@@ -820,6 +828,25 @@ func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAsset
 	return s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
 }
 
+// CheckSubmodelReferenceForDeletionInTransaction hides references in inaccessible AASs.
+func (s *AssetAdministrationShellDatabase) CheckSubmodelReferenceForDeletionInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier, submodelIdentifier string) error {
+	if tx == nil {
+		return common.NewInternalServerError("AASREPO-CHECKDELSMREF-NILTX transaction must not be nil")
+	}
+	ctx = auth.SelectFormulaForRight(ctx, grammar.RightsEnumDELETE)
+	if _, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-CHECKDELSMREF"); err != nil {
+		return err
+	}
+	exists, visible, err := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
+	if !exists || !visible {
+		return common.NewErrNotFound("AASREPO-CHECKDELSMREF-NOTFOUND Asset Administration Shell not found")
+	}
+	return s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
+}
+
 // checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction performs the existence check within an existing transaction.
 func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
@@ -1238,15 +1265,11 @@ func (s *AssetAdministrationShellDatabase) appendAcknowledgedAASPutHistoryTx(
 	if !history.MutationRecordingEnabled() {
 		return nil
 	}
-	var previousSnapshot map[string]any
-	var err error
-	if history.ActiveConfig().EvidenceEnabled {
-		previousSnapshot, err = aasToHistorySnapshot(previous)
-		if err != nil {
-			return err
-		}
+	previousSnapshot, err := aasToHistorySnapshot(previous)
+	if err != nil {
+		return err
 	}
-	return s.appendAASHistoryTx(ctx, tx, previous, previousSnapshot, history.ChangeUpdated, false)
+	return s.appendAcknowledgedAASHistoryTx(ctx, tx, previous, previousSnapshot, history.ChangeUpdated, false)
 }
 
 func (s *AssetAdministrationShellDatabase) loadPreviousAASForPutTx(
@@ -1331,7 +1354,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 }
 
 func (s *AssetAdministrationShellDatabase) loadAASDeleteHistorySnapshotTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (map[string]any, error) {
-	if !history.ActiveConfig().EvidenceEnabled {
+	if !history.LiveSnapshotRequired() {
 		return nil, nil
 	}
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)

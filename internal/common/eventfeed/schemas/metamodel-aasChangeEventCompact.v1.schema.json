@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eclipse-basyx:event-feed:schemas:metamodel-aasChangeEventCompact.v1.schema.json",
+  "title": "metamodel-aasChangeEventCompact.v1",
+  "description": "Compact metamodel-aligned schema for Asset Administration Shell change events. The AAS identifier is a plain string (AssetAdministrationShell.id), which is structurally identical to the non-metamodel compact variant. Included for symmetry and documentation purposes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "aasId"
+  ],
+  "properties": {
+    "aasId": {
+      "type": "string",
+      "format": "uri",
+      "minLength": 1,
+      "description": "Identifier of the AAS (URI). Corresponds to AssetAdministrationShell.id in the AAS metamodel. Plain string, not a Reference, since identifiers in the AAS metamodel are scalar strings."
+    }
+  }
+}
