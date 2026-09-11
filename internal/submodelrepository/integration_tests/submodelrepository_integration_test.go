@@ -2541,13 +2541,13 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 		t,
 		db,
 		companionAASExternalURL+"/shells/"+encodedAASID,
-		"AAS-3.0",
+		"AAS-3.2",
 	)
 	requireDescriptorEndpointInterface(
 		t,
 		db,
 		submodelSyncExternalURL+"/submodels/"+encodedSubmodelID,
-		"SUBMODEL-3.0",
+		"SUBMODEL-3.2",
 	)
 }
 

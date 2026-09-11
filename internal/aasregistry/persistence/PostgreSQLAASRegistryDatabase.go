@@ -487,8 +487,14 @@ func loadAASDescriptorForUpdateTx(
 	tx *sql.Tx,
 	aasID string,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	descriptor, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
-	if err != nil || descriptors.CanSkipUpdateReadback(ctx) {
+	readDescriptor := func() (model.AssetAdministrationShellDescriptor, error) {
+		return descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
+	}
+	if descriptors.CanSkipUpdateReadback(ctx) {
+		return common.WithPostgreSQLGenericPlanTx(ctx, tx, readDescriptor)
+	}
+	descriptor, err := readDescriptor()
+	if err != nil {
 		return descriptor, err
 	}
 	return descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ContextWithoutQueryFilter(ctx), tx, aasID)
