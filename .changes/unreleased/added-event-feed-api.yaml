@@ -1,5 +1,5 @@
 kind: added
-body: Experimental Event Feed API for AAS, Submodel, Asset, and PCN change notifications, including opt-in configuration, served JSON Schemas with optional Submodel semantic IDs, and the feed_events schema migration.
+body: Experimental Event Feed API for AAS, Submodel, Asset, and PCN change notifications, including opt-in configuration, served JSON Schemas with optional Submodel semantic IDs, the feed_events schema migration, and an interactive example covered by CI smoke tests.
 time: 2026-09-10T09:00:00Z
 custom:
     Impact: Low

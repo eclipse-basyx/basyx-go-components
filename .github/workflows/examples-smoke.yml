@@ -55,6 +55,13 @@ jobs:
               eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
             smoke_script: examples/BaSyxDelegatedOperationsExample/smoke.sh
+          - target_name: Event Feed Example
+            compose_files: |
+              examples/BaSyxEventFeedExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+            smoke_script: examples/BaSyxEventFeedExample/smoke.sh
           - target_name: Submodel Repository Example
             compose_files: |
               examples/BaSyxSubmodelRepositoryExample/docker-compose.yml

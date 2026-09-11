@@ -4,6 +4,9 @@ The Event Feed is an opt-in CloudEvents REST API. It is **disabled by default**.
 All standard service configurations leave it disabled. Enabling the feed adds
 its routes, schema documents, mutation capture, and background workers.
 
+The [Event Feed example](../../examples/BaSyxEventFeedExample/README.md) provides
+a local playground, sample data, and an automated smoke test.
+
 MQTT and Kafka sinks remain unimplemented. `eventing.sinks` and
 `eventing.outboxEnabled` still fail fast. `eventing.enabled` is reserved for
 future transports and does not enable the REST feed.
