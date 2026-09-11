@@ -31,7 +31,7 @@ services:
       dockerfile: cmd/aasenvironmentservice/Dockerfile
     command: ["/app/aasenvironmentservice"]
     ports:
-      - "8182:8082"
+      - "8082:8082"
     environment:
       SERVER_PORT: 8082
       SERVER_VERIFICATIONENDPOINTAVAILABLE: "true"
@@ -52,13 +52,13 @@ services:
       EXPERIMENTAL_REBAC_POLICY_SCOPE: minimal-security-example
       EXPERIMENTAL_REBAC_GROUPS_CLAIM: groups
       EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_TYPE: group
-      EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER: http://keycloak.localhost:8180/realms/basyx
+      EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER: http://keycloak.localhost:8080/realms/basyx
       EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT: /aas-admins
       OIDC_TRUSTLISTPATH: /security_env/trustlist.json
       GENERAL_AASREGISTRYINTEGRATION: "true"
       GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
       GENERAL_DISCOVERYINTEGRATION: "true"
-      GENERAL_EXTERNALURL: http://localhost:8182
+      GENERAL_EXTERNALURL: http://localhost:8082
     volumes:
       - ./security_env:/security_env:ro
     extra_hosts:
@@ -72,10 +72,10 @@ services:
 
   aas-ui:
     container_name: basyx-minimal-security-ui
-    image: registry.erbenschell.iese.fraunhofer.de/basyx/uni_bw_bruecken/aas-gui:rebac-1.0.0
-    pull_policy: always
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+#    pull_policy: always
     ports:
-      - "3100:3000"
+      - "3000:3000"
     volumes:
       - ./basyx-infra.yml:/basyx-infra.yml:ro
     environment:
@@ -92,7 +92,7 @@ services:
     image: keycloak/keycloak:26.7.3
     command: ["start-dev", "--import-realm", "--health-enabled=true"]
     ports:
-      - "8180:8080"
+      - "8080:8080"
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB

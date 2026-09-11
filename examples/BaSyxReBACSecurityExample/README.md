@@ -24,7 +24,7 @@ An ABAC allow remains an allow. Do not grant broad ABAC access to resources that
 ## Prerequisites
 
 - Docker with Compose
-- Free ports `3100`, `8180`, and `8182`
+- Free ports `3000`, `8080`, and `8082`
 - Access to the configured Fraunhofer container registry
 - `keycloak.localhost` resolving to `127.0.0.1` (the `.localhost` domain normally does this automatically)
 
@@ -38,9 +38,9 @@ docker compose up --build -d
 
 Open:
 
-- AAS GUI: [http://localhost:3100](http://localhost:3100)
-- Keycloak: [http://keycloak.localhost:8180](http://keycloak.localhost:8180)
-- AAS Environment: [http://localhost:8182](http://localhost:8182)
+- AAS GUI: [http://localhost:3000](http://localhost:3000)
+- Keycloak: [http://keycloak.localhost:8080](http://keycloak.localhost:8080)
+- AAS Environment: [http://localhost:8082](http://localhost:8082)
 
 Demo users:
 
@@ -67,7 +67,7 @@ The Keycloak client emits full group paths in the `groups` claim. Select a group
 {
   "principal": {
     "type": "group",
-    "issuer": "http://keycloak.localhost:8180/realms/basyx",
+    "issuer": "http://keycloak.localhost:8080/realms/basyx",
     "subject": "/aas-viewers"
   },
   "rights": ["READ"]

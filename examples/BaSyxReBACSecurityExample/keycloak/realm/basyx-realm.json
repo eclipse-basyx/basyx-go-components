@@ -13,11 +13,11 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
-      "redirectUris": ["http://localhost:3100/*"],
-      "webOrigins": ["http://localhost:3100"],
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:3100/*"
+        "post.logout.redirect.uris": "http://localhost:3000/*"
       },
       "protocolMappers": [
         {
@@ -92,6 +92,18 @@
       "firstName": "BaSyx",
       "lastName": "User",
       "email": "usera@example.org",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": { "role": ["viewer"] },
+      "groups": ["/aas-viewers"],
+      "credentials": [{ "type": "password", "value": "pwd", "temporary": false }]
+    },
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "username": "userb",
+      "firstName": "BaSyx",
+      "lastName": "User",
+      "email": "userb@example.org",
       "emailVerified": true,
       "enabled": true,
       "attributes": { "role": ["viewer"] },

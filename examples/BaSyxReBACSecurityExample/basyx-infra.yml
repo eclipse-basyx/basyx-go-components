@@ -5,23 +5,23 @@ infrastructures:
     name: Minimal ABAC + ReBAC
     components:
       aasDiscovery:
-        baseUrl: "http://localhost:8182/lookup/shells"
+        baseUrl: "http://localhost:8082/lookup/shells"
       aasRegistry:
-        baseUrl: "http://localhost:8182/shell-descriptors"
+        baseUrl: "http://localhost:8082/shell-descriptors"
         hasDiscoveryIntegration: true
       submodelRegistry:
-        baseUrl: "http://localhost:8182/submodel-descriptors"
+        baseUrl: "http://localhost:8082/submodel-descriptors"
       aasRepository:
-        baseUrl: "http://localhost:8182/shells"
+        baseUrl: "http://localhost:8082/shells"
         hasRegistryIntegration: true
       submodelRepository:
-        baseUrl: "http://localhost:8182/submodels"
+        baseUrl: "http://localhost:8082/submodels"
         hasRegistryIntegration: true
       conceptDescriptionRepository:
-        baseUrl: "http://localhost:8182/concept-descriptions"
+        baseUrl: "http://localhost:8082/concept-descriptions"
     security:
       type: oauth2
       config:
         flow: auth_code
-        issuer: "http://keycloak.localhost:8180/realms/basyx"
+        issuer: "http://keycloak.localhost:8080/realms/basyx"
         clientId: "basyx-ui"
