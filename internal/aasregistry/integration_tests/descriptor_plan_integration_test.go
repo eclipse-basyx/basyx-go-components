@@ -28,7 +28,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"net/http"
 	"testing"
 
@@ -44,14 +43,7 @@ func TestDescriptorReadGenericPlanIsScopedAndReused(t *testing.T) {
 	_, status, _, err := postJSONResponse(aasRegistryBaseURL+"/shell-descriptors", `{"id":"urn:basyx:integration:descriptor-plan","assetKind":"Instance","idShort":"PlanReuse"}`)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, status)
-	t.Cleanup(func() {
-		request, err := http.NewRequest(http.MethodDelete, aasRegistryBaseURL+"/shell-descriptors/"+base64.RawURLEncoding.EncodeToString([]byte(aasID)), nil)
-		require.NoError(t, err)
-		response, err := http.DefaultClient.Do(request)
-		require.NoError(t, err)
-		require.NoError(t, response.Body.Close())
-		require.Equal(t, http.StatusNoContent, response.StatusCode)
-	})
+	t.Cleanup(func() { cleanupAASDescriptor(t, aasRegistryBaseURL, aasID) })
 	db, err := sql.Open("pgx", aasRegistryIntegrationTestDSN)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
