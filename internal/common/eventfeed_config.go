@@ -34,8 +34,16 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 )
 
-// NewEventFeedConfig maps service settings to the feed, using the configured public
-// API base URL for the event source and the locally served schemas by default.
+// NewEventFeedConfig maps service settings to feed storage and HTTP routes.
+//
+// Event source and schema URLs default to the configured public API base URL.
+// Shared URL overrides take precedence over the compatible feed-specific aliases.
+//
+// Parameters:
+//   - cfg: Validated service configuration; nil returns feed defaults.
+//
+// Returns:
+//   - eventfeed.Config: Feed settings with schema routes enabled for any active event transport.
 func NewEventFeedConfig(cfg *Config) eventfeed.Config {
 	runtime := eventfeed.DefaultConfig()
 	if cfg == nil {

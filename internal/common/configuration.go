@@ -33,7 +33,6 @@ package common
 
 import (
 	"fmt"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
 	"io"
 	"log/slog"
 	"os"
@@ -41,6 +40,7 @@ import (
 
 	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/spf13/viper"

@@ -29,11 +29,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	cloudevents "github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"log/slog"
 	"sort"
 	"strings"
 	"time"
+
+	cloudevents "github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 )
 
 // Service implements the Event Feed API's read, write, and retention logic.
@@ -61,6 +62,14 @@ func (s *Service) Builder() *Builder {
 	return s.build
 }
 
+// Write persists a captured feed event in its own write operation.
+//
+// Parameters:
+//   - ctx: Request context for the database write.
+//   - event: Captured CloudEvent to persist.
+//
+// Returns:
+//   - error: Persistence error; nil on success or a service without a repository.
 func (s *Service) Write(ctx context.Context, event FeedEvent) error {
 	if s == nil || s.repo == nil {
 		return nil
@@ -68,7 +77,15 @@ func (s *Service) Write(ctx context.Context, event FeedEvent) error {
 	return s.repo.Save(ctx, event)
 }
 
-// WriteTx persists event in the same writer transaction as the model mutation.
+// WriteTx persists a captured feed event inside the model transaction.
+//
+// Parameters:
+//   - ctx: Original mutation request context.
+//   - tx: Active transaction owned by the caller.
+//   - event: Captured CloudEvent to persist without regenerating its ID or timestamp.
+//
+// Returns:
+//   - error: Persistence error requiring caller rollback; nil on success or a missing service, repository, or transaction.
 func (s *Service) WriteTx(ctx context.Context, tx *sql.Tx, event FeedEvent) error {
 	if s == nil || s.repo == nil || tx == nil {
 		return nil
@@ -77,6 +94,18 @@ func (s *Service) WriteTx(ctx context.Context, tx *sql.Tx, event FeedEvent) erro
 	return err
 }
 
+// Read returns an authorized page of retained events.
+//
+// Cursor state preserves the original query. Every read applies the caller's
+// current authorization rules, then orders the selected page by event time.
+//
+// Parameters:
+//   - ctx: Request context containing the caller identity and authorization metadata.
+//   - query: Feed filters, presentation, page limit, and optional resume position.
+//
+// Returns:
+//   - FeedResponse: Page of authorized records and a continuation cursor when more remain.
+//   - error: Query validation, authorization, or persistence error; otherwise nil.
 func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, error) {
 	var err error
 	query, err = resolveCursorQuery(query)

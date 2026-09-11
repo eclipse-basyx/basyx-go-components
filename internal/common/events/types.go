@@ -40,7 +40,6 @@ const (
 	TypeSubmodelDeleted    = "io.admin-shell.submodel.deleted.v1"
 	TypePCN                = "io.admin-shell.pcn.v1"
 	CloudEventsSpecVersion = "1.0"
-	APIVersion             = "1.0"
 
 	// SemanticIDPCN is the IDTA Product Change Notifications submodel semantic id.
 	SemanticIDPCN = "0173-1#01-AHE582#003"
@@ -52,7 +51,8 @@ type SubmodelRef struct {
 	SemanticID string
 }
 
-// FeedEvent is a persisted CloudEvents feed record with both presentation variants.
+// FeedEvent is a captured model event with REGULAR and COMPACT payloads.
+// Seq and PublishSeq are populated only by HTTP feed storage.
 type FeedEvent struct {
 	// Seq is the internal write-order id (assigned before commit). It is
 	// never used for client-facing ordering or cursors.
@@ -75,7 +75,7 @@ type FeedEvent struct {
 	AuthorizationAASIDs []string
 }
 
-// FeedRecord is one CloudEvents record in a feed response page.
+// FeedRecord is a structured CloudEvents JSON envelope used by the event transports.
 type FeedRecord struct {
 	DataContentType string         `json:"datacontenttype"`
 	SpecVersion     string         `json:"specversion"`

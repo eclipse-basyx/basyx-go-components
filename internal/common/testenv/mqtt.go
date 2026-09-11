@@ -29,13 +29,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"testing"
+	"time"
+
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/stretchr/testify/require"
-	"net/url"
-	"testing"
-	"time"
 )
 
 // MQTTMessage is a decoded broker message used for integration assertions.
@@ -46,7 +47,15 @@ type MQTTMessage struct {
 	Retained    bool
 }
 
-// SubscribeMQTT connects a test subscriber and arranges bounded shutdown.
+// SubscribeMQTT establishes an MQTT 5 subscription for an integration test.
+//
+// Parameters:
+//   - t: Test owning the subscriber and its bounded cleanup.
+//   - brokerURL: Anonymous test broker URL.
+//   - topic: Topic filter to subscribe to at QoS 1.
+//
+// Returns:
+//   - <-chan MQTTMessage: Decoded publications; connection or subscription errors fail the test.
 func SubscribeMQTT(t *testing.T, brokerURL, topic string) <-chan MQTTMessage {
 	t.Helper()
 	ctx := t.Context()
@@ -85,7 +94,16 @@ func SubscribeMQTT(t *testing.T, brokerURL, topic string) <-chan MQTTMessage {
 	return received
 }
 
-// AwaitMQTT waits for one matching event while ignoring unrelated mutations.
+// AwaitMQTT waits up to twenty seconds for a matching publication.
+//
+// Parameters:
+//   - t: Test to fail on timeout.
+//   - received: Channel returned by SubscribeMQTT.
+//   - subject: Expected CloudEvents subject.
+//   - kind: Expected CloudEvents type.
+//
+// Returns:
+//   - MQTTMessage: First matching publication; unrelated messages are consumed and ignored.
 func AwaitMQTT(t *testing.T, received <-chan MQTTMessage, subject, kind string) MQTTMessage {
 	t.Helper()
 	timer := time.NewTimer(20 * time.Second)

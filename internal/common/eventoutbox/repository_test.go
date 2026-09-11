@@ -29,11 +29,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 type testPublisher func(context.Context, json.RawMessage, []byte) error
@@ -55,14 +56,13 @@ func TestDeliveryPersistsRetryOrDeletesAcknowledgedEntry(t *testing.T) {
 		require.NoError(t, err)
 		mock.ExpectBegin()
 		mock.ExpectQuery("SELECT.*FOR UPDATE SKIP LOCKED").WillReturnRows(sqlmock.NewRows([]string{"seq", "envelope", "routing", "attempts"}).AddRow(1, `{"id":"stable"}`, `"topic"`, 0))
-		mock.ExpectExec("UPDATE").WillReturnResult(sqlmock.NewResult(0, 1))
 		operation := "DELETE"
 		if fail {
 			operation = "UPDATE"
 		}
 		mock.ExpectExec(operation).WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectCommit()
-		found, deliveryErr := NewRepository(db).DeliverOne(t.Context(), "mqtt", "replica", testPublisher(func(ctx context.Context, _ json.RawMessage, payload []byte) error {
+		found, deliveryErr := NewRepository(db).DeliverOne(t.Context(), "mqtt", testPublisher(func(ctx context.Context, _ json.RawMessage, payload []byte) error {
 			require.JSONEq(t, `{"id":"stable"}`, string(payload))
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)

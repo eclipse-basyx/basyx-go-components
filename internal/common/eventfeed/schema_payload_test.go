@@ -28,8 +28,6 @@ package eventfeed
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/go-chi/chi/v5"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -41,7 +39,10 @@ import (
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
+	"github.com/go-chi/chi/v5"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/stretchr/testify/require"
 )
 
 // schemaDir contains the same documents embedded and served by the API.
@@ -242,7 +243,7 @@ func schemaResourceURL(name string) string {
 func pcnRecordValueOnly(t *testing.T) any {
 	t.Helper()
 	sm := pcnSubmodelWithListRecordElements(t, fullPCNRecordElement())
-	values := PCNNewRecordValuesFromSubmodel(nil, sm)
+	values := events.PCNNewRecordValuesFromSubmodel(nil, sm)
 	if len(values) != 1 {
 		t.Fatalf("expected exactly one PCN record value, got %d", len(values))
 	}

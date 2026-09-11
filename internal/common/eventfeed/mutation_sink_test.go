@@ -29,7 +29,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"reflect"
 	"regexp"
 	"strings"
@@ -38,6 +37,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 )
 
 func TestMutationSinkRequiresTransaction(t *testing.T) {
@@ -280,7 +280,7 @@ func TestSubmodelFromSnapshotRoundTripsPCNRecordsToValueOnly(t *testing.T) {
 		t.Fatalf("submodelFromSnapshot: %v", err)
 	}
 
-	values := PCNNewRecordValuesFromSubmodel(nil, restored)
+	values := events.PCNNewRecordValuesFromSubmodel(nil, restored)
 	if len(values) != 1 {
 		t.Fatalf("expected 1 record, got %d", len(values))
 	}

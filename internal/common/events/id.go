@@ -70,7 +70,13 @@ func formatUUID(b [16]byte) string {
 	return string(dst)
 }
 
-// DocumentID returns a unique document identifier.
+// DocumentID generates a unique feed-document identifier.
+//
+// Parameters:
+//   - now: Timestamp used in the UUID time component.
+//
+// Returns:
+//   - string: UUID URN identifying one response document.
 func DocumentID(now time.Time) string {
 	return fmt.Sprintf("urn:uuid:%s", newEventID(now))
 }

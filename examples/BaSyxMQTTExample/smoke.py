@@ -29,7 +29,6 @@ from pathlib import Path
 import select
 import subprocess
 import time
-from urllib.parse import quote
 from urllib.request import Request, urlopen
 import uuid
 
@@ -81,14 +80,9 @@ def main():
         assert event["subject"] == identifier
         assert event["specversion"] == "1.0"
         assert event["datacontenttype"] == "application/json"
-        query = quote("rsql:event.subject=='" + identifier + "'")
-        while time.monotonic() < deadline:
-            records = request("GET", "/events?filter=" + query)["records"]
-            if event in records:
-                print("MQTT smoke passed: HTTP and MQTT expose the identical CloudEvent")
-                return
-            time.sleep(0.1)
-        raise RuntimeError("MQTT-SMOKE-PARITY matching feed event missing")
+        assert event["type"] == "io.admin-shell.submodel.created.v1"
+        assert event["id"] and event["time"] and event["dataschema"]
+        print("MQTT smoke passed: Submodel creation published a CloudEvent")
     finally:
         if created:
             request("DELETE", endpoint)

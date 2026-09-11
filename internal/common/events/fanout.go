@@ -30,7 +30,17 @@ import (
 	"database/sql"
 )
 
-// Fanout writes the same generated event to each independently enabled transactional sink.
+// Fanout combines transactional event writers in their supplied order.
+//
+// The returned writer passes the same event, mutation, context, and transaction
+// to every writer. It stops at the first error so the caller can roll back all
+// sink writes together with the model mutation.
+//
+// Parameters:
+//   - writers: Enabled transactional writers; each must preserve the supplied event.
+//
+// Returns:
+//   - EventWriter: Combined writer; an empty list produces a no-op.
 func Fanout(writers ...EventWriter) EventWriter {
 	return func(ctx context.Context, tx *sql.Tx, mutation Mutation, event FeedEvent) error {
 		for _, write := range writers {

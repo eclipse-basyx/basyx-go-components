@@ -54,10 +54,9 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	jose "gopkg.in/go-jose/go-jose.v2"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	jose "gopkg.in/go-jose/go-jose.v2"
 )
 
 var (

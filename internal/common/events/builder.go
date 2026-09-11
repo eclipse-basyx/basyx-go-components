@@ -49,15 +49,35 @@ const (
 	sourceSuffixSubmodel = "/submodels"
 )
 
-// Builder constructs FeedEvent values for the change types the Event Feed
-// API advertises.
+// Builder constructs AAS, asset, Submodel, and PCN CloudEvents.
+// Each build assigns a new ID and UTC timestamp at microsecond precision, and
+// returns REGULAR and COMPACT payloads with their schema URLs.
 type Builder struct {
 	sourceBaseURL string
 	schemaBaseURL string
 	now           func() time.Time
 }
 
-// NewBuilder creates a Builder configured with cfg's source and schema base URLs.
+// NewBuilder creates a CloudEvents builder using public source and schema URLs.
+//
+// Surrounding whitespace and trailing slashes are removed before resource paths
+// are appended. Each event receives a new ID and UTC timestamp at microsecond
+// precision; reuse the resulting event when writing to multiple sinks.
+//
+// Parameters:
+//   - cfg: Validated source and schema base URLs.
+//
+// Returns:
+//   - *Builder: Builder producing REGULAR and COMPACT payloads.
+//
+// Example:
+//
+//	builder := NewBuilder(Config{SourceBaseURL: publicURL, SchemaBaseURL: schemaURL})
+//	event, err := builder.AASCreated(aasID, assetID, submodels)
+//	if err != nil {
+//		return err
+//	}
+//	return write(ctx, tx, mutation, event)
 func NewBuilder(cfg Config) *Builder {
 	return &Builder{
 		sourceBaseURL: trimTrailingSlash(cfg.SourceBaseURL),
@@ -66,52 +86,150 @@ func NewBuilder(cfg Config) *Builder {
 	}
 }
 
-// AssetCreated builds an asset.created feed event.
+// AssetCreated builds a asset.created CloudEvent.
+//
+// Parameters:
+//   - globalAssetID: Asset identifier; falls back to aasID when empty.
+//   - aasID: Identifier of the shell recording the asset.
+//   - submodels: Submodel references captured with the shell.
+//
+// Returns:
+//   - FeedEvent: Captured event with its ID, timestamp, schemas, and both payload presentations.
+//   - error: Coded error if payload serialization fails; otherwise nil.
 func (b *Builder) AssetCreated(globalAssetID string, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.assetEvent(TypeAssetCreated, globalAssetID, aasID, submodels)
 }
 
-// AssetUpdated builds an asset.updated feed event.
+// AssetUpdated builds a asset.updated CloudEvent.
+//
+// Parameters:
+//   - globalAssetID: Asset identifier; falls back to aasID when empty.
+//   - aasID: Identifier of the shell recording the asset.
+//   - submodels: Submodel references captured with the shell.
+//
+// Returns:
+//   - FeedEvent: Captured event with its ID, timestamp, schemas, and both payload presentations.
+//   - error: Coded error if payload serialization fails; otherwise nil.
 func (b *Builder) AssetUpdated(globalAssetID string, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.assetEvent(TypeAssetUpdated, globalAssetID, aasID, submodels)
 }
 
-// AssetDeleted builds an asset.deleted feed event.
+// AssetDeleted builds a asset.deleted CloudEvent.
+//
+// Supply identifiers and references captured before deletion.
+//
+// Parameters:
+//   - globalAssetID: Asset identifier; falls back to aasID when empty.
+//   - aasID: Identifier of the shell recording the asset.
+//   - submodels: Submodel references captured with the shell.
+//
+// Returns:
+//   - FeedEvent: Captured event with its ID, timestamp, schemas, and both payload presentations.
+//   - error: Coded error if payload serialization fails; otherwise nil.
 func (b *Builder) AssetDeleted(globalAssetID string, aasID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.assetEvent(TypeAssetDeleted, globalAssetID, aasID, submodels)
 }
 
-// AASCreated builds an aas.created feed event.
+// AASCreated builds a aas.created CloudEvent.
+//
+// Parameters:
+//   - aasID: Identifier of the affected shell.
+//   - globalAssetID: Optional asset identifier; an empty value is omitted.
+//   - submodels: Submodel references captured with the shell.
+//
+// Returns:
+//   - FeedEvent: Captured event with its ID, timestamp, schemas, and both payload presentations.
+//   - error: Coded error if payload serialization fails; otherwise nil.
 func (b *Builder) AASCreated(aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.aasEvent(TypeAASCreated, aasID, globalAssetID, submodels)
 }
 
-// AASUpdated builds an aas.updated feed event.
+// AASUpdated builds a aas.updated CloudEvent.
+//
+// Parameters:
+//   - aasID: Identifier of the affected shell.
+//   - globalAssetID: Optional asset identifier; an empty value is omitted.
+//   - submodels: Submodel references captured with the shell.
+//
+// Returns:
+//   - FeedEvent: Captured event with its ID, timestamp, schemas, and both payload presentations.
+//   - error: Coded error if payload serialization fails; otherwise nil.
 func (b *Builder) AASUpdated(aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.aasEvent(TypeAASUpdated, aasID, globalAssetID, submodels)
 }
 
-// AASDeleted builds an aas.deleted feed event.
+// AASDeleted builds a aas.deleted CloudEvent.
+//
+// Supply identifiers and references captured before deletion.
+//
+// Parameters:
+//   - aasID: Identifier of the affected shell.
+//   - globalAssetID: Optional asset identifier; an empty value is omitted.
+//   - submodels: Submodel references captured with the shell.
+//
+// Returns:
+//   - FeedEvent: Captured event with its ID, timestamp, schemas, and both payload presentations.
+//   - error: Coded error if payload serialization fails; otherwise nil.
 func (b *Builder) AASDeleted(aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
 	return b.aasEvent(TypeAASDeleted, aasID, globalAssetID, submodels)
 }
 
-// SubmodelCreated builds a submodel.created feed event.
+// SubmodelCreated builds a submodel.created CloudEvent.
+//
+// Parameters:
+//   - submodelID: Identifier of the affected Submodel.
+//   - semanticID: Optional semantic reference identifier.
+//   - globalAssetIDs: Optional owning-asset identifiers captured with the mutation.
+//
+// Returns:
+//   - FeedEvent: Captured event with its ID, timestamp, schemas, and both payload presentations.
+//   - error: Coded error if payload serialization fails; otherwise nil.
 func (b *Builder) SubmodelCreated(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelCreated, submodelID, semanticID, globalAssetIDs)
 }
 
-// SubmodelUpdated builds a submodel.updated feed event.
+// SubmodelUpdated builds a submodel.updated CloudEvent.
+//
+// Parameters:
+//   - submodelID: Identifier of the affected Submodel.
+//   - semanticID: Optional semantic reference identifier.
+//   - globalAssetIDs: Optional owning-asset identifiers captured with the mutation.
+//
+// Returns:
+//   - FeedEvent: Captured event with its ID, timestamp, schemas, and both payload presentations.
+//   - error: Coded error if payload serialization fails; otherwise nil.
 func (b *Builder) SubmodelUpdated(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelUpdated, submodelID, semanticID, globalAssetIDs)
 }
 
-// SubmodelDeleted builds a submodel.deleted feed event.
+// SubmodelDeleted builds a submodel.deleted CloudEvent.
+//
+// Supply identifiers and references captured before deletion.
+//
+// Parameters:
+//   - submodelID: Identifier of the affected Submodel.
+//   - semanticID: Optional semantic reference identifier.
+//   - globalAssetIDs: Optional owning-asset identifiers captured with the mutation.
+//
+// Returns:
+//   - FeedEvent: Captured event with its ID, timestamp, schemas, and both payload presentations.
+//   - error: Coded error if payload serialization fails; otherwise nil.
 func (b *Builder) SubmodelDeleted(submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
 	return b.submodelEvent(TypeSubmodelDeleted, submodelID, semanticID, globalAssetIDs)
 }
 
-// PCN builds an io.admin-shell.pcn.v1 feed event for a single changed Product Change Notification record. record is the record's Value-Only representation.
+// PCN builds a notification for one added Product Change Notification record.
+//
+// The REGULAR payload includes record; COMPACT contains only identifiers.
+//
+// Parameters:
+//   - submodelID: Identifier of the Submodel containing the notification.
+//   - globalAssetIDs: Optional owning-asset identifiers.
+//   - record: The added record's JSON-serializable Value-Only representation.
+//
+// Returns:
+//   - FeedEvent: Captured PCN event with both payload presentations.
+//   - error: Coded error if record cannot be serialized; otherwise nil.
 func (b *Builder) PCN(submodelID string, globalAssetIDs []string, record any) (FeedEvent, error) {
 	ids := normalizeGlobalAssetIDs(globalAssetIDs)
 	full := map[string]any{
@@ -134,8 +252,13 @@ func (b *Builder) PCN(submodelID string, globalAssetIDs []string, record any) (F
 	return event, err
 }
 
-// IsPCNSemanticID reports whether semanticID refers to the IDTA Product
-// Change Notifications submodel semantic id.
+// IsPCNSemanticID identifies the IDTA Product Change Notifications semantic ID.
+//
+// Parameters:
+//   - semanticID: IRDI to compare by its code segment, independently of revision.
+//
+// Returns:
+//   - bool: True when the code segment matches SemanticIDPCN.
 func IsPCNSemanticID(semanticID string) bool {
 	return irdiCode(semanticID) == irdiCode(SemanticIDPCN)
 }
@@ -286,6 +409,9 @@ func externalReference(value string) map[string]any {
 }
 
 // AllEventTypes lists the supported CloudEvents types.
+//
+// Returns:
+//   - []string: A new slice containing the AAS, asset, Submodel, and PCN type names.
 func AllEventTypes() []string {
 	return []string{
 		TypeAssetCreated,
@@ -301,7 +427,15 @@ func AllEventTypes() []string {
 	}
 }
 
-// SchemaPairForType returns the regular and compact payload schema URLs.
+// SchemaPairForType resolves the payload schema URLs for an event type.
+//
+// Parameters:
+//   - eventType: CloudEvents type name; unrecognized types use the Submodel schemas.
+//   - schemaBase: Public base URL serving the embedded payload schemas.
+//
+// Returns:
+//   - full: REGULAR payload schema URL.
+//   - compact: COMPACT payload schema URL; PCN uses the same schema for both presentations.
 func SchemaPairForType(eventType, schemaBase string) (full, compact string) {
 	base := trimTrailingSlash(schemaBase)
 	switch eventType {

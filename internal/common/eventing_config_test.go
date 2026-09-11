@@ -27,11 +27,12 @@ package common
 
 import (
 	"encoding/json"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMQTTConfigDefaultsAndActivation(t *testing.T) {

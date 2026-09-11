@@ -35,8 +35,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
@@ -53,6 +51,7 @@ import (
 	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
+	"github.com/go-chi/chi/v5"
 )
 
 //go:embed openapi.yaml

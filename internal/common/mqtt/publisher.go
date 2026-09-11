@@ -47,7 +47,18 @@ type Publisher struct {
 	connected  atomic.Bool
 }
 
-// NewPublisher starts reconnecting asynchronously; broker availability does not gate startup.
+// NewPublisher initializes asynchronous MQTT connection and reconnection.
+//
+// Credentials and TLS files are loaded before returning. Broker unavailability
+// is retried without blocking API startup. Call Stop during service shutdown.
+//
+// Parameters:
+//   - ctx: Service lifecycle context controlling connection and reconnect attempts.
+//   - cfg: MQTT destination, authentication, QoS, and TLS settings.
+//
+// Returns:
+//   - *Publisher: Publisher with an asynchronous connection loop.
+//   - error: Initialization error for invalid settings or unreadable credentials/TLS material.
 func NewPublisher(ctx context.Context, cfg Config) (*Publisher, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -88,10 +99,24 @@ func NewPublisher(ctx context.Context, cfg Config) (*Publisher, error) {
 	return publisher, nil
 }
 
-// Connected reports the current broker connection state.
+// Connected reports the current MQTT connection state.
+//
+// Returns:
+//   - bool: True after connection establishment and until disconnection is reported.
 func (p *Publisher) Connected() bool { return p.connected.Load() }
 
-// Publish waits for the configured MQTT acknowledgment, never using a second durable queue.
+// Publish sends one structured CloudEvent with the configured QoS and retained flag.
+//
+// It waits for the MQTT acknowledgment at QoS 1 or 2. At QoS 0, success means
+// the packet was sent without a broker acknowledgment.
+//
+// Parameters:
+//   - ctx: Context bounding the publish attempt and acknowledgment wait.
+//   - routing: JSON-encoded topic returned by Routing.
+//   - envelope: Serialized, valid CloudEvent; transmitted unchanged as the message payload.
+//
+// Returns:
+//   - error: Coded error for invalid routing, failed delivery, or broker rejection; otherwise nil.
 func (p *Publisher) Publish(ctx context.Context, routing json.RawMessage, envelope []byte) error {
 	var topic string
 	if err := json.Unmarshal(routing, &topic); err != nil {
@@ -115,7 +140,13 @@ func (p *Publisher) Publish(ctx context.Context, routing json.RawMessage, envelo
 	return nil
 }
 
-// Stop closes the broker connection.
+// Stop disconnects from the MQTT broker and waits for connection shutdown.
+//
+// Parameters:
+//   - ctx: Context bounding the disconnect wait.
+//
+// Returns:
+//   - error: Coded error if shutdown cannot finish within ctx; otherwise nil.
 func (p *Publisher) Stop(ctx context.Context) error {
 	if err := p.connection.Disconnect(ctx); err != nil {
 		return fmt.Errorf("MQTT-PUBLISHER-STOP disconnect did not complete")
@@ -123,7 +154,15 @@ func (p *Publisher) Stop(ctx context.Context) error {
 	return nil
 }
 
-// Routing maps the shared event to adapter-specific topic metadata.
+// Routing maps an event type to its MQTT topic.
+//
+// Parameters:
+//   - prefix: Topic prefix previously checked by ValidateTopicPrefix.
+//   - event: Captured event whose type determines the logical component and operation.
+//
+// Returns:
+//   - json.RawMessage: JSON-encoded topic to store with the event for stable retries.
+//   - error: Coded error for an unsupported event type; otherwise nil.
 func Routing(prefix string, event events.FeedEvent) (json.RawMessage, error) {
 	component, resource, operation, err := topicParts(event.Type)
 	if err != nil {

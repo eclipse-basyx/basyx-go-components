@@ -31,7 +31,10 @@ import "strings"
 // Config identifies the event producer and its payload schemas.
 type Config struct{ SourceBaseURL, SchemaBaseURL string }
 
-// DefaultConfig returns local producer URLs.
+// DefaultConfig supplies localhost URLs for embedded callers.
+//
+// Returns:
+//   - Config: Source http://localhost and schemas under SchemaPath on that host.
 func DefaultConfig() Config {
 	return Config{SourceBaseURL: "http://localhost", SchemaBaseURL: "http://localhost" + SchemaPath}
 }

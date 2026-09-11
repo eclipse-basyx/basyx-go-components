@@ -40,7 +40,13 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
 )
 
-// Bind registers a feed-only mutation consumer for existing embedded callers.
+// Bind registers an enabled feed as the process mutation consumer.
+//
+// The consumer is cleared when the module stops. A nil or disabled module is
+// ignored.
+//
+// Parameters:
+//   - module: Initialized feed module whose service persists captured events.
 func Bind(module *eventfeed.Module) {
 	if module == nil || !module.Enabled() {
 		return
@@ -49,7 +55,19 @@ func Bind(module *eventfeed.Module) {
 	module.SetOnStop(history.ClearMutationSink)
 }
 
-// Start binds all enabled event sinks before startup imports and starts asynchronous delivery.
+// Start registers event writers and launches asynchronous MQTT delivery.
+//
+// Call once before startup imports. The feed module's Stop callback shuts down
+// workers and the broker connection. Broker unavailability is retried asynchronously.
+//
+// Parameters:
+//   - ctx: Service lifecycle context.
+//   - db: Model writer database; close only after stopping the module.
+//   - cfg: Validated service configuration with enabled sinks.
+//   - feed: Initialized feed module, including when feed delivery is disabled.
+//
+// Returns:
+//   - error: MQTT configuration or worker initialization error; otherwise nil.
 func Start(ctx context.Context, db *sql.DB, cfg *common.Config, feed *eventfeed.Module) error {
 	if !cfg.Eventing.MQTTEnabled() {
 		Bind(feed)
@@ -62,7 +80,7 @@ func Start(ctx context.Context, db *sql.DB, cfg *common.Config, feed *eventfeed.
 		return err
 	}
 	repository := eventoutbox.NewRepository(db)
-	worker, err := eventoutbox.Start(runtimeCtx, repository, cfg.Eventing.MQTT.SinkID, cfg.Eventing.MQTT.ClientID, publisher)
+	worker, err := eventoutbox.Start(runtimeCtx, repository, cfg.Eventing.MQTT.SinkID, publisher)
 	if err != nil {
 		cancel()
 		stopPublisher(ctx, publisher)

@@ -31,7 +31,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"io"
 	"net/http"
 	"net/url"
@@ -39,6 +38,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )

@@ -26,19 +26,21 @@
 package events
 
 import (
-	"crypto/rand"
-	"math/big"
+	"math/rand/v2"
 	"time"
 )
 
-// RetryDelay returns exponential backoff with jitter capped at one minute.
+// RetryDelay calculates exponential retry backoff with jitter.
+//
+// Parameters:
+//   - attempt: One-based attempt number; values below one use the initial delay.
+//
+// Returns:
+//   - time.Duration: Delay starting at one second and capped at one minute.
 func RetryDelay(attempt int) time.Duration {
 	exponent := min(max(attempt-1, 0), 6)
 	base := min(time.Second*time.Duration(1<<exponent), time.Minute)
 	span := min(base/2, time.Minute-base)
-	jitter, err := rand.Int(rand.Reader, big.NewInt(int64(span)+1))
-	if err != nil {
-		return base
-	}
-	return base + time.Duration(jitter.Int64())
+	// #nosec G404 -- retry jitter is scheduling noise, not a security value.
+	return base + time.Duration(rand.Int64N(int64(span)+1))
 }

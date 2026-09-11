@@ -26,8 +26,9 @@
 package eventfeed
 
 import (
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 )
 
 // Presentation selects which stored payload variant is returned to consumers.
@@ -55,7 +56,7 @@ const (
 	TypeSubmodelDeleted    = events.TypeSubmodelDeleted
 	TypePCN                = events.TypePCN
 	CloudEventsSpecVersion = events.CloudEventsSpecVersion
-	APIVersion             = events.APIVersion
+	APIVersion             = "1.0"
 	SemanticIDPCN          = events.SemanticIDPCN
 )
 

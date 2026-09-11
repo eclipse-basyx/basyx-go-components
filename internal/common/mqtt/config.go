@@ -52,7 +52,13 @@ type Config struct {
 	KeyFile         string `mapstructure:"keyFile" yaml:"keyFile" json:"-"`
 }
 
-// Validate checks the MQTT destination without disclosing credentials.
+// Validate checks destination settings without connecting to the broker.
+//
+// It checks broker syntax, identifiers, QoS, and credential/TLS combinations.
+// NewPublisher loads and validates the configured files.
+//
+// Returns:
+//   - error: Coded validation error with no secret values; otherwise nil.
 func (c Config) Validate() error {
 	u, err := validateBrokerURL(c.Broker)
 	if err != nil {
@@ -76,7 +82,13 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// ValidateTopicPrefix checks a publish-topic prefix.
+// ValidateTopicPrefix checks a prefix for the generated publish topics.
+//
+// Parameters:
+//   - prefix: Topic prefix without MQTT wildcards or a trailing slash.
+//
+// Returns:
+//   - error: Coded error for empty, oversized, or invalid UTF-8/NUL-containing prefixes; otherwise nil.
 func ValidateTopicPrefix(prefix string) error {
 	if !validText(prefix) || strings.ContainsAny(prefix, "+#") || strings.HasSuffix(prefix, "/") || len(prefix) > 65000 {
 		return fmt.Errorf("MQTT-CONFIG-TOPIC invalid topicPrefix")

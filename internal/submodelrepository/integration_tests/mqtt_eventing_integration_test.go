@@ -192,20 +192,20 @@ func TestMQTTOutboxRollbackRetryRestartAndSinkIsolation(t *testing.T) {
 		}
 		return nil
 	})
-	found, err := repository.DeliverOne(t.Context(), sink, "before-restart", publish)
+	found, err := repository.DeliverOne(t.Context(), sink, publish)
 	require.True(t, found)
 	require.Error(t, err)
 	require.EqualValues(t, 1, pendingCount(t, repository, sink))
 	require.EqualValues(t, 1, pendingCount(t, repository, sink+"-other"))
 	repository = eventoutbox.NewRepository(db)
 	require.Eventually(t, func() bool {
-		_, err = repository.DeliverOne(t.Context(), sink, "after-restart", publish)
+		_, err = repository.DeliverOne(t.Context(), sink, publish)
 		require.NoError(t, err)
 		return pendingCount(t, repository, sink) == 0
 	}, 3*time.Second, 100*time.Millisecond)
 	require.Equal(t, []string{event.ID, event.ID}, attempts)
 	require.EqualValues(t, 1, pendingCount(t, repository, sink+"-other"))
-	_, err = repository.DeliverOne(t.Context(), sink+"-other", "other", publish)
+	_, err = repository.DeliverOne(t.Context(), sink+"-other", publish)
 	require.NoError(t, err)
 }
 func TestMQTTOutboxConcurrentWorkersPreserveEntityOrder(t *testing.T) {
@@ -220,7 +220,7 @@ func TestMQTTOutboxConcurrentWorkersPreserveEntityOrder(t *testing.T) {
 	t.Cleanup(func() { once.Do(func() { close(release) }) })
 	result := make(chan error, 1)
 	go func() {
-		_, err := repository.DeliverOne(t.Context(), sink, "one", outboxTestPublisher(func(ctx context.Context, _ json.RawMessage, raw []byte) error {
+		_, err := repository.DeliverOne(t.Context(), sink, outboxTestPublisher(func(ctx context.Context, _ json.RawMessage, raw []byte) error {
 			var record events.FeedRecord
 			if err := json.Unmarshal(raw, &record); err != nil {
 				return err
@@ -250,16 +250,16 @@ func TestMQTTOutboxConcurrentWorkersPreserveEntityOrder(t *testing.T) {
 		received = record.ID
 		return err
 	})
-	found, err := repository.DeliverOne(t.Context(), sink, "two", publish)
+	found, err := repository.DeliverOne(t.Context(), sink, publish)
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, unrelated.ID, received)
-	found, err = repository.DeliverOne(t.Context(), sink, "two", publish)
+	found, err = repository.DeliverOne(t.Context(), sink, publish)
 	require.NoError(t, err)
 	require.False(t, found)
 	once.Do(func() { close(release) })
 	require.NoError(t, <-result)
-	found, err = repository.DeliverOne(t.Context(), sink, "two", publish)
+	found, err = repository.DeliverOne(t.Context(), sink, publish)
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, second.ID, received)
@@ -312,7 +312,7 @@ func TestMQTTOutboxPendingEventsSurviveFeedRetention(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, found)
 	require.EqualValues(t, 1, pendingCount(t, repository, sink))
-	_, err = repository.DeliverOne(t.Context(), sink, "worker", outboxTestPublisher(func(context.Context, json.RawMessage, []byte) error { return nil }))
+	_, err = repository.DeliverOne(t.Context(), sink, outboxTestPublisher(func(context.Context, json.RawMessage, []byte) error { return nil }))
 	require.NoError(t, err)
 }
 
@@ -353,11 +353,11 @@ func TestMQTTOutboxWorkerCancellationReleasesClaim(t *testing.T) {
 	event := enqueueTestEvent(t, db, sink, "entity", true)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	found, err := repository.DeliverOne(ctx, sink, "cancelled", outboxTestPublisher(func(context.Context, json.RawMessage, []byte) error { cancel(); return nil }))
+	found, err := repository.DeliverOne(ctx, sink, outboxTestPublisher(func(context.Context, json.RawMessage, []byte) error { cancel(); return nil }))
 	require.True(t, found)
 	require.Error(t, err)
 	require.EqualValues(t, 1, pendingCount(t, repository, sink))
-	found, err = repository.DeliverOne(t.Context(), sink, "replacement", outboxTestPublisher(func(_ context.Context, _ json.RawMessage, raw []byte) error {
+	found, err = repository.DeliverOne(t.Context(), sink, outboxTestPublisher(func(_ context.Context, _ json.RawMessage, raw []byte) error {
 		var record events.FeedRecord
 		require.NoError(t, json.Unmarshal(raw, &record))
 		require.Equal(t, event.ID, record.ID)

@@ -28,6 +28,7 @@ package eventfeed
 import (
 	"context"
 	"database/sql"
+
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 )
 
@@ -37,7 +38,13 @@ type Mutation = events.Mutation
 // MutationSink generates events from the existing mutation hook.
 type MutationSink = events.MutationSink
 
-// NewMutationSink creates a feed-only sink for existing callers.
+// NewMutationSink creates a transactional feed writer.
+//
+// Parameters:
+//   - svc: Feed service; nil or disabled services produce a disabled consumer.
+//
+// Returns:
+//   - *MutationSink: Shared mutation consumer writing through svc.WriteTx.
 func NewMutationSink(svc *Service) *MutationSink {
 	if svc == nil || !svc.cfg.Enabled {
 		return events.NewMutationSink(nil, nil)

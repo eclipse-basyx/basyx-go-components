@@ -27,11 +27,12 @@ package mqtt
 
 import (
 	"encoding/json"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRoutingAllExistingEventTypes(t *testing.T) {

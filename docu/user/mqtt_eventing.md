@@ -1,11 +1,12 @@
-# MQTT eventing (experimental)
+# MQTT Eventing (experimental)
 
-Publish the existing AAS, asset, Submodel, and PCN CloudEvents over MQTT 5.
-AAS Repository, Submodel Repository, and AAS Environment support this feature.
-It is disabled by default and does not require history or WORM evidence.
-See the [runnable MQTT example](../../examples/BaSyxMQTTExample/README.md).
+Publish AAS, asset, Submodel, and PCN changes as CloudEvents over MQTT 5.
+AAS Repository, Submodel Repository, and AAS Environment support this opt-in
+feature. Try the [MQTT example](../../examples/BaSyxMQTTExample/README.md).
 
-## Enable MQTT and the HTTP feed together
+## Enable MQTT
+
+Run the configuration service to apply database schema v1.2.1, then configure:
 
 ```yaml
 general:
@@ -15,31 +16,15 @@ eventing:
   format: cloudevents
   sinks: [mqtt]
   outboxEnabled: true
-  topicPrefix: basyx
-  feed:
-    enabled: true
   mqtt:
-    broker: tls://broker.example.com:8883
-    clientId: basyx-replica-1
-    sinkId: mqtt
-    qos: 1
-    retained: false
-    usernameFile: /run/secrets/mqtt-username
-    passwordFile: /run/secrets/mqtt-password
-    caFile: /run/secrets/broker-ca.pem
-    certificateFile: /run/secrets/client.pem
-    keyFile: /run/secrets/client-key.pem
+    broker: mqtt://localhost:1883
+    clientId: basyx-instance-1
 ```
 
-Set `eventing.feed.enabled: false` for MQTT-only operation. Existing feed-only
-configurations continue to work without `eventing.enabled`. MQTT requires
-`enabled`, `sinks: [mqtt]`, and `outboxEnabled: true`. Unknown sinks are rejected.
+All three activation settings are required. Set `general.externalUrl` to the
+public API base URL so event sources and schema links resolve for consumers.
 
-Apply schema **v1.2.1** using the configuration service before starting the new
-service version. The additive migration creates `event_outbox`; it does not
-rewrite model data, change existing feed cursors, or backfill historical events.
-
-## Configuration
+## Connection settings
 
 | Setting under `eventing.mqtt` | Environment variable | Default / behavior |
 | --- | --- | --- |
@@ -60,38 +45,27 @@ Do not configure a credential value and its corresponding file simultaneously.
 
 `eventing.sourceBaseUrl` and `eventing.schemaBaseUrl` override the shared producer
 and schema URLs (`BASYX_EVENTING_SOURCE_BASE_URL`, `BASYX_EVENTING_SCHEMA_BASE_URL`).
-The existing `eventing.feed.sourceBaseUrl` / `schemaBaseUrl` settings remain aliases;
-conflicting explicit URLs are rejected. Otherwise the public API URL supplies the
-source and the hosted schema URL. Schema routes remain available with MQTT-only
-operation; `/events` and feed discovery remain disabled.
+By default, the public API URL supplies the source and hosted schema URLs.
 
-All replicas sharing a `sinkId` in one database must have the same broker,
-credentials, QoS, retained behavior, and topic configuration. Distinct destinations
-sharing a database need distinct sink IDs. Each process supports one MQTT
-destination. Drain pending deliveries before changing a destination or topic
-configuration: stored topics are immutable, and changing a sink ID leaves its old
-queue awaiting a worker with that ID. Disabling MQTT stops enqueueing and delivery;
-reenabling the same sink resumes its pending queue.
+Replicas sharing a database use the same `sinkId` and destination settings, with
+unique MQTT client IDs. Drain the queue before changing the broker, sink ID, or
+topic configuration. Reenabling the same sink resumes its pending queue.
 
-## CloudEvents and topics
+## Messages and topics
 
-Each MQTT PUBLISH contains one REGULAR CloudEvent as structured JSON, with
-`specversion: "1.0"`, `datacontenttype: "application/json"`, and MQTT Content Type
-`application/cloudevents+json`. The implementation follows the
+Each message contains one REGULAR CloudEvent as structured JSON. The MQTT 5
+Content Type is `application/cloudevents+json`; the envelope declares
+`specversion: "1.0"` and `datacontenttype: "application/json"`, following the
 [CloudEvents MQTT binding](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/bindings/mqtt-protocol-binding.md).
-MQTT 3.1.1 and binary content mode are not supported.
-
-The ID, timestamp, type, subject, source, dataschema, and data are identical to the
-corresponding REGULAR HTTP feed record. Existing versioned payload schemas apply:
-change events contain identifiers/references; they do not contain complete model
-snapshots. Delete events preserve the existing identifier/reference representation.
-PCN notifications contain their existing value-only record.
+Change payloads contain model identifiers and references; PCN payloads contain
+the added record's value-only representation. `dataschema` links to the payload
+schema served by the API.
 
 | Event family | Topic (default prefix) |
 | --- | --- |
-| AAS | `basyx/aasrepository/aas/created`, `/updated`, `/deleted` |
-| Asset | `basyx/aasrepository/asset/created`, `/updated`, `/deleted` |
-| Submodel | `basyx/submodelrepository/submodel/created`, `/updated`, `/deleted` |
+| AAS | `basyx/aasrepository/aas/{created,updated,deleted}` |
+| Asset | `basyx/aasrepository/asset/{created,updated,deleted}` |
+| Submodel | `basyx/submodelrepository/submodel/{created,updated,deleted}` |
 | PCN | `basyx/submodelrepository/pcn/notification` |
 
 AAS Environment uses the same logical repository topic names. Nested elements,
@@ -99,54 +73,35 @@ values, file attachments, thumbnails, and uploads use the existing mutation
 triggers. Reads, rolled-back changes, and acknowledged no-op PUTs produce no
 change event. Atomic mutations enqueue all their events in the same transaction.
 
-MQTT delivers the configured service's events to its broker. HTTP caller-specific
-ABAC filtering does not apply to MQTT subscribers; configure broker ACLs and
-network access for the data those topics contain. The HTTP feed retains its
-existing authorization checks.
-
 ## Delivery and operations
 
-Model changes and outbox entries commit atomically. An enqueue error rolls back
-the change. Broker failures after commit do not alter the API response. Services
-start while the broker is unavailable, retaining new events in PostgreSQL.
+Events commit atomically with model changes. During broker outages, services
+continue accepting mutations and retain pending events in PostgreSQL. Failed
+publishes retry indefinitely with exponential backoff and jitter, starting at
+one second and capped at one minute. Publish attempts time out after ten seconds.
 
-Four workers per process publish outside model transactions. A worker holds only
-a delivery-row transaction during its bounded publish attempt (maximum ten
-seconds), then acknowledges or schedules a retry. PostgreSQL releases that lock
-on process/connection loss. Earlier pending entries prevent later delivery for
-the same mutated AAS/Submodel and sink, including derived asset/PCN events.
-Unrelated entities can progress. There is no global ordering guarantee.
+Delivery is ordered per mutated AAS or Submodel, including derived asset and PCN
+events. A failed event blocks later events for that entity; other entities can
+progress. Successful deliveries are removed from the queue. Pending entries do
+not expire, so allow database capacity for the expected outage duration.
 
-At QoS 1 or 2, delivery is at least once: a crash between broker acknowledgment and
-database acknowledgment can repeat an event. Deduplicate by CloudEvents ID before
-applying ordered events. QoS 2 does not make the database-to-broker operation
-exactly once. QoS 0 explicitly weakens the guarantee because it has no broker
-acknowledgment. With retained messages enabled, subscribers receive the last
-message per topic, not a complete change log.
+QoS 1 and 2 provide at-least-once delivery. Deduplicate by CloudEvents ID: a crash
+after broker acknowledgment can cause a retry with the same ID. QoS 0 has no
+broker acknowledgment and weakens this guarantee. Retained messages keep only
+the latest message per topic.
 
-Failed deliveries retry indefinitely with exponential backoff and jitter,
-starting around one second and capped at one minute. A permanently rejected event
-blocks later events for that mutation key until the underlying problem is fixed.
-Pending entries are never expired or dead-lettered automatically. Successfully
-acknowledged entries are deleted immediately. HTTP feed cleanup cannot remove
-pending MQTT events. Allow database capacity for the expected outage duration.
+Configure broker authentication and subscriber ACLs for the data in each topic.
+Use `tls://` for TLS and mount credential/certificate files through the settings
+above. HTTP access rules do not filter MQTT subscribers.
 
 Existing OpenTelemetry configuration exports these metrics, labeled by sink:
 
-- `basyx.eventing.delivered`: successful delivery acknowledgments.
+- `basyx.eventing.delivered`: acknowledged deliveries.
 - `basyx.eventing.delivery.failures`: failed attempts or worker database errors.
-- `basyx.eventing.pending`: queued delivery count.
-- `basyx.eventing.retry.pending`: queued deliveries that have failed before.
-- `basyx.eventing.pending.oldest.age`: age in seconds of the oldest queued event.
-- `basyx.eventing.broker.connected`: broker connection state, 0 or 1.
+- `basyx.eventing.pending`: pending deliveries.
+- `basyx.eventing.retry.pending`: pending deliveries with previous failures.
+- `basyx.eventing.pending.oldest.age`: oldest pending event age in seconds.
+- `basyx.eventing.broker.connected`: connection state, 0 or 1.
 
-Queue gauges refresh every 15 seconds. Alert on a disconnected broker, growing
-queue, or oldest-event age beyond your delivery objective. Inspect coded logs for
-connection and publish failures; fix credentials, broker ACLs, certificate trust,
-packet limits, or database availability and allow automatic retries to resume.
-Keep the same sink ID and event IDs when recovering a queue. Never delete pending
-rows as part of routine cleanup.
-
-The shared builder, transactional fan-out, and per-sink outbox support future
-adapters such as Kafka without new persistence triggers. Kafka support itself is
-outside this release.
+Queue gauges refresh every 15 seconds. Monitor queue growth and delivery age;
+coded logs identify connection and publication failures.

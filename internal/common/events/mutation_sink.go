@@ -53,21 +53,41 @@ type Mutation struct {
 	Acknowledged     bool
 }
 
-// MutationSink writes CloudEvents feed rows inside the authoritative mutation transaction.
+// MutationSink generates CloudEvents inside the authoritative model transaction.
 type MutationSink struct {
 	build *Builder
 	write EventWriter
 }
 
-// NewMutationSink creates a mutation sink backed by svc.
+// NewMutationSink creates a transaction-scoped event consumer.
+//
+// Parameters:
+//   - builder: Builder used once per generated event.
+//   - write: Writer receiving the captured event and original model transaction.
+//
+// Returns:
+//   - *MutationSink: Consumer; a nil builder or writer produces a disabled consumer.
 func NewMutationSink(builder *Builder, write EventWriter) *MutationSink {
 	return &MutationSink{build: builder, write: write}
 }
 
-// EventWriter persists a generated event in the authoritative mutation transaction.
+// EventWriter persists a captured event using the supplied request context and
+// model transaction. mutation identifies the ordering domain. Writers must not
+// commit tx or modify event; an error causes the model mutation to roll back.
 type EventWriter func(context.Context, *sql.Tx, Mutation, FeedEvent) error
 
-// HandleMutation persists feed events for mutation.
+// HandleMutation generates and writes events for a captured model mutation.
+//
+// The caller must hold the entity mutation lock and roll back tx on error.
+// Acknowledged no-op writes and unsupported history tables produce no events.
+//
+// Parameters:
+//   - ctx: Original request context, including security metadata.
+//   - tx: Active model transaction owned by the caller.
+//   - mutation: Entity identity and complete snapshots before and after the write.
+//
+// Returns:
+//   - error: First construction or write error; nil on success, a disabled consumer, or a skipped mutation.
 func (s *MutationSink) HandleMutation(ctx context.Context, tx *sql.Tx, mutation Mutation) error {
 	if s == nil || s.build == nil || s.write == nil || tx == nil {
 		return nil

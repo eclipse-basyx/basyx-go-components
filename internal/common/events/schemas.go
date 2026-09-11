@@ -25,7 +25,10 @@
 
 package events
 
-import "embed"
+import (
+	"embed"
+	"fmt"
+)
 
 // SchemaPath is the existing API-relative schema location.
 const SchemaPath = "/.well-known/event-feed/schemas"
@@ -33,5 +36,18 @@ const SchemaPath = "/.well-known/event-feed/schemas"
 //go:embed schemas/*.json
 var schemaFiles embed.FS
 
-// ReadSchema reads an embedded, versioned payload schema.
-func ReadSchema(name string) ([]byte, error) { return schemaFiles.ReadFile("schemas/" + name) }
+// ReadSchema loads an embedded, versioned event payload schema.
+//
+// Parameters:
+//   - name: Schema filename, for example metamodel-aasChangeEvent.v1.schema.json.
+//
+// Returns:
+//   - []byte: JSON schema document.
+//   - error: Coded read error for a missing name; the HTTP handler maps it to a not-found response.
+func ReadSchema(name string) ([]byte, error) {
+	document, err := schemaFiles.ReadFile("schemas/" + name)
+	if err != nil {
+		return nil, fmt.Errorf("EVENTS-SCHEMA-READ: %w", err)
+	}
+	return document, nil
+}

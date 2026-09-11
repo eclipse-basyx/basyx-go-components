@@ -30,7 +30,18 @@ import (
 	"fmt"
 )
 
-// Record converts the immutable event into its CloudEvents JSON representation.
+// Record converts a captured event into its structured CloudEvents envelope.
+//
+// The event ID and timestamp are preserved. The payload is decoded as a JSON
+// object and datacontenttype is application/json.
+//
+// Parameters:
+//   - event: Captured event containing serialized payloads and schema URLs.
+//   - compact: True for COMPACT; false for REGULAR.
+//
+// Returns:
+//   - FeedRecord: Envelope with the selected payload and schema.
+//   - error: Coded error when the selected payload is invalid JSON; otherwise nil.
 func Record(event FeedEvent, compact bool) (FeedRecord, error) {
 	dataJSON, schema := event.DataFull, event.DataSchemaFull
 	if compact {

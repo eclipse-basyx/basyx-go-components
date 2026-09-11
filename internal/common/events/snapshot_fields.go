@@ -33,7 +33,15 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
-// AASFieldsFromSnapshot extracts the AAS identifiers and stored references.
+// AASFieldsFromSnapshot extracts identifiers and references from a captured shell.
+//
+// Parameters:
+//   - snap: Complete AAS snapshot in JSON-compatible form; nil is allowed.
+//
+// Returns:
+//   - aasID: Shell identifier, or empty if absent.
+//   - globalAssetID: Global asset identifier, or empty if absent.
+//   - submodels: The shell's stored Submodel references and optional semantic identifiers.
 func AASFieldsFromSnapshot(snap map[string]any) (aasID, globalAssetID string, submodels []SubmodelRef) {
 	if snap == nil {
 		return "", "", nil

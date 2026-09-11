@@ -26,30 +26,25 @@
 package eventfeed
 
 import (
-	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 )
 
 // Builder constructs shared CloudEvents.
 type Builder = events.Builder
 
-// NewBuilder constructs a builder using feed-compatible URL settings.
+// NewBuilder constructs an event builder from feed configuration.
+//
+// Parameters:
+//   - cfg: Feed configuration containing the public source and schema URLs.
+//
+// Returns:
+//   - *Builder: Shared CloudEvents builder using those URLs.
 func NewBuilder(cfg Config) *Builder {
 	return events.NewBuilder(events.Config{SourceBaseURL: cfg.SourceBaseURL, SchemaBaseURL: cfg.SchemaBaseURL})
 }
 
-// IsPCNSemanticID identifies Product Change Notification Submodels.
-func IsPCNSemanticID(id string) bool { return events.IsPCNSemanticID(id) }
-
-// SemanticIDFromSubmodel reads the Submodel semantic identifier.
-func SemanticIDFromSubmodel(sm types.ISubmodel) string { return events.SemanticIDFromSubmodel(sm) }
-
-// PCNNewRecordValuesFromSubmodel returns newly added notification records.
-func PCNNewRecordValuesFromSubmodel(previous, current types.ISubmodel) []model.SubmodelElementValue {
-	return events.PCNNewRecordValuesFromSubmodel(previous, current)
-}
 func schemaPairForType(kind, base string) (string, string) {
 	return events.SchemaPairForType(kind, base)
 }

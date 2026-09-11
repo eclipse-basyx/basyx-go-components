@@ -27,10 +27,10 @@ package eventfeed
 
 import (
 	"encoding/json"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"net/http"
 	"path"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"github.com/go-chi/chi/v5"
 )
 

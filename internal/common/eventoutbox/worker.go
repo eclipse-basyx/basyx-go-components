@@ -39,12 +39,12 @@ import (
 
 // Worker runs a bounded pool of post-commit delivery workers for one sink.
 type Worker struct {
-	repository  *Repository
-	sink, owner string
-	publisher   Publisher
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
-	metrics     instruments
+	repository *Repository
+	sink       string
+	publisher  Publisher
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	metrics    instruments
 }
 
 type instruments struct {
@@ -86,26 +86,38 @@ func newInstruments(sink string) (instruments, error) {
 	return i, nil
 }
 
-// Start creates four delivery workers and one queue observer.
-func Start(ctx context.Context, repository *Repository, sink, owner string, publisher Publisher) (*Worker, error) {
+// Start launches four delivery workers and one queue observer.
+//
+// ctx controls their lifetime. Call Stop before closing the database pool.
+//
+// Parameters:
+//   - ctx: Service lifecycle context.
+//   - repository: Repository holding pending deliveries.
+//   - sink: Destination ID to process.
+//   - publisher: Transport adapter used by the delivery workers.
+//
+// Returns:
+//   - *Worker: Running worker pool.
+//   - error: Telemetry initialization error; no workers start on failure.
+func Start(ctx context.Context, repository *Repository, sink string, publisher Publisher) (*Worker, error) {
 	instruments, err := newInstruments(sink)
 	if err != nil {
 		return nil, err
 	}
 	workerCtx, cancel := context.WithCancel(ctx)
-	w := &Worker{repository: repository, sink: sink, owner: owner, publisher: publisher, cancel: cancel, metrics: instruments}
-	for n := range 4 {
-		w.wg.Go(func() { w.run(workerCtx, fmt.Sprintf("%s/%d", owner, n)) })
+	w := &Worker{repository: repository, sink: sink, publisher: publisher, cancel: cancel, metrics: instruments}
+	for range 4 {
+		w.wg.Go(func() { w.run(workerCtx) })
 	}
 	w.wg.Go(func() { w.observe(workerCtx) })
 	return w, nil
 }
 
-func (w *Worker) run(ctx context.Context, owner string) {
+func (w *Worker) run(ctx context.Context) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	for ctx.Err() == nil {
-		found, err := w.repository.DeliverOne(ctx, w.sink, owner, w.publisher)
+		found, err := w.repository.DeliverOne(ctx, w.sink, w.publisher)
 		w.recordResult(ctx, found, err)
 		if found && err == nil {
 			continue
@@ -165,5 +177,7 @@ func (w *Worker) recordStats(ctx context.Context) {
 	}
 }
 
-// Stop cancels in-flight delivery and waits before the database pool is closed.
+// Stop cancels in-flight deliveries and waits for every worker to exit.
+//
+// Interrupted entries remain pending. Stop is safe to call more than once.
 func (w *Worker) Stop() { w.cancel(); w.wg.Wait() }

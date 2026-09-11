@@ -27,14 +27,18 @@ package common
 
 import (
 	"fmt"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
 )
 
-// MQTTEnabled reports whether MQTT delivery is configured.
+// MQTTEnabled checks whether eventing enables the MQTT sink.
+//
+// Returns:
+//   - bool: True when eventing is enabled and sinks contains mqtt; full validation also requires the outbox.
 func (c EventingConfig) MQTTEnabled() bool {
 	if !c.Enabled {
 		return false
