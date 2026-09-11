@@ -27,10 +27,316 @@
 package dppapi
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"net/http"
+	"regexp"
+	"strings"
 	"testing"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
+	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
+	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 )
+
+func TestNewDPPRepositoryServiceWithRegistrySyncFlagCombinations(t *testing.T) {
+	tests := []struct {
+		name        string
+		aasEnabled  bool
+		smEnabled   bool
+		aasRegistry *aasregistrydb.PostgreSQLAASRegistryDatabase
+		smRegistry  *smregistrydb.PostgreSQLSMDatabase
+		wantCode    string
+	}{
+		{name: "disabled"},
+		{name: "AAS only", aasEnabled: true, aasRegistry: &aasregistrydb.PostgreSQLAASRegistryDatabase{}},
+		{name: "Submodel only", smEnabled: true, smRegistry: &smregistrydb.PostgreSQLSMDatabase{}},
+		{name: "both", aasEnabled: true, smEnabled: true, aasRegistry: &aasregistrydb.PostgreSQLAASRegistryDatabase{}, smRegistry: &smregistrydb.PostgreSQLSMDatabase{}},
+		{name: "missing AAS dependency", aasEnabled: true, wantCode: "DPP-REGSYNC-NILAASREGISTRY"},
+		{name: "missing Submodel dependency", smEnabled: true, wantCode: "DPP-REGSYNC-NILSMREGISTRY"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service, err := NewDPPRepositoryServiceWithRegistrySync(nil, nil, test.aasRegistry, test.smRegistry, registrysync.Config{
+				AASRegistryIntegration:      test.aasEnabled,
+				SubmodelRegistryIntegration: test.smEnabled,
+			})
+			if test.wantCode == "" {
+				if err != nil || service == nil {
+					t.Fatalf("NewDPPRepositoryServiceWithRegistrySync() service = %v, error = %v", service, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.wantCode) {
+				t.Fatalf("NewDPPRepositoryServiceWithRegistrySync() error = %v, want %s", err, test.wantCode)
+			}
+		})
+	}
+}
+
+func TestRegistrySynchronizationFlagCombinations(t *testing.T) {
+	for combination := 0; combination < 8; combination++ {
+		aasEnabled := combination&1 != 0
+		submodelEnabled := combination&2 != 0
+		discoveryEnabled := combination&4 != 0
+		t.Run(fmt.Sprintf("aas=%t/submodel=%t/discovery=%t", aasEnabled, submodelEnabled, discoveryEnabled), func(t *testing.T) {
+			aasRegistry := newRecordingAASRegistry()
+			submodelRegistry := newRecordingSubmodelRegistry()
+			service, err := newDPPRepositoryServiceWithRegistrySync(nil, nil, aasRegistry, submodelRegistry, registrysync.Config{
+				AASRegistryIntegration:      aasEnabled,
+				SubmodelRegistryIntegration: submodelEnabled,
+				ExternalBaseURLs:            []string{"https://aas.example.test"},
+			})
+			if err != nil {
+				t.Fatalf("newDPPRepositoryServiceWithRegistrySync() error = %v", err)
+			}
+
+			ctx := common.ContextWithConfig(t.Context(), &common.Config{
+				General: common.GeneralConfig{DiscoveryIntegration: discoveryEnabled},
+			})
+			submodel := types.NewSubmodel("urn:example:submodel")
+			aas := types.NewAssetAdministrationShell(
+				"urn:example:aas",
+				types.NewAssetInformation(types.AssetKindInstance),
+			)
+			aas.SetSubmodels([]types.IReference{submodelReference(submodel.ID())})
+
+			if err = service.syncCreatedDescriptors(ctx, nil, aas, []types.ISubmodel{submodel}); err != nil {
+				t.Fatalf("syncCreatedDescriptors() error = %v", err)
+			}
+			if err = service.syncUpdatedDescriptors(ctx, nil, aas, aas, []submodelDescriptorUpdate{{
+				previous: submodel, submitted: submodel,
+			}}, []string{"urn:example:stale"}); err != nil {
+				t.Fatalf("syncUpdatedDescriptors() error = %v", err)
+			}
+			if err = service.deleteSubmodelDescriptorIfEnabled(ctx, nil, submodel.ID()); err != nil {
+				t.Fatalf("deleteSubmodelDescriptorIfEnabled() error = %v", err)
+			}
+			if err = service.deleteAASDescriptorIfEnabled(ctx, nil, aas.ID()); err != nil {
+				t.Fatalf("deleteAASDescriptorIfEnabled() error = %v", err)
+			}
+
+			assertRegistryCalls(t, "AAS", aasRegistry.calls, aasEnabled, 2)
+			assertRegistryCalls(t, "Submodel", submodelRegistry.calls, submodelEnabled, 3)
+			for _, observed := range append(aasRegistry.discoverySettings, submodelRegistry.discoverySettings...) {
+				if observed != discoveryEnabled {
+					t.Fatalf("registry context discoveryIntegration = %t, want %t", observed, discoveryEnabled)
+				}
+			}
+		})
+	}
+}
+
+func TestRegistrySynchronizationRepairsMissingUnchangedDescriptors(t *testing.T) {
+	aasRegistry := newRecordingAASRegistry()
+	submodelRegistry := newRecordingSubmodelRegistry()
+	service, err := newDPPRepositoryServiceWithRegistrySync(nil, nil, aasRegistry, submodelRegistry, registrysync.Config{
+		AASRegistryIntegration:      true,
+		SubmodelRegistryIntegration: true,
+		ExternalBaseURLs:            []string{"https://aas.example.test"},
+	})
+	if err != nil {
+		t.Fatalf("newDPPRepositoryServiceWithRegistrySync() error = %v", err)
+	}
+
+	aas := types.NewAssetAdministrationShell("urn:example:aas", types.NewAssetInformation(types.AssetKindInstance))
+	submodel := types.NewSubmodel("urn:example:submodel")
+	if err = service.syncUpdatedDescriptors(t.Context(), nil, aas, aas, []submodelDescriptorUpdate{{
+		previous: submodel, submitted: submodel,
+	}}, nil); err != nil {
+		t.Fatalf("syncUpdatedDescriptors() error = %v", err)
+	}
+
+	if aasRegistry.calls != 1 {
+		t.Fatalf("AAS registry writes = %d, want repair upsert", aasRegistry.calls)
+	}
+	if submodelRegistry.calls != 1 {
+		t.Fatalf("Submodel registry writes = %d, want repair upsert", submodelRegistry.calls)
+	}
+}
+
+func TestRegistrySynchronizationSkipsExistingUnchangedDescriptors(t *testing.T) {
+	aasRegistry := newRecordingAASRegistry()
+	submodelRegistry := newRecordingSubmodelRegistry()
+	service, err := newDPPRepositoryServiceWithRegistrySync(nil, nil, aasRegistry, submodelRegistry, registrysync.Config{
+		AASRegistryIntegration:      true,
+		SubmodelRegistryIntegration: true,
+		ExternalBaseURLs:            []string{"https://aas.example.test"},
+	})
+	if err != nil {
+		t.Fatalf("newDPPRepositoryServiceWithRegistrySync() error = %v", err)
+	}
+
+	aas := types.NewAssetAdministrationShell("urn:example:aas", types.NewAssetInformation(types.AssetKindInstance))
+	submodel := types.NewSubmodel("urn:example:submodel")
+	if err = service.syncCreatedDescriptors(t.Context(), nil, aas, []types.ISubmodel{submodel}); err != nil {
+		t.Fatalf("syncCreatedDescriptors() error = %v", err)
+	}
+	aasWrites := aasRegistry.calls
+	submodelWrites := submodelRegistry.calls
+
+	if err = service.syncUpdatedDescriptors(t.Context(), nil, aas, aas, []submodelDescriptorUpdate{{
+		previous: submodel, submitted: submodel,
+	}}, nil); err != nil {
+		t.Fatalf("syncUpdatedDescriptors() error = %v", err)
+	}
+	if aasRegistry.calls != aasWrites {
+		t.Fatalf("AAS registry writes = %d, want unchanged %d", aasRegistry.calls, aasWrites)
+	}
+	if submodelRegistry.calls != submodelWrites {
+		t.Fatalf("Submodel registry writes = %d, want unchanged %d", submodelRegistry.calls, submodelWrites)
+	}
+}
+
+func TestRegistrySynchronizationPreservesAuthorizedCallerAuditScope(t *testing.T) {
+	aasRegistry := newRecordingAASRegistry()
+	submodelRegistry := newRecordingSubmodelRegistry()
+	service, err := newDPPRepositoryServiceWithRegistrySync(nil, nil, aasRegistry, submodelRegistry, registrysync.Config{
+		AASRegistryIntegration:      true,
+		SubmodelRegistryIntegration: true,
+		ExternalBaseURLs:            []string{"https://aas.example.test"},
+	})
+	if err != nil {
+		t.Fatalf("newDPPRepositoryServiceWithRegistrySync() error = %v", err)
+	}
+	ctx := history.ContextWithAudit(t.Context(), history.AuditContext{
+		ActorSubject:        "dpp-writer",
+		AuthorizationResult: "ALLOW",
+		RequestID:           "request-1",
+		CorrelationID:       "correlation-1",
+		HTTPMethod:          http.MethodPost,
+	})
+	aas := types.NewAssetAdministrationShell("urn:example:aas", types.NewAssetInformation(types.AssetKindInstance))
+	submodel := types.NewSubmodel("urn:example:submodel")
+	if err = service.syncCreatedDescriptors(ctx, nil, aas, []types.ISubmodel{submodel}); err != nil {
+		t.Fatalf("syncCreatedDescriptors() error = %v", err)
+	}
+
+	assertRegistryAudit := func(registry string, audit history.AuditContext) {
+		t.Helper()
+		if audit.ActorSubject != "dpp-writer" || audit.AuthorizationResult != "ALLOW" {
+			t.Fatalf("%s registry audit actor/result = %q/%q", registry, audit.ActorSubject, audit.AuthorizationResult)
+		}
+		if audit.RequestID != "request-1" || audit.CorrelationID != "correlation-1" {
+			t.Fatalf("%s registry audit request/correlation = %q/%q", registry, audit.RequestID, audit.CorrelationID)
+		}
+	}
+	assertRegistryAudit("AAS", aasRegistry.audits[0])
+	assertRegistryAudit("Submodel", submodelRegistry.audits[0])
+}
+
+type recordingAASRegistry struct {
+	calls             int
+	discoverySettings []bool
+	descriptors       map[string]commonmodel.AssetAdministrationShellDescriptor
+	audits            []history.AuditContext
+}
+
+func newRecordingAASRegistry() *recordingAASRegistry {
+	return &recordingAASRegistry{descriptors: make(map[string]commonmodel.AssetAdministrationShellDescriptor)}
+}
+
+func (r *recordingAASRegistry) InsertAdministrationShellDescriptorInTransaction(ctx context.Context, _ *sql.Tx, descriptor commonmodel.AssetAdministrationShellDescriptor) error {
+	r.record(ctx)
+	r.descriptors[descriptor.Id] = descriptor
+	return nil
+}
+
+func (r *recordingAASRegistry) UpsertAdministrationShellDescriptorInTransaction(ctx context.Context, _ *sql.Tx, descriptor commonmodel.AssetAdministrationShellDescriptor) error {
+	r.record(ctx)
+	r.descriptors[descriptor.Id] = descriptor
+	return nil
+}
+
+func (r *recordingAASRegistry) GetAssetAdministrationShellDescriptorByIDInTransaction(_ context.Context, _ *sql.Tx, id string) (commonmodel.AssetAdministrationShellDescriptor, error) {
+	descriptor, ok := r.descriptors[id]
+	if !ok {
+		return commonmodel.AssetAdministrationShellDescriptor{}, common.NewErrNotFound("DPP-TEST-AASDESC-NOTFOUND")
+	}
+	return descriptor, nil
+}
+
+func (r *recordingAASRegistry) DeleteAssetAdministrationShellDescriptorByIDInTransaction(ctx context.Context, _ *sql.Tx, id string) error {
+	r.record(ctx)
+	delete(r.descriptors, id)
+	return nil
+}
+
+func (r *recordingAASRegistry) record(ctx context.Context) {
+	r.calls++
+	r.discoverySettings = append(r.discoverySettings, discoveryIntegrationFromContext(ctx))
+	r.audits = append(r.audits, history.FromContext(ctx))
+}
+
+type recordingSubmodelRegistry struct {
+	calls             int
+	discoverySettings []bool
+	descriptors       map[string]commonmodel.SubmodelDescriptor
+	audits            []history.AuditContext
+}
+
+func newRecordingSubmodelRegistry() *recordingSubmodelRegistry {
+	return &recordingSubmodelRegistry{descriptors: make(map[string]commonmodel.SubmodelDescriptor)}
+}
+
+func (r *recordingSubmodelRegistry) InsertSubmodelDescriptorsInTransaction(ctx context.Context, _ *sql.Tx, descriptors []commonmodel.SubmodelDescriptor) (int, error) {
+	r.record(ctx)
+	for _, descriptor := range descriptors {
+		r.descriptors[descriptor.Id] = descriptor
+	}
+	return -1, nil
+}
+
+func (r *recordingSubmodelRegistry) UpsertSubmodelDescriptorInTransaction(ctx context.Context, _ *sql.Tx, descriptor commonmodel.SubmodelDescriptor) error {
+	r.record(ctx)
+	r.descriptors[descriptor.Id] = descriptor
+	return nil
+}
+
+func (r *recordingSubmodelRegistry) GetSubmodelDescriptorByIDInTransaction(_ context.Context, _ *sql.Tx, id string) (commonmodel.SubmodelDescriptor, error) {
+	descriptor, ok := r.descriptors[id]
+	if !ok {
+		return commonmodel.SubmodelDescriptor{}, common.NewErrNotFound("DPP-TEST-SMDESC-NOTFOUND")
+	}
+	return descriptor, nil
+}
+
+func (r *recordingSubmodelRegistry) DeleteSubmodelDescriptorByIDInTransaction(ctx context.Context, _ *sql.Tx, id string) error {
+	r.record(ctx)
+	delete(r.descriptors, id)
+	return nil
+}
+
+func (r *recordingSubmodelRegistry) record(ctx context.Context) {
+	r.calls++
+	r.discoverySettings = append(r.discoverySettings, discoveryIntegrationFromContext(ctx))
+	r.audits = append(r.audits, history.FromContext(ctx))
+}
+
+func discoveryIntegrationFromContext(ctx context.Context) bool {
+	cfg, ok := common.ConfigFromContext(ctx)
+	return ok && cfg.General.DiscoveryIntegration
+}
+
+func assertRegistryCalls(t *testing.T, registry string, calls int, enabled bool, enabledCalls int) {
+	t.Helper()
+	want := 0
+	if enabled {
+		want = enabledCalls
+	}
+	if calls != want {
+		t.Fatalf("%s registry calls = %d, want %d", registry, calls, want)
+	}
+}
 
 func TestElementResponseSupportsScalarSubmodelElementListItems(t *testing.T) {
 	item := scalarProperty("", "A", types.DataTypeDefXSDString)
@@ -56,4 +362,143 @@ func TestElementResponseSupportsScalarSubmodelElementListItems(t *testing.T) {
 	if fullElement["elementId"] != "energyClasses0" {
 		t.Fatalf("elementResponse() full elementId = %#v, want energyClasses0", fullElement["elementId"])
 	}
+}
+
+func TestPreserveManagedFileValuesRestoresRepositoryPathOnDPPUpdate(t *testing.T) {
+	managedPath := "/aasx/files/token/manual.pdf"
+	currentFile := testFileElement("manual", managedPath)
+	current := types.NewSubmodel("submodel/id")
+	current.SetSubmodelElements([]types.ISubmodelElement{currentFile})
+
+	attachmentURL := "https://aas.example.test/submodels/c3VibW9kZWwvaWQ/submodel-elements/manual/attachment"
+	replacementFile := testFileElement("manual", attachmentURL)
+	replacement := types.NewSubmodel("submodel/id")
+	replacement.SetSubmodelElements([]types.ISubmodelElement{replacementFile})
+
+	preserveManagedFileValues(current, replacement, dppSerializationContext{
+		submodelID:             current.ID(),
+		externalBaseURL:        "https://aas.example.test",
+		managedAttachmentPaths: map[string]struct{}{"manual": {}},
+	})
+	if got := dereferenceString(replacementFile.Value()); got != managedPath {
+		t.Fatalf("replacement File value = %q, want managed path %q", got, managedPath)
+	}
+}
+
+func TestPreserveManagedFileValuesKeepsChangedExternalURL(t *testing.T) {
+	current := types.NewSubmodel("submodel/id")
+	current.SetSubmodelElements([]types.ISubmodelElement{testFileElement("manual", "/aasx/files/token/manual.pdf")})
+	replacementFile := testFileElement("manual", "https://files.example.test/replacement.pdf")
+	replacement := types.NewSubmodel("submodel/id")
+	replacement.SetSubmodelElements([]types.ISubmodelElement{replacementFile})
+
+	preserveManagedFileValues(current, replacement, dppSerializationContext{
+		submodelID:             current.ID(),
+		externalBaseURL:        "https://aas.example.test",
+		managedAttachmentPaths: map[string]struct{}{"manual": {}},
+	})
+	if got := dereferenceString(replacementFile.Value()); got != "https://files.example.test/replacement.pdf" {
+		t.Fatalf("replacement File value = %q, want changed external URL", got)
+	}
+}
+
+func TestSerializationContextLoaderBulkLoadsManagedAttachments(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repository, err := submodelrepositorydb.NewSubmodelDatabaseFromPools(db, db, nil, "off")
+	if err != nil {
+		t.Fatalf("NewSubmodelDatabaseFromPools() error = %v", err)
+	}
+	first := types.NewSubmodel("urn:example:first")
+	first.SetSubmodelElements([]types.ISubmodelElement{testFileElement("manual", "/aasx/files/manual")})
+	second := types.NewSubmodel("urn:example:second")
+	collection := types.NewSubmodelElementCollection()
+	collection.SetValue([]types.ISubmodelElement{testFileElement("datasheet", "/aasx/files/datasheet")})
+	collectionIDShort := "documents"
+	collection.SetIDShort(&collectionIDShort)
+	second.SetSubmodelElements([]types.ISubmodelElement{collection})
+
+	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL([]string{first.ID(), second.ID()})
+	if err != nil {
+		t.Fatalf("BuildManagedFileAttachmentPathsBySubmodelIDsSQL() error = %v", err)
+	}
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WillReturnRows(
+		sqlmock.NewRows([]string{"submodel_identifier", "idshort_path"}).
+			AddRow(first.ID(), "manual").
+			AddRow(second.ID(), "documents.datasheet"),
+	)
+
+	service := NewDPPRepositoryService(nil, repository)
+	loader, err := service.serializationContextLoader(t.Context(), []types.ISubmodel{first, second}, false)
+	if err != nil {
+		t.Fatalf("serializationContextLoader() error = %v", err)
+	}
+	firstContext, _ := loader(first)
+	secondContext, _ := loader(second)
+	if !firstContext.isManagedAttachment("manual", "") {
+		t.Fatal("first managed attachment path was not loaded")
+	}
+	if !secondContext.isManagedAttachment("documents.datasheet", "") {
+		t.Fatal("nested managed attachment path was not loaded")
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("attachment lookup queries = %v", err)
+	}
+}
+
+func TestSerializationContextLoaderSkipsSubmodelsWithoutFiles(t *testing.T) {
+	submodel := types.NewSubmodel("urn:example:scalar")
+	submodel.SetSubmodelElements([]types.ISubmodelElement{scalarProperty("name", "value", types.DataTypeDefXSDString)})
+	service := NewDPPRepositoryService(nil, nil)
+	loader, err := service.serializationContextLoader(t.Context(), []types.ISubmodel{submodel}, false)
+	if err != nil {
+		t.Fatalf("serializationContextLoader() error = %v", err)
+	}
+	serializationContext, err := loader(submodel)
+	if err != nil || serializationContext.submodelID != submodel.ID() {
+		t.Fatalf("serialization context = %#v, error = %v", serializationContext, err)
+	}
+}
+
+func TestPreserveManagedAttachmentsMapsLookupFailureToServerError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repository, err := submodelrepositorydb.NewSubmodelDatabaseFromPools(db, db, nil, "off")
+	if err != nil {
+		t.Fatalf("NewSubmodelDatabaseFromPools() error = %v", err)
+	}
+	current := types.NewSubmodel("urn:example:files")
+	current.SetSubmodelElements([]types.ISubmodelElement{testFileElement("manual", "/aasx/files/manual")})
+	replacement := types.NewSubmodel(current.ID())
+	replacement.SetSubmodelElements([]types.ISubmodelElement{testFileElement("manual", "/aasx/files/manual")})
+	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL([]string{current.ID()})
+	if err != nil {
+		t.Fatalf("BuildManagedFileAttachmentPathsBySubmodelIDsSQL() error = %v", err)
+	}
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WillReturnError(errors.New("reader unavailable"))
+
+	service := NewDPPRepositoryService(nil, repository)
+	err = service.preserveManagedAttachments(t.Context(), []types.ISubmodel{replacement}, []types.ISubmodel{current})
+	if err == nil {
+		t.Fatal("preserveManagedAttachments() error = nil")
+	}
+	if status := errorStatus(err, http.StatusBadRequest); status != http.StatusInternalServerError {
+		t.Fatalf("preserveManagedAttachments() status = %d, want %d", status, http.StatusInternalServerError)
+	}
+	if code := errorCode(err); code != "DPP-UPDDPP-PRESERVEFILES-LOADPATHS" {
+		t.Fatalf("preserveManagedAttachments() code = %q", code)
+	}
+}
+
+func testFileElement(idShort string, value string) *types.File {
+	file := types.NewFile()
+	file.SetIDShort(&idShort)
+	file.SetValue(&value)
+	return file
 }

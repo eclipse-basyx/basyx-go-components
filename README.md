@@ -62,9 +62,9 @@ The project is composed of DB-backed microservices for AAS and Submodel registri
 
 ### Prerequisites
 
-- Go >= 1.27.0
+- Go >= 1.27.1
 - Docker & Docker Compose
-- PostgreSQL (for local development)
+- PostgreSQL 16 or newer (for local development)
 
 ### Steps
 

@@ -192,7 +192,6 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 			`"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"."value"`,
 			`EXISTS`,
 			`external_subject_reference_key`,
-			`'PUBLIC_READABLE'`,
 		} {
 			if !strings.Contains(actual, want) {
 				return fmt.Errorf("expected SQL to contain %q, got: %s", want, actual)
@@ -208,7 +207,7 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 	}()
 
 	mock.ExpectQuery("supplemental reference lookup").
-		WithArgs(sqlmock.AnyArg(), "supplementalsemanticIdExample value").
+		WithArgs(sqlmock.AnyArg(), "PUBLIC_READABLE", "supplementalsemanticIdExample value").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"owner_id",
 			"ref_id",
@@ -245,8 +244,8 @@ func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
 			name:                "nested semantic keys correlate to owning AAS descriptor",
 			fragment:            "$aasdesc#submodelDescriptors[].semanticId.keys[]",
 			field:               "$aasdesc#submodelDescriptors[].idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
 			columns:             []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
 			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
 				_, err := ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(ctx, db, ids)
@@ -257,8 +256,8 @@ func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
 			name:                "standalone semantic keys stay on current submodel descriptor",
 			fragment:            "$smdesc#semanticId.keys[]",
 			field:               "$smdesc#idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
 			columns:             []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
 			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
 				_, err := ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(ctx, db, ids)
@@ -269,8 +268,8 @@ func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
 			name:                "nested supplemental references correlate to owning AAS descriptor",
 			fragment:            "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
 			field:               "$aasdesc#submodelDescriptors[].idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
 			columns:             []string{"owner_id", "ref_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
 			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
 				_, err := ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, ids)
@@ -281,8 +280,8 @@ func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
 			name:                "standalone supplemental keys stay on current submodel descriptor",
 			fragment:            "$smdesc#supplementalSemanticIds[].keys[]",
 			field:               "$smdesc#idShort",
-			expectedCorrelation: `"submodel_descriptor__exists"."descriptor_id" = "submodel_descriptor"."descriptor_id"`,
-			unexpected:          `"submodel_descriptor__exists"."aas_descriptor_id" = "submodel_descriptor"."aas_descriptor_id"`,
+			expectedCorrelation: `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."descriptor_id"`,
+			unexpected:          `"submodel_descriptor__exists"."authorization_group_key" = "submodel_descriptor"."aas_descriptor_id"`,
 			columns:             []string{"owner_id", "ref_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
 			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
 				_, err := ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, ids)
@@ -424,17 +423,21 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 				_ = db.Close()
 			}()
 
-			mock.ExpectQuery("supplemental reference lookup").
-				WithArgs(sqlmock.AnyArg(), "FILTER_VISIBLE").
-				WillReturnRows(sqlmock.NewRows([]string{
-					"owner_id",
-					"ref_id",
-					"ref_type",
-					"key_id",
-					"key_type",
-					"key_value",
-					"parent_reference_payload",
-				}))
+			expectation := mock.ExpectQuery("supplemental reference lookup")
+			if test.name == "submodel element" {
+				expectation.WithArgs(sqlmock.AnyArg(), "PUBLIC_READABLE", "FILTER_VISIBLE")
+			} else {
+				expectation.WithArgs(sqlmock.AnyArg(), "FILTER_VISIBLE")
+			}
+			expectation.WillReturnRows(sqlmock.NewRows([]string{
+				"owner_id",
+				"ref_id",
+				"ref_type",
+				"key_id",
+				"key_type",
+				"key_value",
+				"parent_reference_payload",
+			}))
 
 			out, readErr := test.read(ctx, db, []int64{12})
 			if readErr != nil {

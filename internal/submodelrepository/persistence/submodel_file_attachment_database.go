@@ -36,6 +36,8 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 )
@@ -61,6 +63,56 @@ func (s *SubmodelDatabase) FileAttachmentExists(submodelID string, idShortPath s
 	}
 
 	return fileOID.Valid, nil
+}
+
+// ManagedFileAttachmentPaths returns all canonical idShort paths backed by managed attachment bytes.
+func (s *SubmodelDatabase) ManagedFileAttachmentPaths(ctx context.Context, submodelID string) (map[string]struct{}, error) {
+	pathsBySubmodel, err := s.ManagedFileAttachmentPathsBySubmodelIDs(ctx, []string{submodelID})
+	if err != nil {
+		return nil, err
+	}
+	return pathsBySubmodel[submodelID], nil
+}
+
+// ManagedFileAttachmentPathsBySubmodelIDs returns canonical managed attachment paths grouped by Submodel ID.
+func (s *SubmodelDatabase) ManagedFileAttachmentPathsBySubmodelIDs(
+	ctx context.Context,
+	submodelIDs []string,
+) (map[string]map[string]struct{}, error) {
+	pathsBySubmodel := make(map[string]map[string]struct{}, len(submodelIDs))
+	for _, submodelID := range submodelIDs {
+		pathsBySubmodel[submodelID] = make(map[string]struct{})
+	}
+	if len(submodelIDs) == 0 {
+		return pathsBySubmodel, nil
+	}
+	query, args, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL(submodelIDs)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-BUILDSQL " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-QUERY " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var submodelID string
+		var path string
+		if err = rows.Scan(&submodelID, &path); err != nil {
+			return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-SCAN " + err.Error())
+		}
+		paths := pathsBySubmodel[submodelID]
+		if paths == nil {
+			paths = make(map[string]struct{})
+			pathsBySubmodel[submodelID] = paths
+		}
+		paths[path] = struct{}{}
+	}
+	if err = rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-MANAGEDFILEPATHS-ITERATE " + err.Error())
+	}
+	return pathsBySubmodel, nil
 }
 
 // UploadFileAttachment uploads attachment content for a File submodel element.
@@ -101,7 +153,7 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST"); visibilityErr != nil {
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
 		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
@@ -111,6 +163,9 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 		reference, contentType, uploadErr := fileHandler.UploadManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath, file, fileName)
 		if uploadErr != nil {
 			return uploadErr
+		}
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST-PROSPECTIVE", true); visibilityErr != nil {
+			return visibilityErr
 		}
 		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, contentType)
 	})
@@ -145,7 +200,7 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST"); visibilityErr != nil {
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
 		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
@@ -164,6 +219,9 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(
 		)
 		if uploadErr != nil {
 			return uploadErr
+		}
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST-PROSPECTIVE", true); visibilityErr != nil {
+			return visibilityErr
 		}
 		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, resolvedContentType)
 	})
@@ -283,7 +341,7 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-DELETEFILEHIST-STARTTX", "SMREPO-DELETEFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-DELETEFILEHIST"); visibilityErr != nil {
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-DELETEFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
 		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
@@ -300,12 +358,16 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 	})
 }
 
-func (s *SubmodelDatabase) ensureFileAttachmentMutationVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, errorPrefix string) error {
+func (s *SubmodelDatabase) ensureFileAttachmentMutationVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, errorPrefix string, prospective bool) error {
 	shouldEnforce, err := shouldEnforceFormula(ctx, errorPrefix+"-SHOULDENFORCE")
 	if err != nil || !shouldEnforce {
 		return err
 	}
-	exists, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	readCtx := ctx
+	if right, selected := auth.SelectedFormulaRight(ctx); selected && right == grammar.RightsEnumCREATE && !prospective {
+		readCtx = auth.ContextWithoutQueryFilter(ctx)
+	}
+	exists, visible, err := s.checkSubmodelElementVisibilityInTx(readCtx, tx, submodelID, idShortPath)
 	if err != nil {
 		return err
 	}

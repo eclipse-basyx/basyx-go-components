@@ -97,12 +97,18 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		globalAssetIDs, specificAssetLinks := splitGlobalAssetIDLinks(assetLink)
 		readUnrestricted := auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
 		if len(globalAssetIDs) > 0 && len(specificAssetLinks) == 0 {
-			ctx = mergeGlobalAssetIDLookupVisibility(ctx, globalAssetIDs)
+			ctx, enforceErr = mergeGlobalAssetIDLookupVisibility(ctx, globalAssetIDs)
+			if enforceErr != nil {
+				return common.NewErrorResponse(enforceErr, http.StatusInternalServerError, customDiscoveryComponentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "GlobalAssetIDQuery"), enforceErr
+			}
 		}
 
 		assetLinkQuery := buildBasicDiscoveryAssetLinkQueryWithAccess(ctx, specificAssetLinks, readUnrestricted)
 		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
-			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+			ctx, enforceErr = auth.WithAuthorizedQuery(ctx, auth.SemanticResourceBD, assetLinkQuery)
+			if enforceErr != nil {
+				return common.NewErrorResponse(enforceErr, http.StatusInternalServerError, customDiscoveryComponentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "AssetLinkQuery"), enforceErr
+			}
 		}
 		if len(globalAssetIDs) == 0 && (assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0) {
 			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
@@ -112,7 +118,10 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
 		createdAfterQuery := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$bd#createdAt")
-		ctx = auth.MergeQueryFilter(ctx, createdAfterQuery)
+		ctx, enforceErr = auth.WithAuthorizedQuery(ctx, auth.SemanticResourceBD, createdAfterQuery)
+		if enforceErr != nil {
+			return common.NewErrorResponse(enforceErr, http.StatusInternalServerError, customDiscoveryComponentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "CreatedAfterQuery"), enforceErr
+		}
 	}
 
 	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
@@ -440,11 +449,13 @@ func buildUnrestrictedAssetLinkQueryForRoot(assetLink []model.AssetLink, root st
 	}
 }
 
-func mergeGlobalAssetIDLookupVisibility(ctx context.Context, globalAssetIDs []string) context.Context {
+func mergeGlobalAssetIDLookupVisibility(ctx context.Context, globalAssetIDs []string) (context.Context, error) {
+	// globalAssetId is intentionally selectable in the DTR discovery contract. This query
+	// constrains the requested value; it is not a response-field visibility check.
 	globalAssetIDQuery := buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs)
 	if globalAssetIDQuery.Condition == nil {
-		return ctx
+		return ctx, nil
 	}
 
-	return auth.MergeQueryFilter(ctx, globalAssetIDQuery)
+	return auth.WithAuthorizedQuery(ctx, auth.SemanticResourceBD, globalAssetIDQuery)
 }

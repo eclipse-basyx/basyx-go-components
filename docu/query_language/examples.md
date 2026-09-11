@@ -8,7 +8,7 @@ the [query language architecture guide](README.md).
 
 | Endpoint | Main field roots | Typical content |
 | --- | --- | --- |
-| `POST /query/shells` | `$aas` | Asset Administration Shells |
+| `POST /query/shells` | `$aas`; additionally `$sm` and `$sme` in the AAS Environment Service | Asset Administration Shells and, in the AAS Environment Service, their referenced local Submodels and elements |
 | `POST /query/submodels` | `$sm`, `$sme` | Submodels and their elements |
 | `POST /query/shell-descriptors` | `$aasdesc`, nested `$smdesc` | AAS Descriptors and nested Submodel Descriptors |
 | `POST /query/submodel-descriptors` | `$smdesc` | Submodel Descriptors |
@@ -17,9 +17,10 @@ Every request requires a top-level `$condition`. It selects the parent objects
 in `result`. Optional `$filters` shape fragments inside those objects. Available
 field paths depend on the endpoint's model and reader.
 
-`$match` in a request and `MATCH` in an ABAC rule are not separate predicates.
-They only change whether their enclosing fragment condition is evaluated at
-parent scope or against the current fragment row.
+Logical `$match` inside `$condition` requires all contained predicates to hold
+in one shared list or hierarchy scope. The separate `$match` flag on a
+`$filters` entry changes whether that fragment condition is evaluated at parent
+scope or against the current fragment row.
 
 Each example shows the complete expected response for the displayed starting
 object, including `paging_metadata`, the parent object, unchanged displayed
@@ -68,6 +69,39 @@ Expected result:
 
 The top-level condition removes the `Pump` parent from `result`. It does not
 mask individual fragments inside `Motor`.
+
+### Select AASs by referenced Submodel content
+
+On the AAS Environment Service's `/query/shells` endpoint, `$sm` searches only
+Submodels referenced by the candidate AAS, and `$sme` searches their elements.
+This extension is not currently enabled by the standalone AAS Repository
+Service. The following query returns an AAS only when one of its referenced
+`CarbonFootprint` Submodels has the specified property value:
+
+```json
+{
+  "$condition": {
+    "$match": [
+      {
+        "$eq": [
+          { "$field": "$sm#idShort" },
+          { "$strVal": "CarbonFootprint" }
+        ]
+      },
+      {
+        "$lt": [
+          { "$numCast": { "$field": "$sme.AggregatedCarbonFootprint#value" } },
+          { "$numVal": 48 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Replacing `$match` with `$and` gives the conditions independent hierarchy
+scopes: one referenced Submodel may satisfy the `idShort` comparison while a
+different referenced Submodel supplies the matching element.
 
 ## 2. Keep a complete fragment with existential matching
 
@@ -565,6 +599,74 @@ Expected result:
 The request cannot expose `manufacturerAssetId`, because the ABAC filter is
 mandatory. It also cannot recover `P-200`, because the request itself narrowed
 the policy-visible rows to `P-100`.
+
+## 7. Query MultiLanguageProperty text
+
+`#value` on a `MultiLanguageProperty` matches its language string text. The
+condition holds when any language entry satisfies it, so the language does not
+need to be constrained.
+
+Starting Submodel:
+
+```json
+{
+  "id": "https://example.org/submodel/MultiLanguageTest",
+  "submodelElements": [
+    {
+      "idShort": "ProductName",
+      "modelType": "MultiLanguageProperty",
+      "value": [
+        { "language": "en", "text": "Industrial Sensor" },
+        { "language": "de", "text": "Industriesensor" },
+        { "language": "fr", "text": "Capteur industriel" }
+      ]
+    }
+  ]
+}
+```
+
+Request:
+
+```json
+{
+  "$condition": {
+    "$contains": [
+      { "$field": "$sme.ProductName#value" },
+      { "$strVal": "Capteur" }
+    ]
+  }
+}
+```
+
+Expected result:
+
+```json
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "https://example.org/submodel/MultiLanguageTest",
+      "submodelElements": [
+        {
+          "idShort": "ProductName",
+          "modelType": "MultiLanguageProperty",
+          "value": [
+            { "language": "en", "text": "Industrial Sensor" },
+            { "language": "de", "text": "Industriesensor" },
+            { "language": "fr", "text": "Capteur industriel" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+The French text matches even though the condition names no language. Adding a
+separate `#language` condition with `$and` only checks that the language exists;
+it does not require the matching text to belong to that language. For example,
+the text condition above combined with `#language = "en"` still matches this
+Submodel.
 
 ## What can be combined
 

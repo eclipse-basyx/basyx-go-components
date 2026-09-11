@@ -5,7 +5,7 @@
         "name": "user",
         "attributes": [
           {
-            "CLAIM": "role"
+            "CLAIMPATH": "/role"
           }
         ]
       },
@@ -100,10 +100,10 @@
       {
         "name": "data_provider",
         "formula": {
-          "$contains": [
+          "$eq": [
             {
               "$attribute": {
-                "CLAIM": "role"
+                "CLAIMPATH": "/role"
               }
             },
             {
@@ -163,10 +163,10 @@
             {
               "$or": [
                 {
-                  "$contains": [
+                  "$eq": [
                     {
                       "$attribute": {
-                        "CLAIM": "role"
+                        "CLAIMPATH": "/role"
                       }
                     },
                     {
@@ -175,10 +175,10 @@
                   ]
                 },
                 {
-                  "$contains": [
+                  "$eq": [
                     {
                       "$attribute": {
-                        "CLAIM": "role"
+                        "CLAIMPATH": "/role"
                       }
                     },
                     {

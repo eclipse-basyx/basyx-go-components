@@ -318,8 +318,14 @@ func jsonPointerValue(root any, pointer string) (any, bool, error) {
 			}
 			current = next
 		case []any:
-			index, err := strconv.Atoi(token)
-			if err != nil || index < 0 || index >= len(value) {
+			index, valid := jsonPointerArrayIndex(token, len(value))
+			if !valid {
+				return nil, false, nil
+			}
+			current = value[index]
+		case []string:
+			index, valid := jsonPointerArrayIndex(token, len(value))
+			if !valid {
 				return nil, false, nil
 			}
 			current = value[index]
@@ -328,6 +334,17 @@ func jsonPointerValue(root any, pointer string) (any, bool, error) {
 		}
 	}
 	return current, true, nil
+}
+
+func jsonPointerArrayIndex(token string, length int) (int, bool) {
+	if token == "-" || token == "" || len(token) > 1 && token[0] == '0' {
+		return 0, false
+	}
+	index, err := strconv.Atoi(token)
+	if err != nil || index < 0 || index >= length {
+		return 0, false
+	}
+	return index, true
 }
 
 func decodeJSONPointer(pointer string) ([]string, error) {

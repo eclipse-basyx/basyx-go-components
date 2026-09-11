@@ -44,6 +44,7 @@ type FragmentFilterPredicate struct {
 	Or        []FragmentFilterPredicate  `json:"$or,omitempty" yaml:"$or,omitempty" mapstructure:"$or,omitempty"`
 	fragment  *grammar.FragmentStringPattern
 	global    bool
+	caller    bool
 }
 
 // FragmentFilterEntry associates a concrete fragment with its predicate.
@@ -55,6 +56,10 @@ type FragmentFilterEntry struct {
 // NewFragmentFilterPredicate creates a leaf with its evaluation scope.
 func NewFragmentFilterPredicate(expression grammar.LogicalExpression, match bool) FragmentFilterPredicate {
 	return FragmentFilterPredicate{Condition: &expression, Match: match}
+}
+
+func newCallerFragmentFilterPredicate(expression grammar.LogicalExpression, match bool) FragmentFilterPredicate {
+	return FragmentFilterPredicate{Condition: &expression, Match: match, caller: true}
 }
 
 func newGlobalFragmentFilterPredicate(expression grammar.LogicalExpression) FragmentFilterPredicate {

@@ -1,0 +1,26 @@
+{
+    "$condition": {
+        "$and": [
+            {
+                "$contains": [
+                    {
+                        "$field": "$sme.ProductName#value"
+                    },
+                    {
+                        "$strVal": "Capteur"
+                    }
+                ]
+            },
+            {
+                "$contains": [
+                    {
+                        "$field": "$sm#idShort"
+                    },
+                    {
+                        "$strVal": "Query_Language"
+                    }
+                ]
+            }
+        ]
+    }
+}

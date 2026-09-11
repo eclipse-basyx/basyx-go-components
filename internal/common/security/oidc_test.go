@@ -26,6 +26,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -137,10 +138,14 @@ func TestOIDCMiddleware_AnonymousClaimsDoNotContainSubject(t *testing.T) {
 		if _, ok := claims["sub"]; ok {
 			t.Fatal("anonymous claims must not contain sub")
 		}
+		if IsAuthenticated(r.Context()) {
+			t.Fatal("anonymous request must not be authenticated")
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request = request.WithContext(context.WithValue(request.Context(), authenticatedKey, true))
 	response := httptest.NewRecorder()
 
 	middleware.ServeHTTP(response, request)
@@ -178,6 +183,9 @@ func TestOIDCMiddleware_AppliesClaimMappingsAndTokenTypeIndicators(t *testing.T)
 		claims := FromContext(r)
 		if claims == nil {
 			t.Fatalf("expected claims in context")
+		}
+		if !IsAuthenticated(r.Context()) {
+			t.Fatal("verified request must be authenticated")
 		}
 
 		if got := claims["basyx.token_type"]; got != "app" {

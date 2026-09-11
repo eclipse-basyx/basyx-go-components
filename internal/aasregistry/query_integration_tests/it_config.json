@@ -38,7 +38,7 @@
     "expectedStatus": 201
   },
   {
-    "context": "POST Query - Viewer - FILTERED",
+    "context": "POST Query - Viewer - HIDDEN CONDITION DOES NOT MATCH",
     "token": { "user": "usera", "password": "pwd" },
     "method": "POST",
     "endpoint": "{{BASYX_IT_API_URL}}/query/shell-descriptors",
@@ -47,7 +47,7 @@
     "expectedStatus": 200
   },
   {
-    "context": "POST Query - Editor - TIGHTER",
+    "context": "POST Query - Editor - HIDDEN CONDITION DOES NOT MATCH",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
     "endpoint": "{{BASYX_IT_API_URL}}/query/shell-descriptors",

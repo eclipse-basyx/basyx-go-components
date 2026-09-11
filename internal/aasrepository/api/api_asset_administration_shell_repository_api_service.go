@@ -50,6 +50,7 @@ type AssetAdministrationShellRepositoryAPIAPIService struct {
 	lifecycleContext                context.Context
 	asyncJobManager                 *asyncjob.Manager
 	eventFeed                       *eventfeed.Module
+	aasHierarchyQueriesEnabled      bool
 }
 
 const componentName = "AASREPO"
@@ -59,6 +60,7 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(
 	ctx context.Context,
 	databaseBackendAssetAdministrationShell *persistencepostgresql.AssetAdministrationShellDatabase,
 	submodelBackend *submodelpersistence.SubmodelDatabase,
+	aasHierarchyQueriesEnabled bool,
 	managers ...*asyncjob.Manager,
 ) *AssetAdministrationShellRepositoryAPIAPIService {
 	var asyncJobManager *asyncjob.Manager
@@ -76,6 +78,7 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(
 		submodelAPI:                     submodelService,
 		lifecycleContext:                ctx,
 		asyncJobManager:                 asyncJobManager,
+		aasHierarchyQueriesEnabled:      aasHierarchyQueriesEnabled,
 	}
 }
 
@@ -125,8 +128,14 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
+	if hierarchyErr := s.validateAASHierarchyQuery(query); hierarchyErr != nil {
+		return newAPIErrorResponse(hierarchyErr, http.StatusBadRequest, operation, "BadRequest"), nil
+	}
 
-	queryCtx := auth.MergeQueryFilter(ctx, query)
+	queryCtx, queryContextErr := s.queryContext(ctx, query)
+	if queryContextErr != nil {
+		return newAPIErrorResponse(queryContextErr, http.StatusInternalServerError, operation, "BuildAuthorizedQuery"), queryContextErr
+	}
 	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(queryCtx, limit, decodedCursor, "", nil, time.Time{}, time.Time{})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
@@ -155,6 +164,31 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 	}), nil
 }
 
+func (s *AssetAdministrationShellRepositoryAPIAPIService) queryContext(ctx context.Context, query grammar.Query) (context.Context, error) {
+	queryCtx, err := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceAAS, query)
+	if err != nil {
+		return ctx, err
+	}
+	if s.aasHierarchyQueriesEnabled {
+		return grammar.ContextWithAASHierarchyQueries(queryCtx), nil
+	}
+	return queryCtx, nil
+}
+
+func (s *AssetAdministrationShellRepositoryAPIAPIService) validateAASHierarchyQuery(query grammar.Query) error {
+	if s.aasHierarchyQueriesEnabled {
+		return nil
+	}
+	field, found := grammar.FindModelFieldByRoot(query, "$sm", "$sme")
+	if !found {
+		return nil
+	}
+	return common.NewErrBadRequest(
+		"AASREPO-QUERYAAS-HIERARCHYDISABLED field " + string(field) +
+			" is only supported by the AAS Environment Service",
+	)
+}
+
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (gen.ImplResponse, error) {
 
@@ -169,8 +203,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
+	ctx, selectorErr := withAuthorizedAASListSelectors(ctx, idShort, specificAssetIDs)
+	if selectorErr != nil {
+		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
+	}
 
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, "", nil, createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -241,8 +279,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
+	ctx, selectorErr := withAuthorizedAASListSelectors(ctx, idShort, specificAssetIDs)
+	if selectorErr != nil {
+		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
+	}
 
-	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, idShort, specificAssetIDs)
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, "", nil)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -286,6 +328,45 @@ func decodeSpecificAssetIDs(assetIds []string) ([]types.ISpecificAssetID, error)
 		specificAssetIDs = append(specificAssetIDs, specificAssetID)
 	}
 	return specificAssetIDs, nil
+}
+
+func withAuthorizedAASListSelectors(
+	ctx context.Context,
+	idShort string,
+	specificAssetIDs []types.ISpecificAssetID,
+) (context.Context, error) {
+	conditions := make([]grammar.LogicalExpression, 0, len(specificAssetIDs)+1)
+	if idShort != "" {
+		field := grammar.ModelStringPattern("$aas#idShort")
+		value := grammar.StandardString(idShort)
+		conditions = append(conditions, grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}})
+	}
+	for _, specificAssetID := range specificAssetIDs {
+		if specificAssetID == nil {
+			continue
+		}
+		value := grammar.StandardString(specificAssetID.Value())
+		if specificAssetID.Name() == "globalAssetId" {
+			field := grammar.ModelStringPattern("$aas#assetInformation.globalAssetId")
+			conditions = append(conditions, grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}})
+			continue
+		}
+		nameField := grammar.ModelStringPattern("$aas#assetInformation.specificAssetIds[].name")
+		valueField := grammar.ModelStringPattern("$aas#assetInformation.specificAssetIds[].value")
+		name := grammar.StandardString(specificAssetID.Name())
+		conditions = append(conditions, grammar.LogicalExpression{Match: []grammar.MatchExpression{
+			{Eq: grammar.ComparisonItems{{Field: &nameField}, {StrVal: &name}}},
+			{Eq: grammar.ComparisonItems{{Field: &valueField}, {StrVal: &value}}},
+		}})
+	}
+	if len(conditions) == 0 {
+		return ctx, nil
+	}
+	condition := conditions[0]
+	if len(conditions) > 1 {
+		condition = grammar.LogicalExpression{And: conditions}
+	}
+	return auth.WithAuthorizedQuery(ctx, auth.SemanticResourceAAS, grammar.Query{Condition: &condition})
 }
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
@@ -338,13 +419,17 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
+	ctx, selectorErr := withAuthorizedAASListSelectors(ctx, idShort, specificAssetIDs)
+	if selectorErr != nil {
+		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
+	}
 
 	normalizedLimit, err := common.NormalizeRecentChangesLimit(limit)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 	}
 
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, normalizedLimit, decodedCursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, normalizedLimit, decodedCursor, "", nil, createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil

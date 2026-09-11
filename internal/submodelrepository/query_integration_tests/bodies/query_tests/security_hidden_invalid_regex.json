@@ -1,0 +1,8 @@
+{
+  "$condition": {
+    "$regex": [
+      { "$field": "$sme.NewTestList[0]#value" },
+      { "$strVal": "[" }
+    ]
+  }
+}

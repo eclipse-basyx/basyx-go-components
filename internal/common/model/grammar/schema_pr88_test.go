@@ -111,6 +111,37 @@ func TestAttributeItemUnmarshalAcceptsReferenceIdentifier(t *testing.T) {
 	}
 }
 
+func TestAttributeItemUnmarshalAcceptsClaimPath(t *testing.T) {
+	t.Parallel()
+
+	var attr AttributeItem
+	if err := json.Unmarshal([]byte(`{"CLAIMPATH":"/realm_access/roles"}`), &attr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if attr.Kind != ATTRCLAIMPATH || attr.Value != "/realm_access/roles" {
+		t.Fatalf("unexpected claim path: %#v", attr)
+	}
+}
+
+func TestAttributeItemUnmarshalRejectsInvalidClaimPath(t *testing.T) {
+	t.Parallel()
+
+	for _, pointer := range []string{"", "roles", "/roles/~", "/roles/~2"} {
+		pointer := pointer
+		t.Run(pointer, func(t *testing.T) {
+			t.Parallel()
+			payload, err := json.Marshal(map[string]string{"CLAIMPATH": pointer})
+			if err != nil {
+				t.Fatalf("marshal claim path: %v", err)
+			}
+			var attr AttributeItem
+			if err := json.Unmarshal(payload, &attr); err == nil {
+				t.Fatalf("expected invalid CLAIMPATH %q to be rejected", pointer)
+			}
+		})
+	}
+}
+
 func TestLogicalExpressionUnmarshalPR88OperatorRules(t *testing.T) {
 	t.Parallel()
 
@@ -136,6 +167,57 @@ func TestLogicalExpressionUnmarshalPR88OperatorRules(t *testing.T) {
 		{
 			name:    "raw field string comparison allowed",
 			payload: `{"$eq":[{"$field":"$aasdesc#id"},{"$strVal":"urn:aas:demo"}]}`,
+		},
+		{
+			name:    "claim path string array membership allowed",
+			payload: `{"$contains":[{"$attribute":{"CLAIMPATH":"/realm_access/roles"}},{"$strVal":"admin"}]}`,
+		},
+		{
+			name:      "in operator rejected",
+			payload:   `{"$in":[{"$strVal":"admin"},{"$attribute":{"CLAIMPATH":"/realm_access/roles"}}]}`,
+			wantError: "unknown field",
+		},
+		{
+			name:    "claim path equality left",
+			payload: `{"$eq":[{"$attribute":{"CLAIMPATH":"/role"}},{"$strVal":"admin"}]}`,
+		},
+		{
+			name:    "claim path equality right",
+			payload: `{"$eq":[{"$strVal":"admin"},{"$attribute":{"CLAIMPATH":"/role"}}]}`,
+		},
+		{
+			name:      "claim path equality with raw field rejected",
+			payload:   `{"$eq":[{"$attribute":{"CLAIMPATH":"/role"}},{"$field":"$sm#id"}]}`,
+			wantError: "scalar string operand",
+		},
+		{
+			name:      "claim path inequality rejected",
+			payload:   `{"$ne":[{"$attribute":{"CLAIMPATH":"/role"}},{"$strVal":"admin"}]}`,
+			wantError: "direct CLAIMPATH",
+		},
+		{
+			name:      "claim path ordered comparison rejected",
+			payload:   `{"$gt":[{"$attribute":{"CLAIMPATH":"/role"}},{"$strVal":"admin"}]}`,
+			wantError: "direct CLAIMPATH",
+		},
+		{
+			name:      "claim path reverse contains rejected",
+			payload:   `{"$contains":[{"$strVal":"admin"},{"$attribute":{"CLAIMPATH":"/roles"}}]}`,
+			wantError: "does not allow CLAIMPATH",
+		},
+		{
+			name:      "claim path contains raw field rejected",
+			payload:   `{"$contains":[{"$attribute":{"CLAIMPATH":"/roles"}},{"$field":"$sm#id"}]}`,
+			wantError: "scalar string second operand",
+		},
+		{
+			name:    "claim path contains cast field allowed",
+			payload: `{"$contains":[{"$attribute":{"CLAIMPATH":"/roles"}},{"$strCast":{"$field":"$sm#id"}}]}`,
+		},
+		{
+			name:      "claim path regex rejected",
+			payload:   `{"$regex":[{"$attribute":{"CLAIMPATH":"/role"}},{"$strVal":"admin"}]}`,
+			wantError: "direct CLAIMPATH",
 		},
 		{
 			name:    "raw field numeric comparison allowed",

@@ -316,13 +316,8 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDAndDat
 	return aas, nil
 }
 
-func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
-	if err != nil {
-		return nil, common.NewInternalServerError("AASREPO-ABAC-COLLECTOR " + err.Error())
-	}
-
-	return collector, nil
+func buildAASCollector(ctx context.Context) (*grammar.ResolvedFieldPathCollector, error) {
+	return grammar.NewResolvedFieldPathCollectorForAAS(grammar.AASHierarchyQueriesEnabled(ctx)), nil
 }
 
 func buildCoreAssetAdministrationShellSelectExpressions(
@@ -391,7 +386,7 @@ func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Co
 	dialect := goqu.Dialect("postgres")
 	ds := buildGetAssetAdministrationShellDBIDByIdentifierDataset(&dialect, aasIdentifier)
 
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return false, false, collectorErr
 	}
@@ -691,29 +686,16 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	if enforceErr != nil {
 		return enforceErr
 	}
-	if shouldEnforce {
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
-		if visErr != nil {
-			return visErr
-		}
-		if !exists {
-			return common.NewErrNotFound("AASREPO-NEWSMREFINAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		if !visible {
-			return common.NewErrDenied("AASREPO-NEWSMREFINAAS-ABACDENIED writing to this AAS is not allowed")
-		}
-	}
 	keys := submodelRef.Keys()
 	if len(keys) > 0 && keys[0].Value() != "" {
-		submodelIdentifier := keys[0].Value()
-		exists, existsErr := submodelReferenceExistsInAssetAdministrationShellInTransaction(
-			tx, aasDBID, submodelIdentifier, "AASREPO-NEWSMREFINAAS",
-		)
-		if existsErr != nil {
-			return existsErr
-		}
-		if exists {
-			return common.NewErrConflict("AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + submodelIdentifier + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'")
+		if err := s.ensureVisibleSubmodelReferenceCreateDoesNotExist(
+			ctx,
+			tx,
+			aasDBID,
+			aasIdentifier,
+			keys[0].Value(),
+		); err != nil {
+			return err
 		}
 	}
 	previousSnapshot, err := s.loadAASHistorySnapshotByDBIDBeforeMutationTx(ctx, tx, aasDBID)
@@ -737,6 +719,46 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 		}
 	}
 	return s.appendAddedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelRef)
+}
+
+func (s *AssetAdministrationShellDatabase) ensureVisibleSubmodelReferenceCreateDoesNotExist(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasDBID int64,
+	aasIdentifier string,
+	submodelIdentifier string,
+) error {
+	exists, err := submodelReferenceExistsInAssetAdministrationShellInTransaction(
+		tx,
+		aasDBID,
+		submodelIdentifier,
+		"AASREPO-NEWSMREFINAAS",
+	)
+	if err != nil {
+		return err
+	}
+
+	conflictMessage := "AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + submodelIdentifier + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'"
+	deniedMessage := "AASREPO-NEWSMREFINAAS-CHKDUP-ABACDENIED existing Submodel reference is not accessible under ABAC constraints"
+	return createprecheck.EnsureVisibleDuplicate(
+		ctx,
+		exists,
+		func(readCtx context.Context) error {
+			exists, visible, visibilityErr := s.checkAASVisibilityInTx(readCtx, tx, aasIdentifier)
+			if visibilityErr != nil {
+				return visibilityErr
+			}
+			if !exists {
+				return common.NewErrNotFound("AASREPO-NEWSMREFINAAS-CHKDUP-NOTFOUND existing AAS not found")
+			}
+			if !visible {
+				return common.NewErrDenied(deniedMessage)
+			}
+			return nil
+		},
+		conflictMessage,
+		deniedMessage,
+	)
 }
 
 func appendSubmodelReferenceInAssetAdministrationShellTx(ctx context.Context, tx *sql.Tx, aasDBID int64, submodelRef types.IReference) error {
@@ -887,7 +909,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsInTransac
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + err.Error())
 	}
 
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, "", collectorErr
 	}
@@ -980,7 +1002,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-BUILDSQL " + err.Error())
 	}
 
-	collector, err := buildAASCollector()
+	collector, err := buildAASCollector(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1042,7 +1064,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellByIDInTran
 	dialect := goqu.Dialect("postgres")
 	selectDS := buildGetAssetAdministrationShellDBIDByIdentifierDataset(&dialect, aasIdentifier)
 
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, collectorErr
 	}
@@ -1349,7 +1371,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + err.Error())
 	}
-	collector, err := buildAASCollector()
+	collector, err := buildAASCollector(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1761,15 +1783,17 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 		}
 
 		ctx = auth.SelectPutFormulaByExistence(ctx, thumbnailExists)
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
-		if visErr != nil {
-			return visErr
-		}
-		if !exists {
-			return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		if !visible {
-			return common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED updating this AAS is not allowed")
+		if thumbnailExists {
+			exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+			if visErr != nil {
+				return visErr
+			}
+			if !exists {
+				return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+			}
+			if !visible {
+				return common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED updating this AAS is not allowed")
+			}
 		}
 	}
 	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
@@ -1785,6 +1809,15 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 	reference, contentType, uploadErr := thumbnailHandler.uploadManagedThumbnailTx(ctx, tx, aasIdentifier, fileName, file)
 	if uploadErr != nil {
 		return uploadErr
+	}
+	if shouldEnforce {
+		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+		if visErr != nil {
+			return visErr
+		}
+		if !exists || !visible {
+			return common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED prospective AAS is not accessible under ABAC constraints")
+		}
 	}
 	binaryReceipt, err := history.EnsureBinaryEvidenceTx(ctx, tx, reference.Content, contentType)
 	if err != nil {
@@ -1891,7 +1924,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 	dialect := goqu.Dialect("postgres")
 	selectDS := buildGetAssetAdministrationShellDBIDByIdentifierDataset(&dialect, aasIdentifier)
 
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, "", collectorErr
 	}
@@ -2189,7 +2222,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBIDI
 
 func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBIDWithQueryer(ctx context.Context, db aasDBQueryer, aasDBID int64) (types.IAssetAdministrationShell, error) {
 	dialect := goqu.Dialect("postgres")
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, collectorErr
 	}
@@ -2548,7 +2581,7 @@ func parseSpecificAssetIDSemanticIDPayload(payload []byte) (types.IReference, bo
 func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationID(ctx context.Context, db aasDBQueryer, assetInformationID int64) ([]types.ISpecificAssetID, error) {
 	dialect := goqu.Dialect("postgres")
 	queryDS := buildReadSpecificAssetIDsByAssetInformationIDDataset(&dialect, assetInformationID)
-	collector, collectorErr := buildAASCollector()
+	collector, collectorErr := buildAASCollector(ctx)
 	if collectorErr != nil {
 		return nil, collectorErr
 	}

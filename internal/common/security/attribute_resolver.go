@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	jsoniter "github.com/json-iterator/go"
 )
 
 func globalAttributesForEvaluation(configured GlobalAttributes, claims Claims, currentTime time.Time) GlobalAttributes {
@@ -72,7 +71,6 @@ func resolveGlobalToken(name string, globals GlobalAttributes) (any, bool) {
 }
 
 // resolveAttributeValue resolves a grammar.AttributeValue to a concrete literal using claims/globals.
-// It also normalizes common claim container shapes (e.g., single-element arrays from Keycloak).
 func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals GlobalAttributes) any {
 	m, ok := asStringMap(attr)
 	if !ok {
@@ -83,11 +81,14 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, globals G
 		if !exists {
 			return nil
 		}
-		normalized := normalizeClaimScalar(val)
-		if normalized == nil {
+		return grammar.ClaimValue{Value: val}
+	}
+	if pointer := m["CLAIMPATH"]; pointer != "" {
+		val, exists, err := jsonPointerValue(claims, pointer)
+		if err != nil || !exists {
 			return nil
 		}
-		return fmt.Sprint(normalized)
+		return grammar.ClaimValue{Value: val}
 	}
 	if g := m["GLOBAL"]; g != "" {
 		if val, ok := resolveGlobalToken(g, globals); ok {
@@ -132,8 +133,7 @@ func asStringMap(v any) (map[string]string, bool) {
 			return nil, false
 		}
 		var m map[string]any
-		var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
-		if err := jsonMarshaller.Unmarshal(b, &m); err != nil {
+		if err := json.Unmarshal(b, &m); err != nil {
 			return nil, false
 		}
 		out := make(map[string]string, len(m))

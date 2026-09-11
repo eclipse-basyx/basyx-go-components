@@ -182,7 +182,7 @@ func runServer(ctx context.Context, configPath string) error {
 	eventFeedModule.StartPublishLoop(ctx)
 
 	aasSvc := aasenvironment.NewCustomAASRepositoryService(
-		api.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasDatabase, submodelDatabase, asyncJobManager),
+		api.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasDatabase, submodelDatabase, false, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)

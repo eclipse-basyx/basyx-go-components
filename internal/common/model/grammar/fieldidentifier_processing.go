@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
 
@@ -114,6 +115,11 @@ func (a *ArrayIndex) UnmarshalJSON(b []byte) error {
 // or predicates for array-backed structures.
 // can be produced by this value: {"$field": "$aasdesc#specificAssetIds[2].externalSubjectId.keys[3].value"}
 type ResolvedFieldPath struct {
+	// Field preserves the semantic field identifier that produced this SQL
+	// path. Authorization-aware compilers use it to bind visibility to the
+	// value being read without reverse-engineering table aliases.
+	Field ModelStringPattern
+
 	// Column is the final SQL column or expression corresponding to
 	// the terminal field of the identifier.
 	Column string
@@ -125,7 +131,8 @@ type ResolvedFieldPath struct {
 	// as they appear in the original FieldIdentifier.
 	ArrayBindings []ArrayIndexBinding
 
-	rootContext resolveContext
+	rootContext       resolveContext
+	visibilityWitness exp.Expression
 }
 
 // ResolveScalarFieldToSQL converts a FieldIdentifier value into its SQL
@@ -195,6 +202,7 @@ func ResolveScalarFieldToSQL(field *ModelStringPattern) (ResolvedFieldPath, erro
 	}
 
 	return ResolvedFieldPath{
+		Field:         *field,
 		Column:        column,
 		ArrayBindings: bindings,
 		rootContext:   contextFromFieldPrefix(fieldStr),

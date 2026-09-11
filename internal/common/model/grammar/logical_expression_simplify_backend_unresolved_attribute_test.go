@@ -38,11 +38,11 @@ func TestSimplifyForBackendFilter_UnresolvedAttributeStringComparison_FailsClose
 	}
 
 	simplified, decision := le.SimplifyForBackendFilter(func(AttributeValue) any { return nil })
-	if decision != SimplifyFalse {
-		t.Fatalf("expected SimplifyFalse, got %v", decision)
+	if decision != SimplifyIndeterminate {
+		t.Fatalf("expected SimplifyIndeterminate, got %v", decision)
 	}
-	if simplified.Boolean == nil || *simplified.Boolean {
-		t.Fatalf("expected boolean false, got %#v", simplified.Boolean)
+	if !simplified.Indeterminate {
+		t.Fatalf("expected indeterminate marker, got %#v", simplified)
 	}
 }
 
@@ -57,10 +57,10 @@ func TestSimplifyForBackendFilter_UnresolvedAttributeNumCast_FailsClosed(t *test
 	}
 
 	simplified, decision := le.SimplifyForBackendFilter(func(AttributeValue) any { return nil })
-	if decision != SimplifyFalse {
-		t.Fatalf("expected SimplifyFalse, got %v", decision)
+	if decision != SimplifyIndeterminate {
+		t.Fatalf("expected SimplifyIndeterminate, got %v", decision)
 	}
-	if simplified.Boolean == nil || *simplified.Boolean {
-		t.Fatalf("expected boolean false, got %#v", simplified.Boolean)
+	if !simplified.Indeterminate {
+		t.Fatalf("expected indeterminate marker, got %#v", simplified)
 	}
 }

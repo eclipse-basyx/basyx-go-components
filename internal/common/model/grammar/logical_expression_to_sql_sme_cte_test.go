@@ -189,8 +189,8 @@ func TestLogicalExpression_SME_WithCollector_MultiConditions(t *testing.T) {
 	t.Logf("SQL: %s", sql)
 
 	assertContainsPreparedEquality(t, sql, `"submodel_element"."idshort_path"`)
-	if !strings.Contains(sql, "CASE WHEN property_element.value_bool IS NOT NULL") {
-		t.Fatalf("expected CASE-based valueType expression in EXISTS SQL, got: %s", sql)
+	if !strings.Contains(sql, "CASE WHEN property_element.id IS NULL THEN NULL WHEN property_element.value_bool IS NOT NULL") {
+		t.Fatalf("expected guarded CASE-based valueType expression in EXISTS SQL, got: %s", sql)
 	}
 	argsText := argsString(args)
 	if !strings.Contains(argsText, "temperature") {

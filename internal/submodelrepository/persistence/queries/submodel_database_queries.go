@@ -432,6 +432,29 @@ func BuildFileAttachmentExistsSQL(submodelID string, idShortPath string) (string
 		ToSQL()
 }
 
+// BuildManagedFileAttachmentPathsBySubmodelIDsSQL builds a set-based lookup for current and legacy managed File attachments.
+func BuildManagedFileAttachmentPathsBySubmodelIDsSQL(submodelIDs []string) (string, []any, error) {
+	dialect := goqu.Dialect(common.Dialect)
+	sm := goqu.T("submodel").As("sm")
+	sme := goqu.T("submodel_element").As("sme")
+	fe := goqu.T("file_element").As("fe")
+	fd := goqu.T("file_data").As("fd")
+	fr := goqu.T("file_binary_reference").As("fr")
+
+	return dialect.From(sm).
+		Join(sme, goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
+		Join(fe, goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
+		LeftJoin(fd, goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
+		LeftJoin(fr, goqu.On(goqu.I("fr.file_element_id").Eq(goqu.I("sme.id")))).
+		Select(goqu.I("sm.submodel_identifier"), goqu.I("sme.idshort_path")).
+		Where(
+			goqu.I("sm.submodel_identifier").In(submodelIDs),
+			goqu.Or(goqu.I("fr.binary_content_id").IsNotNull(), goqu.I("fd.file_oid").IsNotNull()),
+		).
+		Order(goqu.I("sm.submodel_identifier").Asc(), goqu.I("sme.idshort_path").Asc()).
+		ToSQL()
+}
+
 // BuildUpdateSubmodelMetadataSQL builds the submodel metadata update statement.
 func BuildUpdateSubmodelMetadataSQL(submodelDatabaseID int, submodel types.ISubmodel) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)

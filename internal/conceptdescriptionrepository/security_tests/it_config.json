@@ -67,12 +67,12 @@
     "expectedStatus": 200
   },
   {
-    "context": "POST /query/concept-descriptions - viewer idShort masked by ABAC filter",
+    "context": "POST /query/concept-descriptions - hidden idShort cannot select a resource",
     "token": { "user": "userb", "password": "pwd" },
     "method": "POST",
     "endpoint": "{{BASYX_IT_API_URL}}/query/concept-descriptions",
     "data": "postBody/queryViewerAllowed.json",
-    "shouldMatch": "expected/expectedViewerListMaskedIDShort.json",
+    "shouldMatch": "expected/expectedEmptyList.json",
     "expectedStatus": 200
   },
   {

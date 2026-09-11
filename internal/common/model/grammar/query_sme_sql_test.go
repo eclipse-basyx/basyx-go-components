@@ -247,18 +247,23 @@ func TestSMEDescendantMatchCorrelatesContainingSubmodel(t *testing.T) {
 			}
 
 			innerAlias := "submodel_element"
+			innerSubmodelIDColumn := "submodel_id"
+			innerPathColumn := "idshort_path"
 			if outerAlias == innerAlias {
 				innerAlias += "__exists"
+				innerSubmodelIDColumn = "authorization_submodel_id"
+				innerPathColumn = "authorization_idshort_path"
 			}
 			expectedCorrelation := fmt.Sprintf(
-				`"%s"."submodel_id" = "%s"."submodel_id"`,
+				`"%s"."%s" = "%s"."submodel_id"`,
 				innerAlias,
+				innerSubmodelIDColumn,
 				outerAlias,
 			)
 			if !strings.Contains(sql, expectedCorrelation) {
 				t.Fatalf("expected containing-submodel correlation %q, got: %s", expectedCorrelation, sql)
 			}
-			if !strings.Contains(sql, `"`+innerAlias+`"."idshort_path" LIKE`) {
+			if !strings.Contains(sql, `"`+innerAlias+`"."`+innerPathColumn+`" LIKE`) {
 				t.Fatalf("expected descendant path correlation, got: %s", sql)
 			}
 		})

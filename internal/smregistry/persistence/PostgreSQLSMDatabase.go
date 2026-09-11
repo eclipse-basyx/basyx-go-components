@@ -304,11 +304,11 @@ func loadSubmodelDescriptorForUpdateTx(
 	tx *sql.Tx,
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
-	descriptor, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID)
+	descriptor, err := descriptors.GetSubmodelDescriptorByIDSingleStatement(ctx, tx, submodelID)
 	if err != nil || descriptors.CanSkipUpdateReadback(ctx) {
 		return descriptor, err
 	}
-	return descriptors.GetSubmodelDescriptorByID(auth.ContextWithoutQueryFilter(ctx), tx, submodelID)
+	return descriptors.GetSubmodelDescriptorByIDSingleStatement(auth.ContextWithoutQueryFilter(ctx), tx, submodelID)
 }
 
 func loadAuthorizedSubmodelDescriptorEvidenceSnapshotTx(
