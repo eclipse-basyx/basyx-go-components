@@ -46,6 +46,7 @@ func RegisterRoutes(r chi.Router, svc *Service) {
 	}
 	r.Get("/events", svc.handleGetEvents)
 	r.Get("/.well-known/event-feed.json", svc.handleGetCapabilities)
+	r.Get(SchemaPath+"/{schema}", handleSchema)
 }
 
 func (s *Service) handleGetEvents(w http.ResponseWriter, r *http.Request) {

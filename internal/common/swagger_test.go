@@ -457,6 +457,9 @@ func TestAddSwaggerUIInjectsEventFeedOnlyWhenEnabled(t *testing.T) {
 	if strings.Contains(disabledRecorder.Body.String(), "\n  /events:\n") {
 		t.Fatal("expected Event Feed paths to be hidden when disabled")
 	}
+	if strings.Contains(disabledRecorder.Body.String(), "/.well-known/event-feed/schemas/") {
+		t.Fatal("expected Event Feed schemas to be hidden when disabled")
+	}
 	if strings.Contains(disabledRecorder.Body.String(), "/.well-known/event-feed.json") {
 		t.Fatal("expected Event Feed capabilities path to be hidden when disabled")
 	}
@@ -476,6 +479,9 @@ func TestAddSwaggerUIInjectsEventFeedOnlyWhenEnabled(t *testing.T) {
 	body := enabledRecorder.Body.String()
 	if !strings.Contains(body, "\n  /events:\n") {
 		t.Fatal("expected Event Feed /events path when enabled")
+	}
+	if !strings.Contains(body, "/.well-known/event-feed/schemas/{schema}") {
+		t.Fatal("expected Event Feed schema route when enabled")
 	}
 	if !strings.Contains(body, "/.well-known/event-feed.json") {
 		t.Fatal("expected Event Feed capabilities path when enabled")

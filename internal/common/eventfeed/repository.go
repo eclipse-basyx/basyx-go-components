@@ -28,8 +28,8 @@ package eventfeed
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -81,15 +81,20 @@ func (r *Repository) SaveTx(ctx context.Context, tx *sql.Tx, event FeedEvent) (F
 }
 
 func (r *Repository) save(ctx context.Context, exec queryExecer, event FeedEvent) (FeedEvent, error) {
+	authorization, err := json.Marshal(event.AuthorizationAASIDs)
+	if err != nil {
+		return FeedEvent{}, fmt.Errorf("EVENTFEED-SAVE-AUTHJSON: %w", err)
+	}
 	query, args, err := r.dialect.Insert("feed_events").Rows(goqu.Record{
-		"id":                 event.ID,
-		"event_type":         event.Type,
-		"subject":            event.Subject,
-		"source":             event.Source,
-		"dataschema_full":    event.DataSchemaFull,
-		"dataschema_compact": event.DataSchemaCompact,
-		"data_full":          goqu.L("?::jsonb", event.DataFull),
-		"data_compact":       goqu.L("?::jsonb", event.DataCompact),
+		"id":                    event.ID,
+		"event_type":            event.Type,
+		"subject":               event.Subject,
+		"source":                event.Source,
+		"dataschema_full":       event.DataSchemaFull,
+		"dataschema_compact":    event.DataSchemaCompact,
+		"data_full":             goqu.L("?::jsonb", event.DataFull),
+		"data_compact":          goqu.L("?::jsonb", event.DataCompact),
+		"authorization_aas_ids": goqu.L("?::jsonb", string(authorization)),
 	}).Returning("seq", "time").ToSQL()
 	if err != nil {
 		return FeedEvent{}, fmt.Errorf("EVENTFEED-SAVE-BUILDSQL: %w", err)
@@ -107,7 +112,7 @@ func (r *Repository) save(ctx context.Context, exec queryExecer, event FeedEvent
 func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, error) {
 	query, args, err := r.dialect.From("feed_events").
 		Select("seq", "publish_seq", "id", "event_type", "subject", "source", "time",
-			"dataschema_full", "dataschema_compact", "data_full", "data_compact").
+			"dataschema_full", "dataschema_compact", "data_full", "data_compact", "authorization_aas_ids").
 		Where(goqu.C("id").Eq(id)).
 		ToSQL()
 	if err != nil {
@@ -115,15 +120,19 @@ func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, 
 	}
 	var e FeedEvent
 	var publishSeq sql.NullInt64
+	var authorization []byte
 	err = r.db.QueryRowContext(ctx, query, args...).Scan(
 		&e.Seq, &publishSeq, &e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
-		&e.DataSchemaFull, &e.DataSchemaCompact, &e.DataFull, &e.DataCompact,
+		&e.DataSchemaFull, &e.DataSchemaCompact, &e.DataFull, &e.DataCompact, &authorization,
 	)
 	if err == sql.ErrNoRows {
 		return FeedEvent{}, false, nil
 	}
 	if err != nil {
 		return FeedEvent{}, false, fmt.Errorf("EVENTFEED-FINDBYID-SCAN: %w", err)
+	}
+	if err = decodeAuthorizationAASIDs(&e, authorization); err != nil {
+		return FeedEvent{}, false, err
 	}
 	e.PublishSeq = publishSeq.Int64
 	return e, true, nil
@@ -133,6 +142,53 @@ func (r *Repository) FindByID(ctx context.Context, id string) (FeedEvent, bool, 
 // presentation. The caller uses the extra record to detect whether more
 // pages remain.
 func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation Presentation) ([]FeedEvent, error) {
+	ds, err := r.pageDataset(q, presentation)
+	if err != nil {
+		return nil, err
+	}
+	query, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-BUILDSQL: %w", err)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-QUERY: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	events := make([]FeedEvent, 0, q.Limit+1)
+	for rows.Next() {
+		event, err := scanPageEvent(rows, presentation)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-ROWS: %w", err)
+	}
+	return events, nil
+}
+
+func scanPageEvent(rows *sql.Rows, presentation Presentation) (FeedEvent, error) {
+	var event FeedEvent
+	var schema, data string
+	var authorization []byte
+	if err := rows.Scan(&event.PublishSeq, &event.ID, &event.Type, &event.Subject, &event.Source, &event.Time,
+		&schema, &data, &authorization); err != nil {
+		return FeedEvent{}, fmt.Errorf("EVENTFEED-FINDPAGE-SCAN: %w", err)
+	}
+	if err := decodeAuthorizationAASIDs(&event, authorization); err != nil {
+		return FeedEvent{}, err
+	}
+	if presentation == PresentationCompact {
+		event.DataSchemaCompact, event.DataCompact = schema, data
+	} else {
+		event.DataSchemaFull, event.DataFull = schema, data
+	}
+	return event, nil
+}
+
+func (r *Repository) pageDataset(q domainQuery, presentation Presentation) (*goqu.SelectDataset, error) {
 	compact := presentation == PresentationCompact
 	schemaCol := "dataschema_full"
 	dataCol := "data_full"
@@ -142,7 +198,7 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 	}
 	ds := r.dialect.From("feed_events").
 		Select("publish_seq", "id", "event_type", "subject", "source", "time",
-			goqu.C(schemaCol), goqu.C(dataCol))
+			goqu.C(schemaCol), goqu.C(dataCol), "authorization_aas_ids")
 
 	retentionFloor := r.now().Add(-r.maxAge)
 	ds = ds.Where(goqu.C("time").Gte(retentionFloor))
@@ -158,180 +214,111 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 		ds = ds.Where(goqu.C("time").Gte(*q.Since))
 	}
 	if q.Filter != nil {
-		for _, cmp := range q.Filter.Comparisons {
-			col, err := columnForField(cmp.Field, presentation)
-			if err != nil {
-				return nil, err
-			}
-			expr, err := filterExpression(col, cmp)
-			if err != nil {
-				return nil, err
-			}
-			ds = ds.Where(expr)
+		expr, err := q.Filter.expression(presentation)
+		if err != nil {
+			return nil, err
 		}
+		ds = ds.Where(expr)
 	}
 
 	ds = ds.Order(goqu.C("publish_seq").Asc()).Limit(uint(q.Limit + 1))
-	query, args, err := ds.ToSQL()
-	if err != nil {
-		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-BUILDSQL: %w", err)
-	}
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-QUERY: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
 
-	events := make([]FeedEvent, 0, q.Limit+1)
-	for rows.Next() {
-		var e FeedEvent
-		var schema, data string
-		if err = rows.Scan(
-			&e.PublishSeq, &e.ID, &e.Type, &e.Subject, &e.Source, &e.Time,
-			&schema, &data,
-		); err != nil {
-			return nil, fmt.Errorf("EVENTFEED-FINDPAGE-SCAN: %w", err)
-		}
-		if compact {
-			e.DataSchemaCompact = schema
-			e.DataCompact = data
-		} else {
-			e.DataSchemaFull = schema
-			e.DataFull = data
-		}
-		events = append(events, e)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-ROWS: %w", err)
-	}
-	return events, nil
+	return ds, nil
 }
 
-// WithPublishLock runs fn while holding the publish_seq advisory lock on one
-// pooled connection so lock and unlock cannot land on different sessions.
-func (r *Repository) WithPublishLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
-	return r.withSessionLock(ctx, publishLockKey, "EVENTFEED-PUBLISH", fn)
-}
-
-// AssignPublishSeq assigns publish_seq values, in original seq order, to up
-// to batchSize rows that have become visible (i.e. their writer transaction
-// committed) since the last run and don't have one yet. It returns the
-// number of rows assigned. Because the candidate SELECT runs under normal
-// MVCC visibility, a row can only be selected once its own transaction has
-// committed - so publish_seq is never assigned to a row "ahead of" an
-// earlier-committing one that a caller hasn't seen yet. Call with the
-// advisory lock held (see WithPublishLock) so only one instance assigns at a
-// time.
+// AssignPublishSeq publishes a committed batch atomically on the connection
+// holding the transaction advisory lock. The cursor sequence is allocated only
+// after writer transactions are visible, so late commits remain discoverable.
 func (r *Repository) AssignPublishSeq(ctx context.Context, batchSize int) (int64, error) {
-	query, args, err := r.dialect.From("feed_events").
-		Select("id").
-		Where(goqu.C("publish_seq").IsNull()).
-		Order(goqu.C("seq").Asc()).
-		Limit(uint(batchSize)).
-		ToSQL()
-	if err != nil {
-		return 0, fmt.Errorf("EVENTFEED-PUBLISH-BUILDSQL: %w", err)
+	if batchSize < 1 {
+		return 0, fmt.Errorf("EVENTFEED-PUBLISH-BATCH batch size must be positive")
 	}
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return 0, fmt.Errorf("EVENTFEED-PUBLISH-SELECT: %w", err)
-	}
-	ids := make([]string, 0, batchSize)
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			_ = rows.Close()
-			return 0, fmt.Errorf("EVENTFEED-PUBLISH-SCAN: %w", err)
-		}
-		ids = append(ids, id)
-	}
-	if err = rows.Err(); err != nil {
-		_ = rows.Close()
-		return 0, fmt.Errorf("EVENTFEED-PUBLISH-ROWS: %w", err)
-	}
-	_ = rows.Close()
-
-	var assigned int64
-	for _, id := range ids {
-		res, err := r.db.ExecContext(ctx,
-			`UPDATE feed_events SET publish_seq = nextval('feed_events_publish_seq_seq') WHERE id = $1 AND publish_seq IS NULL`,
-			id)
+	return r.withTransactionLock(ctx, publishLockKey, "EVENTFEED-PUBLISH", func(tx *sql.Tx) (int64, error) {
+		candidates := r.dialect.From("feed_events").Select("seq").
+			Where(goqu.C("publish_seq").IsNull()).Order(goqu.C("seq").Asc()).Limit(uint(batchSize))
+		assignments := r.dialect.From("candidates").Select("seq",
+			goqu.Func("nextval", "feed_events_publish_seq_seq").As("publish_seq")).Order(goqu.C("seq").Asc())
+		query, args, err := r.dialect.Update("feed_events").With("candidates", candidates).
+			With("assignments", assignments).From("assignments").
+			Set(goqu.Record{"publish_seq": goqu.I("assignments.publish_seq")}).
+			Where(goqu.I("feed_events.seq").Eq(goqu.I("assignments.seq"))).ToSQL()
 		if err != nil {
-			return assigned, fmt.Errorf("EVENTFEED-PUBLISH-ASSIGN: %w", err)
+			return 0, fmt.Errorf("EVENTFEED-PUBLISH-BUILDSQL: %w", err)
 		}
-		n, _ := res.RowsAffected()
-		assigned += n
-	}
-	return assigned, nil
+		result, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return 0, fmt.Errorf("EVENTFEED-PUBLISH-ASSIGN: %w", err)
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return 0, fmt.Errorf("EVENTFEED-PUBLISH-COUNT: %w", err)
+		}
+		return count, nil
+	})
 }
 
-// WithRetentionLock runs fn while holding the retention advisory lock on one
-// pooled connection so lock and unlock cannot land on different sessions.
-func (r *Repository) WithRetentionLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
-	return r.withSessionLock(ctx, retentionLockKey, "EVENTFEED-RETENTION", fn)
-}
-
-func (r *Repository) withSessionLock(ctx context.Context, key int64, errPrefix string, fn func(context.Context) error) (bool, error) {
-	conn, err := r.db.Conn(ctx)
+func (r *Repository) withTransactionLock(ctx context.Context, key int64, errPrefix string, fn func(*sql.Tx) (int64, error)) (int64, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return false, fmt.Errorf("%s-LOCK-CONN: %w", errPrefix, err)
+		return 0, fmt.Errorf("%s-BEGIN: %w", errPrefix, err)
 	}
-	defer func() { _ = conn.Close() }()
-
+	defer func() { _ = tx.Rollback() }()
+	query, args, err := r.dialect.Select(goqu.Func("pg_try_advisory_xact_lock", key)).ToSQL()
+	if err != nil {
+		return 0, fmt.Errorf("%s-LOCK-BUILDSQL: %w", errPrefix, err)
+	}
 	var locked bool
-	if err = conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&locked); err != nil {
-		return false, fmt.Errorf("%s-LOCK: %w", errPrefix, err)
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&locked); err != nil {
+		return 0, fmt.Errorf("%s-LOCK: %w", errPrefix, err)
 	}
 	if !locked {
-		return false, nil
+		return 0, nil
 	}
-	defer unlockSessionLock(ctx, conn, key, errPrefix)
-	if err = fn(ctx); err != nil {
-		return true, err
+	count, err := fn(tx)
+	if err != nil {
+		return 0, err
 	}
-	return true, nil
+	if err = tx.Commit(); err != nil {
+		return 0, fmt.Errorf("%s-COMMIT: %w", errPrefix, err)
+	}
+	return count, nil
 }
 
-func unlockSessionLock(ctx context.Context, conn *sql.Conn, key int64, errPrefix string) {
-	unlockCtx := context.WithoutCancel(ctx)
-	var unlocked bool
-	if err := conn.QueryRowContext(unlockCtx, "SELECT pg_advisory_unlock($1)", key).Scan(&unlocked); err != nil {
-		slog.WarnContext(ctx, "event feed advisory unlock failed",
-			"error.code", errPrefix+"-UNLOCK", "error", err)
-		return
-	}
-	if !unlocked {
-		slog.WarnContext(ctx, "event feed advisory unlock returned false",
-			"error.code", errPrefix+"-UNLOCK")
-	}
-}
-
-// DeleteOlderThan deletes events created before cutoff in bounded batches.
+// DeleteOlderThan removes expired events in bounded batches on the connection
+// holding the transaction advisory lock. Cancellation rolls back the cleanup
+// and releases the lock before the connection returns to the pool.
 func (r *Repository) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
-	var total int64
-	for {
-		query, args, err := r.dialect.Delete("feed_events").
-			Where(goqu.C("seq").In(
-				r.dialect.From("feed_events").
-					Select("seq").
-					Where(goqu.C("time").Lt(cutoff.UTC())).
-					Order(goqu.C("seq").Asc()).
-					Limit(uint(retentionBatchSize)),
-			)).
-			ToSQL()
-		if err != nil {
-			return total, fmt.Errorf("EVENTFEED-DELETE-BUILDSQL: %w", err)
+	return r.withTransactionLock(ctx, retentionLockKey, "EVENTFEED-RETENTION", func(tx *sql.Tx) (int64, error) {
+		var total int64
+		for {
+			count, err := r.deleteExpiredBatch(ctx, tx, cutoff)
+			if err != nil {
+				return 0, err
+			}
+			total += count
+			if count < int64(retentionBatchSize) {
+				return total, nil
+			}
 		}
-		res, err := r.db.ExecContext(ctx, query, args...)
-		if err != nil {
-			return total, fmt.Errorf("EVENTFEED-DELETE-EXEC: %w", err)
-		}
-		n, _ := res.RowsAffected()
-		total += n
-		if n < int64(retentionBatchSize) {
-			return total, nil
-		}
+	})
+}
+
+func (r *Repository) deleteExpiredBatch(ctx context.Context, tx *sql.Tx, cutoff time.Time) (int64, error) {
+	query, args, err := r.dialect.Delete("feed_events").
+		Where(goqu.C("seq").In(r.dialect.From("feed_events").Select("seq").
+			Where(goqu.C("time").Lt(cutoff.UTC())).Order(goqu.C("seq").Asc()).Limit(uint(retentionBatchSize)))).ToSQL()
+	if err != nil {
+		return 0, fmt.Errorf("EVENTFEED-DELETE-BUILDSQL: %w", err)
 	}
+	result, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("EVENTFEED-DELETE-EXEC: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("EVENTFEED-DELETE-COUNT: %w", err)
+	}
+	return count, nil
 }
 
 func filterExpression(column string, cmp comparison) (goqu.Expression, error) {
@@ -361,4 +348,14 @@ func filterExpression(column string, cmp comparison) (goqu.Expression, error) {
 	default:
 		return nil, newQueryError("EVENTFEED-FILTER-MALFORMED", "malformed RSQL filter expression")
 	}
+}
+
+func decodeAuthorizationAASIDs(event *FeedEvent, data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(data, &event.AuthorizationAASIDs); err != nil {
+		return fmt.Errorf("EVENTFEED-READ-AUTHJSON: %w", err)
+	}
+	return nil
 }

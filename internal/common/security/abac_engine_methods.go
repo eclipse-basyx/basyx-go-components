@@ -49,6 +49,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	// event feed
 	{"GET", "/events", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/.well-known/event-feed.json", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"GET", "/.well-known/event-feed/schemas/{schema}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 
 	// aasx file server
 	{"GET", "/packages", []grammar.RightsEnum{grammar.RightsEnumREAD}},

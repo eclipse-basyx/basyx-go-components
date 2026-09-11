@@ -76,6 +76,29 @@ func (a EventRecordAuthorizer) Allow(ctx context.Context, eventType, subject str
 	return evaluation.Allowed && !queryFilterRestricts(evaluation.QueryFilter)
 }
 
+// AllowEvent checks every historical source of data included in the event.
+func (a EventRecordAuthorizer) AllowEvent(ctx context.Context, event eventfeed.FeedEvent) bool {
+	if !a.Settings.Enabled {
+		return true
+	}
+	isAsset := strings.HasPrefix(event.Type, "io.admin-shell.asset.")
+	if !isAsset && !a.Allow(ctx, event.Type, event.Subject) {
+		return false
+	}
+	if strings.HasPrefix(event.Type, "io.admin-shell.aas.") {
+		return true
+	}
+	if event.AuthorizationAASIDs == nil || (isAsset && len(event.AuthorizationAASIDs) == 0) {
+		return false
+	}
+	for _, aasID := range event.AuthorizationAASIDs {
+		if !a.Allow(ctx, eventfeed.TypeAASUpdated, aasID) {
+			return false
+		}
+	}
+	return true
+}
+
 const httpMethodGet = "GET"
 
 func eventReadPath(basePath, eventType, subject string) string {

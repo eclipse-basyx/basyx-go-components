@@ -56,7 +56,7 @@ func DefaultConfig() Config {
 		MaxAge:          30 * 24 * time.Hour,
 		MaxPageSize:     100,
 		SourceBaseURL:   "http://localhost",
-		SchemaBaseURL:   "https://admin-shell.io/events/schemas",
+		SchemaBaseURL:   "http://localhost" + SchemaPath,
 		HardDeleteGrace: 10 * 24 * time.Hour,
 		CleanupInterval: 24 * time.Hour,
 		PublishInterval: 250 * time.Millisecond,

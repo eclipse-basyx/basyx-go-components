@@ -36,7 +36,18 @@ func encodeCursor(afterSeq int64) (string, error) {
 	if afterSeq < 1 {
 		return "", fmt.Errorf("EVENTFEED-CURSOR-SEQ cursor sequence must be positive")
 	}
-	payload, err := json.Marshal(cursorData{AfterSeq: afterSeq})
+	return marshalCursor(cursorData{AfterSeq: afterSeq})
+}
+
+func encodeQueryCursor(afterSeq int64, query FeedQuery) (string, error) {
+	if afterSeq < 1 {
+		return "", fmt.Errorf("EVENTFEED-CURSOR-SEQ cursor sequence must be positive")
+	}
+	return marshalCursor(cursorData{AfterSeq: afterSeq, Version: 1, Since: query.Since, Filter: query.Filter, Presentation: normalizePresentation(query.Presentation)})
+}
+
+func marshalCursor(data cursorData) (string, error) {
+	payload, err := json.Marshal(data)
 	if err != nil {
 		return "", fmt.Errorf("EVENTFEED-CURSOR-ENCODE: %w", err)
 	}
@@ -59,8 +70,41 @@ func decodeCursor(cursor string) (cursorData, error) {
 	if err = json.Unmarshal(bytes, &data); err != nil {
 		return cursorData{}, fmt.Errorf("EVENTFEED-CURSOR-JSON Cursor contains invalid content: %s", cursor)
 	}
-	if data.AfterSeq < 1 {
+	if data.AfterSeq < 1 || data.Version < 0 || data.Version > 1 {
 		return cursorData{}, fmt.Errorf("EVENTFEED-CURSOR-FIELDS Cursor contains invalid content: %s", cursor)
 	}
 	return data, nil
+}
+
+func resolveCursorQuery(query FeedQuery) (FeedQuery, error) {
+	if strings.TrimSpace(query.Cursor) == "" {
+		return query, nil
+	}
+	data, err := decodeCursor(query.Cursor)
+	if err != nil {
+		return FeedQuery{}, newQueryError("EVENTFEED-QUERY-CURSOR", err.Error())
+	}
+	if data.Version == 0 {
+		return query, nil
+	}
+	if err = validateCursorContext(query, data); err != nil {
+		return FeedQuery{}, err
+	}
+	query.Since = data.Since
+	query.Filter = data.Filter
+	query.Presentation = data.Presentation
+	return query, nil
+}
+
+func validateCursorContext(query FeedQuery, data cursorData) error {
+	mismatch := query.LastEventID != "" ||
+		(query.Filter != "" && query.Filter != data.Filter) ||
+		(query.Presentation != "" && normalizePresentation(query.Presentation) != data.Presentation)
+	if query.Since != nil && (data.Since == nil || !query.Since.Equal(*data.Since)) {
+		mismatch = true
+	}
+	if mismatch {
+		return newQueryError("EVENTFEED-QUERY-CURSOR-CONTEXT", "cursor query parameters must match the original request")
+	}
+	return nil
 }

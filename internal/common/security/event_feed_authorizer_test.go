@@ -27,6 +27,9 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"testing"
 
@@ -104,6 +107,7 @@ func TestEventRecordAuthorizerRequiresClaims(t *testing.T) {
 
 func TestEventRecordAuthorizerDisabledAllows(t *testing.T) {
 	authorizer := EventRecordAuthorizer{Settings: ABACSettings{Enabled: false}}
+	require.True(t, authorizer.AllowEvent(t.Context(), eventfeed.FeedEvent{Type: eventfeed.TypeAssetUpdated, Subject: "asset-without-provenance"}))
 	if !authorizer.Allow(context.Background(), eventfeed.TypeAASCreated, "aas-1") {
 		t.Fatal("expected allow when ABAC is off")
 	}
@@ -212,5 +216,60 @@ func TestEventRecordAuthorizerUsesContextPathForSubmodelRoutes(t *testing.T) {
 	}
 	if !authorizer.Allow(ctx, eventfeed.TypePCN, "sm-1") {
 		t.Fatal("expected allow for PCN event when policy matches /api/v3/submodels/*")
+	}
+}
+
+func TestEventAuthorizationRequiresHistoricalAASOwnership(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		objects   string
+		eventType string
+		owners    []string
+		allowed   bool
+	}{
+		{"submodel private owner", `$sm("*")`, eventfeed.TypeSubmodelUpdated, []string{"private-aas"}, false},
+		{"pcn private owner", `$sm("*")`, eventfeed.TypePCN, []string{"private-aas"}, false},
+		{"unattached submodel", `$sm("*")`, eventfeed.TypeSubmodelUpdated, []string{}, true},
+		{"unknown submodel provenance", `$sm("*")`, eventfeed.TypeSubmodelUpdated, nil, false},
+		{"lookup cannot read asset owner", "lookup", eventfeed.TypeAssetUpdated, []string{"private-aas"}, false},
+		{"asset owner visible", `$aas("*")`, eventfeed.TypeAssetUpdated, []string{"public-aas"}, true},
+		{"only one owner visible", `$aas("public-aas")`, eventfeed.TypeAssetUpdated, []string{"public-aas", "private-aas"}, false},
+		{"asset without owner", `$aas("*")`, eventfeed.TypeAssetUpdated, []string{}, false},
+		{"unknown asset provenance", `$aas("*")`, eventfeed.TypeAssetUpdated, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := api.NewRouter()
+			noop := func(http.ResponseWriter, *http.Request) {}
+			router.Get("/shells/{aasIdentifier}", noop)
+			router.Get("/submodels/{submodelIdentifier}", noop)
+			router.Get("/lookup/shells", noop)
+			router.Get("/.well-known/event-feed/schemas/{schema}", noop)
+			object := map[string]string{"IDENTIFIABLE": tc.objects}
+			if tc.objects == "lookup" {
+				object = map[string]string{"ROUTE": "/lookup/shells"}
+			}
+			encoded, err := json.Marshal(object)
+			require.NoError(t, err)
+			model, err := ParseAccessModel([]byte(fmt.Sprintf(`{"AllAccessPermissionRules":{
+				"DEFATTRIBUTES":[{"name":"user","attributes":[{"CLAIM":"sub"}]}],
+				"DEFOBJECTS":[{"name":"objects","objects":[%s]}],
+				"DEFACLS":[{"name":"read","acl":{"USEATTRIBUTES":"user","RIGHTS":["READ"],"ACCESS":"ALLOW"}}],
+				"DEFFORMULAS":[{"name":"all","formula":{"$boolean":true}}],
+				"rules":[{"USEACL":"read","USEOBJECTS":["objects"],"USEFORMULA":"all"}]}}`, encoded)), router, "/api/v3")
+			require.NoError(t, err)
+			authorizer := EventRecordAuthorizer{Settings: ABACSettings{Enabled: true, Model: model}}
+			ctx := context.WithValue(t.Context(), ClaimsKey, Claims{"sub": "reader"})
+			event := eventfeed.FeedEvent{Type: tc.eventType, Subject: "sm-1", AuthorizationAASIDs: tc.owners}
+			allowed := authorizer.AllowEvent(ctx, event)
+			require.Equal(t, tc.allowed, allowed)
+			if tc.objects != "lookup" {
+				schemaAllowed, _, _ := model.AuthorizeWithFilter(EvalInput{
+					Method: http.MethodGet,
+					Path:   "/api/v3/.well-known/event-feed/schemas/metamodel-submodelChangeEvent.v1.schema.json",
+					Claims: Claims{"sub": "reader"},
+				})
+				require.True(t, schemaAllowed, "existing identifiable readers can retrieve advertised schemas")
+			}
+		})
 	}
 }

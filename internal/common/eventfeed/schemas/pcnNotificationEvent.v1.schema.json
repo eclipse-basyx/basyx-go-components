@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://admin-shell.io/events/schemas/pcnNotificationEvent.v1.schema.json",
+  "$id": "urn:eclipse-basyx:event-feed:schemas:pcnNotificationEvent.v1.schema.json",
   "title": "PCN Notification Event - data payload",
   "description": "JSON Schema for the 'data' field of a CloudEvent of type 'io.admin-shell.pcn.v1'. The payload carries the asset identification plus a single Record of the IDTA Submodel Template 'ProductChangeNotifications' (IDTA 02036-1-0), serialized in format 'Value' (Value-Only) per IDTA-01003. A Record is a SubmodelElementCollection and is therefore serialized as an unnamed JSON object; required properties are derived from the SMT/Cardinality qualifiers (One, OneToMany).",
   "type": "object",
@@ -29,7 +29,9 @@
       "description": "SubmodelElementCollection 'Record' of the Records list, serialized as an unnamed JSON object.",
       "type": "object",
       "properties": {
-        "Manufacturer": { "$ref": "#/$defs/Manufacturer" },
+        "Manufacturer": {
+          "$ref": "#/$defs/Manufacturer"
+        },
         "ManufacturerChangeID": {
           "type": "string",
           "description": "Property, xs:string. Cardinality ZeroToOne."
@@ -37,50 +39,69 @@
         "PcnType": {
           "type": "string",
           "description": "Property, xs:string. Cardinality One. Global flag distinguishing PCN from PDN (VDMA 24903).",
-          "enum": ["PCN", "PDN"]
+          "enum": [
+            "PCN",
+            "PDN"
+          ]
         },
         "LifeCycleData": {
           "type": "array",
           "description": "SubmodelElementList of Milestone (SMC). Cardinality ZeroToOne; order is preserved.",
-          "items": { "$ref": "#/$defs/Milestone" }
+          "items": {
+            "$ref": "#/$defs/Milestone"
+          }
         },
         "ReasonsOfChange": {
           "type": "array",
           "description": "SubmodelElementList of ReasonOfChange (SMC). Cardinality One, list entries OneToMany. At least one reason according to VDMA 24903 shall be given.",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/ReasonOfChange" }
+          "items": {
+            "$ref": "#/$defs/ReasonOfChange"
+          }
         },
         "ItemCategories": {
           "type": "array",
           "description": "SubmodelElementList of ItemCategory (SMC). Cardinality One, list entries OneToMany. At least one item category according to VDMA 24903 shall be given.",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/ItemCategory" }
+          "items": {
+            "$ref": "#/$defs/ItemCategory"
+          }
         },
         "AffectedPartNumbers": {
           "type": "array",
           "description": "SubmodelElementList of Property (xs:string). Cardinality ZeroToOne. Single numbers ('12345'), sets ('12345;23456'), ranges ('10000-19999'), wildcards '*' and '?' are allowed. Only to be given if not the full range of part numbers is affected.",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "PcnReasonComment": {
           "$ref": "#/$defs/MultiLanguageProperty",
           "description": "MultiLanguageProperty. Cardinality ZeroToOne. May be substituted by PcnChangeInformation."
         },
-        "PcnChangeInformation": { "$ref": "#/$defs/PcnChangeInformation" },
+        "PcnChangeInformation": {
+          "$ref": "#/$defs/PcnChangeInformation"
+        },
         "AdditionalInformation": {
           "type": "array",
           "description": "SubmodelElementList of File. Cardinality ZeroToOne. Attachments such as conventional product change information documents.",
-          "items": { "$ref": "#/$defs/File" }
+          "items": {
+            "$ref": "#/$defs/File"
+          }
         },
         "DateOfRecord": {
           "type": "string",
           "format": "date-time",
           "description": "Property, xs:dateTime. Cardinality One. UTC date (and typically time) at which the record was initially published."
         },
-        "ItemOfChange": { "$ref": "#/$defs/ItemOfChange" },
+        "ItemOfChange": {
+          "$ref": "#/$defs/ItemOfChange"
+        },
         "RecommendedItems": {
           "type": "array",
           "description": "SubmodelElementList of RecommendedItem (SMC). Cardinality ZeroToOne.",
-          "items": { "$ref": "#/$defs/RecommendedItem" }
+          "items": {
+            "$ref": "#/$defs/RecommendedItem"
+          }
         }
       },
       "required": [
@@ -102,8 +123,12 @@
       "items": {
         "type": "object",
         "minProperties": 1,
-        "propertyNames": { "pattern": "^[a-z]{2}(-[A-Za-z0-9]+)*$" },
-        "additionalProperties": { "type": "string" }
+        "propertyNames": {
+          "pattern": "^[a-z]{2}(-[A-Za-z0-9]+)*$"
+        },
+        "additionalProperties": {
+          "type": "string"
+        }
       }
     },
     "Reference": {
@@ -113,9 +138,14 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["ExternalReference", "ModelReference"]
+          "enum": [
+            "ExternalReference",
+            "ModelReference"
+          ]
         },
-        "referredSemanticId": { "$ref": "#/$defs/Reference" },
+        "referredSemanticId": {
+          "$ref": "#/$defs/Reference"
+        },
         "keys": {
           "type": "array",
           "minItems": 1,
@@ -125,48 +155,100 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "AnnotatedRelationshipElement", "AssetAdministrationShell", "BasicEventElement",
-                  "Blob", "Capability", "ConceptDescription", "DataElement", "Entity",
-                  "EventElement", "File", "FragmentReference", "GlobalReference",
-                  "Identifiable", "MultiLanguageProperty", "Operation", "Property", "Range",
-                  "Referable", "ReferenceElement", "RelationshipElement", "Submodel",
-                  "SubmodelElement", "SubmodelElementCollection", "SubmodelElementList"
+                  "AnnotatedRelationshipElement",
+                  "AssetAdministrationShell",
+                  "BasicEventElement",
+                  "Blob",
+                  "Capability",
+                  "ConceptDescription",
+                  "DataElement",
+                  "Entity",
+                  "EventElement",
+                  "File",
+                  "FragmentReference",
+                  "GlobalReference",
+                  "Identifiable",
+                  "MultiLanguageProperty",
+                  "Operation",
+                  "Property",
+                  "Range",
+                  "Referable",
+                  "ReferenceElement",
+                  "RelationshipElement",
+                  "Submodel",
+                  "SubmodelElement",
+                  "SubmodelElementCollection",
+                  "SubmodelElementList"
                 ]
               },
-              "value": { "type": "string", "minLength": 1 }
+              "value": {
+                "type": "string",
+                "minLength": 1
+              }
             },
-            "required": ["type", "value"],
+            "required": [
+              "type",
+              "value"
+            ],
             "additionalProperties": false
           }
         }
       },
-      "required": ["type", "keys"],
+      "required": [
+        "type",
+        "keys"
+      ],
       "additionalProperties": false
     },
     "File": {
       "title": "File (ValueOnly)",
       "type": "object",
       "properties": {
-        "contentType": { "type": "string" },
+        "contentType": {
+          "type": "string"
+        },
         "value": {
           "type": "string",
           "description": "Path or URL of the referenced file."
         }
       },
-      "required": ["contentType"],
+      "required": [
+        "contentType"
+      ],
       "additionalProperties": false
     },
     "ArbitraryValue": {
       "description": "Value of an arbitrary DataElement (Property, MultiLanguageProperty or Range) whose idShort and semanticId are not fixed by the template.",
       "anyOf": [
-        { "type": ["string", "number", "boolean", "null"] },
-        { "$ref": "#/$defs/MultiLanguageProperty" },
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "$ref": "#/$defs/MultiLanguageProperty"
+        },
         {
           "type": "object",
           "title": "Range (ValueOnly)",
           "properties": {
-            "min": { "type": ["string", "number", "null"] },
-            "max": { "type": ["string", "number", "null"] }
+            "min": {
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "max": {
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            }
           },
           "additionalProperties": false
         }
@@ -184,10 +266,15 @@
         "PhysicalAddress": {
           "type": "object",
           "description": "SubmodelElementCollection. Cardinality One. Content is defined by the SMT drop-in 'Contact Information' (V1.0 or V1.1); its elements are therefore not constrained here beyond being valid Value-Only values.",
-          "additionalProperties": { "$ref": "#/$defs/ArbitraryValue" }
+          "additionalProperties": {
+            "$ref": "#/$defs/ArbitraryValue"
+          }
         }
       },
-      "required": ["ManufacturerName", "PhysicalAddress"],
+      "required": [
+        "ManufacturerName",
+        "PhysicalAddress"
+      ],
       "additionalProperties": false
     },
     "Milestone": {
@@ -198,7 +285,15 @@
         "MilestoneClassification": {
           "type": "string",
           "description": "Property, xs:string. Cardinality One. PDN is not used here; it is expressed via PcnType.",
-          "enum": ["SOP", "NRND", "PCN", "EOS", "EOP", "LTD", "EOSR"]
+          "enum": [
+            "SOP",
+            "NRND",
+            "PCN",
+            "EOS",
+            "EOP",
+            "LTD",
+            "EOSR"
+          ]
         },
         "DateOfValidity": {
           "type": "string",
@@ -206,7 +301,10 @@
           "description": "Property, xs:dateTime. Cardinality One. UTC date at which the change takes place."
         }
       },
-      "required": ["MilestoneClassification", "DateOfValidity"],
+      "required": [
+        "MilestoneClassification",
+        "DateOfValidity"
+      ],
       "additionalProperties": false
     },
     "ReasonOfChange": {
@@ -216,20 +314,30 @@
         "ReasonClassificationSystem": {
           "type": "string",
           "description": "Property, xs:string. Cardinality One.",
-          "examples": ["VDMA24903", "ECLASS"]
+          "examples": [
+            "VDMA24903",
+            "ECLASS"
+          ]
         },
         "VersionOfClassificationSystem": {
           "type": "string",
           "description": "Property, xs:string. Cardinality ZeroToOne.",
-          "examples": ["2017"]
+          "examples": [
+            "2017"
+          ]
         },
         "ReasonId": {
           "type": "string",
           "description": "Property, xs:string. Cardinality One.",
-          "examples": ["RAWM"]
+          "examples": [
+            "RAWM"
+          ]
         }
       },
-      "required": ["ReasonClassificationSystem", "ReasonId"],
+      "required": [
+        "ReasonClassificationSystem",
+        "ReasonId"
+      ],
       "additionalProperties": false
     },
     "ItemCategory": {
@@ -239,20 +347,29 @@
         "ItemClassificationSystem": {
           "type": "string",
           "description": "Property, xs:string. Cardinality One.",
-          "examples": ["VDMA24903"]
+          "examples": [
+            "VDMA24903"
+          ]
         },
         "VersionOfClassificationSystem": {
           "type": "string",
           "description": "Property, xs:string. Cardinality ZeroToOne.",
-          "examples": ["2017"]
+          "examples": [
+            "2017"
+          ]
         },
         "ItemCategory": {
           "type": "string",
           "description": "Property, xs:string. Cardinality One.",
-          "examples": ["ELME"]
+          "examples": [
+            "ELME"
+          ]
         }
       },
-      "required": ["ItemClassificationSystem", "ItemCategory"],
+      "required": [
+        "ItemClassificationSystem",
+        "ItemCategory"
+      ],
       "additionalProperties": false
     },
     "PcnChangeInformation": {
@@ -269,7 +386,10 @@
           "description": "MultiLanguageProperty. Cardinality One."
         }
       },
-      "required": ["ChangeTitle", "ChangeDetail"],
+      "required": [
+        "ChangeTitle",
+        "ChangeDetail"
+      ],
       "additionalProperties": false
     },
     "ProductClassification": {
@@ -279,20 +399,29 @@
         "ClassificationSystem": {
           "type": "string",
           "description": "Property, xs:string. Cardinality One.",
-          "examples": ["ECLASS"]
+          "examples": [
+            "ECLASS"
+          ]
         },
         "VersionOfClassificationSystem": {
           "type": "string",
           "description": "Property, xs:string. Cardinality ZeroToOne.",
-          "examples": ["14.0 (BASIC)"]
+          "examples": [
+            "14.0 (BASIC)"
+          ]
         },
         "ProductClassId": {
           "type": "string",
           "description": "Property, xs:string. Cardinality One.",
-          "examples": ["27-27-49-01"]
+          "examples": [
+            "27-27-49-01"
+          ]
         }
       },
-      "required": ["ClassificationSystem", "ProductClassId"],
+      "required": [
+        "ClassificationSystem",
+        "ProductClassId"
+      ],
       "additionalProperties": false
     },
     "SingleChange": {
@@ -307,10 +436,14 @@
         "ReasonId": {
           "type": "string",
           "description": "Property, xs:string. Cardinality ZeroToOne.",
-          "examples": ["RAWM"]
+          "examples": [
+            "RAWM"
+          ]
         }
       },
-      "additionalProperties": { "$ref": "#/$defs/ArbitraryValue" }
+      "additionalProperties": {
+        "$ref": "#/$defs/ArbitraryValue"
+      }
     },
     "TechnicalDataGroup": {
       "title": "TechnicalData_Fit / _Form / _Function / _Other",
@@ -324,7 +457,9 @@
           "maximum": 1
         }
       },
-      "additionalProperties": { "$ref": "#/$defs/ArbitraryValue" }
+      "additionalProperties": {
+        "$ref": "#/$defs/ArbitraryValue"
+      }
     },
     "ItemOfChange": {
       "title": "ItemOfChange",
@@ -350,32 +485,48 @@
         "ProductClassifications": {
           "type": "array",
           "description": "SubmodelElementList of ProductClassification (SMC). Cardinality ZeroToOne.",
-          "items": { "$ref": "#/$defs/ProductClassification" }
+          "items": {
+            "$ref": "#/$defs/ProductClassification"
+          }
         },
         "HardwareVersion": {
           "type": "string",
           "description": "Property, xs:string. Cardinality ZeroToOne.",
-          "examples": ["1.1"]
+          "examples": [
+            "1.1"
+          ]
         },
         "RemainingAmountAvailable": {
-          "type": ["integer", "string"],
+          "type": [
+            "integer",
+            "string"
+          ],
           "description": "Property, xs:positiveInteger. Cardinality ZeroToOne. Serialized as a JSON number; a string is permitted for values exceeding safe JSON number precision.",
           "minimum": 1,
           "pattern": "^\\+?[1-9][0-9]*$",
-          "examples": [4500]
+          "examples": [
+            4500
+          ]
         },
         "TechnicalData_Changes": {
           "type": "array",
           "description": "SubmodelElementList of SingleChange (SMC). Cardinality ZeroToOne.",
-          "items": { "$ref": "#/$defs/SingleChange" }
+          "items": {
+            "$ref": "#/$defs/SingleChange"
+          }
         },
         "TechnicalData_CurrentState": {
           "type": "object",
           "description": "SubmodelElementCollection. Cardinality ZeroToOne. Contains arbitrary DataElements mirroring the properties given for the recommended items.",
-          "additionalProperties": { "$ref": "#/$defs/ArbitraryValue" }
+          "additionalProperties": {
+            "$ref": "#/$defs/ArbitraryValue"
+          }
         }
       },
-      "required": ["ManufacturerProductFamily", "ManufacturerProductDesignation"],
+      "required": [
+        "ManufacturerProductFamily",
+        "ManufacturerProductDesignation"
+      ],
       "additionalProperties": false
     },
     "RecommendedItem": {
@@ -398,26 +549,42 @@
         "ProductClassifications": {
           "type": "array",
           "description": "SubmodelElementList of ProductClassification (SMC). Cardinality ZeroToOne.",
-          "items": { "$ref": "#/$defs/ProductClassification" }
+          "items": {
+            "$ref": "#/$defs/ProductClassification"
+          }
         },
-        "TechnicalData_Fit": { "$ref": "#/$defs/TechnicalDataGroup" },
-        "TechnicalData_Form": { "$ref": "#/$defs/TechnicalDataGroup" },
-        "TechnicalData_Function": { "$ref": "#/$defs/TechnicalDataGroup" },
-        "TechnicalData_Other": { "$ref": "#/$defs/TechnicalDataGroup" },
+        "TechnicalData_Fit": {
+          "$ref": "#/$defs/TechnicalDataGroup"
+        },
+        "TechnicalData_Form": {
+          "$ref": "#/$defs/TechnicalDataGroup"
+        },
+        "TechnicalData_Function": {
+          "$ref": "#/$defs/TechnicalDataGroup"
+        },
+        "TechnicalData_Other": {
+          "$ref": "#/$defs/TechnicalDataGroup"
+        },
         "IncotermCode": {
           "type": "string",
           "description": "Property, xs:string. Cardinality ZeroToOne. INCOTERMS code.",
-          "examples": ["DAT"]
+          "examples": [
+            "DAT"
+          ]
         },
         "DeliveryTimeClassSameRegion": {
           "type": "integer",
           "description": "Property, xs:int. Cardinality ZeroToOne. Expected delivery duration in working days, same region.",
-          "examples": [2]
+          "examples": [
+            2
+          ]
         },
         "DeliveryTimeClassOtherRegion": {
           "type": "integer",
           "description": "Property, xs:int. Cardinality ZeroToOne. Expected delivery duration in working days, other regions.",
-          "examples": [5]
+          "examples": [
+            5
+          ]
         },
         "ConformityDeclarations": {
           "type": "object",

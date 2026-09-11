@@ -127,7 +127,11 @@ func (b *Builder) PCN(submodelID string, globalAssetIDs []string, record any) (F
 		full["globalAssetIds"] = ids
 		compact["globalAssetIds"] = ids
 	}
-	return b.build(TypePCN, submodelID, sourceSuffixSubmodel, schemaPCN, schemaPCN, full, compact)
+	event, err := b.build(TypePCN, submodelID, sourceSuffixSubmodel, schemaPCN, schemaPCN, full, compact)
+	if len(ids) == 0 {
+		event.AuthorizationAASIDs = []string{}
+	}
+	return event, err
 }
 
 // IsPCNSemanticID reports whether semanticID refers to the IDTA Product
@@ -160,7 +164,9 @@ func (b *Builder) assetEvent(eventType, globalAssetID, aasID string, submodels [
 		"aasRefs":       aasRefs,
 	}
 	compact := map[string]any{"globalAssetId": globalAssetID}
-	return b.build(eventType, globalAssetID, sourceSuffixAsset, schemaAssetFull, schemaAssetCompact, full, compact)
+	event, err := b.build(eventType, globalAssetID, sourceSuffixAsset, schemaAssetFull, schemaAssetCompact, full, compact)
+	event.AuthorizationAASIDs = []string{aasID}
+	return event, err
 }
 
 func (b *Builder) aasEvent(eventType, aasID, globalAssetID string, submodels []SubmodelRef) (FeedEvent, error) {
@@ -174,13 +180,16 @@ func (b *Builder) aasEvent(eventType, aasID, globalAssetID string, submodels []S
 		full["globalAssetId"] = globalAssetID
 	}
 	compact := map[string]any{"aasId": aasID}
-	return b.build(eventType, aasID, sourceSuffixAAS, schemaAASFull, schemaAASCompact, full, compact)
+	event, err := b.build(eventType, aasID, sourceSuffixAAS, schemaAASFull, schemaAASCompact, full, compact)
+	event.AuthorizationAASIDs = []string{aasID}
+	return event, err
 }
 
 func (b *Builder) submodelEvent(eventType, submodelID, semanticID string, globalAssetIDs []string) (FeedEvent, error) {
+	ids := normalizeGlobalAssetIDs(globalAssetIDs)
 	full := map[string]any{
 		"submodelId":     submodelID,
-		"globalAssetIds": normalizeGlobalAssetIDs(globalAssetIDs),
+		"globalAssetIds": ids,
 	}
 	compact := map[string]any{
 		"submodelId": submodelID,
@@ -189,7 +198,11 @@ func (b *Builder) submodelEvent(eventType, submodelID, semanticID string, global
 		full["semanticId"] = semRef
 		compact["semanticId"] = semRef
 	}
-	return b.build(eventType, submodelID, sourceSuffixSubmodel, schemaSubmodelFull, schemaSubmodelCompact, full, compact)
+	event, err := b.build(eventType, submodelID, sourceSuffixSubmodel, schemaSubmodelFull, schemaSubmodelCompact, full, compact)
+	if len(ids) == 0 {
+		event.AuthorizationAASIDs = []string{}
+	}
+	return event, err
 }
 
 func (b *Builder) build(

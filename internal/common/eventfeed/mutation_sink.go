@@ -81,14 +81,15 @@ func (s *MutationSink) HandleMutation(ctx context.Context, tx *sql.Tx, mutation 
 	}
 }
 
-func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutation) error {
-	snap := mutation.Snapshot
-	if mutation.Deleted {
-		snap = mutation.PreviousSnapshot
-		if snap == nil {
-			snap = mutation.Snapshot
-		}
+func mutationSnapshot(mutation Mutation) map[string]any {
+	if mutation.Deleted && mutation.PreviousSnapshot != nil {
+		return mutation.PreviousSnapshot
 	}
+	return mutation.Snapshot
+}
+
+func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutation) error {
+	snap := mutationSnapshot(mutation)
 	aasID, globalAssetID, submodels := aasFieldsFromSnapshot(snap)
 	if aasID == "" {
 		aasID = mutation.Identifier
@@ -130,18 +131,12 @@ func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutat
 }
 
 func (s *MutationSink) handleSubmodel(ctx context.Context, tx *sql.Tx, mutation Mutation) error {
-	snap := mutation.Snapshot
-	if mutation.Deleted {
-		snap = mutation.PreviousSnapshot
-		if snap == nil {
-			snap = mutation.Snapshot
-		}
-	}
+	snap := mutationSnapshot(mutation)
 	submodelID, semanticID := submodelFieldsFromSnapshot(snap)
 	if submodelID == "" {
 		submodelID = mutation.Identifier
 	}
-	globalAssetIDs, err := globalAssetIDsForSubmodelTx(ctx, tx, submodelID)
+	globalAssetIDs, aasIDs, err := submodelAssetOwnersTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -159,6 +154,7 @@ func (s *MutationSink) handleSubmodel(ctx context.Context, tx *sql.Tx, mutation 
 	if err != nil {
 		return fmt.Errorf("EVENTFEED-MUTATION-SUBMODEL-BUILD: %w", err)
 	}
+	ev.AuthorizationAASIDs = aasIDs
 	if err = s.service.WriteTx(ctx, tx, ev); err != nil {
 		return err
 	}
@@ -180,6 +176,7 @@ func (s *MutationSink) handleSubmodel(ctx context.Context, tx *sql.Tx, mutation 
 		if pcnErr != nil {
 			return fmt.Errorf("EVENTFEED-MUTATION-PCN-BUILD: %w", pcnErr)
 		}
+		pcnEv.AuthorizationAASIDs = aasIDs
 		if err = s.service.WriteTx(ctx, tx, pcnEv); err != nil {
 			return err
 		}

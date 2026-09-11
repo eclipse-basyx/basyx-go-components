@@ -1,7 +1,7 @@
 kind: added
-body: Experimental Event Feed API for AAS, Submodel, Asset, and PCN change notifications, including configuration and the feed_events schema migration.
+body: Experimental Event Feed API for AAS, Submodel, Asset, and PCN change notifications, including opt-in configuration, served JSON Schemas with optional Submodel semantic IDs, and the feed_events schema migrations.
 time: 2026-09-10T09:00:00Z
 custom:
     Impact: Low
     PullRequest: 647
-    SecurityImpact: Event Feed inherits OIDC and ABAC. Records whose allow decision still carries a remaining query filter are hidden because the feed cannot evaluate snapshot-scoped formulas.
+    SecurityImpact: Event Feed inherits OIDC and ABAC. Records require access to the referenced model and all AAS ownership data disclosed by the payload. Remaining query filters or unknown ownership fail closed.

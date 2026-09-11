@@ -115,42 +115,52 @@ func stringField(m map[string]any, key string) string {
 	}
 }
 
-func globalAssetIDsForSubmodelTx(ctx context.Context, tx *sql.Tx, submodelID string) ([]string, error) {
+func submodelAssetOwnersTx(ctx context.Context, tx *sql.Tx, submodelID string) ([]string, []string, error) {
 	if tx == nil || submodelID == "" {
-		return nil, nil
+		return []string{}, []string{}, nil
 	}
 	dialect := goqu.Dialect("postgres")
 	query, args, err := dialect.From(goqu.T("aas_submodel_reference_key").As("k")).
-		Select(goqu.DISTINCT(goqu.I("ai.global_asset_id"))).
+		SelectDistinct(goqu.I("ai.global_asset_id"), goqu.I("aas.aas_id")).
 		Join(goqu.T("aas_submodel_reference").As("r"), goqu.On(goqu.I("r.id").Eq(goqu.I("k.reference_id")))).
 		Join(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("r.aas_id")))).
+		Join(goqu.T("aas"), goqu.On(goqu.I("aas.id").Eq(goqu.I("r.aas_id")))).
 		Where(
 			goqu.I("k.value").Eq(submodelID),
 			goqu.I("ai.global_asset_id").IsNotNull(),
 			goqu.I("ai.global_asset_id").Neq(""),
 		).
+		Order(goqu.I("ai.global_asset_id").Asc(), goqu.I("aas.aas_id").Asc()).
 		ToSQL()
 	if err != nil {
-		return nil, fmt.Errorf("EVENTFEED-GLOBALASSET-BUILDSQL: %w", err)
+		return nil, nil, fmt.Errorf("EVENTFEED-GLOBALASSET-BUILDSQL: %w", err)
 	}
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("EVENTFEED-GLOBALASSET-QUERY: %w", err)
+		return nil, nil, fmt.Errorf("EVENTFEED-GLOBALASSET-QUERY: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	out := make([]string, 0, 4)
+	assetIDs := make([]string, 0, 4)
+	aasIDs := make([]string, 0, 4)
+	seenAssets := make(map[string]bool)
+	seenAAS := make(map[string]bool)
 	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("EVENTFEED-GLOBALASSET-SCAN: %w", err)
+		var id, aasID string
+		if err = rows.Scan(&id, &aasID); err != nil {
+			return nil, nil, fmt.Errorf("EVENTFEED-GLOBALASSET-SCAN: %w", err)
 		}
-		if id != "" {
-			out = append(out, id)
+		if !seenAssets[id] {
+			assetIDs = append(assetIDs, id)
+			seenAssets[id] = true
+		}
+		if !seenAAS[aasID] {
+			aasIDs = append(aasIDs, aasID)
+			seenAAS[aasID] = true
 		}
 	}
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("EVENTFEED-GLOBALASSET-ROWS: %w", err)
+		return nil, nil, fmt.Errorf("EVENTFEED-GLOBALASSET-ROWS: %w", err)
 	}
-	return out, nil
+	return assetIDs, aasIDs, nil
 }

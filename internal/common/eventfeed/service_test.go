@@ -103,14 +103,14 @@ func TestReadWithSQLMock(t *testing.T) {
 	ts2 := fixedNow.Add(-1 * time.Hour)
 	rows := sqlmock.NewRows([]string{
 		"publish_seq", "id", "event_type", "subject", "source", "time",
-		"dataschema_compact", "data_compact",
+		"dataschema_compact", "data_compact", "authorization_aas_ids",
 	}).
 		AddRow(int64(1), "e1", TypeAASCreated, "aas-1", "http://localhost/shells", ts1,
-			"https://s/compact", `{"aasId":"aas-1"}`).
+			"https://s/compact", `{"aasId":"aas-1"}`, nil).
 		AddRow(int64(2), "e2", TypeAASUpdated, "aas-1", "http://localhost/shells", ts2,
-			"https://s/compact", `{"aasId":"aas-1"}`).
+			"https://s/compact", `{"aasId":"aas-1"}`, nil).
 		AddRow(int64(3), "e3", TypeAASUpdated, "aas-2", "http://localhost/shells", ts2.Add(time.Minute),
-			"https://s/compact", `{"aasId":"aas-2"}`)
+			"https://s/compact", `{"aasId":"aas-2"}`, nil)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).
 		WillReturnRows(rows)
@@ -157,9 +157,9 @@ func TestReadLastEventIDRejectsUnpublishedEvent(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"seq", "publish_seq", "id", "event_type", "subject", "source", "time",
-		"dataschema_full", "dataschema_compact", "data_full", "data_compact",
+		"dataschema_full", "dataschema_compact", "data_full", "data_compact", "authorization_aas_ids",
 	}).AddRow(int64(5), nil, "e5", TypeAASCreated, "aas-1", "http://localhost/shells", time.Now().UTC(),
-		"https://s/full", "https://s/compact", `{}`, `{}`)
+		"https://s/full", "https://s/compact", `{}`, `{}`, nil)
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
 
 	_, err = svc.Read(context.Background(), FeedQuery{
@@ -192,9 +192,9 @@ func TestHTTPHandlers(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"publish_seq", "id", "event_type", "subject", "source", "time",
-		"dataschema_full", "data_full",
+		"dataschema_full", "data_full", "authorization_aas_ids",
 	}).AddRow(int64(1), "e1", TypeAASCreated, "aas-1", "http://localhost/shells", fixedNow.Add(-time.Hour),
-		"https://s/full", `{"aasId":"aas-1"}`)
+		"https://s/full", `{"aasId":"aas-1"}`, nil)
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
 
 	req := httptest.NewRequest(http.MethodGet, "/events?limit=10", nil)
@@ -278,12 +278,12 @@ func TestSaveAndRetentionSQL(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_lock`)).
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_xact_lock`)).
 		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM`)).
 		WillReturnResult(sqlmock.NewResult(0, 3))
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
-		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_unlock"}).AddRow(true))
+	mock.ExpectCommit()
 	n, err := svc.RunRetention(context.Background())
 	if err != nil {
 		t.Fatalf("retention: %v", err)
@@ -308,18 +308,11 @@ func TestRunPublishAssignmentSQL(t *testing.T) {
 	repo := NewRepository(db, cfg.MaxAge)
 	svc := NewService(repo, cfg)
 
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_lock`)).
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_xact_lock`)).
 		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
-	mock.ExpectQuery(`SELECT "id" FROM "feed_events" WHERE \("publish_seq" IS NULL\) ORDER BY "seq" ASC LIMIT 500`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("e1").AddRow("e2"))
-	mock.ExpectExec(regexp.QuoteMeta(`UPDATE feed_events SET publish_seq = nextval('feed_events_publish_seq_seq') WHERE id = $1 AND publish_seq IS NULL`)).
-		WithArgs("e1").
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(regexp.QuoteMeta(`UPDATE feed_events SET publish_seq = nextval('feed_events_publish_seq_seq') WHERE id = $1 AND publish_seq IS NULL`)).
-		WithArgs("e2").
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
-		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_unlock"}).AddRow(true))
+	mock.ExpectExec(`WITH candidates AS .*UPDATE "feed_events" SET "publish_seq"="assignments"."publish_seq" FROM "assignments"`).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectCommit()
 
 	n, err := svc.RunPublishAssignment(context.Background())
 	if err != nil {
@@ -370,7 +363,7 @@ func TestHTTPOmittedLimitUsesMaxPageSize(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"publish_seq", "id", "event_type", "subject", "source", "time",
-		"dataschema_full", "data_full",
+		"dataschema_full", "data_full", "authorization_aas_ids",
 	})
 	mock.ExpectQuery(`LIMIT 51`).WillReturnRows(rows)
 
@@ -404,12 +397,12 @@ func TestReadHidesUnauthorizedSubjects(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"publish_seq", "id", "event_type", "subject", "source", "time",
-		"dataschema_full", "data_full",
+		"dataschema_full", "data_full", "authorization_aas_ids",
 	}).
 		AddRow(int64(1), "e1", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Hour),
-			"https://s/full", `{"aasId":"hidden"}`).
+			"https://s/full", `{"aasId":"hidden"}`, nil).
 		AddRow(int64(2), "e2", TypeAASCreated, "visible", "http://localhost/shells", fixedNow.Add(-time.Minute),
-			"https://s/full", `{"aasId":"visible"}`)
+			"https://s/full", `{"aasId":"visible"}`, nil)
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
 
 	result, err := svc.Read(context.Background(), FeedQuery{Presentation: PresentationRegular, Limit: 10})
@@ -423,13 +416,13 @@ func TestReadHidesUnauthorizedSubjects(t *testing.T) {
 
 type denySubjectAuthorizer struct{ deny string }
 
-func (d denySubjectAuthorizer) Allow(_ context.Context, _, subject string) bool {
-	return subject != d.deny
+func (d denySubjectAuthorizer) AllowEvent(_ context.Context, event FeedEvent) bool {
+	return event.Subject != d.deny
 }
 
 type denyAllAuthorizer struct{}
 
-func (denyAllAuthorizer) Allow(context.Context, string, string) bool { return false }
+func (denyAllAuthorizer) AllowEvent(context.Context, FeedEvent) bool { return false }
 
 func TestReadKeepsCursorWhenAuthScanBudgetExhausted(t *testing.T) {
 	t.Cleanup(func() { SetRecordAuthorizer(nil) })
@@ -453,12 +446,12 @@ func TestReadKeepsCursorWhenAuthScanBudgetExhausted(t *testing.T) {
 		seq := int64(round*2 + 1)
 		rows := sqlmock.NewRows([]string{
 			"publish_seq", "id", "event_type", "subject", "source", "time",
-			"dataschema_full", "data_full",
+			"dataschema_full", "data_full", "authorization_aas_ids",
 		}).
 			AddRow(seq, "e-hidden", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Hour),
-				"https://s/full", `{"aasId":"hidden"}`).
+				"https://s/full", `{"aasId":"hidden"}`, nil).
 			AddRow(seq+1, "e-hidden-more", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Minute),
-				"https://s/full", `{"aasId":"hidden"}`)
+				"https://s/full", `{"aasId":"hidden"}`, nil)
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
 	}
 
@@ -490,9 +483,9 @@ func TestFindPageSQLShape(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"publish_seq", "id", "event_type", "subject", "source", "time",
-		"dataschema_compact", "data_compact",
+		"dataschema_compact", "data_compact", "authorization_aas_ids",
 	})
-	mock.ExpectQuery(`SELECT .*"dataschema_compact", "data_compact" FROM "feed_events".*"publish_seq" IS NOT NULL.*ORDER BY "publish_seq" ASC`).
+	mock.ExpectQuery(`SELECT .*"dataschema_compact", "data_compact", "authorization_aas_ids" FROM "feed_events".*"publish_seq" IS NOT NULL.*ORDER BY "publish_seq" ASC`).
 		WillReturnRows(rows)
 
 	if _, err = repo.FindPage(context.Background(), domainQuery{Limit: 10, Filter: &parsedFilter{
@@ -546,7 +539,7 @@ func TestReadCursorReachesEventAfterHiddenPrefix(t *testing.T) {
 	feedRows := func() *sqlmock.Rows {
 		return sqlmock.NewRows([]string{
 			"publish_seq", "id", "event_type", "subject", "source", "time",
-			"dataschema_full", "data_full",
+			"dataschema_full", "data_full", "authorization_aas_ids",
 		})
 	}
 
@@ -560,9 +553,9 @@ func TestReadCursorReachesEventAfterHiddenPrefix(t *testing.T) {
 		lastScannedSeq = seq
 		rows := feedRows().
 			AddRow(seq, "e-hidden", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Hour),
-				"https://s/full", `{"aasId":"hidden"}`).
+				"https://s/full", `{"aasId":"hidden"}`, nil).
 			AddRow(seq+1, "e-hidden-more", TypeAASCreated, "hidden", "http://localhost/shells", fixedNow.Add(-time.Minute),
-				"https://s/full", `{"aasId":"hidden"}`)
+				"https://s/full", `{"aasId":"hidden"}`, nil)
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(rows)
 	}
 
@@ -588,7 +581,7 @@ func TestReadCursorReachesEventAfterHiddenPrefix(t *testing.T) {
 	// restarting at the hidden prefix.
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT`)).WillReturnRows(
 		feedRows().AddRow(lastScannedSeq+1, "e-visible", TypeAASCreated, "visible", "http://localhost/shells",
-			fixedNow, "https://s/full", `{"aasId":"visible"}`))
+			fixedNow, "https://s/full", `{"aasId":"visible"}`, nil))
 
 	second, err := svc.Read(context.Background(), FeedQuery{Presentation: PresentationRegular, Limit: 1, Cursor: first.Cursor})
 	if err != nil {
@@ -602,10 +595,8 @@ func TestReadCursorReachesEventAfterHiddenPrefix(t *testing.T) {
 	}
 }
 
-// TestRunRetentionUnlocksAfterCancelledCleanup ensures a cancelled cleanup
-// cannot leave a locked session in the pool: the advisory unlock is issued on
-// the same pinned connection even when the work under the lock fails, and it
-// runs on a context detached from the caller's cancellation.
+// TestRunRetentionUnlocksAfterCancelledCleanup ensures rollback releases the
+// transaction lock before the connection returns to the pool.
 func TestRunRetentionUnlocksAfterCancelledCleanup(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -619,17 +610,129 @@ func TestRunRetentionUnlocksAfterCancelledCleanup(t *testing.T) {
 	svc := NewService(repo, cfg)
 	svc.now = func() time.Time { return time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC) }
 
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_lock`)).
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_xact_lock`)).
 		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM`)).
 		WillReturnError(context.Canceled)
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_advisory_unlock`)).
-		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_unlock"}).AddRow(true))
+	mock.ExpectRollback()
 
 	if _, err = svc.RunRetention(context.Background()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("retention err=%v want context.Canceled", err)
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("sql: %v", err)
+	}
+}
+
+func TestPublishAssignmentCompletesWithOneConnection(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT pg_try_advisory_xact_lock`).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(true))
+	mock.ExpectExec(`WITH candidates`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	svc := NewService(NewRepository(db, time.Hour), DefaultConfig())
+	if _, err := svc.RunPublishAssignment(ctx); err != nil {
+		t.Fatalf("publisher with a one-connection pool: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCursorPreservesExplicitSince(t *testing.T) {
+	since := time.Now().UTC().Add(-time.Hour)
+	cursor, err := encodeCursor(4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := NewService(nil, DefaultConfig())
+	query, err := svc.buildDomainQuery(context.Background(), FeedQuery{Cursor: cursor, Since: &since, Limit: 2}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query.Since == nil || !query.Since.Equal(since) {
+		t.Fatal("cursor discarded explicit since bound")
+	}
+}
+
+func TestReadUpdatedIsNewestRecordTime(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	now := time.Now().UTC()
+	mock.ExpectQuery(`SELECT`).WillReturnRows(sqlmock.NewRows([]string{"publish_seq", "id", "event_type", "subject", "source", "time", "dataschema_full", "data_full", "authorization_aas_ids"}).
+		AddRow(1, "first", TypeAASCreated, "aas", "source", now, "schema", `{}`, nil).
+		AddRow(2, "second", TypeAASCreated, "aas", "source", now.Add(-time.Minute), "schema", `{}`, nil))
+	svc := NewService(NewRepository(db, time.Hour), DefaultConfig())
+	result, err := svc.Read(context.Background(), FeedQuery{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Records[0].Time.Before(result.Records[1].Time) {
+		t.Fatal("response records are not chronological")
+	}
+	if !result.Updated.Equal(now) {
+		t.Fatalf("updated=%s, newest=%s", result.Updated, now)
+	}
+}
+
+func TestPublishAssignmentRollsBackBatchBeforeRetry(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+	svc := NewService(NewRepository(db, time.Hour), DefaultConfig())
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT pg_try_advisory_xact_lock`).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(true))
+	mock.ExpectExec(`WITH candidates`).WillReturnError(context.Canceled)
+	mock.ExpectRollback()
+	count, err := svc.RunPublishAssignment(context.Background())
+	if !errors.Is(err, context.Canceled) || count != 0 {
+		t.Fatalf("failed batch: count=%d error=%v", count, err)
+	}
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT pg_try_advisory_xact_lock`).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(true))
+	mock.ExpectExec(`WITH candidates`).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectCommit()
+	count, err = svc.RunPublishAssignment(context.Background())
+	if err != nil || count != 2 {
+		t.Fatalf("retry: count=%d error=%v", count, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWorkerSkipsBusyTransactionLock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	svc := NewService(NewRepository(db, time.Hour), DefaultConfig())
+	for _, run := range []func(context.Context) (int64, error){svc.RunPublishAssignment, svc.RunRetention} {
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT pg_try_advisory_xact_lock`).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(false))
+		mock.ExpectRollback()
+		count, err := run(context.Background())
+		if err != nil || count != 0 {
+			t.Fatalf("busy worker: count=%d error=%v", count, err)
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

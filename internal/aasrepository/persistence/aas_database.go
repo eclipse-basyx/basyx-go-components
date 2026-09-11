@@ -828,6 +828,25 @@ func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAsset
 	return s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
 }
 
+// CheckSubmodelReferenceForDeletionInTransaction hides references in inaccessible AASs.
+func (s *AssetAdministrationShellDatabase) CheckSubmodelReferenceForDeletionInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier, submodelIdentifier string) error {
+	if tx == nil {
+		return common.NewInternalServerError("AASREPO-CHECKDELSMREF-NILTX transaction must not be nil")
+	}
+	ctx = auth.SelectFormulaForRight(ctx, grammar.RightsEnumDELETE)
+	if _, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-CHECKDELSMREF"); err != nil {
+		return err
+	}
+	exists, visible, err := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
+	if !exists || !visible {
+		return common.NewErrNotFound("AASREPO-CHECKDELSMREF-NOTFOUND Asset Administration Shell not found")
+	}
+	return s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
+}
+
 // checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction performs the existence check within an existing transaction.
 func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)

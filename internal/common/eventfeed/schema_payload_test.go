@@ -27,6 +27,13 @@ package eventfeed
 
 import (
 	"bytes"
+	"encoding/json"
+	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/require"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -37,11 +44,8 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-// schemaDir holds verbatim copies of the JSON Schema documents advertised via
-// the CloudEvents "dataschema" attribute. Payloads are validated against these
-// documents rather than against hand-written shape assertions, so a change to
-// either the builder or the published schemas shows up here.
-const schemaDir = "testdata/schemas"
+// schemaDir contains the same documents embedded and served by the API.
+const schemaDir = "schemas"
 
 const (
 	testAASID      = "https://example.com/ids/aas/1"
@@ -128,14 +132,14 @@ func TestGeneratedPayloadsMatchAdvertisedSchema(t *testing.T) {
 }
 
 // TestAdvertisedSchemasAreVendored guards against a schema constant that is
-// changed without adding the matching document under testdata.
+// changed without adding the matching document to the served schemas.
 func TestAdvertisedSchemasAreVendored(t *testing.T) {
 	schemas := loadAdvertisedSchemas(t)
 	for _, eventType := range allEventTypes() {
 		full, compact := schemaPairForType(eventType, DefaultConfig().SchemaBaseURL)
-		for _, url := range []string{full, compact} {
-			if _, ok := schemas.byName[path.Base(url)]; !ok {
-				t.Errorf("no vendored schema for %s (event type %s)", url, eventType)
+		for _, schemaURL := range []string{full, compact} {
+			if _, ok := schemas.byName[path.Base(schemaURL)]; !ok {
+				t.Errorf("no vendored schema for %s (event type %s)", schemaURL, eventType)
 			}
 		}
 	}
@@ -229,7 +233,7 @@ func loadAdvertisedSchemas(t *testing.T) advertisedSchemas {
 // schemaResourceURL mirrors the "$id" of the vendored documents so intra-schema
 // "$ref"s resolve without network access.
 func schemaResourceURL(name string) string {
-	return "https://admin-shell.io/events/schemas/" + name
+	return "urn:eclipse-basyx:event-feed:schemas:" + name
 }
 
 // pcnRecordValueOnly produces the Value-Only record exactly the way the
@@ -313,4 +317,58 @@ func smeList(idShort string, children ...types.ISubmodelElement) types.ISubmodel
 	sel.SetIDShort(&id)
 	sel.SetValue(children)
 	return sel
+}
+
+func TestServedSchemaValidatesSubmodelWithoutSemanticID(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	router := chi.NewRouter()
+	RegisterRoutes(router, NewService(nil, cfg))
+	event, err := NewBuilder(cfg).SubmodelCreated("urn:example:submodel:no-semantic-id", "", nil)
+	require.NoError(t, err)
+	for _, variant := range []struct{ schemaURL, payload string }{{event.DataSchemaFull, event.DataFull}, {event.DataSchemaCompact, event.DataCompact}} {
+		location, err := url.Parse(variant.schemaURL)
+		require.NoError(t, err)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, location.Path, nil))
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Equal(t, "application/schema+json", response.Header().Get("Content-Type"))
+		document, err := jsonschema.UnmarshalJSON(response.Body)
+		require.NoError(t, err)
+		compiler := jsonschema.NewCompiler()
+		require.NoError(t, compiler.AddResource(variant.schemaURL, document))
+		schema, err := compiler.Compile(variant.schemaURL)
+		require.NoError(t, err)
+		payload, err := jsonschema.UnmarshalJSON(strings.NewReader(variant.payload))
+		require.NoError(t, err)
+		require.NoError(t, schema.Validate(payload))
+	}
+}
+
+func TestEveryAdvertisedSchemaIsServed(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	router := chi.NewRouter()
+	svc := NewService(nil, cfg)
+	RegisterRoutes(router, svc)
+	for _, eventType := range svc.Capabilities().EventTypes {
+		for _, schemaURL := range eventType.Schemas {
+			location, err := url.Parse(schemaURL)
+			require.NoError(t, err)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, location.Path, nil))
+			require.Equal(t, http.StatusOK, response.Code, schemaURL)
+			raw, err := io.ReadAll(response.Body)
+			require.NoError(t, err)
+			var schema map[string]any
+			require.NoError(t, json.Unmarshal(raw, &schema))
+			require.NotEmpty(t, schema["$schema"])
+		}
+	}
+	disabledRouter := chi.NewRouter()
+	cfg.Enabled = false
+	RegisterRoutes(disabledRouter, NewService(nil, cfg))
+	response := httptest.NewRecorder()
+	disabledRouter.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/.well-known/event-feed/schemas/metamodel-submodelChangeEvent.v1.schema.json", nil))
+	require.Equal(t, http.StatusNotFound, response.Code)
 }

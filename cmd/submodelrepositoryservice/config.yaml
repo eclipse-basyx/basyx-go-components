@@ -74,7 +74,7 @@ general:
 #   privateKeyPath: "./rsa-key.pem"
 #   certificateChainPath: "./rsa-cert.pem"
 
-# Event Feed (CloudEvents REST). Requires DB schema >= v1.2.0 (feed_events).
+# Event Feed (CloudEvents REST). Requires DB schema >= v1.2.1 (feed_events).
 # Set eventing.feed.enabled: true to opt in. MQTT/Kafka sinks stay unimplemented.
 eventing:
   enabled: false
@@ -84,8 +84,8 @@ eventing:
     maxAgeDays: 30
     hardDeleteGraceDays: 10
     maxPageSize: 100
-    sourceBaseUrl: "http://localhost:5004"
-    schemaBaseUrl: "https://admin-shell.io/events/schemas"
+    sourceBaseUrl: ""  # Defaults to general.externalUrl, then the local server URL.
+    schemaBaseUrl: ""  # Defaults to the schemas served by this API.
     cleanupIntervalHours: 24
     publishIntervalMillis: 250
 

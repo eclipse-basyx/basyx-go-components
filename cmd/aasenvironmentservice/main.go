@@ -189,7 +189,7 @@ func runServer(ctx context.Context, configPath string) error {
 		ConceptDescriptionRepository: cdrPersistence,
 		Discovery:                    discoveryPersistence,
 	}
-	eventFeedModule, err := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg.Eventing))
+	eventFeedModule, err := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg))
 	if err != nil {
 		return err
 	}

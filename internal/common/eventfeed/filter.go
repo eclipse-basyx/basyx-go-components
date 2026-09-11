@@ -27,6 +27,7 @@ package eventfeed
 
 import (
 	"fmt"
+	"github.com/doug-martin/goqu/v9"
 	"strings"
 )
 
@@ -47,6 +48,8 @@ type comparison struct {
 
 type parsedFilter struct {
 	Comparisons []comparison
+	Children    []*parsedFilter
+	Disjunction bool
 }
 
 func parseFilterParam(raw string) (*parsedFilter, error) {
@@ -64,65 +67,113 @@ func parseFilterParam(raw string) (*parsedFilter, error) {
 	return parseRSQL(expr)
 }
 
+const maxFilterDepth = 32
+const maxFilterLength = 16384
+
 func parseRSQL(expr string) (*parsedFilter, error) {
+	if len(expr) > maxFilterLength {
+		return nil, malformedFilter("filter expression is too long")
+	}
 	if err := validateRSQLQuoting(expr); err != nil {
 		return nil, err
 	}
-	parts := splitRSQLAnd(expr)
-	out := &parsedFilter{Comparisons: make([]comparison, 0, len(parts))}
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		cmp, err := parseComparison(part)
+	return parseRSQLExpression(strings.TrimSpace(expr), 0)
+}
+
+func parseRSQLExpression(expr string, depth int) (*parsedFilter, error) {
+	if depth > maxFilterDepth {
+		return nil, malformedFilter("filter nesting is too deep")
+	}
+	if expr == "" {
+		return nil, malformedFilter("empty filter expression")
+	}
+	for _, disjunction := range []bool{true, false} {
+		parts, err := splitRSQLBoolean(expr, disjunction)
 		if err != nil {
 			return nil, err
 		}
-		out.Comparisons = append(out.Comparisons, cmp)
+		if len(parts) > 1 {
+			return parseRSQLChildren(parts, disjunction, depth+1)
+		}
 	}
-	if len(out.Comparisons) == 0 {
-		return nil, newQueryError("EVENTFEED-FILTER-MALFORMED", "malformed RSQL filter expression")
+	if expr[0] == '(' {
+		if rsqlSkipParen(expr, 0) != len(expr) {
+			return nil, malformedFilter("unexpected content after group")
+		}
+		return parseRSQLExpression(strings.TrimSpace(expr[1:len(expr)-1]), depth+1)
 	}
-	return out, nil
+	cmp, err := parseComparison(expr)
+	if err != nil {
+		return nil, err
+	}
+	return &parsedFilter{Comparisons: []comparison{cmp}}, nil
 }
 
-func splitRSQLAnd(expr string) []string {
+func parseRSQLChildren(parts []string, disjunction bool, depth int) (*parsedFilter, error) {
+	result := &parsedFilter{Disjunction: disjunction}
+	for _, part := range parts {
+		child, err := parseRSQLExpression(strings.TrimSpace(part), depth)
+		if err != nil {
+			return nil, err
+		}
+		if !disjunction && len(child.Children) == 0 {
+			result.Comparisons = append(result.Comparisons, child.Comparisons...)
+		} else {
+			result.Children = append(result.Children, child)
+		}
+	}
+	return result, nil
+}
+
+func splitRSQLBoolean(expr string, disjunction bool) ([]string, error) {
 	var parts []string
-	start := 0
+	start, depth := 0, 0
 	for i := 0; i < len(expr); {
 		if n := rsqlQuotedSpan(expr, i); n > 0 {
 			i += n
 			continue
 		}
-		if expr[i] == '(' {
-			i = rsqlSkipParen(expr, i)
-			continue
+		switch expr[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
 		}
-		if expr[i] == ';' {
-			parts = append(parts, expr[start:i])
-			i++
-			start = i
-			continue
+		if depth < 0 {
+			return nil, malformedFilter("unmatched closing parenthesis")
 		}
-		if rsqlHasAndSeparator(expr, i) {
-			parts = append(parts, expr[start:i])
-			i += len(" and ")
-			start = i
-			continue
+		if depth == 0 {
+			if n := rsqlBooleanSeparator(expr[i:], disjunction); n > 0 {
+				parts = append(parts, expr[start:i])
+				i += n
+				start = i
+				continue
+			}
 		}
 		i++
 	}
-	parts = append(parts, expr[start:])
-	return parts
+	if depth != 0 {
+		return nil, malformedFilter("unclosed parenthesis")
+	}
+	return append(parts, expr[start:]), nil
 }
 
-func rsqlHasAndSeparator(expr string, i int) bool {
-	const sep = " and "
-	if i+len(sep) > len(expr) {
-		return false
+func rsqlBooleanSeparator(expr string, disjunction bool) int {
+	separator, word := byte(';'), " and "
+	if disjunction {
+		separator, word = ',', " or "
 	}
-	return strings.EqualFold(expr[i:i+len(sep)], sep)
+	if expr[0] == separator {
+		return 1
+	}
+	if len(expr) >= len(word) && strings.EqualFold(expr[:len(word)], word) {
+		return len(word)
+	}
+	return 0
+}
+
+func malformedFilter(message string) error {
+	return newQueryError("EVENTFEED-FILTER-MALFORMED", message)
 }
 
 // rsqlQuotedSpan returns the length of the quoted value starting at i, or 0
@@ -213,7 +264,7 @@ func parseComparison(expr string) (comparison, error) {
 	if _, ok := filterableFields[field]; !ok {
 		return comparison{}, newQueryError("EVENTFEED-FILTER-FIELD", fmt.Sprintf("filter on field '%s' is not supported", field))
 	}
-	values, err := parseRSQLValues(valueRaw)
+	values, err := parseRSQLValues(valueRaw, op)
 	if err != nil {
 		return comparison{}, err
 	}
@@ -239,8 +290,12 @@ func rsqlOperatorIndex(expr string) (int, string) {
 	return -1, ""
 }
 
-func parseRSQLValues(raw string) ([]string, error) {
+func parseRSQLValues(raw, operator string) ([]string, error) {
 	raw = strings.TrimSpace(raw)
+	list := operator == "=in=" || operator == "=out="
+	if list != (strings.HasPrefix(raw, "(") && strings.HasSuffix(raw, ")")) {
+		return nil, malformedFilter("membership operators require a list; equality requires one scalar value")
+	}
 	if strings.HasPrefix(raw, "(") && strings.HasSuffix(raw, ")") {
 		inner := strings.TrimSpace(raw[1 : len(raw)-1])
 		if inner == "" {
@@ -284,16 +339,21 @@ func splitRSQLList(inner string) []string {
 	return parts
 }
 
-func unquoteRSQL(v string) (string, error) {
-	if len(v) >= 2 {
-		if (v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'') {
-			return unescapeRSQL(v[1:len(v)-1], v[0]), nil
+func unquoteRSQL(value string) (string, error) {
+	if value == "" {
+		return "", malformedFilter("empty unquoted value")
+	}
+	if value[0] == '\'' || value[0] == '"' {
+		length, closed := rsqlQuotedSpanEnd(value, 0)
+		if !closed || length != len(value) {
+			return "", malformedFilter("unexpected content after quoted value")
 		}
+		return unescapeRSQL(value[1:len(value)-1], value[0]), nil
 	}
-	if v == "" {
-		return "", newQueryError("EVENTFEED-FILTER-MALFORMED", "malformed RSQL filter expression")
+	if strings.ContainsAny(value, "()=,!;<>\\\"' \t\r\n") {
+		return "", malformedFilter("reserved characters must be quoted")
 	}
-	return v, nil
+	return value, nil
 }
 
 func columnForField(field string, presentation Presentation) (string, error) {
@@ -328,4 +388,33 @@ func unescapeRSQL(inner string, quote byte) string {
 		}
 	}
 	return b.String()
+}
+
+func (f *parsedFilter) expression(presentation Presentation) (goqu.Expression, error) {
+	expressions := make([]goqu.Expression, 0, len(f.Comparisons)+len(f.Children))
+	for _, child := range f.Children {
+		expr, err := child.expression(presentation)
+		if err != nil {
+			return nil, err
+		}
+		expressions = append(expressions, expr)
+	}
+	for _, cmp := range f.Comparisons {
+		column, err := columnForField(cmp.Field, presentation)
+		if err != nil {
+			return nil, err
+		}
+		expr, err := filterExpression(column, cmp)
+		if err != nil {
+			return nil, err
+		}
+		expressions = append(expressions, expr)
+	}
+	if len(expressions) == 1 {
+		return expressions[0], nil
+	}
+	if f.Disjunction {
+		return goqu.Or(expressions...), nil
+	}
+	return goqu.And(expressions...), nil
 }

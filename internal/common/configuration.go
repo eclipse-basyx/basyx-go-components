@@ -1085,42 +1085,6 @@ func validateEventingConfig(cfg EventingConfig) error {
 	return nil
 }
 
-// EventFeedRuntimeConfig maps service configuration to the eventfeed module config.
-func EventFeedRuntimeConfig(cfg EventingConfig) (maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours, publishIntervalMillis int, sourceBaseURL, schemaBaseURL string, enabled bool) {
-	maxAgeDays = cfg.Feed.MaxAgeDays
-	if maxAgeDays <= 0 {
-		maxAgeDays = 30
-	}
-	hardDeleteGraceDays = cfg.Feed.HardDeleteGraceDays
-	if hardDeleteGraceDays < 0 {
-		hardDeleteGraceDays = 10
-	}
-	if cfg.Feed.HardDeleteGraceDays == 0 {
-		hardDeleteGraceDays = 10
-	}
-	maxPageSize = cfg.Feed.MaxPageSize
-	if maxPageSize <= 0 {
-		maxPageSize = 100
-	}
-	cleanupHours = cfg.Feed.CleanupIntervalHours
-	if cleanupHours <= 0 {
-		cleanupHours = 24
-	}
-	publishIntervalMillis = cfg.Feed.PublishIntervalMillis
-	if publishIntervalMillis <= 0 {
-		publishIntervalMillis = 250
-	}
-	sourceBaseURL = strings.TrimSpace(cfg.Feed.SourceBaseURL)
-	if sourceBaseURL == "" {
-		sourceBaseURL = "http://localhost"
-	}
-	schemaBaseURL = strings.TrimSpace(cfg.Feed.SchemaBaseURL)
-	if schemaBaseURL == "" {
-		schemaBaseURL = "https://admin-shell.io/events/schemas"
-	}
-	return maxAgeDays, hardDeleteGraceDays, maxPageSize, cleanupHours, publishIntervalMillis, sourceBaseURL, schemaBaseURL, cfg.Feed.Enabled
-}
-
 func normalizeProvider(provider string) string {
 	normalized := strings.ToLower(strings.TrimSpace(provider))
 	if normalized == "" {
@@ -1352,8 +1316,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("eventing.feed.maxAgeDays", 30)
 	v.SetDefault("eventing.feed.hardDeleteGraceDays", 10)
 	v.SetDefault("eventing.feed.maxPageSize", 100)
-	v.SetDefault("eventing.feed.sourceBaseUrl", "http://localhost")
-	v.SetDefault("eventing.feed.schemaBaseUrl", "https://admin-shell.io/events/schemas")
+	v.SetDefault("eventing.feed.sourceBaseUrl", "")
+	v.SetDefault("eventing.feed.schemaBaseUrl", "")
 	v.SetDefault("eventing.feed.cleanupIntervalHours", 24)
 	v.SetDefault("eventing.feed.publishIntervalMillis", 250)
 

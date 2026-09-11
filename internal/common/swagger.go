@@ -367,6 +367,28 @@ const eventFeedPathsYAML = `  /events:
           description: Authentication required when security is enabled
         '403':
           description: Caller is not authorized
+  /.well-known/event-feed/schemas/{schema}:
+    get:
+      tags:
+        - Event Feed API
+      summary: Returns a versioned Event Feed JSON Schema
+      operationId: GetEventFeedSchema
+      parameters:
+        - name: schema
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JSON Schema used by the event dataschema attribute
+          content:
+            application/schema+json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Unknown schema
 `
 
 const abacManagementPathsYAML = `  /security/abac/active-policy:

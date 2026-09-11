@@ -555,7 +555,7 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 	}
 
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-		if checkErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier); checkErr != nil {
+		if checkErr := s.persistence.AASRepository.CheckSubmodelReferenceForDeletionInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); checkErr != nil {
 			return checkErr
 		}
 

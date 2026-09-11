@@ -178,7 +178,7 @@ func runServer(ctx context.Context, configPath string) error {
 		SubmodelRepository: smDatabase,
 	}
 	enableReferencingAASDescriptorEmbeddingSync := registrySyncConfig.SubmodelRegistryIntegration
-	eventFeedModule, eventFeedErr := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg.Eventing))
+	eventFeedModule, eventFeedErr := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg))
 	if eventFeedErr != nil {
 		return eventFeedErr
 	}

@@ -168,6 +168,11 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 		route:       "/.well-known/event-feed.json",
 		filterField: "$sm#id",
 		hasWildcard: false,
+	}, {
+		scope:       "$sm",
+		route:       "/.well-known/event-feed/schemas/*",
+		filterField: "$sm#id",
+		hasWildcard: false,
 	},
 	// Covers all concrete submodel endpoints under /submodels/{submodelIdentifier}/...
 	{
@@ -230,6 +235,11 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 	{
 		scope:       "$aas",
 		route:       "/.well-known/event-feed.json",
+		filterField: "$aas#id",
+		hasWildcard: false,
+	}, {
+		scope:       "$aas",
+		route:       "/.well-known/event-feed/schemas/*",
 		filterField: "$aas#id",
 		hasWildcard: false,
 	},

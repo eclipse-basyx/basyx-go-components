@@ -1,17 +1,22 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://admin-shell.io/events/schemas/metamodel-submodelChangeEvent.v1.schema.json",
+  "$id": "urn:eclipse-basyx:event-feed:schemas:metamodel-submodelChangeEvent.v1.schema.json",
   "title": "metamodel-submodelChangeEvent.v1",
   "description": "Metamodel-aligned schema for Submodel change events. Uses AAS Reference objects as defined in IDTA-01001.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["submodelId"],
+  "required": [
+    "submodelId"
+  ],
   "$defs": {
     "Key": {
       "type": "object",
       "description": "A single key within a Reference chain. Corresponds to Key in the AAS metamodel (IDTA-01001).",
       "additionalProperties": false,
-      "required": ["type", "value"],
+      "required": [
+        "type",
+        "value"
+      ],
       "properties": {
         "type": {
           "type": "string",
@@ -35,17 +40,25 @@
       "type": "object",
       "description": "A Reference as defined in the AAS metamodel (IDTA-01001). Can be an ExternalReference (e.g. IRI pointing to a standard) or a ModelReference (navigable path within an AAS repository).",
       "additionalProperties": false,
-      "required": ["type", "keys"],
+      "required": [
+        "type",
+        "keys"
+      ],
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["ExternalReference", "ModelReference"],
+          "enum": [
+            "ExternalReference",
+            "ModelReference"
+          ],
           "description": "Distinguishes between external references (e.g. IRDIs, IRIs) and model-internal references."
         },
         "keys": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/Key" },
+          "items": {
+            "$ref": "#/$defs/Key"
+          },
           "description": "Ordered sequence of keys forming the reference path."
         },
         "referredSemanticId": {

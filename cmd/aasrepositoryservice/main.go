@@ -172,7 +172,7 @@ func runServer(ctx context.Context, configPath string) error {
 		AASRepository:      aasDatabase,
 		SubmodelRepository: submodelDatabase,
 	}
-	eventFeedModule, err := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg.Eventing))
+	eventFeedModule, err := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg))
 	if err != nil {
 		return err
 	}

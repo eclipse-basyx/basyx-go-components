@@ -82,6 +82,9 @@ type FeedEvent struct {
 	DataSchemaCompact string
 	DataFull          string
 	DataCompact       string
+	// AuthorizationAASIDs records the owning AASs of payload data at capture time.
+	// A nil slice means provenance is unknown; an empty slice means none is needed.
+	AuthorizationAASIDs []string
 }
 
 // FeedQuery is the consumer-facing read request.
@@ -157,7 +160,11 @@ type AuthCapabilities struct {
 
 // cursorData is the decoded keyset pagination cursor payload.
 type cursorData struct {
-	AfterSeq int64 `json:"afterSeq"`
+	AfterSeq     int64        `json:"afterSeq"`
+	Version      int          `json:"version,omitempty"`
+	Since        *time.Time   `json:"since,omitempty"`
+	Filter       string       `json:"filter,omitempty"`
+	Presentation Presentation `json:"presentation,omitempty"`
 }
 
 // domainQuery is the internal repository query after validation/cursor resolution.

@@ -27,6 +27,7 @@ package eventfeed
 
 import (
 	"testing"
+	"time"
 )
 
 func TestCursorRoundTrip(t *testing.T) {
@@ -46,5 +47,31 @@ func TestCursorRoundTrip(t *testing.T) {
 func TestCursorInvalid(t *testing.T) {
 	if _, err := decodeCursor("%%%"); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestCursorRestoresQueryContext(t *testing.T) {
+	since := time.Now().UTC().Add(-time.Hour)
+	original := FeedQuery{Since: &since, Filter: "rsql:event.subject==one", Presentation: PresentationCompact, Limit: 2}
+	cursor, err := encodeQueryCursor(42, original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := resolveCursorQuery(FeedQuery{Cursor: cursor, Limit: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.Since == nil || !restored.Since.Equal(since) || restored.Filter != original.Filter || restored.Presentation != PresentationCompact || restored.Limit != 3 {
+		t.Fatalf("restored query: %+v", restored)
+	}
+	for _, request := range []FeedQuery{
+		{Cursor: cursor, Filter: "rsql:event.subject==other"},
+		{Cursor: cursor, Presentation: PresentationRegular},
+		{Cursor: cursor, Since: new(since.Add(-time.Hour))},
+		{Cursor: cursor, LastEventID: "another-event"},
+	} {
+		if _, err := resolveCursorQuery(request); !IsQueryError(err) {
+			t.Fatalf("query mismatch accepted: %+v; err=%v", request, err)
+		}
 	}
 }

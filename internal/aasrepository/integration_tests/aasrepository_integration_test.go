@@ -51,6 +51,7 @@ import (
 )
 
 const actionDeleteAllAAS = "DELETE_ALL_AAS"
+const actionAssertSubmodelReferencePagination = "ASSERT_SUBMODEL_REFERENCE_PAGINATION"
 
 var aasRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
 var aasRepositoryEventFeedBaseURL = testenv.LocalURLFromEnv("BASYX_IT_EVENT_FEED_API_PORT", 6008)
@@ -596,6 +597,7 @@ EXECUTE FUNCTION %s();`, restoreTriggerName, restoreFunctionName)
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		ActionHandlers: map[string]testenv.JSONStepAction{
+			actionAssertSubmodelReferencePagination: assertSubmodelReferencePagination,
 			actionDeleteAllAAS: func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
 				deleteAllAAS(t, runner, stepNumber)
 			},
@@ -1930,4 +1932,32 @@ func TestMain(m *testing.M) {
 			return testenv.WaitHealthyURL(aasRepositoryEventFeedBaseURL+"/health", 150*time.Second)
 		},
 	}))
+}
+
+func assertSubmodelReferencePagination(t *testing.T, runner *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, stepNumber int) {
+	first, err := runner.RunStep(step, stepNumber)
+	require.NoError(t, err)
+	var page map[string]any
+	require.NoError(t, json.Unmarshal([]byte(first.Body), &page))
+	metadata, ok := page["paging_metadata"].(map[string]any)
+	require.True(t, ok)
+	cursor, ok := metadata["cursor"].(string)
+	require.True(t, ok)
+	require.NotEmpty(t, cursor)
+	delete(metadata, "cursor")
+	withoutCursor, err := json.Marshal(page)
+	require.NoError(t, err)
+	expected, err := os.ReadFile(step.ShouldMatch)
+	require.NoError(t, err)
+	require.JSONEq(t, string(expected), string(withoutCursor))
+
+	endpoint, err := url.Parse(step.Endpoint)
+	require.NoError(t, err)
+	endpoint.RawQuery = url.Values{"cursor": {cursor}}.Encode()
+	step.Endpoint = endpoint.String()
+	second, err := runner.RunStep(step, stepNumber)
+	require.NoError(t, err)
+	expected, err = os.ReadFile("expected/expectedAssetAdministrationShellSubmodelReferencesFilterCursor.json")
+	require.NoError(t, err)
+	require.JSONEq(t, string(expected), second.Body)
 }

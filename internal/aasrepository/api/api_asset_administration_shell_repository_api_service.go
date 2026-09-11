@@ -995,7 +995,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		"AASREPO-DELSMBYID-STARTTX",
 		"AASREPO-DELSMBYID-COMMIT",
 		func(tx *sql.Tx) error {
-			if err := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+			if err := s.assetAdministrationShellBackend.CheckSubmodelReferenceForDeletionInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
 				return err
 			}
 

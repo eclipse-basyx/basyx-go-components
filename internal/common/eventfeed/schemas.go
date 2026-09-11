@@ -23,34 +23,35 @@
  * SPDX-License-Identifier: MIT
  ******************************************************************************/
 
-// Package eventfeed implements the AAS Event Feed API: building, persisting,
-// querying, and serving CloudEvents-style change notifications.
 package eventfeed
 
 import (
-	"context"
-	"sync"
+	"embed"
+	"encoding/json"
+	"net/http"
+	"path"
+
+	"github.com/go-chi/chi/v5"
 )
 
-// RecordAuthorizer decides whether a feed record may be returned to the caller.
-type RecordAuthorizer interface {
-	AllowEvent(ctx context.Context, event FeedEvent) bool
-}
+// SchemaPath is the API-relative location of the versioned Event Feed JSON Schemas.
+const SchemaPath = "/.well-known/event-feed/schemas"
 
-var (
-	recordAuthorizerMu sync.RWMutex
-	recordAuthorizer   RecordAuthorizer
-)
+//go:embed schemas/*.json
+var schemaFiles embed.FS
 
-// SetRecordAuthorizer registers the process-wide event visibility check.
-func SetRecordAuthorizer(authorizer RecordAuthorizer) {
-	recordAuthorizerMu.Lock()
-	recordAuthorizer = authorizer
-	recordAuthorizerMu.Unlock()
-}
-
-func currentRecordAuthorizer() RecordAuthorizer {
-	recordAuthorizerMu.RLock()
-	defer recordAuthorizerMu.RUnlock()
-	return recordAuthorizer
+func handleSchema(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "schema")
+	if name == "" || path.Base(name) != name {
+		http.NotFound(w, r)
+		return
+	}
+	document, err := schemaFiles.ReadFile("schemas/" + name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/schema+json")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_ = json.NewEncoder(w).Encode(json.RawMessage(document))
 }

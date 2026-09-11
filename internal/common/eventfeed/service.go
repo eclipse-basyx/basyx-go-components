@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 )
@@ -77,6 +78,11 @@ func (s *Service) WriteTx(ctx context.Context, tx *sql.Tx, event FeedEvent) erro
 }
 
 func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, error) {
+	var err error
+	query, err = resolveCursorQuery(query)
+	if err != nil {
+		return FeedResponse{}, err
+	}
 	if err := s.validateQuery(query); err != nil {
 		return FeedResponse{}, err
 	}
@@ -94,20 +100,26 @@ func (s *Service) Read(ctx context.Context, query FeedQuery) (FeedResponse, erro
 	if err != nil {
 		return FeedResponse{}, err
 	}
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].Time.Equal(events[j].Time) {
+			return events[i].PublishSeq < events[j].PublishSeq
+		}
+		return events[i].Time.Before(events[j].Time)
+	})
 	records, err := toRecords(events, query.Presentation)
 	if err != nil {
 		return FeedResponse{}, err
 	}
 	var cursor string
 	if hasMore {
-		cursor, err = encodeCursor(resumeSeq)
+		cursor, err = encodeQueryCursor(resumeSeq, query)
 		if err != nil {
 			return FeedResponse{}, err
 		}
 	}
 	updated := s.now()
 	if len(events) > 0 {
-		updated = events[len(events)-1].Time
+		updated = events[len(events)-1].Time.UTC()
 	}
 	return FeedResponse{
 		ID:      feedDocumentID(s.now()),
@@ -150,44 +162,21 @@ func (s *Service) Capabilities() CapabilitiesResponse {
 // advisory lock so only one replica performs the cleanup at a time. It
 // returns the number of deleted events.
 func (s *Service) RunRetention(ctx context.Context) (int64, error) {
-	var n int64
-	locked, err := s.repo.WithRetentionLock(ctx, func(ctx context.Context) error {
-		cutoff := s.now().Add(-(s.cfg.MaxAge + s.cfg.HardDeleteGrace))
-		deleted, delErr := s.repo.DeleteOlderThan(ctx, cutoff)
-		if delErr != nil {
-			return delErr
-		}
-		n = deleted
-		s.logger.InfoContext(ctx, "event feed retention completed",
-			"deleted", n, "cutoff", cutoff.Format(time.RFC3339))
-		return nil
-	})
-	if err != nil || !locked {
-		return n, err
+	cutoff := s.now().Add(-(s.cfg.MaxAge + s.cfg.HardDeleteGrace))
+	count, err := s.repo.DeleteOlderThan(ctx, cutoff)
+	if err == nil && count > 0 {
+		s.logger.InfoContext(ctx, "event feed retention completed", "deleted", count, "cutoff", cutoff.Format(time.RFC3339))
 	}
-	return n, nil
+	return count, err
 }
 
-// RunPublishAssignment assigns publish_seq to newly committed feed rows,
-// using an advisory lock so only one replica assigns at a time. It returns
-// the number of rows assigned. Called periodically by Module.StartPublishLoop.
+// RunPublishAssignment assigns durable cursor positions to newly committed rows.
 func (s *Service) RunPublishAssignment(ctx context.Context) (int64, error) {
-	var n int64
-	locked, err := s.repo.WithPublishLock(ctx, func(ctx context.Context) error {
-		assigned, assignErr := s.repo.AssignPublishSeq(ctx, publishBatchSize)
-		if assignErr != nil {
-			return assignErr
-		}
-		n = assigned
-		if n > 0 {
-			s.logger.DebugContext(ctx, "event feed publish assignment completed", "assigned", n)
-		}
-		return nil
-	})
-	if err != nil || !locked {
-		return n, err
+	count, err := s.repo.AssignPublishSeq(ctx, publishBatchSize)
+	if err == nil && count > 0 {
+		s.logger.DebugContext(ctx, "event feed publish assignment completed", "assigned", count)
 	}
-	return n, nil
+	return count, err
 }
 
 const authScanRounds = 32
@@ -227,7 +216,7 @@ func (s *Service) collectAuthorizedEvents(ctx context.Context, domain domainQuer
 		for _, event := range page {
 			lastScanned = event.PublishSeq
 			domain.AfterSeq = event.PublishSeq
-			if !authorizer.Allow(ctx, event.Type, event.Subject) {
+			if !authorizer.AllowEvent(ctx, event) {
 				continue
 			}
 			if len(out) == limit {
@@ -283,6 +272,7 @@ func (s *Service) buildDomainQuery(ctx context.Context, query FeedQuery, filter 
 		}
 		return domainQuery{
 			AfterSeq: data.AfterSeq,
+			Since:    query.Since,
 			Filter:   filter,
 			Limit:    query.Limit,
 		}, nil

@@ -25,7 +25,11 @@
 
 package eventfeed
 
-import "testing"
+import (
+	"github.com/doug-martin/goqu/v9"
+	"github.com/stretchr/testify/require"
+	"testing"
+)
 
 func TestParseFilterOK(t *testing.T) {
 	f, err := parseFilterParam("rsql:event.type==io.admin-shell.aas.created.v1")
@@ -191,5 +195,40 @@ func TestParseFilterQuotedValueDoesNotBreakConjunction(t *testing.T) {
 func TestParseFilterUnterminatedQuoteIsRejected(t *testing.T) {
 	if _, err := parseFilterParam("rsql:event.subject=='urn:example:sm"); err == nil {
 		t.Fatal("expected an error for an unterminated quoted value")
+	}
+}
+
+func TestFilterBooleanExpressions(t *testing.T) {
+	cases := []struct{ name, input, expected string }{
+		{"or", "rsql:event.subject==a,event.subject==b", `(("subject" = 'a') OR ("subject" = 'b'))`},
+		{"and precedence", "rsql:event.subject==a,event.subject==b;event.type==created", `(("subject" = 'a') OR (("subject" = 'b') AND ("event_type" = 'created')))`},
+		{"group precedence", "rsql:(event.subject==a,event.subject==b);event.type==created", `((("subject" = 'a') OR ("subject" = 'b')) AND ("event_type" = 'created'))`},
+		{"quoted comma", "rsql:event.subject=='a,b'", `("subject" = 'a,b')`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := parseFilterParam(tc.input)
+			require.NoError(t, err)
+			expr, err := f.expression(PresentationRegular)
+			require.NoError(t, err)
+			query, _, err := goqu.Dialect("postgres").From("feed_events").Select("id").Where(expr).ToSQL()
+			require.NoError(t, err)
+			require.Equal(t, `SELECT "id" FROM "feed_events" WHERE `+tc.expected, query)
+		})
+	}
+}
+
+func TestFilterRejectsMalformedSyntax(t *testing.T) {
+	for _, input := range []string{
+		"event.subject==a;", ";event.subject==a", "event.subject==a,,event.subject==b",
+		"(event.subject==a", "event.subject==a)", "event.subject==a=b",
+		"event.subject==a b", "event.subject=='a'junk", "event.subject=in=a", "event.subject==(a,b)",
+		"event.subject=in=(a,)", "event.subject=in=(a,(b))", "event.subject=gt=a",
+	} {
+		t.Run(input, func(t *testing.T) {
+			_, err := parseFilterParam("rsql:" + input)
+			require.Error(t, err)
+			require.True(t, IsQueryError(err))
+		})
 	}
 }

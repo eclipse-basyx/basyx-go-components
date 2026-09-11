@@ -219,3 +219,56 @@ func TestSubmodelRepositoryEventFeedCreateAndRead(t *testing.T) {
 	created, _ := waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, 0, 5*time.Second)
 	require.Equal(t, 1, created, "missing submodel.created event for %s", smID)
 }
+
+func TestSubmodelRepositoryEventFeedCoversScopedAndFileMutations(t *testing.T) {
+	baseURL := submodelRepositoryEventFeedBaseURL
+	smID := fmt.Sprintf("urn:example:event-feed:scoped:%d", time.Now().UnixNano())
+	endpoint := baseURL + "/submodels/" + base64.RawURLEncoding.EncodeToString([]byte(smID))
+	elements := []any{
+		map[string]any{"modelType": "Property", "idShort": "Counter", "valueType": "xs:int", "value": "1"},
+		map[string]any{"modelType": "File", "idShort": "Attachment", "contentType": "text/plain", "value": ""},
+	}
+	status, body := sendReconciliationRequest(t, http.MethodPost, baseURL+"/submodels", map[string]any{
+		"modelType": "Submodel", "id": smID, "idShort": "FeedMutations", "submodelElements": elements,
+	})
+	require.Equal(t, http.StatusCreated, status, string(body))
+	t.Cleanup(func() { _, _ = sendReconciliationRequest(t, http.MethodDelete, endpoint, nil) })
+	client := &http.Client{Timeout: 10 * time.Second}
+	updates := []struct {
+		name, method, path string
+		payload            any
+		status             int
+	}{
+		{"post element", http.MethodPost, "/submodel-elements", map[string]any{"modelType": "Property", "idShort": "Added", "valueType": "xs:string", "value": "one"}, http.StatusCreated},
+		{"patch element value", http.MethodPatch, "/submodel-elements/Added/$value", "two", http.StatusNoContent},
+		{"patch element", http.MethodPatch, "/submodel-elements/Added", map[string]any{"modelType": "Property", "valueType": "xs:string", "value": "three"}, http.StatusNoContent},
+		{"put element", http.MethodPut, "/submodel-elements/Added", map[string]any{"modelType": "Property", "idShort": "Added", "valueType": "xs:string", "value": "four"}, http.StatusNoContent},
+		{"delete element", http.MethodDelete, "/submodel-elements/Added", nil, http.StatusNoContent},
+		{"patch submodel value", http.MethodPatch, "/$value", map[string]any{"Counter": "2"}, http.StatusNoContent},
+	}
+	for i, update := range updates {
+		t.Run(update.name, func(t *testing.T) {
+			status, body := sendReconciliationRequest(t, update.method, endpoint+update.path, update.payload)
+			require.Equal(t, update.status, status, string(body))
+			created, updated := waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, i+1, 5*time.Second)
+			require.Equal(t, 1, created)
+			require.Equal(t, i+1, updated)
+		})
+	}
+	attachmentURL := endpoint + "/submodel-elements/Attachment/attachment"
+	filePath := createTemporaryBinaryTestFile(t, "feed.txt", []byte("event feed attachment"))
+	status, err := uploadFileAttachment(attachmentURL, filePath, "feed.txt")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status)
+	_, updated := waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, len(updates)+1, 5*time.Second)
+	require.Equal(t, len(updates)+1, updated)
+	status, body = sendReconciliationRequest(t, http.MethodDelete, attachmentURL, nil)
+	require.Equal(t, http.StatusOK, status, string(body))
+	_, updated = waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, len(updates)+2, 5*time.Second)
+	require.Equal(t, len(updates)+2, updated)
+	status, body = sendReconciliationRequest(t, http.MethodPost, endpoint+"/submodel-elements", elements[0])
+	require.Equal(t, http.StatusConflict, status, string(body))
+	created, updated := countSubmodelFeedEventTypes(t, client, baseURL, smID)
+	require.Equal(t, 1, created)
+	require.Equal(t, len(updates)+2, updated, "rejected mutation must not emit an update")
+}
