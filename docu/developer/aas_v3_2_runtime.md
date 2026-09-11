@@ -363,6 +363,50 @@ go run ./cmd/historyevidenceverifier \
   -out ./recovered-history.json
 ```
 
+### Event Feed Runtime
+
+The opt-in feed lives in `internal/common/eventfeed`. For deployment settings
+and the HTTP consumer contract, see the [Event Feed user guide](../user/event_feed.md).
+When extending persistence paths, preserve these invariants:
+
+- Capture mutations through `history.MutationSink` and insert feed rows in the
+  same PostgreSQL transaction as the live write. A rollback must leave no event.
+  An unchanged PUT retains its history acknowledgement without emitting an update.
+- Serialize snapshot capture with the mutation even when history evidence is
+  disabled. PCN detection compares records before and after the write; concurrent
+  additions must not be reported twice.
+- Capture contributing AAS ownership inside that transaction. Authorization uses
+  this provenance and the caller's current rules, so later relationship changes
+  cannot expose previously private asset IDs. Missing provenance must fail closed
+  with ABAC enabled.
+- Keep capture, workers, routes, and OpenAPI operations gated by
+  `eventing.feed.enabled`; ordinary deployments leave it disabled.
+
+The internal `seq` is assigned before commit and cannot serve as a consumer
+checkpoint. A worker assigns `publish_seq` to committed, visible rows, serializing
+bounded batches with a transaction advisory lock. The lock and worker queries
+must use the same connection so a one-connection database pool remains usable.
+Retention uses a separate transaction lock and commits each bounded deletion
+batch separately.
+
+Pagination scans by `publish_seq`, then sorts the selected page by mutation time.
+This preserves discovery of late commits without claiming global timestamp
+ordering across pages. Keep cursor scan positions independent of presentation
+order, preserve the query context in cursors, and reauthorize every request.
+The user guide documents replay and deduplication requirements for consumers.
+
+The feed schema and capture-time ownership column are introduced together in
+`database/patches/1_2_0.sql`, registered by the configuration service. Hosted event
+schemas are embedded from `internal/common/eventfeed/schemas`; schema tests
+validate generated payloads against the documents served by the HTTP endpoint.
+
+The [example smoke test](../../examples/BaSyxEventFeedExample/smoke.py) exercises
+CRUD and PCN delivery, pagination, presentations, schemas, and the playground UI.
+The `Event Feed Example` job in the Examples Smoke Tests workflow builds the Go
+images and runs that test. Use the persistence integration tests for transaction,
+concurrency, and authorization regressions; the anonymous playground does not
+exercise secured access policies.
+
 ### Diff-Backed Storage
 
 There is intentionally no separate `history.storageMode` setting. Full-snapshot history is represented by `history.fullSnapshotInterval: 1`; compact storage is enabled by values greater than `1`.

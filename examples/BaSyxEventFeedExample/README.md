@@ -1,15 +1,11 @@
 # Event Feed Example
 
-A local playground for the experimental CloudEvents REST feed, with an AAS
-Environment, BaSyx Web UI, and PostgreSQL. Eventing is explicitly enabled here;
-the standard service configurations keep it disabled.
-The Web UI uses the `mono-all` infrastructure template with one AAS Environment URL.
+See how changes to an AAS become events: edit a property, add a product change
+notification (PCN), and read the resulting feed. This local playground includes
+a BaSyx Web UI and an AAS Environment with sample data and eventing already enabled.
+It uses anonymous access on localhost.
 
-The example binds to localhost and uses anonymous access (`ABAC_ENABLED=false`).
-It is intended for functional exploration. See the [Event Feed documentation](../../docu/user/event_feed.md)
-for authorization behavior and secured deployments.
-
-## Start with locally built Go images
+## Start the playground
 
 Requires Docker Compose and free ports `8082` and `3001`. From this directory:
 
@@ -17,42 +13,28 @@ Requires Docker Compose and free ports `8082` and `3001`. From this directory:
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-This builds the AAS Environment and configuration service from the current
-checkout. The configuration service initializes the database before the backend
-starts. The Web UI uses its published image.
+This builds the Go services from your checkout and uses the published Web UI image.
+Once startup completes, open the [Web UI](http://localhost:3001) and select
+**EventFeedPlayground**. If your browser remembers another setup, first choose
+**Settings → Select Infrastructure → Event Feed Playground**.
 
-To use published images for all services instead, run `docker compose up -d`.
-The published Go images must include the Event Feed feature and schema `v1.2.0`;
-use the local build while this feature is still under review.
+## Change a property
 
-## Explore
+1. Open the **NoSemanticId** Submodel and change its **Status** property from
+   `ready` to another value in the editor. Save the change.
+2. Open the [Event Feed in Swagger](http://localhost:8082/swagger) and execute
+   `GET /events`, or open the [JSON feed](http://localhost:8082/events) directly.
+3. Look for an `io.admin-shell.submodel.updated.v1` event whose `subject` is
+   `urn:example:eventing:submodel:no-semantic-id`.
 
-| Endpoint | URL |
-| --- | --- |
-| Web UI | http://localhost:3001 |
-| Swagger UI | http://localhost:8082/swagger |
-| Event Feed | http://localhost:8082/events |
-| Capabilities | http://localhost:8082/.well-known/event-feed.json |
+Allow a moment for the event to appear, then refresh. This Submodel deliberately
+has no semantic ID: it can still produce events.
 
-The startup configuration loads the `EventFeedPlayground` AAS from
-[`aas/playground.json`](aas/playground.json), with two Submodels:
+## Add a product change notification
 
-- **NoSemanticId** has a `Status` property and deliberately has no semantic ID.
-- **ProductChangeNotifications** contains the initial PCN record `CN1`.
-
-Select the AAS in the Web UI and edit `NoSemanticId.Status`. Refresh `/events`
-to see the resulting Submodel update. You can also use Swagger for CRUD requests.
-Records appear after the background publisher runs, normally within a second.
-If your browser remembers another connection on this port, choose
-**Settings → Select Infrastructure → Event Feed Playground** first.
-
-Fetch the compact presentation:
-
-```sh
-curl --fail --silent 'http://localhost:8082/events?presentation=COMPACT'
-```
-
-Add a second PCN record from this directory:
+The **ProductChangeNotifications** Submodel starts with **CN1**. The supplied
+records demonstrate notification delivery and omit fields needed for a complete
+PCN document. Add the **CN2** record from this directory:
 
 ```sh
 curl --fail --request POST \
@@ -61,41 +43,38 @@ curl --fail --request POST \
   --data-binary @pcn-cn2.json
 ```
 
-This emits a Submodel update and a PCN notification for `CN2`. A second POST of
-the same record conflicts with its existing `idShort`; change the record's
-`idShort` and `ManufacturerChangeID` to add further notifications.
+Refresh the feed. This one action produces **two events** for the PCN Submodel:
+a Submodel update and a PCN notification. To add another record, give it a new
+`idShort` and `ManufacturerChangeID`; posting CN2 again conflicts with the existing record.
 
-Use `limit=1` to inspect pagination and follow the returned `cursor`. Cursors
-preserve filters and presentation. For ongoing polling with `lastEventId`,
-deduplicate events by ID. Event schemas are linked through each record's
-`dataschema` URL and served by this backend.
+## Understand what you see
 
-## Smoke test
+The feed includes retained events across the environment, including startup
+imports and earlier experiments. Reading it does not remove events. Check each
+event's `subject`, `type`, and `time` to identify the change you made.
 
-With the stack running and Python 3 installed:
+With only `limit=1`, you start at the first published event still available to
+you, then follow the returned `cursor` forward. This is not a newest-first
+activity list. To focus on your PCN changes, set Swagger's `filter` to:
 
-```sh
-./smoke.sh
+```text
+rsql:event.subject==urn:example:eventing:submodel:pcn
 ```
 
-The smoke test checks the seeded models and the UI's infrastructure configuration,
-then uses temporary models to verify capabilities, served schemas,
-events without semantic IDs, CRUD events, both presentations, and PCN delivery.
-It cleans up its models and leaves the playground sample intact. The resulting
-test events remain in the feed until retention removes them. Override
-`BASYX_EVENT_FEED_BASE_URL` and `BASYX_EVENT_FEED_UI_BASE_URL` to check another
-instance of this example.
+The [Event Feed user guide](../../docu/user/event_feed.md) explains filtering,
+polling for new events, presentation modes, and configuration for your own setup.
 
-The `Event Feed Example` job in the Examples Smoke Tests workflow builds the
-Go images from the PR, starts this stack, and runs the same smoke test.
+## Check or stop the playground
 
-## Stop and restart
+With Python 3 installed, run `./smoke.sh` to check the example. The test creates
+and removes its own models; their events remain in the feed.
+
+Stop the services with:
 
 ```sh
 docker compose -f docker-compose.yml -f docker-compose.local.yml down
-docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-The named database volume preserves your changes and events. Startup
-preconfiguration follows the hosting service's import behavior. To reset the
-playground, stop it with `down -v` instead; this deletes this example's database.
+The database volume is retained. Use the start command to run the playground
+again. To delete its data and events, add `-v` to the stop command; the next
+start loads the sample data into a fresh database.

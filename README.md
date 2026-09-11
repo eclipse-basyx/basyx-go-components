@@ -93,7 +93,7 @@ The project is composed of DB-backed microservices for AAS and Submodel registri
    To run BaSyx with distinct PostgreSQL writer and streaming-standby reader
    endpoints, see the [PostgreSQL read replica
    example](examples/BaSyxReadReplicaExample/README.md).
-   To explore CloudEvents with locally built services and sample PCN data, see
+   To edit sample Submodels and see their changes in a CloudEvents feed, try
    the [Event Feed example](examples/BaSyxEventFeedExample/README.md).
 
 ## 4. Environment Variables & Configuration
