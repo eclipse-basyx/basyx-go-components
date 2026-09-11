@@ -24,6 +24,7 @@
 
 import base64
 from collections import Counter
+from http.client import HTTPException
 import json
 import os
 from pathlib import Path
@@ -57,7 +58,7 @@ def request(method, url, payload=None, expected=(200,), raw_response=False):
             status, raw = response.status, response.read()
     except HTTPError as error:
         status, raw = error.code, error.read()
-    except (URLError, TimeoutError) as error:
+    except (URLError, TimeoutError, ConnectionError, HTTPException) as error:
         raise RuntimeError(f"EVENTFEED-SMOKE-REQUEST: {method} {url}: {error}") from error
     check(status in expected, "HTTP", f"{method} {url}: HTTP {status}: {raw[:1000]!r}")
     if raw_response:

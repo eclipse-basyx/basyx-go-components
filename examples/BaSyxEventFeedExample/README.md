@@ -3,6 +3,7 @@
 A local playground for the experimental CloudEvents REST feed, with an AAS
 Environment, BaSyx Web UI, and PostgreSQL. Eventing is explicitly enabled here;
 the standard service configurations keep it disabled.
+The Web UI uses the `mono-all` infrastructure template with one AAS Environment URL.
 
 The example binds to localhost and uses anonymous access (`ABAC_ENABLED=false`).
 It is intended for functional exploration. See the [Event Feed documentation](../../docu/user/event_feed.md)
