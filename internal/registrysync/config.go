@@ -37,8 +37,8 @@ import (
 
 const (
 	externalURLKey              = "general.externalUrl"
-	aasDescriptorInterface      = "AAS-3.0"
-	submodelDescriptorInterface = "SUBMODEL-3.0"
+	aasDescriptorInterface      = "AAS-3.2"
+	submodelDescriptorInterface = "SUBMODEL-3.2"
 )
 
 // Config controls repository-to-registry synchronization and descriptor endpoint generation.

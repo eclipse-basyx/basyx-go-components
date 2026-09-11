@@ -12,7 +12,7 @@
   },
   "endpoints": [
     {
-      "interface": "SUBMODEL-3.0",
+      "interface": "SUBMODEL-3.2",
       "protocolInformation": {
         "href": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
         "endpointProtocol": "http"
