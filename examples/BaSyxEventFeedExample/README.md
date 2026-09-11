@@ -3,18 +3,18 @@
 See how changes to an AAS become events: edit a property, add a product change
 notification (PCN), and read the resulting feed. This local playground includes
 a BaSyx Web UI and an AAS Environment with sample data and eventing already enabled.
-It uses anonymous access on localhost.
+It uses anonymous access.
 
 ## Start the playground
 
-Requires Docker Compose and free ports `8082` and `3001`. From this directory:
+Requires Docker Compose and free ports `8082` and `3000`. From this directory:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+docker compose up -d
 ```
 
-This builds the Go services from your checkout and uses the published Web UI image.
-Once startup completes, open the [Web UI](http://localhost:3001) and select
+This uses the published SNAPSHOT images.
+Once startup completes, open the [Web UI](http://localhost:3000) and select
 **EventFeedPlayground**. If your browser remembers another setup, first choose
 **Settings → Select Infrastructure → Event Feed Playground**.
 
@@ -72,9 +72,5 @@ and removes its own models; their events remain in the feed.
 Stop the services with:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.local.yml down
+docker compose down
 ```
-
-The database volume is retained. Use the start command to run the playground
-again. To delete its data and events, add `-v` to the stop command; the next
-start loads the sample data into a fresh database.

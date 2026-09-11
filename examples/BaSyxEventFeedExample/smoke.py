@@ -23,19 +23,18 @@
 # SPDX-License-Identifier: MIT
 
 import base64
-from collections import Counter
-from http.client import HTTPException
 import json
 import os
-from pathlib import Path
 import signal
 import sys
 import time
+import uuid
+from collections import Counter
+from http.client import HTTPException
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
-import uuid
-
 
 PREFIX = "io.admin-shell."
 PRESENTATIONS = ("REGULAR", "COMPACT")
@@ -299,7 +298,7 @@ def main():
     signal.signal(signal.SIGTERM, terminate)
     base = os.environ.get("BASYX_EVENT_FEED_BASE_URL", "http://localhost:8082").rstrip("/")
     check(urlsplit(base).scheme in ("http", "https") and urlsplit(base).netloc, "BASEURL", "expected an HTTP(S) API base URL")
-    ui_base = os.environ.get("BASYX_EVENT_FEED_UI_BASE_URL", "http://localhost:3001").rstrip("/")
+    ui_base = os.environ.get("BASYX_EVENT_FEED_UI_BASE_URL", "http://localhost:3000").rstrip("/")
     check(urlsplit(ui_base).scheme in ("http", "https") and urlsplit(ui_base).netloc,
           "UIBASEURL", "expected an HTTP(S) UI base URL")
     wait_for_url(base + "/health")

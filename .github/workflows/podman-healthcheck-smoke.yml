@@ -117,7 +117,7 @@ jobs:
             -e SERVER_PORT=${SERVICE_PORT} \
             -e CORS_ALLOWEDORIGINS='*' \
             -e CORS_ALLOWEDHEADERS='*' \
-            -e CORS_ALLOWEDCREDENTIALS=true \
+            -e CORS_ALLOWCREDENTIALS=true \
             -e CORS_ALLOWEDMETHODS='GET,POST,PUT,PATCH,DELETE,OPTIONS' \
             -e POSTGRES_HOST=${POSTGRES_HOST} \
             -e POSTGRES_PORT=${POSTGRES_PORT} \
