@@ -1,5 +1,8 @@
 # ABAC and ReBAC Coexistence: Nicht-Interferenznachweis
 
+> [!WARNING]
+> ReBAC ist eine experimentelle BaSyx-Erweiterung. APIs und Semantik können sich inkompatibel ändern. ABAC und der Modus `legacy-abac` bleiben davon unabhängig.
+
 > Kurzfassung für Architektur- und Security-Reviews; ausgelegt auf maximal zwei A4-Seiten.
 
 ## Garantie und Grenze des Nachweises

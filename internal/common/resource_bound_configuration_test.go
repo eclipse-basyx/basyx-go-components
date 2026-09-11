@@ -66,12 +66,12 @@ func TestResourceBoundDescriptionProfileIsOptIn(t *testing.T) {
 }
 
 func TestResourceBoundEnvironmentOverrides(t *testing.T) {
-	t.Setenv("SECURITY_AUTHORIZATION_MODE", AuthorizationResourceBoundFirst)
-	t.Setenv("REBAC_POLICY_SCOPE", "bridges")
-	t.Setenv("REBAC_GROUPS_CLAIM", "memberOf")
-	t.Setenv("REBAC_BOOTSTRAP_OWNER_TYPE", "group")
-	t.Setenv("REBAC_BOOTSTRAP_OWNER_ISSUER", "https://issuer.example")
-	t.Setenv("REBAC_BOOTSTRAP_OWNER_SUBJECT", "owner")
+	t.Setenv("EXPERIMENTAL_REBAC_AUTHORIZATION_MODE", AuthorizationResourceBoundFirst)
+	t.Setenv("EXPERIMENTAL_REBAC_POLICY_SCOPE", "bridges")
+	t.Setenv("EXPERIMENTAL_REBAC_GROUPS_CLAIM", "memberOf")
+	t.Setenv("EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_TYPE", "group")
+	t.Setenv("EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER", "https://issuer.example")
+	t.Setenv("EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT", "owner")
 	cfg := &Config{}
 	applyResourceBoundEnvOverrides(cfg)
 	require.NoError(t, validateResourceBoundConfig(cfg))
@@ -95,6 +95,9 @@ paths:
 	require.NoError(t, yaml.Unmarshal(output, &doc))
 	paths := doc["paths"].(map[string]any)
 	require.Contains(t, paths, "/submodels/{submodelIdentifier}/$access/policy")
+	require.Contains(t, paths, "/submodels/{submodelIdentifier}/$access/share-links")
+	require.Contains(t, paths, "/submodels/{submodelIdentifier}/$access/share-links/{shareLinkId}")
+	require.Contains(t, paths, "/security/rebac/share-links/redeem")
 	require.NotContains(t, paths, "/submodels/$access/policy")
 	require.Contains(t, paths, "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$access/grants/{grantId}")
 	require.NotContains(t, paths, "/shells/$access")
@@ -112,6 +115,14 @@ paths:
 	require.Contains(t, string(output), "If-Match")
 	grantOperation := paths["/submodels/{submodelIdentifier}/$access/grants"].(map[string]any)["post"].(map[string]any)
 	require.Contains(t, string(mustJSON(t, grantOperation)), "Location")
+	shareOperation := paths["/submodels/{submodelIdentifier}/$access/share-links"].(map[string]any)["post"].(map[string]any)
+	shareJSON := string(mustJSON(t, shareOperation))
+	require.Contains(t, shareJSON, "ResourceAccessShareLinkInput")
+	require.Contains(t, shareJSON, "no-store")
+	require.Contains(t, shareJSON, "no-referrer")
+	require.NotContains(t, shareJSON, "Location")
+	redeemOperation := paths["/security/rebac/share-links/redeem"].(map[string]any)["post"].(map[string]any)
+	require.Contains(t, string(mustJSON(t, redeemOperation)), "ResourceAccessShareLinkRedemption")
 	require.Contains(t, string(output), "uniqueItems: true")
 	require.Contains(t, string(output), `pattern: .*\S.*`)
 	components := doc["components"].(map[string]any)
@@ -121,6 +132,9 @@ paths:
 	principalType := principalProperties["type"].(map[string]any)
 	require.Equal(t, []any{"user", "group"}, principalType["enum"])
 	require.Equal(t, "user", principalType["default"])
+	require.Contains(t, schemas, "ResourceAccessShareLinkInput")
+	require.Contains(t, schemas, "ResourceAccessShareLink")
+	require.Contains(t, schemas, "ResourceAccessShareLinkRedemption")
 }
 
 func mustJSON(t *testing.T, value any) []byte {

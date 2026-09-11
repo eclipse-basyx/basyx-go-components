@@ -48,12 +48,12 @@ services:
       ABAC_MODELPATH: /security_env/access-rules.json
       ABAC_POLICY_FILE_IMPORT: if_missing
       ABAC_MANAGEMENT_API_ENABLED: "true"
-      SECURITY_AUTHORIZATION_MODE: resource-bound-first
-      REBAC_POLICY_SCOPE: minimal-security-example
-      REBAC_GROUPS_CLAIM: groups
-      REBAC_BOOTSTRAP_OWNER_TYPE: group
-      REBAC_BOOTSTRAP_OWNER_ISSUER: http://keycloak.localhost:8180/realms/basyx
-      REBAC_BOOTSTRAP_OWNER_SUBJECT: /aas-admins
+      EXPERIMENTAL_REBAC_AUTHORIZATION_MODE: resource-bound-first
+      EXPERIMENTAL_REBAC_POLICY_SCOPE: minimal-security-example
+      EXPERIMENTAL_REBAC_GROUPS_CLAIM: groups
+      EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_TYPE: group
+      EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER: http://keycloak.localhost:8180/realms/basyx
+      EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT: /aas-admins
       OIDC_TRUSTLISTPATH: /security_env/trustlist.json
       GENERAL_AASREGISTRYINTEGRATION: "true"
       GENERAL_SUBMODELREGISTRYINTEGRATION: "true"

@@ -42,6 +42,8 @@ var resourceAccessOperations = []resourceAccessOperation{
 	{"/grants", "post", "Add a managed principal grant", "ResourceAccessGrantInput"},
 	{"/grants/{grantId}", "put", "Replace a managed principal grant", "ResourceAccessGrantInput"},
 	{"/grants/{grantId}", "delete", "Remove a managed principal grant", ""},
+	{"/share-links", "post", "Create a single-use access invitation", "ResourceAccessShareLinkInput"},
+	{"/share-links/{shareLinkId}", "delete", "Revoke an unused access invitation", ""},
 	{"/managers", "put", "Replace direct managers", "ResourceAccessPrincipals"},
 	{"/owners", "put", "Replace direct owners; at least one owner must remain", "ResourceAccessPrincipals"},
 }
@@ -84,6 +86,9 @@ func injectResourceBoundAPI(content []byte) ([]byte, error) {
 		paths["/shells/{aasIdentifier}/$access/capabilities"] = map[string]any{
 			"get": resourceCapabilitiesOpenAPIOperation(),
 		}
+	}
+	paths["/security/rebac/share-links/redeem"] = map[string]any{
+		"post": resourceShareLinkRedemptionOpenAPIOperation(),
 	}
 	components, _ := document["components"].(map[string]any)
 	if components == nil {
@@ -150,11 +155,19 @@ func resourceAccessOpenAPIOperation(path string, operation resourceAccessOperati
 		responseSchema = "ResourceAccessPrincipals"
 	case "/grants", "/grants/{grantId}":
 		responseSchema = "ResourceAccessGrant"
+	case "/share-links":
+		responseSchema = "ResourceAccessShareLink"
 	}
 	response := map[string]any{"description": "Result", "headers": map[string]any{"ETag": map[string]any{"schema": map[string]any{"type": "string"}}}, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/" + responseSchema}}}}
+	if strings.HasPrefix(operation.suffix, "/share-links") {
+		response["headers"].(map[string]any)["Cache-Control"] = map[string]any{"schema": map[string]any{"type": "string", "example": "no-store"}}
+		response["headers"].(map[string]any)["Referrer-Policy"] = map[string]any{"schema": map[string]any{"type": "string", "example": "no-referrer"}}
+	}
 	responses["200"] = response
 	if operation.method == "post" {
-		response["headers"].(map[string]any)["Location"] = map[string]any{"description": "URL of the created managed grant", "schema": map[string]any{"type": "string"}}
+		if operation.suffix == "/grants" {
+			response["headers"].(map[string]any)["Location"] = map[string]any{"description": "URL of the created managed grant", "schema": map[string]any{"type": "string"}}
+		}
 		responses["201"] = response
 	}
 
@@ -163,6 +176,22 @@ func resourceAccessOpenAPIOperation(path string, operation resourceAccessOperati
 		result["requestBody"] = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/" + operation.body}}}}
 	}
 	return result
+}
+
+func resourceShareLinkRedemptionOpenAPIOperation() map[string]any {
+	return map[string]any{
+		"tags": []string{"Resource Access"}, "summary": "Redeem a single-use access invitation for the authenticated user",
+		"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/ResourceAccessShareLinkRedemption"}}}},
+		"responses": map[string]any{
+			"201": map[string]any{"description": "Grant assigned to the authenticated issuer and subject", "headers": map[string]any{
+				"Cache-Control":   map[string]any{"schema": map[string]any{"type": "string", "example": "no-store"}},
+				"Referrer-Policy": map[string]any{"schema": map[string]any{"type": "string", "example": "no-referrer"}},
+			}},
+			"400": map[string]any{"description": "Malformed request"}, "401": map[string]any{"description": "Authentication required"},
+			"404": map[string]any{"description": "Invitation is invalid, expired, revoked, consumed, stale, or bound to another user"},
+			"500": map[string]any{"description": "Redemption failed closed"},
+		},
+	}
 }
 
 func resourceAccessSchemas() map[string]any {
@@ -193,6 +222,14 @@ func resourceAccessSchemas() map[string]any {
 			"principal": map[string]any{"$ref": "#/components/schemas/ResourceAccessPrincipal"},
 			"rights":    rights,
 		}},
+		"ResourceAccessShareLinkInput": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"rights"}, "properties": map[string]any{
+			"rights": rights, "expiresInSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 604800, "default": 3600},
+			"expectedPrincipal": map[string]any{"$ref": "#/components/schemas/ResourceAccessPrincipal", "description": "Optional user identity allowed to redeem the invitation."},
+		}},
+		"ResourceAccessShareLink": map[string]any{"type": "object", "required": []string{"id", "shareLink", "expiresAt"}, "properties": map[string]any{
+			"id": map[string]any{"type": "string", "format": "uuid"}, "shareLink": map[string]any{"type": "string"}, "expiresAt": map[string]any{"type": "string", "format": "date-time"},
+		}},
+		"ResourceAccessShareLinkRedemption": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"token"}, "properties": map[string]any{"token": map[string]any{"type": "string", "minLength": 43, "maxLength": 43}}},
 		"ResourceBoundPolicy": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"RESOURCE", "rules"}, "example": map[string]any{"RESOURCE": map[string]string{"IDENTIFIABLE": "$sm(\"urn:bridge:inspection\")"}, "rules": []any{}}, "description": "Single resource-bound model from Part 4 PR #108 (07c8bb6). RESOURCE must identify the addressed resource. Definitions are local; rules prohibit OBJECTS and USEOBJECTS.", "properties": map[string]any{
 			"RESOURCE":      map[string]any{"type": "object", "minProperties": 1, "maxProperties": 1, "additionalProperties": false, "properties": map[string]any{"ROUTE": map[string]any{"type": "string"}, "IDENTIFIABLE": map[string]any{"type": "string"}, "REFERABLE": map[string]any{"type": "string"}, "DESCRIPTOR": map[string]any{"type": "string"}}},
 			"rules":         map[string]any{"type": "array", "items": map[string]any{"type": "object"}},

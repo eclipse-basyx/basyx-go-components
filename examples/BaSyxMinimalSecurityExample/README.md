@@ -1,5 +1,8 @@
 # BaSyx Minimal Security Example
 
+> [!WARNING]
+> ReBAC is experimental. This example is intended for evaluation; its ReBAC APIs and persisted schema may change incompatibly. The demonstrated ABAC behavior remains independent.
+
 This example combines ABAC and resource-bound access control in one AAS Environment Service. It contains only the components required for an end-to-end demonstration:
 
 - AAS Environment with repository, registry, discovery, and Concept Description APIs
@@ -9,7 +12,7 @@ This example combines ABAC and resource-bound access control in one AAS Environm
 
 ## Access model
 
-The service runs with `SECURITY_AUTHORIZATION_MODE=resource-bound-first` and `ABAC_ENABLED=true`.
+The service runs with `EXPERIMENTAL_REBAC_AUTHORIZATION_MODE=resource-bound-first` and `ABAC_ENABLED=true`.
 
 - ABAC keeps broad, stable permissions: collection reads and creation, anonymous service information, `viewer` access to the Concept Description catalog, and ABAC policy administration for the `admin` role.
 - ReBAC controls concrete AAS, Submodels, Submodel Elements, descriptors, Discovery entries, ownership, and sharing.

@@ -36,6 +36,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -374,6 +375,68 @@ func TestResourceBoundGroupGrantAndOwnerAdministration(t *testing.T) {
 	c.mutate(http.MethodPut, access+"/managers", "group-member", []any{}, http.StatusOK)
 	c.request(http.MethodGet, access, "group-member", nil, "", http.StatusOK)
 	c.request(http.MethodDelete, path, "admin", nil, "", http.StatusNoContent)
+}
+
+func TestResourceBoundShareLinkLifecycle(t *testing.T) {
+	c := newAccessClient(t)
+	id := "urn:share-link:" + uuid.NewString()
+	path := "/submodels/" + encoded(id)
+	access := path + "/$access"
+	c.request(http.MethodPost, "/submodels", "admin", map[string]any{"modelType": "Submodel", "id": id, "idShort": "Shared"}, "", http.StatusCreated)
+	c.mutate(http.MethodPost, access+"/share-links", "admin", map[string]any{"rights": []string{"READ"}}, http.StatusConflict)
+	c.mutate(http.MethodPut, access+"/policy", "admin", policy(map[string]string{"IDENTIFIABLE": "$sm(" + strconvQuote(id) + ")"}), http.StatusOK)
+	c.mutate(http.MethodPost, access+"/share-links", "admin", map[string]any{"rights": []string{"READ"}, "expiresInSeconds": int64(^uint64(0) >> 1)}, http.StatusBadRequest)
+
+	_, etag := c.request(http.MethodGet, access, "admin", nil, "", http.StatusOK)
+	created, headers := c.requestRaw(http.MethodPost, access+"/share-links", "admin", mustMarshal(t, map[string]any{"rights": []string{"READ"}, "expiresInSeconds": 3600}), etag, http.StatusCreated)
+	require.Equal(t, "no-store", headers.Get("Cache-Control"))
+	require.Equal(t, "no-referrer", headers.Get("Referrer-Policy"))
+	require.Equal(t, etag, headers.Get("ETag"))
+	var invitation struct {
+		ID        string `json:"id"`
+		ShareLink string `json:"shareLink"`
+	}
+	require.NoError(t, json.Unmarshal(created, &invitation))
+	require.NotEmpty(t, invitation.ID)
+	parts := strings.Split(invitation.ShareLink, "token=")
+	require.Len(t, parts, 2)
+	token := parts[1]
+	_, headers = c.requestRaw(http.MethodPost, "/security/rebac/share-links/redeem", "share-recipient", mustMarshal(t, map[string]string{"token": token}), "", http.StatusCreated)
+	require.Equal(t, "no-store", headers.Get("Cache-Control"))
+	require.Equal(t, "no-referrer", headers.Get("Referrer-Policy"))
+	c.request(http.MethodGet, path, "share-recipient", nil, "", http.StatusOK)
+	c.request(http.MethodPost, "/security/rebac/share-links/redeem", "share-recipient", map[string]string{"token": token}, "", http.StatusNotFound)
+
+	revoked := c.mutate(http.MethodPost, access+"/share-links", "admin", map[string]any{"rights": []string{"READ"}}, http.StatusCreated)
+	require.NoError(t, json.Unmarshal(revoked, &invitation))
+	parts = strings.Split(invitation.ShareLink, "token=")
+	c.mutate(http.MethodDelete, access+"/share-links/"+invitation.ID, "admin", nil, http.StatusNoContent)
+	c.request(http.MethodPost, "/security/rebac/share-links/redeem", "other-recipient", map[string]string{"token": parts[1]}, "", http.StatusNotFound)
+
+	bound := c.mutate(http.MethodPost, access+"/share-links", "admin", map[string]any{"rights": []string{"READ"}, "expectedPrincipal": principal("intended-recipient")}, http.StatusCreated)
+	require.NoError(t, json.Unmarshal(bound, &invitation))
+	parts = strings.Split(invitation.ShareLink, "token=")
+	c.request(http.MethodPost, "/security/rebac/share-links/redeem", "wrong-recipient", map[string]string{"token": parts[1]}, "", http.StatusNotFound)
+	c.request(http.MethodPost, "/security/rebac/share-links/redeem", "intended-recipient", map[string]string{"token": parts[1]}, "", http.StatusCreated)
+
+	expired := c.mutate(http.MethodPost, access+"/share-links", "admin", map[string]any{"rights": []string{"READ"}}, http.StatusCreated)
+	require.NoError(t, json.Unmarshal(expired, &invitation))
+	parts = strings.Split(invitation.ShareLink, "token=")
+	expire := goqu.Dialect("postgres").Update("rebac_share_invitation").Set(goqu.Record{
+		"created_at": goqu.L("CURRENT_TIMESTAMP - INTERVAL '2 seconds'"),
+		"expires_at": goqu.L("CURRENT_TIMESTAMP - INTERVAL '1 second'"),
+	}).Where(goqu.Ex{"id": invitation.ID}).Prepared(true)
+	query, args, err := expire.ToSQL()
+	require.NoError(t, err)
+	_, err = c.db.ExecContext(t.Context(), query, args...)
+	require.NoError(t, err)
+	c.request(http.MethodPost, "/security/rebac/share-links/redeem", "other-recipient", map[string]string{"token": parts[1]}, "", http.StatusNotFound)
+
+	stale := c.mutate(http.MethodPost, access+"/share-links", "admin", map[string]any{"rights": []string{"READ"}}, http.StatusCreated)
+	require.NoError(t, json.Unmarshal(stale, &invitation))
+	parts = strings.Split(invitation.ShareLink, "token=")
+	c.mutate(http.MethodPost, access+"/grants", "admin", grant("revision-change", "VIEW"), http.StatusCreated)
+	c.request(http.MethodPost, "/security/rebac/share-links/redeem", "other-recipient", map[string]string{"token": parts[1]}, "", http.StatusNotFound)
 }
 
 func TestResourceBoundBootstrapGroupOwnsExistingResources(t *testing.T) {

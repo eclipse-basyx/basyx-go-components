@@ -86,6 +86,10 @@ func containsBoundPrincipal(principals []common.AccessPrincipal, principal commo
 }
 
 func (repo *resourceBoundRepository) serveAccess(w http.ResponseWriter, r *http.Request, target boundTarget) {
+	if strings.HasPrefix(target.Suffix, "share-links") {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+	}
 	status, value, tag, err := repo.accessRequest(r, target)
 	if err != nil {
 		writeBoundError(w, err)
@@ -160,9 +164,15 @@ func (repo *resourceBoundRepository) accessRequest(r *http.Request, target bound
 	if r.Header.Get("If-Match") != boundETag(revision, access, effective) {
 		return 0, nil, "", boundError(http.StatusPreconditionFailed, "REVISION stale access revision")
 	}
-	status, value, err := mutateBoundAccess(r, tx, target, access, owner)
+	status, value, err := repo.mutateBoundAccess(r, tx, target, access, owner)
 	if err != nil {
 		return 0, nil, "", err
+	}
+	if strings.HasPrefix(target.Suffix, "share-links") {
+		if err = tx.Commit(); err != nil {
+			return 0, nil, "", fmt.Errorf("REBAC-SHARE-COMMIT %w", err)
+		}
+		return status, value, boundETag(revision, access, effective), nil
 	}
 	etag, err := repo.commitAccess(r, tx, target, access, actor, revision+1)
 	return status, value, etag, err
@@ -225,7 +235,7 @@ func decodeBoundBody(r *http.Request, value any) error {
 	return nil
 }
 
-func mutateBoundAccess(r *http.Request, tx *sql.Tx, target boundTarget, access *boundAccess, owner bool) (int, any, error) {
+func (repo *resourceBoundRepository) mutateBoundAccess(r *http.Request, tx *sql.Tx, target boundTarget, access *boundAccess, owner bool) (int, any, error) {
 	switch target.Suffix {
 	case "policy":
 		return mutateBoundPolicy(r, tx, target, access)
@@ -236,9 +246,14 @@ func mutateBoundAccess(r *http.Request, tx *sql.Tx, target boundTarget, access *
 			return 0, nil, boundError(http.StatusMethodNotAllowed, "METHOD expected POST")
 		}
 		return mutateBoundGrant(r, tx, access, "")
+	case "share-links":
+		return repo.mutateShareLink(r, tx, access, "")
 	default:
 		if strings.HasPrefix(target.Suffix, "grants/") && !strings.Contains(strings.TrimPrefix(target.Suffix, "grants/"), "/") {
 			return mutateBoundGrant(r, tx, access, strings.TrimPrefix(target.Suffix, "grants/"))
+		}
+		if strings.HasPrefix(target.Suffix, "share-links/") && !strings.Contains(strings.TrimPrefix(target.Suffix, "share-links/"), "/") {
+			return repo.mutateShareLink(r, tx, access, strings.TrimPrefix(target.Suffix, "share-links/"))
 		}
 	}
 	return 0, nil, boundError(http.StatusNotFound, "ROUTE unknown access endpoint")

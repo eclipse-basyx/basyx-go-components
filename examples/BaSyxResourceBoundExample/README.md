@@ -1,5 +1,8 @@
 # Resource-bound bridge example
 
+> [!WARNING]
+> This example enables the experimental ReBAC feature. Its APIs and persisted schema may change incompatibly.
+
 This example builds the local AAS Environment and configuration service and uses PostgreSQL. Supply an existing OIDC provider reachable from the containers.
 
 1. Replace `https://issuer.example`, the audience, and subject IDs in `config.yaml`, `trustlist.json`, and `fallback.json` with your verified OIDC identities. The owner needs a token for the configured audience. `bridge-auditor` demonstrates object-based ABAC fallback.

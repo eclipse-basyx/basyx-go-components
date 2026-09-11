@@ -76,6 +76,10 @@ func (repo *resourceBoundRepository) capabilityHeaders(next http.Handler) http.H
 func (repo *resourceBoundRepository) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := stripBasePath(repo.basePath, r.URL.Path)
+		if path == shareLinkRedeemPath {
+			repo.serveShareLinkRedemption(w, r)
+			return
+		}
 		if repo.serveFallbackRoute(next, w, r, path) {
 			return
 		}

@@ -95,12 +95,12 @@ func applyResourceBoundEnvOverrides(cfg *Config) {
 		target *string
 		key    string
 	}{
-		{&cfg.Security.AuthorizationMode, "SECURITY_AUTHORIZATION_MODE"},
-		{&cfg.ReBAC.PolicyScope, "REBAC_POLICY_SCOPE"}, {&cfg.ReBAC.ModelPath, "REBAC_MODEL_PATH"},
-		{&cfg.ReBAC.GroupsClaim, "REBAC_GROUPS_CLAIM"},
-		{(*string)(&cfg.ReBAC.BootstrapOwner.Type), "REBAC_BOOTSTRAP_OWNER_TYPE"},
-		{&cfg.ReBAC.BootstrapOwner.Issuer, "REBAC_BOOTSTRAP_OWNER_ISSUER"},
-		{&cfg.ReBAC.BootstrapOwner.Subject, "REBAC_BOOTSTRAP_OWNER_SUBJECT"},
+		{&cfg.Security.AuthorizationMode, "EXPERIMENTAL_REBAC_AUTHORIZATION_MODE"},
+		{&cfg.ReBAC.PolicyScope, "EXPERIMENTAL_REBAC_POLICY_SCOPE"}, {&cfg.ReBAC.ModelPath, "EXPERIMENTAL_REBAC_MODEL_PATH"},
+		{&cfg.ReBAC.GroupsClaim, "EXPERIMENTAL_REBAC_GROUPS_CLAIM"},
+		{(*string)(&cfg.ReBAC.BootstrapOwner.Type), "EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_TYPE"},
+		{&cfg.ReBAC.BootstrapOwner.Issuer, "EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER"},
+		{&cfg.ReBAC.BootstrapOwner.Subject, "EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT"},
 	}
 	for _, field := range fields {
 		if value, ok := lookupFirstTrimmedEnv(field.key, "BASYX_"+field.key); ok {
