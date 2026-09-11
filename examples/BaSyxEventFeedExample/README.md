@@ -80,28 +80,3 @@ Stop the services with:
 ```sh
 docker compose down
 ```
-
-If you started with the local build override, include both `-f` arguments when
-stopping as well.
-
-Like the minimal example, this setup does not declare a named database volume.
-`docker compose stop` followed by `docker compose start` keeps the existing data
-and events. After `docker compose down`, the next `up` uses a fresh database and
-loads the sample data again. Use `docker compose down -v` to also remove the
-anonymous database volume created by the PostgreSQL image.
-
-## Differences from the minimal example
-
-Ports, CORS, database settings, and UI endpoint configuration follow the minimal
-example. The differences relevant to this playground are:
-
-- `BASYX_EVENTING_FEED_ENABLED=true` enables the event feed.
-- The seed data demonstrates updates without a semantic ID and PCN notifications.
-- `pcn-cn2.json` and `smoke.sh` provide a sample change and a feed verification tool.
-
-The optional local build override is useful for development but is not required
-to run the example. The UI waits for a healthy backend before starting. Compose
-generates container names, and a YAML anchor shares the database settings between
-services. These are setup conveniences, not event-feed requirements. The minimal
-example's JWS signing-key mount is omitted because this demo does not use signed
-responses.
