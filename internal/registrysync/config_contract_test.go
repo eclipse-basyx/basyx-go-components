@@ -70,6 +70,7 @@ func TestDescriptorInterfaceVersionsMatchRepositoryContracts(t *testing.T) {
 func readRepositoryContractVersion(t *testing.T, openAPIPath string) string {
 	t.Helper()
 
+	// #nosec G304 -- path is selected from static repository-owned test fixtures.
 	content, err := os.ReadFile(openAPIPath)
 	require.NoError(t, err)
 
