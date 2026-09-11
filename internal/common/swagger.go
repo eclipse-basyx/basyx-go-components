@@ -1672,6 +1672,13 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 		includeABACManagement = &abacManagementEnabled
 	}
 
+	if ResourceBoundEnabled(serverConfig) {
+		content, err = injectResourceBoundAPI(content)
+		if err != nil {
+			return err
+		}
+	}
+
 	AddSwaggerUI(r, SwaggerUIConfig{
 		Title:                 title,
 		SpecURL:               fullSpecPath,

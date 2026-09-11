@@ -1,0 +1,102 @@
+{
+  "realm": "basyx",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 300,
+  "registrationAllowed": false,
+  "clients": [
+    {
+      "clientId": "basyx-ui",
+      "name": "BaSyx UI",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:3100/*"],
+      "webOrigins": ["http://localhost:3100"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3100/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "Role Mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "role",
+            "claim.name": "role",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "false"
+          }
+        },
+        {
+          "name": "Groups Mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "BaSyx API Audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "basyx-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "basyx-api",
+      "name": "BaSyx API",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    }
+  ],
+  "groups": [
+    { "name": "aas-admins", "path": "/aas-admins", "subGroups": [] },
+    { "name": "aas-viewers", "path": "/aas-viewers", "subGroups": [] }
+  ],
+  "users": [
+    {
+      "id": "32103f0d-1d0e-4d94-b720-bcd22e1c7709",
+      "username": "admin",
+      "firstName": "BaSyx",
+      "lastName": "Admin",
+      "email": "admin@example.org",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": { "role": ["admin"] },
+      "groups": ["/aas-admins"],
+      "credentials": [{ "type": "password", "value": "pwd", "temporary": false }]
+    },
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "username": "usera",
+      "firstName": "BaSyx",
+      "lastName": "User",
+      "email": "usera@example.org",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": { "role": ["viewer"] },
+      "groups": ["/aas-viewers"],
+      "credentials": [{ "type": "password", "value": "pwd", "temporary": false }]
+    }
+  ]
+}

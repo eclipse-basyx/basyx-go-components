@@ -133,7 +133,7 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASXFileServerService")
 
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(
 		ctx,
 		cfg,
 		apiRouter,

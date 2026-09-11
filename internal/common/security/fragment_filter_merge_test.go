@@ -27,6 +27,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -34,6 +35,24 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
+
+func TestResourceBoundMaskSkipsUnrestrictedFragment(t *testing.T) {
+	ctx := context.WithValue(t.Context(), boundRequestKey, &boundRequest{})
+	ctx = WithQueryFilter(ctx, &QueryFilter{Filters: FragmentFilters{
+		"$sme": NewFragmentFilterPredicate(boolExpression(true), true),
+	}})
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
+	if err != nil {
+		t.Fatalf("create collector: %v", err)
+	}
+	_, masked, err := buildFragmentMaskCondition(ctx, "$aas#idShort", collector)
+	if err != nil {
+		t.Fatalf("build fragment mask: %v", err)
+	}
+	if masked {
+		t.Fatal("unrestricted AAS fragment must not receive a resource-bound mask")
+	}
+}
 
 func TestAuthorizeMultipleABACRulesPreservesMatchModePerAlternative(t *testing.T) {
 	model := mustParseAASRegistryAccessModel(t, mixedMatchRulesModelJSON)

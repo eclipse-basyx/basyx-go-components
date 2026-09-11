@@ -125,7 +125,7 @@ func runServer(ctx context.Context, configPath string) error {
 	bulkSvc := smregistryapi.NewBulkService(smSvc, bulkManager)
 	bulkHandler := smregistryapi.NewBulkHTTPHandler(bulkSvc)
 
-	descSvc := smregistryapi.NewDescriptionAPIAPIService()
+	descSvc := smregistryapi.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
 	descCtrl := smregistryopenapi.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
@@ -135,7 +135,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "SubmodelRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "submodelregistryservice")
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "submodelregistryservice")
 	if err != nil {
 		return err
 	}

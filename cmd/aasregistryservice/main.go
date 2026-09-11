@@ -126,7 +126,7 @@ func runServer(ctx context.Context, configPath string) error {
 	bulkSvc := aasregistryapi.NewBulkService(smSvc, bulkManager)
 	bulkHandler := aasregistryapi.NewBulkHTTPHandler(bulkSvc)
 
-	descSvc := aasregistryapi.NewDescriptionAPIAPIService()
+	descSvc := aasregistryapi.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
 	descCtrl := apis.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
@@ -136,7 +136,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "AASRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasregistryservice")
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "aasregistryservice")
 	if err != nil {
 		return err
 	}

@@ -228,13 +228,13 @@ func runServer(ctx context.Context, configPath string) error {
 	smRepositoryCtrl := submodelrepositoryopenapi.NewSubmodelRepositoryAPIAPIController(customSMRepository, "", cfg.Server.StrictVerification)
 	cdrCtrl := cdropenapi.NewConceptDescriptionRepositoryAPIAPIController(customCDRepository, "", cfg.Server.StrictVerification)
 	discoveryCtrl := discoveryopenapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(customDiscovery)
-	descriptionCtrl := discoveryopenapi.NewDescriptionAPIAPIController(aasenvironment.NewDescriptionService())
+	descriptionCtrl := discoveryopenapi.NewDescriptionAPIAPIController(aasenvironment.NewDescriptionService(common.ResourceBoundEnabled(cfg)))
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASEnvironmentService")
 
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice")
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice")
 	if err != nil {
 		return err
 	}

@@ -29,6 +29,7 @@ package digitaltwinregistry
 import (
 	"context"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -38,20 +39,22 @@ const (
 )
 
 // DescriptionService provides the combined service description for the Digital Twin Registry.
-type DescriptionService struct{}
+type DescriptionService struct {
+	resourceBoundEnabled bool
+}
 
 // NewDescriptionService constructs the description service.
-func NewDescriptionService() *DescriptionService {
-	return &DescriptionService{}
+func NewDescriptionService(resourceBoundEnabled ...bool) *DescriptionService {
+	return &DescriptionService{resourceBoundEnabled: len(resourceBoundEnabled) > 0 && resourceBoundEnabled[0]}
 }
 
 // GetDescription - Returns the self-describing information of the Digital Twin Registry.
 func (s *DescriptionService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
 	_ = ctx
 	return model.Response(200, model.ServiceDescription{
-		Profiles: []string{
+		Profiles: common.AddResourceBoundAccessProfile([]string{
 			profileSSP001,
 			profileSSP003,
-		},
+		}, s.resourceBoundEnabled),
 	}), nil
 }

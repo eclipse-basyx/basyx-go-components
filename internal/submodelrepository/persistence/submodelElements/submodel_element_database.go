@@ -38,6 +38,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"strconv"
 	"strings"
 
@@ -754,6 +755,12 @@ func insertSubmodelElements(requestCtx *context.Context, executeBatch func(*sql.
 			err = fmt.Errorf("%s %w", common.NewInternalServerError("SMREPO-INSSME-EXECBATCH"), batchErr)
 		}
 		return nil, err
+	}
+
+	if requestCtx != nil {
+		if err := auth.ResourceBoundElementsCreatedTx(*requestCtx, localTx, int64(submodelDatabaseID)); err != nil {
+			return nil, err
+		}
 	}
 
 	// Commit if we own the transaction

@@ -1,0 +1,154 @@
+# /*******************************************************************************
+# * Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+# *
+# * Permission is hereby granted, free of charge, to any person obtaining
+# * a copy of this software and associated documentation files (the
+# * "Software"), to deal in the Software without restriction, including
+# * without limitation the rights to use, copy, modify, merge, publish,
+# * distribute, sublicense, and/or sell copies of the Software, and to
+# * permit persons to whom the Software is furnished to do so, subject to
+# * the following conditions:
+# *
+# * The above copyright notice and this permission notice shall be
+# * included in all copies or substantial portions of the Software.
+# *
+# * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# *
+# * SPDX-License-Identifier: MIT
+# ******************************************************************************/
+
+services:
+  aas-environment:
+    container_name: basyx-minimal-security-environment
+    build:
+      context: ../..
+      dockerfile: cmd/aasenvironmentservice/Dockerfile
+    command: ["/app/aasenvironmentservice"]
+    ports:
+      - "8182:8082"
+    environment:
+      SERVER_PORT: 8082
+      SERVER_VERIFICATIONENDPOINTAVAILABLE: "true"
+      CORS_ALLOWEDORIGINS: "*"
+      CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWEDCREDENTIALS: "true"
+      CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxTestDB
+      ABAC_ENABLED: "true"
+      ABAC_MODELPATH: /security_env/access-rules.json
+      ABAC_POLICY_FILE_IMPORT: if_missing
+      ABAC_MANAGEMENT_API_ENABLED: "true"
+      EXPERIMENTAL_REBAC_AUTHORIZATION_MODE: resource-bound-first
+      EXPERIMENTAL_REBAC_POLICY_SCOPE: minimal-security-example
+      EXPERIMENTAL_REBAC_GROUPS_CLAIM: groups
+      EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_TYPE: group
+      EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER: http://keycloak.localhost:8180/realms/basyx
+      EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT: /aas-admins
+      OIDC_TRUSTLISTPATH: /security_env/trustlist.json
+      GENERAL_AASREGISTRYINTEGRATION: "true"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
+      GENERAL_DISCOVERYINTEGRATION: "true"
+      GENERAL_EXTERNALURL: http://localhost:8182
+    volumes:
+      - ./security_env:/security_env:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+    depends_on:
+      basyx-configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  aas-ui:
+    container_name: basyx-minimal-security-ui
+    image: registry.erbenschell.iese.fraunhofer.de/basyx/uni_bw_bruecken/aas-gui:rebac-1.0.0
+    pull_policy: always
+    ports:
+      - "3100:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    environment:
+      ENDPOINT_CONFIG_AVAILABLE: "false"
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+    depends_on:
+      aas-environment:
+        condition: service_started
+    restart: unless-stopped
+
+  keycloak:
+    container_name: basyx-minimal-security-keycloak
+    image: keycloak/keycloak:26.7.3
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - "8180:8080"
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: keycloak.localhost
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  keycloak-healthcheck:
+    container_name: basyx-minimal-security-keycloak-healthcheck
+    image: curlimages/curl:latest
+    command: >-
+      sh -c "until curl -sf http://keycloak:9000/health/ready; do sleep 3; done"
+    depends_on:
+      keycloak:
+        condition: service_started
+
+  db:
+    container_name: basyx-minimal-security-db
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  basyx-configuration:
+    container_name: basyx-minimal-security-configuration
+    build:
+      context: ../..
+      dockerfile: cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxTestDB
+    depends_on:
+      db:
+        condition: service_healthy

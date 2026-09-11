@@ -176,6 +176,9 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptor(
 		if err != nil {
 			return err
 		}
+		if err = auth.ResourceBoundCreatedTx(ctx, tx, "submodel_descriptor", submodel.Id); err != nil {
+			return err
+		}
 		if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false); err != nil {
 			return err
 		}
@@ -207,6 +210,9 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 	}
 	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
 		return model.SubmodelDescriptor{}, mapInsertSubmodelDescriptorError(err)
+	}
+	if err = auth.ResourceBoundCreatedTx(ctx, tx, "submodel_descriptor", submodel.Id); err != nil {
+		return model.SubmodelDescriptor{}, err
 	}
 
 	if descriptors.CanSkipCreateReadback(ctx) && !history.MutationRecordingEnabled() {
@@ -348,6 +354,9 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.writerDB, "SMREG-REPLACESMDESC-STARTTX", "SMREG-REPLACESMDESC-COMMITTX", func(tx *sql.Tx) error {
+		if rebacErr := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel_descriptor", submodel.Id); rebacErr != nil {
+			return rebacErr
+		}
 		previousSnapshot, snapshotErr := loadAuthorizedSubmodelDescriptorEvidenceSnapshotTx(ctx, tx, submodel.Id, false)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -412,6 +421,9 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 	descriptorID, lockErr := descriptors.LockGlobalSubmodelDescriptorForUpdateTx(ctx, tx, submodel.Id)
 	switch {
 	case lockErr == nil:
+		if rebacErr := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel_descriptor", submodel.Id); rebacErr != nil {
+			return rebacErr
+		}
 		previous, getErr := loadSubmodelDescriptorForUpdateTx(ctx, tx, submodel.Id)
 		if getErr != nil {
 			return getErr
@@ -429,6 +441,9 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 		var insertErr error
 		stored, insertErr = descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
 		if insertErr != nil {
+			return insertErr
+		}
+		if insertErr = auth.ResourceBoundCreatedTx(ctx, tx, "submodel_descriptor", submodel.Id); insertErr != nil {
 			return insertErr
 		}
 	default:
@@ -508,6 +523,9 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByID(
 	submodelID string,
 ) error {
 	return common.ExecuteInTransaction(p.writerDB, "SMREG-DELSMDESC-STARTTX", "SMREG-DELSMDESC-COMMITTX", func(tx *sql.Tx) error {
+		if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel_descriptor", submodelID); err != nil {
+			return err
+		}
 		if !history.MutationRecordingEnabled() && descriptors.CanSkipDeleteReadback(ctx) {
 			return descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
 		}
@@ -535,6 +553,9 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByIDInTransaction(
 ) error {
 	if tx == nil {
 		return common.NewInternalServerError("SMREG-DELSMDESC-NILTX transaction must not be nil")
+	}
+	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "submodel_descriptor", submodelID); err != nil {
+		return err
 	}
 	if !history.MutationRecordingEnabled() && descriptors.CanSkipDeleteReadback(ctx) {
 		return descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)

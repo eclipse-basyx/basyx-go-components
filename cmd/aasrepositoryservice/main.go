@@ -177,7 +177,7 @@ func runServer(ctx context.Context, configPath string) error {
 	)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
-	descSvc := openapi.NewDescriptionAPIAPIService()
+	descSvc := openapi.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
@@ -185,7 +185,7 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASRepositoryService")
 
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasrepositoryservice")
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "aasrepositoryservice")
 	if err != nil {
 		return err
 	}

@@ -119,7 +119,7 @@ func runServer(ctx context.Context, configPath string) error {
 	cdCtrl := openapi.NewConceptDescriptionRepositoryAPIAPIController(cdSvc, "", cfg.Server.StrictVerification)
 
 	// ==== Description Service ====
-	descSvc := api.NewDescriptionAPIAPIService()
+	descSvc := api.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
@@ -129,7 +129,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "ConceptDescriptionRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "conceptdescriptionrepositoryservice")
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "conceptdescriptionrepositoryservice")
 	if err != nil {
 		return err
 	}

@@ -29,21 +29,24 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // DescriptionService exposes a merged profile description for the AAS Environment Service.
-type DescriptionService struct{}
+type DescriptionService struct {
+	resourceBoundEnabled bool
+}
 
 // NewDescriptionService creates a new description service.
-func NewDescriptionService() *DescriptionService {
-	return &DescriptionService{}
+func NewDescriptionService(resourceBoundEnabled ...bool) *DescriptionService {
+	return &DescriptionService{resourceBoundEnabled: len(resourceBoundEnabled) > 0 && resourceBoundEnabled[0]}
 }
 
 // GetDescription returns merged service profile metadata for all bundled components.
 func (s *DescriptionService) GetDescription(_ context.Context) (model.ImplResponse, error) {
 	return model.Response(http.StatusOK, model.ServiceDescription{
-		Profiles: mergedProfiles(),
+		Profiles: common.AddResourceBoundAccessProfile(mergedProfiles(), s.resourceBoundEnabled),
 	}), nil
 }
 

@@ -14,6 +14,7 @@ package openapi
 import (
 	"context"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -21,19 +22,20 @@ import (
 // This service should implement the business logic for every endpoint for the DescriptionAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type DescriptionAPIAPIService struct {
+	resourceBoundEnabled bool
 }
 
 // NewDescriptionAPIAPIService creates a default api service
-func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
-	return &DescriptionAPIAPIService{}
+func NewDescriptionAPIAPIService(resourceBoundEnabled ...bool) *DescriptionAPIAPIService {
+	return &DescriptionAPIAPIService{resourceBoundEnabled: len(resourceBoundEnabled) > 0 && resourceBoundEnabled[0]}
 }
 
 // GetDescription - Returns the self-describing information of a network resource (ServiceDescription)
 func (s *DescriptionAPIAPIService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
 	return model.Response(200, model.ServiceDescription{
-		Profiles: []string{
+		Profiles: common.AddResourceBoundAccessProfile([]string{
 			"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
 			"https://basyx.org/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
-		},
+		}, s.resourceBoundEnabled),
 	}), nil
 }

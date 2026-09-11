@@ -2946,3 +2946,29 @@ func normalizeTime(t time.Time) time.Time {
 	}
 	return t.UTC()
 }
+
+// AuthorizationResource identifies the persistent resource represented by a collector row.
+func (c *ResolvedFieldPathCollector) AuthorizationResource() (string, exp.IdentifierExpression, error) {
+	if c == nil {
+		return "", nil, fmt.Errorf("GRAMMAR-AUTHRESOURCE-COLLECTOR missing collector")
+	}
+	cfg := c.effectiveJoinConfig()
+	if c.smeRowAlias != "" {
+		return "sme", goqu.I(c.smeRowAlias + ".id"), nil
+	}
+	switch cfg.PreferredBase {
+	case "aas":
+		return "aas", cfg.RootJoinKey(), nil
+	case "s", "submodel_element":
+		return "submodel", cfg.RootJoinKey(), nil
+	case "aas_descriptor":
+		return "aas_descriptor", cfg.RootJoinKey(), nil
+	case "submodel_descriptor":
+		return "submodel_descriptor", cfg.RootJoinKey(), nil
+	case "concept_description":
+		return "concept_description", cfg.RootJoinKey(), nil
+	case "aas_identifier":
+		return "aas_identifier", cfg.RootJoinKey(), nil
+	}
+	return "", nil, fmt.Errorf("GRAMMAR-AUTHRESOURCE-ROOT unsupported root %q", cfg.PreferredBase)
+}

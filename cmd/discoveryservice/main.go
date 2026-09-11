@@ -106,7 +106,7 @@ func runServer(ctx context.Context, configPath string) error {
 	smCtrl := openapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(smSvc)
 
 	// === Description Service (public) ===
-	descSvc := openapi.NewDescriptionAPIAPIService()
+	descSvc := openapi.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
@@ -116,7 +116,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "DiscoveryService")
 
 	// Apply OIDC + ABAC once for all discovery endpoints
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "discoveryservice")
+	abacRepo, err := abacpolicy.SetupConfiguredSecurity(ctx, cfg, apiRouter, sharedDB, "discoveryservice")
 	if err != nil {
 		return err
 	}

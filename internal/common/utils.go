@@ -33,6 +33,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -129,11 +131,17 @@ func IsArrayNotEmpty(data json.RawMessage) bool {
 // Returns:
 //   - error: Non-nil if the JSON is invalid or contains unknown fields.
 func UnmarshalAndDisallowUnknownFields(value []byte, v any) error {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	dec := json.NewDecoder(bytes.NewReader(value))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		return err
+	}
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("COMMON-JSON-TRAILING multiple JSON values are not allowed")
+		}
+		return fmt.Errorf("COMMON-JSON-TRAILING %w", err)
 	}
 	return nil
 }

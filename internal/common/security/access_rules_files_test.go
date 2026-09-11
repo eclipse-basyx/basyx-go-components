@@ -63,3 +63,32 @@ func TestBundledAccessRuleFilesParse(t *testing.T) {
 		}
 	}
 }
+
+func TestBundledResourcePolicyFilesParse(t *testing.T) {
+	t.Parallel()
+
+	patterns := []string{
+		filepath.Join("..", "..", "..", "examples", "*", "resource-policies.json"),
+		filepath.Join("..", "..", "..", "examples", "*", "security_env", "resource-policies.json"),
+	}
+	for _, pattern := range patterns {
+		files, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatalf("glob %q failed: %v", pattern, err)
+		}
+		for _, file := range files {
+			file := file
+			t.Run(file, func(t *testing.T) {
+				t.Parallel()
+				//nolint:gosec // test reads repository-local resource-policy fixtures discovered by glob.
+				data, err := os.ReadFile(file)
+				if err != nil {
+					t.Fatalf("read resource-policy file failed: %v", err)
+				}
+				if _, err = ParseResourceBoundDocument(data); err != nil {
+					t.Fatalf("parse resource-policy file failed: %v", err)
+				}
+			})
+		}
+	}
+}
