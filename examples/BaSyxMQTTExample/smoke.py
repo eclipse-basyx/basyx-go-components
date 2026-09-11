@@ -32,7 +32,7 @@ import time
 from urllib.request import Request, urlopen
 import uuid
 
-BASE = os.environ.get("BASYX_MQTT_EXAMPLE_URL", "http://localhost:8084")
+BASE = os.environ.get("BASYX_MQTT_EXAMPLE_URL", "http://localhost:8082")
 COMPOSE = str(Path(__file__).with_name("docker-compose.yml"))
 
 
