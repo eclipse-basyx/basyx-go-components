@@ -62,6 +62,13 @@ jobs:
               eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
             smoke_script: examples/BaSyxEventFeedExample/smoke.sh
+          - target_name: MQTT Eventing Example
+            compose_files: |
+              examples/BaSyxMQTTExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+            smoke_script: python3 examples/BaSyxMQTTExample/smoke.py
           - target_name: Submodel Repository Example
             compose_files: |
               examples/BaSyxSubmodelRepositoryExample/docker-compose.yml

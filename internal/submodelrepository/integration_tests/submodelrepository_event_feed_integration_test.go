@@ -221,6 +221,7 @@ func TestSubmodelRepositoryEventFeedCreateAndRead(t *testing.T) {
 }
 
 func TestSubmodelRepositoryEventFeedCoversScopedAndFileMutations(t *testing.T) {
+	received := mqttSubscribe(t, "basyx/#")
 	baseURL := submodelRepositoryEventFeedBaseURL
 	smID := fmt.Sprintf("urn:example:event-feed:scoped:%d", time.Now().UnixNano())
 	endpoint := baseURL + "/submodels/" + base64.RawURLEncoding.EncodeToString([]byte(smID))
@@ -233,6 +234,7 @@ func TestSubmodelRepositoryEventFeedCoversScopedAndFileMutations(t *testing.T) {
 	})
 	require.Equal(t, http.StatusCreated, status, string(body))
 	t.Cleanup(func() { _, _ = sendReconciliationRequest(t, http.MethodDelete, endpoint, nil) })
+	assertMQTTFeedParity(t, baseURL, awaitMQTT(t, received, smID, "io.admin-shell.submodel.created.v1").Event)
 	client := &http.Client{Timeout: 10 * time.Second}
 	updates := []struct {
 		name, method, path string
@@ -253,6 +255,7 @@ func TestSubmodelRepositoryEventFeedCoversScopedAndFileMutations(t *testing.T) {
 			created, updated := waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, i+1, 5*time.Second)
 			require.Equal(t, 1, created)
 			require.Equal(t, i+1, updated)
+			assertMQTTFeedParity(t, baseURL, awaitMQTT(t, received, smID, "io.admin-shell.submodel.updated.v1").Event)
 		})
 	}
 	attachmentURL := endpoint + "/submodel-elements/Attachment/attachment"
@@ -262,10 +265,12 @@ func TestSubmodelRepositoryEventFeedCoversScopedAndFileMutations(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, status)
 	_, updated := waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, len(updates)+1, 5*time.Second)
 	require.Equal(t, len(updates)+1, updated)
+	assertMQTTFeedParity(t, baseURL, awaitMQTT(t, received, smID, "io.admin-shell.submodel.updated.v1").Event)
 	status, body = sendReconciliationRequest(t, http.MethodDelete, attachmentURL, nil)
 	require.Equal(t, http.StatusOK, status, string(body))
 	_, updated = waitForSubmodelFeedEventCounts(t, client, baseURL, smID, 1, len(updates)+2, 5*time.Second)
 	require.Equal(t, len(updates)+2, updated)
+	assertMQTTFeedParity(t, baseURL, awaitMQTT(t, received, smID, "io.admin-shell.submodel.updated.v1").Event)
 	status, body = sendReconciliationRequest(t, http.MethodPost, endpoint+"/submodel-elements", elements[0])
 	require.Equal(t, http.StatusConflict, status, string(body))
 	created, updated := countSubmodelFeedEventTypes(t, client, baseURL, smID)

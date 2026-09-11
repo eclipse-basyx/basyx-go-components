@@ -310,7 +310,7 @@ AASX export preserves managed File and thumbnail values byte-for-byte, creates p
 | `history.integrityAnchor.provider: none` | Default. Non-`none` providers such as immudb, Rekor, Trillian, or timestamping services are reserved for later work. |
 | `history.auditIdentityMode` | `none` stores no request identity metadata. `minimal` stores the canonical request and correlation IDs supplied by the shared HTTP middleware, authenticated OIDC subject/issuer/client id, ABAC allow metadata, operation, endpoint, and method. Valid client or ingress IDs are preserved; missing or invalid IDs receive generated defaults. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available. Request and correlation IDs are not authenticated identity data. |
 | `eventing.feed.enabled` | Opt-in CloudEvents REST Event Feed. Writes feed rows in the same PostgreSQL transaction as the model mutation. Default is `false`. See [event_feed.md](../user/event_feed.md). |
-| Configured event sinks or enabled outbox processing | Fail fast until MQTT/Kafka publishing is implemented. |
+| Configured event sinks or enabled outbox processing | MQTT requires enabled eventing and the outbox; reject unknown sinks and inconsistent activation. |
 
 `AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Runtime middleware now populates `AuditContext` when configured; no external ledger anchor client is invoked by the append path yet.
 
@@ -380,7 +380,7 @@ When extending persistence paths, preserve these invariants:
   cannot expose previously private asset IDs. Missing provenance must fail closed
   with ABAC enabled.
 - Keep capture, workers, routes, and OpenAPI operations gated by
-  `eventing.feed.enabled`; ordinary deployments leave it disabled.
+  `eventing.feed.enabled`; shared capture also runs when MQTT is enabled. Schema routes are available for either transport.
 
 The internal `seq` is assigned before commit and cannot serve as a consumer
 checkpoint. A worker assigns `publish_seq` to committed, visible rows, serializing
@@ -397,7 +397,7 @@ The user guide documents replay and deduplication requirements for consumers.
 
 The feed schema and capture-time ownership column are introduced together in
 `database/patches/1_2_0.sql`, registered by the configuration service. Hosted event
-schemas are embedded from `internal/common/eventfeed/schemas`; schema tests
+schemas are embedded from `internal/common/events/schemas`; schema tests
 validate generated payloads against the documents served by the HTTP endpoint.
 
 The [example smoke test](../../examples/BaSyxEventFeedExample/smoke.py) exercises
@@ -587,3 +587,13 @@ The shared append points are intentionally kept independent of a specific event 
 - Populate `AuditContext` through middleware before enabling `minimal` or `extended` identity modes.
 - Implement operator-controlled retention, partitioning, monitoring metrics, and guarded-mode maintenance procedures.
 - Decide whether upgraded installations need an explicit baseline backfill tool.
+
+### MQTT delivery extension
+
+Shared event construction and transactional fan-out live in `internal/common/events`.
+The existing history mutation hook is authoritative for both transports. Feed
+storage and `internal/common/eventoutbox` consume the same captured event, while
+`internal/common/mqtt` owns topic mapping and MQTT 5 publishing. Outbox delivery
+has separate state per sink and never publishes inside a model transaction.
+The v1.2.1 patch adds delivery storage independently of feed retention and WORM.
+See [MQTT operations and guarantees](../user/mqtt_eventing.md).

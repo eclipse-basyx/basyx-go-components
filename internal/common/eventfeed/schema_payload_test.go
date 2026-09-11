@@ -45,7 +45,7 @@ import (
 )
 
 // schemaDir contains the same documents embedded and served by the API.
-const schemaDir = "schemas"
+const schemaDir = "../events/schemas"
 
 const (
 	testAASID      = "https://example.com/ids/aas/1"
@@ -158,8 +158,8 @@ func TestPCNAdvertisesSingleSchema(t *testing.T) {
 	if ev.DataSchemaFull != ev.DataSchemaCompact {
 		t.Fatalf("full=%s compact=%s want the same schema", ev.DataSchemaFull, ev.DataSchemaCompact)
 	}
-	if got := path.Base(ev.DataSchemaFull); got != schemaPCN {
-		t.Fatalf("dataschema=%s want %s", got, schemaPCN)
+	if got := path.Base(ev.DataSchemaFull); got != "pcnNotificationEvent.v1.schema.json" {
+		t.Fatalf("dataschema=%s want %s", got, "pcnNotificationEvent.v1.schema.json")
 	}
 	full, compact := schemaPairForType(TypePCN, cfg.SchemaBaseURL)
 	if full != compact {
@@ -371,4 +371,21 @@ func TestEveryAdvertisedSchemaIsServed(t *testing.T) {
 	response := httptest.NewRecorder()
 	disabledRouter.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/.well-known/event-feed/schemas/metamodel-submodelChangeEvent.v1.schema.json", nil))
 	require.Equal(t, http.StatusNotFound, response.Code)
+}
+
+func TestMQTTOnlyModuleServesSchemasWithoutFeed(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.SchemasEnabled = true
+	module, err := NewModule(nil, cfg)
+	require.NoError(t, err)
+	router := chi.NewRouter()
+	module.RegisterRoutes(router)
+	for _, test := range []struct {
+		path   string
+		status int
+	}{{"/events", 404}, {"/.well-known/event-feed.json", 404}, {SchemaPath + "/metamodel-aasChangeEvent.v1.schema.json", 200}} {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, test.path, nil))
+		require.Equal(t, test.status, response.Code)
+	}
 }

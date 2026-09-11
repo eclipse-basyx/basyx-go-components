@@ -57,12 +57,19 @@ var allowedIntegrationPackages = map[string]struct{}{
 
 func TestMain(m *testing.M) {
 	runtime := testenv.NewComposeRuntimeOrExit("aasenvironment-it", []testenv.PortBinding{
+		{Name: "mqtt", EnvVar: "BASYX_IT_MQTT_PORT"},
+		{Name: "mqtt-auth", EnvVar: "BASYX_IT_MQTT_AUTH_PORT"},
+		{Name: "mqtt-tls", EnvVar: "BASYX_IT_MQTT_TLS_PORT"},
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "sync-off-api", EnvVar: "BASYX_IT_SYNC_OFF_API_PORT"},
 		{Name: "sync-off-db", EnvVar: "BASYX_IT_SYNC_OFF_DB_PORT"},
 		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 	})
+	mqttBrokerURL = "mqtt://" + strings.TrimPrefix(runtime.LocalURL("mqtt"), "http://")
+	mqttAuthURL = "mqtt://" + strings.TrimPrefix(runtime.LocalURL("mqtt-auth"), "http://")
+	mqttTLSURL = "tls://" + strings.TrimPrefix(runtime.LocalURL("mqtt-tls"), "http://")
+	mqttContainer = runtime.ProjectName + "-mqtt_it-1"
 	aasEnvBaseURL = runtime.LocalURL("api")
 	aasEnvSyncOffBaseURL = runtime.LocalURL("sync-off-api")
 	aasEnvEventFeedBaseURL = runtime.LocalURL("event-feed-api")
@@ -107,6 +114,11 @@ func TestIntegration(t *testing.T) {
 			cmd := exec.Command("go", "test", "-v", "-count=1", pkg)
 			cmd.Env = append(os.Environ(),
 				"BASYX_EXTERNAL_COMPOSE=1",
+				"BASYX_IT_MQTT_URL="+mqttBrokerURL,
+				"BASYX_IT_MQTT_AUTH_URL="+mqttAuthURL,
+				"BASYX_IT_MQTT_TLS_URL="+mqttTLSURL,
+				"BASYX_IT_MQTT_API_URL="+aasEnvSyncOffBaseURL,
+				"BASYX_IT_MQTT_CONTAINER="+mqttContainer,
 				"BASYX_AASENVIRONMENT_SERVICE=1",
 				"BASYX_AASENVIRONMENT_SKIP_IMPORTED_DESCRIPTION=1",
 			)

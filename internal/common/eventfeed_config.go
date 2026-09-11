@@ -43,6 +43,7 @@ func NewEventFeedConfig(cfg *Config) eventfeed.Config {
 	}
 	feed := cfg.Eventing.Feed
 	runtime.Enabled = feed.Enabled
+	runtime.SchemasEnabled = feed.Enabled || cfg.Eventing.MQTTEnabled()
 	runtime.MaxAge = eventFeedDuration(feed.MaxAgeDays, 24*time.Hour, runtime.MaxAge)
 	runtime.HardDeleteGrace = time.Duration(feed.HardDeleteGraceDays) * 24 * time.Hour
 	runtime.CleanupInterval = eventFeedDuration(feed.CleanupIntervalHours, time.Hour, runtime.CleanupInterval)
@@ -51,7 +52,10 @@ func NewEventFeedConfig(cfg *Config) eventfeed.Config {
 		runtime.MaxPageSize = feed.MaxPageSize
 	}
 	runtime.SourceBaseURL = eventFeedSourceBaseURL(cfg)
-	runtime.SchemaBaseURL = strings.TrimRight(strings.TrimSpace(feed.SchemaBaseURL), "/")
+	runtime.SchemaBaseURL = normalizeEventURL(cfg.Eventing.SchemaBaseURL)
+	if runtime.SchemaBaseURL == "" {
+		runtime.SchemaBaseURL = normalizeEventURL(feed.SchemaBaseURL)
+	}
 	if runtime.SchemaBaseURL == "" {
 		runtime.SchemaBaseURL = runtime.SourceBaseURL + eventfeed.SchemaPath
 	}
@@ -66,6 +70,9 @@ func eventFeedDuration(value int, unit, fallback time.Duration) time.Duration {
 }
 
 func eventFeedSourceBaseURL(cfg *Config) string {
+	if source := normalizeEventURL(cfg.Eventing.SourceBaseURL); source != "" {
+		return source
+	}
 	if source := strings.TrimRight(strings.TrimSpace(cfg.Eventing.Feed.SourceBaseURL), "/"); source != "" {
 		return source
 	}

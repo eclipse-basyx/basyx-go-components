@@ -73,6 +73,11 @@ services:
       - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
       - SERVER_STRICTVERIFICATION=off
       - BASYX_EVENTING_FEED_ENABLED=true
+      - BASYX_EVENTING_ENABLED=true
+      - BASYX_EVENTING_SINKS=mqtt
+      - BASYX_EVENTING_OUTBOX_ENABLED=true
+      - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
+      - BASYX_EVENTING_MQTT_CLIENT_ID=aasrepository-feed
     ports:
       - "127.0.0.1:${BASYX_IT_EVENT_FEED_API_PORT:-6008}:5004"
     depends_on:
@@ -122,3 +127,11 @@ services:
     depends_on:
       db_it:
         condition: service_healthy
+
+  mqtt_it:
+    image: eclipse-mosquitto:2.0.22
+    command: ["mosquitto", "-c", "/mosquitto/config/mosquitto.conf"]
+    volumes:
+      - ../../../common/testenv/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports:
+      - "127.0.0.1:${BASYX_IT_MQTT_PORT:-61883}:1883"

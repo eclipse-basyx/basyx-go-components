@@ -28,8 +28,8 @@ package eventfeed
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
+	cloudevents "github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"log/slog"
 	"sort"
 	"strings"
@@ -302,31 +302,14 @@ func (s *Service) buildDomainQuery(ctx context.Context, query FeedQuery, filter 
 	}, nil
 }
 
-func toRecords(events []FeedEvent, presentation Presentation) ([]FeedRecord, error) {
-	records := make([]FeedRecord, 0, len(events))
-	for _, e := range events {
-		dataJSON := e.DataFull
-		schema := e.DataSchemaFull
-		if normalizePresentation(presentation) == PresentationCompact {
-			dataJSON = e.DataCompact
-			schema = e.DataSchemaCompact
+func toRecords(items []FeedEvent, presentation Presentation) ([]FeedRecord, error) {
+	records := make([]FeedRecord, 0, len(items))
+	for _, event := range items {
+		record, err := cloudevents.Record(event, normalizePresentation(presentation) == PresentationCompact)
+		if err != nil {
+			return nil, err
 		}
-		var data map[string]any
-		if dataJSON != "" && dataJSON != "null" {
-			if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
-				return nil, fmt.Errorf("EVENTFEED-READ-DATAJSON: %w", err)
-			}
-		}
-		records = append(records, FeedRecord{
-			SpecVersion: CloudEventsSpecVersion,
-			ID:          e.ID,
-			Time:        e.Time.UTC(),
-			Subject:     e.Subject,
-			Type:        e.Type,
-			Source:      e.Source,
-			DataSchema:  schema,
-			Data:        data,
-		})
+		records = append(records, record)
 	}
 	return records, nil
 }

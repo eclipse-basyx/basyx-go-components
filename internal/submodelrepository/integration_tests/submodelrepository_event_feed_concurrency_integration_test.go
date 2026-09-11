@@ -42,11 +42,13 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeedsetup"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
 	smpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEventFeedConcurrentPCNAdditionsUseCommittedPredecessor(t *testing.T) {
+	received := mqttSubscribe(t, "basyx/#")
 	ctx, cancel := context.WithTimeout(eventFeedPersistenceContext(t), 15*time.Second)
 	defer cancel()
 	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
@@ -70,7 +72,8 @@ func TestEventFeedConcurrentPCNAdditionsUseCommittedPredecessor(t *testing.T) {
 	cfg.Enabled = true
 	module, err := eventfeed.NewModule(workers, cfg)
 	require.NoError(t, err)
-	eventfeedsetup.Bind(module)
+	eventConfig := &common.Config{Eventing: common.EventingConfig{Enabled: true, OutboxEnabled: true, Sinks: []string{"mqtt"}, TopicPrefix: "basyx", Feed: common.EventFeedConfig{Enabled: true}, MQTT: mqtt.Config{Broker: submodelRepositoryMQTTURL, ClientID: name, SinkID: name, QoS: 1}}}
+	require.NoError(t, eventfeedsetup.Start(ctx, workers, eventConfig, module))
 	defer module.Stop()
 	sm := types.NewSubmodel("urn:event-feed:" + name)
 	sm.SetSemanticID(types.NewReference(types.ReferenceTypesExternalReference, []types.IKey{types.NewKey(types.KeyTypesGlobalReference, eventfeed.SemanticIDPCN)}))
@@ -96,6 +99,13 @@ func TestEventFeedConcurrentPCNAdditionsUseCommittedPredecessor(t *testing.T) {
 		require.NoError(t, <-results)
 	}
 	require.ElementsMatch(t, []string{"CN1", "CN2"}, readPCNChanges(ctx, t, db, sm.ID()))
+	notifications := []string{}
+	for range 2 {
+		event := awaitMQTT(t, received, sm.ID(), eventfeed.TypePCN)
+		record := event.Event.Data["record"].(map[string]any)
+		notifications = append(notifications, record["ManufacturerChangeID"].(string))
+	}
+	require.ElementsMatch(t, []string{"CN1", "CN2"}, notifications)
 }
 
 func eventFeedPersistenceContext(t *testing.T) context.Context {

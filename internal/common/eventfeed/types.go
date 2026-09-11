@@ -25,7 +25,10 @@
 
 package eventfeed
 
-import "time"
+import (
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
+	"time"
+)
 
 // Presentation selects which stored payload variant is returned to consumers.
 type Presentation string
@@ -39,53 +42,28 @@ const (
 	PresentationCompact Presentation = "COMPACT"
 )
 
-// CloudEvent type values from the Event Feed specification.
+// CloudEvents types preserve the existing feed contract.
 const (
-	TypeAssetCreated       = "io.admin-shell.asset.created.v1"
-	TypeAssetUpdated       = "io.admin-shell.asset.updated.v1"
-	TypeAssetDeleted       = "io.admin-shell.asset.deleted.v1"
-	TypeAASCreated         = "io.admin-shell.aas.created.v1"
-	TypeAASUpdated         = "io.admin-shell.aas.updated.v1"
-	TypeAASDeleted         = "io.admin-shell.aas.deleted.v1"
-	TypeSubmodelCreated    = "io.admin-shell.submodel.created.v1"
-	TypeSubmodelUpdated    = "io.admin-shell.submodel.updated.v1"
-	TypeSubmodelDeleted    = "io.admin-shell.submodel.deleted.v1"
-	TypePCN                = "io.admin-shell.pcn.v1"
-	CloudEventsSpecVersion = "1.0"
-	APIVersion             = "1.0"
-
-	// SemanticIDPCN is the IDTA Product Change Notifications submodel semantic id.
-	SemanticIDPCN = "0173-1#01-AHE582#003"
+	TypeAssetCreated       = events.TypeAssetCreated
+	TypeAssetUpdated       = events.TypeAssetUpdated
+	TypeAssetDeleted       = events.TypeAssetDeleted
+	TypeAASCreated         = events.TypeAASCreated
+	TypeAASUpdated         = events.TypeAASUpdated
+	TypeAASDeleted         = events.TypeAASDeleted
+	TypeSubmodelCreated    = events.TypeSubmodelCreated
+	TypeSubmodelUpdated    = events.TypeSubmodelUpdated
+	TypeSubmodelDeleted    = events.TypeSubmodelDeleted
+	TypePCN                = events.TypePCN
+	CloudEventsSpecVersion = events.CloudEventsSpecVersion
+	APIVersion             = events.APIVersion
+	SemanticIDPCN          = events.SemanticIDPCN
 )
 
-// SubmodelRef identifies a submodel referenced from an AAS or asset change event.
-type SubmodelRef struct {
-	SubmodelID string
-	SemanticID string
-}
+// SubmodelRef identifies a referenced Submodel.
+type SubmodelRef = events.SubmodelRef
 
-// FeedEvent is a persisted CloudEvents feed record with both presentation variants.
-type FeedEvent struct {
-	// Seq is the internal write-order id (assigned before commit). It is
-	// never used for client-facing ordering or cursors.
-	Seq int64
-	// PublishSeq is the client-facing cursor/order key, assigned after the
-	// row becomes visible (see database/patches/1_2_0.sql). Zero means not
-	// yet assigned.
-	PublishSeq        int64
-	ID                string
-	Type              string
-	Subject           string
-	Source            string
-	Time              time.Time
-	DataSchemaFull    string
-	DataSchemaCompact string
-	DataFull          string
-	DataCompact       string
-	// AuthorizationAASIDs records the owning AASs of payload data at capture time.
-	// A nil slice means provenance is unknown; an empty slice means none is needed.
-	AuthorizationAASIDs []string
-}
+// FeedEvent is the shared captured event.
+type FeedEvent = events.FeedEvent
 
 // FeedQuery is the consumer-facing read request.
 type FeedQuery struct {
@@ -97,17 +75,8 @@ type FeedQuery struct {
 	Limit        int
 }
 
-// FeedRecord is one CloudEvents record in a feed response page.
-type FeedRecord struct {
-	SpecVersion string         `json:"specversion"`
-	ID          string         `json:"id"`
-	Time        time.Time      `json:"time"`
-	Subject     string         `json:"subject"`
-	Type        string         `json:"type"`
-	Source      string         `json:"source"`
-	DataSchema  string         `json:"dataschema"`
-	Data        map[string]any `json:"data,omitempty"`
-}
+// FeedRecord is the shared CloudEvents envelope.
+type FeedRecord = events.FeedRecord
 
 // FeedResponse is the page document returned by GET /events.
 type FeedResponse struct {

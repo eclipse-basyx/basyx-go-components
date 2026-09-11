@@ -23,7 +23,7 @@
  * SPDX-License-Identifier: MIT
  ******************************************************************************/
 
-package eventfeed
+package events
 
 import (
 	"encoding/json"
@@ -75,14 +75,7 @@ func PCNNewRecordValuesFromSubmodel(previous, submodel types.ISubmodel) []model.
 		return nil
 	}
 
-	previousCounts := map[string]int{}
-	if previous != nil {
-		for _, record := range pcnRecordElements(previous) {
-			if key := pcnRecordIdentity(record); key != "" {
-				previousCounts[key]++
-			}
-		}
-	}
+	previousCounts := pcnRecordCounts(previous)
 
 	values := make([]model.SubmodelElementValue, 0, len(currentRecords))
 	for _, record := range currentRecords {
@@ -116,4 +109,14 @@ func pcnRecordIdentity(record types.ISubmodelElement) string {
 		return ""
 	}
 	return string(raw)
+}
+
+func pcnRecordCounts(submodel types.ISubmodel) map[string]int {
+	counts := map[string]int{}
+	for _, record := range pcnRecordElements(submodel) {
+		if key := pcnRecordIdentity(record); key != "" {
+			counts[key]++
+		}
+	}
+	return counts
 }

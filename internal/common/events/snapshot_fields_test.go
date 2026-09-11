@@ -23,7 +23,7 @@
  * SPDX-License-Identifier: MIT
  ******************************************************************************/
 
-package eventfeed
+package events
 
 import (
 	"github.com/DATA-DOG/go-sqlmock"

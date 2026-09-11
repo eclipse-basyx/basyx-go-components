@@ -29,6 +29,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"reflect"
 	"regexp"
 	"strings"
@@ -45,9 +46,9 @@ func TestMutationSinkRequiresTransaction(t *testing.T) {
 	sink := NewMutationSink(NewService(nil, cfg))
 	snap := map[string]any{"id": "aas-1"}
 	if err := sink.HandleMutation(context.Background(), nil, Mutation{
-		Table:            mutationTableAAS,
+		Table:            "aas_history",
 		Identifier:       "aas-1",
-		ChangeType:       mutationUpdated,
+		ChangeType:       "Updated",
 		PreviousSnapshot: snap,
 		Snapshot:         snap,
 	}); err != nil {
@@ -58,9 +59,9 @@ func TestMutationSinkRequiresTransaction(t *testing.T) {
 func TestMutationSinkDisabled(t *testing.T) {
 	sink := NewMutationSink(NewService(nil, DefaultConfig()))
 	if err := sink.HandleMutation(context.Background(), nil, Mutation{
-		Table:      mutationTableAAS,
+		Table:      "aas_history",
 		Identifier: "aas-1",
-		ChangeType: mutationCreated,
+		ChangeType: "Created",
 		Snapshot:   map[string]any{"id": "aas-1"},
 	}); err != nil {
 		t.Fatalf("disabled: %v", err)
@@ -70,7 +71,7 @@ func TestMutationSinkDisabled(t *testing.T) {
 // A PUT that changed no persisted content is still recorded in history, but it
 // is not a content change, so it must not reach the feed.
 func TestMutationSinkSkipsAcknowledgedWrites(t *testing.T) {
-	for _, table := range []string{mutationTableAAS, mutationTableSubmodel} {
+	for _, table := range []string{"aas_history", "submodel_history"} {
 		t.Run(table, func(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			if err != nil {
@@ -97,7 +98,7 @@ func TestMutationSinkSkipsAcknowledgedWrites(t *testing.T) {
 			if err = NewMutationSink(svc).HandleMutation(context.Background(), tx, Mutation{
 				Table:            table,
 				Identifier:       "entity-1",
-				ChangeType:       mutationUpdated,
+				ChangeType:       "Updated",
 				PreviousSnapshot: snapshot,
 				Snapshot:         snapshot,
 				Acknowledged:     true,
@@ -124,7 +125,6 @@ func TestMutationSinkWritesAASAndAssetInTx(t *testing.T) {
 	svc := NewService(repo, cfg)
 	fixedNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return fixedNow }
-	svc.build.now = func() time.Time { return fixedNow }
 
 	mock.ExpectBegin()
 	tx, err := db.Begin()
@@ -138,9 +138,9 @@ func TestMutationSinkWritesAASAndAssetInTx(t *testing.T) {
 
 	sink := NewMutationSink(svc)
 	if err = sink.HandleMutation(context.Background(), tx, Mutation{
-		Table:      mutationTableAAS,
+		Table:      "aas_history",
 		Identifier: "aas-1",
-		ChangeType: mutationCreated,
+		ChangeType: "Created",
 		Snapshot: map[string]any{
 			"id": "aas-1",
 			"assetInformation": map[string]any{
@@ -171,7 +171,6 @@ func TestMutationSinkAASEventKeepsReferenceToUnknownSubmodel(t *testing.T) {
 	svc := NewService(NewRepository(db, cfg.MaxAge), cfg)
 	fixedNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return fixedNow }
-	svc.build.now = func() time.Time { return fixedNow }
 
 	mock.ExpectBegin()
 	tx, err := db.Begin()
@@ -204,9 +203,9 @@ func TestMutationSinkAASEventKeepsReferenceToUnknownSubmodel(t *testing.T) {
 
 	sink := NewMutationSink(svc)
 	if err = sink.HandleMutation(context.Background(), tx, Mutation{
-		Table:      mutationTableAAS,
+		Table:      "aas_history",
 		Identifier: "aas-1",
-		ChangeType: mutationUpdated,
+		ChangeType: "Updated",
 		Snapshot:   snapshot,
 	}); err != nil {
 		t.Fatalf("handle: %v", err)
@@ -216,7 +215,7 @@ func TestMutationSinkAASEventKeepsReferenceToUnknownSubmodel(t *testing.T) {
 	}
 
 	// The reference and its referredSemanticId survive into both payloads.
-	aasID, globalAssetID, submodels := aasFieldsFromSnapshot(snapshot)
+	aasID, globalAssetID, submodels := events.AASFieldsFromSnapshot(snapshot)
 	want := []SubmodelRef{{SubmodelID: "sm-not-stored", SemanticID: "0173-1#01-AHE582#003"}}
 	if !reflect.DeepEqual(submodels, want) {
 		t.Fatalf("submodels = %#v, want %#v", submodels, want)
@@ -259,9 +258,9 @@ func TestMutationSinkWriteFailure(t *testing.T) {
 
 	sink := NewMutationSink(svc)
 	err = sink.HandleMutation(context.Background(), tx, Mutation{
-		Table:      mutationTableAAS,
+		Table:      "aas_history",
 		Identifier: "aas-1",
-		ChangeType: mutationCreated,
+		ChangeType: "Created",
 		Snapshot:   map[string]any{"id": "aas-1"},
 	})
 	if err == nil {
@@ -276,7 +275,7 @@ func TestSubmodelFromSnapshotRoundTripsPCNRecordsToValueOnly(t *testing.T) {
 		t.Fatalf("ToJsonable: %v", err)
 	}
 
-	restored, err := submodelFromSnapshot(snap)
+	restored, err := jsonization.SubmodelFromJsonable(snap)
 	if err != nil {
 		t.Fatalf("submodelFromSnapshot: %v", err)
 	}
@@ -299,12 +298,20 @@ func TestSubmodelFromSnapshotRoundTripsPCNRecordsToValueOnly(t *testing.T) {
 	}
 }
 
-func TestSubmodelFromSnapshotNilReturnsNil(t *testing.T) {
-	restored, err := submodelFromSnapshot(nil)
+func TestFeedSaveDefaultsMissingTimestamp(t *testing.T) {
+	db, mock, err := sqlmock.New()
 	if err != nil {
-		t.Fatalf("submodelFromSnapshot(nil): %v", err)
+		t.Fatal(err)
 	}
-	if restored != nil {
-		t.Fatalf("expected nil submodel, got %v", restored)
+	defer func() { _ = db.Close() }()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	repo := NewRepository(db, time.Hour)
+	repo.now = func() time.Time { return now }
+	mock.ExpectQuery("INSERT INTO.*time").WillReturnRows(sqlmock.NewRows([]string{"seq", "time"}).AddRow(1, now))
+	if err = repo.Save(t.Context(), FeedEvent{ID: "test", DataFull: "{}", DataCompact: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

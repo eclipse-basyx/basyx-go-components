@@ -22,10 +22,11 @@ path, so event sources and schema links work for your clients behind a proxy.
 The deployment requires database schema `v1.2.0` or later; run the configuration
 service to apply migrations before starting the hosting service.
 
-The REST feed uses `eventing.feed.enabled`. The separate `eventing.enabled`
-setting is reserved for future transports. MQTT and Kafka publishing are not
-implemented; configuring `eventing.sinks` or enabling `eventing.outboxEnabled`
-fails configuration validation.
+The REST feed uses `eventing.feed.enabled` independently of other transports.
+[MQTT 5 eventing](mqtt_eventing.md) can run alongside the feed or by itself using
+`eventing.enabled`, `eventing.sinks: [mqtt]`, and `eventing.outboxEnabled: true`.
+Both transports reuse the same CloudEvents IDs, timestamps, schemas, and regular
+payloads. Kafka publishing is not yet implemented.
 
 ## Read events
 
@@ -37,7 +38,7 @@ These endpoints are relative to your service's API base path:
 | `GET /.well-known/event-feed.json` | Discover supported event types, filters, schemas, retention, and page limits. |
 | `GET /.well-known/event-feed/schemas/{schema}` | Retrieve the versioned JSON Schema linked by an event's `dataschema`. |
 
-The routes and their OpenAPI operations are absent when the feed is disabled.
+The feed and discovery routes are absent when the feed is disabled. Schema routes remain available when MQTT is enabled.
 
 The feed spans all entities you are authorized to read. Each event's `subject`
 identifies the affected entity, `type` identifies the change, and `time` gives

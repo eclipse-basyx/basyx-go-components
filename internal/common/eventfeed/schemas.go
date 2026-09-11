@@ -26,8 +26,8 @@
 package eventfeed
 
 import (
-	"embed"
 	"encoding/json"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"net/http"
 	"path"
 
@@ -35,10 +35,7 @@ import (
 )
 
 // SchemaPath is the API-relative location of the versioned Event Feed JSON Schemas.
-const SchemaPath = "/.well-known/event-feed/schemas"
-
-//go:embed schemas/*.json
-var schemaFiles embed.FS
+const SchemaPath = events.SchemaPath
 
 func handleSchema(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "schema")
@@ -46,7 +43,7 @@ func handleSchema(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	document, err := schemaFiles.ReadFile("schemas/" + name)
+	document, err := events.ReadSchema(name)
 	if err != nil {
 		http.NotFound(w, r)
 		return

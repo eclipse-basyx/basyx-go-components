@@ -23,7 +23,7 @@
  * SPDX-License-Identifier: MIT
  ******************************************************************************/
 
-package eventfeed
+package events
 
 import (
 	"context"
@@ -33,7 +33,8 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
-func aasFieldsFromSnapshot(snap map[string]any) (aasID, globalAssetID string, submodels []SubmodelRef) {
+// AASFieldsFromSnapshot extracts the AAS identifiers and stored references.
+func AASFieldsFromSnapshot(snap map[string]any) (aasID, globalAssetID string, submodels []SubmodelRef) {
 	if snap == nil {
 		return "", "", nil
 	}

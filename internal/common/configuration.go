@@ -33,6 +33,7 @@ package common
 
 import (
 	"fmt"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
 	"io"
 	"log/slog"
 	"os"
@@ -275,7 +276,7 @@ type Config struct {
 	JWS      JWSConfig      `mapstructure:"jws" yaml:"jws"`           // JWS signing configuration
 	Swagger  SwaggerConfig  `mapstructure:"swagger" yaml:"swagger"`   // Swagger/OpenAPI documentation configuration
 	History  HistoryConfig  `mapstructure:"history" yaml:"history"`   // History/audit behavior
-	Eventing EventingConfig `mapstructure:"eventing" yaml:"eventing"` // Eventing placeholders
+	Eventing EventingConfig `mapstructure:"eventing" yaml:"eventing"` // Experimental eventing
 }
 
 // JWSConfig contains JSON Web Signature configuration parameters.
@@ -324,8 +325,11 @@ type HistoryIntegrityAnchorConfig struct {
 	Provider string `mapstructure:"provider" yaml:"provider" json:"provider"` // none today; immudb/Rekor/Trillian later
 }
 
-// EventingConfig configures CloudEvents feed and reserves future sinks/outbox options.
+// EventingConfig configures the CloudEvents feed and asynchronous transports.
 type EventingConfig struct {
+	SourceBaseURL string          `mapstructure:"sourceBaseUrl" yaml:"sourceBaseUrl" json:"sourceBaseUrl"`
+	SchemaBaseURL string          `mapstructure:"schemaBaseUrl" yaml:"schemaBaseUrl" json:"schemaBaseUrl"`
+	MQTT          mqtt.Config     `mapstructure:"mqtt" yaml:"mqtt" json:"mqtt"`
 	Enabled       bool            `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	Format        string          `mapstructure:"format" yaml:"format" json:"format"`
 	Sinks         []string        `mapstructure:"sinks" yaml:"sinks" json:"sinks"`
@@ -540,6 +544,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 	applyHistoryEnvOverrides(cfg)
 	applyEventingEnvOverrides(cfg)
+	if err = applyMQTTEnvOverrides(cfg); err != nil {
+		return nil, err
+	}
 	if err = validateHistoryAndEventingConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -1057,9 +1064,11 @@ func validateIntegrityAnchorConfig(cfg HistoryIntegrityAnchorConfig) error {
 }
 
 func validateEventingConfig(cfg EventingConfig) error {
-	// MQTT/Kafka sinks and outbox are still out of scope.
-	if cfg.OutboxEnabled || len(cfg.Sinks) > 0 {
-		return fmt.Errorf("CONFIG-EVENTING-SINKS-NOTIMPLEMENTED eventing sinks/outbox (MQTT/Kafka) are not implemented yet")
+	if err := validateEventTransports(cfg); err != nil {
+		return err
+	}
+	if err := validateEventURLs(cfg); err != nil {
+		return err
 	}
 	if cfg.Enabled || cfg.Feed.Enabled {
 		format := strings.ToLower(strings.TrimSpace(cfg.Format))
@@ -1312,6 +1321,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("eventing.sinks", []string{})
 	v.SetDefault("eventing.outboxEnabled", false)
 	v.SetDefault("eventing.topicPrefix", "basyx")
+	v.SetDefault("eventing.sourceBaseUrl", "")
+	v.SetDefault("eventing.schemaBaseUrl", "")
+	v.SetDefault("eventing.mqtt.broker", "")
+	v.SetDefault("eventing.mqtt.clientId", "")
+	v.SetDefault("eventing.mqtt.sinkId", "mqtt")
+	v.SetDefault("eventing.mqtt.qos", 1)
+	v.SetDefault("eventing.mqtt.retained", false)
 	v.SetDefault("eventing.feed.enabled", false)
 	v.SetDefault("eventing.feed.maxAgeDays", 30)
 	v.SetDefault("eventing.feed.hardDeleteGraceDays", 10)

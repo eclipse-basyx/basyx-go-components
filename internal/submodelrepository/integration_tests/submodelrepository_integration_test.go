@@ -2597,6 +2597,10 @@ func TestMain(m *testing.M) {
 	}
 
 	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{
+		{Name: "mqtt", EnvVar: "BASYX_IT_MQTT_PORT"},
+		{Name: "mqtt-auth", EnvVar: "BASYX_IT_MQTT_AUTH_PORT"},
+		{Name: "mqtt-tls", EnvVar: "BASYX_IT_MQTT_TLS_PORT"},
+		{Name: "mqtt-api", EnvVar: "BASYX_IT_MQTT_API_PORT"},
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
 		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 		{Name: "replica-api", EnvVar: "BASYX_IT_REPLICA_API_PORT"},
@@ -2605,6 +2609,11 @@ func TestMain(m *testing.M) {
 		{Name: "sync-api", EnvVar: "BASYX_IT_SYNC_API_PORT"},
 		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
 	})
+	submodelRepositoryMQTTContainer = runtime.ProjectName + "-mqtt_it-1"
+	submodelRepositoryMQTTURL = strings.Replace(runtime.LocalURL("mqtt"), "http://", "mqtt://", 1)
+	submodelRepositoryMQTTAuthURL = strings.Replace(runtime.LocalURL("mqtt-auth"), "http://", "mqtt://", 1)
+	submodelRepositoryMQTTTLSURL = strings.Replace(runtime.LocalURL("mqtt-tls"), "http://", "tls://", 1)
+	submodelRepositoryMQTTOnlyURL = runtime.LocalURL("mqtt-api")
 	submodelRepositoryBaseURL = runtime.LocalURL("api")
 	submodelRepositoryEventFeedBaseURL = runtime.LocalURL("event-feed-api")
 	submodelRepositoryReplicaBaseURL = runtime.LocalURL("replica-api")
@@ -2623,6 +2632,9 @@ func TestMain(m *testing.M) {
 		HealthURL:       submodelRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
 		WaitForReady: func() error {
+			if err := testenv.WaitHealthyURL(submodelRepositoryMQTTOnlyURL+"/health", 150*time.Second); err != nil {
+				return err
+			}
 			if err := testenv.WaitHealthyURL(submodelRepositoryReplicaBaseURL+"/health", 150*time.Second); err != nil {
 				return err
 			}

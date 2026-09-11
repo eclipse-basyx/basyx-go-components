@@ -34,6 +34,7 @@ import (
 // Config holds runtime settings for the Event Feed module.
 type Config struct {
 	Enabled         bool
+	SchemasEnabled  bool
 	MaxAge          time.Duration
 	MaxPageSize     int
 	SourceBaseURL   string
@@ -96,8 +97,4 @@ func (c Config) MaxAgePeriod() string {
 		days = 1
 	}
 	return fmt.Sprintf("P%dD", days)
-}
-
-func trimTrailingSlash(s string) string {
-	return strings.TrimRight(strings.TrimSpace(s), "/")
 }

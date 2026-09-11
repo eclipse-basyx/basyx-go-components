@@ -182,7 +182,9 @@ func runServer(ctx context.Context, configPath string) error {
 	if eventFeedErr != nil {
 		return eventFeedErr
 	}
-	eventfeedsetup.Bind(eventFeedModule)
+	if err = eventfeedsetup.Start(ctx, sharedDB, cfg, eventFeedModule); err != nil {
+		return err
+	}
 	defer eventFeedModule.Stop()
 	eventFeedModule.StartRetentionLoop(ctx)
 	eventFeedModule.StartPublishLoop(ctx)
