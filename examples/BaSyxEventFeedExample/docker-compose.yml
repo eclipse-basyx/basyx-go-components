@@ -3,7 +3,11 @@ x-database-environment: &database-environment
   POSTGRES_PORT: "5432"
   POSTGRES_USER: admin
   POSTGRES_PASSWORD: admin123
-  POSTGRES_DBNAME: basyxEventing
+  POSTGRES_DBNAME: basyxTestDB
+  POSTGRES_MAXOPENCONNECTIONS: "50"
+  POSTGRES_MAXIDLECONNECTIONS: "25"
+  POSTGRES_CONNMAXLIFETIMEMINUTES: "5"
+  POSTGRES_CONNMAXIDLETIMEMINUTES: "0"
 
 services:
   db:
@@ -11,14 +15,12 @@ services:
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
-      POSTGRES_DB: basyxEventing
-    volumes:
-      - database:/var/lib/postgresql
+      POSTGRES_DB: basyxTestDB
     healthcheck:
-      test: [CMD-SHELL, "pg_isready -U admin -d basyxEventing"]
-      interval: 2s
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
       timeout: 5s
-      retries: 30
+      retries: 5
     restart: unless-stopped
 
   basyx_configuration:
@@ -33,7 +35,7 @@ services:
     image: eclipsebasyx/aasenvironment-go:SNAPSHOT
     pull_policy: always
     ports:
-      - "127.0.0.1:8082:8082"
+      - "8082:8082"
     environment:
       <<: *database-environment
       SERVER_PORT: "8082"
@@ -44,8 +46,9 @@ services:
       GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
       GENERAL_DISCOVERYINTEGRATION: "true"
       GENERAL_AAS_PRECONFIG_PATHS: /app/preconfiguration
-      CORS_ALLOWEDORIGINS: http://localhost:3001
+      CORS_ALLOWEDORIGINS: "*"
       CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWCREDENTIALS: "true"
       CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
     volumes:
       - ./aas:/app/preconfiguration:ro
@@ -58,15 +61,12 @@ services:
     image: eclipsebasyx/aas-gui:SNAPSHOT
     pull_policy: always
     ports:
-      - "127.0.0.1:3001:3000"
+      - "3000:3000"
     environment:
-      ENDPOINT_CONFIG_AVAILABLE: "true"
+      ENDPOINT_CONFIG_AVAILABLE: "false"
     volumes:
       - ./basyx-infra.yml:/basyx-infra.yml:ro
     depends_on:
       aas-environment:
         condition: service_healthy
     restart: unless-stopped
-
-volumes:
-  database:
