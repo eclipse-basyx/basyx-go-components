@@ -736,3 +736,51 @@ func TestWorkerSkipsBusyTransactionLock(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRetentionCommitsEachBoundedBatch(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+	for _, count := range []int64{retentionBatchSize, 2} {
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT pg_try_advisory_xact_lock`).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(true))
+		mock.ExpectExec(`DELETE FROM.*LIMIT 1000`).WillReturnResult(sqlmock.NewResult(0, count))
+		mock.ExpectCommit()
+	}
+	svc := NewService(NewRepository(db, time.Hour), DefaultConfig())
+	count, err := svc.RunRetention(t.Context())
+	if err != nil || count != retentionBatchSize+2 {
+		t.Fatalf("retention: count=%d error=%v", count, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRetentionReportsCommittedBatchesAfterCancellation(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT pg_try_advisory_xact_lock`).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(true))
+	mock.ExpectExec(`DELETE FROM`).WillReturnResult(sqlmock.NewResult(0, retentionBatchSize))
+	mock.ExpectCommit()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT pg_try_advisory_xact_lock`).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(true))
+	mock.ExpectExec(`DELETE FROM`).WillReturnError(context.Canceled)
+	mock.ExpectRollback()
+	svc := NewService(NewRepository(db, time.Hour), DefaultConfig())
+	count, err := svc.RunRetention(t.Context())
+	if !errors.Is(err, context.Canceled) || count != retentionBatchSize {
+		t.Fatalf("retention: committed=%d error=%v", count, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

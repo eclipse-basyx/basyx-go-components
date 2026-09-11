@@ -93,7 +93,8 @@ The internal `seq` is assigned before commit and is not a consumer checkpoint.
 A background worker assigns `publish_seq` only to committed, visible rows.
 Assignment is serialized and batched using a transaction advisory lock on the
 same connection as the worker queries. Retention uses its own transaction lock
-and bounded deletion batches. Both support a one-connection database pool.
+and commits each bounded deletion batch separately. Both support a
+one-connection database pool.
 
 Pagination selects records by `publish_seq`. Each response sorts its selected
 records chronologically by mutation time; `updated` is the newest timestamp in

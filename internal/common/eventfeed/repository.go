@@ -284,23 +284,23 @@ func (r *Repository) withTransactionLock(ctx context.Context, key int64, errPref
 	return count, nil
 }
 
-// DeleteOlderThan removes expired events in bounded batches on the connection
-// holding the transaction advisory lock. Cancellation rolls back the cleanup
-// and releases the lock before the connection returns to the pool.
+// DeleteOlderThan commits each bounded deletion batch before acquiring the next
+// transaction lock. Cancellation rolls back only the active batch; the returned
+// count includes all earlier batches already committed by this worker.
 func (r *Repository) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
-	return r.withTransactionLock(ctx, retentionLockKey, "EVENTFEED-RETENTION", func(tx *sql.Tx) (int64, error) {
-		var total int64
-		for {
-			count, err := r.deleteExpiredBatch(ctx, tx, cutoff)
-			if err != nil {
-				return 0, err
-			}
-			total += count
-			if count < int64(retentionBatchSize) {
-				return total, nil
-			}
+	var total int64
+	for {
+		count, err := r.withTransactionLock(ctx, retentionLockKey, "EVENTFEED-RETENTION", func(tx *sql.Tx) (int64, error) {
+			return r.deleteExpiredBatch(ctx, tx, cutoff)
+		})
+		if err != nil {
+			return total, err
 		}
-	})
+		total += count
+		if count < int64(retentionBatchSize) {
+			return total, nil
+		}
+	}
 }
 
 func (r *Repository) deleteExpiredBatch(ctx context.Context, tx *sql.Tx, cutoff time.Time) (int64, error) {
