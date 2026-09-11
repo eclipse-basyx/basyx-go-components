@@ -5,7 +5,7 @@
   "globalAssetId": "urn:example:asset:registry-sync-upload",
   "endpoints": [
     {
-      "interface": "AAS-3.0",
+      "interface": "AAS-3.2",
       "protocolInformation": {
         "href": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtdXBsb2Fk",
         "endpointProtocol": "http"

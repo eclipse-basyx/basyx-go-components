@@ -22,7 +22,7 @@
       "id": "urn:example:sm:registry-sync-post",
       "endpoints": [
         {
-          "interface": "SUBMODEL-3.0",
+          "interface": "SUBMODEL-3.2",
           "protocolInformation": {
             "href": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
             "endpointProtocol": "http"
@@ -33,7 +33,7 @@
   ],
   "endpoints": [
     {
-      "interface": "AAS-3.0",
+      "interface": "AAS-3.2",
       "protocolInformation": {
         "href": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
         "endpointProtocol": "http"
