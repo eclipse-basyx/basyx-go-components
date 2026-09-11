@@ -1,0 +1,7 @@
+kind: added
+body: Experimental resource-bound access control is available for concrete AAS, Submodel, SubmodelElement, Concept Description, Registry, and Discovery resources, with ownership, group principals, inheritance, ABAC fallback, filtered collection reads, capability preflights, and single-use share links. Enable it with the new `EXPERIMENTAL_REBAC_*` environment variables and run the configuration service to apply database schema `v1.1.22`; previous ReBAC environment-variable names are no longer accepted.
+time: 2026-09-11T12:37:50+02:00
+custom:
+  Impact: High
+  PullRequest: 672
+  SecurityImpact: ReBAC grants are evaluated for concrete resources while existing ABAC authorization remains an independent fallback. Creators become owners transactionally; share-link redemption derives the recipient from verified OIDC issuer and subject claims. Deployments must review ownership, inheritance, group claims, ABAC fallback rules, and the experimental configuration before enabling the feature.
