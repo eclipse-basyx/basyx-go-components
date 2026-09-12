@@ -42,6 +42,7 @@ import (
 
 func TestEnvironmentUploadProducesAASAssetSubmodelAndPCNEvents(t *testing.T) {
 	received := testenv.SubscribeMQTT(t, mqttBrokerURL, "basyx/#")
+	kafkaEvents := testenv.SubscribeKafka(t)
 	stamp := time.Now().UnixNano()
 	aasID := fmt.Sprintf("urn:example:event-feed:upload:aas:%d", stamp)
 	smID := fmt.Sprintf("urn:example:event-feed:upload:sm:%d", stamp)
@@ -98,6 +99,11 @@ func TestEnvironmentUploadProducesAASAssetSubmodelAndPCNEvents(t *testing.T) {
 	}
 	for _, event := range feed.Records {
 		require.Equal(t, event, mqttEvents[event.ID])
+		key := "aas_history:" + aasID
+		if event.Subject == smID {
+			key = "submodel_history:" + smID
+		}
+		kafkaEvents.AssertEvent(t, event, key)
 	}
 	types := map[string]int{}
 	for _, event := range feed.Records {

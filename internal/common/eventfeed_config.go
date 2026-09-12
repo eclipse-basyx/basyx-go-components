@@ -51,7 +51,7 @@ func NewEventFeedConfig(cfg *Config) eventfeed.Config {
 	}
 	feed := cfg.Eventing.Feed
 	runtime.Enabled = feed.Enabled
-	runtime.SchemasEnabled = feed.Enabled || cfg.Eventing.MQTTEnabled()
+	runtime.SchemasEnabled = feed.Enabled || cfg.Eventing.TransportsEnabled()
 	runtime.MaxAge = eventFeedDuration(feed.MaxAgeDays, 24*time.Hour, runtime.MaxAge)
 	runtime.HardDeleteGrace = time.Duration(feed.HardDeleteGraceDays) * 24 * time.Hour
 	runtime.CleanupInterval = eventFeedDuration(feed.CleanupIntervalHours, time.Hour, runtime.CleanupInterval)

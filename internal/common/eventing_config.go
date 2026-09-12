@@ -39,18 +39,25 @@ import (
 //
 // Returns:
 //   - bool: True when eventing is enabled and sinks contains mqtt; full validation also requires the outbox.
-func (c EventingConfig) MQTTEnabled() bool {
+func (c EventingConfig) MQTTEnabled() bool { return c.sinkEnabled("mqtt") }
+
+// KafkaEnabled checks whether eventing enables the Kafka sink.
+func (c EventingConfig) KafkaEnabled() bool { return c.sinkEnabled("kafka") }
+
+// TransportsEnabled reports whether any asynchronous event transport is enabled.
+func (c EventingConfig) TransportsEnabled() bool { return c.MQTTEnabled() || c.KafkaEnabled() }
+
+func (c EventingConfig) sinkEnabled(name string) bool {
 	if !c.Enabled {
 		return false
 	}
 	for _, sink := range c.Sinks {
-		if sink == "mqtt" {
+		if sink == name {
 			return true
 		}
 	}
 	return false
 }
-
 func validateEventTransports(c EventingConfig) error {
 	if len(c.Sinks) == 0 {
 		if c.OutboxEnabled {
@@ -58,16 +65,38 @@ func validateEventTransports(c EventingConfig) error {
 		}
 		return nil
 	}
-	if len(c.Sinks) != 1 || c.Sinks[0] != "mqtt" {
-		return fmt.Errorf("CONFIG-EVENTING-SINKS supported sinks: [mqtt]")
-	}
 	if !c.Enabled || !c.OutboxEnabled {
-		return fmt.Errorf("CONFIG-EVENTING-ACTIVATION MQTT requires eventing.enabled and eventing.outboxEnabled")
+		return fmt.Errorf("CONFIG-EVENTING-ACTIVATION transports require eventing.enabled and eventing.outboxEnabled")
 	}
-	if err := mqtt.ValidateTopicPrefix(c.TopicPrefix); err != nil {
-		return err
+	names, ids := map[string]bool{}, map[string]bool{}
+	for _, sink := range c.Sinks {
+		if names[sink] {
+			return fmt.Errorf("CONFIG-EVENTING-SINKS duplicate sink")
+		}
+		names[sink] = true
+		id, err := validateEventTransport(c, sink)
+		if err != nil {
+			return err
+		}
+		if ids[id] {
+			return fmt.Errorf("CONFIG-EVENTING-SINKID transports must use distinct sink IDs")
+		}
+		ids[id] = true
 	}
-	return c.MQTT.Validate()
+	return nil
+}
+func validateEventTransport(c EventingConfig, sink string) (string, error) {
+	switch sink {
+	case "mqtt":
+		if err := mqtt.ValidateTopicPrefix(c.TopicPrefix); err != nil {
+			return "", err
+		}
+		return c.MQTT.SinkID, c.MQTT.Validate()
+	case "kafka":
+		return c.Kafka.SinkID, c.Kafka.Validate()
+	default:
+		return "", fmt.Errorf("CONFIG-EVENTING-SINKS supported sinks: mqtt, kafka")
+	}
 }
 
 func validateEventURLs(c EventingConfig) error {
@@ -125,6 +154,34 @@ func applyMQTTEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("CONFIG-EVENTING-MQTTRETAINED invalid MQTT retained flag")
 		}
 		c.MQTT.Retained = retained
+	}
+	return nil
+}
+
+func applyKafkaEnvOverrides(cfg *Config) error {
+	c := &cfg.Eventing.Kafka
+	fields := map[string]*string{
+		"TOPIC": &c.Topic, "CLIENT_ID": &c.ClientID, "SINK_ID": &c.SinkID, "SASL_MECHANISM": &c.SASLMechanism,
+		"USERNAME": &c.Username, "PASSWORD": &c.Password, "USERNAME_FILE": &c.UsernameFile, "PASSWORD_FILE": &c.PasswordFile,
+		"CA_FILE": &c.CAFile, "CERTIFICATE_FILE": &c.CertificateFile, "KEY_FILE": &c.KeyFile,
+	}
+	for key, destination := range fields {
+		if value, ok := os.LookupEnv("BASYX_EVENTING_KAFKA_" + key); ok {
+			*destination = value
+		}
+	}
+	if value, ok := os.LookupEnv("BASYX_EVENTING_KAFKA_BROKERS"); ok {
+		c.Brokers = strings.Split(value, ",")
+		for i := range c.Brokers {
+			c.Brokers[i] = strings.TrimSpace(c.Brokers[i])
+		}
+	}
+	if value, ok := os.LookupEnv("BASYX_EVENTING_KAFKA_TLS_ENABLED"); ok {
+		enabled, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("CONFIG-EVENTING-KAFKATLS invalid TLS enabled flag")
+		}
+		c.TLSEnabled = enabled
 	}
 	return nil
 }

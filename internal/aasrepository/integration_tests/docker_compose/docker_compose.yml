@@ -74,13 +74,16 @@ services:
       - SERVER_STRICTVERIFICATION=off
       - BASYX_EVENTING_FEED_ENABLED=true
       - BASYX_EVENTING_ENABLED=true
-      - BASYX_EVENTING_SINKS=mqtt
+      - BASYX_EVENTING_SINKS=mqtt,kafka
+      - BASYX_EVENTING_KAFKA_BROKERS=kafka_it:19092
       - BASYX_EVENTING_OUTBOX_ENABLED=true
       - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
       - BASYX_EVENTING_MQTT_CLIENT_ID=aasrepository-feed
     ports:
       - "127.0.0.1:${BASYX_IT_EVENT_FEED_API_PORT:-6008}:5004"
     depends_on:
+      kafka_init:
+        condition: service_completed_successfully
       basyx_configuration:
         condition: service_completed_successfully
       db_it:
@@ -135,3 +138,55 @@ services:
       - ../../../common/testenv/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     ports:
       - "127.0.0.1:${BASYX_IT_MQTT_PORT:-61883}:1883"
+
+  kafka_it:
+    extends:
+      file: ../../../common/testenv/kafka/docker-compose.yml
+      service: kafka_it
+  kafka_init:
+    extends:
+      file: ../../../common/testenv/kafka/docker-compose.yml
+      service: kafka_init
+    depends_on:
+      kafka_it:
+        condition: service_healthy
+
+  aas_repository_it_kafka_only:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasrepositoryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_READER_HOST=db_it
+      - POSTGRES_READER_PORT=5432
+      - POSTGRES_READER_USER=admin
+      - POSTGRES_READER_PASSWORD=admin123
+      - POSTGRES_READER_DBNAME=basyxTestDB
+      - POSTGRES_READER_OPTIONS=-c default_transaction_read_only=on
+      - POSTGRES_READER_MAXOPENCONNECTIONS=500
+      - POSTGRES_READER_MAXIDLECONNECTIONS=500
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - BASYX_HISTORY_MODE=api
+      - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_EVENTING_FEED_ENABLED=false
+      - BASYX_EVENTING_ENABLED=true
+      - BASYX_EVENTING_SINKS=kafka
+      - BASYX_EVENTING_KAFKA_BROKERS=kafka_it:19092
+      - BASYX_EVENTING_OUTBOX_ENABLED=true
+    ports:
+      - "127.0.0.1:${BASYX_IT_KAFKA_API_PORT:-6008}:5004"
+    depends_on:
+      kafka_init:
+        condition: service_completed_successfully
+      basyx_configuration:
+        condition: service_completed_successfully
+      db_it:
+        condition: service_healthy

@@ -1,0 +1,40 @@
+{
+  "assetAdministrationShells": [
+    {
+      "modelType": "AssetAdministrationShell",
+      "id": "urn:example:kafka:aas:playground",
+      "idShort": "KafkaPlayground",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "urn:example:kafka:asset:playground"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:kafka:submodel:status"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:kafka:submodel:status",
+      "idShort": "OperatingStatus",
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "idShort": "Status",
+          "valueType": "xs:string",
+          "value": "ready"
+        }
+      ]
+    }
+  ],
+  "conceptDescriptions": []
+}

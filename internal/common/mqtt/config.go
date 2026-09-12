@@ -28,12 +28,12 @@ package mqtt
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/brokersecurity"
 )
 
 // Config contains MQTT destination and connection settings.
@@ -100,37 +100,11 @@ func validText(s string) bool {
 }
 
 func readCredential(value, file string) (string, error) {
-	if file == "" {
-		return value, nil
-	}
-	// #nosec G304 -- the credential path is an explicit operator configuration value.
-	raw, err := os.ReadFile(file)
-	if err != nil {
-		return "", fmt.Errorf("MQTT-CONFIG-SECRETFILE cannot read credential file")
-	}
-	return strings.TrimRight(string(raw), "\r\n"), nil
+	return brokersecurity.ReadCredential("MQTT", value, file)
 }
 
 func (c Config) tlsConfig() (*tls.Config, error) {
-	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
-	if c.CAFile != "" {
-		raw, err := os.ReadFile(c.CAFile)
-		if err != nil {
-			return nil, fmt.Errorf("MQTT-CONFIG-CAREAD cannot read CA file")
-		}
-		cfg.RootCAs = x509.NewCertPool()
-		if !cfg.RootCAs.AppendCertsFromPEM(raw) {
-			return nil, fmt.Errorf("MQTT-CONFIG-CAPEM invalid CA certificate")
-		}
-	}
-	if c.CertificateFile != "" {
-		cert, err := tls.LoadX509KeyPair(c.CertificateFile, c.KeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("MQTT-CONFIG-CLIENTCERT cannot load client certificate and key")
-		}
-		cfg.Certificates = []tls.Certificate{cert}
-	}
-	return cfg, nil
+	return brokersecurity.TLSConfig("MQTT", c.CAFile, c.CertificateFile, c.KeyFile)
 }
 
 func validateBrokerURL(broker string) (*url.URL, error) {

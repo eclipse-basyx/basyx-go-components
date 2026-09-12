@@ -1826,7 +1826,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 		IncludeVerifyEndpoint: includeVerifyEndpoint,
 		IncludeABACManagement: includeABACManagement,
 		IncludeEventFeed:      includeEventFeed,
-		IncludeEventSchemas:   serverConfig != nil && serverConfig.Eventing.MQTTEnabled(),
+		IncludeEventSchemas:   serverConfig != nil && serverConfig.Eventing.TransportsEnabled(),
 	})
 
 	return nil

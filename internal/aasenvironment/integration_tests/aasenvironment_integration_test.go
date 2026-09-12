@@ -58,6 +58,11 @@ var allowedIntegrationPackages = map[string]struct{}{
 func TestMain(m *testing.M) {
 	runtime := testenv.NewComposeRuntimeOrExit("aasenvironment-it", []testenv.PortBinding{
 		{Name: "mqtt", EnvVar: "BASYX_IT_MQTT_PORT"},
+		{Name: "kafka", EnvVar: "BASYX_IT_KAFKA_PORT"},
+		{Name: "kafka-api", EnvVar: "BASYX_IT_KAFKA_API_PORT"},
+		{Name: "kafka-auth", EnvVar: "BASYX_IT_KAFKA_AUTH_PORT"},
+		{Name: "kafka-tls", EnvVar: "BASYX_IT_KAFKA_TLS_PORT"},
+		{Name: "kafka-auth-tls", EnvVar: "BASYX_IT_KAFKA_AUTH_TLS_PORT"},
 		{Name: "mqtt-auth", EnvVar: "BASYX_IT_MQTT_AUTH_PORT"},
 		{Name: "mqtt-tls", EnvVar: "BASYX_IT_MQTT_TLS_PORT"},
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
