@@ -1331,6 +1331,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("eventing.kafka.brokers", []string{})
 	v.SetDefault("eventing.kafka.topic", "basyx.events")
 	v.SetDefault("eventing.kafka.clientId", "basyx")
+	v.SetDefault("eventing.kafka.producerBatchMaxBytes", 0)
 	v.SetDefault("eventing.kafka.sinkId", "kafka")
 	v.SetDefault("eventing.kafka.tlsEnabled", false)
 	v.SetDefault("eventing.mqtt.broker", "")

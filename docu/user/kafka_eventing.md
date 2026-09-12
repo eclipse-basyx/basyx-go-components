@@ -37,6 +37,7 @@ Settings below are under `eventing.kafka`. Environment variables use the prefix
 | `topic` | `TOPIC` | `basyx.events`; one topic for all event families. |
 | `sinkId` | `SINK_ID` | `kafka`; stable delivery queue identifier. Replicas sharing a database use the same ID and destination. |
 | `clientId` | `CLIENT_ID` | `basyx`; client name reported to Kafka. |
+| `producerBatchMaxBytes` | `PRODUCER_BATCH_MAX_BYTES` | `0` uses the client default of 1,000,012 bytes before compression. Set 512–1,073,741,824 for larger notifications; align broker/topic message limits and `socket.request.max.bytes` with the chosen size. |
 | `tlsEnabled` | `TLS_ENABLED` | `false`; enables certificate verification with TLS 1.2 or later. |
 | `caFile` | `CA_FILE` | Optional PEM CA bundle; otherwise system trust. |
 | `certificateFile`, `keyFile` | `CERTIFICATE_FILE`, `KEY_FILE` | PEM client certificate/key pair for mutual TLS. Requires TLS. |

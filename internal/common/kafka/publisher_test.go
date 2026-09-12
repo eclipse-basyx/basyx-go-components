@@ -26,9 +26,13 @@
 package kafka
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/stretchr/testify/require"
+	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/twmb/franz-go/pkg/kerr"
 )
 
 func TestStructuredRecord(t *testing.T) {
@@ -47,4 +51,13 @@ func TestStructuredRecord(t *testing.T) {
 		_, err = structuredRecord(json.RawMessage(invalid), envelope)
 		require.Error(t, err)
 	}
+}
+
+func TestBrokerErrorCauseOmitsBrokerSuppliedDetails(t *testing.T) {
+	for _, cause := range []error{kerr.SaslAuthenticationFailed, kerr.TopicAuthorizationFailed, kerr.MessageTooLarge} {
+		err := brokerErrorCause(fmt.Errorf("%w: private-user private-password", cause))
+		require.ErrorIs(t, err, cause)
+		require.NotContains(t, err.Error(), "private-")
+	}
+	require.ErrorIs(t, brokerErrorCause(context.DeadlineExceeded), context.DeadlineExceeded)
 }

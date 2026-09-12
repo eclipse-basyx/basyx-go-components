@@ -159,3 +159,30 @@ func TestKafkaEnvironmentAndActivation(t *testing.T) {
 	_, err = LoadConfig("")
 	require.ErrorContains(t, err, "KAFKATLS")
 }
+
+func TestKafkaProducerBatchSizeConfiguration(t *testing.T) {
+	cfg, err := LoadConfig("")
+	require.NoError(t, err)
+	require.Zero(t, cfg.Eventing.Kafka.ProducerBatchMaxBytes)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`eventing:
+  enabled: true
+  sinks: [kafka]
+  outboxEnabled: true
+  kafka:
+    brokers: [localhost:9092]
+    producerBatchMaxBytes: 2097152
+`), 0600))
+	cfg, err = LoadConfig(path)
+	require.NoError(t, err)
+	require.EqualValues(t, 2<<20, cfg.Eventing.Kafka.ProducerBatchMaxBytes)
+	t.Setenv("BASYX_EVENTING_KAFKA_PRODUCER_BATCH_MAX_BYTES", "4194304")
+	cfg, err = LoadConfig(path)
+	require.NoError(t, err)
+	require.EqualValues(t, 4<<20, cfg.Eventing.Kafka.ProducerBatchMaxBytes)
+	for _, value := range []string{"invalid", "2147483648", "-1", "511", "1073741825"} {
+		t.Setenv("BASYX_EVENTING_KAFKA_PRODUCER_BATCH_MAX_BYTES", value)
+		_, err = LoadConfig(path)
+		require.ErrorContains(t, err, "BATCHSIZE")
+	}
+}

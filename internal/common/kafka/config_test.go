@@ -96,6 +96,21 @@ func TestCredentialFilesAndStartupFailure(t *testing.T) {
 	require.ErrorContains(t, err, "CAREAD")
 }
 
+func TestProducerBatchSizeValidation(t *testing.T) {
+	for _, size := range []int32{-1, 1, 511, 1<<30 + 1} {
+		cfg := testConfig()
+		cfg.ProducerBatchMaxBytes = size
+		require.ErrorContains(t, cfg.Validate(), "KAFKA-CONFIG-BATCHSIZE")
+	}
+	for _, size := range []int32{0, 512, 2 << 20, 128 << 20, 1 << 30} {
+		cfg := testConfig()
+		cfg.ProducerBatchMaxBytes = size
+		p, err := NewPublisher(t.Context(), cfg)
+		require.NoError(t, err)
+		require.NoError(t, p.Stop(t.Context()))
+	}
+}
+
 func TestUnavailableBrokerCancellationAndStop(t *testing.T) {
 	c := testConfig()
 	c.Brokers = []string{"127.0.0.1:1"}
@@ -106,7 +121,9 @@ func TestUnavailableBrokerCancellationAndStop(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	require.ErrorContains(t, p.Publish(ctx, routing, []byte(`{}`)), "KAFKA-PUBLISH-DELIVERY")
+	err = p.Publish(ctx, routing, []byte(`{}`))
+	require.ErrorContains(t, err, "KAFKA-PUBLISH-DELIVERY")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.Less(t, time.Since(started), 2*time.Second)
 	require.False(t, p.Connected())
 	shutdown, stop := context.WithTimeout(t.Context(), time.Second)

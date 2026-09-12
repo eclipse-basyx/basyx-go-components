@@ -28,10 +28,13 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -74,6 +77,9 @@ func (p *Publisher) observe() {
 		err := p.client.Ping(ctx)
 		cancel()
 		p.connected.Store(err == nil)
+		if err != nil && p.ctx.Err() == nil {
+			slog.WarnContext(p.ctx, "Kafka broker probe failed", "error.code", "KAFKA-PUBLISHER-PROBE", "error", brokerErrorCause(err))
+		}
 		select {
 		case <-p.ctx.Done():
 			return
@@ -103,9 +109,17 @@ func (p *Publisher) Publish(ctx context.Context, routing json.RawMessage, envelo
 	err = p.client.ProduceSync(publishCtx, record).FirstErr()
 	p.connected.Store(err == nil)
 	if err != nil {
-		return fmt.Errorf("KAFKA-PUBLISH-DELIVERY broker delivery not acknowledged")
+		return fmt.Errorf("KAFKA-PUBLISH-DELIVERY: %w", brokerErrorCause(err))
 	}
 	return nil
+}
+
+func brokerErrorCause(err error) error {
+	var brokerErr *kerr.Error
+	if errors.As(err, &brokerErr) {
+		return kerr.ErrorForCode(brokerErr.Code)
+	}
+	return err
 }
 
 // Stop cancels deliveries and closes the producer. ctx bounds the wait; repeated calls are safe.

@@ -56,6 +56,9 @@ type Config struct {
 	Password        string   `mapstructure:"password" yaml:"password" json:"-"`
 	UsernameFile    string   `mapstructure:"usernameFile" yaml:"usernameFile" json:"-"`
 	PasswordFile    string   `mapstructure:"passwordFile" yaml:"passwordFile" json:"-"`
+
+	// ProducerBatchMaxBytes limits uncompressed batches; zero uses the Kafka client default.
+	ProducerBatchMaxBytes int32 `mapstructure:"producerBatchMaxBytes" yaml:"producerBatchMaxBytes" json:"producerBatchMaxBytes"`
 }
 
 // Validate checks configuration without contacting Kafka or reading files.
@@ -68,6 +71,9 @@ func (c Config) Validate() error {
 	}
 	if !validTopic(c.Topic) {
 		return fmt.Errorf("KAFKA-CONFIG-TOPIC invalid topic name")
+	}
+	if c.ProducerBatchMaxBytes != 0 && (c.ProducerBatchMaxBytes < 512 || c.ProducerBatchMaxBytes > 1<<30) {
+		return fmt.Errorf("KAFKA-CONFIG-BATCHSIZE producerBatchMaxBytes must be zero or between 512 and 1073741824")
 	}
 	if (c.CertificateFile == "") != (c.KeyFile == "") {
 		return fmt.Errorf("KAFKA-CONFIG-CERTPAIR certificateFile and keyFile must be supplied together")
@@ -152,6 +158,9 @@ func (c Config) clientOptions() ([]kgo.Opt, error) {
 		kgo.RecordPartitioner(kgo.StickyKeyPartitioner(nil)), kgo.AllowIdempotentProduceCancellation(),
 		kgo.RecordDeliveryTimeout(10 * time.Second), kgo.ProduceRequestTimeout(5 * time.Second), kgo.RequestTimeoutOverhead(time.Second),
 		kgo.DialTimeout(5 * time.Second), kgo.MaxBufferedRecords(4)}
+	if c.ProducerBatchMaxBytes != 0 {
+		opts = append(opts, kgo.ProducerBatchMaxBytes(c.ProducerBatchMaxBytes), kgo.BrokerMaxWriteBytes(max(100<<20, c.ProducerBatchMaxBytes)))
+	}
 	if c.TLSEnabled {
 		tlsConfig, err := brokersecurity.TLSConfig("KAFKA", c.CAFile, c.CertificateFile, c.KeyFile)
 		if err != nil {

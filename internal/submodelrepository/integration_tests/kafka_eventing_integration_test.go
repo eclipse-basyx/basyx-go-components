@@ -31,6 +31,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -43,6 +44,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/kafka"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/franz-go/pkg/kerr"
 )
 
 func kafkaConfig() kafka.Config {
@@ -63,6 +65,10 @@ func kafkaEnqueue(t *testing.T, db *sql.DB, cfg kafka.Config, key string, commit
 	t.Helper()
 	event, err := events.NewBuilder(events.DefaultConfig()).SubmodelUpdated("urn:"+key, "", nil)
 	require.NoError(t, err)
+	return kafkaEnqueueEvent(t, db, cfg, key, event, commit)
+}
+func kafkaEnqueueEvent(t *testing.T, db *sql.DB, cfg kafka.Config, key string, event events.FeedEvent, commit bool) events.FeedRecord {
+	t.Helper()
 	routing, err := kafka.Routing(cfg.Topic, key)
 	require.NoError(t, err)
 	tx, err := db.BeginTx(t.Context(), nil)
@@ -107,6 +113,17 @@ func TestKafkaAuthenticationAndTLS(t *testing.T) {
 			})
 		}
 	}
+	assertKafkaAuthenticationFailure(t)
+}
+
+func assertKafkaAuthenticationFailure(t *testing.T) {
+	t.Helper()
+	logFile, err := os.CreateTemp(t.TempDir(), "kafka-errors")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, logFile.Close()) })
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(logFile, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
 	cfg := kafkaConfig()
 	cfg.Brokers = []string{testenv.KafkaAddress("BASYX_IT_KAFKA_AUTH_PORT")}
 	cfg.SASLMechanism = "PLAIN"
@@ -118,8 +135,53 @@ func TestKafkaAuthenticationAndTLS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	err = p.Publish(ctx, routing, []byte(`{}`))
-	require.Error(t, err)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.NotContains(t, err.Error(), "wrong")
+	require.Eventually(t, func() bool {
+		raw, readErr := os.ReadFile(logFile.Name())
+		return readErr == nil && strings.Contains(string(raw), "SASL_AUTHENTICATION_FAILED")
+	}, 5*time.Second, 50*time.Millisecond)
+	raw, err := os.ReadFile(logFile.Name())
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "wrong")
+}
+
+func TestKafkaLargePCNDelivery(t *testing.T) {
+	db := mqttTestDB(t)
+	cfg := kafkaConfig()
+	received := testenv.SubscribeKafka(t)
+	key := "submodel_history:" + cfg.SinkID
+	event, err := events.NewBuilder(events.DefaultConfig()).PCN(cfg.SinkID, nil, map[string]any{"description": strings.Repeat("x", 1200000)})
+	require.NoError(t, err)
+	record, err := events.Record(event, false)
+	require.NoError(t, err)
+	raw, err := json.Marshal(record)
+	require.NoError(t, err)
+	routing, err := kafka.Routing(cfg.Topic, key)
+	require.NoError(t, err)
+	t.Run("default limit reports oversized record", func(t *testing.T) {
+		p := kafkaPublisher(t, cfg)
+		require.ErrorIs(t, p.Publish(t.Context(), routing, raw), kerr.MessageTooLarge)
+	})
+	t.Run("configured limit drains large notification and its successor", func(t *testing.T) {
+		require.NoError(t, json.Unmarshal([]byte(`{"producerBatchMaxBytes":2097152}`), &cfg))
+		p := kafkaPublisher(t, cfg)
+		large := kafkaEnqueueEvent(t, db, cfg, key, event, true)
+		next := kafkaEnqueue(t, db, cfg, key, true)
+		repository := eventoutbox.NewRepository(db)
+		found, err := repository.DeliverOne(t.Context(), cfg.SinkID, p)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.EqualValues(t, 1, pendingCount(t, repository, cfg.SinkID))
+		found, err = repository.DeliverOne(t.Context(), cfg.SinkID, p)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.Zero(t, pendingCount(t, repository, cfg.SinkID))
+		firstRecord := received.AssertEvent(t, large, key)
+		nextRecord := received.AssertEvent(t, next, key)
+		require.Equal(t, firstRecord.Partition, nextRecord.Partition)
+		require.Greater(t, nextRecord.Offset, firstRecord.Offset)
+	})
 }
 func kafkaAuthenticationConfig(mechanism string, tlsEnabled bool) kafka.Config {
 	cfg := kafkaConfig()

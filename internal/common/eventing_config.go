@@ -183,5 +183,12 @@ func applyKafkaEnvOverrides(cfg *Config) error {
 		}
 		c.TLSEnabled = enabled
 	}
+	if value, ok := os.LookupEnv("BASYX_EVENTING_KAFKA_PRODUCER_BATCH_MAX_BYTES"); ok {
+		size, err := strconv.ParseInt(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("CONFIG-EVENTING-KAFKABATCHSIZE invalid producer batch size")
+		}
+		c.ProducerBatchMaxBytes = int32(size)
+	}
 	return nil
 }
