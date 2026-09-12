@@ -1,0 +1,106 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyx
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyx"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  basyx_configuration:
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyx
+    depends_on:
+      db:
+        condition: service_healthy
+  aas-environment:
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyx
+      SERVER_PORT: "8082"
+      ABAC_ENABLED: "false"
+      GENERAL_EXTERNALURL: http://localhost:8082
+      GENERAL_AASREGISTRYINTEGRATION: "true"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
+      GENERAL_DISCOVERYINTEGRATION: "true"
+      GENERAL_AAS_PRECONFIG_PATHS: /app/preconfiguration
+      CORS_ALLOWEDORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWCREDENTIALS: "true"
+      CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      BASYX_EVENTING_ENABLED: "true"
+      BASYX_EVENTING_SINKS: kafka
+      BASYX_EVENTING_OUTBOX_ENABLED: "true"
+      BASYX_EVENTING_KAFKA_BROKERS: kafka:19092
+      BASYX_EVENTING_KAFKA_CLIENT_ID: basyx-example
+    ports:
+      - "127.0.0.1:8082:8082"
+    volumes:
+      - ./aas:/app/preconfiguration:ro
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+  aas-ui:
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      ENDPOINT_CONFIG_AVAILABLE: "false"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    depends_on:
+      aas-environment:
+        condition: service_healthy
+    restart: unless-stopped
+  kafka:
+    image: apache/kafka:4.1.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "127.0.0.1:9092:9092"
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:19092", "--list"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+  kafka-init:
+    image: apache/kafka:4.1.1
+    entrypoint: ["/opt/kafka/bin/kafka-topics.sh"]
+    command: ["--bootstrap-server", "kafka:19092", "--create", "--if-not-exists", "--topic", "basyx.events", "--partitions", "3", "--replication-factor", "1"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    environment:
+      KAFKA_CLUSTERS_0_NAME: BaSyx
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+      KAFKA_CLUSTERS_0_READONLY: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully

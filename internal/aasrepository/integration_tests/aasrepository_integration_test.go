@@ -1912,6 +1912,11 @@ func TestMain(m *testing.M) {
 
 	runtime := testenv.NewComposeRuntimeOrExit("aasrepository-it", []testenv.PortBinding{
 		{Name: "mqtt", EnvVar: "BASYX_IT_MQTT_PORT"},
+		{Name: "kafka", EnvVar: "BASYX_IT_KAFKA_PORT"},
+		{Name: "kafka-api", EnvVar: "BASYX_IT_KAFKA_API_PORT"},
+		{Name: "kafka-auth", EnvVar: "BASYX_IT_KAFKA_AUTH_PORT"},
+		{Name: "kafka-tls", EnvVar: "BASYX_IT_KAFKA_TLS_PORT"},
+		{Name: "kafka-auth-tls", EnvVar: "BASYX_IT_KAFKA_AUTH_TLS_PORT"},
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
 		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},

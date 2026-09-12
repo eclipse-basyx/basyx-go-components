@@ -95,7 +95,8 @@ services:
       - SERVER_STRICTVERIFICATION=off
       - ABAC_ENABLED=false
       - BASYX_EVENTING_ENABLED=true
-      - BASYX_EVENTING_SINKS=mqtt
+      - BASYX_EVENTING_SINKS=mqtt,kafka
+      - BASYX_EVENTING_KAFKA_BROKERS=kafka_it:19092
       - BASYX_EVENTING_OUTBOX_ENABLED=true
       - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
       - BASYX_EVENTING_MQTT_CLIENT_ID=aasenvironment-mqtt-only
@@ -110,6 +111,8 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
     depends_on:
+      kafka_init:
+        condition: service_completed_successfully
       basyx_configuration_sync_off:
         condition: service_completed_successfully
 
@@ -148,7 +151,8 @@ services:
       - GENERAL_EXTERNALURL=
       - BASYX_EVENTING_FEED_ENABLED=true
       - BASYX_EVENTING_ENABLED=true
-      - BASYX_EVENTING_SINKS=mqtt
+      - BASYX_EVENTING_SINKS=mqtt,kafka
+      - BASYX_EVENTING_KAFKA_BROKERS=kafka_it:19092
       - BASYX_EVENTING_OUTBOX_ENABLED=true
       - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
       - BASYX_EVENTING_MQTT_CLIENT_ID=aasenvironment-feed
@@ -160,6 +164,8 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
     depends_on:
+      kafka_init:
+        condition: service_completed_successfully
       basyx_configuration:
         condition: service_completed_successfully
 
@@ -209,3 +215,62 @@ services:
       - "127.0.0.1:${BASYX_IT_MQTT_PORT:-61883}:1883"
       - "127.0.0.1:${BASYX_IT_MQTT_AUTH_PORT:-61884}:1884"
       - "127.0.0.1:${BASYX_IT_MQTT_TLS_PORT:-61885}:8883"
+
+  kafka_it:
+    extends:
+      file: ../../../common/testenv/kafka/docker-compose.yml
+      service: kafka_it
+  kafka_init:
+    extends:
+      file: ../../../common/testenv/kafka/docker-compose.yml
+      service: kafka_init
+    depends_on:
+      kafka_it:
+        condition: service_healthy
+
+  aas_environment_it_kafka_only:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_READER_HOST=db_it
+      - POSTGRES_READER_PORT=5432
+      - POSTGRES_READER_USER=admin
+      - POSTGRES_READER_PASSWORD=admin123
+      - POSTGRES_READER_DBNAME=basyxTestDB
+      - POSTGRES_READER_OPTIONS=-c default_transaction_read_only=on
+      - POSTGRES_READER_MAXOPENCONNECTIONS=500
+      - POSTGRES_READER_MAXIDLECONNECTIONS=500
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - BASYX_HISTORY_MODE=api
+      - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
+      - SERVER_STRICTVERIFICATION=off
+      - ABAC_ENABLED=false
+      - GENERAL_AASREGISTRYINTEGRATION=false
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=false
+      - GENERAL_EXTERNALURL=
+      - BASYX_EVENTING_FEED_ENABLED=false
+      - BASYX_EVENTING_ENABLED=true
+      - BASYX_EVENTING_SINKS=kafka
+      - BASYX_EVENTING_KAFKA_BROKERS=kafka_it:19092
+      - BASYX_EVENTING_OUTBOX_ENABLED=true
+      - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
+    volumes:
+      - ../../../submodelrepository/integration_tests/docker_compose/rsa-key.pem:/app/rsa-key.pem:ro
+    ports:
+      - "127.0.0.1:${BASYX_IT_KAFKA_API_PORT:-6009}:5004"
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      kafka_init:
+        condition: service_completed_successfully
+      basyx_configuration:
+        condition: service_completed_successfully

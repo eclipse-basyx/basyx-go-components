@@ -69,6 +69,13 @@ jobs:
               eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
             smoke_script: python3 examples/BaSyxMQTTExample/smoke.py
+          - target_name: Kafka Eventing Example
+            compose_files: |
+              examples/BaSyxKafkaExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+            smoke_script: python3 examples/BaSyxKafkaExample/smoke.py
           - target_name: Submodel Repository Example
             compose_files: |
               examples/BaSyxSubmodelRepositoryExample/docker-compose.yml

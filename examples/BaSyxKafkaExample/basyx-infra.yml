@@ -1,0 +1,11 @@
+infrastructures:
+  default: kafka
+
+  kafka:
+    name: Kafka Playground
+    template: mono-all
+    components:
+      aasEnvironment:
+        baseUrl: "http://localhost:8082"
+    security:
+      type: none

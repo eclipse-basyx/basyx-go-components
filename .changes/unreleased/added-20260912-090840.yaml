@@ -1,0 +1,7 @@
+kind: added
+body: Add experimental Kafka CloudEvents eventing with a Kafka playground, using the existing event contract and outbox.
+time: 2026-09-12T09:08:40.988768+02:00
+custom:
+    Impact: Low
+    PullRequest: 679
+    SecurityImpact: Kafka supports TLS, mutual TLS and SASL authentication. Broker ACLs control consumer access; HTTP authorization does not filter Kafka subscribers.

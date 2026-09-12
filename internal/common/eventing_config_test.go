@@ -120,3 +120,69 @@ func TestMQTTRejectsInvalidActivation(t *testing.T) {
 		require.NotContains(t, err.Error(), "secret")
 	}
 }
+
+func TestKafkaEnvironmentAndActivation(t *testing.T) {
+	cfg, err := LoadConfig("")
+	require.NoError(t, err)
+	require.False(t, cfg.Eventing.KafkaEnabled())
+	require.Equal(t, "basyx.events", cfg.Eventing.Kafka.Topic)
+	require.Equal(t, "kafka", cfg.Eventing.Kafka.SinkID)
+	require.Equal(t, "basyx", cfg.Eventing.Kafka.ClientID)
+	t.Setenv("BASYX_EVENTING_ENABLED", "true")
+	t.Setenv("BASYX_EVENTING_OUTBOX_ENABLED", "true")
+	t.Setenv("BASYX_EVENTING_SINKS", "kafka,mqtt")
+	t.Setenv("BASYX_EVENTING_KAFKA_BROKERS", "localhost:9092, localhost:9093")
+	t.Setenv("BASYX_EVENTING_KAFKA_TOPIC", "custom.events")
+	t.Setenv("BASYX_EVENTING_KAFKA_TLS_ENABLED", "true")
+	t.Setenv("BASYX_EVENTING_KAFKA_SASL_MECHANISM", "SCRAM-SHA-256")
+	t.Setenv("BASYX_EVENTING_KAFKA_USERNAME", "private-user")
+	t.Setenv("BASYX_EVENTING_KAFKA_PASSWORD", "private-secret")
+	t.Setenv("BASYX_EVENTING_MQTT_BROKER", "mqtt://localhost:1883")
+	t.Setenv("BASYX_EVENTING_MQTT_CLIENT_ID", "test")
+	cfg, err = LoadConfig("")
+	require.NoError(t, err)
+	require.True(t, cfg.Eventing.KafkaEnabled())
+	require.True(t, cfg.Eventing.MQTTEnabled())
+	require.Equal(t, []string{"localhost:9092", "localhost:9093"}, cfg.Eventing.Kafka.Brokers)
+	require.Equal(t, "custom.events", cfg.Eventing.Kafka.Topic)
+	require.True(t, cfg.Eventing.Kafka.TLSEnabled)
+	raw, err := json.Marshal(cfg)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "private-")
+	cfg.Eventing.Kafka.SinkID = "mqtt"
+	require.ErrorContains(t, validateEventingConfig(cfg.Eventing), "SINKID")
+	cfg.Eventing.Sinks = []string{"kafka", "kafka"}
+	require.ErrorContains(t, validateEventingConfig(cfg.Eventing), "duplicate")
+	cfg.Eventing.Sinks = []string{"kafka"}
+	require.True(t, NewEventFeedConfig(cfg).SchemasEnabled)
+	t.Setenv("BASYX_EVENTING_KAFKA_TLS_ENABLED", "invalid")
+	_, err = LoadConfig("")
+	require.ErrorContains(t, err, "KAFKATLS")
+}
+
+func TestKafkaProducerBatchSizeConfiguration(t *testing.T) {
+	cfg, err := LoadConfig("")
+	require.NoError(t, err)
+	require.Zero(t, cfg.Eventing.Kafka.ProducerBatchMaxBytes)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`eventing:
+  enabled: true
+  sinks: [kafka]
+  outboxEnabled: true
+  kafka:
+    brokers: [localhost:9092]
+    producerBatchMaxBytes: 2097152
+`), 0600))
+	cfg, err = LoadConfig(path)
+	require.NoError(t, err)
+	require.EqualValues(t, 2<<20, cfg.Eventing.Kafka.ProducerBatchMaxBytes)
+	t.Setenv("BASYX_EVENTING_KAFKA_PRODUCER_BATCH_MAX_BYTES", "4194304")
+	cfg, err = LoadConfig(path)
+	require.NoError(t, err)
+	require.EqualValues(t, 4<<20, cfg.Eventing.Kafka.ProducerBatchMaxBytes)
+	for _, value := range []string{"invalid", "2147483648", "-1", "511", "1073741825"} {
+		t.Setenv("BASYX_EVENTING_KAFKA_PRODUCER_BATCH_MAX_BYTES", value)
+		_, err = LoadConfig(path)
+		require.ErrorContains(t, err, "BATCHSIZE")
+	}
+}
