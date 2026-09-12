@@ -1,0 +1,7 @@
+kind: fixed
+body: AAS Environment and Submodel Repository writes preserve semantically invalid boolean and temporal Property or Range values in text storage when strict verification is disabled, preventing PostgreSQL conversion failures and HTTP 500 responses.
+time: 2026-09-01T10:04:45Z
+custom:
+  Impact: Low
+  PullRequest: 649
+  SecurityImpact: None.

@@ -30,6 +30,7 @@ import (
 	"strconv"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/FriedJannik/aas-go-sdk/verification"
 )
 
 // TypedValue represents a value categorized by its XS datatype for database storage.
@@ -60,6 +61,10 @@ func MapValueByType(valueType types.DataTypeDefXSD, value *string) TypedValue {
 	actualValue := ""
 	if value != nil {
 		actualValue = *value
+	}
+	if valid && requiresTextFallback(valueType, actualValue) {
+		tv.Text = sql.NullString{String: actualValue, Valid: true}
+		return tv
 	}
 	switch {
 	case IsTextType(valueType):
@@ -125,6 +130,18 @@ func isValidNumeric(value string) bool {
 	return err == nil
 }
 
+func requiresTextFallback(valueType types.DataTypeDefXSD, value string) bool {
+	switch valueType {
+	case types.DataTypeDefXSDBoolean,
+		types.DataTypeDefXSDTime,
+		types.DataTypeDefXSDDate,
+		types.DataTypeDefXSDDateTime:
+		return !verification.ValueConsistentWithXSDType(value, valueType)
+	default:
+		return false
+	}
+}
+
 // IsDateTimeType checks if the given XS datatype should be stored in TIMESTAMPTZ columns.
 //
 // Parameters:
@@ -169,6 +186,12 @@ func MapRangeValueByType(valueType types.DataTypeDefXSD, minValue string, maxVal
 	tv := TypedRangeValue{}
 	minValid := minValue != ""
 	maxValid := maxValue != ""
+	if (minValid && requiresTextFallback(valueType, minValue)) ||
+		(maxValid && requiresTextFallback(valueType, maxValue)) {
+		tv.MinText = sql.NullString{String: minValue, Valid: minValid}
+		tv.MaxText = sql.NullString{String: maxValue, Valid: maxValid}
+		return tv
+	}
 
 	switch {
 	case IsTextType(valueType):
