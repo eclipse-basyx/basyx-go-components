@@ -41,6 +41,7 @@ import (
 )
 
 func TestEnvironmentUploadProducesAASAssetSubmodelAndPCNEvents(t *testing.T) {
+	received := testenv.SubscribeMQTT(t, mqttBrokerURL, "basyx/#")
 	stamp := time.Now().UnixNano()
 	aasID := fmt.Sprintf("urn:example:event-feed:upload:aas:%d", stamp)
 	smID := fmt.Sprintf("urn:example:event-feed:upload:sm:%d", stamp)
@@ -81,6 +82,23 @@ func TestEnvironmentUploadProducesAASAssetSubmodelAndPCNEvents(t *testing.T) {
 		return len(feed.Records) >= 4
 	}, 5*time.Second, 50*time.Millisecond)
 	require.Len(t, feed.Records, 4)
+	mqttEvents := map[string]eventfeed.FeedRecord{}
+	deadline := time.NewTimer(20 * time.Second)
+	defer deadline.Stop()
+	for len(mqttEvents) < 4 {
+		select {
+		case message := <-received:
+			event := message.Event
+			if event.Subject == aasID || event.Subject == assetID || event.Subject == smID {
+				mqttEvents[event.ID] = event
+			}
+		case <-deadline.C:
+			t.Fatal("MQTT upload events missing")
+		}
+	}
+	for _, event := range feed.Records {
+		require.Equal(t, event, mqttEvents[event.ID])
+	}
 	types := map[string]int{}
 	for _, event := range feed.Records {
 		types[event.Type]++

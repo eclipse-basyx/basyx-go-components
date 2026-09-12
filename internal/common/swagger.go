@@ -98,7 +98,8 @@ type SwaggerUIConfig struct {
 	Enabled               *bool          // nil/default=true, false disables Swagger UI and OpenAPI spec endpoints
 	IncludeVerifyEndpoint *bool          // nil/default=true, false disables /verify injection in OpenAPI spec
 	IncludeABACManagement *bool          // nil/default=false, true injects ABAC management API paths
-	IncludeEventFeed      *bool          // nil/default=false, true injects Event Feed API paths when eventing is enabled
+	IncludeEventSchemas   bool
+	IncludeEventFeed      *bool // nil/default=false, true injects Event Feed API paths when eventing is enabled
 }
 
 // ContactConfig holds contact information for OpenAPI spec
@@ -1641,6 +1642,11 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	}
 	if includeEventFeed {
 		specContent = injectEventFeedEndpoints(specContent)
+	} else if cfg.IncludeEventSchemas {
+		_, schemaPaths, found := strings.Cut(eventFeedPathsYAML, "  /.well-known/event-feed/schemas/{schema}:")
+		if found {
+			specContent = injectPathFragment(specContent, "  /.well-known/event-feed/schemas/{schema}:"+schemaPaths)
+		}
 	}
 
 	// Serve the OpenAPI spec
@@ -1820,6 +1826,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 		IncludeVerifyEndpoint: includeVerifyEndpoint,
 		IncludeABACManagement: includeABACManagement,
 		IncludeEventFeed:      includeEventFeed,
+		IncludeEventSchemas:   serverConfig != nil && serverConfig.Eventing.MQTTEnabled(),
 	})
 
 	return nil

@@ -310,11 +310,11 @@ AASX export preserves managed File and thumbnail values byte-for-byte, creates p
 | `history.integrityAnchor.provider: none` | Default. Non-`none` providers such as immudb, Rekor, Trillian, or timestamping services are reserved for later work. |
 | `history.auditIdentityMode` | `none` stores no request identity metadata. `minimal` stores the canonical request and correlation IDs supplied by the shared HTTP middleware, authenticated OIDC subject/issuer/client id, ABAC allow metadata, operation, endpoint, and method. Valid client or ingress IDs are preserved; missing or invalid IDs receive generated defaults. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available. Request and correlation IDs are not authenticated identity data. |
 | `eventing.feed.enabled` | Opt-in CloudEvents REST Event Feed. Writes feed rows in the same PostgreSQL transaction as the model mutation. Default is `false`. See [event_feed.md](../user/event_feed.md). |
-| Configured event sinks or enabled outbox processing | Fail fast until MQTT/Kafka publishing is implemented. |
+| Configured event sinks or enabled outbox processing | MQTT requires enabled eventing and the outbox; reject unknown sinks and inconsistent activation. |
 
 `AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Runtime middleware now populates `AuditContext` when configured; no external ledger anchor client is invoked by the append path yet.
 
-Future mutation routes must acquire the entity evidence lock before reading the complete pre-mutation model and append evidence in the same database transaction as the live write. The Event Feed consumes those same transaction-scoped mutations through `history.MutationSink` instead of reconstructing them after commit. MQTT/Kafka outbox delivery remains future work.
+Future mutation routes must acquire the entity evidence lock before reading the complete pre-mutation model and append evidence in the same database transaction as the live write. The Event Feed consumes those same transaction-scoped mutations through `history.MutationSink` instead of reconstructing them after commit.
 
 Example verifier/publisher usage:
 
@@ -363,6 +363,33 @@ go run ./cmd/historyevidenceverifier \
   -out ./recovered-history.json
 ```
 
+### Event Generation and MQTT Delivery
+
+`internal/common/events` builds CloudEvents from the transaction-scoped
+`history.MutationSink` hook. `eventfeedsetup.Start` registers one consumer before
+startup imports and sends each captured event to the enabled transactional
+writers. IDs and timestamps are assigned once; PostgreSQL stores timestamps at
+microsecond precision. Enqueue failures must roll back the model transaction.
+
+`internal/common/eventoutbox` stores immutable envelopes and routing metadata in
+`event_outbox` (patch `1_2_1.sql`). Four workers publish committed rows through the
+`Publisher` interface. Each attempt holds a delivery-row lock for up to ten
+seconds. `FOR UPDATE SKIP LOCKED` and the earlier-pending-row check prevent
+concurrent workers from overtaking events for the same sink and mutated entity.
+PostgreSQL releases ownership on connection loss. Acknowledgments delete rows;
+failures schedule retries. Shutdown cancels workers before closing the database.
+
+`internal/common/mqtt` owns topic routing, credentials, TLS, and the Paho MQTT 5
+connection. It publishes one structured JSON CloudEvent per message, with Content
+Type `application/cloudevents+json`. Connection attempts run asynchronously so
+broker outages do not block API startup. See the [MQTT guide](../user/mqtt_eventing.md)
+for configuration and delivery guarantees.
+
+The integration suites cover combined and individual transports, rollback,
+retries, concurrent workers, cancellation, feed cleanup, and authenticated TLS
+publishing. Keep HTTP pagination and authorization tests in the feed suites;
+transport tests must verify payload schemas and exact event IDs and timestamps.
+
 ### Event Feed Runtime
 
 The opt-in feed lives in `internal/common/eventfeed`. For deployment settings
@@ -379,8 +406,8 @@ When extending persistence paths, preserve these invariants:
   this provenance and the caller's current rules, so later relationship changes
   cannot expose previously private asset IDs. Missing provenance must fail closed
   with ABAC enabled.
-- Keep capture, workers, routes, and OpenAPI operations gated by
-  `eventing.feed.enabled`; ordinary deployments leave it disabled.
+- Keep feed storage, workers, routes, and OpenAPI operations gated by
+  `eventing.feed.enabled`.
 
 The internal `seq` is assigned before commit and cannot serve as a consumer
 checkpoint. A worker assigns `publish_seq` to committed, visible rows, serializing
@@ -397,7 +424,7 @@ The user guide documents replay and deduplication requirements for consumers.
 
 The feed schema and capture-time ownership column are introduced together in
 `database/patches/1_2_0.sql`, registered by the configuration service. Hosted event
-schemas are embedded from `internal/common/eventfeed/schemas`; schema tests
+schemas are embedded from `internal/common/events/schemas`; schema tests
 validate generated payloads against the documents served by the HTTP endpoint.
 
 The [example smoke test](../../examples/BaSyxEventFeedExample/smoke.py) exercises
@@ -575,15 +602,3 @@ Migration does not create history rows or backfill administrative timestamps for
 ### AAS Environment
 
 The AAS Environment delegates the component endpoints. Its behavior should stay aligned with the underlying repository and registry services. If a new v3.2 endpoint is added to a component, the environment OpenAPI and routing must be checked as well.
-
-## Planned Follow-Up Work
-
-The shared append points are intentionally kept independent of a specific event broker or immutability provider. Future additions should build on them without changing repository write APIs:
-
-- Add a transactional outbox table written in the same PostgreSQL transaction as each history row.
-- Publish CloudEvents from an asynchronous outbox worker with retry and idempotency.
-- Anchor row hashes in immudb from an asynchronous worker. Store append-only anchor receipts in a separate table instead of updating guarded history rows.
-- Add identifier-aware access rules for `$history` and `$recent-changes`.
-- Populate `AuditContext` through middleware before enabling `minimal` or `extended` identity modes.
-- Implement operator-controlled retention, partitioning, monitoring metrics, and guarded-mode maintenance procedures.
-- Decide whether upgraded installations need an explicit baseline backfill tool.

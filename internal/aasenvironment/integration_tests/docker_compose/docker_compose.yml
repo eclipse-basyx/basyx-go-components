@@ -94,6 +94,11 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - SERVER_STRICTVERIFICATION=off
       - ABAC_ENABLED=false
+      - BASYX_EVENTING_ENABLED=true
+      - BASYX_EVENTING_SINKS=mqtt
+      - BASYX_EVENTING_OUTBOX_ENABLED=true
+      - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
+      - BASYX_EVENTING_MQTT_CLIENT_ID=aasenvironment-mqtt-only
       - GENERAL_AASREGISTRYINTEGRATION=false
       - GENERAL_SUBMODELREGISTRYINTEGRATION=false
       - GENERAL_EXTERNALURL=
@@ -142,6 +147,11 @@ services:
       - GENERAL_SUBMODELREGISTRYINTEGRATION=false
       - GENERAL_EXTERNALURL=
       - BASYX_EVENTING_FEED_ENABLED=true
+      - BASYX_EVENTING_ENABLED=true
+      - BASYX_EVENTING_SINKS=mqtt
+      - BASYX_EVENTING_OUTBOX_ENABLED=true
+      - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
+      - BASYX_EVENTING_MQTT_CLIENT_ID=aasenvironment-feed
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
     volumes:
       - ../../../submodelrepository/integration_tests/docker_compose/rsa-key.pem:/app/rsa-key.pem:ro
@@ -186,3 +196,16 @@ services:
     depends_on:
       db_it_sync_off:
         condition: service_healthy
+
+  mqtt_it:
+    image: eclipse-mosquitto:2.0.22
+    entrypoint: ["sh", "-c", "mosquitto_passwd -b -c /tmp/passwords integration integration-password && chmod 644 /tmp/passwords && exec mosquitto -c /mosquitto/config/mosquitto.conf"]
+    volumes:
+      - ../../../submodelrepository/integration_tests/docker_compose/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ../../../submodelrepository/integration_tests/docker_compose/mqtt-ca.pem:/mosquitto/config/mqtt-ca.pem:ro
+      - ../../../submodelrepository/integration_tests/docker_compose/mqtt-server.pem:/mosquitto/config/mqtt-server.pem:ro
+      - ../../../submodelrepository/integration_tests/docker_compose/mqtt-server-key.pem:/mosquitto/config/mqtt-server-key.pem:ro
+    ports:
+      - "127.0.0.1:${BASYX_IT_MQTT_PORT:-61883}:1883"
+      - "127.0.0.1:${BASYX_IT_MQTT_AUTH_PORT:-61884}:1884"
+      - "127.0.0.1:${BASYX_IT_MQTT_TLS_PORT:-61885}:8883"

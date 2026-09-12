@@ -83,11 +83,63 @@ services:
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - SERVER_STRICTVERIFICATION=off
       - BASYX_EVENTING_FEED_ENABLED=true
+      - BASYX_EVENTING_ENABLED=true
+      - BASYX_EVENTING_SINKS=mqtt
+      - BASYX_EVENTING_OUTBOX_ENABLED=true
+      - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
+      - BASYX_EVENTING_MQTT_CLIENT_ID=submodel-feed
       - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,172.17.0.1:*,192.168.65.2:*,192.168.65.254:*
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
       - "127.0.0.1:${BASYX_IT_EVENT_FEED_API_PORT:-6024}:5004"
+    extra_hosts:
+      - "localhost:host-gateway"
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      db_it:
+        condition: service_healthy
+
+  submodel_repository_it_mqtt_only:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_READER_HOST=db_it
+      - POSTGRES_READER_PORT=5432
+      - POSTGRES_READER_USER=admin
+      - POSTGRES_READER_PASSWORD=admin123
+      - POSTGRES_READER_DBNAME=basyxTestDB
+      - POSTGRES_READER_OPTIONS=-c default_transaction_read_only=on
+      - POSTGRES_READER_MAXOPENCONNECTIONS=500
+      - POSTGRES_READER_MAXIDLECONNECTIONS=500
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=false
+      - BASYX_HISTORY_MODE=off
+      - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
+      - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_EVENTING_FEED_ENABLED=false
+      - BASYX_EVENTING_ENABLED=true
+      - BASYX_EVENTING_SINKS=mqtt
+      - BASYX_EVENTING_OUTBOX_ENABLED=true
+      - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
+      - BASYX_EVENTING_MQTT_CLIENT_ID=submodel-mqtt-only
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,172.17.0.1:*,192.168.65.2:*,192.168.65.254:*
+    volumes:
+      - ./rsa-key.pem:/app/rsa-key.pem:ro
+    ports:
+      - "127.0.0.1:${BASYX_IT_MQTT_API_PORT:-6034}:5004"
     extra_hosts:
       - "localhost:host-gateway"
       - "host.docker.internal:host-gateway"
@@ -235,3 +287,16 @@ services:
     depends_on:
       db_it:
         condition: service_healthy
+
+  mqtt_it:
+    image: eclipse-mosquitto:2.0.22
+    entrypoint: ["sh", "-c", "mosquitto_passwd -b -c /tmp/passwords integration integration-password && chmod 644 /tmp/passwords && exec mosquitto -c /mosquitto/config/mosquitto.conf"]
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mqtt-ca.pem:/mosquitto/config/mqtt-ca.pem:ro
+      - ./mqtt-server.pem:/mosquitto/config/mqtt-server.pem:ro
+      - ./mqtt-server-key.pem:/mosquitto/config/mqtt-server-key.pem:ro
+    ports:
+      - "127.0.0.1:${BASYX_IT_MQTT_PORT:-61883}:1883"
+      - "127.0.0.1:${BASYX_IT_MQTT_AUTH_PORT:-61884}:1884"
+      - "127.0.0.1:${BASYX_IT_MQTT_TLS_PORT:-61885}:8883"

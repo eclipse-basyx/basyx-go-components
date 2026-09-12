@@ -1,0 +1,40 @@
+{
+  "assetAdministrationShells": [
+    {
+      "modelType": "AssetAdministrationShell",
+      "id": "urn:example:mqtt:aas:playground",
+      "idShort": "MQTTPlayground",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "urn:example:mqtt:asset:playground"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:mqtt:submodel:status"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:mqtt:submodel:status",
+      "idShort": "OperatingStatus",
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "idShort": "Status",
+          "valueType": "xs:string",
+          "value": "ready"
+        }
+      ]
+    }
+  ],
+  "conceptDescriptions": []
+}

@@ -23,42 +23,93 @@
  * SPDX-License-Identifier: MIT
  ******************************************************************************/
 
-// Package eventfeedsetup wires the eventfeed module into the process-wide
-// history mutation hook.
+// Package eventfeedsetup connects shared event generation to the history mutation hook.
 package eventfeedsetup
 
 import (
 	"context"
 	"database/sql"
+	"log/slog"
+	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventoutbox"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
 )
 
-// Bind registers the Event Feed mutation sink on the process-wide history hook.
+// Bind registers an enabled feed as the process mutation consumer.
+//
+// The consumer is cleared when the module stops. A nil or disabled module is
+// ignored.
+//
+// Parameters:
+//   - module: Initialized feed module whose service persists captured events.
 func Bind(module *eventfeed.Module) {
 	if module == nil || !module.Enabled() {
 		return
 	}
-	history.SetMutationSink(&historySink{inner: eventfeed.NewMutationSink(module.Service)})
+	history.SetMutationSink(eventfeed.NewMutationSink(module.Service))
 	module.SetOnStop(history.ClearMutationSink)
 }
 
-type historySink struct {
-	inner *eventfeed.MutationSink
-}
-
-func (s *historySink) HandleMutation(ctx context.Context, tx *sql.Tx, mutation history.Mutation) error {
-	if s == nil || s.inner == nil {
+// Start registers event writers and launches asynchronous MQTT delivery.
+//
+// Call once before startup imports. The feed module's Stop callback shuts down
+// workers and the broker connection. Broker unavailability is retried asynchronously.
+//
+// Parameters:
+//   - ctx: Service lifecycle context.
+//   - db: Model writer database; close only after stopping the module.
+//   - cfg: Validated service configuration with enabled sinks.
+//   - feed: Initialized feed module, including when feed delivery is disabled.
+//
+// Returns:
+//   - error: MQTT configuration or worker initialization error; otherwise nil.
+func Start(ctx context.Context, db *sql.DB, cfg *common.Config, feed *eventfeed.Module) error {
+	if !cfg.Eventing.MQTTEnabled() {
+		Bind(feed)
 		return nil
 	}
-	return s.inner.HandleMutation(ctx, tx, eventfeed.Mutation{
-		Table:            mutation.Table,
-		Identifier:       mutation.Identifier,
-		ChangeType:       mutation.ChangeType,
-		PreviousSnapshot: mutation.PreviousSnapshot,
-		Snapshot:         mutation.Snapshot,
-		Deleted:          mutation.Deleted,
-		Acknowledged:     mutation.Acknowledged,
+	runtimeCtx, cancel := context.WithCancel(ctx)
+	publisher, err := mqtt.NewPublisher(runtimeCtx, cfg.Eventing.MQTT)
+	if err != nil {
+		cancel()
+		return err
+	}
+	repository := eventoutbox.NewRepository(db)
+	worker, err := eventoutbox.Start(runtimeCtx, repository, cfg.Eventing.MQTT.SinkID, publisher)
+	if err != nil {
+		cancel()
+		stopPublisher(ctx, publisher)
+		return err
+	}
+	feedConfig := common.NewEventFeedConfig(cfg)
+	writers := []events.EventWriter{}
+	if feed.Enabled() {
+		writers = append(writers, func(ctx context.Context, tx *sql.Tx, _ events.Mutation, event events.FeedEvent) error {
+			return feed.Service.WriteTx(ctx, tx, event)
+		})
+	}
+	writers = append(writers, func(ctx context.Context, tx *sql.Tx, mutation events.Mutation, event events.FeedEvent) error {
+		routing, err := mqtt.Routing(cfg.Eventing.TopicPrefix, event)
+		if err != nil {
+			return err
+		}
+		return repository.Enqueue(ctx, tx, cfg.Eventing.MQTT.SinkID, mutation.Table+":"+mutation.Identifier, event, routing)
 	})
+	builder := events.NewBuilder(events.Config{SourceBaseURL: feedConfig.SourceBaseURL, SchemaBaseURL: feedConfig.SchemaBaseURL})
+	history.SetMutationSink(events.NewMutationSink(builder, events.Fanout(writers...)))
+	feed.SetOnStop(func() { history.ClearMutationSink(); cancel(); worker.Stop(); stopPublisher(ctx, publisher) })
+	return nil
+}
+
+func stopPublisher(ctx context.Context, publisher *mqtt.Publisher) {
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := publisher.Stop(shutdownCtx); err != nil {
+		slog.WarnContext(shutdownCtx, "MQTT shutdown incomplete", "error.code", "EVENTING-STOP-MQTT", "error", err)
+	}
 }

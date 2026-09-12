@@ -38,6 +38,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
@@ -53,6 +54,7 @@ func TestAASRepositoryEventFeedDisabledByDefault(t *testing.T) {
 }
 
 func TestAASRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
+	received := testenv.SubscribeMQTT(t, mqttBrokerURL, "basyx/#")
 	baseURL := aasRepositoryEventFeedBaseURL
 	aasID := fmt.Sprintf("urn:example:event-feed:noop:aas:%d", time.Now().UnixNano())
 	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
@@ -95,6 +97,15 @@ func TestAASRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
 	created, updated = waitForAASFeedEventCounts(t, baseURL, aasID, 1, 1, 5*time.Second)
 	require.Equal(t, 1, created, "expected exactly one aas.created event")
 	require.Equal(t, 1, updated, "a content change must still emit exactly one aas.updated event")
+	testenv.AwaitMQTT(t, received, aasID, "io.admin-shell.aas.created.v1")
+	testenv.AwaitMQTT(t, received, "urn:example:event-feed:noop:asset", "io.admin-shell.asset.created.v1")
+	testenv.AwaitMQTT(t, received, aasID, "io.admin-shell.aas.updated.v1")
+	testenv.AwaitMQTT(t, received, "urn:example:event-feed:noop:asset", "io.admin-shell.asset.updated.v1")
+	status, err = deleteResponseStatus(baseURL + "/shells/" + encodedAASID)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status)
+	testenv.AwaitMQTT(t, received, aasID, "io.admin-shell.aas.deleted.v1")
+	testenv.AwaitMQTT(t, received, "urn:example:event-feed:noop:asset", "io.admin-shell.asset.deleted.v1")
 }
 
 // waitForAASFeedEventCounts polls the event feed until at least wantCreated

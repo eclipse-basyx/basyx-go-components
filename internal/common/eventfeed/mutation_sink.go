@@ -28,168 +28,28 @@ package eventfeed
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 )
 
-const (
-	mutationTableAAS      = "aas_history"
-	mutationTableSubmodel = "submodel_history"
-	mutationCreated       = "Created"
-	mutationUpdated       = "Updated"
-	mutationDeleted       = "Deleted"
-)
+// Mutation is the shared transaction-scoped model mutation.
+type Mutation = events.Mutation
 
-// Mutation is one model change observed inside the writer transaction.
-type Mutation struct {
-	Table            string
-	Identifier       string
-	ChangeType       string
-	PreviousSnapshot map[string]any
-	Snapshot         map[string]any
-	Deleted          bool
-	Acknowledged     bool
-}
+// MutationSink generates events from the existing mutation hook.
+type MutationSink = events.MutationSink
 
-// MutationSink writes CloudEvents feed rows inside the authoritative mutation transaction.
-type MutationSink struct {
-	service *Service
-}
-
-// NewMutationSink creates a mutation sink backed by svc.
+// NewMutationSink creates a transactional feed writer.
+//
+// Parameters:
+//   - svc: Feed service; nil or disabled services produce a disabled consumer.
+//
+// Returns:
+//   - *MutationSink: Shared mutation consumer writing through svc.WriteTx.
 func NewMutationSink(svc *Service) *MutationSink {
-	return &MutationSink{service: svc}
-}
-
-// HandleMutation persists feed events for mutation.
-func (s *MutationSink) HandleMutation(ctx context.Context, tx *sql.Tx, mutation Mutation) error {
-	if s == nil || s.service == nil || !s.service.cfg.Enabled || tx == nil {
-		return nil
+	if svc == nil || !svc.cfg.Enabled {
+		return events.NewMutationSink(nil, nil)
 	}
-	if mutation.Acknowledged {
-		return nil
-	}
-	switch mutation.Table {
-	case mutationTableAAS:
-		return s.handleAAS(ctx, tx, mutation)
-	case mutationTableSubmodel:
-		return s.handleSubmodel(ctx, tx, mutation)
-	default:
-		return nil
-	}
-}
-
-func mutationSnapshot(mutation Mutation) map[string]any {
-	if mutation.Deleted && mutation.PreviousSnapshot != nil {
-		return mutation.PreviousSnapshot
-	}
-	return mutation.Snapshot
-}
-
-func (s *MutationSink) handleAAS(ctx context.Context, tx *sql.Tx, mutation Mutation) error {
-	snap := mutationSnapshot(mutation)
-	aasID, globalAssetID, submodels := aasFieldsFromSnapshot(snap)
-	if aasID == "" {
-		aasID = mutation.Identifier
-	}
-
-	var buildFn func(string, string, []SubmodelRef) (FeedEvent, error)
-	switch mutation.ChangeType {
-	case mutationCreated:
-		buildFn = s.service.build.AASCreated
-	case mutationDeleted:
-		buildFn = s.service.build.AASDeleted
-	default:
-		buildFn = s.service.build.AASUpdated
-	}
-	ev, err := buildFn(aasID, globalAssetID, submodels)
-	if err != nil {
-		return fmt.Errorf("EVENTFEED-MUTATION-AAS-BUILD: %w", err)
-	}
-	if err = s.service.WriteTx(ctx, tx, ev); err != nil {
-		return err
-	}
-	if globalAssetID == "" {
-		return nil
-	}
-	var assetFn func(string, string, []SubmodelRef) (FeedEvent, error)
-	switch mutation.ChangeType {
-	case mutationCreated:
-		assetFn = s.service.build.AssetCreated
-	case mutationDeleted:
-		assetFn = s.service.build.AssetDeleted
-	default:
-		assetFn = s.service.build.AssetUpdated
-	}
-	aev, err := assetFn(globalAssetID, aasID, submodels)
-	if err != nil {
-		return fmt.Errorf("EVENTFEED-MUTATION-ASSET-BUILD: %w", err)
-	}
-	return s.service.WriteTx(ctx, tx, aev)
-}
-
-func (s *MutationSink) handleSubmodel(ctx context.Context, tx *sql.Tx, mutation Mutation) error {
-	snap := mutationSnapshot(mutation)
-	submodelID, semanticID := submodelFieldsFromSnapshot(snap)
-	if submodelID == "" {
-		submodelID = mutation.Identifier
-	}
-	globalAssetIDs, aasIDs, err := submodelAssetOwnersTx(ctx, tx, submodelID)
-	if err != nil {
-		return err
-	}
-
-	var buildFn func(string, string, []string) (FeedEvent, error)
-	switch mutation.ChangeType {
-	case mutationCreated:
-		buildFn = s.service.build.SubmodelCreated
-	case mutationDeleted:
-		buildFn = s.service.build.SubmodelDeleted
-	default:
-		buildFn = s.service.build.SubmodelUpdated
-	}
-	ev, err := buildFn(submodelID, semanticID, globalAssetIDs)
-	if err != nil {
-		return fmt.Errorf("EVENTFEED-MUTATION-SUBMODEL-BUILD: %w", err)
-	}
-	ev.AuthorizationAASIDs = aasIDs
-	if err = s.service.WriteTx(ctx, tx, ev); err != nil {
-		return err
-	}
-
-	if !IsPCNSemanticID(semanticID) || mutation.Deleted {
-		return nil
-	}
-
-	currentSubmodel, err := submodelFromSnapshot(snap)
-	if err != nil {
-		return fmt.Errorf("EVENTFEED-MUTATION-PCN-DESERIALIZE: %w", err)
-	}
-	previousSubmodel, err := submodelFromSnapshot(mutation.PreviousSnapshot)
-	if err != nil {
-		return fmt.Errorf("EVENTFEED-MUTATION-PCN-DESERIALIZE: %w", err)
-	}
-	for _, record := range PCNNewRecordValuesFromSubmodel(previousSubmodel, currentSubmodel) {
-		pcnEv, pcnErr := s.service.build.PCN(submodelID, globalAssetIDs, record)
-		if pcnErr != nil {
-			return fmt.Errorf("EVENTFEED-MUTATION-PCN-BUILD: %w", pcnErr)
-		}
-		pcnEv.AuthorizationAASIDs = aasIDs
-		if err = s.service.WriteTx(ctx, tx, pcnEv); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// submodelFromSnapshot deserializes a full submodel JSON snapshot back into
-// its typed representation so PCN records can be converted to Value-Only
-// via the shared model helpers.
-func submodelFromSnapshot(snap map[string]any) (types.ISubmodel, error) {
-	if snap == nil {
-		return nil, nil
-	}
-	return jsonization.SubmodelFromJsonable(snap)
+	return events.NewMutationSink(svc.build, func(ctx context.Context, tx *sql.Tx, _ Mutation, event FeedEvent) error {
+		return svc.WriteTx(ctx, tx, event)
+	})
 }

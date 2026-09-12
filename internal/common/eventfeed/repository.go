@@ -81,12 +81,16 @@ func (r *Repository) SaveTx(ctx context.Context, tx *sql.Tx, event FeedEvent) (F
 }
 
 func (r *Repository) save(ctx context.Context, exec queryExecer, event FeedEvent) (FeedEvent, error) {
+	if event.Time.IsZero() {
+		event.Time = r.now().UTC().Truncate(time.Microsecond)
+	}
 	authorization, err := json.Marshal(event.AuthorizationAASIDs)
 	if err != nil {
 		return FeedEvent{}, fmt.Errorf("EVENTFEED-SAVE-AUTHJSON: %w", err)
 	}
 	query, args, err := r.dialect.Insert("feed_events").Rows(goqu.Record{
 		"id":                    event.ID,
+		"time":                  event.Time.UTC().Truncate(time.Microsecond),
 		"event_type":            event.Type,
 		"subject":               event.Subject,
 		"source":                event.Source,

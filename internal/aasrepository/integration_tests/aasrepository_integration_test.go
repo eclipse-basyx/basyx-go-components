@@ -1911,11 +1911,13 @@ func TestMain(m *testing.M) {
 	}
 
 	runtime := testenv.NewComposeRuntimeOrExit("aasrepository-it", []testenv.PortBinding{
+		{Name: "mqtt", EnvVar: "BASYX_IT_MQTT_PORT"},
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
 		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
 	})
+	mqttBrokerURL = "mqtt://" + strings.TrimPrefix(runtime.LocalURL("mqtt"), "http://")
 	aasRepositoryBaseURL = runtime.LocalURL("api")
 	aasRepositoryEventFeedBaseURL = runtime.LocalURL("event-feed-api")
 	aasRepositoryInvalidBaseURL = runtime.LocalhostURL("invalid-api")

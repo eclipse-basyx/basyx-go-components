@@ -22,11 +22,6 @@ path, so event sources and schema links work for your clients behind a proxy.
 The deployment requires database schema `v1.2.0` or later; run the configuration
 service to apply migrations before starting the hosting service.
 
-The REST feed uses `eventing.feed.enabled`. The separate `eventing.enabled`
-setting is reserved for future transports. MQTT and Kafka publishing are not
-implemented; configuring `eventing.sinks` or enabling `eventing.outboxEnabled`
-fails configuration validation.
-
 ## Read events
 
 These endpoints are relative to your service's API base path:
@@ -37,7 +32,7 @@ These endpoints are relative to your service's API base path:
 | `GET /.well-known/event-feed.json` | Discover supported event types, filters, schemas, retention, and page limits. |
 | `GET /.well-known/event-feed/schemas/{schema}` | Retrieve the versioned JSON Schema linked by an event's `dataschema`. |
 
-The routes and their OpenAPI operations are absent when the feed is disabled.
+The feed and discovery routes are absent when the feed is disabled.
 
 The feed spans all entities you are authorized to read. Each event's `subject`
 identifies the affected entity, `type` identifies the change, and `time` gives

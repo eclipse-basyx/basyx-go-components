@@ -23,12 +23,13 @@
  * SPDX-License-Identifier: MIT
  ******************************************************************************/
 
-package eventfeed
+package events
 
 import (
+	"testing"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestSubmodelAssetOwnersPreservesEveryAASForSharedAssets(t *testing.T) {

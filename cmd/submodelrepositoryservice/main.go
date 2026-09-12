@@ -35,8 +35,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
@@ -54,6 +52,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
+	"github.com/go-chi/chi/v5"
 )
 
 //go:embed openapi.yaml
@@ -182,7 +181,9 @@ func runServer(ctx context.Context, configPath string) error {
 	if eventFeedErr != nil {
 		return eventFeedErr
 	}
-	eventfeedsetup.Bind(eventFeedModule)
+	if err = eventfeedsetup.Start(ctx, sharedDB, cfg, eventFeedModule); err != nil {
+		return err
+	}
 	defer eventFeedModule.Stop()
 	eventFeedModule.StartRetentionLoop(ctx)
 	eventFeedModule.StartPublishLoop(ctx)

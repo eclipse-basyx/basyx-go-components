@@ -258,7 +258,7 @@ This has operational consequences:
 Eventing:
 
 - To receive AAS and Submodel changes through the experimental CloudEvents REST API, enable `eventing.feed.enabled` / `BASYX_EVENTING_FEED_ENABLED`. The feed is disabled by default. See the [Event Feed user guide](event_feed.md) for polling, filtering, and access control, or try the [local example](../../examples/BaSyxEventFeedExample/README.md).
-- MQTT and Kafka publishing are not implemented. The separate `BASYX_EVENTING_ENABLED` flag does not enable the REST feed; transport configuration limitations are covered in the user guide.
+- [MQTT 5 publishing](mqtt_eventing.md) can run independently or alongside the REST feed. `BASYX_EVENTING_ENABLED` controls configured transports; the REST feed retains its own activation flag.
 
 Compact history storage:
 

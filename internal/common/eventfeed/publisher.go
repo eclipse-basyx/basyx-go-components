@@ -65,10 +65,16 @@ func (m *Module) Enabled() bool {
 
 // RegisterRoutes mounts the Event Feed HTTP endpoints on r if the module is enabled.
 func (m *Module) RegisterRoutes(r chi.Router) {
-	if m == nil || !m.Enabled() {
+	if m == nil {
 		return
 	}
-	RegisterRoutes(r, m.Service)
+	if m.Enabled() {
+		RegisterRoutes(r, m.Service)
+		return
+	}
+	if m.cfg.SchemasEnabled {
+		r.Get(SchemaPath+"/{schema}", handleSchema)
+	}
 }
 
 // StartRetentionLoop runs the retention job immediately, then on cfg.CleanupInterval until ctx is done or Stop is called.

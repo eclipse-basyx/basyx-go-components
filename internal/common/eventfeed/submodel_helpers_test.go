@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 )
 
 func pcnRecord(idShort, changeID string) *types.SubmodelElementCollection {
@@ -84,7 +85,7 @@ func pcnSubmodelWithListRecordElements(t *testing.T, records ...types.ISubmodelE
 func TestPCNNewRecordValuesFromSubmodelOnCreate(t *testing.T) {
 	sm := pcnSubmodelWithCollectionRecords(t, pcnRecord("Record0", "CN1"), pcnRecord("Record1", "CN2"))
 
-	values := PCNNewRecordValuesFromSubmodel(nil, sm)
+	values := events.PCNNewRecordValuesFromSubmodel(nil, sm)
 	if len(values) != 2 {
 		t.Fatalf("expected 2 new records on create, got %d", len(values))
 	}
@@ -94,7 +95,7 @@ func TestPCNNewRecordValuesFromSubmodelOnUpdateByIDShort(t *testing.T) {
 	previous := pcnSubmodelWithCollectionRecords(t, pcnRecord("Record0", "CN1"))
 	current := pcnSubmodelWithCollectionRecords(t, pcnRecord("Record0", "CN1"), pcnRecord("Record1", "CN2"))
 
-	values := PCNNewRecordValuesFromSubmodel(previous, current)
+	values := events.PCNNewRecordValuesFromSubmodel(previous, current)
 	if len(values) != 1 {
 		t.Fatalf("expected exactly 1 new record, got %d: %v", len(values), values)
 	}
@@ -104,7 +105,7 @@ func TestPCNNewRecordValuesFromSubmodelNoChangeYieldsNoEvents(t *testing.T) {
 	previous := pcnSubmodelWithCollectionRecords(t, pcnRecord("Record0", "CN1"))
 	current := pcnSubmodelWithCollectionRecords(t, pcnRecord("Record0", "CN1"))
 
-	values := PCNNewRecordValuesFromSubmodel(previous, current)
+	values := events.PCNNewRecordValuesFromSubmodel(previous, current)
 	if len(values) != 0 {
 		t.Fatalf("expected no new records when Records is unchanged, got %d", len(values))
 	}
@@ -114,7 +115,7 @@ func TestPCNNewRecordValuesFromSubmodelOnUpdateByPositionForListWithoutIDShorts(
 	previous := pcnSubmodelWithListRecords(t, "CN1")
 	current := pcnSubmodelWithListRecords(t, "CN1", "CN2")
 
-	values := PCNNewRecordValuesFromSubmodel(previous, current)
+	values := events.PCNNewRecordValuesFromSubmodel(previous, current)
 	if len(values) != 1 {
 		t.Fatalf("expected exactly 1 new record appended past previous length, got %d", len(values))
 	}
@@ -124,7 +125,7 @@ func TestPCNNewRecordValuesFromSubmodelListReorderDoesNotEmitExisting(t *testing
 	previous := pcnSubmodelWithListRecords(t, "CN1")
 	current := pcnSubmodelWithListRecords(t, "CN2", "CN1")
 
-	values := PCNNewRecordValuesFromSubmodel(previous, current)
+	values := events.PCNNewRecordValuesFromSubmodel(previous, current)
 	if len(values) != 1 {
 		t.Fatalf("expected only the inserted record, got %d: %v", len(values), values)
 	}
@@ -134,7 +135,7 @@ func TestPCNNewRecordValuesFromSubmodelPureReorderEmitsNothing(t *testing.T) {
 	previous := pcnSubmodelWithListRecords(t, "CN1", "CN2")
 	current := pcnSubmodelWithListRecords(t, "CN2", "CN1")
 
-	values := PCNNewRecordValuesFromSubmodel(previous, current)
+	values := events.PCNNewRecordValuesFromSubmodel(previous, current)
 	if len(values) != 0 {
 		t.Fatalf("expected no new records for a pure reorder, got %d: %v", len(values), values)
 	}
@@ -144,7 +145,7 @@ func TestPCNNewRecordValuesFromSubmodelDuplicateRecordEmitsOnce(t *testing.T) {
 	previous := pcnSubmodelWithListRecords(t, "CN1")
 	current := pcnSubmodelWithListRecords(t, "CN1", "CN1")
 
-	values := PCNNewRecordValuesFromSubmodel(previous, current)
+	values := events.PCNNewRecordValuesFromSubmodel(previous, current)
 	if len(values) != 1 {
 		t.Fatalf("expected exactly 1 new record for an added duplicate, got %d: %v", len(values), values)
 	}

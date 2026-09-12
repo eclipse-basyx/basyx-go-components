@@ -29,6 +29,8 @@ import (
 	"context"
 	"database/sql"
 	"sync"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
 )
 
 // Mutation is one authoritative model change already executing inside tx.
@@ -37,15 +39,7 @@ import (
 // successful create, update, or delete, including PATCH, SubmodelElement, file,
 // and thumbnail paths. Optional MutationSink implementations (Event Feed) observe
 // that same transaction-scoped change instead of reconstructing it after commit.
-type Mutation struct {
-	Table            string
-	Identifier       string
-	ChangeType       string
-	PreviousSnapshot map[string]any
-	Snapshot         map[string]any
-	Deleted          bool
-	Acknowledged     bool
-}
+type Mutation = events.Mutation
 
 // MutationSink consumes normalized mutations inside the writer transaction.
 type MutationSink interface {
