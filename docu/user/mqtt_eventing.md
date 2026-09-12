@@ -21,8 +21,7 @@ eventing:
     clientId: basyx-instance-1
 ```
 
-All three activation settings are required. MQTT can run alongside the
-[Kafka sink](kafka_eventing.md) using `sinks: [mqtt, kafka]`. Set `general.externalUrl` to the
+All three activation settings are required. Set `general.externalUrl` to the
 public API base URL so event sources and schema links resolve for consumers.
 
 ## Connection settings

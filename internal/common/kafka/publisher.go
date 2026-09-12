@@ -29,7 +29,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -43,7 +42,6 @@ type Publisher struct {
 	cancel    context.CancelFunc
 	connected atomic.Bool
 	done      chan struct{}
-	closeOnce sync.Once
 }
 
 // NewPublisher validates settings and loads credentials without waiting for a broker.
@@ -112,7 +110,7 @@ func (p *Publisher) Publish(ctx context.Context, routing json.RawMessage, envelo
 
 // Stop cancels deliveries and closes the producer. ctx bounds the wait; repeated calls are safe.
 func (p *Publisher) Stop(ctx context.Context) error {
-	p.closeOnce.Do(p.cancel)
+	p.cancel()
 	select {
 	case <-p.done:
 		return nil

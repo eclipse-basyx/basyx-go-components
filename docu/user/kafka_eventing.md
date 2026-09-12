@@ -1,14 +1,13 @@
 # Kafka Eventing (experimental)
 
-Publish existing AAS, asset, Submodel, and PCN CloudEvents to Kafka from AAS
-Repository, Submodel Repository, or AAS Environment. Try the
-[Kafka playground](../../examples/BaSyxKafkaExample/README.md) with BaSyx Web UI
-and Kafbat UI.
+Publish AAS, asset, Submodel, and PCN changes as CloudEvents to Kafka from
+AAS Repository, Submodel Repository, or AAS Environment. To try it locally,
+use the [Kafka example](../../examples/BaSyxKafkaExample/README.md).
 
 ## Enable Kafka
 
-Use database schema v1.2.1 or later (the existing event outbox). No additional
-migration is required. Configure the public API URL and provision the Kafka topic:
+Apply database schema v1.2.1 or later with the configuration service and create
+the Kafka topic before starting the application. Configure the public API URL and broker:
 
 ```yaml
 general:
@@ -23,84 +22,73 @@ eventing:
     topic: basyx.events
 ```
 
-Set `sinks: [mqtt, kafka]` to publish to both brokers. Enable `eventing.feed.enabled`
-independently to also expose the HTTP event feed. Each event is generated once;
-all enabled destinations persist the same ID, timestamp, schema, and REGULAR
-payload within the model transaction. Sink names and sink IDs must be unique.
+All three activation settings are required: `enabled`, `sinks`, and `outboxEnabled`.
+`general.externalUrl` supplies the event source and hosted schema URLs. Override
+these with `eventing.sourceBaseUrl` and `eventing.schemaBaseUrl` if needed.
 
-Kafka alone also enables the existing event schema endpoints. Source/schema URL
-overrides remain `eventing.sourceBaseUrl` and `eventing.schemaBaseUrl`.
+## Connection settings
 
-## Configuration
-
-Settings below are under `eventing.kafka`. Environment variables have prefix
+Settings below are under `eventing.kafka`. Environment variables use the prefix
 `BASYX_EVENTING_KAFKA_` followed by the suffix shown.
 
 | Setting | Environment suffix | Default / behavior |
 | --- | --- | --- |
 | `brokers` | `BROKERS` | Required bootstrap `host:port` list; comma-separated in the environment. No schemes or embedded credentials. |
 | `topic` | `TOPIC` | `basyx.events`; one topic for all event families. |
-| `sinkId` | `SINK_ID` | `kafka`; stable outbox destination identifier. |
+| `sinkId` | `SINK_ID` | `kafka`; stable delivery queue identifier. Replicas sharing a database use the same ID and destination. |
 | `clientId` | `CLIENT_ID` | `basyx`; client name reported to Kafka. |
-| `tlsEnabled` | `TLS_ENABLED` | `false`; enable verified TLS, minimum TLS 1.2. |
+| `tlsEnabled` | `TLS_ENABLED` | `false`; enables certificate verification with TLS 1.2 or later. |
 | `caFile` | `CA_FILE` | Optional PEM CA bundle; otherwise system trust. |
-| `certificateFile`, `keyFile` | `CERTIFICATE_FILE`, `KEY_FILE` | Optional PEM client certificate/key pair for mutual TLS. Requires TLS. |
+| `certificateFile`, `keyFile` | `CERTIFICATE_FILE`, `KEY_FILE` | PEM client certificate/key pair for mutual TLS. Requires TLS. |
 | `saslMechanism` | `SASL_MECHANISM` | Empty disables SASL; supports `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`. |
-| `username`, `password` | `USERNAME`, `PASSWORD` | Required when SASL is enabled; omitted from effective configuration output. |
+| `username`, `password` | `USERNAME`, `PASSWORD` | Required with SASL; omitted from effective configuration output. |
 | `usernameFile`, `passwordFile` | `USERNAME_FILE`, `PASSWORD_FILE` | Mounted credential alternatives; trailing line endings are removed. |
 
-Use a value or file for each credential, never both. TLS certificate and key must
-be supplied together. Credentials, certificate material, and invalid local
-configuration are checked at startup; broker unavailability does not block startup.
-Use TLS with SASL credentials, particularly PLAIN. Configure broker ACLs for the
-topic's producer and consumers; HTTP authorization does not filter Kafka readers.
+Supply either a value or a file for each credential. Supply the TLS client
+certificate and key together. Use TLS when transmitting SASL credentials.
+Configure broker ACLs for producers and consumers; HTTP access rules do not
+restrict Kafka subscribers.
 
-Shared activation variables are `BASYX_EVENTING_ENABLED`, `BASYX_EVENTING_SINKS`,
-and `BASYX_EVENTING_OUTBOX_ENABLED`. `eventing.topicPrefix` continues to configure
-MQTT topics; Kafka uses `eventing.kafka.topic`.
+Activation settings also accept `BASYX_EVENTING_ENABLED`, `BASYX_EVENTING_SINKS`,
+and `BASYX_EVENTING_OUTBOX_ENABLED`.
 
-## CloudEvents mapping
+## Consume events
 
-The sink implements structured JSON from the
-[CloudEvents Kafka binding v1.0.2](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/bindings/kafka-protocol-binding.md).
-Each Kafka record contains:
+Each record uses the structured JSON format defined by the
+[CloudEvents Kafka binding v1.0.2](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/bindings/kafka-protocol-binding.md):
 
-- Value: the complete unchanged CloudEvent JSON envelope, with `specversion: "1.0"`
-  and `datacontenttype: "application/json"`.
+- Value: a CloudEvent envelope with `specversion: "1.0"` and
+  `datacontenttype: "application/json"`.
 - Header: `content-type: application/cloudevents+json`.
-- Key: `aas_history:<AAS ID>` or `submodel_history:<Submodel ID>`, matching the
-  outbox's mutated-entity identity. Derived asset and PCN events use the parent's key.
+- Key: `aas_history:<AAS ID>` or `submodel_history:<Submodel ID>`.
+  Asset events share their AAS key; PCN events share their Submodel key.
 
-No Kafka-specific CloudEvent attributes, schema registry framing, or binary
-encoding are added. The binding leaves topic layout to the application. Filter
-by the existing event `type` or `subject` when consuming the shared topic.
+Filter by `type` or `subject` to select events from the topic. Change payloads
+identify affected models; PCN payloads contain the new record's value-only
+representation. `dataschema` links to the payload schema served by the API.
 
-## Delivery and operations
+Delivery is at least once: deduplicate by CloudEvents ID. Events for an entity
+share a partition and are delivered in order. Keep the partition count stable
+when relying on this ordering. There is no ordering across partitions.
 
-The outbox stores topic and key with the immutable event before commit. Four
-workers per sink deliver committed records and require acknowledgment from all
-in-sync replicas. Broker replication and `min.insync.replicas` determine durability;
-configure them for the required availability and durability of production topics.
+## Operate the service
 
-Failures retain the delivery indefinitely and use existing exponential backoff
-with jitter (one second to one minute). Each publish attempt is bounded by ten
-seconds. The producer supports cancellation of in-flight idempotent writes to
-respect this deadline. Ambiguous acknowledgments or a crash after publication can
-cause duplicates with the same CloudEvents ID; consumers must deduplicate.
+During broker outages, model changes remain available and pending events stay in
+PostgreSQL until delivery is acknowledged. Failed deliveries retry indefinitely;
+pending events do not expire. Allow database capacity for the expected outage.
+A failed delivery delays later events for the same entity.
 
-Workers serialize events per mutated entity and use deterministic key partitioning.
-Other entities and sinks can progress while one delivery retries. Kafka orders
-records within a partition; there is no global ordering across partitions. Keep
-partition count stable while relying on entity ordering. Deduplicate retries before
-processing changes. Replicas sharing a database use the same sink ID and destination.
+Kafka must acknowledge writes from all in-sync replicas. Configure replication
+and `min.insync.replicas` for your durability requirements. Set topic retention
+for the replay period consumers need; log compaction discards earlier events
+with the same key.
 
-Provision topics before use; the application does not create them. Drain pending
-deliveries before changing broker, sink ID, topic, or partition layout. Reenabling
-the same sink resumes its queue. Set topic retention for consumer replay needs;
-log compaction keeps only the latest record per entity key and discards event history.
-Broker rejections, including oversized records or missing topic permissions, retain
-the outbox row and require operator correction. Monitor database capacity during outages.
+Drain pending deliveries before changing the broker, sink ID, topic, or partition
+layout. Reenabling the same sink resumes its queue. Broker rejections, including
+oversized records and missing permissions, require operator correction.
 
-The existing `basyx.eventing.*` delivered/failure counters and pending/retry/oldest-age
-gauges also cover Kafka, labeled by sink ID. The connection gauge reflects the latest
-broker probe or publish result; probes and queue gauges refresh every 15 seconds.
+Use the existing OpenTelemetry configuration to monitor these metrics by sink ID:
+
+- `basyx.eventing.pending`: queued deliveries.
+- `basyx.eventing.pending.oldest.age`: age of the oldest pending event in seconds.
+- `basyx.eventing.delivery.failures`: failed delivery attempts or worker database errors.
