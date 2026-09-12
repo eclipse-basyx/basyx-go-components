@@ -1,0 +1,7 @@
+kind: added
+body: Add experimental AMQP 1.0 CloudEvents eventing with a RabbitMQ playground using the existing event contract and outbox.
+time: 2026-09-12T18:01:05.232237+02:00
+custom:
+    Impact: Low
+    PullRequest: 680
+    SecurityImpact: AMQP supports TLS and mutual TLS with optional SASL PLAIN authentication. Broker ACLs control subscriber access; HTTP authorization does not filter AMQP subscribers.
