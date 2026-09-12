@@ -41,11 +41,16 @@ import (
 //   - bool: True when eventing is enabled and sinks contains mqtt; full validation also requires the outbox.
 func (c EventingConfig) MQTTEnabled() bool { return c.sinkEnabled("mqtt") }
 
+// AMQPEnabled checks whether eventing enables the AMQP sink.
+func (c EventingConfig) AMQPEnabled() bool { return c.sinkEnabled("amqp") }
+
 // KafkaEnabled checks whether eventing enables the Kafka sink.
 func (c EventingConfig) KafkaEnabled() bool { return c.sinkEnabled("kafka") }
 
 // TransportsEnabled reports whether any asynchronous event transport is enabled.
-func (c EventingConfig) TransportsEnabled() bool { return c.MQTTEnabled() || c.KafkaEnabled() }
+func (c EventingConfig) TransportsEnabled() bool {
+	return c.MQTTEnabled() || c.KafkaEnabled() || c.AMQPEnabled()
+}
 
 func (c EventingConfig) sinkEnabled(name string) bool {
 	if !c.Enabled {
@@ -94,8 +99,10 @@ func validateEventTransport(c EventingConfig, sink string) (string, error) {
 		return c.MQTT.SinkID, c.MQTT.Validate()
 	case "kafka":
 		return c.Kafka.SinkID, c.Kafka.Validate()
+	case "amqp":
+		return c.AMQP.SinkID, c.AMQP.Validate()
 	default:
-		return "", fmt.Errorf("CONFIG-EVENTING-SINKS supported sinks: mqtt, kafka")
+		return "", fmt.Errorf("CONFIG-EVENTING-SINKS supported sinks: mqtt, kafka, amqp")
 	}
 }
 
@@ -191,4 +198,18 @@ func applyKafkaEnvOverrides(cfg *Config) error {
 		c.ProducerBatchMaxBytes = int32(size)
 	}
 	return nil
+}
+
+func applyAMQPEnvOverrides(cfg *Config) {
+	c := &cfg.Eventing.AMQP
+	fields := map[string]*string{
+		"BROKER": &c.Broker, "ADDRESS": &c.Address, "SINK_ID": &c.SinkID, "HOST_NAME": &c.HostName,
+		"USERNAME": &c.Username, "PASSWORD": &c.Password, "USERNAME_FILE": &c.UsernameFile, "PASSWORD_FILE": &c.PasswordFile,
+		"CA_FILE": &c.CAFile, "CERTIFICATE_FILE": &c.CertificateFile, "KEY_FILE": &c.KeyFile,
+	}
+	for key, destination := range fields {
+		if value, ok := os.LookupEnv("BASYX_EVENTING_AMQP_" + key); ok {
+			*destination = value
+		}
+	}
 }

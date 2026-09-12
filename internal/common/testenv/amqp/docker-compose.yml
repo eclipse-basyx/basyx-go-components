@@ -1,0 +1,21 @@
+services:
+  amqp_it:
+    image: rabbitmq:4.2.0-management
+    environment:
+      RABBITMQ_DEFAULT_USER: basyx
+      RABBITMQ_DEFAULT_PASS: secret
+    volumes:
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./ca.pem:/certs/ca.pem:ro
+      - ./server.pem:/certs/server.pem:ro
+      - ./server-key.pem:/certs/server-key.pem:ro
+    ports:
+      - "127.0.0.1:${BASYX_IT_AMQP_PORT:-55672}:5672"
+      - "127.0.0.1:${BASYX_IT_AMQP_TLS_PORT:-55671}:5671"
+      - "127.0.0.1:${BASYX_IT_AMQP_MANAGEMENT_PORT:-55673}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 5s
+      timeout: 10s
+      retries: 30

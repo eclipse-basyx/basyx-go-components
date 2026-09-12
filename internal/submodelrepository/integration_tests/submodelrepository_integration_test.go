@@ -2598,6 +2598,10 @@ func TestMain(m *testing.M) {
 	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{
 		{Name: "mqtt", EnvVar: "BASYX_IT_MQTT_PORT"},
 		{Name: "kafka", EnvVar: "BASYX_IT_KAFKA_PORT"},
+		{Name: "amqp", EnvVar: "BASYX_IT_AMQP_PORT"},
+		{Name: "amqp-tls", EnvVar: "BASYX_IT_AMQP_TLS_PORT"},
+		{Name: "amqp-management", EnvVar: "BASYX_IT_AMQP_MANAGEMENT_PORT"},
+		{Name: "amqp-api", EnvVar: "BASYX_IT_AMQP_API_PORT"},
 		{Name: "kafka-api", EnvVar: "BASYX_IT_KAFKA_API_PORT"},
 		{Name: "kafka-auth", EnvVar: "BASYX_IT_KAFKA_AUTH_PORT"},
 		{Name: "kafka-tls", EnvVar: "BASYX_IT_KAFKA_TLS_PORT"},

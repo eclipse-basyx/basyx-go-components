@@ -43,6 +43,7 @@ import (
 func TestEnvironmentUploadProducesAASAssetSubmodelAndPCNEvents(t *testing.T) {
 	received := testenv.SubscribeMQTT(t, mqttBrokerURL, "basyx/#")
 	kafkaEvents := testenv.SubscribeKafka(t)
+	amqpEvents := testenv.SubscribeAMQP(t)
 	stamp := time.Now().UnixNano()
 	aasID := fmt.Sprintf("urn:example:event-feed:upload:aas:%d", stamp)
 	smID := fmt.Sprintf("urn:example:event-feed:upload:sm:%d", stamp)
@@ -104,6 +105,7 @@ func TestEnvironmentUploadProducesAASAssetSubmodelAndPCNEvents(t *testing.T) {
 			key = "submodel_history:" + smID
 		}
 		kafkaEvents.AssertEvent(t, event, key)
+		amqpEvents.AssertEvent(t, event)
 	}
 	types := map[string]int{}
 	for _, event := range feed.Records {

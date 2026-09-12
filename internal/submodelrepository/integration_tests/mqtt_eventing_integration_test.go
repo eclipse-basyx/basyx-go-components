@@ -90,6 +90,7 @@ func mqttRequest(t *testing.T, method, target string, body []byte, status int) [
 func TestMQTTMatchesFeedAndSupportsMQTTOnly(t *testing.T) {
 	received := mqttSubscribe(t, "basyx/#")
 	kafkaEvents := testenv.SubscribeKafka(t)
+	amqpEvents := testenv.SubscribeAMQP(t)
 	for _, base := range []string{submodelRepositoryEventFeedBaseURL, submodelRepositoryMQTTOnlyURL} {
 		id := fmt.Sprintf("urn:mqtt:sm:%d", time.Now().UnixNano())
 		endpoint := base + "/submodels/" + base64.RawURLEncoding.EncodeToString([]byte(id))
@@ -98,6 +99,7 @@ func TestMQTTMatchesFeedAndSupportsMQTTOnly(t *testing.T) {
 		t.Cleanup(func() { _, _ = sendReconciliationRequest(t, http.MethodDelete, endpoint, nil) })
 		created := awaitMQTT(t, received, id, events.TypeSubmodelCreated)
 		kafkaEvents.AssertEvent(t, created.Event, "submodel_history:"+id)
+		amqpEvents.AssertEvent(t, created.Event)
 		require.Equal(t, "application/cloudevents+json", created.ContentType)
 		require.Equal(t, "application/json", created.Event.DataContentType)
 		require.Equal(t, "basyx/submodelrepository/submodel/created", created.Topic)
@@ -114,12 +116,14 @@ func TestMQTTMatchesFeedAndSupportsMQTTOnly(t *testing.T) {
 		mqttRequest(t, http.MethodPost, endpoint+"/submodel-elements", property, http.StatusCreated)
 		updated := awaitMQTT(t, received, id, events.TypeSubmodelUpdated)
 		kafkaEvents.AssertEvent(t, updated.Event, "submodel_history:"+id)
+		amqpEvents.AssertEvent(t, updated.Event)
 		if base == submodelRepositoryEventFeedBaseURL {
 			assertMQTTFeedParity(t, base, updated.Event)
 		}
 		mqttRequest(t, http.MethodDelete, endpoint, nil, http.StatusNoContent)
 		deleted := awaitMQTT(t, received, id, events.TypeSubmodelDeleted)
 		kafkaEvents.AssertEvent(t, deleted.Event, "submodel_history:"+id)
+		amqpEvents.AssertEvent(t, deleted.Event)
 		require.NotEqual(t, updated.Event.ID, deleted.Event.ID)
 		if base == submodelRepositoryEventFeedBaseURL {
 			assertMQTTFeedParity(t, base, deleted.Event)
