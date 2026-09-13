@@ -3,5 +3,5 @@ body: Align encoded API parameters and exact reference and asset filtering acros
 time: 2026-09-13T13:54:34.128212+02:00
 custom:
     Impact: High
-    PullRequest: "683"
+    PullRequest: 683
     SecurityImpact: Rejects malformed API parameters while retaining authorization checks. No production vulnerability is claimed.
