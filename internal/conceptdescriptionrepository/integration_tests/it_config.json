@@ -194,11 +194,30 @@
         "shouldMatch": "expected/GetAllConceptDescriptionsFilteredFull.json"
     },
     {
+        "context": "016.1 - isCaseOf without referredSemanticId does not match a reference containing it",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions?isCaseOf=eyJ0eXBlIjoiRXh0ZXJuYWxSZWZlcmVuY2UiLCJrZXlzIjpbeyJ0eXBlIjoiR2xvYmFsUmVmZXJlbmNlIiwidmFsdWUiOiIwMTczLTEjMDItQUFPNjc3IzAwMiJ9XX0",
+        "expectedStatus": 200,
+        "shouldMatch": "expected/GetAllConceptDescriptionsEmpty.json"
+    },
+    {
+        "context": "016.2 - Reject bare identifier in isCaseOf",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions?isCaseOf=MDE3My0xIzAyLUFBTzY3NyMwMDI",
+        "expectedStatus": 400
+    },
+    {
         "context": "017 - Get Concept Descriptions by dataSpecificationRef",
         "method": "GET",
         "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions?dataSpecificationRef=eyJ0eXBlIjoiRXh0ZXJuYWxSZWZlcmVuY2UiLCJrZXlzIjpbeyJ0eXBlIjoiR2xvYmFsUmVmZXJlbmNlIiwidmFsdWUiOiJodHRwczovL2FkbWluLXNoZWxsLmlvL2Fhcy8zLzAvRGF0YVNwZWNpZmljYXRpb25JRUM2MTM2MCJ9XX0",
         "expectedStatus": 200,
         "shouldMatch": "expected/GetAllConceptDescriptionsFilteredFull.json"
+    },
+    {
+        "context": "017.1 - Reject bare identifier in dataSpecificationRef",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions?dataSpecificationRef=aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9hYXMvMy8wL0RhdGFTcGVjaWZpY2F0aW9uSUVDNjEzNjA",
+        "expectedStatus": 400
     },
     {
         "context": "018 - Delete Concept Description Full",

@@ -184,8 +184,9 @@ func RunConceptDescriptionReferenceConformance(t *testing.T, baseURL string) {
 	t.Helper()
 	prefix := fmt.Sprintf("urn:conformance:cd:%d", time.Now().UnixNano())
 	reference := referenceFixture(prefix, "first", "last")
+	singleKeyReference := referenceFixture(prefix)
 	wanted := []string{}
-	for index, ref := range []map[string]any{reference, reference, referenceFixture(prefix, "first", "other")} {
+	for index, ref := range []map[string]any{reference, reference, referenceFixture(prefix, "first", "other"), singleKeyReference} {
 		id := fmt.Sprintf("%s:%d", prefix, index)
 		body := map[string]any{"modelType": "ConceptDescription", "id": id, "isCaseOf": []any{ref}}
 		conformanceRequest(t, http.MethodPost, baseURL+"/concept-descriptions", body, http.StatusCreated)
@@ -200,6 +201,13 @@ func RunConceptDescriptionReferenceConformance(t *testing.T, baseURL string) {
 	if !reflect.DeepEqual(got, wanted) {
 		t.Fatalf("matches=%v wanted=%v", got, wanted)
 	}
+	t.Run("single_key_without_referred_semantic_id", func(t *testing.T) {
+		got := conformancePageIDs(t, baseURL+"/concept-descriptions", url.Values{"isCaseOf": {encodedReferenceFixture(t, singleKeyReference)}})
+		want := []string{prefix + ":3"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("matches=%v wanted=%v", got, want)
+		}
+	})
 }
 
 // EncodeExternalReference encodes a one-key external reference for an API filter.
