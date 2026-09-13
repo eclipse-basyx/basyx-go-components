@@ -2,7 +2,7 @@
   "executionState": "Completed",
   "success": true,
   "outputArguments": {
-    "sum": "8"
+    "sum": 8
   },
   "inoutputArguments": {}
 }

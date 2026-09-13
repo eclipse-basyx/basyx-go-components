@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/stretchr/testify/require"
@@ -94,7 +95,7 @@ func TestOperationRequestFromValueOnlyRejectsUnknownMalformedAndAmbiguousArgumen
 		{
 			name:         "malformed property",
 			declarations: []types.IOperationVariable{propertyOperationVariable("known", "xs:int", "0")},
-			arguments:    map[string]any{"known": 1},
+			arguments:    map[string]any{"known": map[string]any{"invalid": 1}},
 			errorCode:    "SMREPO-OPVALREQ-PROPERTYSHAPE",
 		},
 		{
@@ -265,4 +266,101 @@ func valueOnlyPropertyResult(t *testing.T, result map[string]any, group string, 
 	var value string
 	require.NoError(t, json.Unmarshal(serialized, &value))
 	return value
+}
+
+func TestOperationValueOnlyScalarRoundTrip(t *testing.T) {
+	tests := []struct{ name, declaration, value string }{
+		{"integer", `{"modelType":"Property","valueType":"xs:int"}`, `3`},
+		{"zero exponent integer", `{"modelType":"Property","valueType":"xs:int"}`, `0e-2`},
+		{"exponent integer", `{"modelType":"Property","valueType":"xs:int"}`, `3e2`},
+		{"integral decimal", `{"modelType":"Property","valueType":"xs:int"}`, `3.0`},
+		{"boolean", `{"modelType":"Property","valueType":"xs:boolean"}`, `true`},
+		{"large integer", `{"modelType":"Property","valueType":"xs:unsignedLong"}`, `18446744073709551615`},
+		{"decimal", `{"modelType":"Property","valueType":"xs:decimal"}`, `1234567890.1234567890123456789`},
+		{"range", `{"modelType":"Range","valueType":"xs:int"}`, `{"min":1,"max":10}`},
+		{"nested", `{"modelType":"SubmodelElementCollection","value":[{"modelType":"Property","idShort":"enabled","valueType":"xs:boolean"},{"modelType":"SubmodelElementList","idShort":"numbers","typeValueListElement":"Property","valueTypeListElement":"xs:int","value":[{"modelType":"Property","valueType":"xs:int"}]}]}`, `{"enabled":false,"numbers":[3]}`},
+		{"empty collection", `{"modelType":"SubmodelElementCollection"}`, `{}`},
+		{"empty list", `{"modelType":"SubmodelElementList","typeValueListElement":"Property","valueTypeListElement":"xs:int"}`, `[]`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			declaration := valueOnlyTestDeclaration(t, test.declaration)
+			before, err := jsonization.ToJsonable(declaration.Value())
+			require.NoError(t, err)
+			var supplied gen.OperationRequestValueOnly
+			require.NoError(t, json.Unmarshal([]byte(`{"inputArguments":{"arg":`+test.value+`}}`), &supplied))
+			arguments, err := operationVariablesFromValueOnly([]types.IOperationVariable{declaration}, supplied.InputArguments, "inputArguments")
+			require.NoError(t, err)
+			result, err := operationResultToValueOnly(arguments)
+			require.NoError(t, err)
+			actual, err := json.Marshal(result["outputArguments"].(map[string]any)["arg"])
+			require.NoError(t, err)
+			require.JSONEq(t, test.value, string(actual))
+			if test.name == "large integer" || test.name == "decimal" {
+				require.Equal(t, test.value, string(actual))
+				require.Equal(t, test.value, *arguments[0].Value().(*types.Property).Value())
+			}
+			after, err := jsonization.ToJsonable(declaration.Value())
+			require.NoError(t, err)
+			require.Equal(t, before, after)
+		})
+	}
+}
+
+func TestOperationValueOnlyRejectsInvalidScalarTypes(t *testing.T) {
+	for _, test := range []struct{ name, declaration, value string }{
+		{"fractional integer", `{"modelType":"Property","valueType":"xs:int"}`, `1.5`},
+		{"integer overflow", `{"modelType":"Property","valueType":"xs:int"}`, `2147483648`},
+		{"boolean for integer", `{"modelType":"Property","valueType":"xs:int"}`, `true`},
+		{"number for string", `{"modelType":"Property","valueType":"xs:string"}`, `3`},
+		{"number for boolean", `{"modelType":"Property","valueType":"xs:boolean"}`, `1`},
+		{"invalid lexical integer", `{"modelType":"Property","valueType":"xs:int"}`, `"invalid"`},
+		{"unknown empty child", `{"modelType":"SubmodelElementCollection"}`, `{"unknown":3}`},
+		{"undeclared list item", `{"modelType":"SubmodelElementList","typeValueListElement":"Property"}`, `[3]`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var supplied gen.OperationRequestValueOnly
+			require.NoError(t, json.Unmarshal([]byte(`{"inputArguments":{"arg":`+test.value+`}}`), &supplied))
+			_, err := operationVariablesFromValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, test.declaration)}, supplied.InputArguments, "inputArguments")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "SMREPO-OPVALREQ-")
+		})
+	}
+}
+
+func valueOnlyTestDeclaration(t *testing.T, declaration string) types.IOperationVariable {
+	t.Helper()
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal([]byte(declaration), &raw))
+	raw["idShort"] = "arg"
+	element, err := jsonization.SubmodelElementFromJsonable(raw)
+	require.NoError(t, err)
+	return types.NewOperationVariable(element)
+}
+
+func TestOperationValueOnlyEmptyNamedFields(t *testing.T) {
+	for _, declaration := range []string{
+		`{"modelType":"Entity","entityType":"CoManagedEntity"}`,
+		`{"modelType":"AnnotatedRelationshipElement","first":{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"first"}]},"second":{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"second"}]}}`,
+	} {
+		variable := valueOnlyTestDeclaration(t, declaration)
+		raw, err := jsonization.ToJsonable(variable.Value())
+		require.NoError(t, err)
+		supplied := map[string]any{"statements": map[string]any{}}
+		if raw["modelType"] == "AnnotatedRelationshipElement" {
+			supplied = map[string]any{"first": raw["first"], "second": raw["second"], "annotations": map[string]any{}}
+		}
+		_, err = operationVariableWithValueOnly(variable, supplied)
+		require.NoError(t, err)
+	}
+}
+
+func TestOperationValueOnlyRejectsInvalidDelegatedScalar(t *testing.T) {
+	for _, declaration := range []string{
+		`{"modelType":"Property","valueType":"xs:int","value":"not-an-int"}`,
+		`{"modelType":"Property","valueType":"xs:double","value":"INF"}`,
+	} {
+		_, err := operationResultToValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, declaration)})
+		require.ErrorContains(t, err, "SMREPO-OPVALRES-")
+	}
 }

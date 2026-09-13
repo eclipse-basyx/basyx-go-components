@@ -47,6 +47,15 @@ func startAdderMicroservice(t *testing.T) (string, func()) {
 	t.Helper()
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/delegate/echo", func(w http.ResponseWriter, r *http.Request) {
+		var arguments []any
+		if err := json.NewDecoder(r.Body).Decode(&arguments); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(arguments)
+	})
 	mux.HandleFunc("/delegate/add", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -193,6 +202,7 @@ func TestDelegationOperation(t *testing.T) {
 		},
 	}
 
+	submodelPayload["submodelElements"] = append(submodelPayload["submodelElements"].([]any), delegatedValueOnlyEchoOperation(delegationURL))
 	submodelBody, err := json.Marshal(submodelPayload)
 	require.NoError(t, err)
 
@@ -238,8 +248,8 @@ func TestDelegationOperation(t *testing.T) {
 	valueOnlyRequestBody, err := json.Marshal(map[string]any{
 		"clientTimeoutDuration": "PT10S",
 		"inputArguments": map[string]any{
-			"a": "5",
-			"b": "3",
+			"a": 5,
+			"b": 3,
 		},
 	})
 	require.NoError(t, err)
@@ -327,6 +337,7 @@ func TestDelegationOperation(t *testing.T) {
 	require.NoError(t, compatibilityResultResponse.Body.Close())
 	require.Equalf(t, http.StatusOK, compatibilityResultResponse.StatusCode, "compatibility value-only result body: %s", string(compatibilityResultBody))
 	assertDelegatedAdditionValueOnlyResult(t, compatibilityResultBody)
+	assertDelegatedValueOnlyEcho(t, baseURL, encodedSubmodelID)
 }
 
 func invokeDelegatedOperation(t *testing.T, endpoint string, body []byte) *http.Response {
@@ -407,5 +418,38 @@ func assertDelegatedAdditionValueOnlyResult(t *testing.T, resultBody []byte) {
 	require.Equal(t, true, resultObject["success"])
 	outputArguments, ok := resultObject["outputArguments"].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "8", outputArguments["sum"])
+	require.Equal(t, float64(8), outputArguments["sum"])
+}
+
+func delegatedValueOnlyEchoOperation(delegationURL string) map[string]any {
+	variables := []any{}
+	for _, element := range []map[string]any{
+		{"modelType": "Property", "idShort": "enabled", "valueType": "xs:boolean"},
+		{"modelType": "Property", "idShort": "large", "valueType": "xs:unsignedLong"},
+		{"modelType": "Range", "idShort": "bounds", "valueType": "xs:int"},
+		{"modelType": "SubmodelElementCollection", "idShort": "collection"},
+		{"modelType": "SubmodelElementList", "idShort": "list", "typeValueListElement": "Property", "valueTypeListElement": "xs:int"},
+	} {
+		variables = append(variables, map[string]any{"value": element})
+	}
+	return map[string]any{
+		"modelType": "Operation", "idShort": "EchoValues", "inputVariables": variables,
+		"qualifiers": []any{map[string]any{"type": "invocationDelegation", "valueType": "xs:string", "value": strings.Replace(delegationURL, "/delegate/add?a=5&b=3", "/delegate/echo", 1)}},
+	}
+}
+
+func assertDelegatedValueOnlyEcho(t *testing.T, baseURL string, encodedSubmodelID string) {
+	t.Helper()
+	arguments := `{"enabled":true,"large":18446744073709551615,"bounds":{"min":1,"max":10},"collection":{},"list":[]}`
+	response := invokeDelegatedOperation(t, baseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/EchoValues/invoke/$value", []byte(`{"inputArguments":`+arguments+`}`))
+	defer func() { _ = response.Body.Close() }()
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, response.StatusCode, string(body))
+	var payload struct {
+		OutputArguments json.RawMessage `json:"outputArguments"`
+	}
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.JSONEq(t, arguments, string(payload.OutputArguments))
+	require.Contains(t, string(body), "18446744073709551615")
 }

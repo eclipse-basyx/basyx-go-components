@@ -44,7 +44,7 @@ if payload.get("success") is not True:
     raise SystemExit(f"unexpected success value: {payload.get('success')!r}")
 
 if sys.argv[2] == "value-only":
-    if payload.get("outputArguments", {}).get("sum") != "8":
+    if payload.get("outputArguments", {}).get("sum") != 8:
         raise SystemExit("completed value-only result does not contain output argument sum=8")
     raise SystemExit(0)
 

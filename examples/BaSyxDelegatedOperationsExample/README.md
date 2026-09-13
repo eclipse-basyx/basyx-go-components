@@ -75,7 +75,10 @@ curl --fail-with-body --silent --show-error \
   jq
 ```
 
-The value-only result contains `"outputArguments": {"sum": "8"}`.
+The value-only result contains `"outputArguments": {"sum": 8}`.
+Integer and decimal values use JSON numbers, and boolean values use JSON booleans,
+in accordance with the [IDTA v3.2 normative value-only mappings](https://industrialdigitaltwin.io/aas-specifications/IDTA-01001/v3.2/mappings/mappings.html).
+Full-metadata operation arguments and results retain their XSD lexical strings.
 
 ### Asynchronous invocation
 

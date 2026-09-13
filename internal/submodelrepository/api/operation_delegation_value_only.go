@@ -33,6 +33,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -145,7 +146,7 @@ func normalizeValueOnlyInput(value any) (any, error) {
 		return nil, fmt.Errorf("SMREPO-OPVALREQ-MARSHALVALUE %w", err)
 	}
 	var normalized any
-	if err := json.Unmarshal(serialized, &normalized); err != nil {
+	if err := common.DecodeJSONPreservingNumbers(serialized, &normalized); err != nil {
 		return nil, fmt.Errorf("SMREPO-OPVALREQ-UNMARSHALVALUE %w", err)
 	}
 	return normalized, nil
@@ -159,16 +160,16 @@ func applyValueOnlyToElementJSON(element map[string]any, value any) error {
 
 	switch modelType {
 	case "Property":
-		propertyValue, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("SMREPO-OPVALREQ-PROPERTYSHAPE expected string, got %T", value)
+		propertyValue, err := operationScalarInput(element, value)
+		if err != nil {
+			return err
 		}
 		element["value"] = propertyValue
 		return nil
 	case "MultiLanguageProperty":
 		return applyMultiLanguagePropertyValue(element, value)
 	case "Range":
-		return applyObjectFields(element, value, []string{"min", "max"}, []string{"min", "max"}, modelType)
+		return applyOperationRangeValue(element, value)
 	case "File", "Blob":
 		return applyObjectFields(element, value, []string{"contentType", "value"}, nil, modelType)
 	case "ReferenceElement":
@@ -311,9 +312,9 @@ func applyEntityValue(element map[string]any, value any) error {
 }
 
 func applyNamedElementValues(element map[string]any, field string, supplied map[string]any, context string) error {
-	declaredItems, ok := element[field].([]any)
-	if !ok {
-		return fmt.Errorf("SMREPO-OPVALREQ-INVALIDCHILDREN-%s declaration field %q is not an array", context, field)
+	declaredItems, err := operationDeclaredChildren(element, field)
+	if err != nil {
+		return err
 	}
 	declaredByName := make(map[string]map[string]any, len(declaredItems))
 	for index, item := range declaredItems {
@@ -347,9 +348,9 @@ func applyListElementValues(element map[string]any, value any) error {
 	if !ok {
 		return fmt.Errorf("SMREPO-OPVALREQ-LISTSHAPE expected array, got %T", value)
 	}
-	declaredItems, ok := element["value"].([]any)
-	if !ok {
-		return errors.New("SMREPO-OPVALREQ-INVALIDLIST declaration value is not an array")
+	declaredItems, err := operationDeclaredChildren(element, "value")
+	if err != nil {
+		return err
 	}
 	if len(values) != len(declaredItems) {
 		return fmt.Errorf("SMREPO-OPVALREQ-LISTLENGTH expected %d values, got %d", len(declaredItems), len(values))
@@ -407,7 +408,7 @@ func operationResultArgumentsToValueOnly(payload any, group string) (map[string]
 		if _, duplicate := result[name]; duplicate {
 			return nil, fmt.Errorf("SMREPO-OPVALRES-DUPLICATE-%s argument idShort %q occurs more than once", group, name)
 		}
-		valueOnly, err := gen.SubmodelElementToValueOnly(operationVariable.Value())
+		valueOnly, err := operationElementToValueOnly(operationVariable.Value())
 		if err != nil {
 			return nil, fmt.Errorf("SMREPO-OPVALRES-CONVERT-%s-%s %w", group, name, err)
 		}
@@ -417,4 +418,16 @@ func operationResultArgumentsToValueOnly(payload any, group string) (map[string]
 		result[name] = valueOnly
 	}
 	return result, nil
+}
+
+func operationDeclaredChildren(element map[string]any, field string) ([]any, error) {
+	raw, present := element[field]
+	if !present {
+		return nil, nil
+	}
+	children, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("SMREPO-OPVALREQ-INVALIDCHILDREN declaration field %q is not an array", field)
+	}
+	return children, nil
 }

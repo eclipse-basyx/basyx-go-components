@@ -106,7 +106,7 @@ func TestPersistentValueOnlyOperationResultIsAvailableThroughAnotherServiceInsta
 	outputArguments := payload["outputArguments"].(map[string]any)
 	serializedValue, err := outputArguments["sum"].(interface{ MarshalJSON() ([]byte, error) }).MarshalJSON()
 	require.NoError(t, err)
-	require.JSONEq(t, `"8"`, string(serializedValue))
+	require.JSONEq(t, `8`, string(serializedValue))
 }
 
 func TestPersistentAsyncHandleRecoversAbandonedWorkerAndCleansUp(t *testing.T) {

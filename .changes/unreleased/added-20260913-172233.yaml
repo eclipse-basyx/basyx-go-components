@@ -1,5 +1,5 @@
 kind: added
-body: Implement value-only synchronous and asynchronous operation invocation and result retrieval for the Submodel and AAS Repository APIs, with shared persistent async handles and delegated-operation example coverage.
+body: Implement value-only synchronous and asynchronous operation invocation and result retrieval for the Submodel and AAS Repository APIs, with typed numeric and boolean values, empty structured arguments, shared persistent async handles, and delegated-operation example coverage.
 time: 2026-09-13T17:22:33.775699+02:00
 custom:
     Impact: Low
