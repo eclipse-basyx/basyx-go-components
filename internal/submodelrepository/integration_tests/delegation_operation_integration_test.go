@@ -235,6 +235,21 @@ func TestDelegationOperation(t *testing.T) {
 	require.Equalf(t, http.StatusOK, invokeResponse.StatusCode, "invoke response body: %s", string(invokeResponseBody))
 	assertDelegatedAdditionResult(t, invokeResponseBody)
 
+	valueOnlyRequestBody, err := json.Marshal(map[string]any{
+		"clientTimeoutDuration": "PT10S",
+		"inputArguments": map[string]any{
+			"a": "5",
+			"b": "3",
+		},
+	})
+	require.NoError(t, err)
+	valueOnlyResponse := invokeDelegatedOperation(t, baseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/AddNumbers/invoke/$value", valueOnlyRequestBody)
+	defer func() { _ = valueOnlyResponse.Body.Close() }()
+	valueOnlyResponseBody, err := io.ReadAll(valueOnlyResponse.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusOK, valueOnlyResponse.StatusCode, "value-only invoke response body: %s", string(valueOnlyResponseBody))
+	assertDelegatedAdditionValueOnlyResult(t, valueOnlyResponseBody)
+
 	asyncInvokeRequest, err := http.NewRequest(
 		http.MethodPost,
 		baseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/AddNumbers/invoke-async",
@@ -274,6 +289,72 @@ func TestDelegationOperation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equalf(t, http.StatusOK, asyncResultResponse.StatusCode, "async result response body: %s", string(asyncResultBody))
 	assertDelegatedAdditionResult(t, asyncResultBody)
+
+	valueOnlyAsyncResultResponse, err := noRedirectClient.Get(resultLocation + "/$value")
+	require.NoError(t, err)
+	valueOnlyAsyncResultBody, err := io.ReadAll(valueOnlyAsyncResultResponse.Body)
+	require.NoError(t, err)
+	require.NoError(t, valueOnlyAsyncResultResponse.Body.Close())
+	require.Equalf(t, http.StatusOK, valueOnlyAsyncResultResponse.StatusCode, "value-only async result response body: %s", string(valueOnlyAsyncResultBody))
+	assertDelegatedAdditionValueOnlyResult(t, valueOnlyAsyncResultBody)
+
+	valueOnlyStatusLocation := startDelegatedAsyncInvocation(
+		t,
+		noRedirectClient,
+		baseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/AddNumbers/invoke-async/$value",
+		valueOnlyRequestBody,
+	)
+	valueOnlyResultLocation := waitForDelegatedOperationResultLocation(t, noRedirectClient, valueOnlyStatusLocation)
+	valueOnlyAsyncResultResponse, err = noRedirectClient.Get(valueOnlyResultLocation + "/$value")
+	require.NoError(t, err)
+	valueOnlyAsyncResultBody, err = io.ReadAll(valueOnlyAsyncResultResponse.Body)
+	require.NoError(t, err)
+	require.NoError(t, valueOnlyAsyncResultResponse.Body.Close())
+	require.Equalf(t, http.StatusOK, valueOnlyAsyncResultResponse.StatusCode, "value-only async invocation result body: %s", string(valueOnlyAsyncResultBody))
+	assertDelegatedAdditionValueOnlyResult(t, valueOnlyAsyncResultBody)
+
+	compatibilityStatusLocation := startDelegatedAsyncInvocation(
+		t,
+		noRedirectClient,
+		baseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/AddNumbers/invoke/$value?async=true",
+		valueOnlyRequestBody,
+	)
+	compatibilityResultLocation := waitForDelegatedOperationResultLocation(t, noRedirectClient, compatibilityStatusLocation)
+	compatibilityResultResponse, err := noRedirectClient.Get(compatibilityResultLocation + "/$value")
+	require.NoError(t, err)
+	compatibilityResultBody, err := io.ReadAll(compatibilityResultResponse.Body)
+	require.NoError(t, err)
+	require.NoError(t, compatibilityResultResponse.Body.Close())
+	require.Equalf(t, http.StatusOK, compatibilityResultResponse.StatusCode, "compatibility value-only result body: %s", string(compatibilityResultBody))
+	assertDelegatedAdditionValueOnlyResult(t, compatibilityResultBody)
+}
+
+func invokeDelegatedOperation(t *testing.T, endpoint string, body []byte) *http.Response {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", "application/json")
+	// #nosec G704 -- endpoint is assembled from the fixed local integration-test URL.
+	response, err := (&http.Client{Timeout: 15 * time.Second}).Do(request)
+	require.NoError(t, err)
+	return response
+}
+
+func startDelegatedAsyncInvocation(t *testing.T, client *http.Client, endpoint string, body []byte) string {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", "application/json")
+	// #nosec G704 -- endpoint is assembled from the fixed local integration-test URL.
+	response, err := client.Do(request)
+	require.NoError(t, err)
+	defer func() { _ = response.Body.Close() }()
+	responseBody, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusAccepted, response.StatusCode, "async invocation response body: %s", string(responseBody))
+	location := response.Header.Get("Location")
+	require.NotEmpty(t, location)
+	return location
 }
 
 func waitForDelegatedOperationResultLocation(t *testing.T, client *http.Client, statusLocation string) string {
@@ -315,4 +396,16 @@ func assertDelegatedAdditionResult(t *testing.T, resultBody []byte) {
 	outputValue, ok := outputOperationVariable["value"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "8", fmt.Sprint(outputValue["value"]))
+}
+
+func assertDelegatedAdditionValueOnlyResult(t *testing.T, resultBody []byte) {
+	t.Helper()
+
+	var resultObject map[string]any
+	require.NoError(t, json.Unmarshal(resultBody, &resultObject))
+	require.Equal(t, "Completed", resultObject["executionState"])
+	require.Equal(t, true, resultObject["success"])
+	outputArguments, ok := resultObject["outputArguments"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "8", outputArguments["sum"])
 }

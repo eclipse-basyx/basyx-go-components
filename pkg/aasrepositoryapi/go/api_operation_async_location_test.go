@@ -53,6 +53,18 @@ func (s *aasOperationAsyncLocationService) InvokeOperationAsyncAasRepository(
 	}), nil
 }
 
+func (s *aasOperationAsyncLocationService) InvokeOperationAsyncValueOnlyAasRepository(
+	_ context.Context,
+	_ string,
+	_ string,
+	_ string,
+	_ model.OperationRequestValueOnly,
+) (model.ImplResponse, error) {
+	return model.Response(http.StatusAccepted, Redirect{
+		Location: "/shells/YWFz/submodels/c20/submodel-elements/Ops.Add/operation-status/handle-1",
+	}), nil
+}
+
 func (s *aasOperationAsyncLocationService) GetOperationAsyncStatusAasRepository(
 	_ context.Context,
 	_ string,
@@ -73,6 +85,24 @@ func TestAASInvokeOperationAsyncPreservesShellNamespaceAndContextPath(t *testing
 	controller := NewAssetAdministrationShellRepositoryAPIAPIController(&aasOperationAsyncLocationService{}, "", "")
 
 	controller.InvokeOperationAsyncAasRepository(response, request)
+
+	require.Equal(t, http.StatusAccepted, response.Code)
+	require.Empty(t, response.Body.String())
+	require.Equal(
+		t,
+		"http://example.com/api/v3/shells/YWFz/submodels/c20/submodel-elements/Ops.Add/operation-status/handle-1",
+		response.Header().Get("Location"),
+	)
+}
+
+func TestAASInvokeOperationAsyncValueOnlyPreservesShellNamespaceAndContextPath(t *testing.T) {
+	t.Parallel()
+
+	request := aasOperationAsyncRequest(t, "http://example.com/api/v3/shells/YWFz/submodels/c20/submodel-elements/Ops.Add/invoke-async/$value")
+	response := httptest.NewRecorder()
+	controller := NewAssetAdministrationShellRepositoryAPIAPIController(&aasOperationAsyncLocationService{}, "", "")
+
+	controller.InvokeOperationAsyncValueOnlyAasRepository(response, request)
 
 	require.Equal(t, http.StatusAccepted, response.Code)
 	require.Empty(t, response.Body.String())

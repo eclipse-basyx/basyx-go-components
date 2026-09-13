@@ -32,6 +32,8 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	submodelapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	"github.com/stretchr/testify/require"
 )
 
@@ -62,6 +64,49 @@ func TestPersistentAsyncHandleLifecycleAcrossManagers(t *testing.T) {
 	require.Equal(t, "Completed", record.ExecutionState)
 	require.Equal(t, "replica-a", record.Metadata["source"])
 	require.Equal(t, "persisted", record.Payload.(map[string]any)["value"])
+}
+
+func TestPersistentValueOnlyOperationResultIsAvailableThroughAnotherServiceInstance(t *testing.T) {
+	db, err := common.NewDatabaseConnection(submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	managerA, err := asyncjob.NewPostgresManager(t.Context(), db, "SMREPO-ASYNC-VALUE-IT", time.Minute)
+	require.NoError(t, err)
+	managerB, err := asyncjob.NewPostgresManager(t.Context(), db, "SMREPO-ASYNC-VALUE-IT", time.Minute)
+	require.NoError(t, err)
+
+	decodedSubmodelID := "persistent-value-only-result"
+	encodedSubmodelID := common.EncodeString(decodedSubmodelID)
+	handleID, err := managerA.Start(t.Context(), "anonymous", asyncjob.StartOptions{
+		JobKind: "integration.completed.value-only",
+		Metadata: map[string]string{
+			"submodelIdentifier": decodedSubmodelID,
+			"idShortPath":        "Ops.Add",
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, managerA.CompletePayload(t.Context(), handleID, map[string]any{
+		"executionState": "Completed",
+		"success":        true,
+		"outputArguments": []any{map[string]any{"value": map[string]any{
+			"modelType": "Property",
+			"idShort":   "sum",
+			"valueType": "xs:int",
+			"value":     "8",
+		}}},
+		"inoutputArguments": []any{},
+	}))
+
+	serviceB := submodelapi.NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{}, managerB)
+	response, err := serviceB.GetOperationAsyncResultValueOnly(t.Context(), encodedSubmodelID, "Ops.Add", handleID)
+	require.NoError(t, err)
+	require.Equal(t, 200, response.Code)
+	payload := response.Body.(map[string]any)
+	outputArguments := payload["outputArguments"].(map[string]any)
+	serializedValue, err := outputArguments["sum"].(interface{ MarshalJSON() ([]byte, error) }).MarshalJSON()
+	require.NoError(t, err)
+	require.JSONEq(t, `"8"`, string(serializedValue))
 }
 
 func TestPersistentAsyncHandleRecoversAbandonedWorkerAndCleansUp(t *testing.T) {

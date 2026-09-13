@@ -1,0 +1,7 @@
+{
+  "clientTimeoutDuration": "PT10S",
+  "inputArguments": {
+    "numberA": "5",
+    "numberB": "3"
+  }
+}

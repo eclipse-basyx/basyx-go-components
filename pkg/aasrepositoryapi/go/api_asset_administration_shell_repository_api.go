@@ -2408,6 +2408,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyn
 		return
 	}
 
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 

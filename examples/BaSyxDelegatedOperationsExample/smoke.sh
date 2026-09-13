@@ -3,7 +3,8 @@
 set -euo pipefail
 
 example_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-request_file="${example_dir}/data/invoke-request-add-5-and-3.json"
+full_request_file="${example_dir}/data/invoke-request-add-5-and-3.json"
+value_only_request_file="${example_dir}/data/invoke-request-add-5-and-3-value-only.json"
 aas_environment_url="http://localhost:8090"
 delegated_service_url="http://localhost:8099"
 encoded_submodel_id="aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vZGVsZWdhdGVkLW9wZXJhdGlvbnM"
@@ -28,8 +29,9 @@ wait_for_url() {
 
 assert_completed_sum() {
   local response_file="$1"
+  local representation="$2"
 
-  python3 - "$response_file" <<'PY'
+  python3 - "$response_file" "$representation" <<'PY'
 import json
 import sys
 
@@ -40,6 +42,11 @@ if payload.get("executionState") != "Completed":
     raise SystemExit(f"unexpected executionState: {payload.get('executionState')!r}")
 if payload.get("success") is not True:
     raise SystemExit(f"unexpected success value: {payload.get('success')!r}")
+
+if sys.argv[2] == "value-only":
+    if payload.get("outputArguments", {}).get("sum") != "8":
+        raise SystemExit("completed value-only result does not contain output argument sum=8")
+    raise SystemExit(0)
 
 for argument in payload.get("outputArguments", []):
     value = argument.get("value", {})
@@ -68,6 +75,8 @@ read_location() {
 invoke_async() {
   local invoke_url="$1"
   local invocation_name="$2"
+  local request_file="$3"
+  local representation="$4"
   local response_body="${temporary_dir}/${invocation_name}-body.json"
   local response_headers="${temporary_dir}/${invocation_name}-headers.txt"
   local status_code
@@ -132,6 +141,9 @@ PY
       return 1
     fi
     result_location="$(resolve_location "$location" "$result_location")"
+    if [ "$representation" = "value-only" ]; then
+      result_location="${result_location}/\$value"
+    fi
 
     status_code="$(
       curl --silent --show-error \
@@ -145,7 +157,7 @@ PY
       return 1
     fi
 
-    assert_completed_sum "$response_body"
+    assert_completed_sum "$response_body" "$representation"
     return 0
   done
 
@@ -153,31 +165,60 @@ PY
   return 1
 }
 
+invoke_sync() {
+  local invoke_url="$1"
+  local invocation_name="$2"
+  local request_file="$3"
+  local representation="$4"
+  local response_body="${temporary_dir}/${invocation_name}-body.json"
+  local status_code
+
+  status_code="$(
+    curl --silent --show-error \
+      --output "$response_body" \
+      --write-out '%{http_code}' \
+      --request POST \
+      --header 'Content-Type: application/json' \
+      --data @"$request_file" \
+      "$invoke_url"
+  )"
+  if [ "$status_code" != "200" ]; then
+    echo "${invocation_name} invocation returned ${status_code}" >&2
+    cat "$response_body" >&2
+    return 1
+  fi
+  assert_completed_sum "$response_body" "$representation"
+}
+
 wait_for_url "AAS Environment" "${aas_environment_url}/health"
 wait_for_url "delegated operation service" "${delegated_service_url}/health"
+wait_for_url "delegated operations example data" "${aas_environment_url}/submodels/${encoded_submodel_id}"
 
-sync_response="${temporary_dir}/sync-result.json"
-sync_status="$(
-  curl --silent --show-error \
-    --output "$sync_response" \
-    --write-out '%{http_code}' \
-    --request POST \
-    --header 'Content-Type: application/json' \
-    --data @"$request_file" \
-    "${aas_environment_url}/submodels/${encoded_submodel_id}/submodel-elements/AddNumbersSync/invoke"
-)"
-if [ "$sync_status" != "200" ]; then
-  echo "synchronous invocation returned ${sync_status}" >&2
-  cat "$sync_response" >&2
-  exit 1
-fi
-assert_completed_sum "$sync_response"
+for repository_path in \
+  "submodels/${encoded_submodel_id}" \
+  "shells/${encoded_aas_id}/submodels/${encoded_submodel_id}"; do
+  repository_name="$(printf '%s' "$repository_path" | tr '/:' '--')"
 
-invoke_async \
-  "${aas_environment_url}/submodels/${encoded_submodel_id}/submodel-elements/AddNumbersAsync/invoke-async" \
-  "submodel-repository"
-invoke_async \
-  "${aas_environment_url}/shells/${encoded_aas_id}/submodels/${encoded_submodel_id}/submodel-elements/AddNumbersAsync/invoke-async" \
-  "aas-repository"
+  invoke_sync \
+    "${aas_environment_url}/${repository_path}/submodel-elements/AddNumbersSync/invoke" \
+    "${repository_name}-sync-full" \
+    "$full_request_file" \
+    "full"
+  invoke_async \
+    "${aas_environment_url}/${repository_path}/submodel-elements/AddNumbersAsync/invoke-async" \
+    "${repository_name}-async-full" \
+    "$full_request_file" \
+    "full"
+  invoke_sync \
+    "${aas_environment_url}/${repository_path}/submodel-elements/AddNumbersSyncValueOnly/invoke/\$value" \
+    "${repository_name}-sync-value-only" \
+    "$value_only_request_file" \
+    "value-only"
+  invoke_async \
+    "${aas_environment_url}/${repository_path}/submodel-elements/AddNumbersAsyncValueOnly/invoke-async/\$value" \
+    "${repository_name}-async-value-only" \
+    "$value_only_request_file" \
+    "value-only"
+done
 
 echo "Delegated operations protocol smoke test passed"

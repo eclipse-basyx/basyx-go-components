@@ -303,3 +303,75 @@ func TestGetOperationAsyncStatusReturnsRedirectWithLocation(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, strings.Contains(redirect.Location, "/operation-results/"))
 }
+
+func TestAsyncOperationHandleSupportsFullAndValueOnlyResults(t *testing.T) {
+	t.Parallel()
+
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
+	decodedSubmodelID := "sm-result-representations"
+	encodedSubmodelID := common.EncodeString(decodedSubmodelID)
+	handleID, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{
+		JobKind: "test",
+		Metadata: map[string]string{
+			delegatedAsyncSubmodelIdentifierMetadataKey: decodedSubmodelID,
+			delegatedAsyncIDShortPathMetadataKey:        "Ops.Add",
+		},
+	})
+	require.NoError(t, err)
+	canonicalResult, err := toDelegatedOperationResultPayloadFromBody([]any{operationVariableJSON("sum", "8")})
+	require.NoError(t, err)
+	require.NoError(t, sut.asyncJobManager.CompletePayload(t.Context(), handleID, canonicalResult))
+
+	ctx := contextWithABACDisabled(t)
+	fullResult, err := sut.GetOperationAsyncResult(ctx, encodedSubmodelID, "Ops.Add", handleID)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, fullResult.Code)
+	fullBody := fullResult.Body.(map[string]any)
+	require.IsType(t, []any{}, fullBody["outputArguments"])
+
+	valueOnlyResult, err := sut.GetOperationAsyncResultValueOnly(ctx, encodedSubmodelID, "Ops.Add", handleID)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, valueOnlyResult.Code)
+	valueOnlyBody := valueOnlyResult.Body.(map[string]any)
+	require.Equal(t, "8", valueOnlyPropertyResult(t, valueOnlyBody, "outputArguments", "sum"))
+}
+
+func TestValueOnlyAsyncResultPreservesRunningFailureAndPathIsolation(t *testing.T) {
+	t.Parallel()
+
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
+	decodedSubmodelID := "sm-result-state"
+	encodedSubmodelID := common.EncodeString(decodedSubmodelID)
+	metadata := map[string]string{
+		delegatedAsyncSubmodelIdentifierMetadataKey: decodedSubmodelID,
+		delegatedAsyncIDShortPathMetadataKey:        "Ops.Add",
+	}
+	ctx := contextWithABACDisabled(t)
+
+	runningHandle, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: "test", Metadata: metadata})
+	require.NoError(t, err)
+	runningResult, err := sut.GetOperationAsyncResultValueOnly(ctx, encodedSubmodelID, "Ops.Add", runningHandle)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, runningResult.Code)
+
+	isolatedResult, err := sut.GetOperationAsyncResultValueOnly(ctx, encodedSubmodelID, "Ops.Other", runningHandle)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, isolatedResult.Code)
+
+	failedHandle, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: "test", Metadata: metadata})
+	require.NoError(t, err)
+	require.NoError(t, sut.asyncJobManager.Fail(t.Context(), failedHandle, http.StatusBadGateway, map[string]any{"error": "delegate failed"}))
+	failedResult, err := sut.GetOperationAsyncResultValueOnly(ctx, encodedSubmodelID, "Ops.Add", failedHandle)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadGateway, failedResult.Code)
+	require.Equal(t, map[string]any{"error": "delegate failed"}, failedResult.Body)
+
+	expiringManager := asyncjob.NewManager("SMREPO-ASYNC-EXPIRED", time.Nanosecond)
+	expiringService := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{}, expiringManager)
+	expiredHandle, err := expiringManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: "test", Metadata: metadata})
+	require.NoError(t, err)
+	require.NoError(t, expiringManager.CompletePayload(t.Context(), expiredHandle, map[string]any{"success": true}))
+	expiredResult, err := expiringService.GetOperationAsyncResultValueOnly(ctx, encodedSubmodelID, "Ops.Add", expiredHandle)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, expiredResult.Code)
+}

@@ -2127,6 +2127,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationValueOnly(w http.Res
 		return
 	}
 	// If no error, encode the body and the result code
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -2192,6 +2193,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsyncValueOnly(w htt
 		return
 	}
 	// If no error, encode the body and the result code
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 

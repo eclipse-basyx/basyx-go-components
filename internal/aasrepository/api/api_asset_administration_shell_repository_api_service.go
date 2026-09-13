@@ -1763,6 +1763,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncAa
 func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncValueOnlyAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, operationRequestValueOnly gen.OperationRequestValueOnly) (gen.ImplResponse, error) {
 	const operation = "InvokeOperationAsyncValueOnlyAasRepository"
 
+	if strings.TrimSpace(operationRequestValueOnly.ClientTimeoutDuration) == "" {
+		timeoutRequiredErr := errors.New("AASREPO-INVOKEOPASYVAL-MISSINGTIMEOUT clientTimeoutDuration is required")
+		return newAPIErrorResponse(timeoutRequiredErr, http.StatusBadRequest, operation, "MissingClientTimeoutDuration"), nil
+	}
+
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
 		return response, err
 	}
@@ -1775,7 +1780,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncVa
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.InvokeOperationAsyncValueOnly(ctx, aasIdentifier, submodelIdentifier, idShortPath, operationRequestValueOnly)
+	response, invokeErr := s.submodelAPI.InvokeOperationAsyncValueOnly(ctx, aasIdentifier, submodelIdentifier, idShortPath, operationRequestValueOnly)
+	if invokeErr != nil {
+		return response, invokeErr
+	}
+	return toAASOperationRedirect(response, aasIdentifier, submodelIdentifier, idShortPath, "operation-status"), nil
 }
 
 // GetOperationAsyncStatusAasRepository - Returns the Operation status of an asynchronous invoked Operation
