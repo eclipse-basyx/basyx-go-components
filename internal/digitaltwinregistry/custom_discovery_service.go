@@ -29,7 +29,6 @@ package digitaltwinregistry
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -75,6 +74,10 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, "DIGITALTWINREGISTRY", "SearchAllAssetAdministrationShellIdsByAssetLink", detail), nil
+	}
+
 	if len(assetLink) == 0 {
 		return model.Response(http.StatusOK, map[string]any{
 			"paging_metadata": model.PagedResultPagingMetadata{},
@@ -139,13 +142,13 @@ func (s *CustomDiscoveryService) GetAllAssetAdministrationShellIdsByAssetLink(
 	limit int32,
 	cursor string,
 ) (model.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, "DIGITALTWINREGISTRY", "GetAllAssetAdministrationShellIdsByAssetLink", detail), nil
+	}
+
 	links := make([]model.AssetLink, 0, len(assetIds))
 	for idx, enc := range assetIds {
-		if strings.TrimSpace(enc) == "" {
-			continue
-		}
-
-		dec, err := common.DecodeString(enc)
+		assetID, err := common.DecodeAPISpecificAssetID(enc)
 		if err != nil {
 			slog.ErrorContext(ctx, "Error GetAllAssetAdministrationShellIdsByAssetLink: decode assetIds failed", "error.code", "DIGITALTWINREGISTRY-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-DECODE", "error", err, "custom_discovery_component_name", customDiscoveryComponentName, "idx", idx, "enc", enc)
 			return common.NewErrorResponse(
@@ -157,18 +160,7 @@ func (s *CustomDiscoveryService) GetAllAssetAdministrationShellIdsByAssetLink(
 			), nil
 		}
 
-		var al model.AssetLink
-		if err := json.Unmarshal([]byte(dec), &al); err != nil {
-			slog.ErrorContext(ctx, "Error GetAllAssetAdministrationShellIdsByAssetLink: unmarshal assetIds decoded failed", "error.code", "DIGITALTWINREGISTRY-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-UNMARSHAL", "error", err, "custom_discovery_component_name", customDiscoveryComponentName, "idx", idx, "dec", dec)
-			return common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				customDiscoveryComponentName,
-				"GetAllAssetAdministrationShellIdsByAssetLink",
-				"BadRequest-UnmarshalAssetIds",
-			), nil
-		}
-
+		al := model.AssetLink{Name: assetID.Name(), Value: assetID.Value()}
 		links = append(links, al)
 	}
 
@@ -226,7 +218,7 @@ func (s *CustomDiscoveryService) PostAllAssetLinksByID(
 	aasIdentifier string,
 	specificAssetID []types.ISpecificAssetID,
 ) (model.ImplResponse, error) {
-	decoded, decodeErr := common.DecodeString(aasIdentifier)
+	decoded, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		slog.ErrorContext(ctx, "Error PostAllAssetLinksById: decode aasIdentifier failed", "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-DECODE", "error", decodeErr, "custom_discovery_component_name", customDiscoveryComponentName, "aas_identifier", aasIdentifier)
 		return common.NewErrorResponse(

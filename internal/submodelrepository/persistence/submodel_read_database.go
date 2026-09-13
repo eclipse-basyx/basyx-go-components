@@ -163,6 +163,11 @@ func (s *SubmodelDatabase) GetSubmodelsWithElementsByListFilters(
 func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, idShort string, semanticID string) ([]types.IReference, string, error) {
 	selectDS := submodelqueries.SelectSubmodelIdentifierDataset(idShort, limit, cursor)
 	selectDS = submodelqueries.ApplySubmodelSemanticIDFilter(selectDS, semanticID)
+	selectDS, referenceErr := auth.AddReferenceSelectorQuery(ctx, selectDS, auth.SemanticResourceSM)
+	if referenceErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-LIST-REFERENCE " + referenceErr.Error())
+	}
+
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter != nil && queryFilter.Formula != nil {
 		collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
@@ -261,6 +266,11 @@ func (s *SubmodelDatabase) GetAllSubmodelPathsPage(
 		visibleSubmodels = visibleSubmodels.Where(goqu.Ex{"submodel.id_short": idShort})
 	}
 	visibleSubmodels = submodelqueries.ApplySubmodelSemanticIDFilter(visibleSubmodels, semanticID)
+	visibleSubmodels, referenceErr := auth.AddReferenceSelectorQuery(ctx, visibleSubmodels, auth.SemanticResourceSM)
+	if referenceErr != nil {
+		return submodelelements.SubmodelPathPage{}, common.NewInternalServerError("SMREPO-PATHPAGE-REFERENCE " + referenceErr.Error())
+	}
+
 	if submodelCursor != "" {
 		cursorExists := dialect.From(goqu.T("submodel").As("cursor_submodel")).
 			Select(goqu.L("1")).
@@ -494,6 +504,10 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		return nil, "", err
 	}
 	selectDS = submodelqueries.ApplySubmodelSemanticIDFilter(selectDS, semanticID)
+	selectDS, referenceErr := auth.AddReferenceSelectorQuery(ctx, selectDS, auth.SemanticResourceSM)
+	if referenceErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-LIST-REFERENCE " + referenceErr.Error())
+	}
 
 	queryFilter := auth.GetQueryFilter(ctx)
 	hasFormulaInContext := queryFilter != nil && queryFilter.Formula != nil

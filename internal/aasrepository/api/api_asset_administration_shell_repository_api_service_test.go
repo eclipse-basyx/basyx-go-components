@@ -60,7 +60,7 @@ func TestGetAllAssetAdministrationShellsRejectsInvalidCursorWithStandardErrorBod
 	t.Parallel()
 
 	invalidCursor := "%"
-	_, expectedDecodeErr := common.DecodeString(invalidCursor)
+	_, expectedDecodeErr := common.DecodeAPIString(invalidCursor)
 	require.Error(t, expectedDecodeErr)
 
 	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, false)

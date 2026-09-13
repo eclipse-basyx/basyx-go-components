@@ -39,7 +39,6 @@ import (
 	"context"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -61,10 +60,7 @@ type ConceptDescriptionRepositoryAPIAPIService struct {
 const componentName = "CDREPO"
 
 func pagedResponse[T any](results T, nextCursor string) model.ImplResponse {
-	pm := model.PagedResultPagingMetadata{}
-	if nextCursor != "" {
-		pm.Cursor = common.EncodeString(nextCursor)
-	}
+	pm := common.APIPagingMetadata(nextCursor)
 
 	res := struct {
 		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
@@ -98,12 +94,16 @@ func NewConceptDescriptionRepositoryAPIAPIService(database *persistence.ConceptD
 // results are available. Invalid limits, invalid cursors, denied access, or
 // unsupported query expressions are returned as HTTP error responses.
 func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QueryConceptDescriptions", detail), nil
+	}
+
 	const operation = "QueryConceptDescriptions"
 
-	decodedCursor := strings.TrimSpace(cursor)
+	decodedCursor := cursor
 	if decodedCursor != "" {
 		var decodeErr error
-		decodedCursor, decodeErr = common.DecodeString(decodedCursor)
+		decodedCursor, decodeErr = common.DecodeAPICursor(decodedCursor)
 		if decodeErr != nil {
 			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, operation, "BadCursor"), nil
 		}
@@ -124,7 +124,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx
 	if queryContextErr != nil {
 		return common.NewErrorResponse(queryContextErr, http.StatusInternalServerError, componentName, operation, "BuildAuthorizedQuery"), queryContextErr
 	}
-	cds, nextCursor, err := s.d.GetConceptDescriptions(queryCtx, nil, nil, nil, uint(uintLimit64), &decodedCursor, time.Time{}, time.Time{})
+	cds, nextCursor, err := s.d.GetConceptDescriptions(queryCtx, nil, uint(uintLimit64), &decodedCursor, time.Time{}, time.Time{})
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -150,10 +150,14 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx
 
 // GetAllConceptDescriptions - Returns all Concept Descriptions
 func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ctx context.Context, idShort string, isCaseOf string, dataSpecificationRef string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
-	decodedCursor := strings.TrimSpace(cursor)
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", detail), nil
+	}
+
+	decodedCursor := cursor
 	if decodedCursor != "" {
 		var decodeErr error
-		decodedCursor, decodeErr = common.DecodeString(decodedCursor)
+		decodedCursor, decodeErr = common.DecodeAPICursor(decodedCursor)
 		if decodeErr != nil {
 			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadCursor"), nil
 		}
@@ -178,7 +182,16 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 	if selectorErr != nil {
 		return common.NewErrorResponse(selectorErr, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "BuildAuthorizedSelectors"), selectorErr
 	}
-	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, &isCaseOf, &dataSpecificationRef, uintLimit, &decodedCursor, createdFrom, updatedFrom)
+
+	selectors, decodeErr := decodeConceptDescriptionReferenceSelectors(isCaseOf, dataSpecificationRef)
+	if decodeErr != nil {
+		return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadReference"), nil
+	}
+	ctx, referenceErr := auth.WithAuthorizedReferenceSelectors(ctx, auth.SemanticResourceCD, selectors...)
+	if referenceErr != nil {
+		return common.NewErrorResponse(referenceErr, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "BuildAuthorizedSelectors"), nil
+	}
+	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, uintLimit, &decodedCursor, createdFrom, updatedFrom)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -204,10 +217,10 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 
 // GetAllConceptDescriptionsRecentChanges returns changed Concept Descriptions.
 func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionsRecentChanges(ctx context.Context, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
-	decodedCursor := strings.TrimSpace(cursor)
+	decodedCursor := cursor
 	if decodedCursor != "" {
 		var decodeErr error
-		decodedCursor, decodeErr = common.DecodeString(decodedCursor)
+		decodedCursor, decodeErr = common.DecodeAPICursor(decodedCursor)
 		if decodeErr != nil {
 			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadCursor"), nil
 		}
@@ -224,7 +237,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionsRec
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadLimit"), nil
 	}
 
-	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, nil, nil, uint(uintLimit64), &decodedCursor, createdFrom, updatedFrom)
+	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, uint(uintLimit64), &decodedCursor, createdFrom, updatedFrom)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -293,7 +306,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(ctx c
 
 // GetConceptDescriptionById - Returns a specific Concept Description
 func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(ctx context.Context, cdIdentifier string) (model.ImplResponse, error) {
-	decodedIdentifier, err := common.Decode(cdIdentifier)
+	decodedIdentifier, err := common.DecodeAPIIdentifier(cdIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetConceptDescriptionById", "URLDecode"), nil
 	}
@@ -322,7 +335,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(ct
 
 // PutConceptDescriptionById - Creates or updates an existing Concept Description
 func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ctx context.Context, cdIdentifier string, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
-	decodedIdentifier, err := common.Decode(cdIdentifier)
+	decodedIdentifier, err := common.DecodeAPIIdentifier(cdIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "PutConceptDescriptionById", "URLDecode"), nil
 	}
@@ -352,7 +365,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 
 // DeleteConceptDescriptionById - Deletes a Concept Description
 func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById(ctx context.Context, cdIdentifier string) (model.ImplResponse, error) {
-	decodedIdentifier, err := common.Decode(cdIdentifier)
+	decodedIdentifier, err := common.DecodeAPIIdentifier(cdIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "DeleteConceptDescriptionById", "URLDecode"), nil
 	}
@@ -371,4 +384,25 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById
 	}
 
 	return model.Response(http.StatusNoContent, nil), nil
+}
+
+func decodeConceptDescriptionReferenceSelectors(isCaseOf, dataSpecificationRef string) ([]auth.ReferenceSelector, error) {
+	selectors := make([]auth.ReferenceSelector, 0, 2)
+	for _, parameter := range []struct {
+		value string
+		field grammar.ModelStringPattern
+	}{
+		{isCaseOf, "$cd#isCaseOf"}, {dataSpecificationRef, "$cd#embeddedDataSpecifications.dataSpecification"},
+	} {
+		if parameter.value == "" {
+			continue
+		}
+		reference, err := common.DecodeAPIReference(parameter.value, 0)
+		if err != nil {
+			return nil, err
+		}
+		selectors = append(selectors, auth.ReferenceSelector{Field: parameter.field, Reference: reference})
+	}
+
+	return selectors, nil
 }

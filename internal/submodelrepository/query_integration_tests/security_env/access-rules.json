@@ -102,6 +102,10 @@
         "USEFORMULA": "is_userx",
         "FILTERLIST": [
           {
+            "FRAGMENT": "$sm#supplementalSemanticIds",
+            "CONDITION": { "$boolean": false }
+          },
+          {
             "FRAGMENT": "$sm#semanticId",
             "CONDITION": {
               "$eq": [

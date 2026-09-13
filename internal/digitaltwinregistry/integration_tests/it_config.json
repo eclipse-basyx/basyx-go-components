@@ -107,8 +107,7 @@
   {
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
-    "expectedStatus": 200,
-    "shouldMatch": "expected/empty_paged_result.json"
+    "expectedStatus": 400
   },
   {
     "method": "GET",
@@ -195,7 +194,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9,eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json"
   },
@@ -327,8 +326,7 @@
   {
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
-    "expectedStatus": 200,
-    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 400,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
     }
@@ -507,8 +505,7 @@
   {
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
-    "expectedStatus": 200,
-    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 400,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
     }
@@ -679,8 +676,7 @@
   {
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
-    "expectedStatus": 200,
-    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 400,
     "token": {
       "user": "admin",
       "password": "pwd"
@@ -871,8 +867,7 @@
   {
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
-    "expectedStatus": 200,
-    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 400,
     "token": {
       "user": "admin",
       "password": "pwd"

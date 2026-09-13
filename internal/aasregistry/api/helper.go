@@ -37,7 +37,11 @@ import (
 
 // decodePathParam decodes an URL path component and builds a consistent error response.
 func decodePathParam(ctx context.Context, raw, paramName, operation, errorDetail string) (string, *model.ImplResponse, error) {
-	decoded, err := common.DecodeString(raw)
+	decode := common.DecodeAPIIdentifier
+	if paramName == "cursor" || paramName == "assetType" {
+		decode = common.DecodeAPIString
+	}
+	decoded, err := decode(raw)
 	if err != nil {
 		slog.ErrorContext(ctx, "path parameter decoding failed", "error.code", "API-DECODEPATHPARAM-DECODE", "error", err, "component", componentName, "operation", operation, "param_name", paramName, "raw", raw)
 		resp := common.NewErrorResponse(
@@ -65,10 +69,7 @@ func decodeOptionalQueryParam(ctx context.Context, raw, paramName, operation, er
 
 // pagedResponse builds the common paged envelope used across list endpoints.
 func pagedResponse[T any](results T, nextCursor string) model.ImplResponse {
-	pm := model.PagedResultPagingMetadata{}
-	if nextCursor != "" {
-		pm.Cursor = common.EncodeString(nextCursor)
-	}
+	pm := common.APIPagingMetadata(nextCursor)
 
 	res := struct {
 		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`

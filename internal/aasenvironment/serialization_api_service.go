@@ -355,7 +355,7 @@ func (s *SerializationAPIService) loadAssetAdministrationShells(ctx context.Cont
 		}
 
 		result = append(result, aasPage...)
-		if strings.TrimSpace(nextCursor) == "" {
+		if nextCursor == "" {
 			break
 		}
 		cursor = nextCursor
@@ -410,7 +410,7 @@ func (s *SerializationAPIService) loadSubmodels(ctx context.Context, ids []strin
 		}
 
 		result = append(result, submodelPage...)
-		if strings.TrimSpace(nextCursor) == "" {
+		if nextCursor == "" {
 			break
 		}
 		cursor = nextCursor
@@ -432,13 +432,13 @@ func (s *SerializationAPIService) loadConceptDescriptions(ctx context.Context, i
 	result := make([]aastypes.IConceptDescription, 0)
 	cursor := ""
 	for {
-		conceptDescriptionPage, nextCursor, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(ctx, nil, nil, nil, uint(defaultListPageSize), &cursor, time.Time{}, time.Time{})
+		conceptDescriptionPage, nextCursor, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(ctx, nil, uint(defaultListPageSize), &cursor, time.Time{}, time.Time{})
 		if getErr != nil {
 			return nil, getErr
 		}
 
 		result = append(result, conceptDescriptionPage...)
-		if strings.TrimSpace(nextCursor) == "" {
+		if nextCursor == "" {
 			break
 		}
 		cursor = nextCursor
@@ -1170,7 +1170,7 @@ var preferredSupplementaryExtensions = map[string]string{
 func decodeIdentifiers(ids []string, codePrefix string) ([]string, error) {
 	result := make([]string, 0, len(ids))
 	for _, id := range ids {
-		decodedID, decodeErr := common.DecodeString(id)
+		decodedID, decodeErr := common.DecodeAPIIdentifier(id)
 		if decodeErr != nil {
 			return nil, common.NewErrBadRequest(codePrefix + " " + decodeErr.Error())
 		}
