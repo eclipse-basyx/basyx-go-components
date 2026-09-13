@@ -158,23 +158,18 @@ func (c *SubmodelRegistryAPIAPIController) QuerySubmodelDescriptors(w http.Respo
 		return
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		limitParam, err = parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "limit")
-			_ = EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var queryParam grammar.Query
@@ -223,33 +218,17 @@ func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptors(w http.Resp
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "submodel descriptor limit parsing failed", "error.code", "SMREGISTRY-GETALLSUBMODELDESCRIPTORS-PARSELIMIT", "error", err, "limit", query.Get("limit"))
-			result := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				componentName,
-				"GetAllSubmodelDescriptors",
-				"limit",
-			)
-			_ = EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptors", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptors", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 	var createdFromParam time.Time
 	if query.Has("createdFrom") {

@@ -520,6 +520,10 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 			Where(goqu.C("id").Gte(trimmedCursor))
 	}
 
+	query, referenceErr := auth.AddReferenceSelectorQuery(ctx, query, auth.SemanticResourceCD)
+	if referenceErr != nil {
+		return nil, "", common.NewInternalServerError("CDREPO-LIST-REFERENCE " + referenceErr.Error())
+	}
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
 		return nil, "", common.NewInternalServerError("CDREPO-GCDS-SHOULDENFORCE " + enforceErr.Error())

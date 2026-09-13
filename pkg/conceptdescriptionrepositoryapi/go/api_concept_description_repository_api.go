@@ -95,27 +95,18 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) QueryConceptDescriptions(
 		return
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, parseErr := parseNumericParameter[int32](
-			query.Get("limit"),
-			model.WithParse[int32](parseInt32),
-			model.WithMinimum[int32](1),
-		)
-		if parseErr != nil {
-			result := common.NewErrorResponse(parseErr, http.StatusBadRequest, "CDREPO", "QueryConceptDescriptions", "limit")
-			if encodeErr := model.EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
-				c.errorHandler(w, r, encodeErr, nil)
-			}
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "CDREPO", "QueryConceptDescriptions", "limit")
+		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "CDREPO", "QueryConceptDescriptions", "cursor")
+		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var queryParam grammar.Query
@@ -168,12 +159,22 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) GetAllConceptDescriptions
 		idShortParam = param
 	} else {
 	}
+	if parameterErr := common.ValidateAPIEncodedQuery(query, "isCaseOf", 0); parameterErr != nil {
+		result := common.NewErrorResponse(parameterErr, http.StatusBadRequest, "CDREPO", "GetAllConceptDescriptions", "isCaseOf")
+		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	var isCaseOfParam string
 	if query.Has("isCaseOf") {
 		param := query.Get("isCaseOf")
 
 		isCaseOfParam = param
 	} else {
+	}
+	if parameterErr := common.ValidateAPIEncodedQuery(query, "dataSpecificationRef", 0); parameterErr != nil {
+		result := common.NewErrorResponse(parameterErr, http.StatusBadRequest, "CDREPO", "GetAllConceptDescriptions", "dataSpecificationRef")
+		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 	var dataSpecificationRefParam string
 	if query.Has("dataSpecificationRef") {
@@ -182,26 +183,18 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) GetAllConceptDescriptions
 		dataSpecificationRefParam = param
 	} else {
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			model.WithParse[int32](parseInt32),
-			model.WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &model.ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "CDREPO", "GetAllConceptDescriptions", "limit")
+		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	} else {
 	}
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "CDREPO", "GetAllConceptDescriptions", "cursor")
+		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	} else {
 	}
 	var createdFromParam time.Time
@@ -253,20 +246,20 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) GetAllConceptDescriptions
 			return
 		}
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		limitParam, err = parseNumericParameter[int32](
-			query.Get("limit"),
-			model.WithParse[int32](parseInt32),
-			model.WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &model.ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "CDREPO", "GetAllConceptDescriptionsRecentChanges", "limit")
+		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	result, err := c.service.GetAllConceptDescriptionsRecentChanges(r.Context(), createdFromParam, updatedFromParam, limitParam, query.Get("cursor"))
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "CDREPO", "GetAllConceptDescriptionsRecentChanges", "cursor")
+		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	result, err := c.service.GetAllConceptDescriptionsRecentChanges(r.Context(), createdFromParam, updatedFromParam, limitParam, cursorParam)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return

@@ -1,5 +1,5 @@
 {
-  "url": "/api/v3/lookup/shells/bm90ZXhpc3RpbmdzaGVsbA==",
+  "url": "/api/v3/lookup/shells/bm90ZXhpc3RpbmdzaGVsbA",
   "tenant": "TENANT_ONE",
   "method": "GET",
   "body": null

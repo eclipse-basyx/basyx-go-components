@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -361,27 +360,18 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) QueryAssetAdministr
 		return
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, parseErr := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if parseErr != nil {
-			result := common.NewErrorResponse(parseErr, http.StatusBadRequest, "AASREPO", "QueryAssetAdministrationShells", "limit")
-			if encodeErr := EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
-				c.errorHandler(w, r, encodeErr, nil)
-			}
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "QueryAssetAdministrationShells", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "QueryAssetAdministrationShells", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var queryParam grammar.Query
@@ -426,17 +416,19 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 	assetIdsParam := query["assetIds"]
 	idShortParam := query.Get("idShort")
 
-	var limitParam int32
-	if limit := query.Get("limit"); limit != "" {
-		parsed, err := strconv.ParseInt(limit, 10, 32)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-			return
-		}
-		limitParam = int32(parsed)
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllAssetAdministrationShells", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	cursorParam := query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllAssetAdministrationShells", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 
 	var createdFromParam time.Time
 	if query.Has("createdFrom") {
@@ -513,17 +505,19 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 	assetIdsParam := query["assetIds"]
 	idShortParam := query.Get("idShort")
 
-	var limitParam int32
-	if limit := query.Get("limit"); limit != "" {
-		parsed, err := strconv.ParseInt(limit, 10, 32)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-			return
-		}
-		limitParam = int32(parsed)
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllAssetAdministrationShellsReference", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	cursorParam := query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllAssetAdministrationShellsReference", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 
 	result, err := c.service.GetAllAssetAdministrationShellsReference(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam)
 	if err != nil {
@@ -759,16 +753,18 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelRefer
 	}
 
 	query := r.URL.Query()
-	var limitParam int32
-	if limit := query.Get("limit"); limit != "" {
-		parsed, err := strconv.ParseInt(limit, 10, 32)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-			return
-		}
-		limitParam = int32(parsed)
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelReferencesAasRepository", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
-	cursorParam := query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelReferencesAasRepository", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 
 	result, err := c.service.GetAllSubmodelReferencesAasRepository(r.Context(), aasIdentifierParam, limitParam, cursorParam)
 	if err != nil {
@@ -1237,24 +1233,18 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 		return
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsAasRepository", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	cursorParam := ""
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsAasRepository", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	levelParam := "deep"
@@ -1362,24 +1352,18 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 		return
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsMetadataAasRepository", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	cursorParam := ""
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsMetadataAasRepository", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	result, err := c.service.GetAllSubmodelElementsMetadataAasRepository(
@@ -1418,24 +1402,18 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 		return
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsValueOnlyAasRepository", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	cursorParam := ""
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsValueOnlyAasRepository", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	levelParam := "deep"
@@ -1480,24 +1458,18 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 		return
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsReferenceAasRepository", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	cursorParam := ""
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsReferenceAasRepository", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	levelParam := "core"
@@ -1538,17 +1510,19 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 
 	query := r.URL.Query()
 
-	limitParam := int32(0)
-	if limitParamString := query.Get("limit"); limitParamString != "" {
-		limitParam64, err := strconv.ParseInt(limitParamString, 10, 32)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-			return
-		}
-		limitParam = int32(limitParam64)
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsPathAasRepository", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	cursorParam := query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsPathAasRepository", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	levelParam := query.Get("level")
 	extentParam := query.Get("extent")
 
@@ -2604,19 +2578,19 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		}
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		limitParam, err = parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllAssetAdministrationShellsRecentChanges", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllAssetAdministrationShellsRecentChanges", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	result, err := c.service.GetAllAssetAdministrationShellsRecentChanges(
 		r.Context(),
 		assetIdsParam,
@@ -2624,7 +2598,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		createdFromParam,
 		updatedFromParam,
 		limitParam,
-		query.Get("cursor"),
+		cursorParam,
 	)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

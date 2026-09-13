@@ -337,6 +337,11 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	if parameterErr := common.ValidateAPIEncodedQuery(query, "semanticId", 3072); parameterErr != nil {
+		result := common.NewErrorResponse(parameterErr, http.StatusBadRequest, componentName, "GetAllSubmodels", "semanticId")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
@@ -351,26 +356,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 		idShortParam = param
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodels", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodels", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var levelParam string
@@ -463,6 +460,11 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsMetadata(w http.Resp
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	if parameterErr := common.ValidateAPIEncodedQuery(query, "semanticId", 3072); parameterErr != nil {
+		result := common.NewErrorResponse(parameterErr, http.StatusBadRequest, componentName, "GetAllSubmodelsMetadata", "semanticId")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
@@ -477,26 +479,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsMetadata(w http.Resp
 		idShortParam = param
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsMetadata", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsMetadata", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	result, err := c.service.GetAllSubmodelsMetadata(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam)
@@ -516,6 +510,11 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsValueOnly(w http.Res
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	if parameterErr := common.ValidateAPIEncodedQuery(query, "semanticId", 3072); parameterErr != nil {
+		result := common.NewErrorResponse(parameterErr, http.StatusBadRequest, componentName, "GetAllSubmodelsValueOnly", "semanticId")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
@@ -530,26 +529,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsValueOnly(w http.Res
 		idShortParam = param
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsValueOnly", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsValueOnly", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var levelParam string
@@ -587,6 +578,11 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsReference(w http.Res
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	if parameterErr := common.ValidateAPIEncodedQuery(query, "semanticId", 3072); parameterErr != nil {
+		result := common.NewErrorResponse(parameterErr, http.StatusBadRequest, componentName, "GetAllSubmodelsReference", "semanticId")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
@@ -601,26 +597,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsReference(w http.Res
 		idShortParam = param
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsReference", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsReference", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var levelParam string
@@ -649,6 +637,11 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsPath(w http.Response
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	if parameterErr := common.ValidateAPIEncodedQuery(query, "semanticId", 3072); parameterErr != nil {
+		result := common.NewErrorResponse(parameterErr, http.StatusBadRequest, componentName, "GetAllSubmodelsPath", "semanticId")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
@@ -663,26 +656,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsPath(w http.Response
 		idShortParam = param
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsPath", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsPath", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var levelParam string
@@ -801,20 +786,25 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsRecentChanges(w http
 			return
 		}
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		limitParam, err = parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsRecentChanges", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	result, err := c.service.GetAllSubmodelsRecentChanges(r.Context(), query.Get("semanticId"), query.Get("idShort"), createdFromParam, updatedFromParam, limitParam, query.Get("cursor"))
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsRecentChanges", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	if parameterErr := common.ValidateAPIEncodedQuery(query, "semanticId", 3072); parameterErr != nil {
+		result := common.NewErrorResponse(parameterErr, http.StatusBadRequest, componentName, "GetAllSubmodelsRecentChanges", "semanticId")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	result, err := c.service.GetAllSubmodelsRecentChanges(r.Context(), query.Get("semanticId"), query.Get("idShort"), createdFromParam, updatedFromParam, limitParam, cursorParam)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
@@ -1165,26 +1155,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElements(w http.Respo
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElements", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElements", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var levelParam string
@@ -1289,26 +1271,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsMetadataSubmo
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsMetadataSubmodelRepo", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsMetadataSubmodelRepo", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	result, err := c.service.GetAllSubmodelElementsMetadataSubmodelRepo(r.Context(), submodelIdentifierParam, limitParam, cursorParam)
@@ -1333,26 +1307,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsValueOnlySubm
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsValueOnlySubmodelRepo", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsValueOnlySubmodelRepo", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var levelParam string
@@ -1395,26 +1361,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsReferenceSubm
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsReferenceSubmodelRepo", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsReferenceSubmodelRepo", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var levelParam string
@@ -1448,26 +1406,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsPathSubmodelR
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsPathSubmodelRepo", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsPathSubmodelRepo", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	var levelParam string
@@ -2359,34 +2309,17 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 		}
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "submodel query limit parsing failed", "error.code", "SUBMODELREPOSITORYAPI-QUERYSUBMODELS-PARSELIMIT", "error", err)
-			result := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				componentName,
-				"QuerySubmodels",
-				"limit",
-			)
-			err = EncodeJSONResponse(result.Body, &result.Code, w)
-			if err != nil {
-				c.errorHandler(w, r, err, nil)
-			}
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QuerySubmodels", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
-	var cursorParam string
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QuerySubmodels", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 	var queryParam grammar.Query
 	d := json.NewDecoder(r.Body)

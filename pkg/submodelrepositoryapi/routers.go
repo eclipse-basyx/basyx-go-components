@@ -235,16 +235,6 @@ type Number interface {
 //   - error: An error if parsing fails
 type ParseString[T Number | string | bool] func(v string) (T, error)
 
-// parseInt32 parses a string parameter to an int32.
-func parseInt32(param string) (int32, error) {
-	if param == "" {
-		return 0, nil
-	}
-
-	val, err := strconv.ParseInt(param, 10, 32)
-	return int32(val), err
-}
-
 // parseBool parses a string parameter to an bool.
 func parseBool(param string) (bool, error) {
 	if param == "" {
@@ -367,24 +357,6 @@ func WithMaximum[T Number](expected T) Constraint[T] {
 
 		return nil
 	}
-}
-
-// parseNumericParameter parses a numeric parameter to its respective type.
-func parseNumericParameter[T Number](param string, fn OpenAPIOperation[T], checks ...Constraint[T]) (T, error) {
-	v, ok, err := fn(param)
-	if err != nil {
-		return 0, err
-	}
-
-	if !ok {
-		for _, check := range checks {
-			if err := check(v); err != nil {
-				return 0, err
-			}
-		}
-	}
-
-	return v, nil
 }
 
 // parseBoolParameter parses a string parameter to a bool

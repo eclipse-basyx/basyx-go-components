@@ -29,7 +29,6 @@ package digitaltwinregistry
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -74,6 +73,10 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) (model.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, "DIGITALTWINREGISTRY", "GetAllAssetAdministrationShellDescriptors", detail), nil
+	}
+
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
 		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$aasdesc#createdAt")
@@ -138,6 +141,10 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAsset
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) (model.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, "DIGITALTWINREGISTRY", "getAllAssetAdministrationShellDescriptorsByAssetLinks", detail), nil
+	}
+
 	if len(links) == 0 {
 		return emptyDescriptorPage(), nil
 	}
@@ -197,10 +204,10 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAsset
 }
 
 func decodeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) ([]model.AssetLink, *model.ImplResponse, error) {
-	normalizedAssetIDs := normalizeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs)
+	normalizedAssetIDs := encodedAssetIDs
 	links := make([]model.AssetLink, 0, len(normalizedAssetIDs))
-	for idx, encodedAssetID := range normalizedAssetIDs {
-		link, resp := decodeRegistryAssetLinkQueryAssetID(encodedAssetID, idx)
+	for _, encodedAssetID := range normalizedAssetIDs {
+		link, resp := decodeRegistryAssetLinkQueryAssetID(encodedAssetID)
 		if resp != nil {
 			return nil, resp, nil
 		}
@@ -210,59 +217,13 @@ func decodeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) ([]model.Ass
 	return links, nil, nil
 }
 
-func normalizeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) []string {
-	normalizedAssetIDs := make([]string, 0, len(encodedAssetIDs))
-	for _, encodedAssetID := range encodedAssetIDs {
-		for _, part := range strings.Split(encodedAssetID, ",") {
-			trimmedPart := strings.TrimSpace(part)
-			if trimmedPart != "" {
-				normalizedAssetIDs = append(normalizedAssetIDs, trimmedPart)
-			}
-		}
-	}
-	return normalizedAssetIDs
-}
-
-func decodeRegistryAssetLinkQueryAssetID(encodedAssetID string, idx int) (model.AssetLink, *model.ImplResponse) {
-	decoded, err := common.DecodeString(encodedAssetID)
+func decodeRegistryAssetLinkQueryAssetID(encodedAssetID string) (model.AssetLink, *model.ImplResponse) {
+	assetID, err := common.DecodeAPISpecificAssetID(encodedAssetID)
 	if err != nil {
-		slog.Error("Error GetAllAssetAdministrationShellDescriptors: decode assetIds failed", "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-DECODE", "error", err, "custom_registry_component_name", customRegistryComponentName, "idx", idx)
-		resp := common.NewErrorResponse(
-			err,
-			http.StatusBadRequest,
-			customRegistryComponentName,
-			"GetAllAssetAdministrationShellDescriptors",
-			"BadRequest-DecodeAssetIds",
-		)
+		resp := common.NewErrorResponse(err, http.StatusBadRequest, customRegistryComponentName, "GetAllAssetAdministrationShellDescriptors", "BadRequest-DecodeAssetIds")
 		return model.AssetLink{}, &resp
 	}
-
-	var link model.AssetLink
-	if err = json.Unmarshal([]byte(decoded), &link); err != nil {
-		slog.Error("Error GetAllAssetAdministrationShellDescriptors: unmarshal assetIds failed", "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-UNMARSHAL", "error", err, "custom_registry_component_name", customRegistryComponentName, "idx", idx)
-		resp := common.NewErrorResponse(
-			err,
-			http.StatusBadRequest,
-			customRegistryComponentName,
-			"GetAllAssetAdministrationShellDescriptors",
-			"BadRequest-UnmarshalAssetIds",
-		)
-		return model.AssetLink{}, &resp
-	}
-
-	if err = model.AssertAssetLinkRequired(link); err != nil {
-		slog.Error("Error GetAllAssetAdministrationShellDescriptors: validate assetIds failed", "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-EXECUTE", "error", err, "custom_registry_component_name", customRegistryComponentName, "idx", idx)
-		resp := common.NewErrorResponse(
-			err,
-			http.StatusBadRequest,
-			customRegistryComponentName,
-			"GetAllAssetAdministrationShellDescriptors",
-			"BadRequest-ValidateAssetIds",
-		)
-		return model.AssetLink{}, &resp
-	}
-
-	return link, nil
+	return model.AssetLink{Name: assetID.Name(), Value: assetID.Value()}, nil
 }
 
 func splitGlobalAssetIDLinks(links []model.AssetLink) ([]string, []model.AssetLink) {
@@ -487,7 +448,7 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 ) (model.ImplResponse, error) {
 	ctx = withDTRDescriptorWriteContext(ctx)
 
-	decodedAASID, decodeErr := common.DecodeString(aasIdentifier)
+	decodedAASID, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		resp := common.NewErrorResponse(
 			decodeErr,
@@ -528,7 +489,7 @@ func (s *CustomRegistryService) PutSubmodelDescriptorByIdThroughSuperpath(
 	submodelIdentifier string,
 	submodelDescriptor model.SubmodelDescriptor,
 ) (model.ImplResponse, error) {
-	decodedSMD, decodeErr := common.DecodeString(submodelIdentifier)
+	decodedSMD, decodeErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeErr != nil {
 		resp := common.NewErrorResponse(
 			decodeErr,

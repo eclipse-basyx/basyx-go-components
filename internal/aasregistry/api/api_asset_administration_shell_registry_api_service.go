@@ -71,7 +71,11 @@ func NewAssetAdministrationShellRegistryAPIAPIService(databaseBackend persistenc
 
 // GetAllAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, assetKind model.AssetKind, assetType string, assetIds []string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
-	internalCursor, resp, err := decodeCursor(ctx, strings.TrimSpace(cursor), "GetAllAssetAdministrationShellDescriptors")
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", detail), nil
+	}
+
+	internalCursor, resp, err := decodeCursor(ctx, cursor, "GetAllAssetAdministrationShellDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -79,7 +83,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	if resp != nil || err != nil {
 		return *resp, err
 	}
-	assetIDFilter, err := common.DecodeAssetIDFilter(assetIds)
+	specificAssetIDs, err := common.DecodeAPISpecificAssetIDs(assetIds)
 	if err != nil {
 		return common.NewErrorResponse(
 			err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "BadAssetIds",
@@ -94,16 +98,12 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	if selectorErr != nil {
 		return common.NewErrorResponse(selectorErr, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "BuildAuthorizedSelectors"), selectorErr
 	}
-	fetch := func(pageLimit int32, pageCursor string) ([]model.AssetAdministrationShellDescriptor, string, error) {
-		return s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, pageLimit, pageCursor, "", "", createdFrom, updatedFrom)
+	ctx, selectorErr = auth.WithAuthorizedAssetIDSelectors(ctx, auth.SemanticResourceAASDesc, specificAssetIDs)
+	if selectorErr != nil {
+		return common.NewErrorResponse(selectorErr, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "BuildAuthorizedSelectors"), selectorErr
 	}
-	var aasds []model.AssetAdministrationShellDescriptor
-	var nextCursor string
-	if assetIDFilter.IsEmpty() {
-		aasds, nextCursor, err = fetch(limit, internalCursor)
-	} else {
-		aasds, nextCursor, err = filterAssetAdministrationShellDescriptorPages(limit, internalCursor, fetch, assetIDFilter)
-	}
+	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, "", "", createdFrom, updatedFrom)
+
 	if err != nil {
 		slog.ErrorContext(ctx, "Error in GetAllAssetAdministrationShellDescriptors: list failed", "error.code", "API-GETALLASSETADMINISTRATIONSHELLDESCRIPTORS-EXECUTE", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor, "asset_kind", string(assetKind), "asset_type", assetType)
 		switch {
@@ -130,45 +130,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	}
 
 	return pagedResponse(jsonable, nextCursor), nil
-}
-
-type assetAdministrationShellDescriptorFetcher func(limit int32, cursor string) ([]model.AssetAdministrationShellDescriptor, string, error)
-
-func filterAssetAdministrationShellDescriptorPages(
-	limit int32,
-	cursor string,
-	fetch assetAdministrationShellDescriptorFetcher,
-	filter common.AssetIDFilter,
-) ([]model.AssetAdministrationShellDescriptor, string, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-	pageLimit := limit + 1
-	result := make([]model.AssetAdministrationShellDescriptor, 0, limit)
-	currentCursor := cursor
-	for {
-		page, nextCursor, err := fetch(pageLimit, currentCursor)
-		if err != nil {
-			return nil, "", err
-		}
-		for _, descriptor := range page {
-			matches, matchErr := filter.Matches(descriptor.GlobalAssetId, descriptor.SpecificAssetIds)
-			if matchErr != nil {
-				return nil, "", matchErr
-			}
-			if !matches {
-				continue
-			}
-			if len(result) == int(limit) {
-				return result, descriptor.Id, nil
-			}
-			result = append(result, descriptor)
-		}
-		if nextCursor == "" || nextCursor == currentCursor {
-			return result, "", nil
-		}
-		currentCursor = nextCursor
-	}
 }
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
@@ -414,6 +375,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministratio
 
 // GetAllSubmodelDescriptorsThroughSuperpath - Returns all Submodel Descriptors
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptorsThroughSuperpath(ctx context.Context, aasIdentifier string, limit int32, cursor string) (model.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", detail), nil
+	}
+
 	// Decode AAS identifier from path
 	decodedAAS, resp, err := decodePathParam(ctx, aasIdentifier, "aasIdentifier", "GetAllSubmodelDescriptorsThroughSuperpath", "BadRequest-Decode")
 	if resp != nil || err != nil {
@@ -421,7 +386,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 	}
 
 	// Decode cursor if provided
-	internalCursor, resp, err := decodeCursor(ctx, strings.TrimSpace(cursor), "GetAllSubmodelDescriptorsThroughSuperpath")
+	internalCursor, resp, err := decodeCursor(ctx, cursor, "GetAllSubmodelDescriptorsThroughSuperpath")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -751,6 +716,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 // QueryAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors that confirm to the input query
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QueryAssetAdministrationShellDescriptors", detail), nil
+	}
+
 	queryCtx, queryContextErr := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceAASDesc, query)
 	if queryContextErr != nil {
 		return common.NewErrorResponse(
