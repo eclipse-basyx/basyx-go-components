@@ -2622,40 +2622,58 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx conte
 	return gen.Response(http.StatusOK, nil), nil
 }
 
-// InvokeOperationSubmodelRepo - Synchronously or asynchronously invokes an Operation at a specified path
-//
-//nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) InvokeOperationSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, operationRequest gen.OperationRequest, async bool) (gen.ImplResponse, error) {
-	const operation = "InvokeOperationSubmodelRepo"
+type preparedOperationDelegation struct {
+	decodedSubmodelIdentifier string
+	element                   types.ISubmodelElement
+	delegationURL             string
+	timeout                   time.Duration
+}
 
-	if async {
-		return s.invokeOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest)
-	}
-
+func (s *SubmodelRepositoryAPIAPIService) prepareOperationDelegation(
+	ctx context.Context,
+	submodelIdentifier string,
+	idShortPath string,
+	clientTimeoutDuration string,
+	operation string,
+) (preparedOperationDelegation, gen.ImplResponse, bool) {
 	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
 	if !ok {
-		return response, nil
+		return preparedOperationDelegation{}, response, false
 	}
 
 	element, response, ok := loadOperationElement(ctx, s.submodelBackend, decodedSubmodelIdentifier, idShortPath, operation)
 	if !ok {
-		return response, nil
+		return preparedOperationDelegation{}, response, false
 	}
 
 	delegationURL, delegationErr := resolveDelegationURL(element)
 	if delegationErr != nil {
 		if common.IsErrBadRequest(delegationErr) {
-			return newAPIErrorResponse(delegationErr, http.StatusMethodNotAllowed, operation, "InvokeOnlyValidForOperation"), nil
+			return preparedOperationDelegation{}, newAPIErrorResponse(delegationErr, http.StatusMethodNotAllowed, operation, "InvokeOnlyValidForOperation"), false
 		}
-		return newAPIErrorResponse(delegationErr, http.StatusNotImplemented, operation, "OperationDelegationMissing"), nil
+		return preparedOperationDelegation{}, newAPIErrorResponse(delegationErr, http.StatusNotImplemented, operation, "OperationDelegationMissing"), false
 	}
 
-	timeout, timeoutErr := parseDelegationTimeout(operationRequest.ClientTimeoutDuration)
+	timeout, timeoutErr := parseDelegationTimeout(clientTimeoutDuration)
 	if timeoutErr != nil {
-		return newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), nil
+		return preparedOperationDelegation{}, newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), false
 	}
 
-	statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(ctx, delegationURL, buildDelegatedOperationInput(operationRequest), timeout)
+	return preparedOperationDelegation{
+		decodedSubmodelIdentifier: decodedSubmodelIdentifier,
+		element:                   element,
+		delegationURL:             delegationURL,
+		timeout:                   timeout,
+	}, gen.ImplResponse{}, true
+}
+
+func invokePreparedOperation(
+	ctx context.Context,
+	prepared preparedOperationDelegation,
+	delegatedInput []types.IOperationVariable,
+	operation string,
+) (gen.ImplResponse, error) {
+	statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(ctx, prepared.delegationURL, delegatedInput, prepared.timeout)
 	if delegateErr != nil {
 		slog.ErrorContext(ctx, "delegated operation invocation failed", "error.code", "SMREPO-INVOKEOP-DELEGATE", "error", delegateErr)
 		return newAPIErrorResponse(delegateErr, http.StatusBadGateway, operation, "DelegateOperationCall"), nil
@@ -2674,19 +2692,53 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationSubmodelRepo(ctx contex
 	return gen.Response(http.StatusOK, resultPayload), nil
 }
 
+// InvokeOperationSubmodelRepo - Synchronously or asynchronously invokes an Operation at a specified path
+//
+//nolint:revive
+func (s *SubmodelRepositoryAPIAPIService) InvokeOperationSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, operationRequest gen.OperationRequest, async bool) (gen.ImplResponse, error) {
+	const operation = "InvokeOperationSubmodelRepo"
+
+	if async {
+		return s.invokeOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest)
+	}
+
+	prepared, response, ok := s.prepareOperationDelegation(ctx, submodelIdentifier, idShortPath, operationRequest.ClientTimeoutDuration, operation)
+	if !ok {
+		return response, nil
+	}
+
+	return invokePreparedOperation(ctx, prepared, buildDelegatedOperationInput(operationRequest), operation)
+}
+
 // InvokeOperationValueOnly - Synchronously or asynchronously invokes an Operation at a specified path
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) InvokeOperationValueOnly(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, operationRequestValueOnly gen.OperationRequestValueOnly, async bool) (gen.ImplResponse, error) {
-	_ = ctx
 	_ = aasIdentifier
-	_ = submodelIdentifier
-	_ = idShortPath
-	_ = operationRequestValueOnly
-	_ = async
+	const operation = "InvokeOperationValueOnly"
 
-	delegationUnsupportedErr := errors.New("SMREPO-INVOPVAL-DELEGUNSUPPORTED value-only delegation is not supported")
-	return newAPIErrorResponse(delegationUnsupportedErr, http.StatusBadRequest, "InvokeOperationValueOnly", "DelegationValueOnlyNotSupported"), nil
+	prepared, response, ok := s.prepareOperationDelegation(ctx, submodelIdentifier, idShortPath, operationRequestValueOnly.ClientTimeoutDuration, operation)
+	if !ok {
+		return response, nil
+	}
+	operationRequest, conversionErr := operationRequestFromValueOnly(prepared.element, operationRequestValueOnly)
+	if conversionErr != nil {
+		return newAPIErrorResponse(conversionErr, http.StatusBadRequest, operation, "InvalidValueOnlyArguments"), nil
+	}
+
+	if async {
+		return s.startPreparedOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest, prepared, operation)
+	}
+
+	result, invokeErr := invokePreparedOperation(ctx, prepared, buildDelegatedOperationInput(operationRequest), operation)
+	if invokeErr != nil || result.Code != http.StatusOK {
+		return result, invokeErr
+	}
+	valueOnlyResult, conversionErr := operationResultToValueOnly(result.Body)
+	if conversionErr != nil {
+		return newAPIErrorResponse(conversionErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult"), nil
+	}
+	return gen.Response(http.StatusOK, valueOnlyResult), nil
 }
 
 // InvokeOperationAsync - Asynchronously invokes an Operation at a specified path
@@ -2706,28 +2758,24 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 func (s *SubmodelRepositoryAPIAPIService) invokeOperationAsync(ctx context.Context, submodelIdentifier string, idShortPath string, operationRequest gen.OperationRequest) (gen.ImplResponse, error) {
 	const operation = "InvokeOperationAsync"
 
-	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	prepared, response, ok := s.prepareOperationDelegation(ctx, submodelIdentifier, idShortPath, operationRequest.ClientTimeoutDuration, operation)
 	if !ok {
 		return response, nil
 	}
+	return s.startPreparedOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest, prepared, operation)
+}
 
-	element, response, ok := loadOperationElement(ctx, s.submodelBackend, decodedSubmodelIdentifier, idShortPath, operation)
-	if !ok {
-		return response, nil
-	}
-
-	delegationURL, delegationErr := resolveDelegationURL(element)
-	if delegationErr != nil {
-		if common.IsErrBadRequest(delegationErr) {
-			return newAPIErrorResponse(delegationErr, http.StatusMethodNotAllowed, operation, "InvokeOnlyValidForOperation"), nil
-		}
-		return newAPIErrorResponse(delegationErr, http.StatusNotImplemented, operation, "OperationDelegationMissing"), nil
-	}
-
-	timeout, timeoutErr := parseDelegationTimeout(operationRequest.ClientTimeoutDuration)
-	if timeoutErr != nil {
-		return newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), nil
-	}
+func (s *SubmodelRepositoryAPIAPIService) startPreparedOperationAsync(
+	ctx context.Context,
+	submodelIdentifier string,
+	idShortPath string,
+	operationRequest gen.OperationRequest,
+	prepared preparedOperationDelegation,
+	operation string,
+) (gen.ImplResponse, error) {
+	decodedSubmodelIdentifier := prepared.decodedSubmodelIdentifier
+	delegationURL := prepared.delegationURL
+	timeout := prepared.timeout
 
 	if !s.tryAcquireAsyncDelegationSlot() {
 		capacityErr := errors.New("SMREPO-INVOKEOPASY-CAPACITY asynchronous delegation capacity is exhausted")
@@ -2749,71 +2797,7 @@ func (s *SubmodelRepositoryAPIAPIService) invokeOperationAsync(ctx context.Conte
 	}
 
 	delegatedInput := buildDelegatedOperationInput(operationRequest)
-	go func() {
-		defer s.releaseAsyncDelegationSlot()
-		delegationCtx, cancelDelegation := s.newAsyncDelegationContext(ctx, timeout)
-		defer cancelDelegation()
-		stopHeartbeat := s.asyncJobManager.KeepAlive(delegationCtx, handleID)
-		defer stopHeartbeat()
-
-		statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(delegationCtx, delegationURL, delegatedInput, timeout)
-		if delegateErr != nil {
-			slog.ErrorContext(
-				delegationCtx,
-				"asynchronous delegated operation invocation failed",
-				"error.code", "SMREPO-INVOKEOPASY-DELEGATE",
-				"async_job.handle_id", handleID,
-				"error", delegateErr,
-			)
-			errorResponse := newAPIErrorResponse(delegateErr, http.StatusBadGateway, operation, "DelegateOperationCall")
-			persistenceCtx, cancelPersistence := asyncPersistenceContext(delegationCtx)
-			defer cancelPersistence()
-			if err := s.asyncJobManager.Fail(persistenceCtx, handleID, errorResponse.Code, errorResponse.Body); err != nil {
-				slog.ErrorContext(persistenceCtx, "asynchronous delegated operation failure persistence failed", "error.code", "SMREPO-INVOKEOPASY-PERSISTFAILURE", "error", err, "async_job.handle_id", handleID)
-			}
-			return
-		}
-
-		if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-			slog.WarnContext(
-				delegationCtx,
-				"asynchronous delegated operation returned an unsuccessful status",
-				"error.code", "SMREPO-INVOKEOPASY-STATUS",
-				"async_job.handle_id", handleID,
-				"http.response.status_code", statusCode,
-			)
-			persistenceCtx, cancelPersistence := asyncPersistenceContext(delegationCtx)
-			defer cancelPersistence()
-			if err := s.asyncJobManager.Fail(persistenceCtx, handleID, statusCode, delegatedBody); err != nil {
-				slog.ErrorContext(persistenceCtx, "asynchronous delegated operation failure persistence failed", "error.code", "SMREPO-INVOKEOPASY-PERSISTSTATUS", "error", err, "async_job.handle_id", handleID)
-			}
-			return
-		}
-
-		finalResult, resultErr := toDelegatedOperationResultPayloadFromBody(delegatedBody)
-		if resultErr != nil {
-			slog.ErrorContext(
-				delegationCtx,
-				"asynchronous delegated operation returned an invalid result",
-				"error.code", "SMREPO-INVOKEOPASY-INVALIDRESULT",
-				"async_job.handle_id", handleID,
-				"error", resultErr,
-			)
-			errorResponse := newAPIErrorResponse(resultErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult")
-			persistenceCtx, cancelPersistence := asyncPersistenceContext(delegationCtx)
-			defer cancelPersistence()
-			if err := s.asyncJobManager.Fail(persistenceCtx, handleID, errorResponse.Code, errorResponse.Body); err != nil {
-				slog.ErrorContext(persistenceCtx, "asynchronous delegated operation failure persistence failed", "error.code", "SMREPO-INVOKEOPASY-PERSISTINVALID", "error", err, "async_job.handle_id", handleID)
-			}
-			return
-		}
-
-		persistenceCtx, cancelPersistence := asyncPersistenceContext(delegationCtx)
-		defer cancelPersistence()
-		if err := s.asyncJobManager.CompletePayload(persistenceCtx, handleID, finalResult); err != nil {
-			slog.ErrorContext(persistenceCtx, "asynchronous delegated operation result persistence failed", "error.code", "SMREPO-INVOKEOPASY-PERSISTRESULT", "error", err, "async_job.handle_id", handleID)
-		}
-	}()
+	go s.executePreparedOperationAsync(ctx, handleID, delegationURL, delegatedInput, timeout, operation)
 
 	location := fmt.Sprintf(
 		"/submodels/%s/submodel-elements/%s/operation-status/%s",
@@ -2825,18 +2809,78 @@ func (s *SubmodelRepositoryAPIAPIService) invokeOperationAsync(ctx context.Conte
 	return gen.Response(http.StatusAccepted, openapi.Redirect{Location: location}), nil
 }
 
+func (s *SubmodelRepositoryAPIAPIService) executePreparedOperationAsync(
+	ctx context.Context,
+	handleID string,
+	delegationURL string,
+	delegatedInput []types.IOperationVariable,
+	timeout time.Duration,
+	operation string,
+) {
+	defer s.releaseAsyncDelegationSlot()
+	delegationCtx, cancelDelegation := s.newAsyncDelegationContext(ctx, timeout)
+	defer cancelDelegation()
+	stopHeartbeat := s.asyncJobManager.KeepAlive(delegationCtx, handleID)
+	defer stopHeartbeat()
+
+	statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(delegationCtx, delegationURL, delegatedInput, timeout)
+	if delegateErr != nil {
+		slog.ErrorContext(delegationCtx, "asynchronous delegated operation invocation failed", "error.code", "SMREPO-INVOKEOPASY-DELEGATE", "async_job.handle_id", handleID, "error", delegateErr)
+		errorResponse := newAPIErrorResponse(delegateErr, http.StatusBadGateway, operation, "DelegateOperationCall")
+		s.failPreparedOperationAsync(delegationCtx, handleID, errorResponse, "SMREPO-INVOKEOPASY-PERSISTFAILURE")
+		return
+	}
+
+	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+		slog.WarnContext(delegationCtx, "asynchronous delegated operation returned an unsuccessful status", "error.code", "SMREPO-INVOKEOPASY-STATUS", "async_job.handle_id", handleID, "http.response.status_code", statusCode)
+		s.failPreparedOperationAsync(delegationCtx, handleID, gen.Response(statusCode, delegatedBody), "SMREPO-INVOKEOPASY-PERSISTSTATUS")
+		return
+	}
+
+	finalResult, resultErr := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	if resultErr != nil {
+		slog.ErrorContext(delegationCtx, "asynchronous delegated operation returned an invalid result", "error.code", "SMREPO-INVOKEOPASY-INVALIDRESULT", "async_job.handle_id", handleID, "error", resultErr)
+		errorResponse := newAPIErrorResponse(resultErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult")
+		s.failPreparedOperationAsync(delegationCtx, handleID, errorResponse, "SMREPO-INVOKEOPASY-PERSISTINVALID")
+		return
+	}
+
+	persistenceCtx, cancelPersistence := asyncPersistenceContext(delegationCtx)
+	defer cancelPersistence()
+	if err := s.asyncJobManager.CompletePayload(persistenceCtx, handleID, finalResult); err != nil {
+		slog.ErrorContext(persistenceCtx, "asynchronous delegated operation result persistence failed", "error.code", "SMREPO-INVOKEOPASY-PERSISTRESULT", "error", err, "async_job.handle_id", handleID)
+	}
+}
+
+func (s *SubmodelRepositoryAPIAPIService) failPreparedOperationAsync(ctx context.Context, handleID string, response gen.ImplResponse, errorCode string) {
+	persistenceCtx, cancelPersistence := asyncPersistenceContext(ctx)
+	defer cancelPersistence()
+	if err := s.asyncJobManager.Fail(persistenceCtx, handleID, response.Code, response.Body); err != nil {
+		slog.ErrorContext(persistenceCtx, "asynchronous delegated operation failure persistence failed", "error.code", errorCode, "error", err, "async_job.handle_id", handleID)
+	}
+}
+
 // InvokeOperationAsyncValueOnly - Asynchronously invokes an Operation at a specified path
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsyncValueOnly(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, operationRequestValueOnly gen.OperationRequestValueOnly) (gen.ImplResponse, error) {
-	_ = ctx
 	_ = aasIdentifier
-	_ = submodelIdentifier
-	_ = idShortPath
-	_ = operationRequestValueOnly
+	const operation = "InvokeOperationAsyncValueOnly"
 
-	delegationUnsupportedErr := errors.New("SMREPO-INVOPASYVAL-DELEGUNSUPPORTED value-only delegation is not supported")
-	return newAPIErrorResponse(delegationUnsupportedErr, http.StatusBadRequest, "InvokeOperationAsyncValueOnly", "DelegationValueOnlyNotSupported"), nil
+	if strings.TrimSpace(operationRequestValueOnly.ClientTimeoutDuration) == "" {
+		timeoutRequiredErr := errors.New("SMREPO-INVOKEOPASYVAL-MISSINGTIMEOUT clientTimeoutDuration is required")
+		return newAPIErrorResponse(timeoutRequiredErr, http.StatusBadRequest, operation, "MissingClientTimeoutDuration"), nil
+	}
+
+	prepared, response, ok := s.prepareOperationDelegation(ctx, submodelIdentifier, idShortPath, operationRequestValueOnly.ClientTimeoutDuration, operation)
+	if !ok {
+		return response, nil
+	}
+	operationRequest, conversionErr := operationRequestFromValueOnly(prepared.element, operationRequestValueOnly)
+	if conversionErr != nil {
+		return newAPIErrorResponse(conversionErr, http.StatusBadRequest, operation, "InvalidValueOnlyArguments"), nil
+	}
+	return s.startPreparedOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest, prepared, operation)
 }
 
 // GetOperationAsyncStatus - Returns the status of an asynchronously invoked Operation
@@ -2918,13 +2962,17 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Co
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
-	_ = ctx
-	_ = submodelIdentifier
-	_ = idShortPath
-	_ = handleID
+	const operation = "GetOperationAsyncResultValueOnly"
 
-	delegationUnsupportedErr := errors.New("SMREPO-GETOPASYRESVAL-DELEGUNSUPPORTED value-only async result for delegated operation is not supported")
-	return newAPIErrorResponse(delegationUnsupportedErr, http.StatusNotImplemented, "GetOperationAsyncResultValueOnly", "DelegationValueOnlyNotSupported"), nil
+	result, resultErr := s.GetOperationAsyncResult(ctx, submodelIdentifier, idShortPath, handleID)
+	if resultErr != nil || result.Code != http.StatusOK {
+		return result, resultErr
+	}
+	valueOnlyResult, conversionErr := operationResultToValueOnly(result.Body)
+	if conversionErr != nil {
+		return newAPIErrorResponse(conversionErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult"), nil
+	}
+	return gen.Response(http.StatusOK, valueOnlyResult), nil
 }
 
 // QuerySubmodels returns all Submodels that match the input query.

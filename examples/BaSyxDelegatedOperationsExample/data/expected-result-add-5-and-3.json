@@ -1,0 +1,15 @@
+{
+  "executionState": "Completed",
+  "success": true,
+  "outputArguments": [
+    {
+      "value": {
+        "modelType": "Property",
+        "idShort": "sum",
+        "valueType": "xs:int",
+        "value": "8"
+      }
+    }
+  ],
+  "inoutputArguments": []
+}

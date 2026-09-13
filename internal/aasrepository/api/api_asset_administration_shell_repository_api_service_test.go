@@ -139,3 +139,12 @@ func TestInvokeOperationAsyncAasRepositoryRequiresClientTimeoutDuration(t *testi
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, response.Code)
 }
+
+func TestInvokeOperationAsyncValueOnlyAasRepositoryRequiresClientTimeoutDuration(t *testing.T) {
+	t.Parallel()
+
+	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, false)
+	response, err := sut.InvokeOperationAsyncValueOnlyAasRepository(contextWithABACDisabled(t), "", "", "", model.OperationRequestValueOnly{})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, response.Code)
+}
