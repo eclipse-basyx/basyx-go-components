@@ -432,7 +432,7 @@ func (s *SerializationAPIService) loadConceptDescriptions(ctx context.Context, i
 	result := make([]aastypes.IConceptDescription, 0)
 	cursor := ""
 	for {
-		conceptDescriptionPage, nextCursor, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(ctx, nil, nil, nil, uint(defaultListPageSize), &cursor, time.Time{}, time.Time{})
+		conceptDescriptionPage, nextCursor, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(ctx, nil, uint(defaultListPageSize), &cursor, time.Time{}, time.Time{})
 		if getErr != nil {
 			return nil, getErr
 		}

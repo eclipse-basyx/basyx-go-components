@@ -57,7 +57,7 @@ func RunAPIParameterConformance(t *testing.T, baseURL string, headers http.Heade
 func runAPIEndpointConformance(t *testing.T, baseURL string, headers http.Header, endpoint APIConformanceEndpoint) {
 	t.Helper()
 	runInvalidAPIParameterCases(t, baseURL, headers, endpoint, "limit", []string{"", "0", "-1", "1.5", "2147483648"})
-	runInvalidAPIParameterCases(t, baseURL, headers, endpoint, "cursor", []string{"", "YQ=", "YQ==", "YR", "Y/Q", "Y+Q", "YQ\n", " YQ", "_w"})
+	runInvalidAPIParameterCases(t, baseURL, headers, endpoint, "cursor", []string{"", "YQ=", "YQ===", "YR==", "YR", "Y/Q", "Y+Q", "YQ\n", " YQ", "_w"})
 	for _, filter := range endpoint.Filters {
 		values := []string{"", "YQ=", "YQ\n", "_w"}
 		if filter != "assetType" {

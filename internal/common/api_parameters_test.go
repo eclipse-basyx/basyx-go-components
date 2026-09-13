@@ -26,19 +26,22 @@
 package common
 
 import (
+	"encoding/base64"
 	"net/url"
 	"strings"
 	"testing"
 )
 
 func TestDecodeAPIString(t *testing.T) {
-	for _, value := range []string{"urn:example:abc", "Grüße 世界", "\t\n"} {
-		got, err := DecodeAPIString(EncodeString(value))
-		if err != nil || got != value {
-			t.Fatalf("round trip %q: %q, %v", value, got, err)
+	for _, value := range []string{"a", "ab", "urn:example:abc", "Grüße 世界", "\t\n"} {
+		for _, encoding := range []*base64.Encoding{base64.RawURLEncoding, base64.URLEncoding} {
+			got, err := DecodeAPIString(encoding.EncodeToString([]byte(value)))
+			if err != nil || got != value {
+				t.Fatalf("round trip %q: %q, %v", value, got, err)
+			}
 		}
 	}
-	for _, input := range []string{"", "YQ=", "YQ==", "Y+Q", "Y/Q", "YQ\n", "YQ\r", " YQ", "YQ ", "a", "YR", "_w"} {
+	for _, input := range []string{"", "YQ=", "YQ===", "Y=Q=", "YR==", "Y+Q", "Y/Q", "YQ\n", "YQ\r", "YQ==\n", " YQ", "YQ ", "a", "YR", "_w", "_w=="} {
 		t.Run(input, func(t *testing.T) {
 			if _, err := DecodeAPIString(input); err == nil {
 				t.Fatal("accepted malformed parameter")

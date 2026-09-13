@@ -234,6 +234,9 @@ func RunReferenceVisibilityConformance(t *testing.T, baseURL string, admin, read
 			}
 		})
 	}
+	t.Run("supplemental_collection", func(t *testing.T) {
+		runSupplementalReferenceCollectionVisibility(t, baseURL, admin, reader, visibleSemantic)
+	})
 }
 
 // RunAssetPairConformance checks conjunction, pair correlation and continuation across pages.
@@ -300,4 +303,37 @@ func requireQueryCursorRoundTrip(t *testing.T, baseURL string, want int) {
 		query.Set("cursor", token.(string))
 	}
 	t.Fatal("query pagination did not terminate")
+}
+
+func runSupplementalReferenceCollectionVisibility(t *testing.T, baseURL string, admin, reader http.Header, visibleSemantic string) {
+	id := fmt.Sprintf("urn:conformance:collection-visibility:%d", time.Now().UnixNano())
+	idShort := fmt.Sprintf("CollectionVisibility%d", time.Now().UnixNano())
+	hidden := referenceFixture(id + ":hidden")
+	body := map[string]any{"modelType": "Submodel", "id": id, "idShort": idShort,
+		"semanticId":              referenceFixture(visibleSemantic),
+		"supplementalSemanticIds": []any{hidden}}
+	conformanceRequest(t, http.MethodPost, baseURL+"/submodels", body, http.StatusCreated, admin)
+	t.Cleanup(func() {
+		conformanceRequest(t, http.MethodDelete, baseURL+"/submodels/"+common.EncodeString(id), nil, http.StatusNoContent, admin)
+	})
+	query := url.Values{"idShort": {idShort}}
+	visible := conformanceRequest(t, http.MethodGet, baseURL+"/submodels?"+query.Encode(), nil, http.StatusOK, reader)
+	rows := visible["result"].([]any)
+	if len(rows) != 1 {
+		t.Fatalf("setup: expected one visible owner, got %#v", visible)
+	}
+	owner := rows[0].(map[string]any)
+	supplemental, present := owner["supplementalSemanticIds"]
+	if present && supplemental != nil && len(supplemental.([]any)) > 0 {
+		t.Fatalf("setup: collection mask failed to hide supplemental reference: %#v", owner)
+	}
+	query.Set("semanticId", encodedReferenceFixture(t, hidden))
+	allowed := conformanceRequest(t, http.MethodGet, baseURL+"/submodels?"+query.Encode(), nil, http.StatusOK, admin)
+	if len(allowed["result"].([]any)) != 1 {
+		t.Fatalf("administrator cannot match supplemental reference: %#v", allowed)
+	}
+	matched := conformanceRequest(t, http.MethodGet, baseURL+"/submodels?"+query.Encode(), nil, http.StatusOK, reader)
+	if len(matched["result"].([]any)) != 0 {
+		t.Fatalf("hidden supplemental reference matched owner; expected 0 results, got %#v", matched)
+	}
 }

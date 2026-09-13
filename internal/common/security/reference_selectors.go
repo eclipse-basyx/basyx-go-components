@@ -30,6 +30,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -181,7 +182,10 @@ func visibleReferenceKeys(ctx context.Context, predicate referencePredicate, spe
 	}
 	collector.SetRootJoinKey("submodel", "id")
 	collector.AllowInlineAliases("submodel", spec.alias, keyAlias)
-	fragments := make([]grammar.FragmentStringPattern, 0, 5)
+	fragments := make([]grammar.FragmentStringPattern, 0, 6)
+	if strings.HasSuffix(spec.fragment, "[]") {
+		fragments = append(fragments, grammar.FragmentStringPattern(strings.TrimSuffix(spec.fragment, "[]")))
+	}
 	for _, suffix := range []string{"", ".type", ".keys[]", ".keys[].type", ".keys[].value"} {
 		fragments = append(fragments, grammar.FragmentStringPattern(spec.fragment+suffix))
 	}

@@ -70,7 +70,7 @@ func TestInvalidSubmodelIdentifierDoesNotMutateEnvironmentOrDescriptor(t *testin
 		_, _, _ = doAASEnvRawJSONRequest(http.MethodDelete, aasEnvBaseURL+"/submodels/"+common.EncodeString(id), nil)
 	})
 	payload["idShort"] = "AfterInvalidPut"
-	status, body, err = doAASEnvRawJSONRequest(http.MethodPut, aasEnvBaseURL+"/submodels/"+common.EncodeString(id)+"=", payload)
+	status, body, err = doAASEnvRawJSONRequest(http.MethodPut, aasEnvBaseURL+"/submodels/"+common.EncodeString(id)+"===", payload)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, status, string(body))
 	db, err := sql.Open("pgx", integrationTestDSN)

@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -39,17 +40,21 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-// DecodeAPIString decodes a nonempty, canonical UTF-8 base64url API parameter.
+// DecodeAPIString decodes a nonempty UTF-8 base64url API parameter with optional padding.
 func DecodeAPIString(encoded string) (string, error) {
 	if encoded == "" {
 		return "", NewErrBadRequest("COMMON-APIPARAM-EMPTY encoded value must not be empty")
 	}
 	for _, c := range encoded {
-		if (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' && c != '_' {
-			return "", NewErrBadRequest("COMMON-APIPARAM-ALPHABET expected unpadded base64url")
+		if (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' && c != '_' && c != '=' {
+			return "", NewErrBadRequest("COMMON-APIPARAM-ALPHABET expected base64url")
 		}
 	}
-	decoded, err := base64.RawURLEncoding.Strict().DecodeString(encoded)
+	encoding := base64.RawURLEncoding.Strict()
+	if strings.HasSuffix(encoded, "=") {
+		encoding = base64.URLEncoding.Strict()
+	}
+	decoded, err := encoding.DecodeString(encoded)
 	if err != nil {
 		return "", NewErrBadRequest("COMMON-APIPARAM-DECODE " + err.Error())
 	}

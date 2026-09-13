@@ -124,7 +124,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx
 	if queryContextErr != nil {
 		return common.NewErrorResponse(queryContextErr, http.StatusInternalServerError, componentName, operation, "BuildAuthorizedQuery"), queryContextErr
 	}
-	cds, nextCursor, err := s.d.GetConceptDescriptions(queryCtx, nil, nil, nil, uint(uintLimit64), &decodedCursor, time.Time{}, time.Time{})
+	cds, nextCursor, err := s.d.GetConceptDescriptions(queryCtx, nil, uint(uintLimit64), &decodedCursor, time.Time{}, time.Time{})
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -191,7 +191,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 	if referenceErr != nil {
 		return common.NewErrorResponse(referenceErr, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "BuildAuthorizedSelectors"), nil
 	}
-	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, nil, nil, uintLimit, &decodedCursor, createdFrom, updatedFrom)
+	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, uintLimit, &decodedCursor, createdFrom, updatedFrom)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -237,7 +237,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionsRec
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadLimit"), nil
 	}
 
-	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, nil, nil, uint(uintLimit64), &decodedCursor, createdFrom, updatedFrom)
+	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, uint(uintLimit64), &decodedCursor, createdFrom, updatedFrom)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
