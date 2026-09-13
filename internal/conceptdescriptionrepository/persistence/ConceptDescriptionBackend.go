@@ -450,7 +450,7 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 }
 
 // GetConceptDescriptions retrieves a paginated list of concept descriptions with optional filters.
-func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, idShort *string, isCaseOf *string, dataSpecificationRef *string, limit uint, cursor *string, createdFrom time.Time, updatedFrom time.Time) ([]types.IConceptDescription, string, error) {
+func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, idShort *string, limit uint, cursor *string, createdFrom time.Time, updatedFrom time.Time) ([]types.IConceptDescription, string, error) {
 	readDB := b.readDB(ctx)
 	if limit == 0 {
 		limit = 100
@@ -480,23 +480,6 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 		query = query.Where(goqu.Ex{"id_short": strings.TrimSpace(*idShort)})
 	}
 
-	if isCaseOf != nil && strings.TrimSpace(*isCaseOf) != "" {
-		query = query.Where(goqu.L(`EXISTS (
-			SELECT 1
-			FROM jsonb_array_elements(COALESCE(data->'isCaseOf', '[]'::jsonb)) AS is_case_of,
-				 jsonb_array_elements(COALESCE(is_case_of->'keys', '[]'::jsonb)) AS key_item
-			WHERE key_item->>'value' = ?
-		)`, strings.TrimSpace(*isCaseOf)))
-	}
-
-	if dataSpecificationRef != nil && strings.TrimSpace(*dataSpecificationRef) != "" {
-		query = query.Where(goqu.L(`EXISTS (
-			SELECT 1
-			FROM jsonb_array_elements(COALESCE(data->'embeddedDataSpecifications', '[]'::jsonb)) AS eds,
-				 jsonb_array_elements(COALESCE(eds->'dataSpecification'->'keys', '[]'::jsonb)) AS key_item
-			WHERE key_item->>'value' = ?
-		)`, strings.TrimSpace(*dataSpecificationRef)))
-	}
 	switch {
 	case !createdFrom.IsZero() && !updatedFrom.IsZero():
 		query = query.Where(goqu.Or(
@@ -520,6 +503,10 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 			Where(goqu.C("id").Gte(trimmedCursor))
 	}
 
+	query, referenceErr := auth.AddReferenceSelectorQuery(ctx, query, auth.SemanticResourceCD)
+	if referenceErr != nil {
+		return nil, "", common.NewInternalServerError("CDREPO-LIST-REFERENCE " + referenceErr.Error())
+	}
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
 		return nil, "", common.NewInternalServerError("CDREPO-GCDS-SHOULDENFORCE " + enforceErr.Error())

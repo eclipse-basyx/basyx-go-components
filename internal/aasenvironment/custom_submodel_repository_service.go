@@ -168,7 +168,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeErr != nil {
 		return newSubmodelRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -240,7 +240,7 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeAPIIdentifier(id)
 	if decodeErr != nil {
 		return newSubmodelRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -285,7 +285,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeErr != nil {
 		return newSubmodelRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -378,7 +378,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeErr != nil {
 		return newSubmodelRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}

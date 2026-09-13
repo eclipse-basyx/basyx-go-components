@@ -224,34 +224,26 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "AAS descriptor limit parsing failed", "error.code", "AASREGISTRYAPI-GETALLASSETADMINISTRATIONSHELLDESCRIPTORS-PARSELIMIT", "error", err, "limit", query.Get("limit"))
-			result := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				componentName,
-				"GetAllAssetAdministrationShellDescriptors",
-				"limit",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
-	var cursorParam string
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 	assetKindParam, assetKindErrResponse := parseOptionalAssetKind(r.Context(), query, "GetAllAssetAdministrationShellDescriptors")
 	if assetKindErrResponse != nil {
 		EncodeJSONResponse(assetKindErrResponse.Body, &assetKindErrResponse.Code, w)
+		return
+	}
+	if parameterErr := common.ValidateAPIEncodedQuery(query, "assetType", 2048); parameterErr != nil {
+		result := common.NewErrorResponse(parameterErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "assetType")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
 	var assetTypeParam string
@@ -503,29 +495,17 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllSubmodelDescrip
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			result := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				componentName,
-				"GetAllSubmodelDescriptorsThroughSuperpath",
-				"limit",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
-	var cursorParam string
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 	result, err := c.service.GetAllSubmodelDescriptorsThroughSuperpath(r.Context(), aasIdentifierParam, limitParam, cursorParam)
 	if err != nil {
@@ -778,31 +758,17 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) QueryAssetAdministrat
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "AAS descriptor query limit parsing failed", "error.code", "AASREGISTRYAPI-QUERYASSETADMINISTRATIONSHELLDESCRIPTORS-PARSELIMIT", "error", err, "limit", query.Get("limit"))
-			result := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				componentName,
-				"QueryAssetAdministrationShellDescriptors",
-				"limit",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QueryAssetAdministrationShellDescriptors", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
-	var cursorParam string
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QueryAssetAdministrationShellDescriptors", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 	var queryParam grammar.Query
 	d := json.NewDecoder(r.Body)

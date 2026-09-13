@@ -106,47 +106,20 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetAdmi
 		return
 	}
 
-	var assetIdsParam []string
-	if vals, ok := query["assetIds"]; ok {
-		for _, v := range vals {
-			if v == "" {
-				continue
-			}
-			parts := strings.Split(v, ",")
-			for _, p := range parts {
-				p = strings.TrimSpace(p)
-				if p != "" {
-					assetIdsParam = append(assetIdsParam, p)
-				}
-			}
-		}
+	assetIdsParam := query["assetIds"]
+
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellIdsByAssetLink", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "asset link query limit parsing failed", "error.code", "DISCOVERYAPI-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-PARSELIMIT", "error", err, "limit", query.Get("limit"))
-			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid 'limit' parameter"),
-				http.StatusBadRequest,
-				componentName,
-				"GetAllAssetAdministrationShellIdsByAssetLink",
-				"limit",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-		limitParam = param
-	}
-
-	var cursorParam string
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellIdsByAssetLink", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	result, err := c.service.GetAllAssetAdministrationShellIdsByAssetLink(r.Context(), assetIdsParam, limitParam, cursorParam)
@@ -176,31 +149,18 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 		return
 	}
 
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "asset link search limit parsing failed", "error.code", "DISCOVERYAPI-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-PARSELIMIT", "error", err, "limit", query.Get("limit"))
-			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid 'limit' parameter"),
-				http.StatusBadRequest,
-				componentName,
-				"SearchAllAssetAdministrationShellIdsByAssetLink",
-				"limit",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-		limitParam = param
+	limitParam, paginationErr := common.ParseAPILimit(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "limit")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
-	var cursorParam string
-	if query.Has("cursor") {
-		cursorParam = query.Get("cursor")
+	cursorParam, paginationErr := common.ParseAPICursor(query)
+	if paginationErr != nil {
+		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "cursor")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 
 	// Body: []AssetLink

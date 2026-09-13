@@ -28,6 +28,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -254,27 +255,28 @@ type allSubmodelsPathCursorState struct {
 	PathCursor     string `json:"pathCursor,omitempty"`
 }
 
-func decodeAllSubmodelsPathCursorState(cursor string) allSubmodelsPathCursorState {
-	if strings.TrimSpace(cursor) == "" {
-		return allSubmodelsPathCursorState{}
+func decodeAllSubmodelsPathCursorState(cursor string) (allSubmodelsPathCursorState, error) {
+	if cursor == "" {
+		return allSubmodelsPathCursorState{}, nil
 	}
-
 	var state allSubmodelsPathCursorState
-	if unmarshalErr := json.Unmarshal([]byte(cursor), &state); unmarshalErr == nil {
-		if state.SubmodelCursor != "" || state.PathCursor != "" {
-			return state
-		}
+	decoder := json.NewDecoder(strings.NewReader(cursor))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&state); err != nil {
+		return state, common.NewErrBadRequest("SMREPO-DECPATHCURSOR-JSON " + err.Error())
 	}
-
-	return allSubmodelsPathCursorState{SubmodelCursor: cursor}
+	if state.SubmodelCursor == "" {
+		return state, common.NewErrBadRequest("SMREPO-DECPATHCURSOR-EMPTY submodel cursor is required")
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return state, common.NewErrBadRequest("SMREPO-DECPATHCURSOR-TRAILING unexpected data")
+	}
+	return state, nil
 }
 
 func encodeAllSubmodelsPathCursorState(state allSubmodelsPathCursorState) (string, error) {
 	if state.SubmodelCursor == "" && state.PathCursor == "" {
 		return "", nil
-	}
-	if state.PathCursor == "" {
-		return state.SubmodelCursor, nil
 	}
 
 	payload, marshalErr := json.Marshal(state)

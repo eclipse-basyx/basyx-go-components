@@ -845,7 +845,7 @@ func TestContractSubmodelRepository(t *testing.T) {
 		createSemanticSubmodel(matchingID, "MetadataValueFilterMatch", semanticMatch, "FilteredValueOnlyMatch", "match-value")
 		createSemanticSubmodel(otherID, "MetadataValueFilterOther", semanticOther, "FilteredValueOnlyOther", "other-value")
 
-		encodedSemanticMatch := common.EncodeString(semanticMatch)
+		encodedSemanticMatch := testenv.EncodeExternalReference(semanticMatch)
 		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$metadata?limit=10&semanticId=%s", baseURL, encodedSemanticMatch), nil)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
@@ -1644,7 +1644,7 @@ func TestPathNotationEndpoints(t *testing.T) {
 			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, otherSubmodelIDEncoded), nil)
 		})
 
-		encodedSemanticMatch := common.EncodeString(semanticMatch)
+		encodedSemanticMatch := testenv.EncodeExternalReference(semanticMatch)
 		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?level=deep&limit=500&semanticId=%s", baseURL, encodedSemanticMatch), nil)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
@@ -1661,7 +1661,7 @@ func TestPathNotationEndpoints(t *testing.T) {
 
 	t.Run("GetAllSubmodelsPathPaginatesByPathItems", func(t *testing.T) {
 		semanticPage := fmt.Sprintf("urn:basyx:semantic:path-page-%d", time.Now().UnixNano())
-		encodedSemanticPage := common.EncodeString(semanticPage)
+		encodedSemanticPage := testenv.EncodeExternalReference(semanticPage)
 
 		createPathPageSubmodel := func(idSuffix string, topPath string) string {
 			submodelID := fmt.Sprintf("urn:basyx:integration:path-page-%s-%d", idSuffix, time.Now().UnixNano())

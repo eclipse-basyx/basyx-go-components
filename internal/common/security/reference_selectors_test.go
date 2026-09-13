@@ -22,53 +22,51 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
 
-package api
+package auth
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
-	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/stretchr/testify/require"
 )
 
-func contextWithABACDisabled(t *testing.T) context.Context {
-	t.Helper()
-
-	cfg := &common.Config{}
-	var cfgCtx context.Context
-	handler := common.ConfigMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		cfgCtx = r.Context()
-	}))
-	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
-
-	require.NotNil(t, cfgCtx)
-	return cfgCtx
-}
-
-func TestGetAllConceptDescriptionsRejectsInvalidCursorWithStandardErrorBody(t *testing.T) {
-	t.Parallel()
-
-	invalidCursor := "%"
-	_, expectedDecodeErr := common.DecodeAPIString(invalidCursor)
-	require.Error(t, expectedDecodeErr)
-
-	sut := NewConceptDescriptionRepositoryAPIAPIService(nil)
-	response, err := sut.GetAllConceptDescriptions(contextWithABACDisabled(t), "", "", "", 1, invalidCursor, time.Time{}, time.Time{})
-
-	require.NoError(t, err)
-	require.Equal(t, http.StatusBadRequest, response.Code)
-
-	handlers, ok := response.Body.([]common.ErrorHandler)
-	require.True(t, ok)
-	require.Len(t, handlers, 1)
-	require.Equal(t, "Error", handlers[0].MessageType)
-	require.Equal(t, expectedDecodeErr.Error(), handlers[0].Text)
-	require.Equal(t, "400", handlers[0].Code)
-	require.Equal(t, "CDREPO-400-GetAllConceptDescriptions-BadRequest-BadCursor", handlers[0].CorrelationID)
-	require.NotEmpty(t, handlers[0].Timestamp)
+func TestReferenceSelectorSnapshotsInput(t *testing.T) {
+	reference, err := common.DecodeAPIReference(common.EncodeString(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:original"}]}`), 3072)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := common.ContextWithConfig(context.Background(), &common.Config{})
+	ctx, err = WithAuthorizedReferenceSelectors(ctx, SemanticResourceSM, ReferenceSelector{Field: "$sm#semanticId", Reference: reference})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference.Keys()[0].SetValue("urn:mutated")
+	query, err := AddReferenceSelectorQuery(ctx, goqu.Dialect("postgres").From("submodel").Select("id"), SemanticResourceSM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql, args, err := query.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "submodel_supplemental_semantic_id_reference") {
+		t.Fatal("missing supplemental predicate")
+	}
+	original := false
+	for _, arg := range args {
+		if arg == "urn:mutated" {
+			t.Fatal("caller mutated the published predicate")
+		}
+		if arg == "urn:original" {
+			original = true
+		}
+	}
+	if !original {
+		t.Fatal("lost reference key")
+	}
 }

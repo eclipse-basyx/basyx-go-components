@@ -61,6 +61,11 @@ func (s *operationRequestParsingService) InvokeOperationValueOnly(_ context.Cont
 	return model.Response(http.StatusOK, nil), nil
 }
 
+func (s *operationRequestParsingService) InvokeOperationAsyncValueOnly(_ context.Context, _ string, _ string, _ string, _ model.OperationRequestValueOnly) (model.ImplResponse, error) {
+	s.invoked = true
+	return model.Response(http.StatusAccepted, nil), nil
+}
+
 func TestInvokeOperationSubmodelRepoReturnsStandardizedErrorForBooleanValue(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -86,29 +91,38 @@ func TestInvokeOperationSubmodelRepoReturnsStandardizedErrorForBooleanValue(t *t
 	assertStandardizedOperationError(t, response.Body.Bytes(), "400")
 }
 
-func TestInvokeOperationValueOnlyReturnsUnprocessableEntityForMissingRequiredField(t *testing.T) {
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/submodels/sm/submodel-elements/operation/invoke/$value",
-		bytes.NewBufferString(`{}`),
-	)
-	addRouteParam(request, "submodelIdentifier", "sm")
-	addRouteParam(request, "idShortPath", "operation")
-
-	service := &operationRequestParsingService{}
-	controller := NewSubmodelRepositoryAPIAPIController(service, "", "")
-	response := httptest.NewRecorder()
-
-	controller.InvokeOperationValueOnly(response, request)
-
-	if response.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusUnprocessableEntity, response.Code, response.Body.String())
+func TestValueOnlyOperationTimeoutRequirement(t *testing.T) {
+	for _, test := range []struct {
+		name, body string
+		async      bool
+		status     int
+	}{
+		{"sync_without_timeout", `{}`, false, http.StatusOK},
+		{"async_without_timeout", `{}`, true, http.StatusBadRequest},
+		{"async_empty_timeout", `{"clientTimeoutDuration":""}`, true, http.StatusBadRequest},
+		{"async_blank_timeout", `{"clientTimeoutDuration":" "}`, true, http.StatusBadRequest},
+		{"async_with_timeout", `{"clientTimeoutDuration":"PT1S"}`, true, http.StatusAccepted},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(test.body))
+			addRouteParam(request, "submodelIdentifier", "sm")
+			addRouteParam(request, "idShortPath", "operation")
+			service := &operationRequestParsingService{}
+			controller := NewSubmodelRepositoryAPIAPIController(service, "", "")
+			response := httptest.NewRecorder()
+			if test.async {
+				controller.InvokeOperationAsyncValueOnly(response, request)
+			} else {
+				controller.InvokeOperationValueOnly(response, request)
+			}
+			if response.Code != test.status || service.invoked != (test.status < 400) {
+				t.Fatalf("status=%d invoked=%t body=%s", response.Code, service.invoked, response.Body.String())
+			}
+			if test.status == http.StatusBadRequest {
+				assertStandardizedOperationError(t, response.Body.Bytes(), "400")
+			}
+		})
 	}
-	if service.invoked {
-		t.Fatal("expected invalid request to be rejected before service invocation")
-	}
-
-	assertStandardizedOperationError(t, response.Body.Bytes(), "422")
 }
 
 func assertStandardizedOperationError(t *testing.T, responseBody []byte, expectedCode string) {

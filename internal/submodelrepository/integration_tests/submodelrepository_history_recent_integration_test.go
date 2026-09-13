@@ -31,6 +31,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"net/http"
 	"net/url"
 	"testing"
@@ -49,7 +50,7 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
 	semanticID := "urn:example:semantic:history"
 	supplementalSemanticID := "urn:example:semantic:history:supplemental"
-	encodedSemanticID := base64.RawURLEncoding.EncodeToString([]byte(semanticID))
+	encodedSemanticID := testenv.EncodeExternalReference(semanticID)
 
 	t.Cleanup(func() {
 		status, _, err := requestJSON(http.MethodDelete, baseURL+"/submodels/"+encodedSubmodelID, nil)
@@ -72,7 +73,7 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 			"updatedAt": "2026-01-02T03:04:06Z",
 		},
 		"semanticId": map[string]any{
-			"type": "ModelReference",
+			"type": "ExternalReference",
 			"keys": []any{map[string]any{"type": "GlobalReference", "value": semanticID}},
 		},
 		"supplementalSemanticIds": []any{map[string]any{
