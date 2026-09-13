@@ -56,6 +56,7 @@ func TestAASRepositoryEventFeedDisabledByDefault(t *testing.T) {
 func TestAASRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
 	received := testenv.SubscribeMQTT(t, mqttBrokerURL, "basyx/#")
 	kafkaEvents := testenv.SubscribeKafka(t)
+	amqpEvents := testenv.SubscribeAMQP(t)
 	baseURL := aasRepositoryEventFeedBaseURL
 	aasID := fmt.Sprintf("urn:example:event-feed:noop:aas:%d", time.Now().UnixNano())
 	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
@@ -98,15 +99,27 @@ func TestAASRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
 	created, updated = waitForAASFeedEventCounts(t, baseURL, aasID, 1, 1, 5*time.Second)
 	require.Equal(t, 1, created, "expected exactly one aas.created event")
 	require.Equal(t, 1, updated, "a content change must still emit exactly one aas.updated event")
-	kafkaEvents.AssertEvent(t, testenv.AwaitMQTT(t, received, aasID, "io.admin-shell.aas.created.v1").Event, "aas_history:"+aasID)
-	kafkaEvents.AssertEvent(t, testenv.AwaitMQTT(t, received, "urn:example:event-feed:noop:asset", "io.admin-shell.asset.created.v1").Event, "aas_history:"+aasID)
-	kafkaEvents.AssertEvent(t, testenv.AwaitMQTT(t, received, aasID, "io.admin-shell.aas.updated.v1").Event, "aas_history:"+aasID)
-	kafkaEvents.AssertEvent(t, testenv.AwaitMQTT(t, received, "urn:example:event-feed:noop:asset", "io.admin-shell.asset.updated.v1").Event, "aas_history:"+aasID)
+	event1 := testenv.AwaitMQTT(t, received, aasID, "io.admin-shell.aas.created.v1").Event
+	kafkaEvents.AssertEvent(t, event1, "aas_history:"+aasID)
+	amqpEvents.AssertEvent(t, event1)
+	event2 := testenv.AwaitMQTT(t, received, "urn:example:event-feed:noop:asset", "io.admin-shell.asset.created.v1").Event
+	kafkaEvents.AssertEvent(t, event2, "aas_history:"+aasID)
+	amqpEvents.AssertEvent(t, event2)
+	event3 := testenv.AwaitMQTT(t, received, aasID, "io.admin-shell.aas.updated.v1").Event
+	kafkaEvents.AssertEvent(t, event3, "aas_history:"+aasID)
+	amqpEvents.AssertEvent(t, event3)
+	event4 := testenv.AwaitMQTT(t, received, "urn:example:event-feed:noop:asset", "io.admin-shell.asset.updated.v1").Event
+	kafkaEvents.AssertEvent(t, event4, "aas_history:"+aasID)
+	amqpEvents.AssertEvent(t, event4)
 	status, err = deleteResponseStatus(baseURL + "/shells/" + encodedAASID)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, status)
-	kafkaEvents.AssertEvent(t, testenv.AwaitMQTT(t, received, aasID, "io.admin-shell.aas.deleted.v1").Event, "aas_history:"+aasID)
-	kafkaEvents.AssertEvent(t, testenv.AwaitMQTT(t, received, "urn:example:event-feed:noop:asset", "io.admin-shell.asset.deleted.v1").Event, "aas_history:"+aasID)
+	event5 := testenv.AwaitMQTT(t, received, aasID, "io.admin-shell.aas.deleted.v1").Event
+	kafkaEvents.AssertEvent(t, event5, "aas_history:"+aasID)
+	amqpEvents.AssertEvent(t, event5)
+	event6 := testenv.AwaitMQTT(t, received, "urn:example:event-feed:noop:asset", "io.admin-shell.asset.deleted.v1").Event
+	kafkaEvents.AssertEvent(t, event6, "aas_history:"+aasID)
+	amqpEvents.AssertEvent(t, event6)
 }
 
 // waitForAASFeedEventCounts polls the event feed until at least wantCreated

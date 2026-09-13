@@ -186,3 +186,64 @@ func TestKafkaProducerBatchSizeConfiguration(t *testing.T) {
 		require.ErrorContains(t, err, "BATCHSIZE")
 	}
 }
+
+func TestAMQPConfiguration(t *testing.T) {
+	cfg := &Config{}
+	applyAMQPEnvOverrides(cfg)
+	t.Setenv("BASYX_EVENTING_AMQP_BROKER", "amqp://localhost:5672")
+	t.Setenv("BASYX_EVENTING_AMQP_ADDRESS", "/queues/events")
+	t.Setenv("BASYX_EVENTING_AMQP_SINK_ID", "amqp")
+	t.Setenv("BASYX_EVENTING_AMQP_HOST_NAME", "vhost:test")
+	t.Setenv("BASYX_EVENTING_AMQP_USERNAME", "user")
+	t.Setenv("BASYX_EVENTING_AMQP_PASSWORD", "secret")
+	applyAMQPEnvOverrides(cfg)
+	require.Equal(t, "vhost:test", cfg.Eventing.AMQP.HostName)
+	require.Equal(t, "secret", cfg.Eventing.AMQP.Password)
+	cfg.Eventing.Enabled = true
+	cfg.Eventing.OutboxEnabled = true
+	cfg.Eventing.Sinks = []string{"amqp"}
+	require.True(t, cfg.Eventing.AMQPEnabled())
+	require.True(t, cfg.Eventing.TransportsEnabled())
+	require.NoError(t, validateEventTransports(cfg.Eventing))
+	cfg.Eventing.Sinks = []string{"amqp", "amqp"}
+	require.Error(t, validateEventTransports(cfg.Eventing))
+	cfg.Eventing.Sinks = []string{"amqp"}
+	cfg.Eventing.OutboxEnabled = false
+	require.Error(t, validateEventTransports(cfg.Eventing))
+}
+
+func TestAMQPYAMLDefaultsAndSinkIsolation(t *testing.T) {
+	cfg, err := LoadConfig("")
+	require.NoError(t, err)
+	require.Equal(t, "amqp", cfg.Eventing.AMQP.SinkID)
+	require.False(t, cfg.Eventing.AMQPEnabled())
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`eventing:
+  enabled: true
+  sinks: [amqp]
+  outboxEnabled: true
+  amqp:
+    broker: amqp://localhost:5672
+    address: /queues/events
+`), 0600))
+	cfg, err = LoadConfig(path)
+	require.NoError(t, err)
+	require.True(t, cfg.Eventing.AMQPEnabled())
+	require.Equal(t, "/queues/events", cfg.Eventing.AMQP.Address)
+	cfg.Eventing.Sinks = []string{"amqp", "kafka"}
+	cfg.Eventing.Kafka.Brokers = []string{"localhost:9092"}
+	cfg.Eventing.Kafka.SinkID = "amqp"
+	require.ErrorContains(t, validateEventTransports(cfg.Eventing), "CONFIG-EVENTING-SINKID")
+	cfg.Eventing.Kafka.SinkID = "kafka"
+	require.NoError(t, validateEventTransports(cfg.Eventing))
+	t.Setenv("BASYX_EVENTING_AMQP_ADDRESS", "/queues/override")
+	t.Setenv("BASYX_EVENTING_AMQP_USERNAME", "private-amqp-user")
+	t.Setenv("BASYX_EVENTING_AMQP_PASSWORD", "private-amqp-secret")
+	cfg, err = LoadConfig(path)
+	require.NoError(t, err)
+	require.Equal(t, "/queues/override", cfg.Eventing.AMQP.Address)
+	raw, err := json.Marshal(cfg)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "private-amqp-user")
+	require.NotContains(t, string(raw), "private-amqp-secret")
+}

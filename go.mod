@@ -3,6 +3,7 @@ module github.com/eclipse-basyx/basyx-go-components
 go 1.27.1
 
 require (
+	github.com/Azure/go-amqp v1.7.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/FriedJannik/aas-go-sdk v1.3.2
 	github.com/aas-core-works/aas-package3-golang/v2 v2.0.0

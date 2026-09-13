@@ -38,6 +38,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/amqp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/kafka"
 	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -328,6 +329,7 @@ type HistoryIntegrityAnchorConfig struct {
 
 // EventingConfig configures the CloudEvents feed and asynchronous transports.
 type EventingConfig struct {
+	AMQP          amqp.Config     `mapstructure:"amqp" yaml:"amqp" json:"amqp"`
 	Kafka         kafka.Config    `mapstructure:"kafka" yaml:"kafka" json:"kafka"`
 	SourceBaseURL string          `mapstructure:"sourceBaseUrl" yaml:"sourceBaseUrl" json:"sourceBaseUrl"`
 	SchemaBaseURL string          `mapstructure:"schemaBaseUrl" yaml:"schemaBaseUrl" json:"schemaBaseUrl"`
@@ -549,6 +551,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	if err = applyMQTTEnvOverrides(cfg); err != nil {
 		return nil, err
 	}
+	applyAMQPEnvOverrides(cfg)
 	if err = applyKafkaEnvOverrides(cfg); err != nil {
 		return nil, err
 	}
@@ -1328,6 +1331,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("eventing.topicPrefix", "basyx")
 	v.SetDefault("eventing.sourceBaseUrl", "")
 	v.SetDefault("eventing.schemaBaseUrl", "")
+	v.SetDefault("eventing.amqp.sinkId", "amqp")
 	v.SetDefault("eventing.kafka.brokers", []string{})
 	v.SetDefault("eventing.kafka.topic", "basyx.events")
 	v.SetDefault("eventing.kafka.clientId", "basyx")

@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/amqp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventoutbox"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/events"
@@ -109,6 +110,11 @@ func startTransports(ctx context.Context, repository *eventoutbox.Repository, cf
 }
 func newTransport(ctx context.Context, cfg common.EventingConfig, name string) (*transport, error) {
 	switch name {
+	case "amqp":
+		p, err := amqp.NewPublisher(ctx, cfg.AMQP)
+		return &transport{sink: cfg.AMQP.SinkID, publisher: p, routing: func(_ events.Mutation, _ events.FeedEvent) (json.RawMessage, error) {
+			return amqp.Routing(cfg.AMQP.Address)
+		}}, err
 	case "mqtt":
 		p, err := mqtt.NewPublisher(ctx, cfg.MQTT)
 		return &transport{sink: cfg.MQTT.SinkID, publisher: p, routing: func(_ events.Mutation, event events.FeedEvent) (json.RawMessage, error) {

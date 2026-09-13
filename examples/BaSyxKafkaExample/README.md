@@ -16,12 +16,13 @@ docker compose up -d
 
 1. Open the [BaSyx Web UI](http://localhost:3000). If another setup is selected,
    choose **Settings → Select Infrastructure → Kafka Playground**.
-2. Open **KafkaPlayground → OperatingStatus**. Change **Status** from `ready`
+2. Select **AAS Editor** from the top-left navigation menu.
+3. Open **KafkaPlayground → OperatingStatus**. Change **Status** from `ready`
    to another value and save it.
-3. Open [Kafbat UI](http://localhost:8080) and select
+4. Open [Kafbat UI](http://localhost:8080) and select
    **BaSyx → Topics → basyx.events → Messages**. Refresh the messages and find
    the subject `urn:example:kafka:submodel:status`.
-4. Inspect the event's key, headers, and JSON value. Its type is
+5. Inspect the event's key, headers, and JSON value. Its type is
    `io.admin-shell.submodel.updated.v1`. The payload identifies the affected
    Submodel; it does not include the property's new value.
 

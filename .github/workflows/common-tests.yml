@@ -55,7 +55,7 @@ jobs:
       - name: Run shared eventing and transport tests
         run: |
           go clean -testcache
-          go test -v ./internal/common/events ./internal/common/eventfeed ./internal/common/eventoutbox ./internal/common/mqtt ./internal/common/kafka ./internal/common/brokersecurity ./internal/common/eventfeedsetup
+          go test -v ./internal/common/events ./internal/common/eventfeed ./internal/common/eventoutbox ./internal/common/mqtt ./internal/common/kafka ./internal/common/amqp ./internal/common/brokersecurity ./internal/common/eventfeedsetup
 
       - name: Run common history tests
         run: go test -count=1 -v -cover ./internal/common/history

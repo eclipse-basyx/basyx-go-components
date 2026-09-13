@@ -39,9 +39,10 @@ made before subscribing will not appear.
 
 ## Change a property
 
-1. In the Web UI, open **MQTTPlayground → OperatingStatus**.
-2. Edit the **Status** property from `ready` to another value and save it.
-3. In MQTT Explorer, open `basyx/submodelrepository/submodel/updated`.
+1. In the Web UI, select **AAS Editor** from the top-left navigation menu.
+2. Open **MQTTPlayground → OperatingStatus**.
+3. Edit the **Status** property from `ready` to another value and save it.
+4. In MQTT Explorer, open `basyx/submodelrepository/submodel/updated`.
 
 The event has type `io.admin-shell.submodel.updated.v1` and subject
 `urn:example:mqtt:submodel:status`. Its `data` identifies the affected model;

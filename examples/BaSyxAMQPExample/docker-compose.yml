@@ -1,0 +1,86 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyx
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyx"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  basyx_configuration:
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyx
+    depends_on:
+      db:
+        condition: service_healthy
+  aas-environment:
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyx
+      SERVER_PORT: "8082"
+      ABAC_ENABLED: "false"
+      GENERAL_EXTERNALURL: http://localhost:8082
+      GENERAL_AASREGISTRYINTEGRATION: "true"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
+      GENERAL_DISCOVERYINTEGRATION: "true"
+      GENERAL_AAS_PRECONFIG_PATHS: /app/preconfiguration
+      CORS_ALLOWEDORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWCREDENTIALS: "true"
+      CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      BASYX_EVENTING_ENABLED: "true"
+      BASYX_EVENTING_SINKS: amqp
+      BASYX_EVENTING_OUTBOX_ENABLED: "true"
+      BASYX_EVENTING_AMQP_BROKER: amqp://rabbitmq:5672
+      BASYX_EVENTING_AMQP_ADDRESS: /queues/basyx.events
+      BASYX_EVENTING_AMQP_USERNAME: basyx
+      BASYX_EVENTING_AMQP_PASSWORD: basyx-demo
+    ports:
+      - "127.0.0.1:8082:8082"
+    volumes:
+      - ./aas:/app/preconfiguration:ro
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+  aas-ui:
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      ENDPOINT_CONFIG_AVAILABLE: "false"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    depends_on:
+      aas-environment:
+        condition: service_healthy
+    restart: unless-stopped
+  rabbitmq:
+    image: rabbitmq:4.2.0-management
+    environment:
+      RABBITMQ_DEFAULT_USER: basyx
+      RABBITMQ_DEFAULT_PASS: basyx-demo
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 5s
+      timeout: 10s
+      retries: 30

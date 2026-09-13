@@ -74,7 +74,11 @@ services:
       - SERVER_STRICTVERIFICATION=off
       - BASYX_EVENTING_FEED_ENABLED=true
       - BASYX_EVENTING_ENABLED=true
-      - BASYX_EVENTING_SINKS=mqtt,kafka
+      - BASYX_EVENTING_SINKS=mqtt,kafka,amqp
+      - BASYX_EVENTING_AMQP_BROKER=amqp://amqp_it:5672
+      - BASYX_EVENTING_AMQP_ADDRESS=/exchanges/basyx.events
+      - BASYX_EVENTING_AMQP_USERNAME=basyx
+      - BASYX_EVENTING_AMQP_PASSWORD=secret
       - BASYX_EVENTING_KAFKA_BROKERS=kafka_it:19092
       - BASYX_EVENTING_OUTBOX_ENABLED=true
       - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
@@ -186,6 +190,54 @@ services:
     depends_on:
       kafka_init:
         condition: service_completed_successfully
+      basyx_configuration:
+        condition: service_completed_successfully
+      db_it:
+        condition: service_healthy
+
+  amqp_it:
+    extends:
+      file: ../../../common/testenv/amqp/docker-compose.yml
+      service: amqp_it
+
+  aas_repository_it_amqp_only:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasrepositoryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_READER_HOST=db_it
+      - POSTGRES_READER_PORT=5432
+      - POSTGRES_READER_USER=admin
+      - POSTGRES_READER_PASSWORD=admin123
+      - POSTGRES_READER_DBNAME=basyxTestDB
+      - POSTGRES_READER_OPTIONS=-c default_transaction_read_only=on
+      - POSTGRES_READER_MAXOPENCONNECTIONS=500
+      - POSTGRES_READER_MAXIDLECONNECTIONS=500
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - BASYX_HISTORY_MODE=api
+      - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_EVENTING_FEED_ENABLED=false
+      - BASYX_EVENTING_ENABLED=true
+      - BASYX_EVENTING_SINKS=amqp
+      - BASYX_EVENTING_AMQP_BROKER=amqp://amqp_it:5672
+      - BASYX_EVENTING_AMQP_ADDRESS=/exchanges/basyx.events
+      - BASYX_EVENTING_AMQP_USERNAME=basyx
+      - BASYX_EVENTING_AMQP_PASSWORD=secret
+      - BASYX_EVENTING_OUTBOX_ENABLED=true
+    ports:
+      - "127.0.0.1:${BASYX_IT_AMQP_API_PORT:-6008}:5004"
+    depends_on:
+      amqp_it:
+        condition: service_healthy
       basyx_configuration:
         condition: service_completed_successfully
       db_it:

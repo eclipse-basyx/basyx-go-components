@@ -20,11 +20,12 @@ Once startup completes, open the [Web UI](http://localhost:3000) and select
 
 ## Change a property
 
-1. Open the **NoSemanticId** Submodel and change its **Status** property from
-   `ready` to another value in the editor. Save the change.
-2. Open the [Event Feed in Swagger](http://localhost:8082/swagger) and execute
+1. In the Web UI, select **AAS Editor** from the top-left navigation menu.
+2. Open the **NoSemanticId** Submodel and change its **Status** property from
+   `ready` to another value. Save the change.
+3. Open the [Event Feed in Swagger](http://localhost:8082/swagger) and execute
    `GET /events`, or open the [JSON feed](http://localhost:8082/events) directly.
-3. Look for an `io.admin-shell.submodel.updated.v1` event whose `subject` is
+4. Look for an `io.admin-shell.submodel.updated.v1` event whose `subject` is
    `urn:example:eventing:submodel:no-semantic-id`.
 
 Allow a moment for the event to appear, then refresh. This Submodel deliberately
