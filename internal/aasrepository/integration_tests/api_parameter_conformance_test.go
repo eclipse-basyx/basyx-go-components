@@ -45,3 +45,9 @@ func TestAPIParameterConformance(t *testing.T) {
 func TestAssetPairConformance(t *testing.T) {
 	testenv.RunAssetPairConformance(t, aasRepositoryBaseURL, "/shells", false)
 }
+
+func TestAsyncValueOnlyTimeoutConformance(t *testing.T) {
+	testenv.RunAsyncValueOnlyTimeoutConformance(t, aasRepositoryBaseURL, []string{
+		"/shells/dXJuOnRlc3Q/submodels/dXJuOnRlc3Q/submodel-elements/operation",
+	})
+}

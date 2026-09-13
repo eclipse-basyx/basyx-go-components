@@ -2299,14 +2299,6 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationValu
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
 
 	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))
 	result, err := c.service.InvokeOperationValueOnlyAasRepository(
@@ -2398,12 +2390,8 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyn
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+	if err := model.AssertOperationRequestAsyncValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 

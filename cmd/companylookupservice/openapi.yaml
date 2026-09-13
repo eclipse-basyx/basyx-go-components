@@ -230,6 +230,8 @@ components:
           examples:
             errorResponse:
               $ref: "#/components/examples/ErrorResponse"
+          schema:
+            $ref: "#/components/schemas/Result"
 
     Conflict:
       description: Conflict
@@ -238,6 +240,8 @@ components:
           examples:
             errorResponse:
               $ref: "#/components/examples/ErrorResponse"
+          schema:
+            $ref: "#/components/schemas/Result"
 
     InternalServerError:
       description: Internal Server Error
@@ -246,6 +250,8 @@ components:
           examples:
             errorResponse:
               $ref: "#/components/examples/ErrorResponse"
+          schema:
+            $ref: "#/components/schemas/Result"
 
     DefaultError:
       description: Default error handling for unmentioned status codes
@@ -254,6 +260,8 @@ components:
           examples:
             errorResponse:
               $ref: "#/components/examples/ErrorResponse"
+          schema:
+            $ref: "#/components/schemas/Result"
 
   schemas:
     ServiceDescription:
@@ -323,7 +331,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Endpoint"
-      required: [domain, endpoints]
+      required: [domain, name, endpoints]
 
     LangStringTextType:
       type: object
@@ -367,7 +375,7 @@ components:
           $ref: "#/components/schemas/Reference"
 
     Reference:
-      type: array
+      type: object
       additionalProperties: false
       properties:
         type:
@@ -389,13 +397,9 @@ components:
       required: [type, value]
 
     Result:
-      type: object
-      additionalProperties: false
-      properties:
-        messages:
-          type: array
-          items: 
-            $ref: "#/components/schemas/Message"
+      type: array
+      items:
+        $ref: "#/components/schemas/Message"
     
     Message:
       type: object
@@ -410,11 +414,11 @@ components:
           minLength: 1
         messageType:
           enum:
-            0: Undefined
-            1: info
-            2: Warning
-            3: Error
-            4: Exception
+            - Undefined
+            - info
+            - Warning
+            - Error
+            - Exception
           type: string
         text:
           type: string
@@ -492,11 +496,9 @@ components:
           - "TODO"
 
     ErrorResponse:
-      type: object
       value:
-        messages:
-          - code: "string"
-            correlationId: "string"
-            messageType: "Undefined"
-            text: "string"
-            timestamp: "1970-01-01T00:00:00.000Z"
+        - code: "400"
+          correlationId: "ComLookup-400-PostCompanyDescriptor-BadRequest-RequestBody"
+          messageType: "Error"
+          text: "Invalid Company Descriptor"
+          timestamp: "1970-01-01T00:00:00Z"

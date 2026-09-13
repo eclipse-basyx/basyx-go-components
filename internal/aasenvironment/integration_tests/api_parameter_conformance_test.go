@@ -84,3 +84,10 @@ func TestInvalidSubmodelIdentifierDoesNotMutateEnvironmentOrDescriptor(t *testin
 		require.Equal(t, "BeforeInvalidPut", value)
 	}
 }
+
+func TestAsyncValueOnlyTimeoutConformance(t *testing.T) {
+	testenv.RunAsyncValueOnlyTimeoutConformance(t, aasEnvBaseURL, []string{
+		"/submodels/dXJuOnRlc3Q/submodel-elements/operation",
+		"/shells/dXJuOnRlc3Q/submodels/dXJuOnRlc3Q/submodel-elements/operation",
+	})
+}

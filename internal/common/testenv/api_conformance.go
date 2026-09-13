@@ -115,3 +115,17 @@ func requireAPIParameterError(t *testing.T, baseURL string, headers http.Header,
 		t.Fatalf("missing coded error: %s", body)
 	}
 }
+
+// RunAsyncValueOnlyTimeoutConformance verifies required timeouts at each composed HTTP boundary.
+func RunAsyncValueOnlyTimeoutConformance(t *testing.T, baseURL string, paths []string) {
+	t.Helper()
+	for _, path := range paths {
+		for _, body := range []string{`{}`, `{"clientTimeoutDuration":""}`, `{"clientTimeoutDuration":" "}`} {
+			t.Run(path+"/"+body, func(t *testing.T) {
+				requireAPIParameterError(t, baseURL, nil, APIConformanceEndpoint{
+					Path: path + "/invoke-async/$value", Method: http.MethodPost, Body: body,
+				}, nil)
+			})
+		}
+	}
+}

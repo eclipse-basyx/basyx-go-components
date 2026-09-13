@@ -34,6 +34,11 @@
 //nolint:all
 package model
 
+import (
+	"errors"
+	"strings"
+)
+
 // OperationRequestValueOnly type of OperationRequestValueOnly
 type OperationRequestValueOnly struct {
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
@@ -42,24 +47,13 @@ type OperationRequestValueOnly struct {
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
 	InputArguments map[string]any `json:"inputArguments,omitempty"`
 
-	ClientTimeoutDuration string `json:"clientTimeoutDuration" validate:"regexp=^(-?)P(?=.)((\\\\d+)Y)?((\\\\d+)M)?((\\\\d+)D)?(T(?=.)((\\\\d+)H)?((\\\\d+)M)?(\\\\d*(\\\\.\\\\d+)?S)?)?$"`
+	ClientTimeoutDuration string `json:"clientTimeoutDuration,omitempty" validate:"regexp=^(-?)P(?=.)((\\\\d+)Y)?((\\\\d+)M)?((\\\\d+)D)?(T(?=.)((\\\\d+)H)?((\\\\d+)M)?(\\\\d*(\\\\.\\\\d+)?S)?)?$"`
 }
 
-// AssertOperationRequestValueOnlyRequired checks if the required fields are not zero-ed
-func AssertOperationRequestValueOnlyRequired(obj OperationRequestValueOnly) error {
-	elements := map[string]any{
-		"clientTimeoutDuration": obj.ClientTimeoutDuration,
+// AssertOperationRequestAsyncValueOnlyRequired validates the timeout required for asynchronous invocation.
+func AssertOperationRequestAsyncValueOnlyRequired(obj OperationRequestValueOnly) error {
+	if strings.TrimSpace(obj.ClientTimeoutDuration) == "" {
+		return errors.New("MODEL-OPREQASYNC-TIMEOUT clientTimeoutDuration is required")
 	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
-		}
-	}
-
-	return nil
-}
-
-// AssertOperationRequestValueOnlyConstraints checks if the values respects the defined constraints
-func AssertOperationRequestValueOnlyConstraints(_ OperationRequestValueOnly) error {
 	return nil
 }

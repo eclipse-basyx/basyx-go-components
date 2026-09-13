@@ -2103,14 +2103,6 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationValueOnly(w http.Res
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
 	var asyncParam bool
 	if query.Has("async") {
 		param, err := parseBoolParameter(
@@ -2188,12 +2180,8 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsyncValueOnly(w htt
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+	if err := model.AssertOperationRequestAsyncValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))

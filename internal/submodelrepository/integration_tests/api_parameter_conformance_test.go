@@ -46,3 +46,9 @@ func TestAPIParameterConformance(t *testing.T) {
 func TestExactSubmodelReferenceConformance(t *testing.T) {
 	testenv.RunSubmodelReferenceConformance(t, submodelRepositoryBaseURL)
 }
+
+func TestAsyncValueOnlyTimeoutConformance(t *testing.T) {
+	testenv.RunAsyncValueOnlyTimeoutConformance(t, submodelRepositoryBaseURL, []string{
+		"/submodels/dXJuOnRlc3Q/submodel-elements/operation",
+	})
+}
