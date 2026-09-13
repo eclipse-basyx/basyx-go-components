@@ -16,13 +16,14 @@ docker compose up -d
 
 1. Open the [BaSyx Web UI](http://localhost:3000). If another setup is selected,
    choose **Settings → Select Infrastructure → AMQP Playground**.
-2. Open **AMQPPlayground → OperatingStatus**. Change **Status** from `ready`
+2. Select **AAS Editor** from the top-left navigation menu.
+3. Open **AMQPPlayground → OperatingStatus**. Change **Status** from `ready`
    to another value and save it.
-3. Open [RabbitMQ management](http://localhost:15672) and sign in with username
+4. Open [RabbitMQ management](http://localhost:15672) and sign in with username
    `basyx` and password `basyx-demo`.
-4. Select **Queues and Streams → basyx.events → Get messages**. Choose
+5. Select **Queues and Streams → basyx.events → Get messages**. Choose
    **Nack message requeue true** to keep the messages, then select **Get Message(s)**.
-5. Find the event with subject `urn:example:amqp:submodel:status`. Its type is
+6. Find the event with subject `urn:example:amqp:submodel:status`. Its type is
    `io.admin-shell.submodel.updated.v1`, and its content type is
    `application/cloudevents+json`. The payload identifies the affected Submodel;
    it does not include the property's new value.
