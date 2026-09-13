@@ -29,6 +29,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -43,8 +44,9 @@ type Publisher struct {
 	cancel    context.CancelFunc
 	gate      chan struct{}
 	done      chan struct{}
+	cleanup   sync.WaitGroup
 	connected atomic.Bool
-	conn      *wire.Conn
+	conn      *publisherConnection
 	session   *wire.Session
 	senders   map[string]*wire.Sender
 }
@@ -70,11 +72,12 @@ func (p *Publisher) shutdown() {
 	p.gate <- struct{}{}
 	defer func() { <-p.gate }()
 	p.disconnect()
+	p.cleanup.Wait()
 }
 func (p *Publisher) disconnect() {
 	p.connected.Store(false)
 	if p.conn != nil {
-		_ = p.conn.Close()
+		p.conn.invalidate()
 	}
 	p.conn, p.session, p.senders = nil, nil, nil
 }
@@ -108,8 +111,7 @@ func (p *Publisher) Publish(ctx context.Context, routing json.RawMessage, envelo
 		}
 	}
 	p.connected.Store(false)
-	// Closing a failed connection releases all blocked senders and forces a fresh session on retry.
-	_ = conn.Close()
+	conn.invalidate()
 	return fmt.Errorf("AMQP-PUBLISH-DELIVERY delivery failed or timed out")
 }
 func accepted(outcome wire.DeliveryState) error {
@@ -118,22 +120,18 @@ func accepted(outcome wire.DeliveryState) error {
 	}
 	return fmt.Errorf("AMQP-PUBLISH-OUTCOME broker did not accept delivery (%T)", outcome)
 }
-func (p *Publisher) sender(ctx context.Context, address string) (*wire.Conn, *wire.Sender, error) {
+func (p *Publisher) sender(ctx context.Context, address string) (*publisherConnection, *wire.Sender, error) {
 	select {
 	case p.gate <- struct{}{}:
 	case <-ctx.Done():
 		return nil, nil, fmt.Errorf("AMQP-PUBLISH-CANCELLED delivery cancelled")
 	}
 	defer func() { <-p.gate }()
-	if err := ctx.Err(); err != nil {
+	if ctx.Err() != nil || p.ctx.Err() != nil {
 		return nil, nil, fmt.Errorf("AMQP-PUBLISH-CANCELLED delivery cancelled")
 	}
-	if p.conn != nil {
-		select {
-		case <-p.conn.Done():
-			p.disconnect()
-		default:
-		}
+	if p.conn != nil && !p.conn.active() {
+		p.disconnect()
 	}
 	connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -157,11 +155,11 @@ func (p *Publisher) sender(ctx context.Context, address string) (*wire.Conn, *wi
 	return p.conn, sender, nil
 }
 func (p *Publisher) connect(ctx context.Context) error {
-	var err error
-	p.conn, err = wire.Dial(ctx, p.broker, p.options)
+	conn, err := wire.Dial(ctx, p.broker, p.options)
 	if err != nil {
 		return fmt.Errorf("AMQP-PUBLISH-CONNECT cannot connect or authenticate")
 	}
+	p.conn = p.trackConnection(conn)
 	p.session, err = p.conn.NewSession(ctx, nil)
 	if err != nil {
 		p.disconnect()
@@ -169,6 +167,34 @@ func (p *Publisher) connect(ctx context.Context) error {
 	}
 	p.senders = make(map[string]*wire.Sender)
 	return nil
+}
+
+type publisherConnection struct {
+	*wire.Conn
+	closing chan struct{}
+	once    sync.Once
+}
+
+func (c *publisherConnection) invalidate() { c.once.Do(func() { close(c.closing) }) }
+
+func (c *publisherConnection) active() bool {
+	select {
+	case <-c.closing:
+		return false
+	case <-c.Done():
+		return false
+	default:
+		return true
+	}
+}
+
+func (p *Publisher) trackConnection(conn *wire.Conn) *publisherConnection {
+	c := &publisherConnection{Conn: conn, closing: make(chan struct{})}
+	p.cleanup.Go(func() {
+		<-c.closing
+		_ = conn.Close()
+	})
+	return c
 }
 
 // Stop cancels in-flight operations and closes the connection; repeated calls are safe.
