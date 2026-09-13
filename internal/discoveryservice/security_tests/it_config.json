@@ -25,8 +25,15 @@
     "context": "Shells GET - viewer with clear=3 allowed",
     "token": { "user": "vieweruser", "password": "admin" },
     "method": "GET",
-    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MQ",
     "expectedStatus": 404
+  },
+  {
+    "context": "Shells GET - viewer rejects noncanonical base64url identifier",
+    "token": { "user": "vieweruser", "password": "admin" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
+    "expectedStatus": 400
   },
   {
     "context": "Shells collection GET trailing slash - viewer not found",
@@ -39,28 +46,28 @@
     "context": "Shells GET trailing slash - viewer not found",
     "token": { "user": "vieweruser", "password": "admin" },
     "method": "GET",
-    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT/",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MQ/",
     "expectedStatus": 404
   },
   {
     "context": "Shells GET - editor with clear=6 allowed",
     "token": { "user": "editoruser", "password": "admin" },
     "method": "GET",
-    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MQ",
     "expectedStatus": 404
   },
   {
     "context": "Shells GET - anonymous denied",
     "token": null,
     "method": "GET",
-    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MQ",
     "expectedStatus": 403
   },
   {
     "context": "Shells POST - viewer denied",
     "token": { "user": "vieweruser", "password": "admin" },
     "method": "POST",
-    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MQ",
     "data": "postBody/simple_specificAssetIds.json",
     "expectedStatus": 403
   },
@@ -68,7 +75,7 @@
     "context": "Shells POST - editor with clear=6 allowed",
     "token": { "user": "editoruser", "password": "admin" },
     "method": "POST",
-    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MQ",
     "data": "postBody/simple_specificAssetIds.json",
     "expectedStatus": 201
   },
@@ -76,7 +83,7 @@
     "context": "Shells POST - admin allowed",
     "token": { "user": "adminuser", "password": "admin" },
     "method": "POST",
-    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MQ",
     "data": "postBody/simple_specificAssetIds.json",
     "expectedStatus": 201
   },
@@ -84,7 +91,7 @@
     "context": "Shells DELETE - admin allowed (clear=10)",
     "token": { "user": "adminuser", "password": "admin" },
     "method": "DELETE",
-    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MQ",
     "expectedStatus": 204
   },
   {
