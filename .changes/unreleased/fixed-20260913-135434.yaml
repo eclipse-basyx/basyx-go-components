@@ -1,0 +1,7 @@
+kind: fixed
+body: Align encoded API parameters and exact reference and asset filtering across registries, repositories, Discovery, DTR and AAS Environment. Require unpadded base64url and nonempty supplied pagination parameters; standardize query and path cursors without legacy fallback.
+time: 2026-09-13T13:54:34.128212+02:00
+custom:
+    Impact: High
+    PullRequest: "683"
+    SecurityImpact: Rejects malformed API parameters while retaining authorization checks. No production vulnerability is claimed.
