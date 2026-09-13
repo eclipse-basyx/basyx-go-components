@@ -1,5 +1,5 @@
 kind: fixed
-body: Align encoded API parameters and exact reference and asset filtering across registries, repositories, Discovery, DTR and AAS Environment. Accept valid padded and unpadded base64url for Tractus-X conformance and require nonempty supplied pagination parameters; standardize query and path cursors without legacy fallback.
+body: Align encoded API parameters and exact reference and asset filtering across registries, repositories, Discovery, DTR and AAS Environment. Accept valid padded and unpadded base64url for Tractus-X conformance and require nonempty supplied pagination parameters; standardize query and path cursors without legacy fallback. Use the standalone registry and discovery contracts in the joined AAS Environment OpenAPI, keeping DTR extensions exclusive to the DTR specification.
 time: 2026-09-13T13:54:34.128212+02:00
 custom:
     Impact: High
