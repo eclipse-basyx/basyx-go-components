@@ -1,7 +1,7 @@
 import subprocess
 import time
 import json
-import os
+import shlex
 import requests
 import uuid
 import copy
@@ -15,7 +15,6 @@ import sys
 # CONFIG
 # ──────────────────────────────────────────────
 COMPOSE_FILE = "docker_compose/docker_compose.yml"
-DB_CONTAINER = "postgres_db"  # optional: used if you have a healthcheck on DB
 DISCOVERY_URL = "http://localhost:5004/shell-descriptors"
 
 JSON_FILE = "bodies/simple_aas_a.json"  # path to your file
@@ -40,28 +39,13 @@ LOG_REQUEST_DETAILS = False
 # ──────────────────────────────────────────────
 # Helper functions
 # ──────────────────────────────────────────────
-def run(cmd: str):
-    print(f"▶ {cmd}")
-    return subprocess.run(cmd, shell=True, check=False)
-
-def wait_for_container_health(container: str, timeout: int = 120):
-    """
-    Waits for a container to be healthy via 'podman inspect'.
-    Only useful if the container defines a HEALTHCHECK in your compose.
-    """
-    print(f"⏳ Waiting for '{container}' to be healthy...")
-    start = time.time()
-    while time.time() - start < timeout:
-        result = subprocess.run(
-            f"podman inspect --format='{{{{json .State.Health}}}}' {container}",
-            shell=True, capture_output=True, text=True
-        )
-        if '"Status":"healthy"' in (result.stdout or ""):
-            print(f"✅ {container} is healthy")
-            return True
-        time.sleep(3)
-    print(f"❌ Timeout waiting for '{container}' health.")
-    return False
+def run(cmd: list[str]):
+    print(f"▶ {shlex.join(cmd)}")
+    try:
+        return subprocess.run(cmd, shell=False, check=False)
+    except OSError as error:
+        print(f"BENCH-RUN-EXEC: {error}", file=sys.stderr)
+        return subprocess.CompletedProcess(cmd, returncode=1)
 
 def wait_for_http(url: str, timeout: int = 180):
     print(f"⏳ Waiting for service at {url}")
@@ -96,7 +80,7 @@ with open(JSON_FILE, "r", encoding="utf-8") as f:
 # ──────────────────────────────────────────────
 def cleanup():
     print("\n🧹 Stopping Docker stack...")
-    run(f"podman compose -f {COMPOSE_FILE} down -v")
+    run(["podman", "compose", "-f", COMPOSE_FILE, "down", "-v"])
 
 def sig_handler(sig, frame):
     print("\n⚠ Interrupted by user.")
@@ -111,13 +95,10 @@ signal.signal(signal.SIGTERM, sig_handler)
 # ──────────────────────────────────────────────
 def main():
     print("🚀 Starting Docker Compose...")
-    up_rc = run(f"podman compose -f {COMPOSE_FILE} up -d --build").returncode
+    up_rc = run(["podman", "compose", "-f", COMPOSE_FILE, "up", "-d", "--build"]).returncode
     if up_rc != 0:
         print("❌ Failed to start the compose stack (check build paths and context).")
         sys.exit(1)
-
-    # If you want to wait for DB health (only meaningful if healthcheck is defined on DB):
-    # wait_for_container_health(DB_CONTAINER)  # uncomment if desired
 
     if not wait_for_http(DISCOVERY_URL):
         cleanup()
