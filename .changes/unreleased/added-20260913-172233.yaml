@@ -1,0 +1,7 @@
+kind: added
+body: Implement value-only synchronous and asynchronous operation invocation and result retrieval for the Submodel and AAS Repository APIs, with shared persistent async handles and delegated-operation example coverage.
+time: 2026-09-13T17:22:33.775699+02:00
+custom:
+    Impact: Low
+    PullRequest: 685
+    SecurityImpact: None. Existing OIDC, ABAC, async-job owner and path validation, and request security contexts are preserved.
