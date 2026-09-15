@@ -36,6 +36,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
@@ -501,4 +503,29 @@ func testFileElement(idShort string, value string) *types.File {
 	file.SetIDShort(&idShort)
 	file.SetValue(&value)
 	return file
+}
+
+func TestComposeLoadedDPPPreservesManagedURLsWithoutReloadingModels(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repository, err := submodelrepositorydb.NewSubmodelDatabaseFromPools(db, db, nil, "off")
+	require.NoError(t, err)
+	resolved := selectiveUpdateFixture()
+	technical := resolved.submodels[1]
+	technical.SetSubmodelElements(append(technical.SubmodelElements(), testFileElement("manual", "/aasx/files/manual.pdf")))
+	query, _, err := submodelqueries.BuildManagedFileAttachmentPathsBySubmodelIDsSQL([]string{technical.ID()})
+	require.NoError(t, err)
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WillReturnRows(
+		sqlmock.NewRows([]string{"submodel_identifier", "idshort_path"}).AddRow(technical.ID(), "manual"),
+	)
+	service := NewDPPRepositoryService(nil, repository)
+	ctx := common.ContextWithConfig(t.Context(), &common.Config{General: common.GeneralConfig{ExternalURL: "https://aas.example.test"}})
+	doc, err := service.composeLoadedDPP(ctx, resolved, REPRESENTATION_COMPRESSED, false)
+	require.NoError(t, err)
+	require.Equal(t, resolved.dppID, doc[headerDigitalProductPassportID])
+	section := doc[selectiveTechnicalSemantic].(map[string]any)
+	manual := section["manual"].(map[string]any)
+	require.Contains(t, manual["url"], "/submodels/"+common.EncodeString(technical.ID())+"/submodel-elements/manual/attachment")
+	require.NoError(t, mock.ExpectationsWereMet())
 }

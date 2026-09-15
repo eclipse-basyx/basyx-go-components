@@ -16,6 +16,8 @@
 --   across normalized reference keys and JSON payloads. Source triggers keep
 --   the inventory current and lock newly referenced Submodels so concurrent
 --   reference creation cannot race with reference-aware deletion.
+--   Owner lookup is indexed for cascading deletion; unchanged references
+--   retain their inventory rows without replacement writes.
 --
 -- Copyright (c) Eclipse BaSyx Authors and Fraunhofer IESE
 -- SPDX-License-Identifier: MIT
@@ -49,6 +51,9 @@ CREATE TABLE IF NOT EXISTS submodel_inbound_reference (
 
 CREATE INDEX IF NOT EXISTS ix_submodel_inbound_reference_source
   ON submodel_inbound_reference(source_table, source_id);
+
+CREATE INDEX IF NOT EXISTS ix_submodel_inbound_reference_owner
+  ON submodel_inbound_reference(owner_submodel_id);
 
 CREATE INDEX IF NOT EXISTS ix_submodel_inbound_reference_target_hash
   ON submodel_inbound_reference USING HASH (target_id);
@@ -153,27 +158,35 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   old_target_ids TEXT[];
+  new_target_ids TEXT[];
+  same_owner BOOLEAN;
   target TEXT;
   observed_target_id BIGINT;
   locked_target_id BIGINT;
 BEGIN
-  SELECT COALESCE(array_agg(DISTINCT target_id), ARRAY[]::text[])
-  INTO old_target_ids
+  SELECT COALESCE(array_agg(DISTINCT target_id ORDER BY target_id), ARRAY[]::text[]),
+         COALESCE(bool_and(owner_submodel_id IS NOT DISTINCT FROM inbound_owner_submodel_id), TRUE)
+  INTO old_target_ids, same_owner
   FROM submodel_inbound_reference
   WHERE source_table = inbound_source_table
     AND source_id = inbound_source_id;
+
+  SELECT COALESCE(array_agg(DISTINCT target_id ORDER BY target_id), ARRAY[]::text[])
+  INTO new_target_ids
+  FROM unnest(COALESCE(inbound_target_ids, ARRAY[]::text[])) AS targets(target_id)
+  WHERE NULLIF(target_id, '') IS NOT NULL;
+
+  IF old_target_ids = new_target_ids AND same_owner THEN
+    RETURN;
+  END IF;
 
   DELETE FROM submodel_inbound_reference
   WHERE source_table = inbound_source_table
     AND source_id = inbound_source_id;
 
   INSERT INTO submodel_inbound_reference(source_table, source_id, owner_submodel_id, target_id)
-  SELECT inbound_source_table, inbound_source_id, inbound_owner_submodel_id, candidate.target_id
-  FROM (
-    SELECT DISTINCT NULLIF(target_id, '') AS target_id
-    FROM unnest(COALESCE(inbound_target_ids, ARRAY[]::text[])) AS targets(target_id)
-  ) AS candidate
-  WHERE candidate.target_id IS NOT NULL;
+  SELECT inbound_source_table, inbound_source_id, inbound_owner_submodel_id, target_id
+  FROM unnest(new_target_ids) AS targets(target_id);
 
   FOR target IN
     SELECT DISTINCT reference.target_id
@@ -219,6 +232,11 @@ DECLARE
   owner_id BIGINT;
   target_ids TEXT[];
 BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NEW;
+    END IF;
+  END IF;
   IF TG_OP = 'DELETE' THEN
     source_row := to_jsonb(OLD);
   ELSE
@@ -256,6 +274,11 @@ DECLARE
   owner_id BIGINT;
   target_ids TEXT[] := ARRAY[]::text[];
 BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NEW;
+    END IF;
+  END IF;
   IF TG_OP = 'DELETE' THEN
     source_row := to_jsonb(OLD);
   ELSE

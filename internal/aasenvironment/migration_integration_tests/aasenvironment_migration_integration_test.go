@@ -167,6 +167,7 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 
 	assertCollectionsContainFixtures(t, fixtures)
 	assertSchemaVersion(t, common.CURRENT_DATABASE_VERSION)
+	assertInboundReferenceOwnerIndex(t)
 	require.True(t, databaseIndexExists(t, "ix_submodel_semantic_id_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_specasset_supp_sem_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_smdesc_supp_sem_refpayload_refid"))
@@ -245,6 +246,7 @@ func assertMigratedInboundReferenceInventory(t *testing.T) {
 		"value":     map[string]any{"type": "ModelReference", "keys": []any{map[string]any{"type": "Submodel", "value": "urn:basyx:migration:submodel:1"}}},
 	})
 	assertInboundReferenceTargetCount(t, "urn:basyx:migration:submodel:1", 2, "aas_submodel_reference_key", "reference_element")
+	assertUnchangedInboundReferencesAreNotRewritten(t, db)
 	patchJSON(t, migrationBaseURL+"/submodels/"+encodeMigrationID("urn:basyx:migration:binary-submodel:1")+"/submodel-elements/ModernReference/$value", map[string]any{"type": "ModelReference", "keys": []any{map[string]any{"type": "Submodel", "value": "urn:basyx:external:missing"}}})
 	assertInboundReferenceTargetCount(t, "urn:basyx:migration:submodel:1", 1, "aas_submodel_reference_key", "reference_element")
 	assertInboundReferenceTargetCount(t, "urn:basyx:external:missing", 1)

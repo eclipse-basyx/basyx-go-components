@@ -1,0 +1,7 @@
+kind: fixed
+body: Index inbound-reference ownership for Submodel deletion, skip replacement writes for unchanged references, and reuse already loaded DPP state when composing merge patches.
+time: 2026-09-15T20:00:00+02:00
+custom:
+    Impact: High
+    PullRequest: 691
+    SecurityImpact: Retains reference-owner checks, request authorization, managed attachment handling, and concurrency protection during cleanup.

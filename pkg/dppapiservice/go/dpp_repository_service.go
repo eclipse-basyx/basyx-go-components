@@ -460,7 +460,7 @@ func (s *DPPRepositoryService) loadDPPUpdateState(
 			common.NewInternalServerError(err.Error()),
 		)
 	}
-	current, err := s.composeDPP(ctx, dppID, REPRESENTATION_COMPRESSED, time.Time{})
+	current, err := s.composeLoadedDPP(ctx, resolved, REPRESENTATION_COMPRESSED, false)
 	return resolved, currentContent, current, err
 }
 
@@ -1110,7 +1110,11 @@ func (s *DPPRepositoryService) composeDPP(ctx context.Context, dppID string, rep
 	if err != nil {
 		return nil, err
 	}
-	contextLoader, err := s.serializationContextLoader(ctx, resolved.submodels, !at.IsZero())
+	return s.composeLoadedDPP(ctx, resolved, representation, !at.IsZero())
+}
+
+func (s *DPPRepositoryService) composeLoadedDPP(ctx context.Context, resolved resolvedDPP, representation Representation, historical bool) (dppDocument, error) {
+	contextLoader, err := s.serializationContextLoader(ctx, resolved.submodels, historical)
 	if err != nil {
 		return nil, err
 	}
