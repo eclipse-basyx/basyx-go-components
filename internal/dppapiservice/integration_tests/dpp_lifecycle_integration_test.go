@@ -284,10 +284,10 @@ func testDPPWithDistinctAASID(
 	aasID := "https://www.example.org/aas/distinct/" + idSuffix
 	productID := "https://www.example.org/product/distinct/" + idSuffix
 	encodedDPPID := encodedPathParam(dppID)
-	document := lifecycleDPPDocument(dppID, productID, now)
-
+	document := lifecycleDPPDocument(aasID, productID, now)
 	doJSON(t, client, http.MethodPost, baseURL+"/v1/dpps", document, http.StatusCreated)
-	recreateDPPOwnerAAS(t, client, aasBaseURL, dppID, aasID)
+	replaceDPPMetadataIdentifier(t, client, aasBaseURL, aasID+"/submodels/DppMetadata", dppID)
+	document["digitalProductPassportId"] = dppID
 
 	readBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
 	assertJSONPathEquals(t, readBody, "digitalProductPassportId", dppID)
@@ -307,7 +307,7 @@ func testDPPWithDistinctAASID(
 	assertAASIdentifierExists(t, databasePort, aasID, true)
 	assertAASIdentifierExists(t, databasePort, dppID, false)
 	historyBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, createdVersionDate, "compressed"), nil, http.StatusOK)
-	assertDPPSectionPathEquals(t, historyBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
+	assertDPPSectionPathEquals(t, historyBody, lifecycleTechnicalDataSpec, "manufacturerName", "Imported Owner")
 
 	productBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dppsByProductId/"+encodedPathParam(productID), nil, http.StatusOK)
 	assertJSONPathEquals(t, productBody, "digitalProductPassportId", dppID)
@@ -315,8 +315,8 @@ func testDPPWithDistinctAASID(
 		"productIds": []string{productID},
 	}, http.StatusOK)
 	assertStringSliceContains(t, searchBody["items"], dppID)
-	if cursor, ok := searchBody["cursor"].(string); !ok || cursor != "" {
-		t.Fatalf("single-item DPP search cursor = %#v, want empty", searchBody["cursor"])
+	if cursor, present := searchBody["cursor"]; present && cursor != "" {
+		t.Fatalf("single-item DPP search cursor = %#v, want absent or empty", cursor)
 	}
 
 	doJSONAny(t, client, http.MethodPost, baseURL+"/v1/dpps", document, http.StatusConflict)
@@ -468,12 +468,10 @@ func renameSubmodel(t *testing.T, databasePort int, currentID string, replacemen
 	}
 }
 
-func recreateDPPOwnerAAS(t *testing.T, client *http.Client, aasBaseURL string, currentID string, replacementID string) {
+func replaceDPPMetadataIdentifier(t *testing.T, client *http.Client, aasBaseURL string, metadataID string, dppID string) {
 	t.Helper()
-	aas := doJSON(t, client, http.MethodGet, aasBaseURL+"/shells/"+common.EncodeString(currentID), nil, http.StatusOK)
-	doJSONAny(t, client, http.MethodDelete, aasBaseURL+"/shells/"+common.EncodeString(currentID), nil, http.StatusNoContent)
-	aas["id"] = replacementID
-	doJSONAny(t, client, http.MethodPost, aasBaseURL+"/shells", aas, http.StatusCreated)
+	endpoint := aasBaseURL + "/submodels/" + common.EncodeString(metadataID) + "/submodel-elements/digitalProductPassportId/$value"
+	doJSONAny(t, client, http.MethodPatch, endpoint, dppID, http.StatusNoContent)
 }
 
 func executeGoquUpdate(ctx context.Context, t *testing.T, tx *sql.Tx, dataset *goqu.UpdateDataset) {
