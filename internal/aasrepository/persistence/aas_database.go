@@ -366,6 +366,29 @@ func shouldEnforceFormula(ctx context.Context, step string) (bool, error) {
 	return shouldEnforce, nil
 }
 
+func (s *AssetAdministrationShellDatabase) addAASAuthorizationFormula(
+	ctx context.Context,
+	selectDS *goqu.SelectDataset,
+	operation string,
+) (*goqu.SelectDataset, error) {
+	collector, err := buildAASCollector(ctx)
+	if err != nil {
+		return nil, err
+	}
+	shouldEnforce, err := shouldEnforceFormula(ctx, operation+"-SHOULDENFORCE")
+	if err != nil {
+		return nil, err
+	}
+	if !shouldEnforce {
+		return selectDS, nil
+	}
+	selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+	if err != nil {
+		return nil, common.NewInternalServerError(operation + "-ABACFORMULA " + err.Error())
+	}
+	return selectDS, nil
+}
+
 func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (bool, bool, error) {
 	_, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
@@ -1060,6 +1083,123 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-ITERROWS " + err.Error())
 	}
 
+	nextCursor := ""
+	if limit > 0 && len(identifiers) > int(limit) {
+		identifiers = identifiers[:limit]
+		nextCursor = identifiers[len(identifiers)-1]
+	}
+	return identifiers, nextCursor, nil
+}
+
+// GetAssetAdministrationShellByDPPID returns the AAS that owns DPP metadata with the supplied DPP ID.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByDPPID(
+	ctx context.Context,
+	dppID string,
+	metadataSemanticIDs []string,
+) (types.IAssetAdministrationShell, error) {
+	var result types.IAssetAdministrationShell
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "AASREPO-GETAASBYDPPID-STARTTX", "AASREPO-GETAASBYDPPID-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = s.getAssetAdministrationShellByDPPIDInTransaction(ctx, tx, dppID, metadataSemanticIDs)
+		return txErr
+	})
+	return result, err
+}
+
+func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellByDPPIDInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	dppID string,
+	metadataSemanticIDs []string,
+) (types.IAssetAdministrationShell, error) {
+	dialect := goqu.Dialect("postgres")
+	selectDS := buildGetAssetAdministrationShellDBIDByDPPIDDataset(&dialect, dppID, metadataSemanticIDs)
+	selectDS, err := s.addAASAuthorizationFormula(ctx, selectDS, "AASREPO-GETAASBYDPPID")
+	if err != nil {
+		return nil, err
+	}
+	query, args, err := selectDS.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETAASBYDPPID-BUILDSQL " + err.Error())
+	}
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETAASBYDPPID-EXECSQL " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	var aasDBIDs []int64
+	for rows.Next() {
+		var aasDBID int64
+		if err = rows.Scan(&aasDBID); err != nil {
+			return nil, common.NewInternalServerError("AASREPO-GETAASBYDPPID-SCANROW " + err.Error())
+		}
+		aasDBIDs = append(aasDBIDs, aasDBID)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETAASBYDPPID-ITERROWS " + err.Error())
+	}
+	if len(aasDBIDs) == 0 {
+		return nil, common.NewErrNotFound("AASREPO-GETAASBYDPPID-AASNOTFOUND DPP with ID '" + dppID + "' not found")
+	}
+	if len(aasDBIDs) > 1 {
+		return nil, common.NewErrConflict("AASREPO-GETAASBYDPPID-AMBIGUOUS multiple AAS records contain DPP ID '" + dppID + "'")
+	}
+	return s.getAssetAdministrationShellMapByDBIDInTransaction(ctx, tx, aasDBIDs[0])
+}
+
+// GetAssetAdministrationShellByDPPIDInTransaction returns the AAS that owns DPP metadata using the active transaction.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByDPPIDInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	dppID string,
+	metadataSemanticIDs []string,
+) (types.IAssetAdministrationShell, error) {
+	return s.getAssetAdministrationShellByDPPIDInTransaction(ctx, tx, dppID, metadataSemanticIDs)
+}
+
+// GetDPPIDsByAssetAndMetadataSemanticIDs returns DPP metadata identifiers for matching assets.
+func (s *AssetAdministrationShellDatabase) GetDPPIDsByAssetAndMetadataSemanticIDs(
+	ctx context.Context,
+	globalAssetIDs []string,
+	metadataSemanticIDs []string,
+	limit int32,
+	cursor string,
+) ([]string, string, error) {
+	if limit < 0 {
+		return nil, "", common.NewErrBadRequest("AASREPO-GETDPPIDSBYASSETANDMETADATA-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+	}
+	if len(globalAssetIDs) == 0 || len(metadataSemanticIDs) == 0 {
+		return []string{}, "", nil
+	}
+	dialect := goqu.Dialect("postgres")
+	selectDS, err := buildGetDPPIDsByAssetAndMetadataSemanticIDsDataset(&dialect, globalAssetIDs, metadataSemanticIDs, limit, cursor)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-BUILDSQL " + err.Error())
+	}
+	selectDS, err = s.addAASAuthorizationFormula(ctx, selectDS, "AASREPO-GETDPPIDSBYASSETANDMETADATA")
+	if err != nil {
+		return nil, "", err
+	}
+	query, args, err := selectDS.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-BUILDSQL " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-EXECSQL " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	identifiers := make([]string, 0, limit+1)
+	for rows.Next() {
+		var identifier string
+		if err = rows.Scan(&identifier); err != nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-SCANROW " + err.Error())
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-ITERROWS " + err.Error())
+	}
 	nextCursor := ""
 	if limit > 0 && len(identifiers) > int(limit) {
 		identifiers = identifiers[:limit]

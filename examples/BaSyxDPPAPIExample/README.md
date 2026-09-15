@@ -84,6 +84,10 @@ The secured example protects DPP API routes only. It does not add DPP object-, f
 
 ## Postman Collection
 
+The DPP identifier is the `digitalProductPassportId` property in the referenced
+`DppMetadata` submodel. It may differ from the AAS identifier. Use the DPP identifier
+for DPP API requests; product-ID searches also return DPP identifiers.
+
 Import `BaSyx-DPP-API.postman_collection.json` into Postman to run the example scenarios:
 
 - Create and read the demo DPP

@@ -28,9 +28,11 @@ package persistence
 import (
 	"errors"
 	"regexp"
+	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
@@ -47,6 +49,43 @@ func TestAASRepositoryReadPoolSelection(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, reader, backend.readDB(t.Context()))
 	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
+}
+
+func TestGetAssetAdministrationShellByDPPIDDatasetUsesMetadataPropertyAndDistinctOwner(t *testing.T) {
+	dialect := goqu.Dialect("postgres")
+	query, args, err := buildGetAssetAdministrationShellDBIDByDPPIDDataset(
+		&dialect,
+		"https://example.org/dpps/42",
+		[]string{"urn:samm:io.admin-shell.idta.dpp_meta:1.0.0#DppMetadata"},
+	).Prepared(true).ToSQL()
+
+	require.NoError(t, err)
+	require.Len(t, args, 4)
+	require.Contains(t, query, `SELECT DISTINCT "aas"."id"`)
+	require.Contains(t, query, `"metadata_element"."id_short" = $1`)
+	require.Contains(t, query, `"metadata_element"."parent_sme_id" IS NULL`)
+	require.Contains(t, query, `"metadata_property"."value_text" = $3`)
+	require.True(t, strings.HasSuffix(query, "LIMIT $4"))
+}
+
+func TestGetDPPIDsByAssetAndMetadataSemanticIDsDatasetUsesDPPIDCursor(t *testing.T) {
+	dialect := goqu.Dialect("postgres")
+	query, err := buildGetDPPIDsByAssetAndMetadataSemanticIDsDataset(
+		&dialect,
+		[]string{"product-1"},
+		[]string{"urn:samm:io.admin-shell.idta.dpp_meta:1.0.0#DppMetadata"},
+		10,
+		"https://example.org/dpps/41",
+	)
+	require.NoError(t, err)
+	sqlQuery, sqlArgs, err := query.Prepared(true).ToSQL()
+
+	require.NoError(t, err)
+	require.Len(t, sqlArgs, 5)
+	require.Contains(t, sqlQuery, `SELECT DISTINCT "metadata_property"."value_text"`)
+	require.Contains(t, sqlQuery, `"metadata_property"."value_text" > $4`)
+	require.Contains(t, sqlQuery, `ORDER BY "metadata_property"."value_text" ASC`)
+	require.True(t, strings.HasSuffix(sqlQuery, "LIMIT $5"))
 }
 
 func TestSubmodelReferenceCheckSelectsPoolFromContext(t *testing.T) {

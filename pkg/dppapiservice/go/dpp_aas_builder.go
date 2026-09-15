@@ -21,11 +21,15 @@ import (
 )
 
 func buildAAS(header dppHeader, submodelRefs []types.IReference) types.IAssetAdministrationShell {
+	return buildAASWithID(header, submodelRefs, header.DigitalProductPassportID)
+}
+
+func buildAASWithID(header dppHeader, submodelRefs []types.IReference, aasID string) types.IAssetAdministrationShell {
 	assetInformation := types.NewAssetInformation(granularityAssetKind(header.Granularity))
 	assetInformation.SetGlobalAssetID(&header.UniqueProductIdentifier)
 
-	aas := types.NewAssetAdministrationShell(header.DigitalProductPassportID, assetInformation)
-	idShort := sanitizeIDShort(header.DigitalProductPassportID, "Dpp")
+	aas := types.NewAssetAdministrationShell(aasID, assetInformation)
+	idShort := sanitizeIDShort(aasID, "Dpp")
 	aas.SetIDShort(&idShort)
 	aas.SetSubmodels(submodelRefs)
 	return aas

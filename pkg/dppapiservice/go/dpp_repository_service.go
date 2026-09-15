@@ -261,7 +261,7 @@ func (s *DPPRepositoryService) upsertSubmodelDescriptors(ctx context.Context, tx
 func (s *DPPRepositoryService) deleteDPPResourcesInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
-	dppID string,
+	aasID string,
 	submodels []types.ISubmodel,
 ) error {
 	for _, submodel := range submodels {
@@ -272,10 +272,10 @@ func (s *DPPRepositoryService) deleteDPPResourcesInTransaction(
 			return err
 		}
 	}
-	if err := s.aasRepo.DeleteAssetAdministrationShellByIDInTransaction(ctx, tx, dppID); err != nil {
+	if err := s.aasRepo.DeleteAssetAdministrationShellByIDInTransaction(ctx, tx, aasID); err != nil {
 		return fmt.Errorf("DPP-DELDPP-DELETEAAS delete AAS: %w", err)
 	}
-	return s.deleteAASDescriptorIfEnabled(ctx, tx, dppID)
+	return s.deleteAASDescriptorIfEnabled(ctx, tx, aasID)
 }
 
 func (s *DPPRepositoryService) deleteSubmodelDescriptorIfEnabled(ctx context.Context, tx *sql.Tx, submodelID string) error {
@@ -327,6 +327,15 @@ func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byt
 	aas := buildAAS(header, refs)
 
 	err = s.aasRepo.ExecuteInTransaction("DPP-CREATEDPP-STARTTX", "DPP-CREATEDPP-COMMITTX", func(tx *sql.Tx) error {
+		_, lookupErr := s.aasRepo.GetAssetAdministrationShellByDPPIDInTransaction(
+			ctx, tx, header.DigitalProductPassportID, dppMetadataSemanticIDValues(),
+		)
+		if lookupErr == nil {
+			return common.NewErrConflict("DPP-CREATEDPP-DPPIDEXISTS DPP with ID '" + header.DigitalProductPassportID + "' already exists")
+		}
+		if !common.IsErrNotFound(lookupErr) {
+			return fmt.Errorf("DPP-CREATEDPP-GETAASBYDPPID get DPP %s: %w", header.DigitalProductPassportID, lookupErr)
+		}
 		if err := s.aasRepo.CreateAssetAdministrationShellInTransaction(ctx, tx, aas); err != nil {
 			return fmt.Errorf("DPP-CREATEDPP-CREATEAAS create AAS: %w", err)
 		}
@@ -364,11 +373,11 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
-	update, err := s.prepareDPPUpdate(ctx, dppID, patch, resolved, currentContent, current)
+	update, err := s.prepareDPPUpdate(ctx, resolved.dppID, patch, resolved, currentContent, current)
 	if err != nil {
 		return mapPersistenceError(err, http.StatusBadRequest), nil
 	}
-	err = s.persistDPPUpdate(ctx, dppID, update)
+	err = s.persistDPPUpdate(ctx, resolved.aasID, update)
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
 	}
@@ -408,7 +417,7 @@ func (s *DPPRepositoryService) prepareDPPUpdate(
 	}
 	refs = appendUnselectedContentSubmodelReferences(refs, resolved, currentContent)
 	return preparedDPPUpdate{
-		aas:              buildAAS(header, refs),
+		aas:              buildAASWithID(header, refs, resolved.aasID),
 		submodels:        submodels,
 		staleSubmodelIDs: staleContentSubmodelIDs(currentContent, submodels),
 	}, nil
@@ -457,9 +466,9 @@ func mergeDPPUpdateDocument(
 	return merged, header, err
 }
 
-func (s *DPPRepositoryService) persistDPPUpdate(ctx context.Context, dppID string, update preparedDPPUpdate) error {
+func (s *DPPRepositoryService) persistDPPUpdate(ctx context.Context, aasID string, update preparedDPPUpdate) error {
 	return s.aasRepo.ExecuteInTransaction("DPP-UPDDPP-STARTTX", "DPP-UPDDPP-COMMITTX", func(tx *sql.Tx) error {
-		aasResult, err := s.aasRepo.PutAssetAdministrationShellByIDInTransactionWithResult(ctx, tx, dppID, update.aas)
+		aasResult, err := s.aasRepo.PutAssetAdministrationShellByIDInTransactionWithResult(ctx, tx, aasID, update.aas)
 		if err != nil {
 			return fmt.Errorf("DPP-UPDDPP-PUTAAS put AAS: %w", err)
 		}
@@ -754,7 +763,7 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 	}
 
 	err = s.aasRepo.ExecuteInTransaction("DPP-DELDPP-STARTTX", "DPP-DELDPP-COMMITTX", func(tx *sql.Tx) error {
-		return s.deleteDPPResourcesInTransaction(ctx, tx, dppID, resolved.submodels)
+		return s.deleteDPPResourcesInTransaction(ctx, tx, resolved.aasID, resolved.submodels)
 	})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
@@ -773,7 +782,7 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 //   - ImplResponse: HTTP-style response containing the resolved DPP or mapped error payload
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID string, representation Representation) (ImplResponse, error) {
-	ids, _, err := s.aasRepo.GetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDs(
+	ids, _, err := s.aasRepo.GetDPPIDsByAssetAndMetadataSemanticIDs(
 		ctx,
 		[]string{productID},
 		dppMetadataSemanticIDValues(),
@@ -827,7 +836,7 @@ func (s *DPPRepositoryService) ReadDPPVersionByIdAndDate(ctx context.Context, dp
 //   - ImplResponse: HTTP-style response containing a paged DPP ID search result
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPIdsByProductIds(ctx context.Context, request ReadDppIdsByProductIdsRequest, limit int32, cursor string) (ImplResponse, error) {
-	ids, nextCursor, err := s.aasRepo.GetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDs(
+	ids, nextCursor, err := s.aasRepo.GetDPPIDsByAssetAndMetadataSemanticIDs(
 		ctx,
 		request.ProductIds,
 		dppMetadataSemanticIDValues(),
@@ -1057,6 +1066,8 @@ func (s *DPPRepositoryService) UpdateDPPById(ctx context.Context, dppID string, 
 type resolvedDPP struct {
 	metadata  types.ISubmodel
 	submodels []types.ISubmodel
+	aasID     string
+	dppID     string
 }
 
 func (s *DPPRepositoryService) composeDPP(ctx context.Context, dppID string, representation Representation, at time.Time) (dppDocument, error) {
@@ -1212,42 +1223,83 @@ func newDPPSerializationContext(
 }
 
 func (s *DPPRepositoryService) resolveSubmodels(ctx context.Context, dppID string, at time.Time) (resolvedDPP, error) {
-	var aas types.IAssetAdministrationShell
-	var err error
-	if at.IsZero() {
-		aas, err = s.aasRepo.GetAssetAdministrationShellByID(ctx, dppID)
-	} else {
-		aas, err = s.aasRepo.GetAssetAdministrationShellByIDAndDate(ctx, dppID, at)
-	}
+	aas, err := s.resolveAAS(ctx, dppID, at)
 	if err != nil {
 		return resolvedDPP{}, fmt.Errorf("DPP-RESOLVE-GETAAS get AAS %s: %w", dppID, err)
 	}
 
 	submodels := make([]types.ISubmodel, 0, len(aas.Submodels()))
-	var metadata types.ISubmodel
 	for _, ref := range aas.Submodels() {
 		submodelID := referenceLastValue(ref)
 		if submodelID == "" {
 			continue
 		}
-		var submodel types.ISubmodel
-		if at.IsZero() {
-			submodel, err = s.submodelRepo.GetSubmodelByID(ctx, submodelID, "deep", false, true)
-		} else {
-			submodel, err = s.submodelRepo.GetSubmodelByIDAndDate(ctx, submodelID, at)
-		}
+		submodel, err := s.loadResolvedSubmodel(ctx, submodelID, at)
 		if err != nil {
 			return resolvedDPP{}, fmt.Errorf("DPP-RESOLVE-GETSUBMODEL get submodel %s: %w", submodelID, err)
 		}
-		if hasDPPMetadataSemanticID(submodel) {
-			metadata = submodel
-		}
 		submodels = append(submodels, submodel)
 	}
+	metadata := selectDPPMetadata(submodels, dppID)
 	if metadata == nil {
 		return resolvedDPP{}, fmt.Errorf("DPP-RESOLVE-METADATA DppMetadata submodel not found for %s", dppID)
 	}
-	return resolvedDPP{metadata: metadata, submodels: submodels}, nil
+	header, err := composeHeader(metadata)
+	if err != nil {
+		return resolvedDPP{}, fmt.Errorf("DPP-RESOLVE-HEADER compose DPP metadata: %w", err)
+	}
+	resolvedDPPID, ok := header[headerDigitalProductPassportID].(string)
+	if !ok || resolvedDPPID == "" {
+		return resolvedDPP{}, fmt.Errorf("DPP-RESOLVE-DPPID DppMetadata has no digitalProductPassportId")
+	}
+	return resolvedDPP{metadata: metadata, submodels: submodels, aasID: aas.ID(), dppID: resolvedDPPID}, nil
+}
+
+func (s *DPPRepositoryService) loadResolvedSubmodel(ctx context.Context, submodelID string, at time.Time) (types.ISubmodel, error) {
+	if at.IsZero() {
+		return s.submodelRepo.GetSubmodelByID(ctx, submodelID, "deep", false, true)
+	}
+	return s.submodelRepo.GetSubmodelByIDAndDate(ctx, submodelID, at)
+}
+
+func selectDPPMetadata(submodels []types.ISubmodel, dppID string) types.ISubmodel {
+	var candidate types.ISubmodel
+	for _, submodel := range submodels {
+		if !hasDPPMetadataSemanticID(submodel) {
+			continue
+		}
+		if submodelDPPIDMatches(submodel, dppID) {
+			return submodel
+		}
+		candidate = submodel
+	}
+	return candidate
+}
+
+func submodelDPPIDMatches(submodel types.ISubmodel, dppID string) bool {
+	header, err := composeHeader(submodel)
+	if err != nil {
+		return false
+	}
+	resolvedDPPID, ok := header[headerDigitalProductPassportID].(string)
+	return ok && resolvedDPPID == dppID
+}
+
+func (s *DPPRepositoryService) resolveAAS(ctx context.Context, dppID string, at time.Time) (types.IAssetAdministrationShell, error) {
+	aas, err := s.aasRepo.GetAssetAdministrationShellByDPPID(ctx, dppID, dppMetadataSemanticIDValues())
+	if err == nil {
+		if at.IsZero() {
+			return aas, nil
+		}
+		return s.aasRepo.GetAssetAdministrationShellByIDAndDate(ctx, aas.ID(), at)
+	}
+	if !common.IsErrNotFound(err) {
+		return nil, fmt.Errorf("DPP-RESOLVE-GETAASBYDPPID get AAS for DPP %s: %w", dppID, err)
+	}
+	if at.IsZero() {
+		return s.aasRepo.GetAssetAdministrationShellByID(ctx, dppID)
+	}
+	return s.aasRepo.GetAssetAdministrationShellByIDAndDate(ctx, dppID, at)
 }
 
 func selectedResolvedContentSubmodels(resolved resolvedDPP) ([]types.ISubmodel, error) {
