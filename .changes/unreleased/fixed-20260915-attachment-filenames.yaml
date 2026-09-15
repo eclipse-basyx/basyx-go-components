@@ -1,0 +1,7 @@
+kind: fixed
+body: Download attachments with missing filenames using the managed reference or file path, and return 404 when attachment bytes are absent.
+time: 2026-09-15T12:00:01+02:00
+custom:
+    Impact: High
+    PullRequest: 691
+    SecurityImpact: Normalizes fallback download filenames.
