@@ -1,0 +1,7 @@
+kind: fixed
+body: Resolve DPP identifiers from DppMetadata independently of AAS identifiers, preserve the owning AAS during updates and deletion, and return metadata DPP IDs from product searches. Download attachments with missing filenames using the managed reference or file path, and return 404 when attachment bytes are absent.
+time: 2026-09-15T12:00:00+02:00
+custom:
+    Impact: High
+    PullRequest: 691
+    SecurityImpact: Preserves request authorization context when resolving DPP owners and normalizes fallback download filenames.
