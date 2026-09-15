@@ -124,7 +124,6 @@ func TestMain(m *testing.M) {
 func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 	longIdentifier := variedCJKIdentifier(880)
 	fixtures := []migrationFixture{
-		{endpoint: "/concept-descriptions", path: "testdata/concept_description.json", id: "urn:basyx:migration:concept:1"},
 		{endpoint: "/submodels", path: "testdata/submodel.json", id: "urn:basyx:migration:submodel:1"},
 		{endpoint: "/submodels", path: "testdata/binary_submodel.json", id: "urn:basyx:migration:binary-submodel:1"},
 		{endpoint: "/shells", path: "testdata/shell.json", id: "urn:basyx:migration:shell:1"},
@@ -137,7 +136,6 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 	require.False(t, databaseIndexExists(t, "ix_submodel_semantic_id_refpayload_refid"))
 	require.False(t, databaseIndexExists(t, "ix_specasset_supp_sem_refpayload_refid"))
 	require.False(t, databaseIndexExists(t, "ix_smdesc_supp_sem_refpayload_refid"))
-	require.False(t, databaseIndexExists(t, "ix_property_element_value_text_hash"))
 
 	for _, fixture := range fixtures {
 		postFixture(t, fixture)
@@ -167,19 +165,9 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 
 	assertCollectionsContainFixtures(t, fixtures)
 	assertSchemaVersion(t, common.CURRENT_DATABASE_VERSION)
-	assertInboundReferenceOwnerIndex(t)
 	require.True(t, databaseIndexExists(t, "ix_submodel_semantic_id_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_specasset_supp_sem_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_smdesc_supp_sem_refpayload_refid"))
-	require.True(t, databaseIndexExists(t, "ix_property_element_value_text_hash"))
-	for _, index := range []string{
-		"ix_aas_history_payload_snapshot_identifiers",
-		"ix_aas_history_payload_diff_identifiers",
-		"ix_submodel_history_payload_snapshot_identifiers",
-		"ix_submodel_history_payload_diff_identifiers",
-	} {
-		require.True(t, databaseIndexExists(t, index), "missing historical DPP lookup index %s", index)
-	}
 	assertLongIdentifierEvidenceCatalogAccepts(t, longIdentifier)
 	assertLegacyBinaryStateUnchanged(t, legacyFile, readLegacyFileState(t, "LegacyFile"))
 	assertLegacyBinaryStateUnchanged(t, legacyUntouched, readLegacyFileState(t, "LegacyFileUntouched"))
@@ -204,123 +192,6 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 	require.Equal(t, int64(2), tableRowCount(t, "submodel_supplemental_semantic_id_reference"))
 	require.Equal(t, int64(2), tableRowCount(t, "submodel_element_supplemental_semantic_id_reference"))
 	assertMigratedSupplementalSemanticIDsAreQueryable(t)
-	assertMigratedInboundReferenceInventory(t)
-	assertInboundReferenceTargetCount(t, "urn:basyx:migration:concept-target:1", 1)
-	deleteJSON(t, migrationBaseURL+"/concept-descriptions/"+encodeMigrationID("urn:basyx:migration:concept:1"))
-	assertInboundReferenceTargetCount(t, "urn:basyx:migration:concept-target:1", 0)
-}
-
-func assertMigratedInboundReferenceInventory(t *testing.T) {
-	t.Helper()
-	db := openMigrationDatabase(t)
-	defer db.Close()
-
-	query, args, err := goqu.From(goqu.T("submodel_inbound_reference")).
-		Select(goqu.C("source_table"), goqu.C("target_id")).
-		Where(goqu.Ex{"target_id": "urn:basyx:migration:binary-submodel:1"}).
-		Order(goqu.C("source_table").Asc()).ToSQL()
-	require.NoError(t, err)
-	rows, err := db.QueryContext(t.Context(), query, args...)
-	require.NoError(t, err)
-	defer rows.Close()
-	var sources []string
-	for rows.Next() {
-		var source, target string
-		require.NoError(t, rows.Scan(&source, &target))
-		require.Equal(t, "urn:basyx:migration:binary-submodel:1", target)
-		sources = append(sources, source)
-	}
-	require.NoError(t, rows.Err())
-	require.Equal(t, []string{"reference_element"}, sources)
-	assertInboundReferenceTargetCount(t, "urn:basyx:migration:submodel:1", 1, "aas_submodel_reference_key", "reference_element")
-
-	postJSON(t, migrationBaseURL+"/submodels/"+encodeMigrationID("urn:basyx:migration:binary-submodel:1")+"/submodel-elements", map[string]any{
-		"idShort":   "ExternalReference",
-		"modelType": "ReferenceElement",
-		"value":     map[string]any{"type": "ExternalReference", "keys": []any{map[string]any{"type": "GlobalReference", "value": "urn:basyx:external:missing"}}},
-	})
-	assertInboundReferenceTargetCount(t, "urn:basyx:external:missing", 0)
-	postJSON(t, migrationBaseURL+"/submodels/"+encodeMigrationID("urn:basyx:migration:binary-submodel:1")+"/submodel-elements", map[string]any{
-		"idShort":   "ModernReference",
-		"modelType": "ReferenceElement",
-		"value":     map[string]any{"type": "ModelReference", "keys": []any{map[string]any{"type": "Submodel", "value": "urn:basyx:migration:submodel:1"}}},
-	})
-	assertInboundReferenceTargetCount(t, "urn:basyx:migration:submodel:1", 2, "aas_submodel_reference_key", "reference_element")
-	assertUnchangedInboundReferencesAreNotRewritten(t, db)
-	patchJSON(t, migrationBaseURL+"/submodels/"+encodeMigrationID("urn:basyx:migration:binary-submodel:1")+"/submodel-elements/ModernReference/$value", map[string]any{"type": "ModelReference", "keys": []any{map[string]any{"type": "Submodel", "value": "urn:basyx:external:missing"}}})
-	assertInboundReferenceTargetCount(t, "urn:basyx:migration:submodel:1", 1, "aas_submodel_reference_key", "reference_element")
-	assertInboundReferenceTargetCount(t, "urn:basyx:external:missing", 1)
-	deleteJSON(t, migrationBaseURL+"/submodels/"+encodeMigrationID("urn:basyx:migration:binary-submodel:1")+"/submodel-elements/ModernReference")
-	assertInboundReferenceTargetCount(t, "urn:basyx:external:missing", 0)
-	deleteJSON(t, migrationBaseURL+"/submodels/"+encodeMigrationID("urn:basyx:migration:submodel:1")+"/submodel-elements/MigratedReference")
-	assertInboundReferenceTargetCount(t, "urn:basyx:migration:binary-submodel:1", 0)
-}
-
-func assertInboundReferenceTargetCount(t *testing.T, target string, expected int64, sources ...string) {
-	t.Helper()
-	db := openMigrationDatabase(t)
-	defer db.Close()
-	dataset := goqu.From(goqu.T("submodel_inbound_reference")).
-		Select(goqu.COUNT(goqu.Star())).Where(goqu.Ex{"target_id": target})
-	if len(sources) > 0 {
-		dataset = dataset.Where(goqu.C("source_table").In(sources))
-	}
-	query, args, err := dataset.ToSQL()
-	require.NoError(t, err)
-	var count int64
-	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&count))
-	require.Equal(t, expected, count)
-}
-
-func postJSON(t *testing.T, endpoint string, payload any) {
-	t.Helper()
-	body, err := json.Marshal(payload)
-	require.NoError(t, err)
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, endpoint, bytes.NewReader(body))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
-}
-
-func deleteJSON(t *testing.T, endpoint string) {
-	t.Helper()
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, endpoint, nil)
-	require.NoError(t, err)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusNoContent, resp.StatusCode)
-}
-
-func patchJSON(t *testing.T, endpoint string, payload any) {
-	t.Helper()
-	body, err := json.Marshal(payload)
-	require.NoError(t, err)
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPatch, endpoint, bytes.NewReader(body))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := testenv.HTTPClient().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusNoContent, resp.StatusCode)
-}
-
-func encodeMigrationID(identifier string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(identifier))
-}
-
-func findElementByIDShort(t *testing.T, elements []any, idShort string) map[string]any {
-	t.Helper()
-	for _, value := range elements {
-		if element, ok := value.(map[string]any); ok && element["idShort"] == idShort {
-			return element
-		}
-	}
-	t.Fatalf("missing submodel element %q", idShort)
-	return nil
 }
 
 func variedCJKIdentifier(length int) string {
@@ -647,7 +518,9 @@ func assertMigratedSupplementalSemanticIDsAreQueryable(t *testing.T) {
 		submodel := requireSingleQueryResult(t, result, "urn:basyx:migration:submodel:1")
 		assertSingleSupplementalSemanticID(t, submodel, "urn:basyx:migration:submodel:supplemental:2")
 		elements := requireJSONArray(t, submodel, "submodelElements")
-		element := findElementByIDShort(t, elements, "MigratedProperty")
+		require.Len(t, elements, 1)
+		element, ok := elements[0].(map[string]any)
+		require.True(t, ok)
 		assertSingleSupplementalSemanticID(t, element, "urn:basyx:migration:sme:supplemental:1")
 	})
 

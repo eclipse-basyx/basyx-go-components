@@ -1,7 +1,7 @@
 kind: fixed
-body: Resolve current and historical DPP requests and product searches using digitalProductPassportId from DppMetadata independently of the AAS ID.
+body: Require ID-based DPP lookup to match both the owning AAS identifier and its DppMetadata.digitalProductPassportId; a requested ID returns 404 when either stored value differs. Historical lookup applies the same check, while product-based retrieval remains available through uniqueProductIdentifier.
 time: 2026-09-15T12:00:00+02:00
 custom:
     Impact: High
     PullRequest: 691
-    SecurityImpact: Preserves request authorization and applies metadata value visibility before returning passport identifiers and pagination cursors.
+    SecurityImpact: Preserves request authorization and applies metadata value visibility before returning product-search DPP IDs or pagination cursors; mismatched AAS and metadata IDs return 404 for ID-based requests.

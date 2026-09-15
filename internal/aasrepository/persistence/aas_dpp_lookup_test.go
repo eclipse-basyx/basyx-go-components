@@ -53,23 +53,6 @@ func TestAASRepositoryReadPoolSelection(t *testing.T) {
 	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
 }
 
-func TestGetAssetAdministrationShellByDPPIDDatasetUsesMetadataPropertyAndDistinctOwner(t *testing.T) {
-	dialect := goqu.Dialect("postgres")
-	query, args, err := buildGetAssetAdministrationShellDBIDByDPPIDDataset(
-		&dialect,
-		"https://example.org/dpps/42",
-		[]string{"urn:samm:io.admin-shell.idta.dpp_meta:1.0.0#DppMetadata"},
-	).Prepared(true).ToSQL()
-
-	require.NoError(t, err)
-	require.Len(t, args, 4)
-	require.Contains(t, query, `SELECT DISTINCT "aas"."id"`)
-	require.Contains(t, query, `"metadata_element"."id_short" = $1`)
-	require.Contains(t, query, `"metadata_element"."parent_sme_id" IS NULL`)
-	require.Contains(t, query, `"metadata_property"."value_text" = $3`)
-	require.True(t, strings.HasSuffix(query, "LIMIT $4"))
-}
-
 func TestGetDPPIDsByAssetAndMetadataSemanticIDsDatasetUsesDPPIDCursor(t *testing.T) {
 	dialect := goqu.Dialect("postgres")
 	query, err := buildGetDPPIDsByAssetAndMetadataSemanticIDsDataset(
@@ -83,11 +66,36 @@ func TestGetDPPIDsByAssetAndMetadataSemanticIDsDatasetUsesDPPIDCursor(t *testing
 	sqlQuery, sqlArgs, err := query.Prepared(true).ToSQL()
 
 	require.NoError(t, err)
-	require.Len(t, sqlArgs, 5)
+	require.Len(t, sqlArgs, 6)
 	require.Contains(t, sqlQuery, `SELECT DISTINCT "metadata_property"."value_text"`)
-	require.Contains(t, sqlQuery, `"metadata_property"."value_text" > $4`)
+	require.Contains(t, sqlQuery, `"metadata_property"."value_text" > $5`)
 	require.Contains(t, sqlQuery, `ORDER BY "metadata_property"."value_text" ASC`)
-	require.True(t, strings.HasSuffix(sqlQuery, "LIMIT $5"))
+	require.True(t, strings.HasSuffix(sqlQuery, "LIMIT $6"))
+}
+
+func TestGetDPPAssetIdentifiersDatasetSelectsOwningAASAndVisibleDPPID(t *testing.T) {
+	dialect := goqu.Dialect("postgres")
+	dataset, err := buildGetDPPAssetIdentifiersDataset(
+		&dialect,
+		[]string{"product-1"},
+		[]string{"urn:samm:io.admin-shell.idta.dpp_meta:1.0.0#DppMetadata"},
+		1,
+	)
+	require.NoError(t, err)
+	query, args, err := dataset.Prepared(true).ToSQL()
+
+	require.NoError(t, err)
+	require.Len(t, args, 5)
+	require.Contains(t, query, `SELECT DISTINCT "aas"."aas_id", "metadata_property"."value_text"`)
+	require.Contains(t, query, `"metadata_semantic_id_key"."value" = ANY`)
+	require.Contains(t, query, `"asset_information"."global_asset_id" = ANY`)
+	require.Contains(t, query, `"metadata_property"."value_text" IS NOT NULL`)
+	require.Contains(t, query, `"metadata_property"."value_text" != $`)
+	require.Contains(t, query, `"submodel_reference_key"."position" IN (SELECT MAX("terminal_submodel_reference_key"."position")`)
+	require.Contains(t, query, `"metadata_semantic_id_key"."position" IN (SELECT MAX("terminal_metadata_semantic_id_key"."position")`)
+	require.Contains(t, query, `ORDER BY "aas"."aas_id" ASC, "metadata_property"."value_text" ASC`)
+	require.True(t, strings.HasSuffix(query, "LIMIT $5"))
+	require.Equal(t, int64(2), args[4])
 }
 
 func TestDPPIDLookupAuthorizationFiltersMaskedValueBeforePagination(t *testing.T) {

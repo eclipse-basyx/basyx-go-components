@@ -1,7 +1,7 @@
 kind: fixed
-body: Preserve shared and unselected Submodels, their descriptors and shared attachments when deleting a DPP. Clean up metadata and selected content only when no other live local resources reference them; apply the same rule to explicitly removed sections.
+body: Delete a DPP's owning AAS, DppMetadata and their descriptors while retaining all content Submodels, their descriptors and managed attachments. Removing a content section also retains its Submodel and attachments.
 time: 2026-09-15T18:00:00+02:00
 custom:
     Impact: High
     PullRequest: 691
-    SecurityImpact: Checks references independently of caller visibility and protects concurrently referenced content from deletion. Retains request authorization, transactional history, and shared attachments.
+    SecurityImpact: Revalidates the matching DPP ID and ownership under transaction row locks before deletion while preserving request authorization; content Submodels and attachments are retained instead of being removed as a side effect of DPP deletion or section removal.

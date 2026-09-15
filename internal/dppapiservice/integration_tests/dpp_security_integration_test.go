@@ -117,13 +117,13 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	historicalDate := time.Now().UTC()
 
 	hiddenDPPID := assertSecuredDPPIDSearch(t, client, baseURL, editorToken, restrictedViewerToken)
-	protectedTechnicalID := configureHiddenDPPContentReference(
-		t, databasePort, dppID, hiddenDPPID,
-	)
+	securityDB := openDPPDatabase(t, databasePort, "basyxDppSecurityIT")
+	protectedTechnicalID := submodelIDBySemanticIDFromDatabase(t, securityDB, dppID, lifecycleTechnicalDataSpec)
+	_ = securityDB.Close()
 	doJSONAnyAuth(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedPathParam(hiddenDPPID), restrictedViewerToken, nil, http.StatusNotFound)
 
 	doJSONAnyAuth(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, restrictedViewerToken, nil, http.StatusNoContent)
-	securityDB := openDPPDatabase(t, databasePort, "basyxDppSecurityIT")
+	securityDB = openDPPDatabase(t, databasePort, "basyxDppSecurityIT")
 	assertSubmodelIdentifierExistsInDatabase(t, securityDB, protectedTechnicalID, true)
 	_ = securityDB.Close()
 
@@ -168,33 +168,10 @@ func assertSecuredDPPIDSearch(
 		http.StatusOK,
 	)
 	assertDPPIDSearchPage(t, secondPage, []string{visibleCID}, "")
+	doJSONAnyAuth(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(visibleCID), editorToken, nil, http.StatusNoContent)
+	visibleOwner := doJSONAuth(t, client, http.MethodGet, baseURL+"/v1/dppsByProductId/"+encodedPathParam(productID), restrictedViewerToken, nil, http.StatusOK)
+	assertJSONPathEquals(t, visibleOwner, "digitalProductPassportId", visibleAID)
 	return hiddenID
-}
-
-func configureHiddenDPPContentReference(
-	t *testing.T,
-	databasePort int,
-	protectedDPPID string,
-	hiddenDPPID string,
-) string {
-	t.Helper()
-	db := openDPPDatabase(t, databasePort, "basyxDppSecurityIT")
-	defer func() { _ = db.Close() }()
-	protectedTechnicalID := submodelIDBySemanticIDFromDatabase(t, db, protectedDPPID, lifecycleTechnicalDataSpec)
-	hiddenTechnicalID := submodelIDBySemanticIDFromDatabase(t, db, hiddenDPPID, lifecycleTechnicalDataSpec)
-	keyID := aasSubmodelReferenceKeyID(t, db, hiddenDPPID, hiddenTechnicalID)
-	tx, err := db.BeginTx(t.Context(), nil)
-	if err != nil {
-		t.Fatalf("begin hidden DPP reference update: %v", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err = updateAASReferenceKeyInTransaction(t.Context(), tx, keyID, protectedTechnicalID); err != nil {
-		t.Fatalf("update hidden DPP content reference: %v", err)
-	}
-	if err = tx.Commit(); err != nil {
-		t.Fatalf("commit hidden DPP content reference: %v", err)
-	}
-	return protectedTechnicalID
 }
 
 func assertDPPIDSearchPage(t *testing.T, body map[string]any, expectedItems []string, expectedCursor string) {

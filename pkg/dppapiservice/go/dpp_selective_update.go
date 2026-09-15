@@ -78,73 +78,73 @@ func (s *DPPRepositoryService) prepareSelectiveDPPUpdate(
 	if err != nil {
 		return preparedDPPUpdate{}, err
 	}
-	if err = s.planContentUpdates(
-		ctx, patch, merged, header, current, currentBySection, mergedBySection, detachedIDsBySection, &update,
-	); err != nil {
+	planner := dppContentUpdatePlanner{
+		service:              s,
+		ctx:                  ctx,
+		patch:                patch,
+		mergedSections:       contentSections(merged),
+		header:               header,
+		current:              current,
+		currentBySection:     currentBySection,
+		mergedBySection:      mergedBySection,
+		detachedIDsBySection: detachedIDsBySection,
+		update:               &update,
+	}
+	if err = planner.plan(); err != nil {
 		return preparedDPPUpdate{}, err
 	}
-	update.detachedSubmodelIDs = withoutRetainedDPPSubmodels(
-		update.detachedSubmodelIDs, update.submodels, update.retainedSubmodelIDs,
+	detachedSubmodelIDs := withoutRetainedDPPSubmodels(
+		planner.detachedSubmodelIDs, update.submodels, update.retainedSubmodelIDs,
 	)
-	update.aas, err = updatedDPPAAS(resolved.aas, current, merged, update.detachedSubmodelIDs, update.newSubmodelIDs)
+	update.aas, err = updatedDPPAAS(resolved.aas, current, merged, detachedSubmodelIDs, update.newSubmodelIDs)
 	if err != nil {
 		return preparedDPPUpdate{}, err
 	}
 	return update, nil
 }
 
-func (s *DPPRepositoryService) planContentUpdates(
-	ctx context.Context,
-	patch dppDocument,
-	merged dppDocument,
-	header dppHeader,
-	current dppDocument,
-	currentBySection map[string]types.ISubmodel,
-	mergedBySection map[string]types.ISubmodel,
-	detachedIDsBySection map[string][]string,
-	update *preparedDPPUpdate,
-) error {
-	mergedSections := contentSections(merged)
-	for _, sectionName := range sortedKeys(contentSections(patch)) {
-		if err := s.planContentSectionUpdate(
-			ctx, sectionName, patch, mergedSections, header, current, currentBySection, mergedBySection, detachedIDsBySection, update,
-		); err != nil {
+type dppContentUpdatePlanner struct {
+	service              *DPPRepositoryService
+	ctx                  context.Context
+	patch                dppDocument
+	mergedSections       map[string]any
+	header               dppHeader
+	current              dppDocument
+	currentBySection     map[string]types.ISubmodel
+	mergedBySection      map[string]types.ISubmodel
+	detachedIDsBySection map[string][]string
+	detachedSubmodelIDs  []string
+	update               *preparedDPPUpdate
+}
+
+func (p *dppContentUpdatePlanner) plan() error {
+	for _, sectionName := range sortedKeys(contentSections(p.patch)) {
+		if err := p.planSection(sectionName); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *DPPRepositoryService) planContentSectionUpdate(
-	ctx context.Context,
-	sectionName string,
-	patch dppDocument,
-	mergedSections map[string]any,
-	header dppHeader,
-	current dppDocument,
-	currentBySection map[string]types.ISubmodel,
-	mergedBySection map[string]types.ISubmodel,
-	detachedIDsBySection map[string][]string,
-	update *preparedDPPUpdate,
-) error {
-	currentSubmodel, currentValue, mergeFromCurrent, err := s.resolveDPPContentUpdateBase(
-		ctx, sectionName, current, currentBySection, mergedBySection, update,
+func (p *dppContentUpdatePlanner) planSection(sectionName string) error {
+	currentSubmodel, currentValue, mergeFromCurrent, err := p.service.resolveDPPContentUpdateBase(
+		p.ctx, sectionName, p.current, p.currentBySection, p.mergedBySection, p.update,
 	)
 	if err != nil {
 		return err
 	}
-	mergedSection, exists := mergedSections[sectionName]
+	mergedSection, exists := p.mergedSections[sectionName]
 	if !exists {
 		if currentSubmodel != nil {
-			update.detachedSubmodelIDs = append(update.detachedSubmodelIDs, detachedIDsBySection[sectionName]...)
+			p.detachedSubmodelIDs = append(p.detachedSubmodelIDs, p.detachedIDsBySection[sectionName]...)
 		}
 		return nil
 	}
 	if currentSubmodel != nil {
-		update.retainedSubmodelIDs[currentSubmodel.ID()] = struct{}{}
+		p.update.retainedSubmodelIDs[currentSubmodel.ID()] = struct{}{}
 	}
 	if mergeFromCurrent {
-		mergedSection, err = mergeRemappedDPPContent(currentValue, patch[sectionName])
+		mergedSection, err = mergeRemappedDPPContent(currentValue, p.patch[sectionName])
 		if err != nil {
 			return err
 		}
@@ -153,16 +153,20 @@ func (s *DPPRepositoryService) planContentSectionUpdate(
 		return nil
 	}
 	if currentSubmodel == nil {
-		return planNewDPPContentSubmodel(sectionName, mergedSection, mergedSections, header, update)
+		return planNewDPPContentSubmodel(sectionName, mergedSection, p.mergedSections, p.header, p.update)
 	}
-	changed, err := updatedDPPContentSubmodel(currentSubmodel, currentValue, mergedSection, patch[sectionName], header.LastUpdate)
+	changed, err := updatedDPPContentSubmodel(
+		currentSubmodel, currentValue, mergedSection, p.patch[sectionName], p.header.LastUpdate,
+	)
 	if err != nil {
 		return err
 	}
-	if err = s.preserveManagedAttachments(ctx, []types.ISubmodel{changed}, []types.ISubmodel{currentSubmodel}); err != nil {
+	if err = p.service.preserveManagedAttachments(
+		p.ctx, []types.ISubmodel{changed}, []types.ISubmodel{currentSubmodel},
+	); err != nil {
 		return err
 	}
-	update.submodels = appendOrReplacePlannedDPPSubmodel(update.submodels, changed)
+	p.update.submodels = appendOrReplacePlannedDPPSubmodel(p.update.submodels, changed)
 	return nil
 }
 

@@ -48,19 +48,6 @@
           ]
         }
       ]
-    },
-    {
-      "idShort": "MigratedReference",
-      "modelType": "ReferenceElement",
-      "value": {
-        "type": "ModelReference",
-        "keys": [
-          {
-            "type": "Submodel",
-            "value": "urn:basyx:migration:binary-submodel:1"
-          }
-        ]
-      }
     }
   ]
 }

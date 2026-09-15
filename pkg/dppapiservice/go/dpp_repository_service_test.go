@@ -117,7 +117,7 @@ func TestRegistrySynchronizationFlagCombinations(t *testing.T) {
 			}
 			if err = service.syncUpdatedDescriptors(ctx, nil, aas, aas, []submodelDescriptorUpdate{{
 				previous: submodel, submitted: submodel,
-			}}, []string{"urn:example:stale"}); err != nil {
+			}}); err != nil {
 				t.Fatalf("syncUpdatedDescriptors() error = %v", err)
 			}
 			if err = service.deleteSubmodelDescriptorIfEnabled(ctx, nil, submodel.ID()); err != nil {
@@ -128,7 +128,7 @@ func TestRegistrySynchronizationFlagCombinations(t *testing.T) {
 			}
 
 			assertRegistryCalls(t, "AAS", aasRegistry.calls, aasEnabled, 2)
-			assertRegistryCalls(t, "Submodel", submodelRegistry.calls, submodelEnabled, 3)
+			assertRegistryCalls(t, "Submodel", submodelRegistry.calls, submodelEnabled, 2)
 			for _, observed := range append(aasRegistry.discoverySettings, submodelRegistry.discoverySettings...) {
 				if observed != discoveryEnabled {
 					t.Fatalf("registry context discoveryIntegration = %t, want %t", observed, discoveryEnabled)
@@ -154,7 +154,7 @@ func TestRegistrySynchronizationRepairsMissingUnchangedDescriptors(t *testing.T)
 	submodel := types.NewSubmodel("urn:example:submodel")
 	if err = service.syncUpdatedDescriptors(t.Context(), nil, aas, aas, []submodelDescriptorUpdate{{
 		previous: submodel, submitted: submodel,
-	}}, nil); err != nil {
+	}}); err != nil {
 		t.Fatalf("syncUpdatedDescriptors() error = %v", err)
 	}
 
@@ -188,7 +188,7 @@ func TestRegistrySynchronizationSkipsExistingUnchangedDescriptors(t *testing.T) 
 
 	if err = service.syncUpdatedDescriptors(t.Context(), nil, aas, aas, []submodelDescriptorUpdate{{
 		previous: submodel, submitted: submodel,
-	}}, nil); err != nil {
+	}}); err != nil {
 		t.Fatalf("syncUpdatedDescriptors() error = %v", err)
 	}
 	if aasRegistry.calls != aasWrites {
@@ -523,7 +523,7 @@ func TestComposeLoadedDPPPreservesManagedURLsWithoutReloadingModels(t *testing.T
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{General: common.GeneralConfig{ExternalURL: "https://aas.example.test"}})
 	doc, err := service.composeLoadedDPP(ctx, resolved, REPRESENTATION_COMPRESSED, false)
 	require.NoError(t, err)
-	require.Equal(t, resolved.dppID, doc[headerDigitalProductPassportID])
+	require.Equal(t, resolved.aas.ID(), doc[headerDigitalProductPassportID])
 	section := doc[selectiveTechnicalSemantic].(map[string]any)
 	manual := section["manual"].(map[string]any)
 	require.Contains(t, manual["url"], "/submodels/"+common.EncodeString(technical.ID())+"/submodel-elements/manual/attachment")

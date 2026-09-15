@@ -30,7 +30,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -87,17 +86,16 @@ func newSelectiveDPPFixture(
 		baseURL:      baseURL,
 		aasBaseURL:   aasBaseURL,
 		databasePort: databasePort,
-		aasID:        "https://www.example.org/aas/selective/" + idSuffix,
 		dppID:        "https://www.example.org/dpp/selective/" + idSuffix,
 	}
+	fixture.aasID = fixture.dppID
 	fixture.encodedDPPID = encodedPathParam(fixture.dppID)
 	productID := "https://www.example.org/product/selective/" + idSuffix
-	doJSON(t, fixture.client, http.MethodPost, fixture.baseURL+"/v1/dpps", lifecycleDPPDocument(fixture.aasID, productID, now), http.StatusCreated)
-	replaceDPPMetadataIdentifier(t, fixture.client, fixture.aasBaseURL, fixture.aasID+"/submodels/DppMetadata", fixture.dppID)
+	doJSON(t, fixture.client, http.MethodPost, fixture.baseURL+"/v1/dpps", lifecycleDPPDocument(fixture.dppID, productID, now), http.StatusCreated)
 	fixture.technicalDataID = submodelIDBySemanticID(t, fixture.databasePort, fixture.aasID, lifecycleTechnicalDataSpec)
 	fixture.carbonFootprintID = submodelIDBySemanticID(t, fixture.databasePort, fixture.aasID, lifecycleCarbonFootprintSpec)
 	fixture.metadataID = fixture.aasID + "/submodels/DppMetadata"
-	fixture.collisionID = strings.Replace(fixture.technicalDataID, fixture.aasID, fixture.dppID, 1)
+	fixture.collisionID = fixture.dppID + "/submodels/CollisionTechnicalData"
 	return fixture
 }
 
@@ -373,20 +371,35 @@ func assertNewDPPSectionCollisionRollsBack(t *testing.T, fixture selectiveDPPFix
 
 func assertRemovedDPPSectionRetainsSharedContent(t *testing.T, fixture selectiveDPPFixture) {
 	t.Helper()
+	attachmentURL := fixture.aasBaseURL + "/submodels/" + common.EncodeString(fixture.carbonFootprintID) + "/submodel-elements/deletionEvidence/attachment"
+	attachmentBytes := []byte("detached exclusive attachment")
+	doJSON(t, fixture.client, http.MethodPost, fixture.aasBaseURL+"/submodels/"+common.EncodeString(fixture.carbonFootprintID)+"/submodel-elements", map[string]any{
+		"idShort":     "deletionEvidence",
+		"modelType":   "File",
+		"contentType": "application/octet-stream",
+		"value":       "",
+	}, http.StatusCreated)
+	uploadAttachment(t, fixture.client, attachmentURL, "deletion-evidence.bin", attachmentBytes)
 	beforeTechnicalData := submodelSnapshot(t, fixture, fixture.technicalDataID)
+	beforeCarbonFootprint := submodelSnapshot(t, fixture, fixture.carbonFootprintID)
 	beforeCollision := submodelSnapshot(t, fixture, fixture.collisionID)
 	beforeAASRevision := historyRevision(t, fixture.databasePort, "aas_history", fixture.aasID)
 	beforeMetadataRevision := historyRevision(t, fixture.databasePort, "submodel_history", fixture.metadataID)
 	doJSON(t, fixture.client, http.MethodPatch, fixture.baseURL+"/v1/dpps/"+fixture.encodedDPPID, map[string]any{
-		lifecycleTechnicalDataSpec: nil,
+		lifecycleTechnicalDataSpec:   nil,
+		lifecycleCarbonFootprintSpec: nil,
 	}, http.StatusOK)
 	assertRevisionAdvanced(t, fixture.databasePort, "aas_history", fixture.aasID, beforeAASRevision)
 	assertRevisionAdvanced(t, fixture.databasePort, "submodel_history", fixture.metadataID, beforeMetadataRevision)
 	assertSubmodelSnapshotUnchanged(t, fixture, beforeTechnicalData)
+	assertSubmodelSnapshotUnchanged(t, fixture, beforeCarbonFootprint)
 	assertSubmodelSnapshotUnchanged(t, fixture, beforeCollision)
 	assertAASReferencesSubmodel(t, fixture.client, fixture.aasBaseURL, fixture.aasID, fixture.technicalDataID, false)
+	assertAASReferencesSubmodel(t, fixture.client, fixture.aasBaseURL, fixture.aasID, fixture.carbonFootprintID, false)
 	assertAASReferencesSubmodel(t, fixture.client, fixture.aasBaseURL, fixture.sharedAASID, fixture.technicalDataID, true)
 	doJSON(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/submodel-descriptors/"+common.EncodeString(fixture.technicalDataID), nil, http.StatusOK)
+	doJSON(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/submodel-descriptors/"+common.EncodeString(fixture.carbonFootprintID), nil, http.StatusOK)
+	assertAttachmentDownload(t, fixture.client, attachmentURL, attachmentBytes)
 }
 
 type selectiveUpdateState struct {

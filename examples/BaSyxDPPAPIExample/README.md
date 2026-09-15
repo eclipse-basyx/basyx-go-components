@@ -35,6 +35,22 @@ DPP_ID='https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545'
 PRODUCT_ID='https%3A%2F%2Fwww.example.org%2F1234545'
 ```
 
+For ID-based DPP requests, use the same value for the owning AAS identifier and
+`DppMetadata.digitalProductPassportId`. This example uses the following
+matching values:
+
+| Value | Example |
+| --- | --- |
+| AAS identifier | `https://www.example.org/batterypassport/1234545` |
+| `DppMetadata.digitalProductPassportId` | `https://www.example.org/batterypassport/1234545` |
+| `DPP_ID` path value | `https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545` |
+
+If the two stored values differ, an ID-based request returns `404 Not Found`.
+This is a BaSyx API limitation; the DPP specification permits the identifiers
+to differ. `PRODUCT_ID` is the separate `uniqueProductIdentifier` used by
+product lookup. Product lookup can still return a passport when its AAS and
+metadata identifiers differ, provided the product ID matches.
+
 ## Create a passport
 
 The [sample DPP](sample-dpp.json) describes a battery pack with nameplate, carbon footprint, documentation and circularity data.
@@ -158,7 +174,11 @@ curl -i -X DELETE "$BASE_URL/v1/dpps/$DPP_ID"
 
 Expect `204 No Content`. Reading the current passport now returns `404 Not Found`. Its historical versions remain readable in this example.
 
-Deleting the passport removes its AAS. Its DppMetadata and the content selected by `contentSpecificationIds` are also deleted if no other live resources in this AAS Environment reference them. Shared content and content outside the selection remain available. Removing a content section with `null` follows the same rule; changing `contentSpecificationIds` alone only changes what the passport shows.
+Deleting the passport removes its AAS, DppMetadata and their descriptors. The
+content Submodels, their descriptors and managed attachments remain available
+in the AAS Environment. Removing a content section with `null` also retains
+that Submodel and its attachments; changing `contentSpecificationIds` only
+changes what the passport shows.
 
 To repeat the walkthrough with the same sample IDs, use the [cleanup commands](#stop-and-clean-up) to remove all sample data, then start the example again.
 

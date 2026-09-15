@@ -41,10 +41,7 @@ const selectiveOtherSemantic = "urn:example:selective:other"
 
 func TestSelectDPPMetadataRequiresExactPassportIdentifier(t *testing.T) {
 	resolved := selectiveUpdateFixture()
-	require.Nil(t, selectDPPMetadata(resolved.submodels, resolved.aasID))
 	require.Nil(t, selectDPPMetadata(resolved.submodels, "urn:example:unknown-passport"))
-	require.Same(t, resolved.metadata, selectDPPMetadata(resolved.submodels, resolved.dppID))
-	resolved.aas.SetID(resolved.dppID)
 	require.Same(t, resolved.metadata, selectDPPMetadata(resolved.submodels, resolved.aas.ID()))
 }
 
@@ -122,7 +119,7 @@ func TestPrepareDPPMappedHeaderUpdatePreservesAASAttributes(t *testing.T) {
 		headerGranularity:             "Batch",
 	})
 	require.NotNil(t, update.aas)
-	require.Equal(t, resolved.aasID, update.aas.ID())
+	require.Equal(t, resolved.aas.ID(), update.aas.ID())
 	require.Equal(t, resolved.aas.IDShort(), update.aas.IDShort())
 	require.Equal(t, resolved.aas.Extensions(), update.aas.Extensions())
 	require.Equal(t, resolved.aas.Administration(), update.aas.Administration())
@@ -174,7 +171,6 @@ func TestPrepareDPPContentSelectionUpdateDoesNotRewriteContent(t *testing.T) {
 	})
 	require.Nil(t, update.aas)
 	require.Len(t, update.submodels, 1)
-	require.Empty(t, update.detachedSubmodelIDs)
 	require.Len(t, resolved.aas.Submodels(), 3)
 	require.True(t, referenceListContains(resolved.aas.Submodels(), resolved.submodels[2].ID()))
 	resolved.metadata = update.submodels[0]
@@ -196,7 +192,6 @@ func TestPrepareDPPNoContentSelectionPreservesReferencedContent(t *testing.T) {
 			})
 			require.Nil(t, update.aas)
 			require.Len(t, update.submodels, 1)
-			require.Empty(t, update.detachedSubmodelIDs)
 			assertSelectiveContentReferencesUnchanged(t, resolved, update)
 			resolved.metadata = update.submodels[0]
 			resolved.submodels[0] = update.submodels[0]
@@ -218,7 +213,6 @@ func TestPrepareDPPRepopulatedContentSelectionReusesReferencedContent(t *testing
 	})
 	require.Nil(t, update.aas)
 	require.Len(t, update.submodels, 1)
-	require.Empty(t, update.detachedSubmodelIDs)
 	assertSelectiveContentReferencesUnchanged(t, resolved, update)
 	resolved.metadata = update.submodels[0]
 	resolved.submodels[0] = update.submodels[0]
@@ -354,7 +348,6 @@ func TestPrepareDPPSemanticNoOpRetainsOldAliasReferenceWithoutContentWrite(t *te
 	})
 	require.Nil(t, update.aas)
 	require.Len(t, update.submodels, 1)
-	require.Empty(t, update.detachedSubmodelIDs)
 }
 
 func TestPrepareDPPUpdateTimestampFollowsNewlySelectedContent(t *testing.T) {
@@ -385,7 +378,7 @@ func prepareSelectiveTestUpdate(t *testing.T, resolved resolvedDPP, current dppD
 	require.NoError(t, err)
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
 	service := NewDPPRepositoryService(nil, nil)
-	update, err := service.prepareDPPUpdate(ctx, resolved.dppID, patch, resolved, content, current)
+	update, err := service.prepareDPPUpdate(ctx, resolved.aas.ID(), patch, resolved, content, current)
 	require.NoError(t, err)
 	return update
 }
@@ -431,14 +424,14 @@ func selectiveUpdateFixture() resolvedDPP {
 	other.SetSubmodelElements([]types.ISubmodelElement{stringProperty("note", "unchanged")})
 	submodels := []types.ISubmodel{metadata, technical, other}
 	refs := []types.IReference{submodelReference(metadata.ID()), submodelReference(technical.ID()), submodelReference(other.ID())}
-	aas := buildAASWithID(header, refs, "urn:example:owner")
+	aas := buildAAS(header, refs)
 	aas.SetIDShort(selectiveString("ImportedOwner"))
 	aas.SetExtensions([]types.IExtension{types.NewExtension("owner-private")})
 	administration := types.NewAdministrativeInformation()
 	administration.SetVersion(selectiveString("42"))
 	aas.SetAdministration(administration)
 	aas.AssetInformation().SetSpecificAssetIDs([]types.ISpecificAssetID{types.NewSpecificAssetID("serial", "123")})
-	return resolvedDPP{aas: aas, metadata: metadata, submodels: submodels, aasID: aas.ID(), dppID: header.DigitalProductPassportID}
+	return resolvedDPP{aas: aas, metadata: metadata, submodels: submodels}
 }
 
 func selectiveTechnicalSubmodel(timestamp time.Time) types.ISubmodel {

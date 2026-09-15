@@ -205,7 +205,7 @@ func assertSelectionElementAccess(
 	selected map[string]struct{},
 ) {
 	t.Helper()
-	status := http.StatusBadRequest
+	status := http.StatusNotFound
 	if _, expected := selected[specificationID]; expected {
 		status = http.StatusOK
 	}

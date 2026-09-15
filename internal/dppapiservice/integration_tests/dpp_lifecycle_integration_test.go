@@ -257,15 +257,9 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 		lifecycleCarbonFootprintSpec: nil,
 	}, http.StatusOK)
 	assertAASReferencesSubmodel(t, client, aasBaseURL, dppID, carbonFootprintSubmodelID, false)
-	assertSubmodelIdentifierExists(t, databasePort, carbonFootprintSubmodelID, false)
-	doJSONAny(
-		t, client, http.MethodGet,
-		aasBaseURL+"/submodels/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusNotFound,
-	)
-	doJSONAny(
-		t, client, http.MethodGet,
-		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusNotFound,
-	)
+	assertSubmodelIdentifierExists(t, databasePort, carbonFootprintSubmodelID, true)
+	doJSON(t, client, http.MethodGet, aasBaseURL+"/submodels/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusOK)
+	doJSON(t, client, http.MethodGet, aasBaseURL+"/submodel-descriptors/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusOK)
 	preCarbonRemovalBody := doJSON(
 		t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforeCarbonRemovalDate, "compressed"), nil, http.StatusOK,
 	)
@@ -282,6 +276,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 			deletedAASID:        dppID,
 			deletedMetadataID:   importedMetadataID,
 			retainedTechnicalID: technicalDataSubmodelID,
+			retainedDetachedID:  carbonFootprintSubmodelID,
 		},
 		idSuffix,
 		now,
@@ -297,72 +292,12 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	doJSONAny(t, client, http.MethodGet, aasBaseURL+"/submodel-descriptors/"+common.EncodeString(importedMetadataID), nil, http.StatusNotFound)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(deletionFixture.consumerDPPID), nil, http.StatusNoContent)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(optionalDPPID), nil, http.StatusNoContent)
-	testDPPWithDistinctAASID(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
+	testDPPIdentifierInvariant(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
+	testDPPDeleteRevalidationConcurrency(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 	testDPPAttachmentAndAASHistory(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 	testDPPCollectionSerialization(t, client, baseURL, idSuffix, now)
 	testDPPContentSpecificationSelection(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
-	testSubmodelReferenceCleanupConcurrency(t, client, aasBaseURL, databasePort, idSuffix)
 	testSelectiveDPPUpdates(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
-}
-
-func testDPPWithDistinctAASID(
-	t *testing.T,
-	client *http.Client,
-	baseURL string,
-	aasBaseURL string,
-	databasePort int,
-	idSuffix string,
-	now time.Time,
-) {
-	t.Helper()
-	dppID := "https://www.example.org/dpp/distinct/" + idSuffix
-	aasID := "https://www.example.org/aas/distinct/" + idSuffix
-	productID := "https://www.example.org/product/distinct/" + idSuffix
-	encodedDPPID := encodedPathParam(dppID)
-	document := lifecycleDPPDocument(aasID, productID, now)
-	doJSON(t, client, http.MethodPost, baseURL+"/v1/dpps", document, http.StatusCreated)
-	replaceDPPMetadataIdentifier(t, client, aasBaseURL, aasID+"/submodels/DppMetadata", dppID)
-	document["digitalProductPassportId"] = dppID
-
-	readBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
-	assertJSONPathEquals(t, readBody, "digitalProductPassportId", dppID)
-	encodedAASID := encodedPathParam(aasID)
-	doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedAASID, nil, http.StatusNotFound)
-
-	submodelIDBySemanticID(t, databasePort, aasID, lifecycleTechnicalDataSpec)
-	elementPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "manufacturerName"))
-	doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+elementPath, nil, http.StatusOK)
-	updatedElement := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+elementPath, "Imported Owner", http.StatusOK)
-	assertScalarEquals(t, updatedElement, "Imported Owner")
-
-	createdVersionDate := latestDPPHistoryTimestamp(t, databasePort, aasID)
-	doJSONAny(t, client, http.MethodGet, historyURL(baseURL, encodedAASID, createdVersionDate, "compressed"), nil, http.StatusNotFound)
-	doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedAASID, map[string]any{"dppStatus": "deprecated"}, http.StatusNotFound)
-	doJSONAny(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedAASID, nil, http.StatusNotFound)
-	doJSON(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, map[string]any{
-		lifecycleTechnicalDataSpec: map[string]any{"manufacturerName": "Imported Owner Updated"},
-	}, http.StatusOK)
-	assertAASIdentifierExists(t, databasePort, aasID, true)
-	assertAASIdentifierExists(t, databasePort, dppID, false)
-	historyBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, createdVersionDate, "compressed"), nil, http.StatusOK)
-	assertDPPSectionPathEquals(t, historyBody, lifecycleTechnicalDataSpec, "manufacturerName", "Imported Owner")
-
-	productBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dppsByProductId/"+encodedPathParam(productID), nil, http.StatusOK)
-	assertJSONPathEquals(t, productBody, "digitalProductPassportId", dppID)
-	searchBody := doJSON(t, client, http.MethodPost, baseURL+"/v1/dppsByProductIds?limit=1", map[string]any{
-		"productIds": []string{productID},
-	}, http.StatusOK)
-	assertStringSliceContains(t, searchBody["items"], dppID)
-	if cursor, present := searchBody["cursor"]; present && cursor != "" {
-		t.Fatalf("single-item DPP search cursor = %#v, want absent or empty", cursor)
-	}
-
-	doJSONAny(t, client, http.MethodPost, baseURL+"/v1/dpps", document, http.StatusConflict)
-	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNoContent)
-	assertAASIdentifierExists(t, databasePort, aasID, false)
-	doJSONAny(t, client, http.MethodGet, aasBaseURL+"/shell-descriptors/"+common.EncodeString(aasID), nil, http.StatusNotFound)
-	doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNotFound)
-	assertDistinctDPPHistorySurvivesDeletionAndIDReuse(t, client, baseURL, dppID, productID, createdVersionDate, now)
 }
 
 func lifecycleDPPDocument(dppID string, productID string, now time.Time) map[string]any {
