@@ -1,7 +1,7 @@
 kind: fixed
-body: Resolve DPP identifiers exclusively from DppMetadata independently of AAS identifiers, preserving the owning AAS identity during updates and returning metadata DPP IDs from product searches. Remove AAS-ID aliases for current and historical DPP operations. Add a hash index for exact property-text lookup.
+body: Resolve current and historical DPP requests and product searches using digitalProductPassportId from DppMetadata independently of the AAS ID.
 time: 2026-09-15T12:00:00+02:00
 custom:
     Impact: High
     PullRequest: 691
-    SecurityImpact: Preserves request authorization context when resolving DPP owners.
+    SecurityImpact: Preserves request authorization and applies metadata value visibility before returning passport identifiers and pagination cursors.

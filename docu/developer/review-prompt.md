@@ -33,7 +33,7 @@ Check for:
 
 Check for:
 
-- Schema changes not reflected in `database/base.sql`, a versioned `database/patches/` migration, or schema version registration when required
+- Schema changes missing from the PR’s single new `database/patches/` migration or its schema version registration; changes to the reference-only `database/base.sql`
 - Queryable columns added to `*_payload` tables
 - Missing transactions, incorrect rollback/commit behavior, lock ordering issues
 - Inefficient queries, N+1 patterns, missing pagination, unbounded scans
@@ -75,7 +75,9 @@ Check for:
 - Live code must not use `context.Background()`; pass a caller/request/signal-aware context. Unit tests may create their own context.
 - Own `.go` files must include the project license header. Generated files may follow their generator's established header pattern.
 - Public Go symbols must have useful GoDoc. For exported functions, check that docs explain parameters, return values, and include a short example snippet when it materially improves correct usage.
-- Database schema changes must update `database/base.sql` for new baseline installs, add a versioned patch under `database/patches/` for existing installs, and update schema version registration when required.
+- Database schema and index changes must use at most one new, unreleased patch file per PR under `database/patches/`, with matching schema version registration. Amend that same patch for follow-up fixes. Never modify `database/base.sql` or a patch already present in the PR base.
+- Review all Changie fragments against the complete PR diff from its base branch. Remove entries for issues introduced and fixed entirely within this PR; describe each final release change without recounting review iterations.
+- Multiple Changie fragments per PR are allowed for distinct notable changes. Do not require one fragment per PR or add one per commit. Every fragment must follow `.changie.yaml`, including Impact, PullRequest, and SecurityImpact.
 - Queryable columns must not be added to `*_payload` tables.
 - Service changes should stay aligned across equivalent production services.
 - Prefer existing helpers and patterns over new one-off implementations.

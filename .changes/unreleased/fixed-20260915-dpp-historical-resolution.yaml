@@ -1,7 +1,0 @@
-kind: fixed
-body: Resolve historical DPP identifiers against their historical AAS and metadata association so past passports remain readable after deletion or reassociation.
-time: 2026-09-15T15:45:00+02:00
-custom:
-    Impact: High
-    PullRequest: 691
-    SecurityImpact: Rejects historical requests requiring unsupported resource-level authorization filters instead of exposing unfiltered snapshots.

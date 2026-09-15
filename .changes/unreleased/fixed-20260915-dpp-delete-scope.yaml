@@ -1,5 +1,5 @@
 kind: fixed
-body: Delete a DPP's passport AAS and clean up its metadata and selected content only when no other live local model references remain. Apply the same cleanup to explicitly removed sections while retaining unselected content. Index and coordinate reference writes with cleanup across the AAS and DPP APIs.
+body: Preserve shared and unselected Submodels, their descriptors and shared attachments when deleting a DPP. Clean up metadata and selected content only when no other live local resources reference them; apply the same rule to explicitly removed sections.
 time: 2026-09-15T18:00:00+02:00
 custom:
     Impact: High
