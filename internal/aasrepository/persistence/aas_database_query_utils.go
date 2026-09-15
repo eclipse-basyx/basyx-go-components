@@ -363,7 +363,7 @@ func dppMetadataAASDataset(dialect *goqu.DialectWrapper, metadataSemanticIDs []s
 			goqu.T("submodel_element").As("metadata_element"),
 			goqu.On(
 				goqu.I("metadata_element.submodel_id").Eq(goqu.I("metadata_submodel.id")),
-				goqu.I("metadata_element.id_short").Eq("digitalProductPassportId"),
+				goqu.I("metadata_element.id_short").Eq(dppIDElementPath),
 				goqu.I("metadata_element.parent_sme_id").IsNull(),
 			),
 		).

@@ -167,6 +167,10 @@ Read a historical DPP version:
 curl "http://localhost:8080/v1/dppsByIdAndDate/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545?date=2026-06-11T12:00:00Z&representation=compressed"
 ```
 
+Historical reads resolve the passport's AAS and metadata association at the requested date. They continue to work when the current passport has been deleted or its identifier has since been associated with another AAS, provided the required history is retained. Database patch `1_2_3.sql` indexes existing history snapshots and diffs for this lookup; it also covers history written before the patch. Ambiguous ownership or a lookup exceeding 1,024 candidate resources returns HTTP 409 without returning a partial result.
+
+Historical snapshots cannot currently evaluate resource-level authorization formulas or field masks. Requests requiring those filters return HTTP 404 instead of exposing an unfiltered snapshot. Route-authorized historical reads without those filters remain supported.
+
 ## Service Endpoints
 
 - DPP API: [http://localhost:8080/v1/dpps](http://localhost:8080/v1/dpps)
@@ -202,6 +206,7 @@ docker compose down -v
 - The DPP API and AAS Environment use the same PostgreSQL database, so DPP-created AAS and Submodels are visible through the AAS Environment APIs and UI.
 - Registry and discovery synchronization is enabled on both API surfaces. Creating, updating, or deleting a DPP through either the DPP API or the AAS Environment keeps the AAS and Submodel descriptors and product discovery links consistent. Updates synchronize only descriptor-relevant changes and repair missing descriptors for existing DPPs.
 - Authorizing a DPP write also authorizes its configured internal AAS Registry, Submodel Registry, and Discovery mutations. The synchronized records remain subject to the independent read policies of those services, so deployments must align DPP write access with the intended registry and discovery visibility.
+- DPP identifier searches apply metadata value visibility before pagination. Hidden identifiers are omitted from both results and generated cursors.
 - `GENERAL_EXTERNALURL` on the DPP API identifies the public AAS Environment URL used by descriptors and managed attachment URLs; it is not the public URL of the DPP endpoint. It is also required when the DPP API can read AAS-managed attachments, even if registry synchronization is disabled; without it, those attachment URLs cannot be serialized and the read returns a configuration error.
 - The DPP API has no attachment upload or storage endpoints. Callers creating a DPP directly must provide valid HTTP(S) `RelatedResource.url` values and manage those resources themselves.
 - A File whose bytes were uploaded through the AAS Environment attachment endpoint is exposed in DPP representations through that attachment endpoint. Externally supplied HTTP(S) File URLs remain unchanged.

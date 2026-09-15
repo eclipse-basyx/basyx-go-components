@@ -1286,20 +1286,17 @@ func submodelDPPIDMatches(submodel types.ISubmodel, dppID string) bool {
 }
 
 func (s *DPPRepositoryService) resolveAAS(ctx context.Context, dppID string, at time.Time) (types.IAssetAdministrationShell, error) {
+	if !at.IsZero() {
+		return s.aasRepo.GetAssetAdministrationShellByDPPIDAndDate(ctx, dppID, dppMetadataSemanticIDValues(), at)
+	}
 	aas, err := s.aasRepo.GetAssetAdministrationShellByDPPID(ctx, dppID, dppMetadataSemanticIDValues())
 	if err == nil {
-		if at.IsZero() {
-			return aas, nil
-		}
-		return s.aasRepo.GetAssetAdministrationShellByIDAndDate(ctx, aas.ID(), at)
+		return aas, nil
 	}
 	if !common.IsErrNotFound(err) {
 		return nil, fmt.Errorf("DPP-RESOLVE-GETAASBYDPPID get AAS for DPP %s: %w", dppID, err)
 	}
-	if at.IsZero() {
-		return s.aasRepo.GetAssetAdministrationShellByID(ctx, dppID)
-	}
-	return s.aasRepo.GetAssetAdministrationShellByIDAndDate(ctx, dppID, at)
+	return s.aasRepo.GetAssetAdministrationShellByID(ctx, dppID)
 }
 
 func selectedResolvedContentSubmodels(resolved resolvedDPP) ([]types.ISubmodel, error) {

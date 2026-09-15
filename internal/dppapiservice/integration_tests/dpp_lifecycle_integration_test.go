@@ -325,6 +325,7 @@ func testDPPWithDistinctAASID(
 	assertAASIdentifierExists(t, databasePort, aasID, false)
 	doJSONAny(t, client, http.MethodGet, aasBaseURL+"/shell-descriptors/"+common.EncodeString(aasID), nil, http.StatusNotFound)
 	doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNotFound)
+	assertDistinctDPPHistorySurvivesDeletionAndIDReuse(t, client, baseURL, dppID, productID, createdVersionDate, now)
 }
 
 func lifecycleDPPDocument(dppID string, productID string, now time.Time) map[string]any {

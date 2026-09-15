@@ -1176,7 +1176,7 @@ func (s *AssetAdministrationShellDatabase) GetDPPIDsByAssetAndMetadataSemanticID
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-BUILDSQL " + err.Error())
 	}
-	selectDS, err = s.addAASAuthorizationFormula(ctx, selectDS, "AASREPO-GETDPPIDSBYASSETANDMETADATA")
+	selectDS, err = s.addDPPIDLookupAuthorization(ctx, selectDS, "AASREPO-GETDPPIDSBYASSETANDMETADATA")
 	if err != nil {
 		return nil, "", err
 	}

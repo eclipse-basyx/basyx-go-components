@@ -95,6 +95,21 @@
             }
           ]
         }
+      },
+      {
+        "name": "is_restricted_viewer",
+        "formula": {
+          "$eq": [
+            {
+              "$attribute": {
+                "CLAIM": "role"
+              }
+            },
+            {
+              "$strVal": "martin"
+            }
+          ]
+        }
       }
     ],
     "rules": [
@@ -112,6 +127,26 @@
           "dpp_write_routes"
         ],
         "USEFORMULA": "is_editor"
+      },
+      {
+        "USEACL": "viewer_read",
+        "USEOBJECTS": [
+          "dpp_read_routes"
+        ],
+        "USEFORMULA": "is_restricted_viewer",
+        "FILTER": {
+          "FRAGMENT": "$sme.digitalProductPassportId#value",
+          "CONDITION": {
+            "$ne": [
+              {
+                "$field": "$sme.digitalProductPassportId#value"
+              },
+              {
+                "$strVal": "https://www.example.org/dpp/security-search-b"
+              }
+            ]
+          }
+        }
       }
     ]
   }
