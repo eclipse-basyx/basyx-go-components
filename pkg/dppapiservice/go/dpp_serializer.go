@@ -80,7 +80,6 @@ func compressedContentWithContext(submodel types.ISubmodel, serializationContext
 	if err := json.Unmarshal(raw, &content); err != nil {
 		return nil, fmt.Errorf("DPP-CONTENT-UNMARSHAL unmarshal submodel value-only: %w", err)
 	}
-	normalizeValueOnly(content)
 	if err := enrichCompressedValue(content, submodel.SubmodelElements(), "", serializationContext); err != nil {
 		return nil, err
 	}
@@ -100,7 +99,6 @@ func compressedElementValueWithContext(element types.ISubmodelElement, idShortPa
 	if err := json.Unmarshal(raw, &content); err != nil {
 		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED-UNMARSHAL unmarshal element value-only: %w", err)
 	}
-	normalizeValueOnly(content)
 	if err := enrichCompressedElementValue(content, element, idShortPath, serializationContext); err != nil {
 		return nil, err
 	}
@@ -439,6 +437,8 @@ func enrichCompressedElementValue(value any, element types.ISubmodelElement, idS
 	switch typed := element.(type) {
 	case *types.File:
 		return enrichCompressedFileValue(value, typed, idShortPath, serializationContext)
+	case *types.MultiLanguageProperty:
+		normalizeCompressedMultiLanguageValue(value)
 	case *types.SubmodelElementCollection:
 		return enrichCompressedValue(value, typed.Value(), idShortPath, serializationContext)
 	case *types.SubmodelElementList:
@@ -469,6 +469,7 @@ func enrichCompressedFileValue(value any, file *types.File, idShortPath string, 
 		return err
 	}
 	object["url"] = attachmentURL
+	delete(object, "value")
 	if resourceTitle := extensionValue(file.Extensions(), dppResourceTitleExtensionName); resourceTitle != "" {
 		object["resourceTitle"] = resourceTitle
 	}
@@ -476,6 +477,22 @@ func enrichCompressedFileValue(value any, file *types.File, idShortPath string, 
 		object["language"] = language
 	}
 	return nil
+}
+
+func normalizeCompressedMultiLanguageValue(value any) {
+	items, ok := value.([]any)
+	if !ok {
+		return
+	}
+	for index, item := range items {
+		languageValue, ok := item.(map[string]any)
+		if !ok || len(languageValue) != 1 {
+			continue
+		}
+		for language, text := range languageValue {
+			items[index] = map[string]any{"language": language, "value": text}
+		}
+	}
 }
 
 func extensionValue(extensions []types.IExtension, name string) string {

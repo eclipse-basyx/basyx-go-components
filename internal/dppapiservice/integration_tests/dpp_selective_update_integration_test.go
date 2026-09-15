@@ -257,7 +257,13 @@ func assertContentSpecificationIdentityNormalization(t *testing.T, fixture selec
 		"contentSpecificationIds": nil,
 	}, http.StatusOK)
 	assertJSONFieldMissing(t, cleared, "contentSpecificationIds")
-	idShortSectionName := dppSectionNameForValue(t, cleared, "manufacturerName", "Selective Update GmbH")
+	assertJSONFieldMissing(t, cleared, lifecycleTechnicalDataSpec)
+	assertJSONFieldMissing(t, cleared, lifecycleCarbonFootprintSpec)
+	assertJSONFieldMissing(t, cleared, fixture.addedSpecificationID)
+	idShortSectionName, ok := beforeClear.technicalData["idShort"].(string)
+	if !ok || idShortSectionName == "" {
+		t.Fatalf("TechnicalData idShort = %#v, want non-empty string", beforeClear.technicalData["idShort"])
+	}
 	assertRevisionAdvanced(t, fixture.databasePort, "submodel_history", fixture.metadataID, beforeClear.metadataRevision)
 	assertSelectiveSnapshotUnchanged(t, fixture, beforeClear, true, true, true)
 
@@ -277,21 +283,6 @@ func assertContentSpecificationIdentityNormalization(t *testing.T, fixture selec
 	assertJSONEquals(t, doJSON(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/shells/"+common.EncodeString(fixture.aasID), nil, http.StatusOK), beforeRestore.aas)
 	assertSelectiveSubmodelsUnchanged(t, fixture, beforeRestore, false, true, true)
 	assertSubmodelIdentifierExists(t, fixture.databasePort, fixture.technicalDataID, true)
-}
-
-func dppSectionNameForValue(t *testing.T, body map[string]any, elementName string, expected string) string {
-	t.Helper()
-	for sectionName, rawSection := range body {
-		section, ok := rawSection.(map[string]any)
-		if !ok {
-			continue
-		}
-		if value, err := valueAtPath(section, elementName); err == nil && value == expected {
-			return sectionName
-		}
-	}
-	t.Fatalf("DPP does not contain %s = %q: %#v", elementName, expected, body)
-	return ""
 }
 
 func assertSelectiveSubmodelsUnchanged(

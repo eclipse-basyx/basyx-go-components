@@ -159,7 +159,13 @@ curl -i \
 
 A DPP patch writes only the affected resources and updates `DppMetadata.lastUpdate`. Existing AAS and Submodel identifiers and their AAS-specific metadata are preserved. A status-only patch leaves content Submodels unchanged; a content patch updates the existing Submodel for that section. Changes and their history are saved atomically.
 
+With history enabled on every writing service, direct content edits through the AAS/Submodel APIs are recorded in Submodel history and appear in dated DPP reads, but do not refresh `DppMetadata.lastUpdate`. Consumers must not use that header alone to detect changes made through those APIs. Concurrent read-modify-write requests have no revision conflict detection; clients must coordinate overlapping updates when lost updates are unacceptable.
+
+DPP reads include only referenced content Submodels whose semantic IDs are listed in `DppMetadata.contentSpecificationIds`. An absent or empty list produces no content sections. This selection applies to compressed, full, historical, and element reads. Changing only the list changes the passport view while preserving its AAS Submodel references and the stored content.
+
 Removing a content section with `null` detaches its Submodel reference from the owning AAS. The Submodel and its descriptor remain available to other AAS records. New sections are created without overwriting an existing Submodel at the generated identifier; a collision returns HTTP 409.
+
+Deleting a DPP removes its passport AAS and `DppMetadata` Submodel, together with their synchronized descriptors. Content Submodels and their descriptors remain available for reuse, including Submodels shared with other AAS records.
 
 Read a historical DPP version:
 
@@ -210,7 +216,7 @@ docker compose down -v
 - `GENERAL_EXTERNALURL` on the DPP API identifies the public AAS Environment URL used by descriptors and managed attachment URLs; it is not the public URL of the DPP endpoint. It is also required when the DPP API can read AAS-managed attachments, even if registry synchronization is disabled; without it, those attachment URLs cannot be serialized and the read returns a configuration error.
 - The DPP API has no attachment upload or storage endpoints. Callers creating a DPP directly must provide valid HTTP(S) `RelatedResource.url` values and manage those resources themselves.
 - A File whose bytes were uploaded through the AAS Environment attachment endpoint is exposed in DPP representations through that attachment endpoint. Externally supplied HTTP(S) File URLs remain unchanged.
-- Historical DPP representations version the applicable `RelatedResource.url`, not attachment bytes. An unchanged URL is treated as an unchanged file; deployment operators are responsible for preventing byte replacement behind stable URLs when immutable file history is required.
+- Historical DPP representations version the applicable `RelatedResource.url`, not attachment bytes. Replacing a managed attachment, including a same-name upload, makes its stable download endpoint serve the replacement bytes even when reached from an older DPP representation. Immutable attachment retrieval requires versioned resource URLs or a separate archive retrieval mechanism; enabling history alone does not provide a DPP endpoint for downloading old bytes.
 - The secured DPP-only compose stack intentionally leaves registry synchronization disabled because it does not include an AAS Environment.
 - The DPP API Service enables audit history internally, and the compose environment enables the same audit/history settings for both DPP API and AAS Environment.
 - The sample uses compressed EN 18223-style content: top-level content keys are the `contentSpecificationIds`; full/expanded representation is available via `representation=full`.

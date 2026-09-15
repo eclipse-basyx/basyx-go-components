@@ -165,12 +165,58 @@ func TestPrepareDPPContentSelectionUpdateDoesNotRewriteContent(t *testing.T) {
 	})
 	require.Nil(t, update.aas)
 	require.Len(t, update.submodels, 1)
+	require.Empty(t, update.detachedSubmodelIDs)
+	require.Len(t, resolved.aas.Submodels(), 3)
+	require.True(t, referenceListContains(resolved.aas.Submodels(), resolved.submodels[2].ID()))
 	resolved.metadata = update.submodels[0]
 	resolved.submodels[0] = update.submodels[0]
 	selected, err := selectedResolvedContentSubmodels(resolved)
 	require.NoError(t, err)
 	require.Len(t, selected, 1)
 	require.Equal(t, "urn:shared:technical", selected[0].ID())
+}
+
+func TestPrepareDPPNoContentSelectionPreservesReferencedContent(t *testing.T) {
+	for name, selection := range map[string]any{"empty": []any{}, "missing": nil} {
+		t.Run(name, func(t *testing.T) {
+			resolved := selectiveUpdateFixture()
+			current, err := composeResolvedDPP(resolved, REPRESENTATION_COMPRESSED)
+			require.NoError(t, err)
+			update := prepareSelectiveTestUpdate(t, resolved, current, dppDocument{
+				headerContentSpecificationIDs: selection,
+			})
+			require.Nil(t, update.aas)
+			require.Len(t, update.submodels, 1)
+			require.Empty(t, update.detachedSubmodelIDs)
+			assertSelectiveContentReferencesUnchanged(t, resolved, update)
+			resolved.metadata = update.submodels[0]
+			resolved.submodels[0] = update.submodels[0]
+			selected, err := selectedResolvedContentSubmodels(resolved)
+			require.NoError(t, err)
+			require.Empty(t, selected)
+		})
+	}
+}
+
+func TestPrepareDPPRepopulatedContentSelectionReusesReferencedContent(t *testing.T) {
+	resolved := selectiveUpdateFixture()
+	selection := metadataElementByIDShort(t, resolved.metadata, headerContentSpecificationIDs).(*types.SubmodelElementList)
+	selection.SetValue([]types.ISubmodelElement{})
+	current, err := composeResolvedDPP(resolved, REPRESENTATION_COMPRESSED)
+	require.NoError(t, err)
+	update := prepareSelectiveTestUpdate(t, resolved, current, dppDocument{
+		headerContentSpecificationIDs: []any{selectiveTechnicalSemantic, selectiveOtherSemantic},
+	})
+	require.Nil(t, update.aas)
+	require.Len(t, update.submodels, 1)
+	require.Empty(t, update.detachedSubmodelIDs)
+	assertSelectiveContentReferencesUnchanged(t, resolved, update)
+	resolved.metadata = update.submodels[0]
+	resolved.submodels[0] = update.submodels[0]
+	selected, err := selectedResolvedContentSubmodels(resolved)
+	require.NoError(t, err)
+	require.Len(t, selected, 2)
+	require.ElementsMatch(t, []string{resolved.submodels[1].ID(), resolved.submodels[2].ID()}, []string{selected[0].ID(), selected[1].ID()})
 }
 
 func TestPrepareDPPStatusUpdatePreservesExplicitEmptyContentSelection(t *testing.T) {
@@ -249,7 +295,7 @@ func TestPrepareDPPAddingSemanticSelectionRetainsExistingSubmodel(t *testing.T) 
 			current, err := composeResolvedDPP(resolved, REPRESENTATION_COMPRESSED)
 			require.NoError(t, err)
 			oldKey := compressedContentSectionName(resolved.submodels[1], map[string]struct{}{})
-			require.Contains(t, current, oldKey)
+			require.NotContains(t, current, oldKey)
 			patch := dppDocument{
 				headerContentSpecificationIDs: []any{selectiveTechnicalSemantic, selectiveOtherSemantic},
 				selectiveTechnicalSemantic:    map[string]any{"temperature": json.Number("24.5")},
@@ -333,6 +379,15 @@ func prepareSelectiveTestUpdate(t *testing.T, resolved resolvedDPP, current dppD
 	update, err := service.prepareDPPUpdate(ctx, resolved.dppID, patch, resolved, content, current)
 	require.NoError(t, err)
 	return update
+}
+
+func assertSelectiveContentReferencesUnchanged(t *testing.T, resolved resolvedDPP, update preparedDPPUpdate) {
+	t.Helper()
+	require.Len(t, resolved.aas.Submodels(), len(resolved.submodels))
+	for _, content := range resolved.submodels[1:] {
+		require.True(t, referenceListContains(resolved.aas.Submodels(), content.ID()))
+		require.NotEqual(t, content.ID(), update.submodels[0].ID())
+	}
 }
 
 func selectivePlannedSubmodel(t *testing.T, update preparedDPPUpdate, id string) types.ISubmodel {

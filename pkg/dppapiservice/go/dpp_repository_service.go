@@ -262,15 +262,13 @@ func (s *DPPRepositoryService) deleteDPPResourcesInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
 	aasID string,
-	submodels []types.ISubmodel,
+	metadata types.ISubmodel,
 ) error {
-	for _, submodel := range submodels {
-		if err := s.submodelRepo.DeleteSubmodelInTransaction(ctx, tx, submodel.ID()); err != nil {
-			return fmt.Errorf("DPP-DELDPP-DELETESUBMODEL delete submodel %s: %w", submodel.ID(), err)
-		}
-		if err := s.deleteSubmodelDescriptorIfEnabled(ctx, tx, submodel.ID()); err != nil {
-			return err
-		}
+	if err := s.submodelRepo.DeleteSubmodelInTransaction(ctx, tx, metadata.ID()); err != nil {
+		return fmt.Errorf("DPP-DELDPP-DELETESUBMODEL delete submodel %s: %w", metadata.ID(), err)
+	}
+	if err := s.deleteSubmodelDescriptorIfEnabled(ctx, tx, metadata.ID()); err != nil {
+		return err
 	}
 	if err := s.aasRepo.DeleteAssetAdministrationShellByIDInTransaction(ctx, tx, aasID); err != nil {
 		return fmt.Errorf("DPP-DELDPP-DELETEAAS delete AAS: %w", err)
@@ -745,7 +743,7 @@ func (s *DPPRepositoryService) ReadDPPById(ctx context.Context, dppID string, re
 	return Response(http.StatusOK, doc), nil
 }
 
-// DeleteDPPById deletes a DPP and its currently referenced submodels.
+// DeleteDPPById deletes a DPP AAS and its DppMetadata submodel.
 //
 // Parameters:
 //   - ctx: Request context used for repository persistence calls
@@ -762,7 +760,7 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 	}
 
 	err = s.aasRepo.ExecuteInTransaction("DPP-DELDPP-STARTTX", "DPP-DELDPP-COMMITTX", func(tx *sql.Tx) error {
-		return s.deleteDPPResourcesInTransaction(ctx, tx, resolved.aasID, resolved.submodels)
+		return s.deleteDPPResourcesInTransaction(ctx, tx, resolved.aasID, resolved.metadata)
 	})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
@@ -1312,20 +1310,16 @@ func selectedContentSubmodelsForHeader(header dppDocument, metadataID string, su
 	if err != nil {
 		return nil, err
 	}
+	if len(specificationSet) == 0 {
+		return []types.ISubmodel{}, nil
+	}
 	selectedBySemanticID := make(map[string]types.ISubmodel)
-	selectedWithoutSemanticID := make([]types.ISubmodel, 0, len(submodels))
 	for _, submodel := range submodels {
 		if submodel.ID() == metadataID {
 			continue
 		}
 		semanticID := referenceToString(submodel.SemanticID())
-		if len(specificationSet) > 0 {
-			if _, included := specificationSet[semanticID]; !included {
-				continue
-			}
-		}
-		if semanticID == "" {
-			selectedWithoutSemanticID = append(selectedWithoutSemanticID, submodel)
+		if _, included := specificationSet[semanticID]; !included {
 			continue
 		}
 		current, found := selectedBySemanticID[semanticID]
@@ -1341,11 +1335,10 @@ func selectedContentSubmodelsForHeader(header dppDocument, metadataID string, su
 			selectedBySemanticID[semanticID] = submodel
 		}
 	}
-	selected := make([]types.ISubmodel, 0, len(selectedBySemanticID)+len(selectedWithoutSemanticID))
+	selected := make([]types.ISubmodel, 0, len(selectedBySemanticID))
 	for _, submodel := range selectedBySemanticID {
 		selected = append(selected, submodel)
 	}
-	selected = append(selected, selectedWithoutSemanticID...)
 	sort.Slice(selected, func(left int, right int) bool {
 		return contentSubmodelSortKey(selected[left]) < contentSubmodelSortKey(selected[right])
 	})

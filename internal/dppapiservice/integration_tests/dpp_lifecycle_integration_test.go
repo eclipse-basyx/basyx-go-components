@@ -90,7 +90,9 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	encodedProductID := encodedPathParam(productID)
 	document := lifecycleDPPDocument(dppID, productID, now)
 	rollbackDPPID := dppID + "/rollback"
-	insertConflictingAASDescriptor(t, databasePort, rollbackDPPID)
+	doJSON(t, client, http.MethodPost, aasBaseURL+"/shell-descriptors", map[string]any{
+		"id": rollbackDPPID, "assetKind": "Instance",
+	}, http.StatusCreated)
 	doJSONAny(
 		t, client, http.MethodPost, baseURL+"/v1/dpps", lifecycleDPPDocument(rollbackDPPID, productID+"/rollback", now),
 		http.StatusConflict,
@@ -115,9 +117,13 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	delete(optionalDocument, "contentSpecificationIds")
 	optionalCreateBody := doJSON(t, client, http.MethodPost, baseURL+"/v1/dpps", optionalDocument, http.StatusCreated)
 	assertJSONPathEquals(t, optionalCreateBody, "digitalProductPassportId", optionalDPPID)
+	assertJSONFieldMissing(t, optionalCreateBody, lifecycleTechnicalDataSpec)
+	assertJSONFieldMissing(t, optionalCreateBody, lifecycleCarbonFootprintSpec)
 	optionalReadBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedPathParam(optionalDPPID), nil, http.StatusOK)
 	assertJSONFieldMissing(t, optionalReadBody, "facilityId")
 	assertJSONFieldMissing(t, optionalReadBody, "contentSpecificationIds")
+	assertJSONFieldMissing(t, optionalReadBody, lifecycleTechnicalDataSpec)
+	assertJSONFieldMissing(t, optionalReadBody, lifecycleCarbonFootprintSpec)
 
 	readBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
 	assertJSONPathEquals(t, readBody, "digitalProductPassportId", dppID)
@@ -255,19 +261,36 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	)
 
 	beforeDeleteDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
-	doJSON(
-		t, client, http.MethodDelete,
-		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(technicalDataSubmodelID), nil, http.StatusNoContent,
+	deletionFixture := prepareDPPDeletionRegression(
+		t,
+		dppDeletionRegressionFixture{
+			client:              client,
+			baseURL:             baseURL,
+			aasBaseURL:          aasBaseURL,
+			databasePort:        databasePort,
+			deletedAASID:        dppID,
+			deletedMetadataID:   importedMetadataID,
+			retainedTechnicalID: technicalDataSubmodelID,
+			retainedCarbonID:    carbonFootprintSubmodelID,
+		},
+		idSuffix,
+		now,
 	)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNoContent)
+	assertDPPDeletionRegression(t, deletionFixture)
+	assertAttachmentDownload(t, client, attachmentURL, attachmentBytes)
 	preDeleteVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforeDeleteDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, preDeleteVersionBody, lifecycleTechnicalDataSpec, "energyClass", "B")
 	doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, latestDPPHistoryTimestamp(t, databasePort, dppID), "compressed"), nil, http.StatusNotFound)
 	doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNotFound)
 	doJSONAny(t, client, http.MethodGet, aasBaseURL+"/shell-descriptors/"+common.EncodeString(dppID), nil, http.StatusNotFound)
 	doJSONAny(t, client, http.MethodGet, aasBaseURL+"/submodel-descriptors/"+common.EncodeString(importedMetadataID), nil, http.StatusNotFound)
+	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(deletionFixture.consumerDPPID), nil, http.StatusNoContent)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(optionalDPPID), nil, http.StatusNoContent)
 	testDPPWithDistinctAASID(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
+	testDPPAttachmentAndAASHistory(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
+	testDPPCollectionSerialization(t, client, baseURL, idSuffix, now)
+	testDPPContentSpecificationSelection(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 	testSelectiveDPPUpdates(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 }
 
@@ -543,40 +566,6 @@ func assertSubmodelIdentifierExists(t *testing.T, databasePort int, submodelID s
 	}
 	if (count == 1) != expected {
 		t.Fatalf("submodel identifier %q exists = %t, want %t", submodelID, count == 1, expected)
-	}
-}
-
-func insertConflictingAASDescriptor(t *testing.T, databasePort int, aasID string) {
-	t.Helper()
-	db := openDPPIntegrationDatabase(t, databasePort)
-	defer func() { _ = db.Close() }()
-	tx, err := db.BeginTx(t.Context(), nil)
-	if err != nil {
-		t.Fatalf("begin conflicting descriptor insert: %v", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	dialect := goqu.Dialect("postgres")
-	rootQuery, rootArgs, err := dialect.Insert("descriptor").Rows(goqu.Record{}).Returning("id").ToSQL()
-	if err != nil {
-		t.Fatalf("build conflicting descriptor root insert: %v", err)
-	}
-	var descriptorID int64
-	if err = tx.QueryRowContext(t.Context(), rootQuery, rootArgs...).Scan(&descriptorID); err != nil {
-		t.Fatalf("insert conflicting descriptor root: %v", err)
-	}
-	query, args, err := dialect.Insert("aas_descriptor").Rows(goqu.Record{
-		"descriptor_id": descriptorID,
-		"id":            aasID,
-	}).ToSQL()
-	if err != nil {
-		t.Fatalf("build conflicting AAS descriptor insert: %v", err)
-	}
-	if _, err = tx.ExecContext(t.Context(), query, args...); err != nil {
-		t.Fatalf("insert conflicting AAS descriptor: %v", err)
-	}
-	if err = tx.Commit(); err != nil {
-		t.Fatalf("commit conflicting AAS descriptor: %v", err)
 	}
 }
 
