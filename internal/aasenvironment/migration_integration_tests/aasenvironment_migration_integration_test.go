@@ -136,6 +136,7 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 	require.False(t, databaseIndexExists(t, "ix_submodel_semantic_id_refpayload_refid"))
 	require.False(t, databaseIndexExists(t, "ix_specasset_supp_sem_refpayload_refid"))
 	require.False(t, databaseIndexExists(t, "ix_smdesc_supp_sem_refpayload_refid"))
+	require.False(t, databaseIndexExists(t, "ix_property_element_value_text_hash"))
 
 	for _, fixture := range fixtures {
 		postFixture(t, fixture)
@@ -168,6 +169,7 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 	require.True(t, databaseIndexExists(t, "ix_submodel_semantic_id_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_specasset_supp_sem_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_smdesc_supp_sem_refpayload_refid"))
+	require.True(t, databaseIndexExists(t, "ix_property_element_value_text_hash"))
 	assertLongIdentifierEvidenceCatalogAccepts(t, longIdentifier)
 	assertLegacyBinaryStateUnchanged(t, legacyFile, readLegacyFileState(t, "LegacyFile"))
 	assertLegacyBinaryStateUnchanged(t, legacyUntouched, readLegacyFileState(t, "LegacyFileUntouched"))
