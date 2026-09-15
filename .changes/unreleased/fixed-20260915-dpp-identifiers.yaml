@@ -1,5 +1,5 @@
 kind: fixed
-body: Resolve DPP identifiers from DppMetadata independently of AAS identifiers, preserve the owning AAS during updates and deletion, and return metadata DPP IDs from product searches. Add a hash index for exact property-text lookup so DPP ID resolution has an indexed access path.
+body: Resolve DPP identifiers exclusively from DppMetadata independently of AAS identifiers, preserving the owning AAS identity during updates and returning metadata DPP IDs from product searches. Remove AAS-ID aliases for current and historical DPP operations. Add a hash index for exact property-text lookup.
 time: 2026-09-15T12:00:00+02:00
 custom:
     Impact: High

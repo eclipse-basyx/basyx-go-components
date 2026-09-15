@@ -36,13 +36,21 @@ import (
 
 const deleteUnrelatedContentSpec = "urn:example:semantic:unrelated-delete-content"
 
+const (
+	deleteExclusiveContentSpec = "urn:example:semantic:delete-exclusive-content"
+	deleteProtectedContentSpec = "urn:example:semantic:delete-reference-protected-content"
+)
+
 type dppDeletionRegressionFixture struct {
 	client                                *http.Client
 	baseURL, aasBaseURL                   string
 	databasePort                          int
 	deletedAASID, deletedMetadataID       string
-	retainedTechnicalID, retainedCarbonID string
+	retainedTechnicalID                   string
 	retainedUnrelatedID                   string
+	deletedExclusiveID, exclusiveFileURL  string
+	retainedProtectedID, referenceGuardID string
+	referenceGuardAASID                   string
 	consumerDPPID, consumerMetadataID     string
 	consumerCarbonID                      string
 }
@@ -54,6 +62,7 @@ func prepareDPPDeletionRegression(
 	now time.Time,
 ) dppDeletionRegressionFixture {
 	t.Helper()
+	fixture = prepareExclusiveAndReferenceProtectedContent(t, fixture, idSuffix)
 	consumerDPPID := "https://www.example.org/dpp/delete-consumer/" + idSuffix
 	consumerProductID := "https://www.example.org/product/delete-consumer/" + idSuffix
 	doJSON(t, fixture.client, http.MethodPost, fixture.baseURL+"/v1/dpps", lifecycleDPPDocument(consumerDPPID, consumerProductID, now), http.StatusCreated)
@@ -66,7 +75,7 @@ func prepareDPPDeletionRegression(
 		fixture.client,
 		fixture.aasBaseURL,
 		fixture.deletedAASID,
-		fixture.retainedCarbonID,
+		fixture.retainedTechnicalID,
 		"https://www.example.org/submodels/delete-unrelated/"+idSuffix,
 		"UnrelatedDeleteContent",
 		deleteUnrelatedContentSpec,
@@ -82,6 +91,81 @@ func prepareDPPDeletionRegression(
 	fixture.consumerMetadataID = consumerDPPID + "/submodels/DppMetadata"
 	fixture.consumerCarbonID = consumerCarbonID
 	return fixture
+}
+
+func prepareExclusiveAndReferenceProtectedContent(
+	t *testing.T,
+	fixture dppDeletionRegressionFixture,
+	idSuffix string,
+) dppDeletionRegressionFixture {
+	t.Helper()
+	body := doJSON(t, fixture.client, http.MethodPatch, fixture.baseURL+"/v1/dpps/"+encodedPathParam(fixture.deletedAASID), map[string]any{
+		"contentSpecificationIds": []string{lifecycleTechnicalDataSpec, deleteExclusiveContentSpec, deleteProtectedContentSpec},
+		deleteExclusiveContentSpec: map[string]any{
+			"exclusiveValue": "delete with owning passport",
+			"manual": map[string]any{
+				"url":         "https://example.test/exclusive-manual.pdf",
+				"contentType": "application/pdf",
+			},
+		},
+		deleteProtectedContentSpec: map[string]any{"protectedValue": "retain through inbound reference"},
+	}, http.StatusOK)
+	assertDPPSectionPathEquals(t, body, deleteExclusiveContentSpec, "exclusiveValue", "delete with owning passport")
+	assertDPPSectionPathEquals(t, body, deleteProtectedContentSpec, "protectedValue", "retain through inbound reference")
+	fixture.deletedExclusiveID = submodelIDBySemanticID(t, fixture.databasePort, fixture.deletedAASID, deleteExclusiveContentSpec)
+	fixture.retainedProtectedID = submodelIDBySemanticID(t, fixture.databasePort, fixture.deletedAASID, deleteProtectedContentSpec)
+	addSelfReferenceToSubmodel(t, fixture.client, fixture.aasBaseURL, fixture.deletedExclusiveID)
+	fixture.exclusiveFileURL = fixture.aasBaseURL + "/submodels/" + common.EncodeString(fixture.deletedExclusiveID) + "/submodel-elements/manual/attachment"
+	uploadAttachment(t, fixture.client, fixture.exclusiveFileURL, "exclusive-manual.txt", []byte("exclusive attachment bytes"))
+	fixture.referenceGuardID, fixture.referenceGuardAASID = createInboundReferenceGuard(
+		t, fixture.client, fixture.aasBaseURL, fixture.retainedProtectedID, idSuffix,
+	)
+	return fixture
+}
+
+func addSelfReferenceToSubmodel(t *testing.T, client *http.Client, aasBaseURL string, submodelID string) {
+	t.Helper()
+	doJSON(t, client, http.MethodPost,
+		aasBaseURL+"/submodels/"+common.EncodeString(submodelID)+"/submodel-elements",
+		map[string]any{
+			"idShort":   "selfReference",
+			"modelType": "ReferenceElement",
+			"value":     submodelReferencePayload(submodelID),
+		},
+		http.StatusCreated,
+	)
+}
+
+func createInboundReferenceGuard(
+	t *testing.T,
+	client *http.Client,
+	aasBaseURL string,
+	targetSubmodelID string,
+	idSuffix string,
+) (string, string) {
+	t.Helper()
+	guardID := "https://www.example.org/submodels/delete-reference-guard/" + idSuffix
+	doJSON(t, client, http.MethodPost, aasBaseURL+"/submodels", map[string]any{
+		"id":        guardID,
+		"idShort":   "DeleteReferenceGuard",
+		"modelType": "Submodel",
+		"submodelElements": []any{map[string]any{
+			"idShort":   "protectedContentReference",
+			"modelType": "ReferenceElement",
+			"value":     submodelReferencePayload(targetSubmodelID),
+		}},
+	}, http.StatusCreated)
+	guardAASID := "https://www.example.org/aas/delete-reference-guard/" + idSuffix
+	doJSON(t, client, http.MethodPost, aasBaseURL+"/shells", map[string]any{
+		"id":        guardAASID,
+		"idShort":   "DeleteReferenceGuardAAS",
+		"modelType": "AssetAdministrationShell",
+		"assetInformation": map[string]any{
+			"assetKind": "Instance",
+		},
+		"submodels": []any{submodelReferencePayload(guardID)},
+	}, http.StatusCreated)
+	return guardID, guardAASID
 }
 
 func addReferencedSubmodelClone(
@@ -153,17 +237,35 @@ func assertDPPDeletionRegression(t *testing.T, fixture dppDeletionRegressionFixt
 	doJSONAny(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/submodel-descriptors/"+common.EncodeString(fixture.deletedMetadataID), nil, http.StatusNotFound)
 
 	assertRetainedSubmodelAndDescriptor(t, fixture, fixture.retainedTechnicalID)
-	assertRetainedSubmodelAndDescriptor(t, fixture, fixture.retainedCarbonID)
 	assertRetainedSubmodelAndDescriptor(t, fixture, fixture.retainedUnrelatedID)
+	assertRetainedSubmodelAndDescriptor(t, fixture, fixture.retainedProtectedID)
+	assertRetainedSubmodelAndDescriptor(t, fixture, fixture.referenceGuardID)
 	assertRetainedSubmodelAndDescriptor(t, fixture, fixture.consumerCarbonID)
+	assertSubmodelIdentifierExists(t, fixture.databasePort, fixture.deletedExclusiveID, false)
+	doJSONAny(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/submodels/"+common.EncodeString(fixture.deletedExclusiveID), nil, http.StatusNotFound)
+	doJSONAny(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/submodel-descriptors/"+common.EncodeString(fixture.deletedExclusiveID), nil, http.StatusNotFound)
+	assertAttachmentUnavailable(t, fixture.client, fixture.exclusiveFileURL)
 	assertSubmodelIdentifierExists(t, fixture.databasePort, fixture.consumerMetadataID, true)
 	doJSON(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/shells/"+common.EncodeString(fixture.consumerDPPID), nil, http.StatusOK)
 	doJSON(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/shell-descriptors/"+common.EncodeString(fixture.consumerDPPID), nil, http.StatusOK)
 	doJSON(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/submodel-descriptors/"+common.EncodeString(fixture.consumerMetadataID), nil, http.StatusOK)
+	doJSON(t, fixture.client, http.MethodGet, fixture.aasBaseURL+"/shells/"+common.EncodeString(fixture.referenceGuardAASID), nil, http.StatusOK)
 
 	consumerBody := doJSON(t, fixture.client, http.MethodGet, fixture.baseURL+"/v1/dpps/"+encodedPathParam(fixture.consumerDPPID), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, consumerBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme Updated GmbH")
 	assertDPPSectionPathEquals(t, consumerBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4180.75")
+}
+
+func assertAttachmentUnavailable(t *testing.T, client *http.Client, attachmentURL string) {
+	t.Helper()
+	response, err := client.Get(attachmentURL) //nolint:gosec
+	if err != nil {
+		t.Fatalf("request deleted attachment: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("deleted attachment status = %d, want %d", response.StatusCode, http.StatusNotFound)
+	}
 }
 
 func assertRetainedSubmodelAndDescriptor(t *testing.T, fixture dppDeletionRegressionFixture, submodelID string) {

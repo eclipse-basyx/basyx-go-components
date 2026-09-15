@@ -61,7 +61,7 @@ type historicalAASLookupResult struct {
 //
 // Parameters:
 //   - ctx: Request context carrying cancellation, database routing, and access filters.
-//   - dppID: DPP identifier stored in the metadata submodel, or an AAS-ID alias.
+//   - dppID: DPP identifier stored in the metadata submodel.
 //   - metadataSemanticIDs: Accepted semantic identifiers for DPP metadata submodels.
 //   - at: Point in time at which the DPP association must have been valid.
 //
@@ -100,7 +100,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByDPPIDAnd
 	if len(owners) > 1 {
 		return nil, common.NewErrConflict("AASREPO-HISTORY-DPP-AMBIGUOUS multiple historical AAS records contain DPP ID '" + dppID + "'")
 	}
-	return historicalDPPByAASID(ctx, readDB, dppID, metadataSemanticIDs, at, &budget)
+	return nil, common.NewErrNotFound("AASREPO-HISTORY-DPP-NOTFOUND historical DPP with ID '" + dppID + "' not found")
 }
 
 func matchingHistoricalDPPMetadataIDs(
@@ -209,68 +209,6 @@ func historicalAASValues(ownersByID map[string]types.IAssetAdministrationShell) 
 		owners = append(owners, aas)
 	}
 	return owners
-}
-
-func historicalDPPByAASID(
-	ctx context.Context,
-	db *sql.DB,
-	aasID string,
-	metadataSemanticIDs []string,
-	at time.Time,
-	budget *historicalDPPIdentityBudget,
-) (types.IAssetAdministrationShell, error) {
-	if err := budget.consume(history.TableAAS, []string{aasID}); err != nil {
-		return nil, err
-	}
-	aas, err := historicalAASByID(ctx, db, aasID, at)
-	if err != nil {
-		return nil, err
-	}
-	seenMetadataIDs := make(map[string]struct{}, len(aas.Submodels()))
-	for _, reference := range aas.Submodels() {
-		matches, matchErr := historicalReferenceIsDPPMetadata(ctx, db, reference, metadataSemanticIDs, at, budget, seenMetadataIDs)
-		if matchErr != nil {
-			return nil, matchErr
-		}
-		if matches {
-			return aas, nil
-		}
-	}
-	return nil, common.NewErrNotFound("AASREPO-HISTORY-DPP-NOTFOUND historical DPP with ID '" + aasID + "' not found")
-}
-
-func historicalReferenceIsDPPMetadata(
-	ctx context.Context,
-	db *sql.DB,
-	reference types.IReference,
-	metadataSemanticIDs []string,
-	at time.Time,
-	budget *historicalDPPIdentityBudget,
-	seenMetadataIDs map[string]struct{},
-) (bool, error) {
-	metadataID := historicalReferenceLastValue(reference)
-	if metadataID == "" {
-		return false, nil
-	}
-	if _, seen := seenMetadataIDs[metadataID]; seen {
-		return false, nil
-	}
-	seenMetadataIDs[metadataID] = struct{}{}
-	if err := budget.consume(history.TableSubmodel, []string{metadataID}); err != nil {
-		return false, err
-	}
-	snapshot, err := history.SnapshotByDate(ctx, db, history.TableSubmodel, metadataID, at)
-	if common.IsErrNotFound(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	submodel, err := jsonization.SubmodelFromJsonable(snapshot)
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-HISTORY-DPP-PARSEFALLBACKMETADATA " + err.Error())
-	}
-	return historicalSubmodelHasSemanticID(submodel, metadataSemanticIDs), nil
 }
 
 func historicalAASByID(ctx context.Context, db *sql.DB, identifier string, at time.Time) (types.IAssetAdministrationShell, error) {

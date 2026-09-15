@@ -252,13 +252,24 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4200.5")
 
 	carbonFootprintSubmodelID := submodelIDBySemanticID(t, databasePort, dppID, lifecycleCarbonFootprintSpec)
+	beforeCarbonRemovalDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	doJSON(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, map[string]any{
 		lifecycleCarbonFootprintSpec: nil,
 	}, http.StatusOK)
+	assertAASReferencesSubmodel(t, client, aasBaseURL, dppID, carbonFootprintSubmodelID, false)
+	assertSubmodelIdentifierExists(t, databasePort, carbonFootprintSubmodelID, false)
 	doJSONAny(
 		t, client, http.MethodGet,
-		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusOK,
+		aasBaseURL+"/submodels/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusNotFound,
 	)
+	doJSONAny(
+		t, client, http.MethodGet,
+		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusNotFound,
+	)
+	preCarbonRemovalBody := doJSON(
+		t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforeCarbonRemovalDate, "compressed"), nil, http.StatusOK,
+	)
+	assertDPPSectionPathEquals(t, preCarbonRemovalBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4200.5")
 
 	beforeDeleteDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	deletionFixture := prepareDPPDeletionRegression(
@@ -271,7 +282,6 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 			deletedAASID:        dppID,
 			deletedMetadataID:   importedMetadataID,
 			retainedTechnicalID: technicalDataSubmodelID,
-			retainedCarbonID:    carbonFootprintSubmodelID,
 		},
 		idSuffix,
 		now,
@@ -291,6 +301,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	testDPPAttachmentAndAASHistory(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 	testDPPCollectionSerialization(t, client, baseURL, idSuffix, now)
 	testDPPContentSpecificationSelection(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
+	testSubmodelReferenceCleanupConcurrency(t, client, aasBaseURL, databasePort, idSuffix)
 	testSelectiveDPPUpdates(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 }
 
@@ -315,8 +326,8 @@ func testDPPWithDistinctAASID(
 
 	readBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
 	assertJSONPathEquals(t, readBody, "digitalProductPassportId", dppID)
-	aliasBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedPathParam(aasID), nil, http.StatusOK)
-	assertJSONPathEquals(t, aliasBody, "digitalProductPassportId", dppID)
+	encodedAASID := encodedPathParam(aasID)
+	doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedAASID, nil, http.StatusNotFound)
 
 	submodelIDBySemanticID(t, databasePort, aasID, lifecycleTechnicalDataSpec)
 	elementPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "manufacturerName"))
@@ -325,6 +336,9 @@ func testDPPWithDistinctAASID(
 	assertScalarEquals(t, updatedElement, "Imported Owner")
 
 	createdVersionDate := latestDPPHistoryTimestamp(t, databasePort, aasID)
+	doJSONAny(t, client, http.MethodGet, historyURL(baseURL, encodedAASID, createdVersionDate, "compressed"), nil, http.StatusNotFound)
+	doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedAASID, map[string]any{"dppStatus": "deprecated"}, http.StatusNotFound)
+	doJSONAny(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedAASID, nil, http.StatusNotFound)
 	doJSON(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, map[string]any{
 		lifecycleTechnicalDataSpec: map[string]any{"manufacturerName": "Imported Owner Updated"},
 	}, http.StatusOK)
@@ -549,7 +563,11 @@ func assertSubmodelIdentifierExists(t *testing.T, databasePort int, submodelID s
 	defer func() {
 		_ = db.Close()
 	}()
+	assertSubmodelIdentifierExistsInDatabase(t, db, submodelID, expected)
+}
 
+func assertSubmodelIdentifierExistsInDatabase(t *testing.T, db *sql.DB, submodelID string, expected bool) {
+	t.Helper()
 	query, args, err := goqu.Dialect("postgres").
 		From("submodel").
 		Select(goqu.COUNT("*")).
@@ -633,7 +651,11 @@ func submodelIDBySemanticID(t *testing.T, databasePort int, dppID string, semant
 	t.Helper()
 	db := openDPPIntegrationDatabase(t, databasePort)
 	defer func() { _ = db.Close() }()
+	return submodelIDBySemanticIDFromDatabase(t, db, dppID, semanticID)
+}
 
+func submodelIDBySemanticIDFromDatabase(t *testing.T, db *sql.DB, dppID string, semanticID string) string {
+	t.Helper()
 	query, args, err := goqu.Dialect("postgres").
 		From(goqu.T("aas").As("aas")).
 		Join(
@@ -738,7 +760,12 @@ func assertAttachmentDownload(t *testing.T, client *http.Client, attachmentURL s
 
 func openDPPIntegrationDatabase(t *testing.T, databasePort int) *sql.DB {
 	t.Helper()
-	dsn := fmt.Sprintf("postgres://admin:admin123@127.0.0.1:%d/basyxDppLifecycleIT?sslmode=disable", databasePort)
+	return openDPPDatabase(t, databasePort, "basyxDppLifecycleIT")
+}
+
+func openDPPDatabase(t *testing.T, databasePort int, databaseName string) *sql.DB {
+	t.Helper()
+	dsn := fmt.Sprintf("postgres://admin:admin123@127.0.0.1:%d/%s?sslmode=disable", databasePort, databaseName)
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatalf("open DPP integration database: %v", err)

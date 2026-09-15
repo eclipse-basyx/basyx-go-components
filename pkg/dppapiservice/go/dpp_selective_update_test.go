@@ -39,6 +39,15 @@ import (
 const selectiveTechnicalSemantic = "urn:example:selective:technical"
 const selectiveOtherSemantic = "urn:example:selective:other"
 
+func TestSelectDPPMetadataRequiresExactPassportIdentifier(t *testing.T) {
+	resolved := selectiveUpdateFixture()
+	require.Nil(t, selectDPPMetadata(resolved.submodels, resolved.aasID))
+	require.Nil(t, selectDPPMetadata(resolved.submodels, "urn:example:unknown-passport"))
+	require.Same(t, resolved.metadata, selectDPPMetadata(resolved.submodels, resolved.dppID))
+	resolved.aas.SetID(resolved.dppID)
+	require.Same(t, resolved.metadata, selectDPPMetadata(resolved.submodels, resolved.aas.ID()))
+}
+
 func TestPrepareDPPMetadataUpdateLeavesContentAndAASUntouched(t *testing.T) {
 	resolved := selectiveUpdateFixture()
 	current, err := composeResolvedDPP(resolved, REPRESENTATION_COMPRESSED)

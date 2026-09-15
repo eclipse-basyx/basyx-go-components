@@ -158,7 +158,9 @@ curl -i -X DELETE "$BASE_URL/v1/dpps/$DPP_ID"
 
 Expect `204 No Content`. Reading the current passport now returns `404 Not Found`. Its historical versions remain readable in this example.
 
-Deleting the passport removes its AAS and DppMetadata. Content Submodels remain in the AAS Environment, so deleting one passport does not remove content used by another. To repeat the walkthrough with the same sample IDs, use the [cleanup commands](#stop-and-clean-up) to remove all sample data, then start the example again.
+Deleting the passport removes its AAS. Its DppMetadata and the content selected by `contentSpecificationIds` are also deleted if no other live resources in this AAS Environment reference them. Shared content and content outside the selection remain available. Removing a content section with `null` follows the same rule; changing `contentSpecificationIds` alone only changes what the passport shows.
+
+To repeat the walkthrough with the same sample IDs, use the [cleanup commands](#stop-and-clean-up) to remove all sample data, then start the example again.
 
 ## Try file references
 

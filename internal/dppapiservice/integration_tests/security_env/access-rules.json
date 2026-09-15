@@ -63,6 +63,16 @@
           ],
           "ACCESS": "ALLOW"
         }
+      },
+      {
+        "name": "restricted_delete",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": [
+            "DELETE"
+          ],
+          "ACCESS": "ALLOW"
+        }
       }
     ],
     "DEFFORMULAS": [
@@ -132,6 +142,26 @@
         "USEACL": "viewer_read",
         "USEOBJECTS": [
           "dpp_read_routes"
+        ],
+        "USEFORMULA": "is_restricted_viewer",
+        "FILTER": {
+          "FRAGMENT": "$sme.digitalProductPassportId#value",
+          "CONDITION": {
+            "$ne": [
+              {
+                "$field": "$sme.digitalProductPassportId#value"
+              },
+              {
+                "$strVal": "https://www.example.org/dpp/security-search-b"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "USEACL": "restricted_delete",
+        "USEOBJECTS": [
+          "dpp_write_routes"
         ],
         "USEFORMULA": "is_restricted_viewer",
         "FILTER": {

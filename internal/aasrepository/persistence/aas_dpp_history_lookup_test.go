@@ -26,10 +26,12 @@
 package persistence
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
@@ -67,6 +69,35 @@ func TestHistoricalSubmodelMatchesExactDPPIdentityAndSemanticID(t *testing.T) {
 	require.True(t, historicalSubmodelMatchesDPP(metadata, "dpp-1", []string{"semantic-1"}))
 	require.False(t, historicalSubmodelMatchesDPP(metadata, "dpp-2", []string{"semantic-1"}))
 	require.False(t, historicalSubmodelMatchesDPP(metadata, "dpp-1", []string{"semantic-2"}))
+}
+
+func TestHistoricalDPPResolutionRejectsAASIDAlias(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	at := time.Date(2026, time.September, 15, 12, 0, 0, 0, time.UTC)
+	dataset, err := buildHistoricalIdentifierCandidatesDataset(history.TableSubmodel, "aas-1", at)
+	require.NoError(t, err)
+	query, args, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+	mock.ExpectQuery(regexp.QuoteMeta(query)).
+		WithArgs(args[0], args[1], args[2], args[3]).
+		WillReturnRows(sqlmock.NewRows([]string{"identifier"}))
+
+	repository := &AssetAdministrationShellDatabase{db: db}
+	_, err = repository.GetAssetAdministrationShellByDPPIDAndDate(
+		t.Context(), "aas-1", []string{"semantic-1"}, at,
+	)
+	require.Error(t, err)
+	require.True(t, common.IsErrNotFound(err))
+	require.ErrorContains(t, err, "AASREPO-HISTORY-DPP-NOTFOUND")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestHistoricalDPPIdentityMayEqualOwningAASID(t *testing.T) {
+	metadata := historicalMetadataSubmodel("metadata-1", "shared-id", "semantic-1")
+	require.True(t, historicalSubmodelMatchesDPP(metadata, "shared-id", []string{"semantic-1"}))
 }
 
 func TestHistoricalAASReferenceMatchingUsesExactKeyValue(t *testing.T) {

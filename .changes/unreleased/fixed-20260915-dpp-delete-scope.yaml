@@ -1,7 +1,7 @@
 kind: fixed
-body: Delete a DPP's passport AAS and DppMetadata resources while preserving content and unrelated Submodels and their descriptors for reuse.
+body: Delete a DPP's passport AAS and clean up its metadata and selected content only when no other live local model references remain. Apply the same cleanup to explicitly removed sections while retaining unselected content. Index and coordinate reference writes with cleanup across the AAS and DPP APIs.
 time: 2026-09-15T18:00:00+02:00
 custom:
     Impact: High
     PullRequest: 691
-    SecurityImpact: Preserves authorization context, atomic history writes, and shared content instead of deleting resources outside the passport deletion scope.
+    SecurityImpact: Checks references independently of caller visibility and protects concurrently referenced content from deletion. Retains request authorization, transactional history, and shared attachments.

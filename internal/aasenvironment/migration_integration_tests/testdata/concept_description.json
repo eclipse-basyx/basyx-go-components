@@ -1,0 +1,21 @@
+{
+  "id": "urn:basyx:migration:concept:1",
+  "idShort": "MigratedConcept",
+  "modelType": "ConceptDescription",
+  "extensions": [
+    {
+      "name": "reference-guard",
+      "refersTo": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:basyx:migration:concept-target:1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
