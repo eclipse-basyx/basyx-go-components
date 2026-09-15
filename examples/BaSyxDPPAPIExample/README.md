@@ -1,224 +1,244 @@
-# BaSyx DPP API Example
+# Try the BaSyx DPP API
 
-This example starts:
-
-- Digital Product Passport API Service
-- AAS Environment Service using the same database as the DPP API
-- BaSyx Web UI connected to the AAS Environment
-- BaSyx Configuration Service for database schema initialization
-- Shared PostgreSQL database
+Create, read and update a sample Digital Product Passport (DPP), then inspect its AAS and Submodels in the BaSyx Web UI. The example runs the DPP API and AAS Environment against the same database.
 
 ## Prerequisites
 
-- Docker + Docker Compose
-- Free ports for the default stack: `3000`, `8080`, `8082`
-- Free ports for the secured stack: `8080`, `8088`
+- Docker with Docker Compose
+- `curl` for the command-line examples, or Postman
+- Available ports `3000`, `8080` and `8082`
 
-Run either the default stack or the secured stack at one time unless you change ports and container names.
+Run the commands below in the same terminal, starting from the repository root.
 
-## Start The Example
-
-From this folder:
+## Start the example
 
 ```bash
+cd examples/BaSyxDPPAPIExample
 docker compose up -d
 ```
 
-Open the Swagger UI:
+The first start downloads the container images and initializes the database. Check startup progress with `docker compose ps`. If a service does not start, use `docker compose logs dpp-api aas-environment basyx_configuration`.
 
-- [http://localhost:8080/swagger](http://localhost:8080/swagger)
+| Open | Use it to |
+| --- | --- |
+| [DPP Swagger UI](http://localhost:8080/swagger) | Explore and call the DPP endpoints |
+| [BaSyx Web UI](http://localhost:3000) | Inspect the AAS and Submodels created by your requests |
+| [DPP health endpoint](http://localhost:8080/health) | Check whether the DPP service is ready |
 
-Open the BaSyx UI:
+This default example does not require authentication. To try access control, use the [secured example](#try-the-secured-example) below.
 
-- [http://localhost:3000](http://localhost:3000)
-
-## Start The Secured DPP API Example
-
-The unsecured example above remains the default. To run only the DPP API with route-based OIDC + ABAC security:
-
-```bash
-docker compose -f docker-compose.secured.yml up -d
-```
-
-Open the secured DPP Swagger UI:
-
-- [http://localhost:8088/swagger](http://localhost:8088/swagger)
-
-Open Keycloak:
-
-- [http://keycloak.localhost:8080](http://keycloak.localhost:8080)
-
-Useful test users from the shared BaSyx Keycloak realm:
-
-- `usera` / `pwd`: `viewer`, read-only access to DPP routes
-- `userx` / `pwd`: `editor`, create/read/update/delete access to DPP routes
-
-Get a token:
+Set the API URL and the percent-encoded identifiers used by the sample:
 
 ```bash
-TOKEN=$(curl -s \
-  -X POST "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "client_id=basyx-ui" \
-  -d "grant_type=password" \
-  -d "username=userx" \
-  -d "password=pwd" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+BASE_URL='http://localhost:8080'
+DPP_ID='https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545'
+PRODUCT_ID='https%3A%2F%2Fwww.example.org%2F1234545'
 ```
 
-Use the token against the secured DPP API:
+## Create a passport
+
+The [sample DPP](sample-dpp.json) describes a battery pack with nameplate, carbon footprint, documentation and circularity data.
 
 ```bash
 curl -i \
+  -H 'Content-Type: application/json' \
+  --data @sample-dpp.json \
+  "$BASE_URL/v1/dpps"
+```
+
+Expect `201 Created` and the DPP ID `https://www.example.org/batterypassport/1234545`. Creating the same passport again returns `409 Conflict`; use an update request to change it.
+
+Refresh the BaSyx Web UI to see the corresponding AAS and Submodels.
+
+## Read the passport
+
+Read the default, compressed representation:
+
+```bash
+curl "$BASE_URL/v1/dpps/$DPP_ID"
+```
+
+Read the full representation, which includes data element types and metadata:
+
+```bash
+curl "$BASE_URL/v1/dpps/$DPP_ID?representation=full"
+```
+
+Find the same passport using its product ID:
+
+```bash
+curl "$BASE_URL/v1/dppsByProductId/$PRODUCT_ID"
+```
+
+### Read one element
+
+Element paths identify the content section and the element within it. For the sample manufacturer name, the path is:
+
+```text
+$['https://admin-shell-io/idta/digitalproductpassport/Nameplate/1']['ManufacturerName']
+```
+
+URL path parameters must be percent-encoded once. The encoded manufacturer path is provided here for copying:
+
+```bash
+MANUFACTURER_PATH='%24%5B%27https%3A%2F%2Fadmin-shell-io%2Fidta%2Fdigitalproductpassport%2FNameplate%2F1%27%5D%5B%27ManufacturerName%27%5D'
+curl "$BASE_URL/v1/dpps/$DPP_ID/elements/$MANUFACTURER_PATH"
+```
+
+Expect the JSON string `"VoltFabrik GmbH"`.
+
+## Update the passport and read its history
+
+Save a timestamp before making changes. The one-second wait ensures this timestamp is after creation, even when you run the commands in quick succession:
+
+```bash
+sleep 1
+HISTORY_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+```
+
+Change the manufacturer name:
+
+```bash
+curl -i \
+  -X PATCH \
+  -H 'Content-Type: application/json' \
+  --data '"VoltFabrik GmbH - Updated"' \
+  "$BASE_URL/v1/dpps/$DPP_ID/elements/$MANUFACTURER_PATH"
+```
+
+Expect `200 OK` with the updated value. Read the passport again to see the change, or refresh its Submodel in the BaSyx Web UI.
+
+You can also patch passport metadata:
+
+```bash
+curl -i \
+  -X PATCH \
+  -H 'Content-Type: application/merge-patch+json' \
+  --data '{"dppStatus":"archived"}' \
+  "$BASE_URL/v1/dpps/$DPP_ID"
+```
+
+This changes the status and `lastUpdate` without changing the content sections.
+
+Read the passport as it was before these updates:
+
+```bash
+curl "$BASE_URL/v1/dppsByIdAndDate/$DPP_ID?date=$HISTORY_DATE&representation=compressed"
+```
+
+The historical response contains the original manufacturer name and status. Use a timestamp from your own session; a date before the passport existed returns `404 Not Found`.
+
+History is enabled for both APIs in this example. Changes made through the AAS API also appear in historical DPP reads, although they do not refresh the DPP's `lastUpdate` field.
+
+## Choose which content appears
+
+`contentSpecificationIds` lists the semantic IDs of the Submodels that contribute content to the passport. To show only the sample nameplate:
+
+```bash
+curl -i \
+  -X PATCH \
+  -H 'Content-Type: application/merge-patch+json' \
+  --data '{"contentSpecificationIds":["https://admin-shell-io/idta/digitalproductpassport/Nameplate/1"]}' \
+  "$BASE_URL/v1/dpps/$DPP_ID"
+```
+
+Read the passport again: only the nameplate content section is included. The other Submodels remain available in the AAS Environment and Web UI. Add their semantic IDs back to the list to include them again.
+
+- An empty or missing `contentSpecificationIds` list returns passport metadata with no content sections.
+- Unselected sections cannot be read through the DPP element endpoints.
+- Historical reads use the selection that applied at the requested time.
+
+When preparing your own DPP JSON, use the listed semantic IDs as the top-level content keys, as shown in [sample-dpp.json](sample-dpp.json).
+
+## Delete the passport
+
+```bash
+curl -i -X DELETE "$BASE_URL/v1/dpps/$DPP_ID"
+```
+
+Expect `204 No Content`. Reading the current passport now returns `404 Not Found`. Its historical versions remain readable in this example.
+
+Deleting the passport removes its AAS and DppMetadata. Content Submodels remain in the AAS Environment, so deleting one passport does not remove content used by another. To repeat the walkthrough with the same sample IDs, use the [cleanup commands](#stop-and-clean-up) to remove all sample data, then start the example again.
+
+## Try file references
+
+The sample contains PDF links for manuals and reports. These are placeholder URLs; the example does not host those files.
+
+For your own data, provide an HTTP(S) URL in a file's `url` field. The DPP API does not upload files. You can upload managed files through the AAS Environment attachment endpoints instead; see the [AAS API guide](../../docu/user/aas_api_v3_2.md).
+
+Historical responses preserve file references. If a file is replaced behind the same URL, downloading it from an old passport may return the new bytes. Use separate URLs for different file versions when you need to retrieve the original files.
+
+## Use Postman instead of curl
+
+Import [BaSyx-DPP-API.postman_collection.json](BaSyx-DPP-API.postman_collection.json). It includes create, read, update, history, search and delete requests, with the required IDs and element paths already configured.
+
+No separate Postman environment is needed. The main collection variables to adjust are:
+
+| Variable | Default / purpose |
+| --- | --- |
+| `baseUrl` | `http://localhost:8080`; use `http://localhost:8088` for the secured example |
+| `bearerToken` | Access token for secured requests |
+| `dppId`, `productId` and their `Encoded` variants | Identifiers for the passport you want to use |
+| `representation` | `compressed` or `full` |
+| `historicalDate` | Timestamp for a historical read |
+| `limit`, `cursor` | Pagination for search requests |
+
+The collection also supplies encoded element paths. If you use your own passport, update these to match its content.
+
+## Try the secured example
+
+This alternative runs the DPP API with Keycloak authentication and role-based permissions. It uses ports `8080` and `8088` and does not include the AAS Environment or Web UI. Stop the default example first because both stacks use port `8080`:
+
+```bash
+docker compose down
+docker compose -f docker-compose.secured.yml up -d
+```
+
+Open the [secured Swagger UI](http://localhost:8088/swagger) or [Keycloak](http://keycloak.localhost:8080). If `keycloak.localhost` does not resolve, add `127.0.0.1 keycloak.localhost` to your hosts file.
+
+| Test user | Password | DPP permissions |
+| --- | --- | --- |
+| `usera` | `pwd` | Read only |
+| `userx` | `pwd` | Create, read, update and delete |
+
+The token command below requires `jq`:
+
+```bash
+TOKEN=$(curl -fsS \
+  -X POST 'http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'client_id=basyx-ui' \
+  -d 'grant_type=password' \
+  -d 'username=userx' \
+  -d 'password=pwd' | jq -r '.access_token')
+
+curl -i \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
+  -H 'Content-Type: application/json' \
   --data @sample-dpp.json \
   http://localhost:8088/v1/dpps
 ```
 
-Security files:
+To use the other requests above, change `BASE_URL` to `http://localhost:8088` and add `-H "Authorization: Bearer $TOKEN"` to each request. Alternatively, set `baseUrl` and `bearerToken` in Postman. Obtain a new token when the current one expires.
 
-- [`security_env/access-rules.json`](security_env/access-rules.json)
-- [`security_env/trustlist.json`](security_env/trustlist.json)
+Try the same write request with a token for `usera`: it should be denied. This example grants permissions per route, so it does not demonstrate different permissions for individual passports or fields. You can inspect the [access rules](security_env/access-rules.json) and [trusted issuer configuration](security_env/trustlist.json), or read the [security guide](../../docu/security/README.md).
 
-The secured example protects DPP API routes only. It does not add DPP object-, field-, or query-filter authorization.
+## Stop and clean up
 
-## Postman Collection
-
-Import `BaSyx-DPP-API.postman_collection.json` into Postman to run the example scenarios:
-
-- Create and read the demo DPP
-- Resolve a DPP by product ID
-- Read and update individual DPP elements
-- Delete the demo DPP when you are done
-
-The collection contains default collection variables, so a separate Postman environment is not required for the default stack. Adjust these variables in the collection when needed:
-
-- `baseUrl`: `http://localhost:8080` for the default stack or `http://localhost:8088` for the secured stack
-- `bearerToken`: bearer token for secured requests
-- `dppId`, `dppIdEncoded`: demo DPP ID and its percent-encoded form
-- `productId`, `productIdEncoded`: demo product ID and its percent-encoded form
-- `elementIdPath`, `elementIdPathEncoded`: RFC 9535 Normalized Path for the collection payload, such as `$['https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0']['ProductCarbonFootprints']`
-- `representation`: `compressed` or `full`
-- `historicalDate`, `currentTimestamp`: ISO-8601 timestamps used by history requests
-- `limit`, `cursor`: pagination values
-
-## Create A DPP
+Stop the default stack without removing its containers:
 
 ```bash
-curl -i \
-  -H "Content-Type: application/json" \
-  --data @sample-dpp.json \
-  http://localhost:8080/v1/dpps
+docker compose stop
 ```
 
-## Read The DPP
-
-The example DPP ID is `https://www.example.org/batterypassport/1234545`.
-
-```bash
-curl http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545
-```
-
-Read the full representation:
-
-```bash
-curl "http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545?representation=full"
-```
-
-Read by product ID:
-
-```bash
-curl http://localhost:8080/v1/dppsByProductId/https%3A%2F%2Fwww.example.org%2F1234545
-```
-
-Read a single data element:
-
-```bash
-curl http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545/elements/%24%5B%27https%3A%2F%2Fadmin-shell.io%2Fidta%2FCarbonFootprint%2FCarbonFootprint%2F1%2F0%27%5D%5B%27ProductCarbonFootprints%27%5D
-```
-
-Update a single data element:
-
-```bash
-curl -i \
-  -X PATCH \
-  -H "Content-Type: application/json" \
-  --data '"VoltFabrik GmbH - Curl Update"' \
-  http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545/elements/%24%5B%27https%3A%2F%2Fadmin-shell-io%2Fidta%2Fdigitalproductpassport%2FNameplate%2F1%27%5D%5B%27ManufacturerName%27%5D
-```
-
-Update passport metadata:
-
-```bash
-curl -i \
-  -X PATCH \
-  -H "Content-Type: application/merge-patch+json" \
-  --data '{"dppStatus":"archived"}' \
-  http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545
-```
-
-A DPP patch writes only the affected resources and updates `DppMetadata.lastUpdate`. Existing AAS and Submodel identifiers and their AAS-specific metadata are preserved. A status-only patch leaves content Submodels unchanged; a content patch updates the existing Submodel for that section. Changes and their history are saved atomically.
-
-With history enabled on every writing service, direct content edits through the AAS/Submodel APIs are recorded in Submodel history and appear in dated DPP reads, but do not refresh `DppMetadata.lastUpdate`. Consumers must not use that header alone to detect changes made through those APIs. Concurrent read-modify-write requests have no revision conflict detection; clients must coordinate overlapping updates when lost updates are unacceptable.
-
-DPP reads include only referenced content Submodels whose semantic IDs are listed in `DppMetadata.contentSpecificationIds`. An absent or empty list produces no content sections. This selection applies to compressed, full, historical, and element reads. Changing only the list changes the passport view while preserving its AAS Submodel references and the stored content.
-
-Removing a content section with `null` detaches its Submodel reference from the owning AAS. The Submodel and its descriptor remain available to other AAS records. New sections are created without overwriting an existing Submodel at the generated identifier; a collision returns HTTP 409.
-
-Deleting a DPP removes its passport AAS and `DppMetadata` Submodel, together with their synchronized descriptors. Content Submodels and their descriptors remain available for reuse, including Submodels shared with other AAS records.
-
-Read a historical DPP version:
-
-```bash
-curl "http://localhost:8080/v1/dppsByIdAndDate/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545?date=2026-06-11T12:00:00Z&representation=compressed"
-```
-
-Historical reads resolve the passport's AAS and metadata association at the requested date. They continue to work when the current passport has been deleted or its identifier has since been associated with another AAS, provided the required history is retained. Database patch `1_2_2.sql` indexes existing history snapshots and diffs for this lookup; it also covers history written before the patch. Ambiguous ownership or a lookup exceeding 1,024 candidate resources returns HTTP 409 without returning a partial result.
-
-Historical snapshots cannot currently evaluate resource-level authorization formulas or field masks. Requests requiring those filters return HTTP 404 instead of exposing an unfiltered snapshot. Route-authorized historical reads without those filters remain supported.
-
-## Service Endpoints
-
-- DPP API: [http://localhost:8080/v1/dpps](http://localhost:8080/v1/dpps)
-- DPP Swagger UI: [http://localhost:8080/swagger](http://localhost:8080/swagger)
-- DPP OpenAPI document: [http://localhost:8080/api-docs/openapi.yaml](http://localhost:8080/api-docs/openapi.yaml)
-- DPP health endpoint: [http://localhost:8080/health](http://localhost:8080/health)
-- BaSyx UI: [http://localhost:3000](http://localhost:3000)
-- AAS Environment: [http://localhost:8082](http://localhost:8082)
-- AAS Repository API: [http://localhost:8082/shells](http://localhost:8082/shells)
-- Submodel Repository API: [http://localhost:8082/submodels](http://localhost:8082/submodels)
-- AAS Registry API: [http://localhost:8082/shell-descriptors](http://localhost:8082/shell-descriptors)
-- Submodel Registry API: [http://localhost:8082/submodel-descriptors](http://localhost:8082/submodel-descriptors)
-- Discovery API: [http://localhost:8082/lookup/shells](http://localhost:8082/lookup/shells)
-
-## Stop / Clean Up
-
-Stop containers:
-
-```bash
-docker compose down
-```
-
-Stop and remove volumes:
+Resume it with `docker compose start`. To remove the containers and delete their database volumes, including all sample data:
 
 ```bash
 docker compose down -v
 ```
 
-## Notes
+For the secured stack, use:
 
-- This example is intentionally unsecured (`ABAC_ENABLED=false`).
-- The DB schema is initialized by the BaSyx Configuration Service before the DPP API and AAS Environment start.
-- The DPP API and AAS Environment use the same PostgreSQL database, so DPP-created AAS and Submodels are visible through the AAS Environment APIs and UI.
-- Registry and discovery synchronization is enabled on both API surfaces. Creating, updating, or deleting a DPP through either the DPP API or the AAS Environment keeps the AAS and Submodel descriptors and product discovery links consistent. Updates synchronize only descriptor-relevant changes and repair missing descriptors for existing DPPs.
-- Authorizing a DPP write also authorizes its configured internal AAS Registry, Submodel Registry, and Discovery mutations. The synchronized records remain subject to the independent read policies of those services, so deployments must align DPP write access with the intended registry and discovery visibility.
-- DPP identifier searches apply metadata value visibility before pagination. Hidden identifiers are omitted from both results and generated cursors.
-- `GENERAL_EXTERNALURL` on the DPP API identifies the public AAS Environment URL used by descriptors and managed attachment URLs; it is not the public URL of the DPP endpoint. It is also required when the DPP API can read AAS-managed attachments, even if registry synchronization is disabled; without it, those attachment URLs cannot be serialized and the read returns a configuration error.
-- The DPP API has no attachment upload or storage endpoints. Callers creating a DPP directly must provide valid HTTP(S) `RelatedResource.url` values and manage those resources themselves.
-- A File whose bytes were uploaded through the AAS Environment attachment endpoint is exposed in DPP representations through that attachment endpoint. Externally supplied HTTP(S) File URLs remain unchanged.
-- Historical DPP representations version the applicable `RelatedResource.url`, not attachment bytes. Replacing a managed attachment, including a same-name upload, makes its stable download endpoint serve the replacement bytes even when reached from an older DPP representation. Immutable attachment retrieval requires versioned resource URLs or a separate archive retrieval mechanism; enabling history alone does not provide a DPP endpoint for downloading old bytes.
-- The secured DPP-only compose stack intentionally leaves registry synchronization disabled because it does not include an AAS Environment.
-- The DPP API Service enables audit history internally, and the compose environment enables the same audit/history settings for both DPP API and AAS Environment.
-- The sample uses compressed EN 18223-style content: top-level content keys are the `contentSpecificationIds`; full/expanded representation is available via `representation=full`.
-- Fine-grained element paths use RFC 9535 Normalized Path syntax, for example `$['<contentSpecificationId>']['<elementId>']`.
-- Path parameters containing URLs or Normalized Path expressions must be percent-encoded once so they stay one path segment.
+```bash
+docker compose -f docker-compose.secured.yml down -v
+```
