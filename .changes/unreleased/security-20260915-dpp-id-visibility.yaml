@@ -1,6 +1,7 @@
-kind: fixed
+kind: security
 body: Respect metadata value visibility when searching DPP identifiers, filtering inaccessible identifiers before pagination.
 time: 2026-09-15T15:45:00+02:00
 custom:
     Impact: High
     PullRequest: 691
+    SecurityImpact: Prevents disclosure of restricted DPP identifiers through search results and pagination cursors.

@@ -4,3 +4,4 @@ time: 2026-09-15T15:14:23+02:00
 custom:
     Impact: High
     PullRequest: 691
+    SecurityImpact: Prevents unintended overwrite or deletion of unrelated and shared Submodels during DPP updates.

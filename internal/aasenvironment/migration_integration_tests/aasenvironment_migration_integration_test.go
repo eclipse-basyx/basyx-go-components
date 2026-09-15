@@ -170,6 +170,14 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 	require.True(t, databaseIndexExists(t, "ix_specasset_supp_sem_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_smdesc_supp_sem_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_property_element_value_text_hash"))
+	for _, index := range []string{
+		"ix_aas_history_payload_snapshot_identifiers",
+		"ix_aas_history_payload_diff_identifiers",
+		"ix_submodel_history_payload_snapshot_identifiers",
+		"ix_submodel_history_payload_diff_identifiers",
+	} {
+		require.True(t, databaseIndexExists(t, index), "missing historical DPP lookup index %s", index)
+	}
 	assertLongIdentifierEvidenceCatalogAccepts(t, longIdentifier)
 	assertLegacyBinaryStateUnchanged(t, legacyFile, readLegacyFileState(t, "LegacyFile"))
 	assertLegacyBinaryStateUnchanged(t, legacyUntouched, readLegacyFileState(t, "LegacyFileUntouched"))

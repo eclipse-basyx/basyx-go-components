@@ -167,7 +167,7 @@ Read a historical DPP version:
 curl "http://localhost:8080/v1/dppsByIdAndDate/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545?date=2026-06-11T12:00:00Z&representation=compressed"
 ```
 
-Historical reads resolve the passport's AAS and metadata association at the requested date. They continue to work when the current passport has been deleted or its identifier has since been associated with another AAS, provided the required history is retained. Database patch `1_2_3.sql` indexes existing history snapshots and diffs for this lookup; it also covers history written before the patch. Ambiguous ownership or a lookup exceeding 1,024 candidate resources returns HTTP 409 without returning a partial result.
+Historical reads resolve the passport's AAS and metadata association at the requested date. They continue to work when the current passport has been deleted or its identifier has since been associated with another AAS, provided the required history is retained. Database patch `1_2_2.sql` indexes existing history snapshots and diffs for this lookup; it also covers history written before the patch. Ambiguous ownership or a lookup exceeding 1,024 candidate resources returns HTTP 409 without returning a partial result.
 
 Historical snapshots cannot currently evaluate resource-level authorization formulas or field masks. Requests requiring those filters return HTTP 404 instead of exposing an unfiltered snapshot. Route-authorized historical reads without those filters remain supported.
 
