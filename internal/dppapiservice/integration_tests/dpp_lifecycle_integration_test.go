@@ -251,7 +251,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	}, http.StatusOK)
 	doJSONAny(
 		t, client, http.MethodGet,
-		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusNotFound,
+		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(carbonFootprintSubmodelID), nil, http.StatusOK,
 	)
 
 	beforeDeleteDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
@@ -268,6 +268,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	doJSONAny(t, client, http.MethodGet, aasBaseURL+"/submodel-descriptors/"+common.EncodeString(importedMetadataID), nil, http.StatusNotFound)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(optionalDPPID), nil, http.StatusNoContent)
 	testDPPWithDistinctAASID(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
+	testSelectiveDPPUpdates(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 }
 
 func testDPPWithDistinctAASID(

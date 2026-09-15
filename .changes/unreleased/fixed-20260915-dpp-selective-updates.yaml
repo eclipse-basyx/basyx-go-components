@@ -1,0 +1,6 @@
+kind: fixed
+body: Apply DPP merge patches only to affected resources, preserving existing AAS and Submodel identities and metadata. Keep detached content available for reuse and reject collisions when creating new sections.
+time: 2026-09-15T15:14:23+02:00
+custom:
+    Impact: High
+    PullRequest: 691

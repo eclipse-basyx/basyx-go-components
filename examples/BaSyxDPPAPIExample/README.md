@@ -147,6 +147,20 @@ curl -i \
   http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545/elements/%24%5B%27https%3A%2F%2Fadmin-shell-io%2Fidta%2Fdigitalproductpassport%2FNameplate%2F1%27%5D%5B%27ManufacturerName%27%5D
 ```
 
+Update passport metadata:
+
+```bash
+curl -i \
+  -X PATCH \
+  -H "Content-Type: application/merge-patch+json" \
+  --data '{"dppStatus":"archived"}' \
+  http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545
+```
+
+A DPP patch writes only the affected resources and updates `DppMetadata.lastUpdate`. Existing AAS and Submodel identifiers and their AAS-specific metadata are preserved. A status-only patch leaves content Submodels unchanged; a content patch updates the existing Submodel for that section. Changes and their history are saved atomically.
+
+Removing a content section with `null` detaches its Submodel reference from the owning AAS. The Submodel and its descriptor remain available to other AAS records. New sections are created without overwriting an existing Submodel at the generated identifier; a collision returns HTTP 409.
+
 Read a historical DPP version:
 
 ```bash

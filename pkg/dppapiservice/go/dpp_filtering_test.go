@@ -301,44 +301,6 @@ func TestComposeResolvedDPPIncludesAllContentWhenContentSpecificationIDsMissing(
 	assertDPPContentSectionExists(t, doc, "technicalData")
 }
 
-func TestStaleContentSubmodelIDsUsesOnlySelectedCurrentContent(t *testing.T) {
-	resolved := filteringResolvedDPP()
-	currentContent, err := selectedResolvedContentSubmodels(resolved)
-	if err != nil {
-		t.Fatalf("selectedResolvedContentSubmodels() error = %v", err)
-	}
-
-	stale := staleContentSubmodelIDs(currentContent, []types.ISubmodel{resolved.metadata})
-	if len(stale) != 1 {
-		t.Fatalf("stale IDs = %#v, want only selected content submodel", stale)
-	}
-	if stale[0] != contentSubmodelID(filteringDPPID, "digitalNameplate") {
-		t.Fatalf("stale[0] = %q", stale[0])
-	}
-}
-
-func TestAppendUnselectedContentSubmodelReferencesPreservesBaseSubmodelRefs(t *testing.T) {
-	resolved := filteringResolvedDPP()
-	currentContent, err := selectedResolvedContentSubmodels(resolved)
-	if err != nil {
-		t.Fatalf("selectedResolvedContentSubmodels() error = %v", err)
-	}
-	refs := []types.IReference{
-		submodelReference(resolved.metadata.ID()),
-		submodelReference(contentSubmodelID(filteringDPPID, "digitalNameplate")),
-	}
-
-	refs = appendUnselectedContentSubmodelReferences(refs, resolved, currentContent)
-	refs = appendUnselectedContentSubmodelReferences(refs, resolved, currentContent)
-
-	if len(refs) != 3 {
-		t.Fatalf("refs length = %d, want metadata, selected, and one unselected ref: %#v", len(refs), refs)
-	}
-	if !referenceListContains(refs, contentSubmodelID(filteringDPPID, "technicalData")) {
-		t.Fatalf("refs do not contain unselected technicalData submodel: %#v", refs)
-	}
-}
-
 func TestDPPUpdateReplacementRemainsNewestForSharedSemanticID(t *testing.T) {
 	resolved := filteringResolvedDPP()
 	current := filteringContentSubmodel("currentNameplate", "CurrentNameplate", filteringNameplateSemantic, stringProperty("manufacturerName", "Current GmbH"))
@@ -374,12 +336,7 @@ func TestDPPUpdateReplacementRemainsNewestForSharedSemanticID(t *testing.T) {
 		EconomicOperatorID:       "operator-123",
 		ContentSpecificationIDs:  []string{filteringNameplateSemantic},
 	})
-	applyDPPUpdateAdministration(
-		[]types.ISubmodel{replacementMetadata, replacement},
-		resolved.metadata,
-		[]types.ISubmodel{current},
-		updatedAt,
-	)
+	replacement.SetAdministration(updatedDPPAdministration(current, updatedAt))
 
 	updated := resolvedDPP{
 		metadata:  replacementMetadata,
