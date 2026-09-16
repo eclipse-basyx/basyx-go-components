@@ -34,6 +34,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	basyxmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -159,10 +160,16 @@ func dppElementFromAASWithContext(element types.ISubmodelElement, idShortPath st
 		return multiLanguageDataElement(typed), nil
 	case *types.SubmodelElementCollection:
 		return dataElementCollection(typed, idShortPath, serializationContext)
+	case *types.Entity:
+		return entityDataElementCollection(typed, idShortPath, serializationContext)
 	case *types.File:
 		return relatedResourceWithContext(typed, idShortPath, serializationContext)
 	default:
-		return nil, fmt.Errorf("DPP-ELEM-FULL-UNSUPPORTED unsupported AAS element type %v", element.ModelType())
+		return nil, newDPPHTTPError(
+			http.StatusUnprocessableEntity,
+			"DPP-ELEM-FULL-UNSUPPORTED",
+			fmt.Sprintf("unsupported AAS element type %v", element.ModelType()),
+		)
 	}
 }
 
@@ -215,6 +222,127 @@ func dataElementCollection(collection *types.SubmodelElementCollection, idShortP
 	result := dppElementBase(idShortValue(collection), "DataElementCollection", collection.SemanticID())
 	result["elements"] = elements
 	return result, nil
+}
+
+func entityDataElementCollection(entity *types.Entity, idShortPath string, serializationContext dppSerializationContext) (map[string]any, error) {
+	elements, err := entityIdentityDataElements(entity)
+	if err != nil {
+		return nil, err
+	}
+	if len(entity.Statements()) > 0 {
+		statements, err := dppElementsFromAAS(entity.Statements(), idShortPath, serializationContext)
+		if err != nil {
+			return nil, err
+		}
+		statementCollection := dppElementBase("statements", "DataElementCollection", nil)
+		statementCollection["elements"] = statements
+		elements = append(elements, statementCollection)
+	}
+	result := dppElementBase(idShortValue(entity), "DataElementCollection", entity.SemanticID())
+	result["elements"] = elements
+	return result, nil
+}
+
+func entityIdentityDataElements(entity *types.Entity) ([]map[string]any, error) {
+	elements := make([]map[string]any, 0, 4)
+	if entity.EntityType() != nil {
+		entityType, ok := stringification.EntityTypeToString(*entity.EntityType())
+		if !ok {
+			return nil, unsupportedEntityField("entityType", *entity.EntityType())
+		}
+		elements = append(elements, dppStringDataElement("entityType", entityType))
+	}
+	if entity.GlobalAssetID() != nil {
+		elements = append(elements, dppStringDataElement("globalAssetId", *entity.GlobalAssetID()))
+	}
+	if len(entity.SpecificAssetIDs()) > 0 {
+		specificAssetIDs, err := specificAssetIDsDataElement(entity.SpecificAssetIDs())
+		if err != nil {
+			return nil, err
+		}
+		elements = append(elements, specificAssetIDs)
+	}
+	return elements, nil
+}
+
+func specificAssetIDsDataElement(specificAssetIDs []types.ISpecificAssetID) (map[string]any, error) {
+	elements := make([]map[string]any, 0, len(specificAssetIDs))
+	for index, specificAssetID := range specificAssetIDs {
+		fields := []map[string]any{
+			dppStringDataElement("name", specificAssetID.Name()),
+			dppStringDataElement("value", specificAssetID.Value()),
+		}
+		if specificAssetID.ExternalSubjectID() != nil {
+			externalSubjectID, err := referenceDataElement("externalSubjectId", specificAssetID.ExternalSubjectID())
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, externalSubjectID)
+		}
+		item := dppElementBase(fmt.Sprintf("specificAssetId%d", index), "DataElementCollection", specificAssetID.SemanticID())
+		item["elements"] = fields
+		elements = append(elements, item)
+	}
+	result := dppElementBase("specificAssetIds", "MultiValuedDataElement", nil)
+	result["elements"] = elements
+	return result, nil
+}
+
+func referenceDataElement(elementID string, reference types.IReference) (map[string]any, error) {
+	referenceType, ok := stringification.ReferenceTypesToString(reference.Type())
+	if !ok {
+		return nil, unsupportedEntityField(elementID+".type", reference.Type())
+	}
+	elements := []map[string]any{dppStringDataElement("type", referenceType)}
+	keys, err := referenceKeysDataElement(reference.Keys())
+	if err != nil {
+		return nil, err
+	}
+	elements = append(elements, keys)
+	if reference.ReferredSemanticID() != nil {
+		referredSemanticID, err := referenceDataElement("referredSemanticId", reference.ReferredSemanticID())
+		if err != nil {
+			return nil, err
+		}
+		elements = append(elements, referredSemanticID)
+	}
+	result := dppElementBase(elementID, "DataElementCollection", nil)
+	result["elements"] = elements
+	return result, nil
+}
+
+func referenceKeysDataElement(keys []types.IKey) (map[string]any, error) {
+	elements := make([]map[string]any, 0, len(keys))
+	for index, key := range keys {
+		keyType, ok := stringification.KeyTypesToString(key.Type())
+		if !ok {
+			return nil, unsupportedEntityField(fmt.Sprintf("externalSubjectId.keys[%d].type", index), key.Type())
+		}
+		item := dppElementBase(fmt.Sprintf("key%d", index), "DataElementCollection", nil)
+		item["elements"] = []map[string]any{
+			dppStringDataElement("type", keyType),
+			dppStringDataElement("value", key.Value()),
+		}
+		elements = append(elements, item)
+	}
+	result := dppElementBase("keys", "MultiValuedDataElement", nil)
+	result["elements"] = elements
+	return result, nil
+}
+
+func dppStringDataElement(elementID string, value string) map[string]any {
+	result := dppElementBase(elementID, "SingleValuedDataElement", nil)
+	result["valueDataType"] = "xsd:string"
+	result["value"] = value
+	return result
+}
+
+func unsupportedEntityField(field string, value any) error {
+	return newDPPHTTPError(
+		http.StatusUnprocessableEntity,
+		"DPP-ELEM-FULL-UNSUPPORTED",
+		fmt.Sprintf("unsupported Entity %s value %v", field, value),
+	)
 }
 
 func relatedResourceWithContext(file *types.File, idShortPath string, serializationContext dppSerializationContext) (map[string]any, error) {
@@ -455,8 +583,71 @@ func enrichCompressedElementValue(value any, element types.ISubmodelElement, idS
 				return err
 			}
 		}
+	case *types.Entity:
+		return enrichCompressedEntityValue(value, typed, idShortPath, serializationContext)
 	}
 	return nil
+}
+
+func enrichCompressedEntityValue(value any, entity *types.Entity, idShortPath string, serializationContext dppSerializationContext) error {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	if err := enrichCompressedSpecificAssetIDs(object, entity.SpecificAssetIDs()); err != nil {
+		return err
+	}
+	return enrichCompressedValue(object["statements"], entity.Statements(), idShortPath, serializationContext)
+}
+
+func enrichCompressedSpecificAssetIDs(object map[string]any, specificAssetIDs []types.ISpecificAssetID) error {
+	items, ok := object["specificAssetIds"].([]any)
+	if !ok {
+		return nil
+	}
+	for index, specificAssetID := range specificAssetIDs {
+		if index >= len(items) || specificAssetID.ExternalSubjectID() == nil {
+			continue
+		}
+		item, ok := items[index].(map[string]any)
+		if !ok {
+			continue
+		}
+		reference, err := referenceValueOnly(specificAssetID.ExternalSubjectID())
+		if err != nil {
+			return err
+		}
+		item["externalSubjectId"] = reference
+	}
+	return nil
+}
+
+func referenceValueOnly(reference types.IReference) (map[string]any, error) {
+	referenceType, ok := stringification.ReferenceTypesToString(reference.Type())
+	if !ok {
+		return nil, unsupportedEntityField("externalSubjectId.type", reference.Type())
+	}
+	result := map[string]any{
+		"type": referenceType,
+		"keys": make([]any, 0, len(reference.Keys())),
+	}
+	keys := result["keys"].([]any)
+	for index, key := range reference.Keys() {
+		keyType, valid := stringification.KeyTypesToString(key.Type())
+		if !valid {
+			return nil, unsupportedEntityField(fmt.Sprintf("externalSubjectId.keys[%d].type", index), key.Type())
+		}
+		keys = append(keys, map[string]any{"type": keyType, "value": key.Value()})
+	}
+	result["keys"] = keys
+	if reference.ReferredSemanticID() != nil {
+		referredSemanticID, err := referenceValueOnly(reference.ReferredSemanticID())
+		if err != nil {
+			return nil, err
+		}
+		result["referredSemanticId"] = referredSemanticID
+	}
+	return result, nil
 }
 
 func enrichCompressedFileValue(value any, file *types.File, idShortPath string, serializationContext dppSerializationContext) error {

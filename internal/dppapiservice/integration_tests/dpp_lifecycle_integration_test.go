@@ -296,6 +296,8 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	testDPPDeleteRevalidationConcurrency(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 	testDPPAttachmentAndAASHistory(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 	testDPPCollectionSerialization(t, client, baseURL, idSuffix, now)
+	testDPPEntitySerialization(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
+	testDPPLongIdentifierLifecycle(t, client, baseURL, aasBaseURL, idSuffix, now)
 	testDPPContentSpecificationSelection(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 	testSelectiveDPPUpdates(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 }

@@ -20,12 +20,14 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
+const dppAASIDShort = "DPP"
+
 func buildAAS(header dppHeader, submodelRefs []types.IReference) types.IAssetAdministrationShell {
 	assetInformation := types.NewAssetInformation(granularityAssetKind(header.Granularity))
 	assetInformation.SetGlobalAssetID(&header.UniqueProductIdentifier)
 
 	aas := types.NewAssetAdministrationShell(header.DigitalProductPassportID, assetInformation)
-	idShort := sanitizeIDShort(header.DigitalProductPassportID, "Dpp")
+	idShort := dppAASIDShort
 	aas.SetIDShort(&idShort)
 	aas.SetSubmodels(submodelRefs)
 	return aas
