@@ -27,10 +27,13 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 	"strconv"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // TypedValue represents a value categorized by its XS datatype for database storage.
@@ -55,16 +58,18 @@ type TypedValue struct {
 //
 // Returns:
 //   - TypedValue: A struct with the value placed in the appropriate field based on type
-func MapValueByType(valueType types.DataTypeDefXSD, value *string) TypedValue {
+//   - error: A bad request when a boolean or temporal value is inconsistent with its XS datatype
+func MapValueByType(valueType types.DataTypeDefXSD, value *string) (TypedValue, error) {
 	tv := TypedValue{}
 	valid := value != nil && (*value != "" || IsTextType(valueType))
 	actualValue := ""
 	if value != nil {
 		actualValue = *value
 	}
-	if valid && requiresTextFallback(valueType, actualValue) {
-		tv.Text = sql.NullString{String: actualValue, Valid: true}
-		return tv
+	if valid {
+		if err := validateDatabaseTypedValue(valueType, actualValue); err != nil {
+			return tv, err
+		}
 	}
 	switch {
 	case IsTextType(valueType):
@@ -87,7 +92,7 @@ func MapValueByType(valueType types.DataTypeDefXSD, value *string) TypedValue {
 		// Fallback to text for unknown types
 		tv.Text = sql.NullString{String: actualValue, Valid: valid}
 	}
-	return tv
+	return tv, nil
 }
 
 // IsTextType checks if the given XS datatype is a text/string type.
@@ -130,16 +135,21 @@ func isValidNumeric(value string) bool {
 	return err == nil
 }
 
-func requiresTextFallback(valueType types.DataTypeDefXSD, value string) bool {
+func validateDatabaseTypedValue(valueType types.DataTypeDefXSD, value string) error {
 	switch valueType {
 	case types.DataTypeDefXSDBoolean,
 		types.DataTypeDefXSDTime,
 		types.DataTypeDefXSDDate,
 		types.DataTypeDefXSDDateTime:
-		return !verification.ValueConsistentWithXSDType(value, valueType)
-	default:
-		return false
+		if !verification.ValueConsistentWithXSDType(value, valueType) {
+			return common.NewErrBadRequest(fmt.Sprintf(
+				"SMREPO-MAPVALUE-INVALIDXSD value %q is not consistent with %s",
+				value,
+				stringification.MustDataTypeDefXSDToString(valueType),
+			))
+		}
 	}
+	return nil
 }
 
 // IsDateTimeType checks if the given XS datatype should be stored in TIMESTAMPTZ columns.
@@ -182,15 +192,20 @@ type TypedRangeValue struct {
 //
 // Returns:
 //   - TypedRangeValue: A struct with the values placed in the appropriate fields based on type
-func MapRangeValueByType(valueType types.DataTypeDefXSD, minValue string, maxValue string) TypedRangeValue {
+//   - error: A bad request when a temporal bound is inconsistent with its XS datatype
+func MapRangeValueByType(valueType types.DataTypeDefXSD, minValue string, maxValue string) (TypedRangeValue, error) {
 	tv := TypedRangeValue{}
 	minValid := minValue != ""
 	maxValid := maxValue != ""
-	if (minValid && requiresTextFallback(valueType, minValue)) ||
-		(maxValid && requiresTextFallback(valueType, maxValue)) {
-		tv.MinText = sql.NullString{String: minValue, Valid: minValid}
-		tv.MaxText = sql.NullString{String: maxValue, Valid: maxValid}
-		return tv
+	if minValid {
+		if err := validateDatabaseTypedValue(valueType, minValue); err != nil {
+			return tv, err
+		}
+	}
+	if maxValid {
+		if err := validateDatabaseTypedValue(valueType, maxValue); err != nil {
+			return tv, err
+		}
 	}
 
 	switch {
@@ -221,32 +236,5 @@ func MapRangeValueByType(valueType types.DataTypeDefXSD, minValue string, maxVal
 		tv.MinText = sql.NullString{String: minValue, Valid: minValid}
 		tv.MaxText = sql.NullString{String: maxValue, Valid: maxValid}
 	}
-	return tv
-}
-
-// GetRangeColumnNames returns the appropriate column names for min and max values
-// based on the XML Schema datatype of the Range element.
-//
-// Parameters:
-//   - valueType: The XS datatype string
-//
-// Returns:
-//   - minCol: The column name for the minimum value
-//   - maxCol: The column name for the maximum value
-func GetRangeColumnNames(valueType types.DataTypeDefXSD) (minCol, maxCol string) {
-	switch {
-	case IsTextType(valueType):
-		return "min_text", "max_text"
-	case IsNumericType(valueType):
-		return "min_num", "max_num"
-	case valueType == types.DataTypeDefXSDTime:
-		return "min_time", "max_time"
-	case valueType == types.DataTypeDefXSDDate:
-		return "min_date", "max_date"
-	case IsDateTimeType(valueType):
-		return "min_datetime", "max_datetime"
-	default:
-		// Fallback to text
-		return "min_text", "max_text"
-	}
+	return tv, nil
 }

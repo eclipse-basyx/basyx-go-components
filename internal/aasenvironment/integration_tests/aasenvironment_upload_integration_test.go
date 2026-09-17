@@ -97,7 +97,7 @@ func TestUploadAASXIntegration(t *testing.T) {
 	runUploadJSONSuite(t, "upload_it_config.json")
 }
 
-func TestUploadAASXWithoutStrictVerificationPreservesInvalidDateTime(t *testing.T) {
+func TestUploadAASXWithoutStrictVerificationRejectsInvalidDateTime(t *testing.T) {
 	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
 	const submodelID = "urn:basyx:integration:upload-invalid-datetime"
 	const invalidDateTime = "22.04.2024"
@@ -119,7 +119,8 @@ func TestUploadAASXWithoutStrictVerificationPreservesInvalidDateTime(t *testing.
 
 	payload := buildUploadAASXFixture(t, specification)
 	status, responseBody := uploadAASXPayload(t, payload, "invalid-datetime.aasx")
-	require.Equal(t, http.StatusOK, status, "invalid AASX must not cause an internal server error: %s", string(responseBody))
+	require.Equal(t, http.StatusBadRequest, status, "invalid AASX must be rejected: %s", string(responseBody))
+	require.Contains(t, string(responseBody), "not consistent with xs:dateTime")
 
 	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
 	response := doHTTPIntegrationRequest(t, &http.Client{Timeout: 30 * time.Second}, mustNewRequest(
@@ -130,15 +131,7 @@ func TestUploadAASXWithoutStrictVerificationPreservesInvalidDateTime(t *testing.
 	defer func() { _ = response.Body.Close() }()
 	responseBody, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, response.StatusCode, "persisted Property could not be read: %s", string(responseBody))
-
-	var property struct {
-		Value     string `json:"value"`
-		ValueType string `json:"valueType"`
-	}
-	require.NoError(t, json.Unmarshal(responseBody, &property))
-	require.Equal(t, invalidDateTime, property.Value)
-	require.Equal(t, "xs:dateTime", property.ValueType)
+	require.Equal(t, http.StatusNotFound, response.StatusCode, "invalid Property must not be stored: %s", string(responseBody))
 }
 
 func TestUploadCombinedExampleEmbeddedFileMIMETypes(t *testing.T) {
