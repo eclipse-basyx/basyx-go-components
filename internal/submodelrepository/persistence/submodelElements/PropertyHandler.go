@@ -232,7 +232,10 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 		return common.NewErrBadRequest("valueOnly is not of type PropertyValue")
 	}
 
-	typedValue := MapValueByType(valueType, &propertyValue.Value)
+	typedValue, err := MapValueByType(valueType, &propertyValue.Value)
+	if err != nil {
+		return err
+	}
 
 	dialect := goqu.Dialect("postgres")
 	updateQuery, updateArgs, err := dialect.Update("property_element").
@@ -288,7 +291,10 @@ func (p PostgreSQLPropertyHandler) GetInsertQueryPart(_ *sql.Tx, id int, element
 	}
 
 	// Use centralized value type mapper
-	typedValue := MapValueByType(property.ValueType(), property.Value())
+	typedValue, err := MapValueByType(property.ValueType(), property.Value())
+	if err != nil {
+		return nil, err
+	}
 
 	return &InsertQueryPart{
 		TableName: "property_element",
@@ -313,7 +319,10 @@ func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, local
 
 	// Map value by type - always update based on isPut or if value is provided
 	if isPut || property.Value() != nil {
-		typedValue := MapValueByType(property.ValueType(), property.Value())
+		typedValue, err := MapValueByType(property.ValueType(), property.Value())
+		if err != nil {
+			return nil, err
+		}
 		updateRecord["value_text"] = typedValue.Text
 		updateRecord["value_num"] = typedValue.Numeric
 		updateRecord["value_bool"] = typedValue.Boolean

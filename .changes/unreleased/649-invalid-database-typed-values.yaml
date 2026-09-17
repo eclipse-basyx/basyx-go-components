@@ -1,0 +1,7 @@
+kind: fixed
+body: AAS Environment and Submodel Repository writes reject semantically invalid boolean and temporal Property or Range values with HTTP 400 instead of exposing PostgreSQL conversion errors as HTTP 500 responses.
+time: 2026-09-01T10:04:45Z
+custom:
+  Impact: High
+  PullRequest: 649
+  SecurityImpact: None.

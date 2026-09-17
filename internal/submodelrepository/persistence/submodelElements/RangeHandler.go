@@ -111,7 +111,10 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 	dialect := goqu.Dialect("postgres")
 
 	// Build update record for Range-specific fields
-	updateRecord := buildUpdateRangeRecordObject(rangeElem, isPut)
+	updateRecord, err := buildUpdateRangeRecordObject(rangeElem, isPut)
+	if err != nil {
+		return err
+	}
 
 	// Execute update
 	updateQuery, updateArgs, err := dialect.Update("range_element").
@@ -178,9 +181,6 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 		return err
 	}
 
-	// Determine column names based on value type
-	minCol, maxCol := getRangeColumnNames(valueType)
-
 	// Build subquery to get the submodel element ID
 	var elementID int
 	idQuery, args, err := dialect.From("submodel_element").
@@ -197,20 +197,31 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 		return err
 	}
 
-	// Build update record with all columns, setting unused ones to NULL
-	updateRecord := goqu.Record{
-		"min_text":     nil,
-		"max_text":     nil,
-		"min_num":      nil,
-		"max_num":      nil,
-		"min_time":     nil,
-		"max_time":     nil,
-		"min_datetime": nil,
-		"max_datetime": nil,
+	minValue := ""
+	if rangeValue.Min != nil {
+		minValue = *rangeValue.Min
 	}
-	// Set the appropriate columns based on value type
-	updateRecord[minCol] = rangeValue.Min
-	updateRecord[maxCol] = rangeValue.Max
+	maxValue := ""
+	if rangeValue.Max != nil {
+		maxValue = *rangeValue.Max
+	}
+	typedValue, err := MapRangeValueByType(valueType, minValue, maxValue)
+	if err != nil {
+		return err
+	}
+
+	updateRecord := goqu.Record{
+		"min_text":     typedValue.MinText,
+		"max_text":     typedValue.MaxText,
+		"min_num":      typedValue.MinNumeric,
+		"max_num":      typedValue.MaxNumeric,
+		"min_time":     typedValue.MinTime,
+		"max_time":     typedValue.MaxTime,
+		"min_date":     typedValue.MinDate,
+		"max_date":     typedValue.MaxDate,
+		"min_datetime": typedValue.MinDateTime,
+		"max_datetime": typedValue.MaxDateTime,
+	}
 
 	// Build and execute update query
 	updateQuery, updateArgs, err := dialect.Update("range_element").
@@ -267,7 +278,10 @@ func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element ty
 	if rangeElem.Max() != nil {
 		maxVal = *rangeElem.Max()
 	}
-	typedValue := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+	typedValue, err := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+	if err != nil {
+		return nil, err
+	}
 
 	return &InsertQueryPart{
 		TableName: "range_element",
@@ -288,13 +302,7 @@ func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element ty
 	}, nil
 }
 
-// getRangeColumnNames returns the appropriate column names for min and max values
-// based on the XML Schema datatype of the Range element.
-func getRangeColumnNames(valueType types.DataTypeDefXSD) (minCol, maxCol string) {
-	return GetRangeColumnNames(valueType)
-}
-
-func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Record {
+func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// ValueType is always updated (required field)
@@ -307,7 +315,10 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Recor
 			// For PUT, both min and max must be provided
 			panic("Both 'Min' and 'Max' values must be provided for Range element in PUT operation")
 		}
-		typedValue := MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
+		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
+		if err != nil {
+			return nil, err
+		}
 		updateRecord["min_text"] = typedValue.MinText
 		updateRecord["max_text"] = typedValue.MaxText
 		updateRecord["min_num"] = typedValue.MinNumeric
@@ -328,7 +339,10 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Recor
 		if rangeElem.Max() != nil {
 			maxVal = *rangeElem.Max()
 		}
-		typedValue := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+		if err != nil {
+			return nil, err
+		}
 		if minVal != "" {
 			updateRecord["min_text"] = typedValue.MinText
 			updateRecord["min_num"] = typedValue.MinNumeric
@@ -345,5 +359,5 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Recor
 		}
 
 	}
-	return updateRecord
+	return updateRecord, nil
 }
