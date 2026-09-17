@@ -334,7 +334,7 @@ func TestLogConfigurationExcludesSecrets(t *testing.T) {
 
 	LogConfiguration(cfg, "/config/service.yaml")
 
-	for _, expected := range []string{`"msg":"configuration loaded"`, `"service.name":"testservice"`, `"verification_mode":"permissive"`} {
+	for _, expected := range []string{`"msg":"configuration loaded"`, `"service.name":"testservice"`, `"documentation.url":"https://wiki.basyx.org"`, `"verification_mode":"permissive"`} {
 		if !strings.Contains(output.String(), expected) {
 			t.Fatalf("configuration record does not contain %q: %s", expected, output.String())
 		}
@@ -425,6 +425,9 @@ func TestConfigureLoggingShowsSplashOnlyInTextMode(t *testing.T) {
 			}
 			if !strings.Contains(output.String(), "configuration loaded") {
 				t.Fatalf("configuration event missing from %q", output.String())
+			}
+			if !strings.Contains(output.String(), DocumentationURL) {
+				t.Fatalf("documentation URL missing from %q", output.String())
 			}
 		})
 	}

@@ -202,6 +202,9 @@ var DefaultConfig = struct {
 }
 
 const (
+	// DocumentationURL is the public BaSyx documentation entry point.
+	DocumentationURL = "https://wiki.basyx.org"
+
 	// ABACPolicyFileImportAlways imports abac.modelPath on every service start.
 	ABACPolicyFileImportAlways = "always"
 	// ABACPolicyFileImportIfMissing imports abac.modelPath only when no active DB policy exists.
@@ -1393,6 +1396,7 @@ func LogConfiguration(cfg *Config, configPath string) {
 	slog.Info(
 		"configuration loaded",
 		"configuration.source", source,
+		"documentation.url", DocumentationURL,
 		"logging.format", cfg.Logging.Format,
 		"logging.level", cfg.Logging.Level,
 		slog.Group(
