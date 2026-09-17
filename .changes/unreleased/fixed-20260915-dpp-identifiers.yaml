@@ -1,0 +1,7 @@
+kind: fixed
+body: Require ID-based DPP lookup to match both the owning AAS identifier and its DppMetadata.digitalProductPassportId; a requested ID returns 404 when either stored value differs. Historical lookup applies the same check, while product-based retrieval remains available through uniqueProductIdentifier. Generate a bounded, valid DPP AAS idShort independently of potentially long or punctuated identifiers while preserving the exact identifier as the AAS ID.
+time: 2026-09-15T12:00:00+02:00
+custom:
+    Impact: High
+    PullRequest: 691
+    SecurityImpact: Preserves request authorization and applies metadata value visibility before returning product-search DPP IDs or pagination cursors; mismatched AAS and metadata IDs return 404 for ID-based requests. The generated idShort is non-authoritative display metadata; authorization and lookup continue to use the exact AAS/DPP identifier.

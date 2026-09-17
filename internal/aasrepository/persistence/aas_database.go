@@ -366,6 +366,29 @@ func shouldEnforceFormula(ctx context.Context, step string) (bool, error) {
 	return shouldEnforce, nil
 }
 
+func (s *AssetAdministrationShellDatabase) addAASAuthorizationFormula(
+	ctx context.Context,
+	selectDS *goqu.SelectDataset,
+	operation string,
+) (*goqu.SelectDataset, error) {
+	collector, err := buildAASCollector(ctx)
+	if err != nil {
+		return nil, err
+	}
+	shouldEnforce, err := shouldEnforceFormula(ctx, operation+"-SHOULDENFORCE")
+	if err != nil {
+		return nil, err
+	}
+	if !shouldEnforce {
+		return selectDS, nil
+	}
+	selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+	if err != nil {
+		return nil, common.NewInternalServerError(operation + "-ABACFORMULA " + err.Error())
+	}
+	return selectDS, nil
+}
+
 func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (bool, bool, error) {
 	_, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
@@ -1068,6 +1091,108 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 	return identifiers, nextCursor, nil
 }
 
+// GetDPPIDsByAssetAndMetadataSemanticIDs returns DPP metadata identifiers for matching assets.
+func (s *AssetAdministrationShellDatabase) GetDPPIDsByAssetAndMetadataSemanticIDs(
+	ctx context.Context,
+	globalAssetIDs []string,
+	metadataSemanticIDs []string,
+	limit int32,
+	cursor string,
+) ([]string, string, error) {
+	if limit < 0 {
+		return nil, "", common.NewErrBadRequest("AASREPO-GETDPPIDSBYASSETANDMETADATA-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+	}
+	if len(globalAssetIDs) == 0 || len(metadataSemanticIDs) == 0 {
+		return []string{}, "", nil
+	}
+	dialect := goqu.Dialect("postgres")
+	selectDS, err := buildGetDPPIDsByAssetAndMetadataSemanticIDsDataset(&dialect, globalAssetIDs, metadataSemanticIDs, limit, cursor)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-BUILDSQL " + err.Error())
+	}
+	selectDS, err = s.addDPPIDLookupAuthorization(ctx, selectDS, "AASREPO-GETDPPIDSBYASSETANDMETADATA")
+	if err != nil {
+		return nil, "", err
+	}
+	query, args, err := selectDS.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-BUILDSQL " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-EXECSQL " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	identifiers := make([]string, 0, limit+1)
+	for rows.Next() {
+		var identifier string
+		if err = rows.Scan(&identifier); err != nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-SCANROW " + err.Error())
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-ITERROWS " + err.Error())
+	}
+	nextCursor := ""
+	if limit > 0 && len(identifiers) > int(limit) {
+		identifiers = identifiers[:limit]
+		nextCursor = identifiers[len(identifiers)-1]
+	}
+	return identifiers, nextCursor, nil
+}
+
+// DPPAssetIdentifiers identifies a DPP and its owning AAS.
+type DPPAssetIdentifiers struct {
+	AASID string
+	DPPID string
+}
+
+// GetDPPAssetIdentifiersByAssetAndMetadataSemanticIDs returns visible DPP and owner identifiers for matching assets.
+func (s *AssetAdministrationShellDatabase) GetDPPAssetIdentifiersByAssetAndMetadataSemanticIDs(
+	ctx context.Context,
+	globalAssetIDs []string,
+	metadataSemanticIDs []string,
+	limit int32,
+) ([]DPPAssetIdentifiers, error) {
+	if limit < 0 {
+		return nil, common.NewErrBadRequest("AASREPO-GETDPPASSETIDS-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+	}
+	if len(globalAssetIDs) == 0 || len(metadataSemanticIDs) == 0 {
+		return []DPPAssetIdentifiers{}, nil
+	}
+	dialect := goqu.Dialect("postgres")
+	selectDS, err := buildGetDPPAssetIdentifiersDataset(&dialect, globalAssetIDs, metadataSemanticIDs, limit)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-BUILDSQL " + err.Error())
+	}
+	selectDS, err = s.addDPPIDLookupAuthorization(ctx, selectDS, "AASREPO-GETDPPASSETIDS")
+	if err != nil {
+		return nil, err
+	}
+	query, args, err := selectDS.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-BUILDSQL " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-EXECSQL " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	identifiers := make([]DPPAssetIdentifiers, 0, limit+1)
+	for rows.Next() {
+		var identifier DPPAssetIdentifiers
+		if err = rows.Scan(&identifier.AASID, &identifier.DPPID); err != nil {
+			return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-SCANROW " + err.Error())
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-ITERROWS " + err.Error())
+	}
+	return identifiers, nil
+}
+
 // GetAssetAdministrationShellByID returns an AAS by identifier.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(ctx context.Context, aasIdentifier string) (types.IAssetAdministrationShell, error) {
 	var result types.IAssetAdministrationShell
@@ -1114,6 +1239,21 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellByIDInTran
 	}
 
 	return s.getAssetAdministrationShellMapByDBIDInTransaction(ctx, tx, aasDBID)
+}
+
+// GetAssetAdministrationShellByIDForUpdateInTransaction locks and returns an AAS using an existing transaction.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDForUpdateInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+) (types.IAssetAdministrationShell, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("AASREPO-GETAASBYIDFORUPDATE-NILTX transaction must not be nil")
+	}
+	if _, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-GETAASBYIDFORUPDATE"); err != nil {
+		return nil, err
+	}
+	return s.getAssetAdministrationShellByIDInTransaction(ctx, tx, aasIdentifier)
 }
 
 // PutAssetAdministrationShellByID upserts an AAS and performs ABAC write checks when enabled.

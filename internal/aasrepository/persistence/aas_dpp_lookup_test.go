@@ -28,10 +28,14 @@ package persistence
 import (
 	"errors"
 	"regexp"
+	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,6 +51,140 @@ func TestAASRepositoryReadPoolSelection(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, reader, backend.readDB(t.Context()))
 	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
+}
+
+func TestGetDPPIDsByAssetAndMetadataSemanticIDsDatasetUsesDPPIDCursor(t *testing.T) {
+	dialect := goqu.Dialect("postgres")
+	query, err := buildGetDPPIDsByAssetAndMetadataSemanticIDsDataset(
+		&dialect,
+		[]string{"product-1"},
+		[]string{"urn:samm:io.admin-shell.idta.dpp_meta:1.0.0#DppMetadata"},
+		10,
+		"https://example.org/dpps/41",
+	)
+	require.NoError(t, err)
+	sqlQuery, sqlArgs, err := query.Prepared(true).ToSQL()
+
+	require.NoError(t, err)
+	require.Len(t, sqlArgs, 6)
+	require.Contains(t, sqlQuery, `SELECT DISTINCT "metadata_property"."value_text"`)
+	require.Contains(t, sqlQuery, `"metadata_property"."value_text" > $5`)
+	require.Contains(t, sqlQuery, `ORDER BY "metadata_property"."value_text" ASC`)
+	require.True(t, strings.HasSuffix(sqlQuery, "LIMIT $6"))
+}
+
+func TestGetDPPAssetIdentifiersDatasetSelectsOwningAASAndVisibleDPPID(t *testing.T) {
+	dialect := goqu.Dialect("postgres")
+	dataset, err := buildGetDPPAssetIdentifiersDataset(
+		&dialect,
+		[]string{"product-1"},
+		[]string{"urn:samm:io.admin-shell.idta.dpp_meta:1.0.0#DppMetadata"},
+		1,
+	)
+	require.NoError(t, err)
+	query, args, err := dataset.Prepared(true).ToSQL()
+
+	require.NoError(t, err)
+	require.Len(t, args, 5)
+	require.Contains(t, query, `SELECT DISTINCT "aas"."aas_id", "metadata_property"."value_text"`)
+	require.Contains(t, query, `"metadata_semantic_id_key"."value" = ANY`)
+	require.Contains(t, query, `"asset_information"."global_asset_id" = ANY`)
+	require.Contains(t, query, `"metadata_property"."value_text" IS NOT NULL`)
+	require.Contains(t, query, `"metadata_property"."value_text" != $`)
+	require.Contains(t, query, `"submodel_reference_key"."position" IN (SELECT MAX("terminal_submodel_reference_key"."position")`)
+	require.Contains(t, query, `"metadata_semantic_id_key"."position" IN (SELECT MAX("terminal_metadata_semantic_id_key"."position")`)
+	require.Contains(t, query, `ORDER BY "aas"."aas_id" ASC, "metadata_property"."value_text" ASC`)
+	require.True(t, strings.HasSuffix(query, "LIMIT $5"))
+	require.Equal(t, int64(2), args[4])
+}
+
+func TestDPPIDLookupAuthorizationFiltersMaskedValueBeforePagination(t *testing.T) {
+	t.Parallel()
+
+	deny := false
+	sqlQuery, sqlArgs := buildAuthorizedDPPIDLookupSQL(
+		t,
+		"$sme.digitalProductPassportId#value",
+		grammar.LogicalExpression{Boolean: &deny},
+	)
+
+	require.Contains(t, sqlQuery, `"metadata_element"."idshort_path"`)
+	require.Contains(t, sqlArgs, false)
+	require.Less(t, strings.Index(sqlQuery, "WHERE"), strings.Index(sqlQuery, "ORDER BY"))
+	require.Less(t, strings.Index(sqlQuery, "WHERE"), strings.Index(sqlQuery, "LIMIT"))
+}
+
+func TestDPPIDLookupAuthorizationHonorsRootValueMask(t *testing.T) {
+	t.Parallel()
+
+	deny := false
+	_, sqlArgs := buildAuthorizedDPPIDLookupSQL(t, "$sme#value", grammar.LogicalExpression{Boolean: &deny})
+
+	require.Contains(t, sqlArgs, false)
+}
+
+func TestDPPIDLookupAuthorizationCorrelatesPathMaskToMetadataRow(t *testing.T) {
+	t.Parallel()
+
+	field := grammar.ModelStringPattern("$sme.digitalProductPassportId#value")
+	hiddenID := grammar.StandardString("https://www.example.org/dpp/security-search-b")
+	condition := grammar.LogicalExpression{Ne: grammar.ComparisonItems{
+		{Field: &field},
+		{StrVal: &hiddenID},
+	}}
+	sqlQuery, sqlArgs := buildAuthorizedDPPIDLookupSQL(t, grammar.FragmentStringPattern(field), condition)
+
+	require.Contains(t, sqlQuery, `"submodel_element"."submodel_id" = "metadata_element"."submodel_id"`)
+	require.Contains(t, sqlQuery, `"submodel_element"."idshort_path"`)
+	require.Contains(t, sqlQuery, "property_element.value_text")
+	require.Contains(t, sqlArgs, string(hiddenID))
+}
+
+func TestDPPIDVisibilityFilterContextCombinesStructuralAndIDShortMasks(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	deny := false
+	ctx := auth.WithQueryFilter(t.Context(), &auth.QueryFilter{Filters: auth.FragmentFilters{
+		"$sme.digitalProductPassportId":         auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
+		"$sme.digitalProductPassportId#idShort": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
+	}})
+
+	queryFilter := auth.GetQueryFilter(dppIDVisibilityFilterContext(ctx))
+	entries := queryFilter.FilterPredicateEntriesFor("$sme.digitalProductPassportId#idShort")
+	require.Len(t, entries, 1)
+	require.Len(t, entries[0].Predicate.And, 2)
+}
+
+func buildAuthorizedDPPIDLookupSQL(
+	t *testing.T,
+	fragment grammar.FragmentStringPattern,
+	condition grammar.LogicalExpression,
+) (string, []any) {
+	t.Helper()
+
+	ctx := auth.WithQueryFilter(contextWithConfig(), &auth.QueryFilter{Filters: auth.FragmentFilters{
+		fragment: auth.NewFragmentFilterPredicate(condition, false),
+	}})
+	dialect := goqu.Dialect("postgres")
+	dataset, err := buildGetDPPIDsByAssetAndMetadataSemanticIDsDataset(
+		&dialect,
+		[]string{"product-1"},
+		[]string{"urn:samm:io.admin-shell.idta.dpp_meta:1.0.0#DppMetadata"},
+		1,
+		"",
+	)
+	require.NoError(t, err)
+
+	dataset, err = (&AssetAdministrationShellDatabase{}).addDPPIDLookupAuthorization(
+		ctx,
+		dataset,
+		"AASREPO-GETDPPIDSBYASSETANDMETADATA",
+	)
+	require.NoError(t, err)
+	sqlQuery, sqlArgs, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+	return sqlQuery, sqlArgs
 }
 
 func TestSubmodelReferenceCheckSelectsPoolFromContext(t *testing.T) {

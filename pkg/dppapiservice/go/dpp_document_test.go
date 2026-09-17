@@ -332,6 +332,151 @@ func TestFullContentMapsAASElementsToDPPDataElements(t *testing.T) {
 	assertMapValue(t, nested[1], "language", "en-GB")
 }
 
+func TestEntityContentPreservesIdentityStatementsAndManagedAttachments(t *testing.T) {
+	entity := types.NewEntity()
+	entityIDShort := "component"
+	entityType := types.EntityTypeSelfManagedEntity
+	entity.SetIDShort(&entityIDShort)
+	entity.SetEntityType(&entityType)
+	specificAssetID := types.NewSpecificAssetID("serialNumber", "SN-42")
+	specificAssetID.SetExternalSubjectID(types.NewReference(
+		types.ReferenceTypesExternalReference,
+		[]types.IKey{types.NewKey(types.KeyTypesGlobalReference, "urn:example:subject:manufacturer")},
+	))
+	entity.SetSpecificAssetIDs([]types.ISpecificAssetID{specificAssetID})
+
+	statement := stringProperty("entityType", "statement value")
+	manual := types.NewFile()
+	manualIDShort := "manual"
+	managedPath := "/aasx/files/token/entity-manual.pdf"
+	contentType := "application/pdf"
+	manual.SetIDShort(&manualIDShort)
+	manual.SetValue(&managedPath)
+	manual.SetContentType(&contentType)
+	name := types.NewMultiLanguageProperty()
+	nameIDShort := "name"
+	name.SetIDShort(&nameIDShort)
+	name.SetValue([]types.ILangStringTextType{types.NewLangStringTextType("en", "Component")})
+	entity.SetStatements([]types.ISubmodelElement{statement, name, manual})
+	globalEntity := types.NewEntity()
+	globalEntityIDShort := "globalComponent"
+	globalAssetID := "urn:example:asset:component"
+	globalEntity.SetIDShort(&globalEntityIDShort)
+	globalEntity.SetEntityType(&entityType)
+	globalEntity.SetGlobalAssetID(&globalAssetID)
+
+	submodel := types.NewSubmodel("submodel/entity")
+	submodel.SetSubmodelElements([]types.ISubmodelElement{entity, globalEntity})
+	serializationContext := dppSerializationContext{
+		submodelID:             submodel.ID(),
+		externalBaseURL:        "https://aas.example.test/base",
+		managedAttachmentPaths: map[string]struct{}{"component.manual": {}},
+	}
+	wantAttachmentURL := "https://aas.example.test/base/submodels/c3VibW9kZWwvZW50aXR5/submodel-elements/component.manual/attachment"
+
+	compressed, err := compressedContentWithContext(submodel, serializationContext)
+	if err != nil {
+		t.Fatalf("compressedContentWithContext() error = %v", err)
+	}
+	compressedEntity := compressed.(map[string]any)["component"].(map[string]any)
+	assertMapValue(t, compressedEntity, "entityType", "SelfManagedEntity")
+	compressedSpecificAssetID := compressedEntity["specificAssetIds"].([]any)[0].(map[string]any)
+	assertMapValue(t, compressedSpecificAssetID, "name", "serialNumber")
+	assertMapValue(t, compressedSpecificAssetID, "value", "SN-42")
+	compressedExternalSubjectID := compressedSpecificAssetID["externalSubjectId"].(map[string]any)
+	assertMapValue(t, compressedExternalSubjectID, "type", "ExternalReference")
+	compressedKey := compressedExternalSubjectID["keys"].([]any)[0].(map[string]any)
+	assertMapValue(t, compressedKey, "type", "GlobalReference")
+	assertMapValue(t, compressedKey, "value", "urn:example:subject:manufacturer")
+	compressedGlobalEntity := compressed.(map[string]any)["globalComponent"].(map[string]any)
+	assertMapValue(t, compressedGlobalEntity, "globalAssetId", globalAssetID)
+	compressedStatements := compressedEntity["statements"].(map[string]any)
+	assertMapValue(t, compressedStatements, "entityType", "statement value")
+	compressedName := compressedStatements["name"].([]any)[0].(map[string]any)
+	assertMapValue(t, compressedName, "language", "en")
+	assertMapValue(t, compressedName, "value", "Component")
+	assertMapValue(t, compressedStatements["manual"].(map[string]any), "url", wantAttachmentURL)
+
+	full, err := fullContentWithContext(submodel, serializationContext)
+	if err != nil {
+		t.Fatalf("fullContentWithContext() error = %v", err)
+	}
+	root := full.(map[string]any)
+	entityElement := dppElementByID(t, root["elements"].([]map[string]any), "component")
+	assertMapValue(t, entityElement, "objectType", "DataElementCollection")
+	entityElements := entityElement["elements"].([]map[string]any)
+	assertMapValue(t, dppElementByID(t, entityElements, "entityType"), "value", "SelfManagedEntity")
+
+	specificAssetIDs := dppElementByID(t, entityElements, "specificAssetIds")
+	assertMapValue(t, specificAssetIDs, "objectType", "MultiValuedDataElement")
+	specificAsset := dppElementByID(t, specificAssetIDs["elements"].([]map[string]any), "specificAssetId0")
+	specificAssetElements := specificAsset["elements"].([]map[string]any)
+	assertMapValue(t, dppElementByID(t, specificAssetElements, "name"), "value", "serialNumber")
+	assertMapValue(t, dppElementByID(t, specificAssetElements, "value"), "value", "SN-42")
+	externalSubjectID := dppElementByID(t, specificAssetElements, "externalSubjectId")
+	externalSubjectElements := externalSubjectID["elements"].([]map[string]any)
+	assertMapValue(t, dppElementByID(t, externalSubjectElements, "type"), "value", "ExternalReference")
+	keys := dppElementByID(t, externalSubjectElements, "keys")
+	key := dppElementByID(t, keys["elements"].([]map[string]any), "key0")
+	keyElements := key["elements"].([]map[string]any)
+	assertMapValue(t, dppElementByID(t, keyElements, "type"), "value", "GlobalReference")
+	assertMapValue(t, dppElementByID(t, keyElements, "value"), "value", "urn:example:subject:manufacturer")
+
+	statements := dppElementByID(t, entityElements, "statements")
+	assertMapValue(t, statements, "objectType", "DataElementCollection")
+	statementElements := statements["elements"].([]map[string]any)
+	assertMapValue(t, dppElementByID(t, statementElements, "entityType"), "value", "statement value")
+	fullName := dppElementByID(t, statementElements, "name")
+	assertMapValue(t, fullName, "objectType", "MultiLanguageDataElement")
+	nameValue := fullName["value"].([]map[string]any)[0]
+	assertMapValue(t, nameValue, "language", "en")
+	assertMapValue(t, nameValue, "value", "Component")
+	assertMapValue(t, dppElementByID(t, statementElements, "manual"), "url", wantAttachmentURL)
+	globalEntityElement := dppElementByID(t, root["elements"].([]map[string]any), "globalComponent")
+	assertMapValue(t, dppElementByID(t, globalEntityElement["elements"].([]map[string]any), "globalAssetId"), "value", globalAssetID)
+}
+
+func TestCoManagedEntityWithoutAssetIdentityMapsToCollection(t *testing.T) {
+	entity := types.NewEntity()
+	idShort := "component"
+	entityType := types.EntityTypeCoManagedEntity
+	entity.SetIDShort(&idShort)
+	entity.SetEntityType(&entityType)
+
+	mapped, err := dppElementFromAASWithContext(entity, idShort, dppSerializationContext{})
+	if err != nil {
+		t.Fatalf("dppElementFromAASWithContext() error = %v", err)
+	}
+	assertMapValue(t, mapped, "objectType", "DataElementCollection")
+	elements := mapped["elements"].([]map[string]any)
+	if len(elements) != 1 {
+		t.Fatalf("Entity elements = %#v, want only entityType", elements)
+	}
+	assertMapValue(t, elements[0], "elementId", "entityType")
+	assertMapValue(t, elements[0], "value", "CoManagedEntity")
+}
+
+func TestUnsupportedFullElementReturnsUnprocessableEntity(t *testing.T) {
+	reference := types.NewReferenceElement()
+	idShort := "unsupportedReference"
+	reference.SetIDShort(&idShort)
+	submodel := types.NewSubmodel("unsupported")
+	submodel.SetSubmodelElements([]types.ISubmodelElement{reference})
+
+	_, err := fullContent(submodel)
+	if err == nil {
+		t.Fatal("fullContent() error = nil, want unsupported element error")
+	}
+	response := mapPersistenceError(err, http.StatusNotFound)
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("mapPersistenceError() status = %d, want %d", response.Code, http.StatusUnprocessableEntity)
+	}
+	result := response.Body.(Result)
+	if result.Messages[0].Code != "DPP-ELEM-FULL-UNSUPPORTED" {
+		t.Fatalf("mapPersistenceError() code = %q, want DPP-ELEM-FULL-UNSUPPORTED", result.Messages[0].Code)
+	}
+}
+
 func TestCompressedContentEnrichesRelatedResourceMetadata(t *testing.T) {
 	manual := types.NewFile()
 	manualIDShort := "manual"
@@ -490,4 +635,15 @@ func assertMapMissing(t *testing.T, value map[string]any, key string) {
 	if _, ok := value[key]; ok {
 		t.Fatalf("%s unexpectedly present in %#v", key, value)
 	}
+}
+
+func dppElementByID(t *testing.T, elements []map[string]any, elementID string) map[string]any {
+	t.Helper()
+	for _, element := range elements {
+		if element["elementId"] == elementID {
+			return element
+		}
+	}
+	t.Fatalf("element %q not found in %#v", elementID, elements)
+	return nil
 }

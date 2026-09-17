@@ -34,7 +34,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -720,106 +722,128 @@ func deleteManagedFileReference(tx *sql.Tx, elementID int64) error {
 //   - string: The content type
 //   - error: Error if the download operation fails
 func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShortPath string) ([]byte, string, string, error) {
-	dialect := goqu.Dialect("postgres")
-
-	// Get the submodel element ID and content type
-	var submodelElementID int64
-	var contentType string
-	var fileName string
 	tx, err := p.db.Begin()
 	if err != nil {
-		return nil, "", "", fmt.Errorf("failed to begin transaction: %w", err)
+		return nil, "", "", common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-STARTTX " + err.Error())
 	}
+	committed := false
 	defer func() {
-		if err != nil {
+		if !committed {
 			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
 		}
 	}()
 
+	metadata, err := readLegacyDownloadFileMetadata(tx, submodelID, idShortPath)
+	if err != nil {
+		return nil, "", "", err
+	}
+	fileContent, err := readLegacyLargeObjectContent(tx, metadata.oid)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, "", "", common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-COMMIT " + err.Error())
+	}
+	committed = true
+	return fileContent, metadata.contentType, resolveDownloadFileName(metadata.fileName, metadata.fileValue, idShortPath), nil
+}
+
+type legacyDownloadFileMetadata struct {
+	contentType string
+	fileName    sql.NullString
+	fileValue   sql.NullString
+	oid         int64
+}
+
+func readLegacyDownloadFileMetadata(tx *sql.Tx, submodelID string, idShortPath string) (legacyDownloadFileMetadata, error) {
+	dialect := goqu.Dialect("postgres")
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, "", "", common.NewErrNotFound("submodel not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			return legacyDownloadFileMetadata{}, common.NewErrNotFound("SMREPO-DOWNLOADATTACHMENT-NOTFOUND submodel not found")
 		}
-		return nil, "", "", fmt.Errorf("failed to get submodel database ID: %w", err)
+		return legacyDownloadFileMetadata{}, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-SUBMODEL " + err.Error())
 	}
+	metadata, err := readLegacyFileElementMetadata(tx, dialect, int64(submodelDatabaseID), idShortPath)
+	if err != nil {
+		return legacyDownloadFileMetadata{}, err
+	}
+	oid, err := readLegacyFileOIDWithoutContext(tx, dialect, metadata.elementID)
+	if err != nil {
+		return legacyDownloadFileMetadata{}, err
+	}
+	return legacyDownloadFileMetadata{
+		contentType: metadata.contentType, fileName: metadata.fileName, fileValue: metadata.fileValue, oid: oid,
+	}, nil
+}
 
+type legacyFileElementMetadata struct {
+	elementID   int64
+	contentType string
+	fileName    sql.NullString
+	fileValue   sql.NullString
+}
+
+func readLegacyFileElementMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseID int64, idShortPath string) (legacyFileElementMetadata, error) {
 	query, args, err := dialect.From("submodel_element").
-		InnerJoin(
-			goqu.T("file_element"),
-			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id"))),
-		).
-		Select("submodel_element.id", "file_element.content_type", "file_element.file_name").
-		Where(
-			goqu.C("submodel_id").Eq(submodelDatabaseID),
-			goqu.C("idshort_path").Eq(idShortPath),
-		).
-		ToSQL()
+		InnerJoin(goqu.T("file_element"), goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id")))).
+		Select("submodel_element.id", "file_element.content_type", "file_element.file_name", "file_element.value").
+		Where(goqu.C("submodel_id").Eq(submodelDatabaseID), goqu.C("idshort_path").Eq(idShortPath)).ToSQL()
 	if err != nil {
-		return nil, "", "", fmt.Errorf("failed to build query: %w", err)
+		return legacyFileElementMetadata{}, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDELEMENT " + err.Error())
 	}
-
-	err = tx.QueryRow(query, args...).Scan(&submodelElementID, &contentType, &fileName)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, "", "", common.NewErrNotFound("file element not found")
+	var metadata legacyFileElementMetadata
+	if err = tx.QueryRow(query, args...).Scan(&metadata.elementID, &metadata.contentType, &metadata.fileName, &metadata.fileValue); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return legacyFileElementMetadata{}, common.NewErrNotFound("SMREPO-DOWNLOADATTACHMENT-NOTFOUND file element not found")
 		}
-		return nil, "", "", fmt.Errorf("failed to get file element: %w", err)
+		return legacyFileElementMetadata{}, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-ELEMENT " + err.Error())
 	}
+	return metadata, nil
+}
 
-	// Get the file OID from file_data
-	var fileOID sql.NullInt64
-	fileDataQuery, fileDataArgs, err := dialect.From("file_data").
-		Select("file_oid").
-		Where(goqu.C("id").Eq(submodelElementID)).
-		ToSQL()
+func readLegacyLargeObjectContent(tx *sql.Tx, oid int64) ([]byte, error) {
+	dialect := goqu.Dialect("postgres")
+	openQuery, openArgs, err := dialect.Select(goqu.Func("lo_open", goqu.V(oid), goqu.V(0x00040000))).ToSQL()
 	if err != nil {
-		return nil, "", "", fmt.Errorf("failed to build file_data query: %w", err)
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDOPENLO " + err.Error())
 	}
-
-	err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&fileOID)
+	var descriptor int
+	if err = tx.QueryRow(openQuery, openArgs...).Scan(&descriptor); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-OPENLO " + err.Error())
+	}
+	readQuery, readArgs, err := dialect.Select(goqu.Func("loread", goqu.V(descriptor), goqu.V(8192))).ToSQL()
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, "", "", common.NewErrNotFound("file data not found")
-		}
-		return nil, "", "", fmt.Errorf("failed to get file OID: %w", err)
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDREADLO " + err.Error())
 	}
-
-	if !fileOID.Valid {
-		return nil, "", "", common.NewErrNotFound("file OID is null")
-	}
-
-	// Open the Large Object for reading (0x00040000 = INV_READ mode)
-	var loFD int
-	err = tx.QueryRow(`SELECT lo_open($1, $2)`, fileOID.Int64, 0x00040000).Scan(&loFD)
+	closeQuery, closeArgs, err := dialect.Select(goqu.Func("lo_close", goqu.V(descriptor))).ToSQL()
 	if err != nil {
-		return nil, "", "", fmt.Errorf("failed to open large object: %w", err)
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDCLOSELO " + err.Error())
 	}
-
-	// Read the Large Object content in chunks
 	var fileContent []byte
 	for {
 		var bytesRead []byte
-		err = tx.QueryRow(`SELECT loread($1, $2)`, loFD, 8192).Scan(&bytesRead)
-		if err != nil {
-			_, _ = tx.Exec(`SELECT lo_close($1)`, loFD)
-			return nil, "", "", fmt.Errorf("failed to read large object: %w", err)
+		if err := tx.QueryRow(readQuery, readArgs...).Scan(&bytesRead); err != nil {
+			_, _ = tx.Exec(closeQuery, closeArgs...)
+			return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-READLO " + err.Error())
 		}
 		if len(bytesRead) == 0 {
 			break
 		}
 		fileContent = append(fileContent, bytesRead...)
 	}
-
-	// Close the Large Object
-	_, err = tx.Exec(`SELECT lo_close($1)`, loFD)
-	if err != nil {
-		return nil, "", "", fmt.Errorf("failed to close large object: %w", err)
+	if _, err := tx.Exec(closeQuery, closeArgs...); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-CLOSELO " + err.Error())
 	}
+	return fileContent, nil
+}
 
-	return fileContent, contentType, fileName, nil
+func readLegacyFileOIDWithoutContext(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64) (int64, error) {
+	query, args, err := dialect.From("file_data").Select("file_oid").Where(goqu.C("id").Eq(elementID)).ToSQL()
+	if err != nil {
+		return 0, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDLEGACY " + err.Error())
+	}
+	return scanLegacyFileOID(tx.QueryRow(query, args...))
 }
 
 // DownloadManagedFileAttachment reads canonical content through its owning File SME.
@@ -961,19 +985,65 @@ func readDownloadFileMetadata(ctx context.Context, tx *sql.Tx, submodelID string
 	query, args, err := dialect.From(goqu.T("submodel").As("sm")).
 		Join(goqu.T("submodel_element").As("sme"), goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
 		Join(goqu.T("file_element").As("fe"), goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
-		Select(goqu.I("sme.id"), goqu.I("fe.content_type"), goqu.I("fe.file_name")).
+		LeftJoin(goqu.T(binarycontent.TableFileReference).As("fbr"), goqu.On(goqu.I("fbr.file_element_id").Eq(goqu.I("fe.id")))).
+		Select(
+			goqu.I("sme.id"),
+			goqu.I("fe.content_type"),
+			goqu.COALESCE(goqu.Func("NULLIF", goqu.I("fe.file_name"), goqu.V("")), goqu.I("fbr.safe_file_name")),
+			goqu.I("fe.value"),
+		).
 		Where(goqu.I("sm.submodel_identifier").Eq(submodelID), goqu.I("sme.idshort_path").Eq(idShortPath)).ToSQL()
 	if err != nil {
 		return downloadFileMetadata{}, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDMETADATA " + err.Error())
 	}
 	var metadata downloadFileMetadata
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&metadata.elementID, &metadata.contentType, &metadata.fileName); err != nil {
+	var fileName sql.NullString
+	var fileValue sql.NullString
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&metadata.elementID, &metadata.contentType, &fileName, &fileValue); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return downloadFileMetadata{}, common.NewErrNotFound("SMREPO-DOWNLOADATTACHMENT-NOTFOUND File SME not found")
 		}
 		return downloadFileMetadata{}, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-METADATA " + err.Error())
 	}
+	metadata.fileName = resolveDownloadFileName(fileName, fileValue, idShortPath)
 	return metadata, nil
+}
+
+func resolveDownloadFileName(fileName sql.NullString, fileValue sql.NullString, idShortPath string) string {
+	if fileName.Valid {
+		if safeFileName := normalizeDownloadFileName(fileName.String); safeFileName != "" {
+			return safeFileName
+		}
+	}
+	if fileValue.Valid {
+		if safeFileName := fileNameFromFileValue(fileValue.String); safeFileName != "" {
+			return safeFileName
+		}
+	}
+	pathSegments := strings.Split(strings.TrimSpace(idShortPath), ".")
+	for index := len(pathSegments) - 1; index >= 0; index-- {
+		if safeFileName := normalizeDownloadFileName(pathSegments[index]); safeFileName != "" {
+			return safeFileName
+		}
+	}
+	return "attachment"
+}
+
+func fileNameFromFileValue(fileValue string) string {
+	parsed, err := url.Parse(strings.TrimSpace(fileValue))
+	if err != nil {
+		return ""
+	}
+	return normalizeDownloadFileName(path.Base(parsed.Path))
+}
+
+func normalizeDownloadFileName(fileName string) string {
+	fileName = path.Base(strings.ReplaceAll(strings.TrimSpace(fileName), "\\", "/"))
+	safeFileName, err := binarycontent.SafeFileName(fileName)
+	if err != nil {
+		return ""
+	}
+	return safeFileName
 }
 
 func readLegacyFileContent(ctx context.Context, tx *sql.Tx, elementID int64) ([]byte, error) {
@@ -990,14 +1060,21 @@ func readLegacyFileOID(ctx context.Context, tx *sql.Tx, elementID int64) (int64,
 	if err != nil {
 		return 0, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDLEGACY " + err.Error())
 	}
-	var oid int64
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&oid); err != nil {
+	return scanLegacyFileOID(tx.QueryRowContext(ctx, query, args...))
+}
+
+func scanLegacyFileOID(row *sql.Row) (int64, error) {
+	var oid sql.NullInt64
+	if err := row.Scan(&oid); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, common.NewErrNotFound("SMREPO-DOWNLOADATTACHMENT-NODATA attachment content not found")
 		}
 		return 0, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-LEGACY " + err.Error())
 	}
-	return oid, nil
+	if !oid.Valid {
+		return 0, common.NewErrNotFound("SMREPO-DOWNLOADATTACHMENT-NODATA attachment content not found")
+	}
+	return oid.Int64, nil
 }
 
 // DeleteFileAttachment deletes a file from PostgreSQL's Large Object system.

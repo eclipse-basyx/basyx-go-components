@@ -271,7 +271,7 @@ func TestResolveDPPElementPathRejectsNonSingularJSONPath(t *testing.T) {
 	}
 }
 
-func TestComposeResolvedDPPIncludesAllContentWhenContentSpecificationIDsEmpty(t *testing.T) {
+func TestComposeResolvedDPPExcludesAllContentWhenContentSpecificationIDsEmpty(t *testing.T) {
 	resolved := filteringResolvedDPP()
 	resolved.metadata.SetSubmodelElements(replaceSubmodelElement(
 		resolved.metadata.SubmodelElements(),
@@ -279,63 +279,50 @@ func TestComposeResolvedDPPIncludesAllContentWhenContentSpecificationIDsEmpty(t 
 		emptyStringList(headerContentSpecificationIDs),
 	))
 
-	doc, err := composeResolvedDPP(resolved, REPRESENTATION_COMPRESSED)
-	if err != nil {
-		t.Fatalf("composeResolvedDPP() error = %v", err)
+	for _, representation := range []Representation{REPRESENTATION_COMPRESSED, REPRESENTATION_FULL} {
+		doc, err := composeResolvedDPP(resolved, representation)
+		if err != nil {
+			t.Fatalf("composeResolvedDPP(%s) error = %v", representation, err)
+		}
+		assertDPPHasNoContent(t, doc, representation)
 	}
-
-	assertDPPContentSectionExists(t, doc, "digitalNameplate")
-	assertDPPContentSectionExists(t, doc, "technicalData")
 }
 
-func TestComposeResolvedDPPIncludesAllContentWhenContentSpecificationIDsMissing(t *testing.T) {
+func TestComposeResolvedDPPExcludesAllContentWhenContentSpecificationIDsMissing(t *testing.T) {
 	resolved := filteringResolvedDPP()
 	resolved.metadata.SetSubmodelElements(withoutSubmodelElement(resolved.metadata.SubmodelElements(), headerContentSpecificationIDs))
 
-	doc, err := composeResolvedDPP(resolved, REPRESENTATION_COMPRESSED)
-	if err != nil {
-		t.Fatalf("composeResolvedDPP() error = %v", err)
-	}
-
-	assertDPPContentSectionExists(t, doc, "digitalNameplate")
-	assertDPPContentSectionExists(t, doc, "technicalData")
-}
-
-func TestStaleContentSubmodelIDsUsesOnlySelectedCurrentContent(t *testing.T) {
-	resolved := filteringResolvedDPP()
-	currentContent, err := selectedResolvedContentSubmodels(resolved)
-	if err != nil {
-		t.Fatalf("selectedResolvedContentSubmodels() error = %v", err)
-	}
-
-	stale := staleContentSubmodelIDs(currentContent, []types.ISubmodel{resolved.metadata})
-	if len(stale) != 1 {
-		t.Fatalf("stale IDs = %#v, want only selected content submodel", stale)
-	}
-	if stale[0] != contentSubmodelID(filteringDPPID, "digitalNameplate") {
-		t.Fatalf("stale[0] = %q", stale[0])
+	for _, representation := range []Representation{REPRESENTATION_COMPRESSED, REPRESENTATION_FULL} {
+		doc, err := composeResolvedDPP(resolved, representation)
+		if err != nil {
+			t.Fatalf("composeResolvedDPP(%s) error = %v", representation, err)
+		}
+		assertDPPHasNoContent(t, doc, representation)
 	}
 }
 
-func TestAppendUnselectedContentSubmodelReferencesPreservesBaseSubmodelRefs(t *testing.T) {
-	resolved := filteringResolvedDPP()
-	currentContent, err := selectedResolvedContentSubmodels(resolved)
-	if err != nil {
-		t.Fatalf("selectedResolvedContentSubmodels() error = %v", err)
+func TestResolveDPPElementPathRejectsContentWhenSelectionIsEmptyOrMissing(t *testing.T) {
+	tests := map[string]func(types.ISubmodel){
+		"empty": func(metadata types.ISubmodel) {
+			metadata.SetSubmodelElements(replaceSubmodelElement(
+				metadata.SubmodelElements(),
+				headerContentSpecificationIDs,
+				emptyStringList(headerContentSpecificationIDs),
+			))
+		},
+		"missing": func(metadata types.ISubmodel) {
+			metadata.SetSubmodelElements(withoutSubmodelElement(metadata.SubmodelElements(), headerContentSpecificationIDs))
+		},
 	}
-	refs := []types.IReference{
-		submodelReference(resolved.metadata.ID()),
-		submodelReference(contentSubmodelID(filteringDPPID, "digitalNameplate")),
-	}
-
-	refs = appendUnselectedContentSubmodelReferences(refs, resolved, currentContent)
-	refs = appendUnselectedContentSubmodelReferences(refs, resolved, currentContent)
-
-	if len(refs) != 3 {
-		t.Fatalf("refs length = %d, want metadata, selected, and one unselected ref: %#v", len(refs), refs)
-	}
-	if !referenceListContains(refs, contentSubmodelID(filteringDPPID, "technicalData")) {
-		t.Fatalf("refs do not contain unselected technicalData submodel: %#v", refs)
+	for name, changeMetadata := range tests {
+		t.Run(name, func(t *testing.T) {
+			resolved := filteringResolvedDPP()
+			changeMetadata(resolved.metadata)
+			_, _, err := resolveDPPElementPath(resolved, "$['"+filteringNameplateSemantic+"']['manufacturerName']")
+			if err == nil || !strings.Contains(err.Error(), "DPP-ELEMPATH-NOTFOUND") {
+				t.Fatalf("resolveDPPElementPath() error = %v, want DPP-ELEMPATH-NOTFOUND", err)
+			}
+		})
 	}
 }
 
@@ -374,12 +361,7 @@ func TestDPPUpdateReplacementRemainsNewestForSharedSemanticID(t *testing.T) {
 		EconomicOperatorID:       "operator-123",
 		ContentSpecificationIDs:  []string{filteringNameplateSemantic},
 	})
-	applyDPPUpdateAdministration(
-		[]types.ISubmodel{replacementMetadata, replacement},
-		resolved.metadata,
-		[]types.ISubmodel{current},
-		updatedAt,
-	)
+	replacement.SetAdministration(updatedDPPAdministration(current, updatedAt))
 
 	updated := resolvedDPP{
 		metadata:  replacementMetadata,
@@ -430,14 +412,19 @@ func setContentSubmodelUpdatedAt(submodel types.ISubmodel, updatedAt string) {
 	submodel.SetAdministration(administration)
 }
 
-func assertDPPContentSectionExists(t *testing.T, doc dppDocument, sectionName string) {
+func assertDPPHasNoContent(t *testing.T, doc dppDocument, representation Representation) {
 	t.Helper()
-	section, ok := doc[sectionName].(map[string]any)
-	if !ok {
-		t.Fatalf("%s section = %#v, want object", sectionName, doc[sectionName])
+	if representation == REPRESENTATION_FULL {
+		elements, ok := doc["elements"].([]map[string]any)
+		if !ok || len(elements) != 0 {
+			t.Fatalf("full elements = %#v, want empty array", doc["elements"])
+		}
+		return
 	}
-	if len(section) == 0 {
-		t.Fatalf("%s section is empty", sectionName)
+	for field := range doc {
+		if _, header := dppHeaderFields[field]; !header {
+			t.Fatalf("compressed DPP contains content field %s: %#v", field, doc[field])
+		}
 	}
 }
 

@@ -1,0 +1,7 @@
+kind: fixed
+body: Preserve collection field names and shapes in compressed DPP representations while converting only typed multilingual properties and files.
+time: 2026-09-15T18:30:00+02:00
+custom:
+    Impact: High
+    PullRequest: 691
+    SecurityImpact: None. Serialization remains subject to the existing authorization and field-visibility checks.

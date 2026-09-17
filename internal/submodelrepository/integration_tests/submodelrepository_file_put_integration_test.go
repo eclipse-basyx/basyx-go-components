@@ -217,6 +217,72 @@ func TestFullSubmodelPutPreservesOwnedManagedAttachment(t *testing.T) {
 	require.Equal(t, managedPath, getFileElementValue(t, endpoint+"/submodel-elements/Document"))
 }
 
+func TestDownloadManagedAttachmentWithMissingFileName(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:managed-file-name-%d", time.Now().UnixNano())
+	encodedID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + encodedID
+	status, body, err := requestJSON(http.MethodPost, submodelRepositoryBaseURL+"/submodels", fileReplacementSubmodelPayload(submodelID, []string{"Document", "Empty"}))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _, _ = requestJSON(http.MethodDelete, endpoint, nil) })
+
+	attachmentEndpoint := endpoint + "/submodel-elements/Document/attachment"
+	emptyAttachmentEndpoint := endpoint + "/submodel-elements/Empty/attachment"
+	status, body, err = requestJSON(http.MethodGet, emptyAttachmentEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, status, "response=%s", string(body))
+
+	payload := []byte("managed attachment content")
+	filePath := createTemporaryBinaryTestFile(t, "manual.pdf", payload)
+	status, err = uploadFileAttachment(attachmentEndpoint, filePath, "manual.pdf")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status)
+
+	setManagedAttachmentFileName(t, submodelID, "Document", nil)
+	content, contentType, downloadStatus, err := downloadFileAttachment(attachmentEndpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, downloadStatus)
+	require.Equal(t, "application/pdf", contentType)
+	require.Equal(t, payload, content)
+	assertAttachmentFileName(t, attachmentEndpoint, "manual.pdf")
+
+	setManagedAttachmentFileName(t, submodelID, "Document", "")
+	content, contentType, downloadStatus, err = downloadFileAttachment(attachmentEndpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, downloadStatus)
+	require.Equal(t, "application/pdf", contentType)
+	require.Equal(t, payload, content)
+	assertAttachmentFileName(t, attachmentEndpoint, "manual.pdf")
+}
+
+func assertAttachmentFileName(t *testing.T, endpoint string, fileName string) {
+	t.Helper()
+	status, body, headers, err := requestJSONWithHeaders(http.MethodGet, endpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	require.Contains(t, headers.Get("Content-Disposition"), fileName)
+}
+
+func setManagedAttachmentFileName(t *testing.T, submodelID string, idShortPath string, fileName any) {
+	t.Helper()
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	elementIDQuery := goqu.From(goqu.T("submodel_element").As("sme")).
+		Join(goqu.T("submodel").As("sm"), goqu.On(goqu.I("sm.id").Eq(goqu.I("sme.submodel_id")))).
+		Select(goqu.I("sme.id")).
+		Where(goqu.I("sm.submodel_identifier").Eq(submodelID), goqu.I("sme.idshort_path").Eq(idShortPath))
+	query, args, err := goqu.Update("file_element").Set(goqu.Record{"file_name": fileName}).
+		Where(goqu.C("id").Eq(elementIDQuery)).ToSQL()
+	require.NoError(t, err)
+	result, err := db.Exec(query, args...)
+	require.NoError(t, err)
+	updated, err := result.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), updated)
+}
+
 func TestConcurrentSubmodelDeletionCleansSharedCanonicalFilesWithoutDeadlock(t *testing.T) {
 	baseline := binaryContentRowCount(t)
 	leftID := fmt.Sprintf("urn:basyx:integration:delete-left-%d", time.Now().UnixNano())

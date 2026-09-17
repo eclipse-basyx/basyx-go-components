@@ -1,0 +1,7 @@
+kind: fixed
+body: Apply DPP merge patches only to affected resources, preserving existing AAS and Submodel identities and metadata. Reuse the loaded passport state while preparing updates and reject generated-ID collisions when creating new sections.
+time: 2026-09-15T15:14:23+02:00
+custom:
+    Impact: High
+    PullRequest: 691
+    SecurityImpact: Prevents unintended overwrite or deletion of unrelated and shared Submodels during DPP updates.

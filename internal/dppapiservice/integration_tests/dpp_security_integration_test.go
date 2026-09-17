@@ -52,11 +52,13 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 
 	port := reserveLocalPort(t)
 	keycloakPort := reserveLocalPort(t)
+	databasePort := reserveLocalPort(t)
 	issuerURL := dppSecurityIssuerURL(keycloakPort)
 	securityEnv := writeDPPSecurityEnvironment(t, issuerURL)
 	keycloakRealm := writeDPPSecurityKeycloakRealm(t)
 	composeEnv := dppComposeEnvironment{
 		apiPort:       port,
+		databasePort:  databasePort,
 		keycloakPort:  keycloakPort,
 		securityEnv:   securityEnv,
 		keycloakRealm: keycloakRealm,
@@ -78,6 +80,7 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	tokenEndpoint := issuerURL + "/protocol/openid-connect/token"
 	viewerToken := passwordGrantToken(t, client, tokenEndpoint, "usera", "pwd")
+	restrictedViewerToken := passwordGrantToken(t, client, tokenEndpoint, "userb", "pwd")
 	editorToken := passwordGrantToken(t, client, tokenEndpoint, "userx", "pwd")
 
 	dppID := "https://www.example.org/dpp/security%2F" + strings.ReplaceAll(projectName, "-", "")
@@ -111,8 +114,88 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	energyClassPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "energyClass"))
 	elementBody := doJSONAnyAuth(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+energyClassPath, editorToken, "B", http.StatusOK)
 	assertScalarEquals(t, elementBody, "B")
+	historicalDate := time.Now().UTC()
 
-	doJSONAnyAuth(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, editorToken, nil, http.StatusNoContent)
+	hiddenDPPID := assertSecuredDPPIDSearch(t, client, baseURL, editorToken, restrictedViewerToken)
+	securityDB := openDPPDatabase(t, databasePort, "basyxDppSecurityIT")
+	protectedTechnicalID := submodelIDBySemanticIDFromDatabase(t, securityDB, dppID, lifecycleTechnicalDataSpec)
+	_ = securityDB.Close()
+	doJSONAnyAuth(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedPathParam(hiddenDPPID), restrictedViewerToken, nil, http.StatusNotFound)
+
+	doJSONAnyAuth(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, restrictedViewerToken, nil, http.StatusNoContent)
+	securityDB = openDPPDatabase(t, databasePort, "basyxDppSecurityIT")
+	assertSubmodelIdentifierExistsInDatabase(t, securityDB, protectedTechnicalID, true)
+	_ = securityDB.Close()
+
+	historicalURL := historyURL(baseURL, encodedDPPID, historicalDate, "compressed")
+	doJSONAnyAuth(t, client, http.MethodGet, historicalURL, restrictedViewerToken, nil, http.StatusNotFound)
+	historicalBody := doJSONAuth(t, client, http.MethodGet, historicalURL, viewerToken, nil, http.StatusOK)
+	assertJSONPathEquals(t, historicalBody, "digitalProductPassportId", dppID)
+}
+
+func assertSecuredDPPIDSearch(
+	t *testing.T,
+	client *http.Client,
+	baseURL string,
+	editorToken string,
+	restrictedViewerToken string,
+) string {
+	t.Helper()
+
+	const (
+		productID  = "https://www.example.org/products/security-search"
+		visibleAID = "https://www.example.org/dpp/security-search-a"
+		hiddenID   = "https://www.example.org/dpp/security-search-b"
+		visibleCID = "https://www.example.org/dpp/security-search-c"
+	)
+	for _, dppID := range []string{visibleAID, hiddenID, visibleCID} {
+		document := lifecycleDPPDocument(dppID, productID, time.Now().UTC())
+		doJSONAuth(t, client, http.MethodPost, baseURL+"/v1/dpps", editorToken, document, http.StatusCreated)
+	}
+
+	searchURL := baseURL + "/v1/dppsByProductIds?limit=1"
+	request := map[string]any{"productIds": []string{productID}}
+	firstPage := doJSONAuth(t, client, http.MethodPost, searchURL, restrictedViewerToken, request, http.StatusOK)
+	assertDPPIDSearchPage(t, firstPage, []string{visibleAID}, visibleAID)
+
+	secondPage := doJSONAuth(
+		t,
+		client,
+		http.MethodPost,
+		searchURL+"&cursor="+url.QueryEscape(visibleAID),
+		restrictedViewerToken,
+		request,
+		http.StatusOK,
+	)
+	assertDPPIDSearchPage(t, secondPage, []string{visibleCID}, "")
+	doJSONAnyAuth(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(visibleCID), editorToken, nil, http.StatusNoContent)
+	visibleOwner := doJSONAuth(t, client, http.MethodGet, baseURL+"/v1/dppsByProductId/"+encodedPathParam(productID), restrictedViewerToken, nil, http.StatusOK)
+	assertJSONPathEquals(t, visibleOwner, "digitalProductPassportId", visibleAID)
+	return hiddenID
+}
+
+func assertDPPIDSearchPage(t *testing.T, body map[string]any, expectedItems []string, expectedCursor string) {
+	t.Helper()
+
+	rawItems, ok := body["items"].([]any)
+	if !ok {
+		t.Fatalf("items = %#v, want array", body["items"])
+	}
+	items := make([]string, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		item, itemOK := rawItem.(string)
+		if !itemOK {
+			t.Fatalf("item = %#v, want string", rawItem)
+		}
+		items = append(items, item)
+	}
+	if strings.Join(items, "\x00") != strings.Join(expectedItems, "\x00") {
+		t.Fatalf("items = %#v, want %#v", items, expectedItems)
+	}
+	cursor, _ := body["cursor"].(string)
+	if cursor != expectedCursor {
+		t.Fatalf("cursor = %q, want %q", cursor, expectedCursor)
+	}
 }
 
 func dppSecurityIssuerURL(keycloakPort int) string {

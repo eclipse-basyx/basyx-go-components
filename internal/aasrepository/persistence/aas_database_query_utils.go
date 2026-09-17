@@ -298,6 +298,118 @@ func buildGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsDataset(
 	return ds, nil
 }
 
+func buildGetDPPIDsByAssetAndMetadataSemanticIDsDataset(
+	dialect *goqu.DialectWrapper,
+	globalAssetIDs []string,
+	metadataSemanticIDs []string,
+	limit int32,
+	cursor string,
+) (*goqu.SelectDataset, error) {
+	ds := dppMetadataAASDataset(dialect, metadataSemanticIDs).
+		Select(goqu.I("metadata_property.value_text")).
+		Distinct().
+		Where(common.PostgreSQLTextArrayContains(goqu.I("asset_information.global_asset_id"), globalAssetIDs)).
+		Order(goqu.I("metadata_property.value_text").Asc())
+	if cursor != "" {
+		ds = ds.Where(goqu.I("metadata_property.value_text").Gt(cursor))
+	}
+	if limit > 0 {
+		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
+		if err != nil {
+			return nil, err
+		}
+		ds = ds.Limit(pageLimitPlusOne)
+	}
+	return ds, nil
+}
+
+func buildGetDPPAssetIdentifiersDataset(
+	dialect *goqu.DialectWrapper,
+	globalAssetIDs []string,
+	metadataSemanticIDs []string,
+	limit int32,
+) (*goqu.SelectDataset, error) {
+	ds := dppMetadataAASDataset(dialect, metadataSemanticIDs).
+		Select(goqu.I("aas.aas_id"), goqu.I("metadata_property.value_text")).
+		Distinct().
+		Where(common.PostgreSQLTextArrayContains(goqu.I("asset_information.global_asset_id"), globalAssetIDs)).
+		Order(goqu.I("aas.aas_id").Asc(), goqu.I("metadata_property.value_text").Asc())
+	if limit > 0 {
+		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
+		if err != nil {
+			return nil, err
+		}
+		ds = ds.Limit(pageLimitPlusOne)
+	}
+	return ds, nil
+}
+
+func dppMetadataAASDataset(dialect *goqu.DialectWrapper, metadataSemanticIDs []string) *goqu.SelectDataset {
+	submodelReferenceTerminalPosition := terminalReferenceKeyPositionDataset(
+		dialect, "aas_submodel_reference_key", "terminal_submodel_reference_key", "submodel_reference_key",
+	)
+	metadataSemanticIDTerminalPosition := terminalReferenceKeyPositionDataset(
+		dialect, "submodel_semantic_id_reference_key", "terminal_metadata_semantic_id_key", "metadata_semantic_id_key",
+	)
+	return dialect.
+		From(goqu.T("aas").As("aas")).
+		InnerJoin(
+			goqu.T("asset_information").As("asset_information"),
+			goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id"))),
+		).
+		InnerJoin(
+			goqu.T("aas_submodel_reference").As("submodel_reference"),
+			goqu.On(goqu.I("submodel_reference.aas_id").Eq(goqu.I("aas.id"))),
+		).
+		InnerJoin(
+			goqu.T("aas_submodel_reference_key").As("submodel_reference_key"),
+			goqu.On(
+				goqu.I("submodel_reference_key.reference_id").Eq(goqu.I("submodel_reference.id")),
+				goqu.I("submodel_reference_key.position").Eq(submodelReferenceTerminalPosition),
+			),
+		).
+		InnerJoin(
+			goqu.T("submodel").As("metadata_submodel"),
+			goqu.On(goqu.I("metadata_submodel.submodel_identifier").Eq(goqu.I("submodel_reference_key.value"))),
+		).
+		InnerJoin(
+			goqu.T("submodel_semantic_id_reference_key").As("metadata_semantic_id_key"),
+			goqu.On(
+				goqu.I("metadata_semantic_id_key.reference_id").Eq(goqu.I("metadata_submodel.id")),
+				goqu.I("metadata_semantic_id_key.position").Eq(metadataSemanticIDTerminalPosition),
+			),
+		).
+		InnerJoin(
+			goqu.T("submodel_element").As("metadata_element"),
+			goqu.On(
+				goqu.I("metadata_element.submodel_id").Eq(goqu.I("metadata_submodel.id")),
+				goqu.I("metadata_element.id_short").Eq(dppIDElementPath),
+				goqu.I("metadata_element.parent_sme_id").IsNull(),
+			),
+		).
+		InnerJoin(
+			goqu.T("property_element").As("metadata_property"),
+			goqu.On(goqu.I("metadata_property.id").Eq(goqu.I("metadata_element.id"))),
+		).
+		Where(
+			common.PostgreSQLTextArrayContains(goqu.I("metadata_semantic_id_key.value"), metadataSemanticIDs),
+			goqu.I("metadata_property.value_text").IsNotNull(),
+			goqu.I("metadata_property.value_text").Neq(""),
+		)
+}
+
+func terminalReferenceKeyPositionDataset(
+	dialect *goqu.DialectWrapper,
+	table string,
+	terminalAlias string,
+	currentAlias string,
+) *goqu.SelectDataset {
+	return dialect.
+		From(goqu.T(table).As(terminalAlias)).
+		Select(goqu.MAX(goqu.I(terminalAlias + ".position"))).
+		Where(goqu.I(terminalAlias + ".reference_id").Eq(goqu.I(currentAlias + ".reference_id")))
+}
+
 func buildSpecificAssetIDFilterExpression(dialect *goqu.DialectWrapper, specificAssetID types.ISpecificAssetID) goqu.Expression {
 	if specificAssetID.Name() == globalAssetIDSpecificAssetIDName {
 		return goqu.I("asset_information.global_asset_id").Eq(specificAssetID.Value())
