@@ -29,6 +29,7 @@ See the [changelog](CHANGELOG.md) for release changes and upgrade considerations
     - [Steps](#steps)
   - [4. Environment Variables \& Configuration](#4-environment-variables--configuration)
     - [Database Initialization](#database-initialization)
+    - [PostgreSQL Maintenance](#postgresql-maintenance)
     - [Logging](#logging)
     - [OpenTelemetry Tracing](#opentelemetry-tracing)
   - [5. Code Style \& Conventions](#5-code-style--conventions)
@@ -107,6 +108,11 @@ For operator-facing setup guidance, see the [BaSyx wiki](https://wiki.basyx.org)
 The `basyxconfigurationservice` image should use the same BaSyx version or build revision as the DB-backed runtime components in the same setup. This is especially important when using mutable image tags. The `latest` tag tracks the newest release, and the `SNAPSHOT` tag tracks the current main-branch snapshot; both tags may point to different image digests over time. For reproducible deployments, pin a concrete version tag, commit/SNAPSHOT tag, or image digest instead.
 
 If a setup uses mutable tags and pulls images on every start or restart, include `basyxconfigurationservice` in the deployment and run it before the DB-backed components. Otherwise a freshly pulled runtime component may expect a newer schema version than the database currently contains, causing startup validation to fail.
+
+### PostgreSQL Maintenance
+
+For autovacuum policy, monitoring and recovery of large Submodel repositories,
+see the [PostgreSQL maintenance guide](docu/user/postgresql_maintenance.md).
 
 ### Logging
 
