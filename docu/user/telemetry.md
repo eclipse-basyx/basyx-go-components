@@ -106,6 +106,10 @@ while `used` approaches `max` indicates that the service pool is constraining
 concurrency. Low pool utilization with slow requests points elsewhere, such as
 PostgreSQL query execution, server capacity, or storage latency.
 
+For PostgreSQL autovacuum activity, obsolete-row estimates, replication lag
+and API latency correlation, see the [PostgreSQL maintenance
+guide](postgresql_maintenance.md).
+
 ## Sampling and Lifecycle
 
 The default sampler is parent-based and always-on. For sustained or high-volume

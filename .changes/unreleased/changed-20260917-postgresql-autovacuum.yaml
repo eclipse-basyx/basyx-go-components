@@ -1,0 +1,7 @@
+kind: changed
+body: Set an earlier PostgreSQL autovacuum trigger and force index cleanup on high-churn Submodel Element tables while preserving explicit operator maintenance settings.
+time: 2026-09-17T23:25:57+02:00
+custom:
+    Impact: High
+    PullRequest: 697
+    SecurityImpact: None.
