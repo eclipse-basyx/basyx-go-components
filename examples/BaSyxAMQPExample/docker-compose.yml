@@ -53,6 +53,12 @@ services:
       - "127.0.0.1:8082:8082"
     volumes:
       - ./aas:/app/preconfiguration:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://127.0.0.1:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
