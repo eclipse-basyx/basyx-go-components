@@ -12,6 +12,7 @@ services:
       retries: 20
   basyx_configuration:
     image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
@@ -23,6 +24,7 @@ services:
         condition: service_healthy
   aas-environment:
     image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: always
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
@@ -54,6 +56,7 @@ services:
         condition: service_completed_successfully
   aas-ui:
     image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
     ports:
       - "127.0.0.1:3000:3000"
     environment:
