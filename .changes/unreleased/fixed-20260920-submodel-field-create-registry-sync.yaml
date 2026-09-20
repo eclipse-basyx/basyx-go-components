@@ -1,0 +1,7 @@
+kind: fixed
+body: Allow Submodel creation with field-based ABAC CREATE rules when Submodel Registry synchronization is enabled.
+time: 2026-09-20T17:41:41+02:00
+custom:
+    Impact: Low
+    PullRequest: 700
+    SecurityImpact: 'Submodel CREATE authorization remains enforced; only the internal descriptor synchronization excludes the Submodel-specific field filter.'
