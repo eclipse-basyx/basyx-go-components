@@ -37,6 +37,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 )
 
@@ -130,7 +131,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		}
 
 		if _, insertErr := s.persistence.SubmodelRegistry.InsertSubmodelDescriptorInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistryAddAuditMetadataIfNotAvailable(auth.ContextWithoutQueryFilter(ctx), submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); insertErr != nil {
 			return insertErr
 		}

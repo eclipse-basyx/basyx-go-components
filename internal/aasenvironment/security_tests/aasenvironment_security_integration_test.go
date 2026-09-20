@@ -397,6 +397,70 @@ func TestABACPolicyManagementRuleLifecycleStories(t *testing.T) {
 	})
 }
 
+func TestPostSubmodelWithFieldBasedCreateRuleAndRegistrySync(t *testing.T) {
+	tokenProvider := testenv.NewPasswordGrantTokenProvider(testKeycloakTokenURL, "basyx-ui", 10*time.Second)
+	adminToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "admin", Password: "pwd"})
+	require.NoError(t, err)
+	editorToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "userx", Password: "pwd"})
+	require.NoError(t, err)
+
+	baseVersionID := activePolicyVersionID(t, adminToken)
+	uniqueID := time.Now().UnixNano()
+	testCases := []struct {
+		name       string
+		field      string
+		value      string
+		submodelID string
+	}{
+		{
+			name:       "submodel ID",
+			field:      "$sm#id",
+			submodelID: fmt.Sprintf("urn:test:sm:create-field-id:%d", uniqueID),
+		},
+		{
+			name:       "supplemental semantic ID key",
+			field:      "$sm#supplementalSemanticIds[].keys[].value",
+			value:      "https://example.com/vendor/A/",
+			submodelID: fmt.Sprintf("urn:test:sm:create-field-supplemental:%d", uniqueID),
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			value := testCase.value
+			if value == "" {
+				value = testCase.submodelID
+			}
+			versionID := clonePolicyVersion(t, baseVersionID, adminToken)
+			createEditorSubmodelFieldCreateRule(t, versionID, testCase.field, value, adminToken)
+			validatePolicyVersion(t, versionID, adminToken)
+			activatePolicyVersion(t, versionID, adminToken)
+
+			body := fmt.Sprintf(`{"id":%q,"idShort":"FieldCreate","modelType":"Submodel"}`, testCase.submodelID)
+			if testCase.value != "" {
+				body = fmt.Sprintf(`{"id":%q,"idShort":"FieldCreate","modelType":"Submodel","supplementalSemanticIds":[{"type":"ModelReference","keys":[{"type":"Submodel","value":%q}]}]}`, testCase.submodelID, value)
+			}
+			status, response := doAuthorizedRequest(t, http.MethodPost, testBaseURL+"/submodels", body, editorToken)
+			require.Equalf(t, http.StatusCreated, status, "POST /submodels failed: %s", response)
+
+			deniedID := testCase.submodelID + ":denied"
+			deniedBody := fmt.Sprintf(`{"id":%q,"idShort":"DeniedCreate","modelType":"Submodel"}`, deniedID)
+			if testCase.value != "" {
+				deniedBody = fmt.Sprintf(`{"id":%q,"idShort":"DeniedCreate","modelType":"Submodel","supplementalSemanticIds":[{"type":"ModelReference","keys":[{"type":"Submodel","value":%q}]}]}`, deniedID, value+":denied")
+			}
+			status, response = doAuthorizedRequest(t, http.MethodPost, testBaseURL+"/submodels", deniedBody, editorToken)
+			require.Equalf(t, http.StatusForbidden, status, "non-matching POST /submodels was not denied: %s", response)
+		})
+	}
+}
+
+func createEditorSubmodelFieldCreateRule(t *testing.T, versionID int64, field string, value string, bearerToken string) {
+	t.Helper()
+	body := fmt.Sprintf(`{"rule":{"ACL":{"ATTRIBUTES":[{"CLAIM":"role"}],"RIGHTS":["CREATE","UPDATE"],"ACCESS":"ALLOW"},"OBJECTS":[{"ROUTE":"/submodels"}],"FORMULA":{"$and":[{"$eq":[{"$attribute":{"CLAIM":"role"}},{"$strVal":"editor"}]},{"$eq":[{"$field":%q},{"$strVal":%q}]}]}}}`, field, value)
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/rules", testBaseURL, versionID)
+	status, response := doAuthorizedRequest(t, http.MethodPost, endpoint, body, bearerToken)
+	require.Equalf(t, http.StatusOK, status, "create field-based policy rule failed: %s", response)
+}
+
 func createStorySubmodel(t *testing.T, submodelID string, idShort string, bearerToken string) string {
 	t.Helper()
 
