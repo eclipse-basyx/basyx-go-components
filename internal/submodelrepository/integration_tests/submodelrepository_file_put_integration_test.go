@@ -138,12 +138,34 @@ func TestUploadFileAttachmentInIndexedSubmodelElementLists(t *testing.T) {
 	t.Cleanup(func() { _, _, _ = requestJSON(http.MethodDelete, endpoint, nil) })
 
 	idShortPath := "Model3D[105].File.FileVersion[0].DigitalFile"
+	elementEndpoint := endpoint + "/submodel-elements/" + url.PathEscape(idShortPath)
 	attachmentEndpoint := endpoint + "/submodel-elements/" + url.PathEscape(idShortPath) + "/attachment"
+	status, body, err = requestJSON(http.MethodGet, elementEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	var element map[string]any
+	require.NoError(t, json.Unmarshal(body, &element))
+	require.Equal(t, "File", element["modelType"])
+	require.Equal(t, "/aasx/files/model.step", element["value"])
+	issuePath := "Model3D[0].File.FileVersion[0].DigitalFile"
+	status, body, err = requestJSON(http.MethodGet, endpoint+"/submodel-elements/"+url.PathEscape(issuePath), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	require.NoError(t, json.Unmarshal(body, &element))
+	require.Equal(t, "File", element["modelType"])
+	require.Equal(t, "/aasx/files/model.step", element["value"])
+
 	payload := []byte("indexed list attachment")
 	filePath := createTemporaryBinaryTestFile(t, "model.step", payload)
 	status, err = uploadFileAttachment(attachmentEndpoint, filePath, "model.step")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, status)
+
+	status, body, err = requestJSON(http.MethodGet, elementEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	require.NoError(t, json.Unmarshal(body, &element))
+	require.Equal(t, "File", element["modelType"])
 
 	content, _, status, err := downloadFileAttachment(attachmentEndpoint)
 	require.NoError(t, err)
@@ -176,7 +198,7 @@ func indexedListFileEntry() map[string]any {
 				"value": []any{map[string]any{
 					"modelType": "SubmodelElementCollection",
 					"value": []any{map[string]any{
-						"idShort": "DigitalFile", "modelType": "File", "contentType": "model/step",
+						"idShort": "DigitalFile", "modelType": "File", "contentType": "model/step", "value": "/aasx/files/model.step",
 					}},
 				}},
 			}},
