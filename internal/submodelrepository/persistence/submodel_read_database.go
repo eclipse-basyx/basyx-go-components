@@ -44,6 +44,7 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 type submodelPageElementsError struct {
@@ -86,6 +87,42 @@ func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifi
 		return nil, common.NewInternalServerError("SMREPO-GETSMBYID-NILSUBMODEL Loaded submodel is nil")
 	}
 	return submodel, nil
+}
+
+// GetSubmodelByIDInTransaction returns a submodel using an existing transaction.
+func (s *SubmodelDatabase) GetSubmodelByIDInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelIdentifier string,
+	level string,
+	metadataOnly bool,
+	includeBlobValue bool,
+) (types.ISubmodel, error) {
+	return s.getSubmodelByIDInTransaction(ctx, tx, submodelIdentifier, level, metadataOnly, includeBlobValue)
+}
+
+// GetSubmodelByIDForUpdateInTransaction locks and returns a submodel using an existing transaction.
+func (s *SubmodelDatabase) GetSubmodelByIDForUpdateInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelIdentifier string,
+	level string,
+	metadataOnly bool,
+	includeBlobValue bool,
+) (types.ISubmodel, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDFORUPDATE-NILTX transaction must not be nil")
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelIdentifier); err != nil {
+		return nil, err
+	}
+	if _, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelIdentifier); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("SMREPO-GETSMBYIDFORUPDATE-NOTFOUND Submodel with ID '" + submodelIdentifier + "' not found")
+		}
+		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDFORUPDATE-LOCKSUBMODEL " + err.Error())
+	}
+	return s.getSubmodelByIDInTransaction(ctx, tx, submodelIdentifier, level, metadataOnly, includeBlobValue)
 }
 
 // GetSubmodels retrieves submodels and applies optional ABAC formula filters from ctx.
@@ -163,6 +200,11 @@ func (s *SubmodelDatabase) GetSubmodelsWithElementsByListFilters(
 func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, idShort string, semanticID string) ([]types.IReference, string, error) {
 	selectDS := submodelqueries.SelectSubmodelIdentifierDataset(idShort, limit, cursor)
 	selectDS = submodelqueries.ApplySubmodelSemanticIDFilter(selectDS, semanticID)
+	selectDS, referenceErr := auth.AddReferenceSelectorQuery(ctx, selectDS, auth.SemanticResourceSM)
+	if referenceErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-LIST-REFERENCE " + referenceErr.Error())
+	}
+
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter != nil && queryFilter.Formula != nil {
 		collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
@@ -261,6 +303,11 @@ func (s *SubmodelDatabase) GetAllSubmodelPathsPage(
 		visibleSubmodels = visibleSubmodels.Where(goqu.Ex{"submodel.id_short": idShort})
 	}
 	visibleSubmodels = submodelqueries.ApplySubmodelSemanticIDFilter(visibleSubmodels, semanticID)
+	visibleSubmodels, referenceErr := auth.AddReferenceSelectorQuery(ctx, visibleSubmodels, auth.SemanticResourceSM)
+	if referenceErr != nil {
+		return submodelelements.SubmodelPathPage{}, common.NewInternalServerError("SMREPO-PATHPAGE-REFERENCE " + referenceErr.Error())
+	}
+
 	if submodelCursor != "" {
 		cursorExists := dialect.From(goqu.T("submodel").As("cursor_submodel")).
 			Select(goqu.L("1")).
@@ -494,6 +541,10 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 		return nil, "", err
 	}
 	selectDS = submodelqueries.ApplySubmodelSemanticIDFilter(selectDS, semanticID)
+	selectDS, referenceErr := auth.AddReferenceSelectorQuery(ctx, selectDS, auth.SemanticResourceSM)
+	if referenceErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-LIST-REFERENCE " + referenceErr.Error())
+	}
 
 	queryFilter := auth.GetQueryFilter(ctx)
 	hasFormulaInContext := queryFilter != nil && queryFilter.Formula != nil

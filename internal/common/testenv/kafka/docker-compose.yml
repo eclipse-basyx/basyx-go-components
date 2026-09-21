@@ -1,0 +1,49 @@
+services:
+  kafka_it:
+    image: apache/kafka:4.1.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka_it:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,AUTH://:9093,TLS://:9094,AUTHTLS://:9095,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka_it:19092,EXTERNAL://127.0.0.1:${BASYX_IT_KAFKA_PORT:-59092},AUTH://127.0.0.1:${BASYX_IT_KAFKA_AUTH_PORT:-59093},TLS://127.0.0.1:${BASYX_IT_KAFKA_TLS_PORT:-59094},AUTHTLS://127.0.0.1:${BASYX_IT_KAFKA_AUTH_TLS_PORT:-59095}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,AUTH:SASL_PLAINTEXT,TLS:SSL,AUTHTLS:SASL_SSL,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN,SCRAM-SHA-256,SCRAM-SHA-512
+      KAFKA_LISTENER_NAME_AUTH_PLAIN_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required user_basyx="secret";
+      KAFKA_LISTENER_NAME_AUTH_SCRAM___SHA___256_SASL_JAAS_CONFIG: org.apache.kafka.common.security.scram.ScramLoginModule required;
+      KAFKA_LISTENER_NAME_AUTH_SCRAM___SHA___512_SASL_JAAS_CONFIG: org.apache.kafka.common.security.scram.ScramLoginModule required;
+      KAFKA_LISTENER_NAME_AUTHTLS_PLAIN_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required user_basyx="secret";
+      KAFKA_LISTENER_NAME_AUTHTLS_SCRAM___SHA___256_SASL_JAAS_CONFIG: org.apache.kafka.common.security.scram.ScramLoginModule required;
+      KAFKA_LISTENER_NAME_AUTHTLS_SCRAM___SHA___512_SASL_JAAS_CONFIG: org.apache.kafka.common.security.scram.ScramLoginModule required;
+      KAFKA_SSL_KEYSTORE_TYPE: PEM
+      KAFKA_SSL_KEYSTORE_LOCATION: /certs/server.pem
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /certs/ca.pem
+      KAFKA_SSL_CLIENT_AUTH: required
+    volumes:
+      - ./server.pem:/certs/server.pem:ro
+      - ./ca.pem:/certs/ca.pem:ro
+    ports:
+      - "127.0.0.1:${BASYX_IT_KAFKA_PORT:-59092}:9092"
+      - "127.0.0.1:${BASYX_IT_KAFKA_AUTH_PORT:-59093}:9093"
+      - "127.0.0.1:${BASYX_IT_KAFKA_TLS_PORT:-59094}:9094"
+      - "127.0.0.1:${BASYX_IT_KAFKA_AUTH_TLS_PORT:-59095}:9095"
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka_it:19092", "--list"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+  kafka_init:
+    image: apache/kafka:4.1.1
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka_it:19092 --create --if-not-exists --topic basyx.events --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka_it:19092 --alter --entity-type users --entity-name basyx --add-config 'SCRAM-SHA-256=[password=secret]'
+        /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka_it:19092 --alter --entity-type users --entity-name basyx --add-config 'SCRAM-SHA-512=[password=secret]'

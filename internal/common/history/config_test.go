@@ -26,6 +26,8 @@
 package history
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -57,4 +59,34 @@ func TestMutationRecordingEnabledForEvidenceWithoutHistory(t *testing.T) {
 	})
 
 	require.True(t, MutationRecordingEnabled())
+}
+
+type recordingEnabledSink struct{}
+
+func (recordingEnabledSink) HandleMutation(context.Context, *sql.Tx, Mutation) error {
+	return nil
+}
+
+func TestMutationRecordingEnabledForEventFeedSink(t *testing.T) {
+	previousConfig := ActiveConfig()
+	t.Cleanup(func() {
+		Configure(previousConfig)
+		ClearMutationSink()
+	})
+
+	Configure(Config{
+		Mode:              ModeOff,
+		Immutability:      ImmutabilityNone,
+		AuditIdentityMode: AuditIdentityNone,
+	})
+	ClearMutationSink()
+	require.False(t, MutationRecordingEnabled())
+
+	SetMutationSink(recordingEnabledSink{})
+	require.True(t, MutationRecordingEnabled())
+	require.True(t, LiveSnapshotRequired())
+
+	ClearMutationSink()
+	require.False(t, MutationRecordingEnabled())
+	require.False(t, LiveSnapshotRequired())
 }

@@ -97,6 +97,98 @@ func TestUploadAASXIntegration(t *testing.T) {
 	runUploadJSONSuite(t, "upload_it_config.json")
 }
 
+func TestUploadedAASXNestedFileElementCanBeFetched(t *testing.T) {
+	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
+	const submodelID = "urn:basyx:integration:aasx-nested-file-read"
+	specification := []byte(`{
+		"assetAdministrationShells": [],
+		"submodels": [{
+			"id": "` + submodelID + `",
+			"idShort": "Models3D",
+			"modelType": "Submodel",
+			"submodelElements": [{
+				"idShort": "Model3D", "modelType": "SubmodelElementList", "orderRelevant": true,
+				"typeValueListElement": "SubmodelElementCollection",
+				"value": [{"modelType": "SubmodelElementCollection", "value": [{
+					"idShort": "File", "modelType": "SubmodelElementCollection", "value": [{
+						"idShort": "FileVersion", "modelType": "SubmodelElementList", "orderRelevant": true,
+						"typeValueListElement": "SubmodelElementCollection",
+						"value": [{"modelType": "SubmodelElementCollection", "value": [{
+							"idShort": "DigitalFile", "modelType": "File", "contentType": "image/jpeg",
+							"value": "/aasx/files/example.jpg"
+						}]}]
+					}]
+				}]}]
+			}]
+		}],
+		"conceptDescriptions": []
+	}`)
+	attachment := []byte("nested AASX attachment")
+	packageBytes := buildUploadAASXFixture(t, specification, fixtureEmbeddedFile{
+		FileName: "example.jpg", ContentType: "image/jpeg", Content: attachment,
+	})
+	status, body := uploadAASXPayload(t, packageBytes, "nested-file.aasx")
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+
+	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	path := "Model3D%5B0%5D.File.FileVersion%5B0%5D.DigitalFile"
+	request := mustNewRequest(t, http.MethodGet, aasEnvBaseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/"+path)
+	response := doHTTPIntegrationRequest(t, &http.Client{Timeout: 30 * time.Second}, request)
+	defer func() { _ = response.Body.Close() }()
+	responseBody, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, response.StatusCode, "response=%s", string(responseBody))
+	var element map[string]any
+	require.NoError(t, json.Unmarshal(responseBody, &element))
+	require.Equal(t, "File", element["modelType"])
+	require.Regexp(t, dynamicBinaryReferencePattern, element["value"])
+
+	attachmentRequest := mustNewRequest(t, http.MethodGet, aasEnvBaseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/"+path+"/attachment")
+	attachmentResponse := doHTTPIntegrationRequest(t, &http.Client{Timeout: 30 * time.Second}, attachmentRequest)
+	defer func() { _ = attachmentResponse.Body.Close() }()
+	downloadedAttachment, err := io.ReadAll(attachmentResponse.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, attachmentResponse.StatusCode, "response=%s", string(downloadedAttachment))
+	require.Equal(t, attachment, downloadedAttachment)
+}
+
+func TestUploadAASXWithoutStrictVerificationRejectsInvalidDateTime(t *testing.T) {
+	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
+	const submodelID = "urn:basyx:integration:upload-invalid-datetime"
+	const invalidDateTime = "22.04.2024"
+	specification := []byte(`{
+		"assetAdministrationShells": [],
+		"submodels": [{
+			"id": "` + submodelID + `",
+			"idShort": "InvalidDateTimeSubmodel",
+			"modelType": "Submodel",
+			"submodelElements": [{
+				"idShort": "DateOfManufacture",
+				"modelType": "Property",
+				"valueType": "xs:dateTime",
+				"value": "` + invalidDateTime + `"
+			}]
+		}],
+		"conceptDescriptions": []
+	}`)
+
+	payload := buildUploadAASXFixture(t, specification)
+	status, responseBody := uploadAASXPayload(t, payload, "invalid-datetime.aasx")
+	require.Equal(t, http.StatusBadRequest, status, "invalid AASX must be rejected: %s", string(responseBody))
+	require.Contains(t, string(responseBody), "not consistent with xs:dateTime")
+
+	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	response := doHTTPIntegrationRequest(t, &http.Client{Timeout: 30 * time.Second}, mustNewRequest(
+		t,
+		http.MethodGet,
+		aasEnvBaseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/DateOfManufacture",
+	))
+	defer func() { _ = response.Body.Close() }()
+	responseBody, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, response.StatusCode, "invalid Property must not be stored: %s", string(responseBody))
+}
+
 func TestUploadCombinedExampleEmbeddedFileMIMETypes(t *testing.T) {
 	fixtures := []string{
 		"BOMAAS.aasx",
@@ -372,6 +464,49 @@ func runMultipartUploadAction(t *testing.T, step testenv.JSONSuiteStep) {
 			}
 		}
 	}
+}
+
+func buildUploadAASXFixture(t *testing.T, specification []byte, supplementaryFiles ...fixtureEmbeddedFile) []byte {
+	t.Helper()
+
+	var destination bytes.Buffer
+	writer, err := aasx.NewPackaging().CreateWriter(&destination)
+	require.NoError(t, err)
+	specificationURI, err := url.Parse("/aasx/environment.json")
+	require.NoError(t, err)
+	specificationPart, err := writer.PutPartFromStream(specificationURI, "application/json", bytes.NewReader(specification))
+	require.NoError(t, err)
+	require.NoError(t, writer.MakeSpec(specificationPart))
+	for _, supplementaryFile := range supplementaryFiles {
+		supplementaryURI, parseErr := url.Parse("/aasx/files/" + supplementaryFile.FileName)
+		require.NoError(t, parseErr)
+		supplementaryPart, putErr := writer.PutPartFromStream(supplementaryURI, supplementaryFile.ContentType, bytes.NewReader(supplementaryFile.Content))
+		require.NoError(t, putErr)
+		require.NoError(t, writer.RelateSupplementaryToSpec(supplementaryPart, specificationPart))
+	}
+	require.NoError(t, writer.Close())
+	return destination.Bytes()
+}
+
+func uploadAASXPayload(t *testing.T, content []byte, fileName string) (int, []byte) {
+	t.Helper()
+
+	var payload bytes.Buffer
+	writer := multipart.NewWriter(&payload)
+	filePart, err := writer.CreateFormFile("file", fileName)
+	require.NoError(t, err)
+	_, err = filePart.Write(content)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	request, err := http.NewRequest(http.MethodPost, aasEnvBaseURL+"/upload", &payload)
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response := doHTTPIntegrationRequest(t, &http.Client{Timeout: 60 * time.Second}, request)
+	defer func() { _ = response.Body.Close() }()
+	responseBody, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	return response.StatusCode, responseBody
 }
 
 func verifyStoredAttachments(t *testing.T, step testenv.JSONSuiteStep) {

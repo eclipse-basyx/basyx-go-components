@@ -7,6 +7,10 @@ on:
       - 'database/**'
       - 'internal/basyxconfigurationservice/**'
       - 'internal/healthprobe/**'
+      - 'examples/BaSyxEventFeedExample/docker-compose.yml'
+      - 'examples/BaSyxMQTTExample/docker-compose.yml'
+      - 'examples/BaSyxKafkaExample/docker-compose.yml'
+      - 'examples/BaSyxAMQPExample/docker-compose.yml'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/podman-healthcheck-smoke.yml'
@@ -17,6 +21,10 @@ on:
       - 'database/**'
       - 'internal/basyxconfigurationservice/**'
       - 'internal/healthprobe/**'
+      - 'examples/BaSyxEventFeedExample/docker-compose.yml'
+      - 'examples/BaSyxMQTTExample/docker-compose.yml'
+      - 'examples/BaSyxKafkaExample/docker-compose.yml'
+      - 'examples/BaSyxAMQPExample/docker-compose.yml'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/podman-healthcheck-smoke.yml'
@@ -26,13 +34,23 @@ permissions:
 
 jobs:
   podman-smoke:
-    name: Podman healthcheck smoke (representative service)
+    name: Podman healthcheck smoke (${{ matrix.service_name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service_name: aasregistryservice
+            image_name: aasregistry-go
+            service_port: 8080
+          - service_name: aasenvironmentservice
+            image_name: aasenvironment-go
+            service_port: 8082
     env:
-      SERVICE_NAME: aasregistryservice
-      IMAGE_NAME: aasregistry-go
+      SERVICE_NAME: ${{ matrix.service_name }}
+      IMAGE_NAME: ${{ matrix.image_name }}
       CONFIG_IMAGE_NAME: basyxconfigurationservice-go
-      SERVICE_PORT: 8080
+      SERVICE_PORT: ${{ matrix.service_port }}
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
@@ -117,7 +135,7 @@ jobs:
             -e SERVER_PORT=${SERVICE_PORT} \
             -e CORS_ALLOWEDORIGINS='*' \
             -e CORS_ALLOWEDHEADERS='*' \
-            -e CORS_ALLOWEDCREDENTIALS=true \
+            -e CORS_ALLOWCREDENTIALS=true \
             -e CORS_ALLOWEDMETHODS='GET,POST,PUT,PATCH,DELETE,OPTIONS' \
             -e POSTGRES_HOST=${POSTGRES_HOST} \
             -e POSTGRES_PORT=${POSTGRES_PORT} \
@@ -156,3 +174,29 @@ jobs:
 
           podman exec service-smoke /bin/wget --quiet --tries=1 --output-document=- http://127.0.0.1:${SERVICE_PORT}/health >/dev/null
           echo "Compose-style wget healthcheck command works under Podman"
+
+          if [ "${SERVICE_NAME}" = "aasenvironmentservice" ]; then
+            python3 - <<'PYCODE'
+          import json
+          import subprocess
+
+          examples = (
+              "BaSyxEventFeedExample",
+              "BaSyxMQTTExample",
+              "BaSyxKafkaExample",
+              "BaSyxAMQPExample",
+          )
+          for example in examples:
+              compose_file = f"examples/{example}/docker-compose.yml"
+              config = subprocess.check_output(
+                  ["docker", "compose", "-f", compose_file, "config", "--format", "json"],
+                  text=True,
+              )
+              services = json.loads(config)["services"]
+              command = services["aas-environment"]["healthcheck"]["test"]
+              if command[0] != "CMD":
+                  raise RuntimeError(f"{example}: healthcheck must use exec form")
+              subprocess.run(["podman", "exec", "service-smoke", *command[1:]], check=True)
+              print(f"{example}: declared healthcheck passed under Podman")
+          PYCODE
+          fi

@@ -270,6 +270,13 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 				return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store submodel '%s': %w", submodel.ID(), putErr)
 			}
 			if putResp.Code < http.StatusOK || putResp.Code >= http.StatusMultipleChoices {
+				if putResp.Code == http.StatusBadRequest {
+					detail := "invalid submodel data"
+					if messages, ok := putResp.Body.([]commonmodel.Message); ok && len(messages) > 0 {
+						detail = messages[0].Text
+					}
+					return common.NewErrBadRequest(fmt.Sprintf("AASENV-PROCESSENV-PUTSM submodel %q: %s", submodel.ID(), detail))
+				}
 				return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store submodel '%s': repository returned HTTP %d", submodel.ID(), putResp.Code)
 			}
 			continue

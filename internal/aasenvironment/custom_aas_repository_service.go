@@ -147,7 +147,7 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAASRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -209,7 +209,7 @@ func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx cont
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAASRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -246,7 +246,7 @@ func (s *CustomAASRepositoryService) PutAssetInformationAasRepository(ctx contex
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAASRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -305,7 +305,7 @@ func (s *CustomAASRepositoryService) PostSubmodelReferenceAasRepository(ctx cont
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedAASIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedAASIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAASRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -369,12 +369,12 @@ func (s *CustomAASRepositoryService) DeleteSubmodelReferenceAasRepository(ctx co
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	decodedAASIdentifier, decodeAASErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeAASErr != nil {
 		return newAASRepoErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeSubmodelErr != nil {
 		return newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -421,12 +421,12 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	decodedAASIdentifier, decodeAASErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeAASErr != nil {
 		return newAASRepoErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeSubmodelErr != nil {
 		return newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -448,7 +448,7 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		return newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
-	isUpdate, err := s.putSubmodelAndSyncDescriptors(ctx, decodedAASIdentifier, decodedSubmodelIdentifier, submodel)
+	isUpdate, _, err := s.putSubmodelAndSyncDescriptors(ctx, decodedAASIdentifier, decodedSubmodelIdentifier, submodel)
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAASRepoErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
@@ -482,8 +482,9 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 	aasIdentifier string,
 	submodelIdentifier string,
 	submodel types.ISubmodel,
-) (bool, error) {
+) (bool, types.ISubmodel, error) {
 	isUpdate := false
+	var previousSubmodel types.ISubmodel
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		submodelReference := types.NewReference(
 			types.ReferenceTypesModelReference,
@@ -500,6 +501,7 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 			return putErr
 		}
 		isUpdate = putResult.IsUpdate
+		previousSubmodel = putResult.Previous
 		if !putResult.Changed && !referenceCreated {
 			return nil
 		}
@@ -528,7 +530,7 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 			aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertEmbeddedOperation), tx, aasDescriptor,
 		)
 	})
-	return isUpdate, err
+	return isUpdate, previousSubmodel, err
 }
 
 // DeleteSubmodelByIdAasRepository deletes a submodel through the superpath and synchronizes descriptors.
@@ -542,31 +544,18 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	decodedAASIdentifier, decodeAASErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeAASErr != nil {
 		return newAASRepoErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeSubmodelErr != nil {
 		return newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	if _, aasLookupErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier); aasLookupErr != nil {
-		if common.IsErrDenied(aasLookupErr) {
-			return newAASRepoErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(aasLookupErr) {
-			return newAASRepoErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
-		}
-		if common.IsErrBadRequest(aasLookupErr) {
-			return newAASRepoErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
-	}
-
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-		if checkErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier); checkErr != nil {
+		if checkErr := s.persistence.AASRepository.CheckSubmodelReferenceForDeletionInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); checkErr != nil {
 			return checkErr
 		}
 
@@ -731,12 +720,12 @@ func (s *CustomAASRepositoryService) PatchSubmodelByIdMetadataAasRepository(ctx 
 }
 
 func (s *CustomAASRepositoryService) decodeAndEnsureAASSubmodelReference(ctx context.Context, operation string, aasIdentifier string, submodelIdentifier string) (string, string, commonmodel.ImplResponse, bool) {
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	decodedAASIdentifier, decodeAASErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeAASErr != nil {
 		return "", "", newAASRepoErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), false
 	}
 
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeSubmodelErr != nil {
 		return "", "", newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), false
 	}

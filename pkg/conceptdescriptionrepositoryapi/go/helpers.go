@@ -15,7 +15,6 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
@@ -28,36 +27,8 @@ func encodeIdentifierForPath(identifier string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(identifier))
 }
 
-func requestScheme(r *http.Request) string {
-	return common.RequestScheme(r)
-}
-
-func requestHost(r *http.Request) string {
-	return common.RequestHost(r)
-}
-
-func normalizeContextPathForBaseLocation(contextPath string) string {
-	trimmed := strings.TrimSpace(contextPath)
-	if trimmed == "" || trimmed == "/" {
-		return ""
-	}
-
-	return "/" + strings.Trim(trimmed, "/")
-}
-
 func (c *ConceptDescriptionRepositoryAPIAPIController) buildBaseLocation(r *http.Request) string {
-	if externalBaseURL := common.ExternalBaseURLFromContext(r.Context()); externalBaseURL != "" {
-		return externalBaseURL
-	}
-
-	host := requestHost(r)
-	if host == "" {
-		return ""
-	}
-
-	basePath := normalizeContextPathForBaseLocation(c.contextPath)
-
-	return requestScheme(r) + "://" + host + basePath
+	return common.APIBaseLocation(r, c.contextPath)
 }
 
 func (c *ConceptDescriptionRepositoryAPIAPIController) buildConceptDescriptionLocationFromEncodedIdentifier(r *http.Request, encodedConceptDescriptionIdentifier string) string {

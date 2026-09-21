@@ -138,12 +138,34 @@ func TestUploadFileAttachmentInIndexedSubmodelElementLists(t *testing.T) {
 	t.Cleanup(func() { _, _, _ = requestJSON(http.MethodDelete, endpoint, nil) })
 
 	idShortPath := "Model3D[105].File.FileVersion[0].DigitalFile"
+	elementEndpoint := endpoint + "/submodel-elements/" + url.PathEscape(idShortPath)
 	attachmentEndpoint := endpoint + "/submodel-elements/" + url.PathEscape(idShortPath) + "/attachment"
+	status, body, err = requestJSON(http.MethodGet, elementEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	var element map[string]any
+	require.NoError(t, json.Unmarshal(body, &element))
+	require.Equal(t, "File", element["modelType"])
+	require.Equal(t, "/aasx/files/model.step", element["value"])
+	issuePath := "Model3D[0].File.FileVersion[0].DigitalFile"
+	status, body, err = requestJSON(http.MethodGet, endpoint+"/submodel-elements/"+url.PathEscape(issuePath), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	require.NoError(t, json.Unmarshal(body, &element))
+	require.Equal(t, "File", element["modelType"])
+	require.Equal(t, "/aasx/files/model.step", element["value"])
+
 	payload := []byte("indexed list attachment")
 	filePath := createTemporaryBinaryTestFile(t, "model.step", payload)
 	status, err = uploadFileAttachment(attachmentEndpoint, filePath, "model.step")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, status)
+
+	status, body, err = requestJSON(http.MethodGet, elementEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	require.NoError(t, json.Unmarshal(body, &element))
+	require.Equal(t, "File", element["modelType"])
 
 	content, _, status, err := downloadFileAttachment(attachmentEndpoint)
 	require.NoError(t, err)
@@ -176,7 +198,7 @@ func indexedListFileEntry() map[string]any {
 				"value": []any{map[string]any{
 					"modelType": "SubmodelElementCollection",
 					"value": []any{map[string]any{
-						"idShort": "DigitalFile", "modelType": "File", "contentType": "model/step",
+						"idShort": "DigitalFile", "modelType": "File", "contentType": "model/step", "value": "/aasx/files/model.step",
 					}},
 				}},
 			}},
@@ -215,6 +237,72 @@ func TestFullSubmodelPutPreservesOwnedManagedAttachment(t *testing.T) {
 	require.Equal(t, http.StatusOK, downloadStatus)
 	require.Equal(t, []byte("managed-file-content"), content)
 	require.Equal(t, managedPath, getFileElementValue(t, endpoint+"/submodel-elements/Document"))
+}
+
+func TestDownloadManagedAttachmentWithMissingFileName(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:managed-file-name-%d", time.Now().UnixNano())
+	encodedID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + encodedID
+	status, body, err := requestJSON(http.MethodPost, submodelRepositoryBaseURL+"/submodels", fileReplacementSubmodelPayload(submodelID, []string{"Document", "Empty"}))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _, _ = requestJSON(http.MethodDelete, endpoint, nil) })
+
+	attachmentEndpoint := endpoint + "/submodel-elements/Document/attachment"
+	emptyAttachmentEndpoint := endpoint + "/submodel-elements/Empty/attachment"
+	status, body, err = requestJSON(http.MethodGet, emptyAttachmentEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, status, "response=%s", string(body))
+
+	payload := []byte("managed attachment content")
+	filePath := createTemporaryBinaryTestFile(t, "manual.pdf", payload)
+	status, err = uploadFileAttachment(attachmentEndpoint, filePath, "manual.pdf")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status)
+
+	setManagedAttachmentFileName(t, submodelID, "Document", nil)
+	content, contentType, downloadStatus, err := downloadFileAttachment(attachmentEndpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, downloadStatus)
+	require.Equal(t, "application/pdf", contentType)
+	require.Equal(t, payload, content)
+	assertAttachmentFileName(t, attachmentEndpoint, "manual.pdf")
+
+	setManagedAttachmentFileName(t, submodelID, "Document", "")
+	content, contentType, downloadStatus, err = downloadFileAttachment(attachmentEndpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, downloadStatus)
+	require.Equal(t, "application/pdf", contentType)
+	require.Equal(t, payload, content)
+	assertAttachmentFileName(t, attachmentEndpoint, "manual.pdf")
+}
+
+func assertAttachmentFileName(t *testing.T, endpoint string, fileName string) {
+	t.Helper()
+	status, body, headers, err := requestJSONWithHeaders(http.MethodGet, endpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	require.Contains(t, headers.Get("Content-Disposition"), fileName)
+}
+
+func setManagedAttachmentFileName(t *testing.T, submodelID string, idShortPath string, fileName any) {
+	t.Helper()
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	elementIDQuery := goqu.From(goqu.T("submodel_element").As("sme")).
+		Join(goqu.T("submodel").As("sm"), goqu.On(goqu.I("sm.id").Eq(goqu.I("sme.submodel_id")))).
+		Select(goqu.I("sme.id")).
+		Where(goqu.I("sm.submodel_identifier").Eq(submodelID), goqu.I("sme.idshort_path").Eq(idShortPath))
+	query, args, err := goqu.Update("file_element").Set(goqu.Record{"file_name": fileName}).
+		Where(goqu.C("id").Eq(elementIDQuery)).ToSQL()
+	require.NoError(t, err)
+	result, err := db.Exec(query, args...)
+	require.NoError(t, err)
+	updated, err := result.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), updated)
 }
 
 func TestConcurrentSubmodelDeletionCleansSharedCanonicalFilesWithoutDeadlock(t *testing.T) {

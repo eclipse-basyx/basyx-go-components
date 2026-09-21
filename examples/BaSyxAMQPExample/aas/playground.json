@@ -1,0 +1,40 @@
+{
+  "assetAdministrationShells": [
+    {
+      "modelType": "AssetAdministrationShell",
+      "id": "urn:example:amqp:aas:playground",
+      "idShort": "AMQPPlayground",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "urn:example:amqp:asset:playground"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:amqp:submodel:status"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:amqp:submodel:status",
+      "idShort": "OperatingStatus",
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "idShort": "Status",
+          "valueType": "xs:string",
+          "value": "ready"
+        }
+      ]
+    }
+  ],
+  "conceptDescriptions": []
+}

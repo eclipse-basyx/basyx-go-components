@@ -88,8 +88,6 @@ func TestGetConceptDescriptionsValidatesCursorInPageQuery(t *testing.T) {
 	items, nextCursor, err := backend.GetConceptDescriptions(
 		contextWithConceptDescriptionConfig(t),
 		nil,
-		nil,
-		nil,
 		10,
 		&cursor,
 		time.Time{},

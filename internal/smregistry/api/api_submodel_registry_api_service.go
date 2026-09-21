@@ -71,7 +71,11 @@ func NewSubmodelRegistryAPIAPIService(databaseBackend smregistrypostgresql.Postg
 
 // GetAllSubmodelDescriptors - Returns all Submodel Descriptors
 func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
-	internalCursor, resp, err := decodeCursor(ctx, strings.TrimSpace(cursor), "GetAllSubmodelDescriptors")
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptors", detail), nil
+	}
+
+	internalCursor, resp, err := decodeCursor(ctx, cursor, "GetAllSubmodelDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -113,7 +117,11 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 	cursor string,
 	query grammar.Query,
 ) (model.ImplResponse, error) {
-	internalCursor, resp, err := decodeCursor(ctx, strings.TrimSpace(cursor), "QuerySubmodelDescriptors")
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", detail), nil
+	}
+
+	internalCursor, resp, err := decodeCursor(ctx, cursor, "QuerySubmodelDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
 	}

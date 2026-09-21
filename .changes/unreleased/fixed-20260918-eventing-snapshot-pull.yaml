@@ -1,0 +1,7 @@
+kind: fixed
+body: Pull current SNAPSHOT images when starting the MQTT, Kafka, and AMQP examples, avoiding startup failures caused by outdated cached images.
+time: 2026-09-18T11:23:50+02:00
+custom:
+    Impact: Low
+    PullRequest: 698
+    SecurityImpact: None.

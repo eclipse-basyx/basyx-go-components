@@ -31,6 +31,29 @@ import (
 	"strings"
 )
 
+// APIBaseLocation resolves the configured external URL or the request origin and context path.
+func APIBaseLocation(request *http.Request, contextPath string) string {
+	if externalBaseURL := ExternalBaseURLFromContext(request.Context()); externalBaseURL != "" {
+		return externalBaseURL
+	}
+
+	host := RequestHost(request)
+	if host == "" {
+		return ""
+	}
+
+	return RequestScheme(request) + "://" + host + normalizeLocationContextPath(contextPath)
+}
+
+func normalizeLocationContextPath(contextPath string) string {
+	trimmed := strings.TrimSpace(contextPath)
+	if trimmed == "" || trimmed == "/" {
+		return ""
+	}
+
+	return "/" + strings.Trim(trimmed, "/")
+}
+
 // ContextualizeAPIResourceLocation resolves a root-relative API Location
 // against the request's external origin and mounted context path.
 func ContextualizeAPIResourceLocation(request *http.Request, location string, resourcePathMarker string) string {

@@ -600,7 +600,7 @@ The request cannot expose `manufacturerAssetId`, because the ABAC filter is
 mandatory. It also cannot recover `P-200`, because the request itself narrowed
 the policy-visible rows to `P-100`.
 
-## 7. Query MultiLanguageProperty text
+## 7. Query MultiLanguageProperty text and language
 
 `#value` on a `MultiLanguageProperty` matches its language string text. The
 condition holds when any language entry satisfies it, so the language does not
@@ -667,6 +667,63 @@ separate `#language` condition with `$and` only checks that the language exists;
 it does not require the matching text to belong to that language. For example,
 the text condition above combined with `#language = "en"` still matches this
 Submodel.
+
+To require the text and language to belong to the same language/text entry of
+the same `ProductName` MultiLanguageProperty, BaSyx supports combining the
+conditions with `$match`:
+
+```json
+{
+  "$condition": {
+    "$match": [
+      {
+        "$contains": [
+          { "$field": "$sme.ProductName#value" },
+          { "$strVal": "Capteur" }
+        ]
+      },
+      {
+        "$eq": [
+          { "$field": "$sme.ProductName#language" },
+          { "$strVal": "fr" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+This request returns the same Submodel shown above, including all three language
+entries. The `$condition` selects Submodels; it does not trim the returned
+MultiLanguageProperty to the matching language.
+
+Changing only `"fr"` to `"en"` in this `$match` request returns an empty result,
+because `"Capteur"` occurs only in the French text:
+
+```json
+{
+  "paging_metadata": {},
+  "result": []
+}
+```
+
+For the same example data, the following combinations show the difference
+between `$match` and `$and`. Each row combines `$contains` on
+`$sme.ProductName#value` with `$eq` on `$sme.ProductName#language`:
+
+| Text contains | Language equals | `$match` returns the Submodel | `$and` returns the Submodel |
+| --- | --- | --- | --- |
+| `Capteur` | `fr` | Yes | Yes |
+| `Capteur` | `en` | No | Yes |
+| `Industrial Sensor` | `en` | Yes | Yes |
+| `Industrial Sensor` | `fr` | No | Yes |
+
+This documents supported BaSyx behavior. The IDTA-01002 v3.2
+[Query Language specification, "Match of Elements in Lists"](https://industrialdigitaltwin.io/aas-specifications/IDTA-01002/v3.2/query-language.html)
+describes `$match` with an explicit `[]` list context. These MultiLanguageProperty
+fields expose no such context. Although the BNF accepts the expression, the
+semantics of this implicit language-entry list still need clarification upstream
+before this usage can be described as standards-compliant.
 
 ## What can be combined
 

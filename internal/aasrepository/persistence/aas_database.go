@@ -207,6 +207,14 @@ func (s *AssetAdministrationShellDatabase) appendAASHistoryTx(ctx context.Contex
 	return history.AppendVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, previousSnapshot, snapshot, deleted)
 }
 
+func (s *AssetAdministrationShellDatabase) appendAcknowledgedAASHistoryTx(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell, previousSnapshot map[string]any, changeType string, deleted bool) error {
+	snapshot, err := aasToHistorySnapshot(aas)
+	if err != nil {
+		return err
+	}
+	return history.AppendAcknowledgedVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, previousSnapshot, snapshot, deleted)
+}
+
 func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any, changeType string) error {
 	if !history.MutationRecordingEnabled() {
 		return nil
@@ -234,7 +242,7 @@ func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotBeforeMutationT
 	if err := auth.ResourceBoundPrepareMutationTx(ctx, tx, "aas", aasIdentifier); err != nil {
 		return nil, err
 	}
-	if !history.ActiveConfig().EvidenceEnabled {
+	if !history.LiveSnapshotRequired() {
 		return nil, nil
 	}
 	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
@@ -251,7 +259,7 @@ func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotBeforeMutationT
 }
 
 func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotByDBIDBeforeMutationTx(ctx context.Context, tx *sql.Tx, aasDBID int64) (map[string]any, error) {
-	if !history.ActiveConfig().EvidenceEnabled {
+	if !history.LiveSnapshotRequired() {
 		return nil, nil
 	}
 	aas, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
@@ -359,6 +367,29 @@ func shouldEnforceFormula(ctx context.Context, step string) (bool, error) {
 		return false, common.NewInternalServerError(step + " " + err.Error())
 	}
 	return shouldEnforce, nil
+}
+
+func (s *AssetAdministrationShellDatabase) addAASAuthorizationFormula(
+	ctx context.Context,
+	selectDS *goqu.SelectDataset,
+	operation string,
+) (*goqu.SelectDataset, error) {
+	collector, err := buildAASCollector(ctx)
+	if err != nil {
+		return nil, err
+	}
+	shouldEnforce, err := shouldEnforceFormula(ctx, operation+"-SHOULDENFORCE")
+	if err != nil {
+		return nil, err
+	}
+	if !shouldEnforce {
+		return selectDS, nil
+	}
+	selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+	if err != nil {
+		return nil, common.NewInternalServerError(operation + "-ABACFORMULA " + err.Error())
+	}
+	return selectDS, nil
 }
 
 func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (bool, bool, error) {
@@ -836,6 +867,25 @@ func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAsset
 	return s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
 }
 
+// CheckSubmodelReferenceForDeletionInTransaction hides references in inaccessible AASs.
+func (s *AssetAdministrationShellDatabase) CheckSubmodelReferenceForDeletionInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier, submodelIdentifier string) error {
+	if tx == nil {
+		return common.NewInternalServerError("AASREPO-CHECKDELSMREF-NILTX transaction must not be nil")
+	}
+	ctx = auth.SelectFormulaForRight(ctx, grammar.RightsEnumDELETE)
+	if _, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-CHECKDELSMREF"); err != nil {
+		return err
+	}
+	exists, visible, err := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
+	if !exists || !visible {
+		return common.NewErrNotFound("AASREPO-CHECKDELSMREF-NOTFOUND Asset Administration Shell not found")
+	}
+	return s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
+}
+
 // checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction performs the existence check within an existing transaction.
 func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
@@ -1057,6 +1107,108 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 	return identifiers, nextCursor, nil
 }
 
+// GetDPPIDsByAssetAndMetadataSemanticIDs returns DPP metadata identifiers for matching assets.
+func (s *AssetAdministrationShellDatabase) GetDPPIDsByAssetAndMetadataSemanticIDs(
+	ctx context.Context,
+	globalAssetIDs []string,
+	metadataSemanticIDs []string,
+	limit int32,
+	cursor string,
+) ([]string, string, error) {
+	if limit < 0 {
+		return nil, "", common.NewErrBadRequest("AASREPO-GETDPPIDSBYASSETANDMETADATA-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+	}
+	if len(globalAssetIDs) == 0 || len(metadataSemanticIDs) == 0 {
+		return []string{}, "", nil
+	}
+	dialect := goqu.Dialect("postgres")
+	selectDS, err := buildGetDPPIDsByAssetAndMetadataSemanticIDsDataset(&dialect, globalAssetIDs, metadataSemanticIDs, limit, cursor)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-BUILDSQL " + err.Error())
+	}
+	selectDS, err = s.addDPPIDLookupAuthorization(ctx, selectDS, "AASREPO-GETDPPIDSBYASSETANDMETADATA")
+	if err != nil {
+		return nil, "", err
+	}
+	query, args, err := selectDS.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-BUILDSQL " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-EXECSQL " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	identifiers := make([]string, 0, limit+1)
+	for rows.Next() {
+		var identifier string
+		if err = rows.Scan(&identifier); err != nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-SCANROW " + err.Error())
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-ITERROWS " + err.Error())
+	}
+	nextCursor := ""
+	if limit > 0 && len(identifiers) > int(limit) {
+		identifiers = identifiers[:limit]
+		nextCursor = identifiers[len(identifiers)-1]
+	}
+	return identifiers, nextCursor, nil
+}
+
+// DPPAssetIdentifiers identifies a DPP and its owning AAS.
+type DPPAssetIdentifiers struct {
+	AASID string
+	DPPID string
+}
+
+// GetDPPAssetIdentifiersByAssetAndMetadataSemanticIDs returns visible DPP and owner identifiers for matching assets.
+func (s *AssetAdministrationShellDatabase) GetDPPAssetIdentifiersByAssetAndMetadataSemanticIDs(
+	ctx context.Context,
+	globalAssetIDs []string,
+	metadataSemanticIDs []string,
+	limit int32,
+) ([]DPPAssetIdentifiers, error) {
+	if limit < 0 {
+		return nil, common.NewErrBadRequest("AASREPO-GETDPPASSETIDS-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+	}
+	if len(globalAssetIDs) == 0 || len(metadataSemanticIDs) == 0 {
+		return []DPPAssetIdentifiers{}, nil
+	}
+	dialect := goqu.Dialect("postgres")
+	selectDS, err := buildGetDPPAssetIdentifiersDataset(&dialect, globalAssetIDs, metadataSemanticIDs, limit)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-BUILDSQL " + err.Error())
+	}
+	selectDS, err = s.addDPPIDLookupAuthorization(ctx, selectDS, "AASREPO-GETDPPASSETIDS")
+	if err != nil {
+		return nil, err
+	}
+	query, args, err := selectDS.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-BUILDSQL " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-EXECSQL " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	identifiers := make([]DPPAssetIdentifiers, 0, limit+1)
+	for rows.Next() {
+		var identifier DPPAssetIdentifiers
+		if err = rows.Scan(&identifier.AASID, &identifier.DPPID); err != nil {
+			return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-SCANROW " + err.Error())
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-ITERROWS " + err.Error())
+	}
+	return identifiers, nil
+}
+
 // GetAssetAdministrationShellByID returns an AAS by identifier.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(ctx context.Context, aasIdentifier string) (types.IAssetAdministrationShell, error) {
 	var result types.IAssetAdministrationShell
@@ -1103,6 +1255,21 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellByIDInTran
 	}
 
 	return s.getAssetAdministrationShellMapByDBIDInTransaction(ctx, tx, aasDBID)
+}
+
+// GetAssetAdministrationShellByIDForUpdateInTransaction locks and returns an AAS using an existing transaction.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDForUpdateInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+) (types.IAssetAdministrationShell, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("AASREPO-GETAASBYIDFORUPDATE-NILTX transaction must not be nil")
+	}
+	if _, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-GETAASBYIDFORUPDATE"); err != nil {
+		return nil, err
+	}
+	return s.getAssetAdministrationShellByIDInTransaction(ctx, tx, aasIdentifier)
 }
 
 // PutAssetAdministrationShellByID upserts an AAS and performs ABAC write checks when enabled.
@@ -1263,15 +1430,11 @@ func (s *AssetAdministrationShellDatabase) appendAcknowledgedAASPutHistoryTx(
 	if !history.MutationRecordingEnabled() {
 		return nil
 	}
-	var previousSnapshot map[string]any
-	var err error
-	if history.ActiveConfig().EvidenceEnabled {
-		previousSnapshot, err = aasToHistorySnapshot(previous)
-		if err != nil {
-			return err
-		}
+	previousSnapshot, err := aasToHistorySnapshot(previous)
+	if err != nil {
+		return err
 	}
-	return s.appendAASHistoryTx(ctx, tx, previous, previousSnapshot, history.ChangeUpdated, false)
+	return s.appendAcknowledgedAASHistoryTx(ctx, tx, previous, previousSnapshot, history.ChangeUpdated, false)
 }
 
 func (s *AssetAdministrationShellDatabase) loadPreviousAASForPutTx(
@@ -1356,7 +1519,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 }
 
 func (s *AssetAdministrationShellDatabase) loadAASDeleteHistorySnapshotTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (map[string]any, error) {
-	if !history.ActiveConfig().EvidenceEnabled {
+	if !history.LiveSnapshotRequired() {
 		return nil, nil
 	}
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)

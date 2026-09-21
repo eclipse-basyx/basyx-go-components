@@ -691,7 +691,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
+                  $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     post:
@@ -717,7 +717,7 @@ paths:
             schema:
               type: array
               items:
-                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
+                $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
         required: true
       responses:
         '201':
@@ -727,7 +727,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
+                  $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
         '404':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         default:

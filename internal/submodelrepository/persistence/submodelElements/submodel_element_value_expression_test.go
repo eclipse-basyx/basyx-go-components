@@ -73,6 +73,24 @@ func TestGetSMEValueExpressionForReadSanitizesOperationVariableBlobs(t *testing.
 	require.NotContains(t, withBlobValueSQL, `"current"."payload" #- "target"."path"`)
 }
 
+// PostgreSQL does not guarantee jsonb_agg row order without an explicit
+// ORDER BY: the planner is free to return multilanguage_property_value rows
+// in whatever order a given scan happens to produce, which need not match the
+// order the values were originally submitted in. Without this ordering, the
+// same MultiLanguageProperty read back twice from an otherwise-unchanged
+// database can come back in a different slice order and be misdetected as
+// changed by PUT reconciliation, publishing a phantom event feed update.
+func TestGetSMEValueExpressionOrdersMultiLanguagePropertyValues(t *testing.T) {
+	t.Parallel()
+
+	dialect := goqu.Dialect("postgres")
+	sql, _, err := dialect.
+		Select(getSMEValueExpressionForRead(dialect, false)).
+		ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, sql, `jsonb_agg(jsonb_build_object('language'::text, "mlpv"."language", 'text'::text, "mlpv"."text", 'id'::text, "mlpv"."id") ORDER BY "mlpv"."id")`)
+}
+
 func TestGetSMEValueExpressionDoesNotBindStaticJSONKeys(t *testing.T) {
 	t.Parallel()
 

@@ -64,6 +64,31 @@ func (s *operationAsyncLocationService) InvokeOperationSubmodelRepo(
 	}), nil
 }
 
+func (s *operationAsyncLocationService) InvokeOperationValueOnly(
+	_ context.Context,
+	_ string,
+	_ string,
+	_ string,
+	_ model.OperationRequestValueOnly,
+	_ bool,
+) (model.ImplResponse, error) {
+	return model.Response(http.StatusAccepted, Redirect{
+		Location: "/submodels/c20/submodel-elements/Ops.Add/operation-status/handle-1",
+	}), nil
+}
+
+func (s *operationAsyncLocationService) InvokeOperationAsyncValueOnly(
+	_ context.Context,
+	_ string,
+	_ string,
+	_ string,
+	_ model.OperationRequestValueOnly,
+) (model.ImplResponse, error) {
+	return model.Response(http.StatusAccepted, Redirect{
+		Location: "/submodels/c20/submodel-elements/Ops.Add/operation-status/handle-1",
+	}), nil
+}
+
 func (s *operationAsyncLocationService) GetOperationAsyncStatus(
 	_ context.Context,
 	_ string,
@@ -109,6 +134,45 @@ func TestInvokeCompatibilityAliasReturnsContextAwareLocation(t *testing.T) {
 		"http://example.com/api/v3/submodels/c20/submodel-elements/Ops.Add/operation-status/handle-1",
 		response.Header().Get("Location"),
 	)
+}
+
+func TestValueOnlyAsyncRoutesReturnContextAwareLocation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		path   string
+		invoke func(*SubmodelRepositoryAPIAPIController, http.ResponseWriter, *http.Request)
+	}{
+		{
+			name: "compatibility alias",
+			path: "/api/v3/submodels/c20/submodel-elements/Ops.Add/invoke/$value?async=true",
+			invoke: func(controller *SubmodelRepositoryAPIAPIController, response http.ResponseWriter, request *http.Request) {
+				controller.InvokeOperationValueOnly(response, request)
+			},
+		},
+		{
+			name: "async endpoint",
+			path: "/api/v3/submodels/c20/submodel-elements/Ops.Add/invoke-async/$value",
+			invoke: func(controller *SubmodelRepositoryAPIAPIController, response http.ResponseWriter, request *http.Request) {
+				controller.InvokeOperationAsyncValueOnly(response, request)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			request := operationAsyncRequest(t, test.path)
+			response := httptest.NewRecorder()
+			controller := NewSubmodelRepositoryAPIAPIController(&operationAsyncLocationService{}, "", "")
+
+			test.invoke(controller, response, request)
+
+			require.Equal(t, http.StatusAccepted, response.Code)
+			require.Equal(t, "http://example.com/api/v3/submodels/c20/submodel-elements/Ops.Add/operation-status/handle-1", response.Header().Get("Location"))
+		})
+	}
 }
 
 func TestGetOperationAsyncStatusReturnsContextAwareResultLocation(t *testing.T) {

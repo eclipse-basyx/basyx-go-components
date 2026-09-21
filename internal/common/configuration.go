@@ -38,8 +38,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/amqp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/kafka"
 	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/spf13/viper"
@@ -199,6 +202,9 @@ var DefaultConfig = struct {
 }
 
 const (
+	// DocumentationURL is the public BaSyx documentation entry point.
+	DocumentationURL = "https://wiki.basyx.org"
+
 	// ABACPolicyFileImportAlways imports abac.modelPath on every service start.
 	ABACPolicyFileImportAlways = "always"
 	// ABACPolicyFileImportIfMissing imports abac.modelPath only when no active DB policy exists.
@@ -277,7 +283,7 @@ type Config struct {
 	JWS      JWSConfig      `mapstructure:"jws" yaml:"jws"`           // JWS signing configuration
 	Swagger  SwaggerConfig  `mapstructure:"swagger" yaml:"swagger"`   // Swagger/OpenAPI documentation configuration
 	History  HistoryConfig  `mapstructure:"history" yaml:"history"`   // History/audit behavior
-	Eventing EventingConfig `mapstructure:"eventing" yaml:"eventing"` // Eventing placeholders
+	Eventing EventingConfig `mapstructure:"eventing" yaml:"eventing"` // Experimental eventing
 }
 
 // JWSConfig contains JSON Web Signature configuration parameters.
@@ -326,13 +332,31 @@ type HistoryIntegrityAnchorConfig struct {
 	Provider string `mapstructure:"provider" yaml:"provider" json:"provider"` // none today; immudb/Rekor/Trillian later
 }
 
-// EventingConfig reserves future-compatible eventing configuration.
+// EventingConfig configures the CloudEvents feed and asynchronous transports.
 type EventingConfig struct {
-	Enabled       bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Format        string   `mapstructure:"format" yaml:"format" json:"format"`
-	Sinks         []string `mapstructure:"sinks" yaml:"sinks" json:"sinks"`
-	OutboxEnabled bool     `mapstructure:"outboxEnabled" yaml:"outboxEnabled" json:"outboxEnabled"`
-	TopicPrefix   string   `mapstructure:"topicPrefix" yaml:"topicPrefix" json:"topicPrefix"`
+	AMQP          amqp.Config     `mapstructure:"amqp" yaml:"amqp" json:"amqp"`
+	Kafka         kafka.Config    `mapstructure:"kafka" yaml:"kafka" json:"kafka"`
+	SourceBaseURL string          `mapstructure:"sourceBaseUrl" yaml:"sourceBaseUrl" json:"sourceBaseUrl"`
+	SchemaBaseURL string          `mapstructure:"schemaBaseUrl" yaml:"schemaBaseUrl" json:"schemaBaseUrl"`
+	MQTT          mqtt.Config     `mapstructure:"mqtt" yaml:"mqtt" json:"mqtt"`
+	Enabled       bool            `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Format        string          `mapstructure:"format" yaml:"format" json:"format"`
+	Sinks         []string        `mapstructure:"sinks" yaml:"sinks" json:"sinks"`
+	OutboxEnabled bool            `mapstructure:"outboxEnabled" yaml:"outboxEnabled" json:"outboxEnabled"`
+	TopicPrefix   string          `mapstructure:"topicPrefix" yaml:"topicPrefix" json:"topicPrefix"`
+	Feed          EventFeedConfig `mapstructure:"feed" yaml:"feed" json:"feed"`
+}
+
+// EventFeedConfig configures the REST Event Feed module.
+type EventFeedConfig struct {
+	Enabled               bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	MaxAgeDays            int    `mapstructure:"maxAgeDays" yaml:"maxAgeDays" json:"maxAgeDays"`
+	HardDeleteGraceDays   int    `mapstructure:"hardDeleteGraceDays" yaml:"hardDeleteGraceDays" json:"hardDeleteGraceDays"`
+	MaxPageSize           int    `mapstructure:"maxPageSize" yaml:"maxPageSize" json:"maxPageSize"`
+	SourceBaseURL         string `mapstructure:"sourceBaseUrl" yaml:"sourceBaseUrl" json:"sourceBaseUrl"`
+	SchemaBaseURL         string `mapstructure:"schemaBaseUrl" yaml:"schemaBaseUrl" json:"schemaBaseUrl"`
+	CleanupIntervalHours  int    `mapstructure:"cleanupIntervalHours" yaml:"cleanupIntervalHours" json:"cleanupIntervalHours"`
+	PublishIntervalMillis int    `mapstructure:"publishIntervalMillis" yaml:"publishIntervalMillis" json:"publishIntervalMillis"`
 }
 
 // SwaggerConfig contains Swagger/OpenAPI documentation configuration parameters.
@@ -533,6 +557,13 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 	applyHistoryEnvOverrides(cfg)
 	applyEventingEnvOverrides(cfg)
+	if err = applyMQTTEnvOverrides(cfg); err != nil {
+		return nil, err
+	}
+	applyAMQPEnvOverrides(cfg)
+	if err = applyKafkaEnvOverrides(cfg); err != nil {
+		return nil, err
+	}
 	if err = validateHistoryAndEventingConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -932,6 +963,18 @@ func applyEventingEnvOverrides(cfg *Config) {
 	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_TOPIC_PREFIX"); ok {
 		cfg.Eventing.TopicPrefix = value
 	}
+	applyBoolEnv("BASYX_EVENTING_FEED_ENABLED", func(value bool) { cfg.Eventing.Feed.Enabled = value })
+	applyIntEnv("BASYX_EVENTING_FEED_MAX_AGE_DAYS", func(value int) { cfg.Eventing.Feed.MaxAgeDays = value })
+	applyIntEnv("BASYX_EVENTING_FEED_HARD_DELETE_GRACE_DAYS", func(value int) { cfg.Eventing.Feed.HardDeleteGraceDays = value })
+	applyIntEnv("BASYX_EVENTING_FEED_MAX_PAGE_SIZE", func(value int) { cfg.Eventing.Feed.MaxPageSize = value })
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_FEED_SOURCE_BASE_URL"); ok {
+		cfg.Eventing.Feed.SourceBaseURL = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_FEED_SCHEMA_BASE_URL"); ok {
+		cfg.Eventing.Feed.SchemaBaseURL = value
+	}
+	applyIntEnv("BASYX_EVENTING_FEED_CLEANUP_INTERVAL_HOURS", func(value int) { cfg.Eventing.Feed.CleanupIntervalHours = value })
+	applyIntEnv("BASYX_EVENTING_FEED_PUBLISH_INTERVAL_MILLIS", func(value int) { cfg.Eventing.Feed.PublishIntervalMillis = value })
 }
 
 func validateHistoryAndEventingConfig(cfg *Config) error {
@@ -1038,8 +1081,32 @@ func validateIntegrityAnchorConfig(cfg HistoryIntegrityAnchorConfig) error {
 }
 
 func validateEventingConfig(cfg EventingConfig) error {
-	if cfg.Enabled || cfg.OutboxEnabled || len(cfg.Sinks) > 0 {
-		return fmt.Errorf("CONFIG-EVENTING-NOTIMPLEMENTED eventing publishing and outbox processing are not implemented yet")
+	if err := validateEventTransports(cfg); err != nil {
+		return err
+	}
+	if err := validateEventURLs(cfg); err != nil {
+		return err
+	}
+	if cfg.Enabled || cfg.Feed.Enabled {
+		format := strings.ToLower(strings.TrimSpace(cfg.Format))
+		if format != "" && format != "cloudevents" {
+			return fmt.Errorf("CONFIG-EVENTING-FORMAT unsupported eventing.format %q (supported: cloudevents)", cfg.Format)
+		}
+	}
+	if !cfg.Feed.Enabled {
+		return nil
+	}
+	if cfg.Feed.MaxPageSize < 0 {
+		return fmt.Errorf("CONFIG-EVENTING-FEED-MAXPAGESIZE eventing.feed.maxPageSize must not be negative")
+	}
+	if cfg.Feed.MaxAgeDays < 0 {
+		return fmt.Errorf("CONFIG-EVENTING-FEED-MAXAGE eventing.feed.maxAgeDays must not be negative")
+	}
+	if cfg.Feed.HardDeleteGraceDays < 0 {
+		return fmt.Errorf("CONFIG-EVENTING-FEED-HARDDELETE eventing.feed.hardDeleteGraceDays must not be negative")
+	}
+	if cfg.Feed.PublishIntervalMillis < 0 {
+		return fmt.Errorf("CONFIG-EVENTING-FEED-PUBLISHINTERVAL eventing.feed.publishIntervalMillis must not be negative")
 	}
 	return nil
 }
@@ -1265,12 +1332,34 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("history.evidence.signing.required", DefaultConfig.HistoryEvidenceSigningRequired)
 	v.SetDefault("history.integrityAnchor.provider", DefaultConfig.HistoryIntegrityAnchorProvider)
 
-	// Eventing placeholders
+	// Eventing / Event Feed
 	v.SetDefault("eventing.enabled", false)
 	v.SetDefault("eventing.format", "cloudevents")
 	v.SetDefault("eventing.sinks", []string{})
 	v.SetDefault("eventing.outboxEnabled", false)
 	v.SetDefault("eventing.topicPrefix", "basyx")
+	v.SetDefault("eventing.sourceBaseUrl", "")
+	v.SetDefault("eventing.schemaBaseUrl", "")
+	v.SetDefault("eventing.amqp.sinkId", "amqp")
+	v.SetDefault("eventing.kafka.brokers", []string{})
+	v.SetDefault("eventing.kafka.topic", "basyx.events")
+	v.SetDefault("eventing.kafka.clientId", "basyx")
+	v.SetDefault("eventing.kafka.producerBatchMaxBytes", 0)
+	v.SetDefault("eventing.kafka.sinkId", "kafka")
+	v.SetDefault("eventing.kafka.tlsEnabled", false)
+	v.SetDefault("eventing.mqtt.broker", "")
+	v.SetDefault("eventing.mqtt.clientId", "")
+	v.SetDefault("eventing.mqtt.sinkId", "mqtt")
+	v.SetDefault("eventing.mqtt.qos", 1)
+	v.SetDefault("eventing.mqtt.retained", false)
+	v.SetDefault("eventing.feed.enabled", false)
+	v.SetDefault("eventing.feed.maxAgeDays", 30)
+	v.SetDefault("eventing.feed.hardDeleteGraceDays", 10)
+	v.SetDefault("eventing.feed.maxPageSize", 100)
+	v.SetDefault("eventing.feed.sourceBaseUrl", "")
+	v.SetDefault("eventing.feed.schemaBaseUrl", "")
+	v.SetDefault("eventing.feed.cleanupIntervalHours", 24)
+	v.SetDefault("eventing.feed.publishIntervalMillis", 250)
 
 	// Swagger defaults
 	v.SetDefault("swagger.enabled", DefaultConfig.SwaggerEnabled)
@@ -1313,6 +1402,7 @@ func LogConfiguration(cfg *Config, configPath string) {
 	slog.Info(
 		"configuration loaded",
 		"configuration.source", source,
+		"documentation.url", DocumentationURL,
 		"logging.format", cfg.Logging.Format,
 		"logging.level", cfg.Logging.Level,
 		slog.Group(
@@ -1329,6 +1419,7 @@ func LogConfiguration(cfg *Config, configPath string) {
 			"swagger_enabled", cfg.Swagger.Enabled,
 			"history_mode", cfg.History.Mode,
 			"eventing_enabled", cfg.Eventing.Enabled,
+			"eventing_feed_enabled", cfg.Eventing.Feed.Enabled,
 		),
 	)
 }

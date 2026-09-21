@@ -1,0 +1,7 @@
+kind: fixed
+body: Serialize AAS Entity elements in full DPP read representations as EN 18223 DataElementCollection values, preserving entity identity, specific asset references, nested statements, multilingual values, and file resources. Unsupported full element conversions now return 422 instead of being reported as missing DPPs.
+time: 2026-09-16T08:00:00+02:00
+custom:
+    Impact: High
+    PullRequest: 691
+    SecurityImpact: Existing authorization and content-selection filtering remain unchanged; the fix only corrects authorized DPP read serialization and error classification.

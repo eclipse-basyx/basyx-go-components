@@ -1,0 +1,12 @@
+{
+  "modelType": "SubmodelElementCollection",
+  "idShort": "CN2",
+  "value": [
+    {
+      "modelType": "Property",
+      "idShort": "ManufacturerChangeID",
+      "valueType": "xs:string",
+      "value": "CN2"
+    }
+  ]
+}

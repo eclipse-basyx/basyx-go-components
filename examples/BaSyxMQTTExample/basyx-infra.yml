@@ -1,0 +1,11 @@
+infrastructures:
+  default: mqtt
+
+  mqtt:
+    name: MQTT Playground
+    template: mono-all
+    components:
+      aasEnvironment:
+        baseUrl: "http://localhost:8082"
+    security:
+      type: none

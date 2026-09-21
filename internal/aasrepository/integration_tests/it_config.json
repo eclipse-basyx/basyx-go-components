@@ -502,17 +502,11 @@
 		"expectedStatus": 201
 	},
 	{
-		"context": "009.6 - GET /shells/{aasIdentifier}/submodel-refs - filter by limit",
+		"context": "009.6 - GET /shells/{aasIdentifier}/submodel-refs - follow limit and returned cursor",
+		"action": "ASSERT_SUBMODEL_REFERENCE_PAGINATION",
 		"method": "GET",
 		"endpoint": "{{BASYX_IT_API_URL}}/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?limit=2",
 		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferencesFilterLimit.json",
-		"expectedStatus": 200
-	},
-	{
-		"context": "009.7 - GET /shells/{aasIdentifier}/submodel-refs - filter by cursor",
-		"method": "GET",
-		"endpoint": "{{BASYX_IT_API_URL}}/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?cursor=NQ",
-		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferencesFilterCursor.json",
 		"expectedStatus": 200
 	},
 	{

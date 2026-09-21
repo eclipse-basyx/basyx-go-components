@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package api tests the Asset Administration Shell repository API service.
 package api
 
 import (
@@ -59,7 +60,7 @@ func TestGetAllAssetAdministrationShellsRejectsInvalidCursorWithStandardErrorBod
 	t.Parallel()
 
 	invalidCursor := "%"
-	_, expectedDecodeErr := common.DecodeString(invalidCursor)
+	_, expectedDecodeErr := common.DecodeAPIString(invalidCursor)
 	require.Error(t, expectedDecodeErr)
 
 	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, false)
@@ -135,6 +136,15 @@ func TestInvokeOperationAsyncAasRepositoryRequiresClientTimeoutDuration(t *testi
 
 	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, false)
 	response, err := sut.InvokeOperationAsyncAasRepository(contextWithABACDisabled(t), "", "", "", model.OperationRequest{})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, response.Code)
+}
+
+func TestInvokeOperationAsyncValueOnlyAasRepositoryRequiresClientTimeoutDuration(t *testing.T) {
+	t.Parallel()
+
+	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil, false)
+	response, err := sut.InvokeOperationAsyncValueOnlyAasRepository(contextWithABACDisabled(t), "", "", "", model.OperationRequestValueOnly{})
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, response.Code)
 }

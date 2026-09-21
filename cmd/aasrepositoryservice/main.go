@@ -35,14 +35,14 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeedsetup"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -51,6 +51,7 @@ import (
 	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
+	"github.com/go-chi/chi/v5"
 )
 
 //go:embed openapi.yaml
@@ -170,11 +171,23 @@ func runServer(ctx context.Context, configPath string) error {
 		AASRepository:      aasDatabase,
 		SubmodelRepository: submodelDatabase,
 	}
+	eventFeedModule, err := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg))
+	if err != nil {
+		return err
+	}
+	if err = eventfeedsetup.Start(ctx, sharedDB, cfg, eventFeedModule); err != nil {
+		return err
+	}
+	defer eventFeedModule.Stop()
+	eventFeedModule.StartRetentionLoop(ctx)
+	eventFeedModule.StartPublishLoop(ctx)
+
 	aasSvc := aasenvironment.NewCustomAASRepositoryService(
 		api.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasDatabase, submodelDatabase, false, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)
+	aasSvc.SetEventFeed(eventFeedModule)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
 	descSvc := openapi.NewDescriptionAPIAPIService(common.ResourceBoundEnabled(cfg))
@@ -208,6 +221,8 @@ func runServer(ctx context.Context, configPath string) error {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+
+	eventFeedModule.RegisterRoutes(apiRouter)
 
 	r.Mount(base, apiRouter)
 

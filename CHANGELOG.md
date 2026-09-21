@@ -8,6 +8,56 @@ Each entry states whether users need to take action and records the security
 consequence separately. High-impact entries require an API, configuration,
 policy, or deployment update. Low-impact entries do not require migration.
 
+## v1.0.12 (2026-09-10)
+
+Changes since [v1.0.11](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.0.11...v1.0.12).
+
+### Added
+
+* **High impact** — Synchronize DPP API writes with AAS and Submodel registries and product discovery. ([#650](https://github.com/eclipse-basyx/basyx-go-components/pull/650))
+  * **Security:** DPP write authorization now also covers the configured internal AAS Registry, Submodel Registry, and Discovery mutations; their independent read policies continue to control visibility.
+
+* **Low impact** — AAS Environment Service shell queries can evaluate `$sm` and `$sme` field conditions against Submodels referenced by each Asset Administration Shell, with logical `$match` correlating all enclosed conditions to the same referenced Submodel hierarchy. ([#654](https://github.com/eclipse-basyx/basyx-go-components/pull/654))
+  * **Security:** Cross-resource query fields use the authorization view of their corresponding semantic resource.
+
+* **Low impact** — Querying the text of a MultiLanguageProperty ([#659](https://github.com/eclipse-basyx/basyx-go-components/pull/659))
+  * **Security:** None
+
+* **Low impact** — The AASX File Server now supports durable asynchronous package uploads through `POST /packages-async`. ([#609](https://github.com/eclipse-basyx/basyx-go-components/pull/609))
+  * **Security:** Async uploads use existing create/read authorization; status and results are restricted to the submitting owner.
+
+
+### Changed
+
+* **High impact** — ABAC claims retain their JWT JSON types. `CLAIM` selects a top-level value and `CLAIMPATH` selects a nested value using a non-empty RFC 6901 JSON Pointer. Every declared claim must be present before its rule can become active; values are resolved and type-checked when formulas evaluate them. Uncast scalar comparisons require strings; claim casts accept only the corresponding JSON type. Exact string-array membership uses `$contains` with `CLAIMPATH` first. The branch-only `$in` operator has been removed, so policies must migrate from `{"$in":[scalar,CLAIMPATH]}` to `{"$contains":[CLAIMPATH,scalar]}`. Formula evaluation uses true/false/indeterminate logic, and CREATE/UPDATE checks are performed on staged state before commit, with UPDATE requiring both current and prospective state. ([#616](https://github.com/eclipse-basyx/basyx-go-components/pull/616))
+  * **Security:** Claim evaluation now follows the documented JSON types and paths. Missing declared claims make the rule ineligible. Present `null`, wrong-type, object, mixed-array, and unsupported values are indeterminate and fail closed when evaluated; empty string arrays evaluate false.
+
+* **High impact** — Expose AAS-managed File attachments as AAS Environment attachment URLs in DPP representations; GENERAL_EXTERNALURL is required to serialize these URLs even when registry synchronization is disabled. ([#650](https://github.com/eclipse-basyx/basyx-go-components/pull/650))
+  * **Security:** None.
+
+* **Low impact** — Query-capable repository, registry, and discovery endpoints now represent caller conditions, public list selectors, projections, and authorization constraints in an immutable request-scoped semantic access-view intermediate representation. Responses for authorized resources remain compatible. ([#654](https://github.com/eclipse-basyx/basyx-go-components/pull/654))
+  * **Security:** The policy version, claims, trusted global attributes, and per-resource access views remain consistent throughout each request.
+
+* **High impact** — Database schema `v1.1.19` requires PostgreSQL 16 or newer and installs `basyx_safe_regex_pattern` for total regular-expression evaluation and `basyx_validated_cast_input` for safe nested query casts. Run the configuration service before starting updated services. Deployments using an older PostgreSQL version must upgrade before applying this schema patch. ([#654](https://github.com/eclipse-basyx/basyx-go-components/pull/654))
+  * **Security:** Invalid regular-expression and cast inputs use consistent no-match semantics. Nested casts validate and convert the same textual value without duplicating inner SQL expressions.
+
+
+### Fixed
+
+* **Low impact** — Invalid ABAC claim comparisons now retain their indeterminate result through `$not`, `$and`, `$or`, and `$match` instead of being converted to Boolean values. ([#616](https://github.com/eclipse-basyx/basyx-go-components/pull/616))
+  * **Security:** Invalid or unusable claim values now consistently fail closed.
+
+* **Low impact** — Reduce database round trips and redundant root writes when updating AAS and Submodel Descriptors. ([#658](https://github.com/eclipse-basyx/basyx-go-components/pull/658))
+  * **Security:** None.
+
+* **Low impact** — Query conditions now evaluate fields and related resources through their effective semantic access view, including negated conditions, nested `$match`, response filters, list selectors, casts, and regular expressions. AAS object grants no longer authorize nested Submodel data, Fragment objects constrain exact SME fields, and list selectors are emitted only once. Incompatible cast values and invalid regular expressions return no match without hiding PostgreSQL's regex operator from index planning, and Basic Discovery global asset identifier lookups use the Basic Discovery semantic field. ([#654](https://github.com/eclipse-basyx/basyx-go-components/pull/654))
+  * **Security:** Caller and policy expressions now use consistent per-resource authorization and query-evaluation semantics. Nested AAS Environment Submodel routes require dedicated Submodel or Submodel Element grants.
+
+* **High impact** — Nested query casts preserve authorization checks without exponential SQL expansion or unsupported PostgreSQL casts. Policy routes containing parent segments derive query permissions from the same mounted path as direct authorization. Queries and policy expressions now enforce 64 JSON container levels and 8,192 JSON tokens before recursive decoding. ([#654](https://github.com/eclipse-basyx/basyx-go-components/pull/654))
+  * **Security:** Bounds expression complexity and SQL expansion, prevents nested cast database errors, and prevents semantic permissions from escaping the configured route mount. Existing oversized expressions must be reduced.
+
+* **High impact** — Compiled query policies are copied structurally so many individually valid access rules retain their grants when combined. External query and policy-expression limits remain enforced. ([#654](https://github.com/eclipse-basyx/basyx-go-components/pull/654))
+  * **Security:** Prevents valid combined allow rules from silently becoming deny-all while preserving fragment scope, indeterminate conditions, and request policy isolation.
 ## v1.0.11 (2026-08-31)
 
 Changes since [v1.0.10](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.0.10...v1.0.11).

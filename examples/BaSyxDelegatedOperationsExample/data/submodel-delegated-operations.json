@@ -81,6 +81,84 @@
           }
         }
       ]
+    },
+    {
+      "modelType": "Operation",
+      "idShort": "AddNumbersSyncValueOnly",
+      "qualifiers": [
+        {
+          "type": "invocationDelegation",
+          "valueType": "xs:string",
+          "value": "http://delegated-operation-service:8080/delegate/add/sync"
+        }
+      ],
+      "inputVariables": [
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "numberA",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        },
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "numberB",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        }
+      ],
+      "outputVariables": [
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "sum",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "modelType": "Operation",
+      "idShort": "AddNumbersAsyncValueOnly",
+      "qualifiers": [
+        {
+          "type": "invocationDelegation",
+          "valueType": "xs:string",
+          "value": "http://delegated-operation-service:8080/delegate/add/async"
+        }
+      ],
+      "inputVariables": [
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "numberA",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        },
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "numberB",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        }
+      ],
+      "outputVariables": [
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "sum",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        }
+      ]
     }
   ]
 }

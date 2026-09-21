@@ -365,36 +365,8 @@ func encodeIdentifierForPath(identifier string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(identifier))
 }
 
-func requestScheme(r *http.Request) string {
-	return common.RequestScheme(r)
-}
-
-func requestHost(r *http.Request) string {
-	return common.RequestHost(r)
-}
-
-func normalizeContextPathForBaseLocation(contextPath string) string {
-	trimmed := strings.TrimSpace(contextPath)
-	if trimmed == "" || trimmed == "/" {
-		return ""
-	}
-
-	return "/" + strings.Trim(trimmed, "/")
-}
-
 func (c *AssetAdministrationShellRegistryAPIAPIController) buildBaseLocation(r *http.Request) string {
-	if externalBaseURL := common.ExternalBaseURLFromContext(r.Context()); externalBaseURL != "" {
-		return externalBaseURL
-	}
-
-	host := requestHost(r)
-	if host == "" {
-		return ""
-	}
-
-	basePath := normalizeContextPathForBaseLocation(c.contextPath)
-
-	return requestScheme(r) + "://" + host + basePath
+	return common.APIBaseLocation(r, c.contextPath)
 }
 
 func (c *AssetAdministrationShellRegistryAPIAPIController) buildAASDescriptorLocationFromEncodedIdentifier(r *http.Request, encodedAASIdentifier string) string {

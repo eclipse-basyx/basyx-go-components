@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eclipse-basyx:event-feed:schemas:metamodel-aasChangeEvent.v1.schema.json",
+  "title": "metamodel-aasChangeEvent.v1",
+  "description": "Metamodel-aligned schema for Asset Administration Shell change events. Uses AAS Reference objects as defined in IDTA-01001. Submodel references use ModelReference<Submodel>.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "aasId"
+  ],
+  "$defs": {
+    "Key": {
+      "type": "object",
+      "description": "A single key within a Reference chain. Corresponds to Key in the AAS metamodel (IDTA-01001).",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The model element type this key refers to.",
+          "enum": [
+            "AssetAdministrationShell",
+            "ConceptDescription",
+            "GlobalReference",
+            "Identifiable",
+            "Submodel"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The identifier or local ID of the referenced element."
+        }
+      }
+    },
+    "Reference": {
+      "type": "object",
+      "description": "A Reference as defined in the AAS metamodel (IDTA-01001). Can be an ExternalReference or a ModelReference.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "keys"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "ExternalReference",
+            "ModelReference"
+          ],
+          "description": "Distinguishes between external references (e.g. IRDIs, IRIs) and model-internal references."
+        },
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Key"
+          },
+          "description": "Ordered sequence of keys forming the reference path."
+        },
+        "referredSemanticId": {
+          "$ref": "#/$defs/Reference",
+          "description": "Optional: semantic ID of the referenced element."
+        }
+      }
+    },
+    "ModelReferenceToSubmodel": {
+      "type": "object",
+      "description": "A ModelReference<Submodel>: a navigable reference whose first key has type 'Submodel'. Corresponds to ModelReference<Submodel> in the AAS metamodel.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "keys"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "ModelReference",
+          "description": "Must be 'ModelReference' for a model-internal reference."
+        },
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Key"
+          },
+          "description": "Reference chain. The first key must have type 'Submodel' and value equal to the Submodel.id."
+        },
+        "referredSemanticId": {
+          "$ref": "#/$defs/Reference",
+          "description": "Optional: semantic ID of the referenced submodel."
+        }
+      }
+    }
+  },
+  "properties": {
+    "aasId": {
+      "type": "string",
+      "format": "uri",
+      "minLength": 1,
+      "description": "Identifier of the AAS (URI). Corresponds to AssetAdministrationShell.id in the AAS metamodel."
+    },
+    "globalAssetId": {
+      "type": "string",
+      "format": "uri",
+      "minLength": 1,
+      "description": "Global identifier of the associated asset (URI). Corresponds to AssetInformation.globalAssetId. Optional; omitted when unknown."
+    },
+    "submodels": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ModelReferenceToSubmodel"
+      },
+      "description": "Submodels associated with this AAS as ModelReference<Submodel> objects. Each reference contains the Submodel.id as the first key value and may carry a referredSemanticId."
+    }
+  }
+}

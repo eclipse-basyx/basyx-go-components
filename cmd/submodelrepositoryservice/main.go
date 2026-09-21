@@ -35,13 +35,13 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeedsetup"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -52,6 +52,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
+	"github.com/go-chi/chi/v5"
 )
 
 //go:embed openapi.yaml
@@ -176,12 +177,24 @@ func runServer(ctx context.Context, configPath string) error {
 		SubmodelRepository: smDatabase,
 	}
 	enableReferencingAASDescriptorEmbeddingSync := registrySyncConfig.SubmodelRegistryIntegration
+	eventFeedModule, eventFeedErr := eventfeed.NewModule(sharedDB, common.NewEventFeedConfig(cfg))
+	if eventFeedErr != nil {
+		return eventFeedErr
+	}
+	if err = eventfeedsetup.Start(ctx, sharedDB, cfg, eventFeedModule); err != nil {
+		return err
+	}
+	defer eventFeedModule.Stop()
+	eventFeedModule.StartRetentionLoop(ctx)
+	eventFeedModule.StartPublishLoop(ctx)
+
 	smSvc := aasenvironment.NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
 		api.NewSubmodelRepositoryAPIAPIService(ctx, *smDatabase, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 		enableReferencingAASDescriptorEmbeddingSync,
 	)
+	smSvc.SetEventFeed(eventFeedModule)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", cfg.Server.StrictVerification)
 
 	serializationSvc := api.NewSerializationAPIAPIService()
@@ -227,6 +240,8 @@ func runServer(ctx context.Context, configPath string) error {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+
+	eventFeedModule.RegisterRoutes(apiRouter)
 
 	// Mount protected API under base path
 	r.Mount(base, apiRouter)

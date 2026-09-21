@@ -218,89 +218,6 @@ function renderBody(body, variables) {
   return ["  body:", "    type: json", "    data: |-", indent(resolveVariables(body.raw, variables), 6)].join("\n");
 }
 
-function renderSingleHeaders(headers, variables, spaces) {
-  const filtered = (headers || []).filter((header) => header.key.toLowerCase() !== "authorization");
-
-  if (filtered.length === 0) {
-    return [];
-  }
-
-  return [
-    `${" ".repeat(spaces)}headers:`,
-    ...filtered.flatMap((header) => [
-      `${" ".repeat(spaces + 2)}- name: ${yamlString(header.key)}`,
-      `${" ".repeat(spaces + 4)}value: ${yamlString(resolveVariables(header.value, variables))}`,
-    ]),
-  ];
-}
-
-function renderSingleBody(body, variables, spaces) {
-  if (!body || body.mode !== "raw") {
-    return [];
-  }
-
-  return [
-    `${" ".repeat(spaces)}body:`,
-    `${" ".repeat(spaces + 2)}type: json`,
-    `${" ".repeat(spaces + 2)}data: |-`,
-    indent(resolveVariables(body.raw, variables), spaces + 4),
-  ];
-}
-
-function renderSingleRuntime(beforeRequestScript, testsScript, spaces) {
-  const scripts = [];
-
-  if (beforeRequestScript) {
-    scripts.push([
-      `${" ".repeat(spaces + 2)}- type: before-request`,
-      `${" ".repeat(spaces + 4)}code: |-`,
-      indent(beforeRequestScript, spaces + 6),
-    ]);
-  }
-
-  if (testsScript) {
-    scripts.push([
-      `${" ".repeat(spaces + 2)}- type: tests`,
-      `${" ".repeat(spaces + 4)}code: |-`,
-      indent(testsScript, spaces + 6),
-    ]);
-  }
-
-  if (scripts.length === 0) {
-    return [];
-  }
-
-  return [`${" ".repeat(spaces)}runtime:`, `${" ".repeat(spaces + 2)}scripts:`, ...scripts.flat()];
-}
-
-function renderSingleRequest(item, seq, variables, spaces) {
-  const request = item.request;
-  const headers = request.header || [];
-  const requestAuthType = authType(headers);
-  const beforeRequestScript = requestAuthType ? tokenScript(requestAuthType, variables) : "";
-  const testsScript = translateTests(item.event);
-
-  return [
-    `${" ".repeat(spaces)}- info:`,
-    `${" ".repeat(spaces + 4)}name: ${yamlString(item.name)}`,
-    `${" ".repeat(spaces + 4)}type: http`,
-    `${" ".repeat(spaces + 4)}seq: ${seq}`,
-    `${" ".repeat(spaces + 2)}http:`,
-    `${" ".repeat(spaces + 4)}method: ${request.method.toUpperCase()}`,
-    `${" ".repeat(spaces + 4)}url: ${yamlString(resolveVariables(request.url.raw, variables))}`,
-    ...renderSingleHeaders(headers, variables, spaces + 4),
-    ...renderSingleBody(request.body, variables, spaces + 4),
-    `${" ".repeat(spaces + 4)}auth:`,
-    `${" ".repeat(spaces + 6)}type: none`,
-    ...renderSingleRuntime(beforeRequestScript, testsScript, spaces + 2),
-    `${" ".repeat(spaces + 2)}settings:`,
-    `${" ".repeat(spaces + 4)}encodeUrl: true`,
-    `${" ".repeat(spaces + 4)}timeout: 0`,
-    `${" ".repeat(spaces + 4)}followRedirects: true`,
-    `${" ".repeat(spaces + 4)}maxRedirects: 5`,
-  ];
-}
-
 function renderRequest(item, seq, variables) {
   const request = item.request;
   const headers = request.header || [];
@@ -370,44 +287,6 @@ function writeCollection(config) {
 
     folderSeq++;
   }
-}
-
-function renderSingleFolder(folder, seq, variables) {
-  const lines = [
-    "  - info:",
-    `      name: ${yamlString(folder.name)}`,
-    "      type: folder",
-    `      seq: ${seq}`,
-    "    items:",
-  ];
-
-  let requestSeq = 1;
-  for (const item of folder.item || []) {
-    lines.push(...renderSingleRequest(item, requestSeq, variables, 6));
-    requestSeq++;
-  }
-
-  return lines;
-}
-
-function writeSingleFile(config) {
-  const postman = JSON.parse(fs.readFileSync(config.source, "utf8"));
-  const variables = variableMap(postman);
-  const lines = [
-    "info:",
-    `  name: ${yamlString(config.name)}`,
-    "  type: collection",
-    '  version: "1"',
-    "items:",
-  ];
-
-  let folderSeq = 1;
-  for (const folder of postman.item) {
-    lines.push(...renderSingleFolder(folder, folderSeq, variables));
-    folderSeq++;
-  }
-
-  writeFile(config.singleFileTarget, lines.join("\n") + "\n");
 }
 
 writeCollection(collection);

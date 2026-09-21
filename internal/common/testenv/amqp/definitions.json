@@ -1,0 +1,75 @@
+{
+  "vhosts": [
+    {
+      "name": "/"
+    },
+    {
+      "name": "tenant"
+    }
+  ],
+  "queues": [
+    {
+      "name": "basyx.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "basyx.events",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "unroutable",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "basyx.events",
+      "vhost": "/",
+      "destination": "basyx.events",
+      "destination_type": "queue",
+      "routing_key": "",
+      "arguments": {}
+    }
+  ],
+  "users": [
+    {
+      "name": "basyx",
+      "password_hash": "YW1xcOzwN9TPcI9BlsZZSo3leilnTLZgHM4MIp9Y4SduweaA",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": [
+        "administrator"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "user": "basyx",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    },
+    {
+      "user": "basyx",
+      "vhost": "tenant",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ]
+}

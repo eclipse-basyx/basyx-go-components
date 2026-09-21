@@ -30,6 +30,7 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -48,6 +49,7 @@ type AssetAdministrationShellRepositoryAPIAPIService struct {
 	submodelAPI                     *submodelapi.SubmodelRepositoryAPIAPIService
 	lifecycleContext                context.Context
 	asyncJobManager                 *asyncjob.Manager
+	eventFeed                       *eventfeed.Module
 	aasHierarchyQueriesEnabled      bool
 }
 
@@ -80,6 +82,25 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(
 	}
 }
 
+// SetEventFeed attaches an optional Event Feed module for create/update hooks.
+func (s *AssetAdministrationShellRepositoryAPIAPIService) SetEventFeed(module *eventfeed.Module) {
+	if s == nil {
+		return
+	}
+	s.eventFeed = module
+	if s.submodelAPI != nil {
+		s.submodelAPI.SetEventFeed(module)
+	}
+}
+
+// EventFeedModule returns the attached Event Feed module, if any.
+func (s *AssetAdministrationShellRepositoryAPIAPIService) EventFeedModule() *eventfeed.Module {
+	if s == nil {
+		return nil
+	}
+	return s.eventFeed
+}
+
 func newAPIErrorResponse(err error, status int, operation string, info string) gen.ImplResponse {
 	if err == nil {
 		err = errors.New(http.StatusText(status))
@@ -101,9 +122,13 @@ func newAPIErrorResponse(err error, status int, operation string, info string) g
 // available. Invalid cursors or unsupported query expressions are returned as
 // HTTP error responses with a nil Go error.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrationShells(ctx context.Context, limit int32, cursor string, query grammar.Query) (gen.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QueryAssetAdministrationShells", detail), nil
+	}
+
 	const operation = "QueryAssetAdministrationShells"
 
-	decodedCursor, decodeErr := common.DecodeString(cursor)
+	decodedCursor, decodeErr := common.DecodeAPICursor(cursor)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -138,7 +163,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 	}
 
 	return gen.Response(http.StatusOK, gen.GetAssetAdministrationShellsResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
+		PagingMetadata: common.APIPagingMetadata(nextCursor),
 		Result:         jsonAASList,
 	}), nil
 }
@@ -170,15 +195,18 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) validateAASHierarchyQu
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (gen.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShells", detail), nil
+	}
 
 	const operation = "GetAllAssetAdministrationShells"
 
-	decodedCursor, decodeErr := common.DecodeString(cursor)
+	decodedCursor, decodeErr := common.DecodeAPICursor(cursor)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	specificAssetIDs, decodeErr := decodeSpecificAssetIDs(assetIds)
+	specificAssetIDs, decodeErr := common.DecodeAPISpecificAssetIDs(assetIds)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
@@ -210,7 +238,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}
 
 	return gen.Response(http.StatusOK, gen.GetAssetAdministrationShellsResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
+		PagingMetadata: common.APIPagingMetadata(nextCursor),
 		Result:         jsonAASList,
 	}), nil
 }
@@ -246,15 +274,18 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 
 // GetAllAssetAdministrationShellsReference - Returns References to all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellsReference", detail), nil
+	}
 
 	const operation = "GetAllAssetAdministrationShellsReference"
 
-	decodedCursor, decodeErr := common.DecodeString(cursor)
+	decodedCursor, decodeErr := common.DecodeAPICursor(cursor)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	specificAssetIDs, decodeErr := decodeSpecificAssetIDs(assetIds)
+	specificAssetIDs, decodeErr := common.DecodeAPISpecificAssetIDs(assetIds)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
@@ -281,71 +312,17 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}
 
 	return gen.Response(http.StatusOK, gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
+		PagingMetadata: common.APIPagingMetadata(nextCursor),
 		Result:         jsonReferences,
 	}), nil
 }
 
-func decodeSpecificAssetIDs(assetIds []string) ([]types.ISpecificAssetID, error) {
-	specificAssetIDs := make([]types.ISpecificAssetID, 0, len(assetIds))
-	for _, encodedAssetID := range assetIds {
-		if strings.TrimSpace(encodedAssetID) == "" {
-			continue
-		}
-		decodedAssetID, err := common.DecodeString(encodedAssetID)
-		if err != nil {
-			return nil, err
-		}
-		var jsonable map[string]any
-		if err = json.Unmarshal([]byte(decodedAssetID), &jsonable); err != nil {
-			return nil, err
-		}
-		specificAssetID, err := jsonization.SpecificAssetIDFromJsonable(jsonable)
-		if err != nil {
-			return nil, err
-		}
-		specificAssetIDs = append(specificAssetIDs, specificAssetID)
+func withAuthorizedAASListSelectors(ctx context.Context, idShort string, specificAssetIDs []types.ISpecificAssetID) (context.Context, error) {
+	ctx, err := auth.WithAuthorizedStringSelectors(ctx, auth.SemanticResourceAAS, auth.StringSelector{Field: "$aas#idShort", Value: idShort})
+	if err != nil {
+		return ctx, err
 	}
-	return specificAssetIDs, nil
-}
-
-func withAuthorizedAASListSelectors(
-	ctx context.Context,
-	idShort string,
-	specificAssetIDs []types.ISpecificAssetID,
-) (context.Context, error) {
-	conditions := make([]grammar.LogicalExpression, 0, len(specificAssetIDs)+1)
-	if idShort != "" {
-		field := grammar.ModelStringPattern("$aas#idShort")
-		value := grammar.StandardString(idShort)
-		conditions = append(conditions, grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}})
-	}
-	for _, specificAssetID := range specificAssetIDs {
-		if specificAssetID == nil {
-			continue
-		}
-		value := grammar.StandardString(specificAssetID.Value())
-		if specificAssetID.Name() == "globalAssetId" {
-			field := grammar.ModelStringPattern("$aas#assetInformation.globalAssetId")
-			conditions = append(conditions, grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}})
-			continue
-		}
-		nameField := grammar.ModelStringPattern("$aas#assetInformation.specificAssetIds[].name")
-		valueField := grammar.ModelStringPattern("$aas#assetInformation.specificAssetIds[].value")
-		name := grammar.StandardString(specificAssetID.Name())
-		conditions = append(conditions, grammar.LogicalExpression{Match: []grammar.MatchExpression{
-			{Eq: grammar.ComparisonItems{{Field: &nameField}, {StrVal: &name}}},
-			{Eq: grammar.ComparisonItems{{Field: &valueField}, {StrVal: &value}}},
-		}})
-	}
-	if len(conditions) == 0 {
-		return ctx, nil
-	}
-	condition := conditions[0]
-	if len(conditions) > 1 {
-		condition = grammar.LogicalExpression{And: conditions}
-	}
-	return auth.WithAuthorizedQuery(ctx, auth.SemanticResourceAAS, grammar.Query{Condition: &condition})
+	return auth.WithAuthorizedAssetIDSelectors(ctx, auth.SemanticResourceAAS, specificAssetIDs)
 }
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
@@ -353,7 +330,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 
 	const operation = "GetAssetAdministrationShellById"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -390,11 +367,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 ) (gen.ImplResponse, error) {
 	const operation = "GetAllAssetAdministrationShellsRecentChanges"
 
-	decodedCursor, decodeErr := common.DecodeString(cursor)
+	decodedCursor, decodeErr := common.DecodeAPICursor(cursor)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
-	specificAssetIDs, decodeErr := decodeSpecificAssetIDs(assetIds)
+	specificAssetIDs, decodeErr := common.DecodeAPISpecificAssetIDs(assetIds)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
@@ -452,7 +429,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}
 
 	return gen.Response(http.StatusOK, gen.GetAllAssetAdministrationShellsRecentChangesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
+		PagingMetadata: common.APIPagingMetadata(nextCursor),
 		Result:         changes,
 	}), nil
 }
@@ -460,7 +437,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellByIdSigned(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
 	const operation = "GetAssetAdministrationShellByIdSigned"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -482,7 +459,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellVersionByIdAndDate(ctx context.Context, aasIdentifier string, date time.Time) (gen.ImplResponse, error) {
 	const operation = "GetAssetAdministrationShellVersionByIdAndDate"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -507,7 +484,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 
 	const operation = "PutAssetAdministrationShellById"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -543,7 +520,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 
 	const operation = "DeleteAssetAdministrationShellById"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -567,7 +544,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 
 	const operation = "GetAssetAdministrationShellByIdReferenceAasRepository"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -593,7 +570,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAas
 
 	const operation = "GetAssetInformationAasRepository"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -614,7 +591,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAas
 
 	const operation = "PutAssetInformationAasRepository"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -641,7 +618,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 
 	const operation = "GetThumbnailAasRepository"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -682,7 +659,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 
 	const operation = "PutThumbnailAasRepository"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -709,7 +686,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 
 	const operation = "DeleteThumbnailAasRepository"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -733,15 +710,18 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 
 // GetAllSubmodelReferencesAasRepository - Returns all submodel references
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferencesAasRepository(ctx context.Context, aasIdentifier string, limit int32, cursor string) (gen.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelReferencesAasRepository", detail), nil
+	}
 
 	const operation = "GetAllSubmodelReferencesAasRepository"
 
-	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	decodedCursor, cursorDecodeErr := common.DecodeString(cursor)
+	decodedCursor, cursorDecodeErr := common.DecodeAPICursor(cursor)
 	if cursorDecodeErr != nil {
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -767,7 +747,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 	}
 
 	return gen.Response(http.StatusOK, gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
+		PagingMetadata: common.APIPagingMetadata(nextCursor),
 		Result:         jsonReferences,
 	}), nil
 }
@@ -776,7 +756,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, reference types.IReference) (gen.ImplResponse, error) {
 	const operation = "PostSubmodelReferenceAasRepository"
 
-	decodedAssetAdministrationShellIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	decodedAssetAdministrationShellIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -810,12 +790,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenc
 
 	const operation = "DeleteSubmodelReferenceAasRepository"
 
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	decodedAASIdentifier, decodeAASErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeAASErr != nil {
 		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeSubmodelErr != nil {
 		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -866,12 +846,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	decodedAASIdentifier, decodeAASErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeAASErr != nil {
 		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeSubmodelErr != nil {
 		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -911,11 +891,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 				return createReferenceErr
 			}
 
-			updated, putErr := s.submodelBackend.PutSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier, submodel)
+			putResult, putErr := s.submodelBackend.PutSubmodelInTransactionWithResult(ctx, tx, decodedSubmodelIdentifier, submodel)
 			if putErr != nil {
 				return putErr
 			}
-			isUpdate = updated
+			isUpdate = putResult.IsUpdate
 			return nil
 		},
 	)
@@ -960,35 +940,21 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	decodedAASIdentifier, decodeAASErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeAASErr != nil {
 		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeSubmodelErr != nil {
 		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
-	}
-
-	_, aasLookupErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier)
-	if aasLookupErr != nil {
-		if common.IsErrDenied(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
-		}
-		if common.IsErrBadRequest(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
 	deleteErr := s.assetAdministrationShellBackend.ExecuteInTransaction(
 		"AASREPO-DELSMBYID-STARTTX",
 		"AASREPO-DELSMBYID-COMMIT",
 		func(tx *sql.Tx) error {
-			if err := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+			if err := s.assetAdministrationShellBackend.CheckSubmodelReferenceForDeletionInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
 				return err
 			}
 
@@ -1106,12 +1072,12 @@ func toAASOperationRedirect(
 }
 
 func decodeAASAndSubmodelIdentifiers(aasIdentifier string, submodelIdentifier string, operation string) (string, string, gen.ImplResponse, bool) {
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	decodedAASIdentifier, decodeAASErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeAASErr != nil {
 		return "", "", newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), false
 	}
 
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeSubmodelErr != nil {
 		return "", "", newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), false
 	}
@@ -1305,6 +1271,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdPathAas
 
 // GetAllSubmodelElementsAasRepository - Returns all submodel elements including their hierarchy
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElementsAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsAasRepository", detail), nil
+	}
+
 	const operation = "GetAllSubmodelElementsAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
@@ -1345,6 +1315,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelElementAas
 
 // GetAllSubmodelElementsMetadataAasRepository - Returns all submodel elements including their hierarchy
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElementsMetadataAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, limit int32, cursor string) (gen.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsMetadataAasRepository", detail), nil
+	}
+
 	const operation = "GetAllSubmodelElementsMetadataAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
@@ -1364,6 +1338,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 
 // GetAllSubmodelElementsValueOnlyAasRepository - Returns all submodel elements including their hierarchy in the ValueOnly representation
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlyAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsValueOnlyAasRepository", detail), nil
+	}
+
 	const operation = "GetAllSubmodelElementsValueOnlyAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
@@ -1384,6 +1362,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 
 // GetAllSubmodelElementsReferenceAasRepository - Returns all submodel elements as a list of References
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElementsReferenceAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsReferenceAasRepository", detail), nil
+	}
+
 	const operation = "GetAllSubmodelElementsReferenceAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
@@ -1404,6 +1386,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 
 // GetAllSubmodelElementsPathAasRepository - Returns all submodel elements including their hierarchy
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElementsPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
+	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsPathAasRepository", detail), nil
+	}
+
 	const operation = "GetAllSubmodelElementsPathAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
@@ -1777,6 +1763,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncAa
 func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncValueOnlyAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, operationRequestValueOnly gen.OperationRequestValueOnly) (gen.ImplResponse, error) {
 	const operation = "InvokeOperationAsyncValueOnlyAasRepository"
 
+	if strings.TrimSpace(operationRequestValueOnly.ClientTimeoutDuration) == "" {
+		timeoutRequiredErr := errors.New("AASREPO-INVOKEOPASYVAL-MISSINGTIMEOUT clientTimeoutDuration is required")
+		return newAPIErrorResponse(timeoutRequiredErr, http.StatusBadRequest, operation, "MissingClientTimeoutDuration"), nil
+	}
+
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
 		return response, err
 	}
@@ -1789,7 +1780,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncVa
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.InvokeOperationAsyncValueOnly(ctx, aasIdentifier, submodelIdentifier, idShortPath, operationRequestValueOnly)
+	response, invokeErr := s.submodelAPI.InvokeOperationAsyncValueOnly(ctx, aasIdentifier, submodelIdentifier, idShortPath, operationRequestValueOnly)
+	if invokeErr != nil {
+		return response, invokeErr
+	}
+	return toAASOperationRedirect(response, aasIdentifier, submodelIdentifier, idShortPath, "operation-status"), nil
 }
 
 // GetOperationAsyncStatusAasRepository - Returns the Operation status of an asynchronous invoked Operation

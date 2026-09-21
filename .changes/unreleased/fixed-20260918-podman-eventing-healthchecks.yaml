@@ -1,0 +1,7 @@
+kind: fixed
+body: Declare AAS Environment health checks in the Event Feed, MQTT, Kafka, and AMQP examples so Podman Compose can start their dependent Web UI services.
+time: 2026-09-18T12:04:05+02:00
+custom:
+    Impact: Low
+    PullRequest: 699
+    SecurityImpact: None.

@@ -909,3 +909,43 @@ func (store *recordingEvidenceStore) GetArtifact(_ context.Context, ref Evidence
 func (store *recordingEvidenceStore) VerifyArtifact(_ context.Context, _ EvidenceReference, _ string) (*EvidenceReceipt, error) {
 	return nil, errors.New("not implemented")
 }
+
+func TestLockMutationTxSerializesFeedOnlySnapshots(t *testing.T) {
+	previousConfig := ActiveConfig()
+	t.Cleanup(func() {
+		Configure(previousConfig)
+		ClearMutationSink()
+	})
+	Configure(Config{Mode: ModeOff})
+	SetMutationSink(recordingEnabledSink{})
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WithArgs(TableSubmodel+":pcn", int64(0)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, LockMutationTx(t.Context(), tx, TableSubmodel, "pcn"))
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestLockMutationTxDoesNotLockWithoutSnapshotConsumers(t *testing.T) {
+	previousConfig := ActiveConfig()
+	t.Cleanup(func() { Configure(previousConfig) })
+	Configure(Config{Mode: ModeOff})
+	ClearMutationSink()
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	mock.ExpectRollback()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, LockMutationTx(t.Context(), tx, TableSubmodel, "pcn"))
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}

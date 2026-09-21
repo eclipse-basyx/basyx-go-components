@@ -42,13 +42,9 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const errMsgRequiredMissing = "required parameter is missing"
@@ -195,30 +191,6 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 	return nil
 }
 
-// nolint:unused
-func parseTimes(param string) ([]time.Time, error) {
-	splits := strings.Split(param, ",")
-	times := make([]time.Time, 0, len(splits))
-	for _, v := range splits {
-		t, err := parseTime(v)
-		if err != nil {
-			return nil, err
-		}
-		times = append(times, t)
-	}
-	return times, nil
-}
-
-// parseTime parses a string parameter into a time.Time using the RFC3339 format.
-// This function is currently unused but kept for potential future use.
-// nolint:unused
-func parseTime(param string) (time.Time, error) {
-	if param == "" {
-		return time.Time{}, nil
-	}
-	return time.Parse(time.RFC3339, param)
-}
-
 // Number is a type constraint that allows numeric types (int32, int64, float32, float64).
 // It's used in generic functions for parsing and validating numeric parameters.
 type Number interface {
@@ -228,58 +200,6 @@ type Number interface {
 // ParseString is a function type for parsing string values into various types.
 // It takes a string value and returns the parsed value of type T and an error if parsing fails.
 type ParseString[T Number | string | bool] func(v string) (T, error)
-
-// parseFloat64 parses a string parameter to an float64.
-// nolint:unused
-func parseFloat64(param string) (float64, error) {
-	if param == "" {
-		return 0, nil
-	}
-
-	return strconv.ParseFloat(param, 64)
-}
-
-// parseFloat32 parses a string parameter to an float32.
-// nolint:unused
-func parseFloat32(param string) (float32, error) {
-	if param == "" {
-		return 0, nil
-	}
-
-	v, err := strconv.ParseFloat(param, 32)
-	return float32(v), err
-}
-
-// parseInt64 parses a string parameter to an int64.
-// nolint:unused
-func parseInt64(param string) (int64, error) {
-	if param == "" {
-		return 0, nil
-	}
-
-	return strconv.ParseInt(param, 10, 64)
-}
-
-// parseInt32 parses a string parameter to an int32.
-// nolint:unused
-func parseInt32(param string) (int32, error) {
-	if param == "" {
-		return 0, nil
-	}
-
-	val, err := strconv.ParseInt(param, 10, 32)
-	return int32(val), err
-}
-
-// parseBool parses a string parameter to an bool.
-// nolint:unused
-func parseBool(param string) (bool, error) {
-	if param == "" {
-		return false, nil
-	}
-
-	return strconv.ParseBool(param)
-}
 
 // HOperation is a function type that handles parameter parsing with optional default values.
 // It returns the parsed value, a boolean indicating if a default was used, and any parsing error.
@@ -343,70 +263,4 @@ func WithMaximum[T Number](expected T) Constraint[T] {
 
 		return nil
 	}
-}
-
-// parseNumericParameter parses a numeric parameter to its respective type.
-// nolint:unused
-func parseNumericParameter[T Number](param string, fn HOperation[T], checks ...Constraint[T]) (T, error) {
-	v, ok, err := fn(param)
-	if err != nil {
-		return 0, err
-	}
-
-	if !ok {
-		for _, check := range checks {
-			if err := check(v); err != nil {
-				return 0, err
-			}
-		}
-	}
-
-	return v, nil
-}
-
-// parseBoolParameter parses a string parameter to a bool
-// nolint:unused
-func parseBoolParameter(param string, fn HOperation[bool]) (bool, error) {
-	v, _, err := fn(param)
-	return v, err
-}
-
-// parseNumericArrayParameter parses a string parameter containing array of values to its respective type.
-// nolint:unused
-func parseNumericArrayParameter[T Number](param, delim string, required bool, fn HOperation[T], checks ...Constraint[T]) ([]T, error) {
-	if param == "" {
-		if required {
-			return nil, errors.New(errMsgRequiredMissing)
-		}
-
-		return nil, nil
-	}
-
-	str := strings.Split(param, delim)
-	values := make([]T, len(str))
-
-	for i, s := range str {
-		v, ok, err := fn(s)
-		if err != nil {
-			return nil, err
-		}
-
-		if !ok {
-			for _, check := range checks {
-				if err := check(v); err != nil {
-					return nil, err
-				}
-			}
-		}
-
-		values[i] = v
-	}
-
-	return values, nil
-}
-
-// parseQuery parses query parameters and returns an error if any malformed value pairs are encountered.
-// nolint:unused
-func parseQuery(rawQuery string) (url.Values, error) {
-	return url.ParseQuery(rawQuery)
 }

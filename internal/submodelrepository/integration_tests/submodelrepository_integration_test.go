@@ -54,10 +54,9 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	jose "gopkg.in/go-jose/go-jose.v2"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	jose "gopkg.in/go-jose/go-jose.v2"
 )
 
 var (
@@ -75,6 +74,7 @@ var (
 const actionAssertSignedSubmodel = "ASSERT_SIGNED_SUBMODEL"
 
 var submodelRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var submodelRepositoryEventFeedBaseURL = testenv.LocalURLFromEnv("BASYX_IT_EVENT_FEED_API_PORT", 6024)
 var submodelRepositoryReplicaBaseURL = testenv.LocalURLFromEnv("BASYX_IT_REPLICA_API_PORT", 6014)
 var submodelRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6007)
 var submodelRepositoryAASBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
@@ -845,7 +845,7 @@ func TestContractSubmodelRepository(t *testing.T) {
 		createSemanticSubmodel(matchingID, "MetadataValueFilterMatch", semanticMatch, "FilteredValueOnlyMatch", "match-value")
 		createSemanticSubmodel(otherID, "MetadataValueFilterOther", semanticOther, "FilteredValueOnlyOther", "other-value")
 
-		encodedSemanticMatch := common.EncodeString(semanticMatch)
+		encodedSemanticMatch := testenv.EncodeExternalReference(semanticMatch)
 		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$metadata?limit=10&semanticId=%s", baseURL, encodedSemanticMatch), nil)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
@@ -1644,7 +1644,7 @@ func TestPathNotationEndpoints(t *testing.T) {
 			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, otherSubmodelIDEncoded), nil)
 		})
 
-		encodedSemanticMatch := common.EncodeString(semanticMatch)
+		encodedSemanticMatch := testenv.EncodeExternalReference(semanticMatch)
 		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?level=deep&limit=500&semanticId=%s", baseURL, encodedSemanticMatch), nil)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
@@ -1661,7 +1661,7 @@ func TestPathNotationEndpoints(t *testing.T) {
 
 	t.Run("GetAllSubmodelsPathPaginatesByPathItems", func(t *testing.T) {
 		semanticPage := fmt.Sprintf("urn:basyx:semantic:path-page-%d", time.Now().UnixNano())
-		encodedSemanticPage := common.EncodeString(semanticPage)
+		encodedSemanticPage := testenv.EncodeExternalReference(semanticPage)
 
 		createPathPageSubmodel := func(idSuffix string, topPath string) string {
 			submodelID := fmt.Sprintf("urn:basyx:integration:path-page-%s-%d", idSuffix, time.Now().UnixNano())
@@ -2540,13 +2540,13 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 		t,
 		db,
 		companionAASExternalURL+"/shells/"+encodedAASID,
-		"AAS-3.0",
+		"AAS-3.2",
 	)
 	requireDescriptorEndpointInterface(
 		t,
 		db,
 		submodelSyncExternalURL+"/submodels/"+encodedSubmodelID,
-		"SUBMODEL-3.0",
+		"SUBMODEL-3.2",
 	)
 }
 
@@ -2585,24 +2585,45 @@ func requireDescriptorEndpointInterface(t *testing.T, db *sql.DB, href string, e
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
 		testenv.SetEnvDefaultsOrExit(map[string]string{
-			"BASYX_IT_API_URL":         submodelRepositoryBaseURL,
-			"BASYX_IT_REPLICA_API_URL": submodelRepositoryReplicaBaseURL,
-			"BASYX_IT_AAS_API_URL":     submodelRepositoryAASExternalURL,
-			"BASYX_IT_SYNC_API_URL":    submodelRepositorySyncExternalURL,
-			"BASYX_IT_INVALID_API_URL": submodelRepositoryInvalidBaseURL,
+			"BASYX_IT_API_URL":            submodelRepositoryBaseURL,
+			"BASYX_IT_EVENT_FEED_API_URL": submodelRepositoryEventFeedBaseURL,
+			"BASYX_IT_REPLICA_API_URL":    submodelRepositoryReplicaBaseURL,
+			"BASYX_IT_AAS_API_URL":        submodelRepositoryAASExternalURL,
+			"BASYX_IT_SYNC_API_URL":       submodelRepositorySyncExternalURL,
+			"BASYX_IT_INVALID_API_URL":    submodelRepositoryInvalidBaseURL,
 		})
 		os.Exit(m.Run())
 	}
 
 	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{
+		{Name: "mqtt", EnvVar: "BASYX_IT_MQTT_PORT"},
+		{Name: "kafka", EnvVar: "BASYX_IT_KAFKA_PORT"},
+		{Name: "amqp", EnvVar: "BASYX_IT_AMQP_PORT"},
+		{Name: "amqp-tls", EnvVar: "BASYX_IT_AMQP_TLS_PORT"},
+		{Name: "amqp-management", EnvVar: "BASYX_IT_AMQP_MANAGEMENT_PORT"},
+		{Name: "amqp-api", EnvVar: "BASYX_IT_AMQP_API_PORT"},
+		{Name: "kafka-api", EnvVar: "BASYX_IT_KAFKA_API_PORT"},
+		{Name: "kafka-auth", EnvVar: "BASYX_IT_KAFKA_AUTH_PORT"},
+		{Name: "kafka-tls", EnvVar: "BASYX_IT_KAFKA_TLS_PORT"},
+		{Name: "kafka-auth-tls", EnvVar: "BASYX_IT_KAFKA_AUTH_TLS_PORT"},
+		{Name: "mqtt-auth", EnvVar: "BASYX_IT_MQTT_AUTH_PORT"},
+		{Name: "mqtt-tls", EnvVar: "BASYX_IT_MQTT_TLS_PORT"},
+		{Name: "mqtt-api", EnvVar: "BASYX_IT_MQTT_API_PORT"},
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 		{Name: "replica-api", EnvVar: "BASYX_IT_REPLICA_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "aas-api", EnvVar: "BASYX_IT_AAS_API_PORT"},
 		{Name: "sync-api", EnvVar: "BASYX_IT_SYNC_API_PORT"},
 		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
 	})
+	submodelRepositoryMQTTContainer = runtime.ProjectName + "-mqtt_it-1"
+	submodelRepositoryMQTTURL = strings.Replace(runtime.LocalURL("mqtt"), "http://", "mqtt://", 1)
+	submodelRepositoryMQTTAuthURL = strings.Replace(runtime.LocalURL("mqtt-auth"), "http://", "mqtt://", 1)
+	submodelRepositoryMQTTTLSURL = strings.Replace(runtime.LocalURL("mqtt-tls"), "http://", "tls://", 1)
+	submodelRepositoryMQTTOnlyURL = runtime.LocalURL("mqtt-api")
 	submodelRepositoryBaseURL = runtime.LocalURL("api")
+	submodelRepositoryEventFeedBaseURL = runtime.LocalURL("event-feed-api")
 	submodelRepositoryReplicaBaseURL = runtime.LocalURL("replica-api")
 	submodelRepositoryAASBaseURL = runtime.LocalhostURL("aas-api")
 	submodelRepositoryAASExternalURL = runtime.LocalURL("aas-api")
@@ -2619,7 +2640,13 @@ func TestMain(m *testing.M) {
 		HealthURL:       submodelRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
 		WaitForReady: func() error {
-			return testenv.WaitHealthyURL(submodelRepositoryReplicaBaseURL+"/health", 150*time.Second)
+			if err := testenv.WaitHealthyURL(submodelRepositoryMQTTOnlyURL+"/health", 150*time.Second); err != nil {
+				return err
+			}
+			if err := testenv.WaitHealthyURL(submodelRepositoryReplicaBaseURL+"/health", 150*time.Second); err != nil {
+				return err
+			}
+			return testenv.WaitHealthyURL(submodelRepositoryEventFeedBaseURL+"/health", 150*time.Second)
 		},
 	}))
 }

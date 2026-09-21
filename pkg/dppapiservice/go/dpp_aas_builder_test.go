@@ -27,12 +27,91 @@
 package dppapi
 
 import (
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 )
+
+func TestBuildAASPreservesLongIdentifierWithValidIDShort(t *testing.T) {
+	tests := []struct {
+		name       string
+		identifier string
+		length     int
+	}{
+		{
+			name:       "157 character URL identifier",
+			identifier: longDPPIdentifier("https://manufacturer.example/digital-product-passports/series-a/item-", 157),
+			length:     157,
+		},
+		{
+			name:       "175 character punctuation and non-ASCII-leading identifier",
+			identifier: longDPPIdentifier("Ä/urn:example:dpp:series_b.item-", 175),
+			length:     175,
+		},
+		{
+			name:       "128 character identifier boundary",
+			identifier: longDPPIdentifier("https://manufacturer.example/digital-product-passports/boundary-", 128),
+			length:     128,
+		},
+		{
+			name:       "129 character identifier beyond idShort boundary",
+			identifier: longDPPIdentifier("https://manufacturer.example/digital-product-passports/beyond-boundary-", 129),
+			length:     129,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := utf8.RuneCountInString(test.identifier); got != test.length {
+				t.Fatalf("identifier length = %d, want %d", got, test.length)
+			}
+			header := dppHeader{
+				DigitalProductPassportID: test.identifier,
+				UniqueProductIdentifier:  "https://example.org/products/long-identifier",
+				Granularity:              "Item",
+			}
+
+			aas := buildAAS(header, nil)
+
+			if got := aas.ID(); got != test.identifier {
+				t.Fatalf("AAS ID = %q, want original DPP identifier %q", got, test.identifier)
+			}
+			if aas.IDShort() == nil {
+				t.Fatal("AAS idShort is nil")
+			}
+			if got := len(*aas.IDShort()); got > 128 {
+				t.Fatalf("AAS idShort length = %d, want at most 128", got)
+			}
+			if !verification.MatchesIDShort(*aas.IDShort()) {
+				t.Fatalf("AAS idShort = %q, want valid ASCII AAS idShort", *aas.IDShort())
+			}
+			assertValidAAS(t, aas)
+			if *aas.IDShort() != "DPP" {
+				t.Fatalf("AAS idShort = %q, want DPP", *aas.IDShort())
+			}
+		})
+	}
+}
+
+func longDPPIdentifier(prefix string, length int) string {
+	return prefix + strings.Repeat("x", length-utf8.RuneCountInString(prefix))
+}
+
+func assertValidAAS(t *testing.T, aas types.IAssetAdministrationShell) {
+	t.Helper()
+	verificationErrors := make([]string, 0)
+	verification.VerifyAssetAdministrationShell(aas, func(err *verification.VerificationError) bool {
+		verificationErrors = append(verificationErrors, err.Error())
+		return false
+	})
+	if len(verificationErrors) != 0 {
+		t.Fatalf("VerifyAssetAdministrationShell() errors = %#v", verificationErrors)
+	}
+}
 
 func TestBuildMetadataSubmodelConformsToIDTA02099(t *testing.T) {
 	lastUpdate := time.Date(2026, time.July, 9, 10, 11, 12, 123000000, time.UTC)

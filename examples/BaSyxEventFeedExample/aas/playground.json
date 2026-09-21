@@ -1,0 +1,83 @@
+{
+  "assetAdministrationShells": [
+    {
+      "modelType": "AssetAdministrationShell",
+      "id": "urn:example:eventing:aas:playground",
+      "idShort": "EventFeedPlayground",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "urn:example:eventing:asset:playground"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:eventing:submodel:no-semantic-id"
+            }
+          ]
+        },
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:eventing:submodel:pcn"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:eventing:submodel:no-semantic-id",
+      "idShort": "NoSemanticId",
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "idShort": "Status",
+          "valueType": "xs:string",
+          "value": "ready"
+        }
+      ]
+    },
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:eventing:submodel:pcn",
+      "idShort": "ProductChangeNotifications",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#01-AHE582#003"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "modelType": "SubmodelElementCollection",
+          "idShort": "Records",
+          "value": [
+            {
+              "modelType": "SubmodelElementCollection",
+              "idShort": "CN1",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "idShort": "ManufacturerChangeID",
+                  "valueType": "xs:string",
+                  "value": "CN1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "conceptDescriptions": []
+}

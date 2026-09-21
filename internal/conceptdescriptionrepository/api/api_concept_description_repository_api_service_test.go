@@ -54,7 +54,7 @@ func TestGetAllConceptDescriptionsRejectsInvalidCursorWithStandardErrorBody(t *t
 	t.Parallel()
 
 	invalidCursor := "%"
-	_, expectedDecodeErr := common.DecodeString(invalidCursor)
+	_, expectedDecodeErr := common.DecodeAPIString(invalidCursor)
 	require.Error(t, expectedDecodeErr)
 
 	sut := NewConceptDescriptionRepositoryAPIAPIService(nil)

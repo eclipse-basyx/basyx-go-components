@@ -1,7 +1,0 @@
-kind: changed
-body: Query-capable repository, registry, and discovery endpoints now represent caller conditions, public list selectors, projections, and authorization constraints in an immutable request-scoped semantic access-view intermediate representation. Responses for authorized resources remain compatible.
-time: 2026-09-07T14:35:00.000000000+02:00
-custom:
-  Impact: Low
-  PullRequest: 654
-  SecurityImpact: The policy version, claims, trusted global attributes, and per-resource access views remain consistent throughout each request.

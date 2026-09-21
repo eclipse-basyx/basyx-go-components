@@ -38,14 +38,14 @@ import (
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 )
 
-func TestDecodeRegistryAssetLinkQueryAssetIDsSplitsCommaSeparatedValues(t *testing.T) {
+func TestDecodeRegistryAssetLinkQueryAssetIDsPreservesRepeatedValues(t *testing.T) {
 	t.Parallel()
 
 	globalAssetID := model.AssetLink{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"}
 	customerPartID := model.AssetLink{Name: "customerPartId", Value: "customer-part"}
 
 	links, resp, err := decodeRegistryAssetLinkQueryAssetIDs([]string{
-		" " + encodeRegistryAssetLink(t, globalAssetID) + ", " + encodeRegistryAssetLink(t, customerPartID),
+		encodeRegistryAssetLink(t, globalAssetID), encodeRegistryAssetLink(t, customerPartID),
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

@@ -87,15 +87,9 @@ type dppHeader struct {
 }
 
 func decodeDPPDocument(data []byte, requireHeaders bool) (dppDocument, dppHeader, error) {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-
-	var doc dppDocument
-	if err := decoder.Decode(&doc); err != nil {
-		return nil, dppHeader{}, fmt.Errorf("DPP-DECDOC-DECODE decode request body: %w", err)
-	}
-	if doc == nil {
-		return nil, dppHeader{}, fmt.Errorf("DPP-DECDOC-EMPTY document must be a JSON object")
+	doc, err := decodeRawDPPDocument(data)
+	if err != nil {
+		return nil, dppHeader{}, err
 	}
 	if err := validateCompressedDPPDocument(doc); err != nil {
 		return nil, dppHeader{}, err
@@ -106,6 +100,46 @@ func decodeDPPDocument(data []byte, requireHeaders bool) (dppDocument, dppHeader
 		return nil, dppHeader{}, err
 	}
 	return doc, header, nil
+}
+
+func decodeRawDPPDocument(data []byte) (dppDocument, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+
+	var doc dppDocument
+	if err := decoder.Decode(&doc); err != nil {
+		return nil, fmt.Errorf("DPP-DECDOC-DECODE decode request body: %w", err)
+	}
+	if doc == nil {
+		return nil, fmt.Errorf("DPP-DECDOC-EMPTY document must be a JSON object")
+	}
+	return doc, nil
+}
+
+func decodeDPPPatchDocument(data []byte) (dppDocument, error) {
+	patch, err := decodeRawDPPDocument(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCompressedDPPDocument(patch); err != nil {
+		return nil, err
+	}
+	headerPatch := make(dppDocument, len(dppHeaderFields))
+	for field := range dppHeaderFields {
+		value, present := patch[field]
+		if !present || value == nil && removableDPPHeaderField(field) {
+			continue
+		}
+		headerPatch[field] = value
+	}
+	if _, err := parseDPPHeader(headerPatch, false); err != nil {
+		return nil, err
+	}
+	return patch, nil
+}
+
+func removableDPPHeaderField(field string) bool {
+	return field == headerFacilityID || field == headerContentSpecificationIDs
 }
 
 func parseDPPHeader(doc dppDocument, requireHeaders bool) (dppHeader, error) {

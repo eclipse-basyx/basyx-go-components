@@ -12,7 +12,7 @@ services:
       - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWCREDENTIALS=true
       - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
@@ -25,11 +25,6 @@ services:
       - POSTGRES_CONNMAXIDLETIMEMINUTES=0
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
-      - ABAC_POLICY_FILE_IMPORT=if_missing
-      - EXPERIMENTAL_REBAC_AUTHORIZATION_MODE=resource-bound-first
-      - EXPERIMENTAL_REBAC_POLICY_SCOPE=secured-example-resources
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     depends_on:
       basyx_configuration:
@@ -44,16 +39,15 @@ services:
 
   sm-registry:
     container_name: sm-registry
-    build:
-      context: ../..
-      dockerfile: cmd/submodelregistryservice/Dockerfile
+    image: eclipsebasyx/submodelregistry-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/submodelregistryservice"]
     environment:
       - SERVER_PORT=5004
       - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWCREDENTIALS=true
       - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
@@ -66,11 +60,6 @@ services:
       - POSTGRES_CONNMAXIDLETIMEMINUTES=0
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
-      - ABAC_POLICY_FILE_IMPORT=if_missing
-      - EXPERIMENTAL_REBAC_AUTHORIZATION_MODE=resource-bound-first
-      - EXPERIMENTAL_REBAC_POLICY_SCOPE=secured-example-resources
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
       - 8083:5004
@@ -87,16 +76,15 @@ services:
 
   aas-discovery:
     container_name: aas-discovery
-    build:
-      context: ../..
-      dockerfile: cmd/discoveryservice/Dockerfile
+    image: eclipsebasyx/aasdiscovery-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/discoveryservice"]
     environment:
       - SERVER_PORT=5004
       - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWCREDENTIALS=true
       - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
@@ -109,11 +97,6 @@ services:
       - POSTGRES_CONNMAXIDLETIMEMINUTES=0
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
-      - ABAC_POLICY_FILE_IMPORT=if_missing
-      - EXPERIMENTAL_REBAC_AUTHORIZATION_MODE=resource-bound-first
-      - EXPERIMENTAL_REBAC_POLICY_SCOPE=secured-example-resources
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
       - "8084:5004"
@@ -144,16 +127,15 @@ services:
 
   aas_repository:
     container_name: aas-repository
-    build:
-      context: ../..
-      dockerfile: cmd/aasrepositoryservice/Dockerfile
+    image: eclipsebasyx/aasrepository-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/aasrepositoryservice"]
     environment:
       - SERVER_PORT=5004
       - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWCREDENTIALS=true
       - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
@@ -166,11 +148,6 @@ services:
       - POSTGRES_CONNMAXIDLETIMEMINUTES=0
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
-      - ABAC_POLICY_FILE_IMPORT=if_missing
-      - EXPERIMENTAL_REBAC_AUTHORIZATION_MODE=resource-bound-first
-      - EXPERIMENTAL_REBAC_POLICY_SCOPE=secured-example-resources
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
       - "8090:5004"
@@ -187,16 +164,15 @@ services:
 
   submodel_repository:
     container_name: submodel-repository
-    build:
-      context: ../..
-      dockerfile: cmd/submodelrepositoryservice/Dockerfile
+    image: eclipsebasyx/submodelrepository-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/submodelrepositoryservice"]
     environment:
       - SERVER_PORT=5004
       - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWCREDENTIALS=true
       - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
@@ -210,11 +186,6 @@ services:
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
-      - ABAC_POLICY_FILE_IMPORT=if_missing
-      - EXPERIMENTAL_REBAC_AUTHORIZATION_MODE=resource-bound-first
-      - EXPERIMENTAL_REBAC_POLICY_SCOPE=secured-example-resources
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     volumes:
       - ./security_env:/security_env:ro
@@ -232,16 +203,15 @@ services:
 
   concept-description-repository:
     container_name: concept-description-repository
-    build:
-      context: ../..
-      dockerfile: cmd/conceptdescriptionrepositoryservice/Dockerfile
+    image: eclipsebasyx/conceptdescriptionrepository-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/conceptdescriptionrepositoryservice"]
     environment:
       - SERVER_PORT=5004
       - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWCREDENTIALS=true
       - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
@@ -254,11 +224,6 @@ services:
       - POSTGRES_CONNMAXIDLETIMEMINUTES=0
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
-      - ABAC_POLICY_FILE_IMPORT=if_missing
-      - EXPERIMENTAL_REBAC_AUTHORIZATION_MODE=resource-bound-first
-      - EXPERIMENTAL_REBAC_POLICY_SCOPE=secured-example-resources
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_ISSUER=http://keycloak.localhost:8080/realms/basyx
-      - EXPERIMENTAL_REBAC_BOOTSTRAP_OWNER_SUBJECT=32103f0d-1d0e-4d94-b720-bcd22e1c7709
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
       - "8092:5004"
@@ -330,9 +295,7 @@ services:
 
   basyx_configuration:
     container_name: basyx_configuration
-    build:
-      context: ../..
-      dockerfile: cmd/basyxconfigurationservice/Dockerfile
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432

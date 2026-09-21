@@ -1,0 +1,7 @@
+kind: fixed
+body: Run registry benchmark compose commands with literal arguments and report process-launch failures with BENCH-RUN-EXEC.
+time: 2026-09-13T10:22:39.949021+02:00
+custom:
+    Impact: Low
+    PullRequest: 681
+    SecurityImpact: 'Benchmark hardening: compose paths are passed as literal arguments without shell interpretation; no demonstrated production vulnerability.'

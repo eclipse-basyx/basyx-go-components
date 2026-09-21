@@ -1,0 +1,7 @@
+kind: fixed
+body: Reuse PostgreSQL plans for unrestricted shell descriptor updates to reduce repeated query planning on the writer database.
+time: 2026-09-11T09:21:26.805938+02:00
+custom:
+    Impact: Low
+    PullRequest: 669
+    SecurityImpact: None. Existing authorization checks and writer transaction consistency are preserved.
