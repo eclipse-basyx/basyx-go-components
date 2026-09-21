@@ -2,6 +2,33 @@
 
 Utilities and scripts related to the basyx-go-components project.
 
+## Build BaSyx Images
+
+`build_images.sh` builds the twelve BaSyx service images through an interactive
+wizard. It uses `SNAPSHOT`, all services, and Docker Build as the defaults. The
+wizard asks for the image repository prefix (default `eclipsebasyx`) and
+supports local Docker loads and BuildX multi-platform registry pushes.
+It must be run from the Project root directory.
+
+```bash
+./scripts/build_images.sh
+```
+
+For automation, skip the wizard with explicit options:
+
+```bash
+./scripts/build_images.sh --non-interactive --services all --tag SNAPSHOT \
+  --method buildx --output push --platform linux/amd64,linux/arm64 \
+  --repository ghcr.io/eclipse-basyx --yes
+```
+
+The repository prefix defaults to `eclipsebasyx`. For example,
+`--repository myregistry.example/team` produces
+`myregistry.example/team/aasenvironment-go:SNAPSHOT`. `--registry` remains
+available as an alias.
+
+Use `--dry-run` to review generated Docker commands without running a build.
+
 ## Bruno Collection Generator
 
 Script: `generate_bruno_collections.js`
