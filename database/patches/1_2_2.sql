@@ -232,5 +232,5 @@ CREATE INDEX IF NOT EXISTS ix_rebac_share_invitation_access
   ON rebac_share_invitation(scope, access_id, expires_at)
   WHERE redeemed_at IS NULL AND revoked_at IS NULL;
 
-UPDATE basyxsystem SET schema_version = 'v1.1.20', state = 'clean'
+UPDATE basyxsystem SET schema_version = 'v1.2.2', state = 'clean'
 WHERE identifier = (SELECT identifier FROM basyxsystem ORDER BY identifier ASC LIMIT 1);
