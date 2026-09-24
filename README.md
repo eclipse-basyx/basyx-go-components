@@ -252,6 +252,8 @@ general:
 
 `uploadMaxSizeBytes` limits the uploaded file content for AASX packages, File element attachments, and thumbnails. Multipart metadata and framing use a separate bounded allowance, so a file whose content exactly matches the configured limit is accepted. The default 128 MiB file limit therefore accommodates common 50 MiB PDF attachments. The AASX limits constrain entry count, expanded OPC metadata, each expanded part, all expanded payload parts combined, and thumbnails respectively. The 512 MiB total expansion default allows a package to contain multiple large payload parts while the 128 MiB per-part limit continues to bound any single expanded file. All limits must be positive, and the total expanded limit must be greater than or equal to the per-part limit, which must be greater than or equal to the thumbnail limit.
 
+The Submodel Repository's `general.delegatedOperationResponseMaxSizeBytes` limits the JSON response read from a delegated Operation, for both synchronous and asynchronous invocation. Its default is 1 MiB (1048576 bytes). Set a positive byte count in the service configuration or via `GENERAL_DELEGATEDOPERATIONRESPONSEMAXSIZEBYTES` to allow larger results. The repository buffers the delegated response in memory, so choose a limit appropriate for the deployment. This setting does not affect File element attachment downloads.
+
 AASX request bodies and generated specification parts use transaction-scoped PostgreSQL large objects for seekable staging; no writable local temporary directory is required. Package parts, attachments, thumbnails, and generated AASX output are streamed. The parsed AAS object model remains in memory because the current AAS SDK requires an in-memory model representation.
 
 - `POST /upload`

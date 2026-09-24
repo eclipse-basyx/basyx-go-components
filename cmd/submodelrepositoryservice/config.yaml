@@ -64,6 +64,7 @@ general:
   submodelRegistryIntegration: false
   externalUrl: ""
   uploadMaxSizeBytes: 134217728
+  delegatedOperationResponseMaxSizeBytes: 1048576
   aasxMaxPartCount: 10000
   aasxMaxOPCMetadataSizeBytes: 16777216
   aasxMaxPartExpandedSizeBytes: 134217728

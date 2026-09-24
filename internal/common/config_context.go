@@ -86,3 +86,11 @@ func UploadMaxSizeBytesFromContext(ctx context.Context) int64 {
 	}
 	return cfg.General.UploadMaxSizeBytes
 }
+
+func DelegatedResponseMaxBytesFromContext(ctx context.Context) int64 {
+	cfg, ok := ConfigFromContext(ctx)
+	if !ok || cfg == nil || cfg.General.DelegatedResponseMaxBytes <= 0 {
+		return DefaultConfig.GeneralDelegatedResponseMaxBytes
+	}
+	return cfg.General.DelegatedResponseMaxBytes
+}

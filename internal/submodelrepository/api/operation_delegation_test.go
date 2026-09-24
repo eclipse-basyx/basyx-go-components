@@ -35,6 +35,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -291,28 +292,56 @@ func TestDelegatedOperationResultRejectsPartialOperationVariable(t *testing.T) {
 
 func TestReadDelegatedOperationResponseRejectsFixedOversizedBody(t *testing.T) {
 	t.Parallel()
+	maximumResponseBytes := common.DefaultConfig.GeneralDelegatedResponseMaxBytes
 
 	response := &http.Response{
 		StatusCode:    http.StatusOK,
-		ContentLength: maximumDelegatedOperationResponseBytes + 1,
+		ContentLength: maximumResponseBytes + 1,
 		Body:          io.NopCloser(strings.NewReader("{}")),
 	}
 
-	_, _, err := readDelegatedOperationResponse(response)
+	_, _, err := readDelegatedOperationResponse(response, maximumResponseBytes)
 	require.ErrorContains(t, err, "SMREPO-DOOPDELG-RESPTOOLARGE")
 }
 
 func TestReadDelegatedOperationResponseRejectsChunkedOversizedBody(t *testing.T) {
 	t.Parallel()
+	maximumResponseBytes := common.DefaultConfig.GeneralDelegatedResponseMaxBytes
 
 	response := &http.Response{
 		StatusCode:    http.StatusOK,
 		ContentLength: -1,
-		Body:          io.NopCloser(io.LimitReader(strings.NewReader(strings.Repeat("x", int(maximumDelegatedOperationResponseBytes)+1)), maximumDelegatedOperationResponseBytes+1)),
+		Body:          io.NopCloser(strings.NewReader(strings.Repeat("x", int(maximumResponseBytes)+1))),
 	}
 
-	_, _, err := readDelegatedOperationResponse(response)
+	_, _, err := readDelegatedOperationResponse(response, maximumResponseBytes)
 	require.ErrorContains(t, err, "SMREPO-DOOPDELG-RESPTOOLARGE")
+}
+
+func TestDelegatedOperationResponseLimitUsesConfiguredValue(t *testing.T) {
+	responseBody := `[{"value":{"modelType":"Property","idShort":"records","valueType":"xs:string","value":"` + strings.Repeat("x", 1<<20) + `"}}]`
+	delegationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, responseBody)
+	}))
+	defer delegationServer.Close()
+
+	serverURL := mustParseDelegationTestURL(t, delegationServer.URL)
+	t.Setenv(delegationTrustedHostsKey, serverURL.Host)
+
+	defaultContext := contextWithABACDisabled(t)
+	_, _, err := doDelegatedOperationCall(defaultContext, delegationServer.URL, nil, time.Second)
+	require.ErrorContains(t, err, "SMREPO-DOOPDELG-RESPTOOLARGE")
+
+	configPath := t.TempDir() + "/config.yaml"
+	require.NoError(t, os.WriteFile(configPath, []byte("general:\n  delegatedOperationResponseMaxSizeBytes: 2097152\n"), 0600))
+	cfg, err := common.LoadConfig(configPath)
+	require.NoError(t, err)
+	configuredContext := common.ContextWithConfig(defaultContext, cfg)
+	statusCode, response, err := doDelegatedOperationCall(configuredContext, delegationServer.URL, nil, time.Second)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode)
+	require.Len(t, response.([]any), 1)
 }
 
 func stringPointer(value string) *string {

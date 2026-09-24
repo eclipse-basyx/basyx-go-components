@@ -1105,6 +1105,7 @@ func TestValidateGeneralConfigAASXLimits(t *testing.T) {
 	valid := GeneralConfig{
 		BulkBatchLimit:                1000,
 		UploadMaxSizeBytes:            128 << 20,
+		DelegatedResponseMaxBytes:     1 << 20,
 		AASXMaxPartCount:              10000,
 		AASXMaxOPCMetadataSizeBytes:   16 << 20,
 		AASXMaxPartExpandedSizeBytes:  128 << 20,
@@ -1131,6 +1132,48 @@ func TestValidateGeneralConfigAASXLimits(t *testing.T) {
 			test.mutate(&candidate)
 			if err := validateGeneralConfig(&Config{General: candidate}); err == nil {
 				t.Fatal("expected invalid AASX limits to be rejected")
+			}
+		})
+	}
+}
+
+func TestDelegatedOperationResponseLimitConfiguration(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		cfg, err := LoadConfig("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.General.DelegatedResponseMaxBytes != 1<<20 {
+			t.Fatalf("unexpected default delegated response limit: %d", cfg.General.DelegatedResponseMaxBytes)
+		}
+	})
+
+	t.Run("YAML", func(t *testing.T) {
+		cfg, err := LoadConfig(writeTempConfig(t, "general:\n  delegatedOperationResponseMaxSizeBytes: 2097152\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.General.DelegatedResponseMaxBytes != 2<<20 {
+			t.Fatalf("unexpected configured delegated response limit: %d", cfg.General.DelegatedResponseMaxBytes)
+		}
+	})
+
+	t.Run("environment", func(t *testing.T) {
+		t.Setenv("GENERAL_DELEGATEDOPERATIONRESPONSEMAXSIZEBYTES", "3145728")
+		cfg, err := LoadConfig("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.General.DelegatedResponseMaxBytes != 3<<20 {
+			t.Fatalf("unexpected environment delegated response limit: %d", cfg.General.DelegatedResponseMaxBytes)
+		}
+	})
+
+	for _, value := range []string{"0", "-1", "9223372036854775807"} {
+		t.Run("invalid "+value, func(t *testing.T) {
+			_, err := LoadConfig(writeTempConfig(t, "general:\n  delegatedOperationResponseMaxSizeBytes: "+value+"\n"))
+			if err == nil || !strings.Contains(err.Error(), "CONFIG-GENERAL-DELEGATEDRESPONSEMAXSIZE") {
+				t.Fatalf("expected delegated response limit validation error, got %v", err)
 			}
 		})
 	}
