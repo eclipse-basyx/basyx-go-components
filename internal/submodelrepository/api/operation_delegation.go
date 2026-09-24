@@ -46,8 +46,6 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-const maximumDelegatedOperationResponseBytes int64 = 1024 * 1024
-
 func parseDelegationTimeout(clientTimeoutDuration string) (time.Duration, error) {
 	if strings.TrimSpace(clientTimeoutDuration) == "" {
 		return defaultDelegationTimeout, nil
@@ -487,26 +485,26 @@ func doTrustedDelegatedOperationCall(
 		_ = response.Body.Close()
 	}()
 
-	return readDelegatedOperationResponse(response)
+	return readDelegatedOperationResponse(response, common.DelegatedResponseMaxBytesFromContext(ctx))
 }
 
-func readDelegatedOperationResponse(response *http.Response) (int, any, error) {
-	if response.ContentLength > maximumDelegatedOperationResponseBytes {
+func readDelegatedOperationResponse(response *http.Response, maximumResponseBytes int64) (int, any, error) {
+	if response.ContentLength > maximumResponseBytes {
 		return 0, nil, fmt.Errorf(
 			"SMREPO-DOOPDELG-RESPTOOLARGE delegated response Content-Length %d exceeds limit %d",
 			response.ContentLength,
-			maximumDelegatedOperationResponseBytes,
+			maximumResponseBytes,
 		)
 	}
 
-	responseBytes, readErr := io.ReadAll(io.LimitReader(response.Body, maximumDelegatedOperationResponseBytes+1))
+	responseBytes, readErr := io.ReadAll(io.LimitReader(response.Body, maximumResponseBytes+1))
 	if readErr != nil {
 		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-READRESP %w", readErr)
 	}
-	if int64(len(responseBytes)) > maximumDelegatedOperationResponseBytes {
+	if int64(len(responseBytes)) > maximumResponseBytes {
 		return 0, nil, fmt.Errorf(
 			"SMREPO-DOOPDELG-RESPTOOLARGE delegated response exceeds limit %d",
-			maximumDelegatedOperationResponseBytes,
+			maximumResponseBytes,
 		)
 	}
 

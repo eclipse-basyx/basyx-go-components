@@ -1,0 +1,7 @@
+kind: added
+body: Configurable response size limit for delegated Submodel Operations, allowing larger synchronous and asynchronous results while retaining the 1 MiB default.
+time: 2026-09-24T10:30:26Z
+custom:
+    Impact: Low
+    PullRequest: 707
+    SecurityImpact: Delegated responses remain size-limited, and invalid limits are rejected at startup. Raising the limit increases peak memory use per request.

@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"strings"
 
@@ -93,6 +94,7 @@ var DefaultConfig = struct {
 	GeneralAASPreconfigPaths             []string
 	GeneralBulkBatchLimit                int
 	GeneralUploadMaxSizeBytes            int64
+	GeneralDelegatedResponseMaxBytes     int64
 	GeneralAASXMaxPartCount              int
 	GeneralAASXMaxOPCMetadataSizeBytes   int64
 	GeneralAASXMaxPartExpandedSizeBytes  int64
@@ -167,6 +169,7 @@ var DefaultConfig = struct {
 	GeneralAASPreconfigPaths:             []string{},
 	GeneralBulkBatchLimit:                1000,
 	GeneralUploadMaxSizeBytes:            128 << 20,
+	GeneralDelegatedResponseMaxBytes:     1 << 20,
 	GeneralAASXMaxPartCount:              defaultAASXMaxPartCount,
 	GeneralAASXMaxOPCMetadataSizeBytes:   defaultAASXMaxOPCMetadataSizeBytes,
 	GeneralAASXMaxPartExpandedSizeBytes:  defaultAASXMaxPartExpandedSizeBytes,
@@ -427,13 +430,14 @@ type GeneralConfig struct {
 	TrustProxyHeaders                      bool     `mapstructure:"trustProxyHeaders" yaml:"trustProxyHeaders" json:"trustProxyHeaders"`                                                                // Trust Forwarded/X-Forwarded-* headers when request source matches trustedProxyCIDRs
 	TrustedProxyCIDRs                      []string `mapstructure:"trustedProxyCIDRs" yaml:"trustedProxyCIDRs" json:"trustedProxyCIDRs"`                                                                // CIDR allowlist for proxy source addresses eligible to provide forwarded headers
 	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum uploaded file content size in bytes
-	AASXMaxPartCount                       int      `mapstructure:"aasxMaxPartCount" yaml:"aasxMaxPartCount" json:"aasxMaxPartCount"`                                                                   // Maximum non-directory entries in an AASX package
-	AASXMaxOPCMetadataSizeBytes            int64    `mapstructure:"aasxMaxOPCMetadataSizeBytes" yaml:"aasxMaxOPCMetadataSizeBytes" json:"aasxMaxOPCMetadataSizeBytes"`                                  // Maximum combined expanded OPC metadata size
-	AASXMaxPartExpandedSizeBytes           int64    `mapstructure:"aasxMaxPartExpandedSizeBytes" yaml:"aasxMaxPartExpandedSizeBytes" json:"aasxMaxPartExpandedSizeBytes"`                               // Maximum expanded size of one AASX payload part
-	AASXMaxTotalExpandedSizeBytes          int64    `mapstructure:"aasxMaxTotalExpandedSizeBytes" yaml:"aasxMaxTotalExpandedSizeBytes" json:"aasxMaxTotalExpandedSizeBytes"`                            // Maximum combined expanded AASX payload size
-	AASXMaxThumbnailSizeBytes              int64    `mapstructure:"aasxMaxThumbnailSizeBytes" yaml:"aasxMaxThumbnailSizeBytes" json:"aasxMaxThumbnailSizeBytes"`                                        // Maximum expanded size of an AASX thumbnail
-	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
-	BulkBatchLimit                         int      `mapstructure:"bulkBatchLimit" yaml:"bulkBatchLimit" json:"bulkBatchLimit"`                                                                         // Maximum row count per generated bulk SQL statement
+	DelegatedResponseMaxBytes              int64    `mapstructure:"delegatedOperationResponseMaxSizeBytes" yaml:"delegatedOperationResponseMaxSizeBytes" json:"delegatedOperationResponseMaxSizeBytes"`
+	AASXMaxPartCount                       int      `mapstructure:"aasxMaxPartCount" yaml:"aasxMaxPartCount" json:"aasxMaxPartCount"`                                        // Maximum non-directory entries in an AASX package
+	AASXMaxOPCMetadataSizeBytes            int64    `mapstructure:"aasxMaxOPCMetadataSizeBytes" yaml:"aasxMaxOPCMetadataSizeBytes" json:"aasxMaxOPCMetadataSizeBytes"`       // Maximum combined expanded OPC metadata size
+	AASXMaxPartExpandedSizeBytes           int64    `mapstructure:"aasxMaxPartExpandedSizeBytes" yaml:"aasxMaxPartExpandedSizeBytes" json:"aasxMaxPartExpandedSizeBytes"`    // Maximum expanded size of one AASX payload part
+	AASXMaxTotalExpandedSizeBytes          int64    `mapstructure:"aasxMaxTotalExpandedSizeBytes" yaml:"aasxMaxTotalExpandedSizeBytes" json:"aasxMaxTotalExpandedSizeBytes"` // Maximum combined expanded AASX payload size
+	AASXMaxThumbnailSizeBytes              int64    `mapstructure:"aasxMaxThumbnailSizeBytes" yaml:"aasxMaxThumbnailSizeBytes" json:"aasxMaxThumbnailSizeBytes"`             // Maximum expanded size of an AASX thumbnail
+	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                     // Files/directories loaded at startup for AAS preconfiguration
+	BulkBatchLimit                         int      `mapstructure:"bulkBatchLimit" yaml:"bulkBatchLimit" json:"bulkBatchLimit"`                                              // Maximum row count per generated bulk SQL statement
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
@@ -623,6 +627,9 @@ func validateGeneralConfig(cfg *Config) error {
 	}
 	if cfg.General.UploadMaxSizeBytes <= 0 {
 		return fmt.Errorf("CONFIG-GENERAL-UPLOADMAXSIZE general.uploadMaxSizeBytes must be greater than 0")
+	}
+	if cfg.General.DelegatedResponseMaxBytes <= 0 || cfg.General.DelegatedResponseMaxBytes == math.MaxInt64 {
+		return fmt.Errorf("CONFIG-GENERAL-DELEGATEDRESPONSEMAXSIZE general.delegatedOperationResponseMaxSizeBytes must be between 1 and %d", int64(math.MaxInt64-1))
 	}
 	if cfg.General.AASXMaxPartCount <= 0 {
 		return fmt.Errorf("CONFIG-GENERAL-AASXPARTCOUNT general.aasxMaxPartCount must be greater than 0")
@@ -1373,6 +1380,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.trustProxyHeaders", DefaultConfig.GeneralTrustProxyHeaders)
 	v.SetDefault("general.trustedProxyCIDRs", DefaultConfig.GeneralTrustedProxyCIDRs)
 	v.SetDefault("general.uploadMaxSizeBytes", DefaultConfig.GeneralUploadMaxSizeBytes)
+	v.SetDefault("general.delegatedOperationResponseMaxSizeBytes", DefaultConfig.GeneralDelegatedResponseMaxBytes)
 	v.SetDefault("general.aasxMaxPartCount", DefaultConfig.GeneralAASXMaxPartCount)
 	v.SetDefault("general.aasxMaxOPCMetadataSizeBytes", DefaultConfig.GeneralAASXMaxOPCMetadataSizeBytes)
 	v.SetDefault("general.aasxMaxPartExpandedSizeBytes", DefaultConfig.GeneralAASXMaxPartExpandedSizeBytes)
