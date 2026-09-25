@@ -1,0 +1,50 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonymous", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "admin_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+    "DEFOBJECTS": [
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "submodel_read_routes", "objects": [
+        { "ROUTE": "/submodels" },
+        { "ROUTE": "/submodels/*" },
+        { "ROUTE": "/query/submodels" }
+      ]}
+    ],
+    "DEFACLS": [
+      { "name": "public_read", "acl": { "USEATTRIBUTES": "anonymous", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "role_read", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "admin_all", "acl": { "USEATTRIBUTES": "admin_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
+    ],
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      { "name": "is_admin", "formula": {
+        "$and": [
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+          { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 10 } ] }
+        ]
+      }},
+      { "name": "editor_public_submodels", "formula": {
+        "$and": [
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+          { "$eq": [ { "$field": "$sm#idShort" }, { "$strVal": "public" } ] }
+        ]
+      }},
+      { "name": "not_secret_element", "formula": {
+        "$ne": [ { "$field": "$sme#idShort" }, { "$strVal": "secret" } ]
+      }}
+    ],
+    "rules": [
+      { "USEACL": "admin_all", "OBJECTS": [ { "ROUTE": "*" } ], "USEFORMULA": "is_admin" },
+      { "USEACL": "public_read", "USEOBJECTS": [ "description" ], "USEFORMULA": "always_true" },
+      {
+        "USEACL": "role_read",
+        "USEOBJECTS": [ "submodel_read_routes" ],
+        "USEFORMULA": "editor_public_submodels",
+        "FILTER": { "FRAGMENT": "$sme", "MATCH": true, "USEFORMULA": "not_secret_element" }
+      }
+    ]
+  }
+}

@@ -575,6 +575,9 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 		}
 		return fmt.Errorf("%s %w", common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECBATCH"), err)
 	}
+	if err = auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceAAS, aas.ID()); err != nil {
+		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-REBACOWNER " + err.Error())
+	}
 	return nil
 }
 
@@ -1364,7 +1367,7 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 	}
 
 	if isUpdate {
-		if _, reconciliationErr := executeAASReconciliationStatement(ctx, tx, aasIdentifier, reconciliationPlan); reconciliationErr != nil {
+		if reconciliationErr := reconcileAASUpdateTx(ctx, tx, aasIdentifier, reconciliationPlan, previous, aas); reconciliationErr != nil {
 			return PutAssetAdministrationShellResult{}, reconciliationErr
 		}
 	} else {
@@ -1481,6 +1484,9 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 		return err
 	}
 
+	if err = auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceAAS, aasIdentifier); err != nil {
+		return common.NewInternalServerError("AASREPO-DELAAS-REBACSTATE " + err.Error())
+	}
 	dialect := goqu.Dialect("postgres")
 	deleted, err := cleanupAndDeleteAASByIdentifier(ctx, tx, &dialect, aasIdentifier)
 	if err != nil {
@@ -2352,7 +2358,62 @@ func deleteSubmodelReferenceInAssetAdministrationShellTx(ctx context.Context, tx
 	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 		return common.NewInternalServerError("AASREPO-DELSMREF-EXECDELETEREFERENCE " + err.Error())
 	}
+	if err = auth.RecordReBACSubmodelReferenceRemoved(ctx, tx, aasIdentifier, submodelIdentifier); err != nil {
+		return common.NewInternalServerError("AASREPO-DELSMREF-REBACLINK " + err.Error())
+	}
 	return nil
+}
+
+// reconcileAASUpdateTx applies an AAS update plan and removes the ReBAC
+// inheritance links of Submodel references the update dropped.
+func reconcileAASUpdateTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+	plan aasReconciliationPlan,
+	previous types.IAssetAdministrationShell,
+	current types.IAssetAdministrationShell,
+) error {
+	if _, err := executeAASReconciliationStatement(ctx, tx, aasIdentifier, plan); err != nil {
+		return err
+	}
+	return recordRemovedSubmodelReferences(ctx, tx, aasIdentifier, previous.Submodels(), current.Submodels())
+}
+
+// recordRemovedSubmodelReferences removes approved ReBAC inheritance links of
+// Submodel references that an AAS update dropped.
+func recordRemovedSubmodelReferences(ctx context.Context, tx *sql.Tx, aasIdentifier string, previous []types.IReference, current []types.IReference) error {
+	if auth.ReBACStateFromContext(ctx) == nil {
+		return nil
+	}
+	kept := make(map[string]struct{}, len(current))
+	for _, submodelIdentifier := range referencedSubmodelIdentifiers(current) {
+		kept[submodelIdentifier] = struct{}{}
+	}
+	for _, submodelIdentifier := range referencedSubmodelIdentifiers(previous) {
+		if _, stillReferenced := kept[submodelIdentifier]; stillReferenced {
+			continue
+		}
+		if err := auth.RecordReBACSubmodelReferenceRemoved(ctx, tx, aasIdentifier, submodelIdentifier); err != nil {
+			return common.NewInternalServerError("AASREPO-PUTAAS-REBACLINK " + err.Error())
+		}
+	}
+	return nil
+}
+
+func referencedSubmodelIdentifiers(references []types.IReference) []string {
+	identifiers := make([]string, 0, len(references))
+	for _, reference := range references {
+		if reference == nil {
+			continue
+		}
+		for _, key := range reference.Keys() {
+			if key.Type() == types.KeyTypesSubmodel {
+				identifiers = append(identifiers, key.Value())
+			}
+		}
+	}
+	return identifiers
 }
 
 type coreAssetAdministrationShellRow struct {

@@ -147,6 +147,26 @@ func SetupSecurityWithAccessModelProvider(
 	provider AccessModelProvider,
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) error {
+	return SetupSecurityWithExtensions(ctx, cfg, r, provider, SecurityExtensions{}, claimsMiddleware...)
+}
+
+// SecurityExtensions carries optional authorization extensions that widen
+// ABAC decisions. The zero value keeps ABAC-only behavior.
+type SecurityExtensions struct {
+	// ReBAC adds relationship-based grants as a strict union with ABAC.
+	ReBAC ReBACResolver
+}
+
+// SetupSecurityWithExtensions configures OIDC and ABAC with a dynamic model
+// provider and optional authorization extensions.
+func SetupSecurityWithExtensions(
+	ctx context.Context,
+	cfg *common.Config,
+	r *api.Mux,
+	provider AccessModelProvider,
+	extensions SecurityExtensions,
+	claimsMiddleware ...func(http.Handler) http.Handler,
+) error {
 	if !cfg.ABAC.Enabled {
 		eventfeed.SetRecordAuthorizer(nil)
 		return nil
@@ -160,6 +180,10 @@ func SetupSecurityWithAccessModelProvider(
 		EnableImplicitCasts:    cfg.General.EnableImplicitCasts,
 		ModelProvider:          provider,
 		DenyAsNotFoundPrefixes: abacDeniedAsNotFoundPrefixes(cfg.Server.ContextPath),
+		ReBAC:                  extensions.ReBAC,
+	}
+	if binder, ok := extensions.ReBAC.(ABACModelBinder); ok {
+		binder.BindABAC(provider, cfg.General.EnableImplicitCasts)
 	}
 	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), claimsMiddleware...)
 	BindEventFeedAuthorizer(abacSettings)

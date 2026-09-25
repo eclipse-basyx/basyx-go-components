@@ -1,0 +1,207 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
+
+package rebacintegration
+
+import (
+	"net/http"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
+	"github.com/stretchr/testify/require"
+)
+
+func TestInvitationsCreateNormalGrantsForTheRedeemer(t *testing.T) {
+	bootstrapCreators(t)
+	identifier := unique("cd")
+	expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, cdURL+"/concept-descriptions", conceptDescription(identifier), nil), "create CD")
+	target := cdURL + "/concept-descriptions/" + enc(identifier)
+	invitations := target + "/$access/invitations"
+	accept := cdURL + "/security/rebac/invitations/accept"
+
+	expiry := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	expectStatus(t, http.StatusBadRequest, call(t, "alice", http.MethodPost, invitations, map[string]any{"relation": "owner", "expiresAt": expiry}, nil), "owner invitations are not allowed")
+	expectStatus(t, http.StatusBadRequest, call(t, "alice", http.MethodPost, invitations, map[string]any{"relation": "viewer"}, nil), "expiry is required")
+	expectStatus(t, http.StatusBadRequest, call(t, "alice", http.MethodPost, invitations, map[string]any{"relation": "executor", "expiresAt": expiry}, nil), "no executor on CDs")
+	expectStatus(t, http.StatusNotFound, call(t, "bob", http.MethodPost, invitations, map[string]any{"relation": "viewer", "expiresAt": expiry}, nil), "only managers invite")
+
+	created := call(t, "alice", http.MethodPost, invitations, map[string]any{"relation": "viewer", "expiresAt": expiry}, nil)
+	expectStatus(t, http.StatusCreated, created, "create invitation")
+	invitationToken, _ := created.json(t)["token"].(string)
+	require.NotEmpty(t, invitationToken)
+
+	listed := call(t, "alice", http.MethodGet, invitations, nil, nil)
+	expectStatus(t, http.StatusOK, listed, "list invitations")
+	require.NotContains(t, string(listed.body), invitationToken, "tokens are only visible once")
+
+	expectStatus(t, http.StatusForbidden, call(t, "eve", http.MethodGet, target, nil, nil), "before redemption")
+	expectStatus(t, http.StatusNotFound, call(t, "", http.MethodPost, accept, map[string]any{"token": invitationToken}, nil), "anonymous redemption")
+	expectStatus(t, http.StatusOK, call(t, "eve", http.MethodPost, accept, map[string]any{"token": invitationToken}, nil), "redeem")
+	expectStatus(t, http.StatusOK, call(t, "eve", http.MethodGet, target, nil, nil), "redeemer reads")
+	expectStatus(t, http.StatusNotFound, call(t, "bob", http.MethodPost, accept, map[string]any{"token": invitationToken}, nil), "maxUses defaults to one")
+
+	second := call(t, "alice", http.MethodPost, invitations, map[string]any{"relation": "editor", "expiresAt": expiry, "maxUses": 5}, nil)
+	expectStatus(t, http.StatusCreated, second, "second invitation")
+	secondID, _ := second.json(t)["id"].(string)
+	expectStatus(t, http.StatusNoContent, call(t, "alice", http.MethodDelete, invitations+"/"+secondID, nil, nil), "revoke invitation")
+	secondToken, _ := second.json(t)["token"].(string)
+	expectStatus(t, http.StatusNotFound, call(t, "bob", http.MethodPost, accept, map[string]any{"token": secondToken}, nil), "revoked invitations cannot be redeemed")
+	expectStatus(t, http.StatusOK, call(t, "eve", http.MethodGet, target, nil, nil), "redeemed grants survive invitation revocation")
+}
+
+func TestAdministratorEndpointsAreHiddenFromOthers(t *testing.T) {
+	bootstrapCreators(t)
+	expectStatus(t, http.StatusOK, call(t, "dave", http.MethodGet, submodelURL+"/security/rebac/status", nil, nil), "administrator status")
+	expectStatus(t, http.StatusNotFound, call(t, "alice", http.MethodGet, submodelURL+"/security/rebac/status", nil, nil), "status is hidden")
+	expectStatus(t, http.StatusNotFound, call(t, "alice", http.MethodPost, submodelURL+"/security/rebac/admin/reconcile", nil, nil), "reconcile is hidden")
+	reconciled := call(t, "dave", http.MethodPost, submodelURL+"/security/rebac/admin/reconcile", nil, nil)
+	expectStatus(t, http.StatusOK, reconciled, "administrator reconcile")
+	require.EqualValues(t, 0, reconciled.json(t)["unexpectedTuples"], "only BaSyx writes the projection")
+}
+
+func TestConcurrentGrantChangesAllowOneWriter(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "race")
+	accessURL := submodelAccess(submodelURL, identifier)
+	grants, etag := readAccess(t, "alice", accessURL)
+	statuses := make([]int, 2)
+	var wait sync.WaitGroup
+	for index, user := range []string{"bob", "carol"} {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			body := map[string]any{"grants": append(append([]grant{}, grants...), userGrant(t, "viewer", user))}
+			statuses[index] = call(t, "alice", http.MethodPut, accessURL+"/grants", body, map[string]string{"If-Match": etag}).status
+		}()
+	}
+	wait.Wait()
+	require.ElementsMatch(t, []int{http.StatusOK, http.StatusPreconditionFailed}, statuses)
+}
+
+func TestPendingRevocationRejectsReBACAllowsButNotABACAllows(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "barrier")
+	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
+	target := submodelURL + "/submodels/" + enc(identifier)
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, target, nil, nil), "before revocation")
+
+	db := openDB(t)
+	insert, args, err := goqu.Dialect("postgres").Insert("rebac_outbox").Rows(goqu.Record{
+		"scope": "it", "operation_id": goqu.L("gen_random_uuid()"), "operation": "delete",
+		"tuple_object": "submodel:00000000-0000-0000-0000-000000000000", "tuple_relation": "viewer",
+		"tuple_user": "user:barrier-test", "revokes": true, "next_attempt_at": time.Now().Add(time.Hour),
+	}).Returning("seq").ToSQL()
+	require.NoError(t, err)
+	var seq int64
+	require.NoError(t, db.QueryRowContext(t.Context(), insert, args...).Scan(&seq))
+
+	expectStatus(t, http.StatusServiceUnavailable, call(t, "bob", http.MethodGet, target, nil, nil), "pending revocation invalidates ReBAC allows")
+	expectStatus(t, http.StatusOK, call(t, "admin", http.MethodGet, target, nil, nil), "ABAC allows are unaffected")
+
+	remove, args, err := goqu.Dialect("postgres").Delete("rebac_outbox").Where(goqu.C("seq").Eq(seq)).ToSQL()
+	require.NoError(t, err)
+	_, err = db.ExecContext(t.Context(), remove, args...)
+	require.NoError(t, err)
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, target, nil, nil), "barrier lifts once applied")
+}
+
+func TestOpenFGAOutageOnlyAffectsRequestsThatNeedReBAC(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "outage")
+	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
+	target := submodelURL + "/submodels/" + enc(identifier)
+
+	compose(t, "stop", "openfga")
+	t.Cleanup(func() { compose(t, "start", "openfga") })
+	expectStatus(t, http.StatusServiceUnavailable, call(t, "bob", http.MethodGet, target, nil, nil), "ReBAC needed but unavailable")
+	expectStatus(t, http.StatusOK, call(t, "admin", http.MethodGet, target, nil, nil), "unconditional ABAC allow does not call OpenFGA")
+
+	compose(t, "start", "openfga")
+	require.Eventually(t, func() bool {
+		return call(t, "bob", http.MethodGet, target, nil, nil).status == http.StatusOK
+	}, 90*time.Second, time.Second, "ReBAC recovers after OpenFGA restarts")
+}
+
+func TestReenableReconciliationRemovesStateOfResourcesDeletedMeanwhile(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "orphan")
+	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
+	db := openDB(t)
+	var authUUID string
+	lookup, args, err := goqu.Dialect("postgres").From("submodel").Select(goqu.L("auth_uuid::text")).
+		Where(goqu.C("submodel_identifier").Eq(identifier)).ToSQL()
+	require.NoError(t, err)
+	require.NoError(t, db.QueryRowContext(t.Context(), lookup, args...).Scan(&authUUID))
+
+	deleteRow, args, err := goqu.Dialect("postgres").Delete("submodel").Where(goqu.C("submodel_identifier").Eq(identifier)).ToSQL()
+	require.NoError(t, err)
+	_, err = db.ExecContext(t.Context(), deleteRow, args...)
+	require.NoError(t, err, "simulates a deletion while ReBAC was disabled")
+
+	compose(t, "restart", "submodel-repository")
+	require.NoError(t, testenv.WaitHealthyURL(submodelURL+"/health", healthTimeout))
+
+	count, args, err := goqu.Dialect("postgres").From("rebac_grant").Select(goqu.COUNT("*")).
+		Where(goqu.L("object_uuid = ?::uuid", authUUID)).ToSQL()
+	require.NoError(t, err)
+	var remaining int
+	require.NoError(t, db.QueryRowContext(t.Context(), count, args...).Scan(&remaining))
+	require.Zero(t, remaining, "grants of resources deleted meanwhile are removed before readiness")
+
+	expectStatus(t, http.StatusCreated, call(t, "admin", http.MethodPost, submodelURL+"/submodels", submodel(identifier, "recreated"), nil), "recreate identifier")
+	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, submodelURL+"/submodels/"+enc(identifier), nil, nil), "a recreated resource never inherits old grants")
+}
+
+func TestGrantsAreSharedAcrossServicesOfOneScope(t *testing.T) {
+	identifier := createSubmodel(t, environmentURL, "alice", "cross-service", property("p", "1"))
+	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, environmentURL+"/submodels/"+enc(identifier), nil, nil), "AAS Environment")
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, submodelURL+"/submodels/"+enc(identifier), nil, nil), "Submodel repository")
+
+	shellID := unique("aas")
+	expectStatus(t, http.StatusCreated, call(t, "carol", http.MethodPost, aasURL+"/shells", shell(shellID), nil), "create shell in AAS repository")
+	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, environmentURL+"/shells/"+enc(shellID), nil, nil), "ungranted shell")
+	addGrants(t, "carol", aasURL+"/shells/"+enc(shellID)+"/$access", userGrant(t, "editor", "bob"))
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, environmentURL+"/shells/"+enc(shellID), nil, nil), "shell grant in environment")
+	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodDelete, aasURL+"/shells/"+enc(shellID), nil, nil), "editors cannot delete")
+	expectStatus(t, http.StatusNoContent, call(t, "carol", http.MethodDelete, aasURL+"/shells/"+enc(shellID), nil, nil), "owner deletes")
+}
+
+func TestEffectiveRightsReportSourcesWithoutRevealingExistence(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "effective")
+	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "editor", "bob"))
+	effective := call(t, "bob", http.MethodGet, submodelAccess(submodelURL, identifier)+"/effective", nil, nil)
+	expectStatus(t, http.StatusOK, effective, "effective rights")
+	sources := map[string]string{}
+	for _, right := range effective.json(t)["rights"].([]any) {
+		entry := right.(map[string]any)
+		sources[entry["action"].(string)] = entry["source"].(string)
+	}
+	require.Equal(t, map[string]string{"read": "rebac", "update": "rebac", "delete": "none", "execute": "none", "manage": "none"}, sources)
+	expectStatus(t, http.StatusNotFound, call(t, "eve", http.MethodGet, submodelAccess(submodelURL, identifier)+"/effective", nil, nil), "no rights, no existence")
+	adminEffective := call(t, "admin", http.MethodGet, submodelAccess(submodelURL, identifier)+"/effective", nil, nil)
+	expectStatus(t, http.StatusOK, adminEffective, "ABAC administrator")
+	require.Contains(t, string(adminEffective.body), `"source":"abac"`)
+}

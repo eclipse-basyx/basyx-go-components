@@ -1,0 +1,102 @@
+name: BaSyx ReBAC model tests
+model_file: ./model.fga
+tests:
+  - name: resource roles
+    tuples:
+      - { user: user:owner, relation: owner, object: aas:a1 }
+      - { user: user:editor, relation: editor, object: aas:a1 }
+      - { user: user:viewer, relation: viewer, object: aas:a1 }
+      - { user: user:executor, relation: executor, object: aas:a1 }
+      - { user: group:ops#member, relation: viewer, object: concept_description:c1 }
+      - { user: user:member, relation: member, object: group:ops }
+    check:
+      - user: user:owner
+        object: aas:a1
+        assertions: { can_read: true, can_update: true, can_delete: true, can_manage: true, can_execute: true }
+      - user: user:editor
+        object: aas:a1
+        assertions: { can_read: true, can_update: true, can_delete: false, can_manage: false, can_execute: false }
+      - user: user:viewer
+        object: aas:a1
+        assertions: { can_read: true, can_update: false, can_delete: false, can_manage: false, can_execute: false }
+      - user: user:executor
+        object: aas:a1
+        assertions: { can_read: false, can_update: false, can_execute: true }
+      - user: user:stranger
+        object: aas:a1
+        assertions: { can_read: false, can_execute: false }
+      - user: user:member
+        object: concept_description:c1
+        assertions: { can_read: true, can_update: false }
+      - user: user:stranger
+        object: concept_description:c1
+        assertions: { can_read: false }
+
+  - name: approved aas links never carry management
+    tuples:
+      - { user: aas:a1, relation: linked_aas, object: submodel:s1 }
+      - { user: user:aasowner, relation: owner, object: aas:a1 }
+      - { user: user:aasviewer, relation: viewer, object: aas:a1 }
+      - { user: user:aasexecutor, relation: executor, object: aas:a1 }
+      - { user: user:unlinked, relation: owner, object: aas:a2 }
+    check:
+      - user: user:aasowner
+        object: submodel:s1
+        assertions: { can_read: true, can_update: true, can_execute: true, can_manage: false, can_delete: false }
+      - user: user:aasviewer
+        object: submodel:s1
+        assertions: { can_read: true, can_update: false, can_execute: false }
+      - user: user:aasexecutor
+        object: submodel:s1
+        assertions: { can_read: false, can_execute: true }
+      - user: user:unlinked
+        object: submodel:s1
+        assertions: { can_read: false }
+
+  - name: path based element grants
+    tuples:
+      - { user: user:smviewer, relation: viewer, object: submodel:s1 }
+      - { user: user:smowner, relation: owner, object: submodel:s1 }
+      - { user: user:elementviewer, relation: viewer, object: element:s1.a }
+      - { user: user:elementowner, relation: owner, object: element:s1.a }
+      - { user: submodel:s1, relation: submodel, object: element:s1.a }
+      - { user: element:s1.a, relation: parent, object: element:s1.a.b }
+      - { user: submodel:s1, relation: submodel, object: element:s1.sibling }
+    check:
+      - user: user:smviewer
+        object: element:s1.a.b
+        assertions: { can_read: true, can_update: false }
+      - user: user:smowner
+        object: element:s1.a.b
+        assertions: { can_read: true, can_update: true, can_manage: true, can_execute: true }
+      - user: user:elementviewer
+        object: element:s1.a.b
+        assertions: { can_read: true, can_update: false }
+      - user: user:elementviewer
+        object: element:s1.sibling
+        assertions: { can_read: false }
+      - user: user:elementviewer
+        object: submodel:s1
+        assertions: { can_read: false }
+      - user: user:elementowner
+        object: element:s1.a.b
+        assertions: { can_manage: true, can_update: true }
+      - user: user:elementowner
+        object: submodel:s1
+        assertions: { can_manage: false, can_read: false }
+
+  - name: repository relations
+    tuples:
+      - { user: user:admin, relation: admin, object: repository:aas }
+      - { user: group:creators#member, relation: creator, object: repository:aas }
+      - { user: user:creator, relation: member, object: group:creators }
+    check:
+      - user: user:admin
+        object: repository:aas
+        assertions: { admin: true, creator: true }
+      - user: user:creator
+        object: repository:aas
+        assertions: { admin: false, creator: true }
+      - user: user:creator
+        object: repository:submodel
+        assertions: { creator: false }

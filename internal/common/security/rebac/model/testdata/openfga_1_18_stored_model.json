@@ -1,0 +1,916 @@
+{
+ "id": "01M3D3ZSD0CG1NFMR91MVQ0DZ4",
+ "schema_version": "1.1",
+ "type_definitions": [
+  {
+   "type": "user",
+   "relations": {},
+   "metadata": null
+  },
+  {
+   "type": "group",
+   "relations": {
+    "member": {
+     "this": {}
+    }
+   },
+   "metadata": {
+    "relations": {
+     "member": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     }
+    },
+    "module": "",
+    "source_info": null
+   }
+  },
+  {
+   "type": "repository",
+   "relations": {
+    "admin": {
+     "this": {}
+    },
+    "creator": {
+     "union": {
+      "child": [
+       {
+        "this": {}
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "admin"
+        }
+       }
+      ]
+     }
+    }
+   },
+   "metadata": {
+    "relations": {
+     "admin": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "creator": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     }
+    },
+    "module": "",
+    "source_info": null
+   }
+  },
+  {
+   "type": "aas",
+   "relations": {
+    "can_delete": {
+     "computedUserset": {
+      "object": "",
+      "relation": "owner"
+     }
+    },
+    "can_execute": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "executor"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "owner"
+        }
+       }
+      ]
+     }
+    },
+    "can_manage": {
+     "computedUserset": {
+      "object": "",
+      "relation": "owner"
+     }
+    },
+    "can_read": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "viewer"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "can_update"
+        }
+       }
+      ]
+     }
+    },
+    "can_update": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "editor"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "owner"
+        }
+       }
+      ]
+     }
+    },
+    "editor": {
+     "this": {}
+    },
+    "executor": {
+     "this": {}
+    },
+    "owner": {
+     "this": {}
+    },
+    "viewer": {
+     "this": {}
+    }
+   },
+   "metadata": {
+    "relations": {
+     "can_delete": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_execute": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_manage": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_read": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_update": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "editor": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "executor": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "owner": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "viewer": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     }
+    },
+    "module": "",
+    "source_info": null
+   }
+  },
+  {
+   "type": "submodel",
+   "relations": {
+    "can_delete": {
+     "computedUserset": {
+      "object": "",
+      "relation": "owner"
+     }
+    },
+    "can_execute": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "executor"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "owner"
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "linked_aas"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_execute"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "can_manage": {
+     "computedUserset": {
+      "object": "",
+      "relation": "owner"
+     }
+    },
+    "can_read": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "viewer"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "can_update"
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "linked_aas"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_read"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "can_update": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "editor"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "owner"
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "linked_aas"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_update"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "editor": {
+     "this": {}
+    },
+    "executor": {
+     "this": {}
+    },
+    "linked_aas": {
+     "this": {}
+    },
+    "owner": {
+     "this": {}
+    },
+    "viewer": {
+     "this": {}
+    }
+   },
+   "metadata": {
+    "relations": {
+     "can_delete": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_execute": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_manage": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_read": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_update": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "editor": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "executor": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "linked_aas": {
+      "directly_related_user_types": [
+       {
+        "type": "aas",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "owner": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "viewer": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     }
+    },
+    "module": "",
+    "source_info": null
+   }
+  },
+  {
+   "type": "element",
+   "relations": {
+    "can_execute": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "executor"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "can_manage"
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "parent"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_execute"
+         }
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "submodel"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_execute"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "can_manage": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "owner"
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "parent"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_manage"
+         }
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "submodel"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_manage"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "can_read": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "viewer"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "can_update"
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "parent"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_read"
+         }
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "submodel"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_read"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "can_update": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "editor"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "can_manage"
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "parent"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_update"
+         }
+        }
+       },
+       {
+        "tupleToUserset": {
+         "tupleset": {
+          "object": "",
+          "relation": "submodel"
+         },
+         "computedUserset": {
+          "object": "",
+          "relation": "can_update"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "editor": {
+     "this": {}
+    },
+    "executor": {
+     "this": {}
+    },
+    "owner": {
+     "this": {}
+    },
+    "parent": {
+     "this": {}
+    },
+    "submodel": {
+     "this": {}
+    },
+    "viewer": {
+     "this": {}
+    }
+   },
+   "metadata": {
+    "relations": {
+     "can_execute": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_manage": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_read": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_update": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "editor": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "executor": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "owner": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "parent": {
+      "directly_related_user_types": [
+       {
+        "type": "element",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "submodel": {
+      "directly_related_user_types": [
+       {
+        "type": "submodel",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "viewer": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     }
+    },
+    "module": "",
+    "source_info": null
+   }
+  },
+  {
+   "type": "concept_description",
+   "relations": {
+    "can_delete": {
+     "computedUserset": {
+      "object": "",
+      "relation": "owner"
+     }
+    },
+    "can_manage": {
+     "computedUserset": {
+      "object": "",
+      "relation": "owner"
+     }
+    },
+    "can_read": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "viewer"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "can_update"
+        }
+       }
+      ]
+     }
+    },
+    "can_update": {
+     "union": {
+      "child": [
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "editor"
+        }
+       },
+       {
+        "computedUserset": {
+         "object": "",
+         "relation": "owner"
+        }
+       }
+      ]
+     }
+    },
+    "editor": {
+     "this": {}
+    },
+    "owner": {
+     "this": {}
+    },
+    "viewer": {
+     "this": {}
+    }
+   },
+   "metadata": {
+    "relations": {
+     "can_delete": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_manage": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_read": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "can_update": {
+      "directly_related_user_types": [],
+      "module": "",
+      "source_info": null
+     },
+     "editor": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "owner": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     },
+     "viewer": {
+      "directly_related_user_types": [
+       {
+        "type": "user",
+        "condition": ""
+       },
+       {
+        "type": "group",
+        "relation": "member",
+        "condition": ""
+       }
+      ],
+      "module": "",
+      "source_info": null
+     }
+    },
+    "module": "",
+    "source_info": null
+   }
+  }
+ ],
+ "conditions": {}
+}

@@ -281,6 +281,7 @@ type Config struct {
 	General  GeneralConfig  `mapstructure:"general" yaml:"general"`   // General configuration
 	OIDC     OIDCConfig     `mapstructure:"oidc" yaml:"oidc"`         // OpenID Connect authentication
 	ABAC     ABACConfig     `mapstructure:"abac" yaml:"abac"`         // Attribute-Based Access Control
+	ReBAC    ReBACConfig    `mapstructure:"rebac" yaml:"rebac"`       // Experimental relationship-based access control
 	JWS      JWSConfig      `mapstructure:"jws" yaml:"jws"`           // JWS signing configuration
 	Swagger  SwaggerConfig  `mapstructure:"swagger" yaml:"swagger"`   // Swagger/OpenAPI documentation configuration
 	History  HistoryConfig  `mapstructure:"history" yaml:"history"`   // History/audit behavior
@@ -551,6 +552,10 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 	if err = validateABACConfig(cfg); err != nil {
+		return nil, err
+	}
+	applyReBACEnvOverrides(cfg)
+	if err = validateReBACConfig(cfg); err != nil {
 		return nil, err
 	}
 	applyHistoryEnvOverrides(cfg)
@@ -1305,6 +1310,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("abac.policyFileImport", DefaultConfig.ABACPolicyFileImport)
 	v.SetDefault("abac.policyScope", DefaultConfig.ABACPolicyScope)
 	v.SetDefault("abac.managementApi.enabled", DefaultConfig.ABACManagementAPIEnabled)
+	setReBACDefaults(v)
 
 	// JWS defaults
 	v.SetDefault("jws.privateKeyPath", "")
@@ -1418,6 +1424,7 @@ func LogConfiguration(cfg *Config, configPath string) {
 		slog.Group(
 			"features",
 			"abac_enabled", cfg.ABAC.Enabled,
+			"rebac_enabled", cfg.ReBAC.Enabled,
 			"swagger_enabled", cfg.Swagger.Enabled,
 			"history_mode", cfg.History.Mode,
 			"eventing_enabled", cfg.Eventing.Enabled,

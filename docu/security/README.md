@@ -10,6 +10,8 @@ For build and release supply-chain security (image signing, provenance attestati
 
 For PostgreSQL-backed ABAC policy versions, management API behavior, and ABAC policy evidence, see [ABAC_POLICY_REPOSITORY.md](ABAC_POLICY_REPOSITORY.md).
 
+For the experimental relationship-based access control (ReBAC) with OpenFGA, which extends ABAC as a strict union, see [REBAC.md](REBAC.md).
+
 For AAS Registry-specific `CREATE`, `UPDATE`, `READ`, `DELETE`, and status-code semantics, see [REGISTRY_SECURITY.md](REGISTRY_SECURITY.md).
 
 For history evidence deployment guidance and NIS2-relevant operator responsibilities, see [NIS2_HISTORY_EVIDENCE.md](NIS2_HISTORY_EVIDENCE.md).

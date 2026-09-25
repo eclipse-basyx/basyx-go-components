@@ -99,7 +99,9 @@ type SwaggerUIConfig struct {
 	IncludeVerifyEndpoint *bool          // nil/default=true, false disables /verify injection in OpenAPI spec
 	IncludeABACManagement *bool          // nil/default=false, true injects ABAC management API paths
 	IncludeEventSchemas   bool
-	IncludeEventFeed      *bool // nil/default=false, true injects Event Feed API paths when eventing is enabled
+	// IncludeReBACManagement documents the ReBAC $access and management routes.
+	IncludeReBACManagement bool
+	IncludeEventFeed       *bool // nil/default=false, true injects Event Feed API paths when eventing is enabled
 }
 
 // ContactConfig holds contact information for OpenAPI spec
@@ -1636,6 +1638,9 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	if includeABACManagement {
 		specContent = injectABACManagementAPI(specContent)
 	}
+	if cfg.IncludeReBACManagement {
+		specContent = injectReBACManagementAPI(specContent)
+	}
 	includeEventFeed := false
 	if cfg.IncludeEventFeed != nil {
 		includeEventFeed = *cfg.IncludeEventFeed
@@ -1814,19 +1819,20 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 	}
 
 	AddSwaggerUI(r, SwaggerUIConfig{
-		Title:                 title,
-		SpecURL:               fullSpecPath,
-		UIPath:                fullUIPath,
-		SpecPath:              fullSpecPath,
-		SpecContent:           content,
-		ServerURL:             serverURL,
-		BasePath:              basePath,
-		Contact:               contact,
-		Enabled:               enabled,
-		IncludeVerifyEndpoint: includeVerifyEndpoint,
-		IncludeABACManagement: includeABACManagement,
-		IncludeEventFeed:      includeEventFeed,
-		IncludeEventSchemas:   serverConfig != nil && serverConfig.Eventing.TransportsEnabled(),
+		Title:                  title,
+		SpecURL:                fullSpecPath,
+		UIPath:                 fullUIPath,
+		SpecPath:               fullSpecPath,
+		SpecContent:            content,
+		ServerURL:              serverURL,
+		BasePath:               basePath,
+		Contact:                contact,
+		Enabled:                enabled,
+		IncludeVerifyEndpoint:  includeVerifyEndpoint,
+		IncludeABACManagement:  includeABACManagement,
+		IncludeEventFeed:       includeEventFeed,
+		IncludeEventSchemas:    serverConfig != nil && serverConfig.Eventing.TransportsEnabled(),
+		IncludeReBACManagement: serverConfig != nil && serverConfig.ReBAC.Enabled,
 	})
 
 	return nil

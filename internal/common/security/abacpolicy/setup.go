@@ -93,6 +93,20 @@ func SetupSecurityWithABACRepository(
 	serviceType string,
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) (*Repository, error) {
+	return SetupSecurityWithABACRepositoryAndExtensions(ctx, cfg, r, db, serviceType, auth.SecurityExtensions{}, claimsMiddleware...)
+}
+
+// SetupSecurityWithABACRepositoryAndExtensions is SetupSecurityWithABACRepository
+// with optional authorization extensions such as ReBAC.
+func SetupSecurityWithABACRepositoryAndExtensions(
+	ctx context.Context,
+	cfg *common.Config,
+	r *chi.Mux,
+	db *sql.DB,
+	serviceType string,
+	extensions auth.SecurityExtensions,
+	claimsMiddleware ...func(http.Handler) http.Handler,
+) (*Repository, error) {
 	if cfg == nil || !cfg.ABAC.Enabled {
 		return nil, nil
 	}
@@ -111,7 +125,7 @@ func SetupSecurityWithABACRepository(
 	if err = initializeRepository(ctx, repo, cfg.ABAC.ModelPath, policyScope, mode); err != nil {
 		return nil, err
 	}
-	if err = auth.SetupSecurityWithAccessModelProvider(ctx, cfg, r, repo, claimsMiddleware...); err != nil {
+	if err = auth.SetupSecurityWithExtensions(ctx, cfg, r, repo, extensions, claimsMiddleware...); err != nil {
 		return nil, err
 	}
 	return repo, nil

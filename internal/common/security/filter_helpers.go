@@ -426,9 +426,14 @@ func buildFragmentMaskCondition(
 		return nil, false, nil
 	}
 
+	grant, hasGrant := reBACGrantPredicate(ctx, collector)
 	wcs := make([]exp.Expression, 0, len(filters))
 	for _, filter := range filters {
-		wc, err := evaluateFragmentFilterPredicate(ctx, filter.Predicate, filter.Fragment, collector)
+		predicate := filter.Predicate
+		if hasGrant {
+			predicate = liftSecurityFragmentPredicate(predicate, grant)
+		}
+		wc, err := evaluateFragmentFilterPredicate(ctx, predicate, filter.Fragment, collector)
 		if err != nil {
 			return nil, false, err
 		}
@@ -459,6 +464,19 @@ func evaluateFragmentFilterPredicate(
 }
 
 func evaluateFragmentFilterLeaf(
+	ctx context.Context,
+	predicate FragmentFilterPredicate,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+) (exp.Expression, error) {
+	whereCondition, err := evaluateFragmentFilterCondition(ctx, predicate, fragment, collector)
+	if err != nil || predicate.reBACGrant == nil {
+		return whereCondition, err
+	}
+	return goqu.Or(whereCondition, predicate.reBACGrant), nil
+}
+
+func evaluateFragmentFilterCondition(
 	ctx context.Context,
 	predicate FragmentFilterPredicate,
 	fragment grammar.FragmentStringPattern,
@@ -649,26 +667,9 @@ func GetColumnSelectStatement(ctx context.Context, columns []FilterColumnSpec, c
 // has no QueryFilter or no formula, the original dataset is returned unchanged.
 // Errors from grammar expression evaluation are propagated to the caller.
 func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, collector *grammar.ResolvedFieldPathCollector) (*goqu.SelectDataset, error) {
+	grant, hasGrant := reBACGrantPredicate(ctx, collector)
 	if authorized := AuthorizedQueryFromContext(ctx); authorized != nil {
-		if authorized.outer.decision == AccessViewDenied {
-			return ds.Where(goqu.L("FALSE")), nil
-		}
-		if authorized.outer.queryFilter != nil && authorized.outer.queryFilter.Formula != nil {
-			wc, _, err := authorized.outer.queryFilter.Formula.EvaluateToExpression(collector.WithoutFieldValueDecorator())
-			if err != nil {
-				return nil, err
-			}
-			ds = ds.Where(wc)
-		}
-		caller := authorized.callerForBackend()
-		if caller.Condition != nil {
-			wc, _, err := caller.Condition.EvaluateToExpression(conditionVisibleCollector(ctx, collector))
-			if err != nil {
-				return nil, err
-			}
-			ds = ds.Where(wc)
-		}
-		return ds, nil
+		return addAuthorizedFormulaQuery(ctx, ds, collector, authorized, grant, hasGrant)
 	}
 
 	p := GetQueryFilter(ctx)
@@ -677,9 +678,51 @@ func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, col
 		if err != nil {
 			return nil, err
 		}
+		ds = ds.Where(orReBACGrant(wc, grant, hasGrant))
+	}
+	return ds, nil
+}
+
+func addAuthorizedFormulaQuery(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	collector *grammar.ResolvedFieldPathCollector,
+	authorized *AuthorizedQuery,
+	grant exp.Expression,
+	hasGrant bool,
+) (*goqu.SelectDataset, error) {
+	securityCondition, err := authorizedSecurityCondition(authorized.outer, collector)
+	if err != nil {
+		return nil, err
+	}
+	if securityCondition != nil {
+		ds = ds.Where(orReBACGrant(securityCondition, grant, hasGrant))
+	}
+	caller := authorized.callerForBackend()
+	if caller.Condition != nil {
+		wc, _, err := caller.Condition.EvaluateToExpression(conditionVisibleCollector(ctx, collector))
+		if err != nil {
+			return nil, err
+		}
 		ds = ds.Where(wc)
 	}
 	return ds, nil
+}
+
+// authorizedSecurityCondition returns the policy condition of the outer view,
+// or nil when the view is unrestricted.
+func authorizedSecurityCondition(
+	outer SemanticAccessView,
+	collector *grammar.ResolvedFieldPathCollector,
+) (exp.Expression, error) {
+	if outer.decision == AccessViewDenied {
+		return goqu.L("FALSE"), nil
+	}
+	if outer.queryFilter == nil || outer.queryFilter.Formula == nil {
+		return nil, nil
+	}
+	wc, _, err := outer.queryFilter.Formula.EvaluateToExpression(collector.WithoutFieldValueDecorator())
+	return wc, err
 }
 
 func conditionVisibleCollector(
@@ -1061,12 +1104,18 @@ func submodelElementSubtreeExpression(
 	if err != nil {
 		return nil, nil, fmt.Errorf("SECURITY-CONDITIONVIEW-REFERABLEPATH: %w", err)
 	}
+	return submodelElementPathSubtreeCondition(idShortPath, path), []grammar.ResolvedFieldPath{resolved}, nil
+}
+
+// submodelElementPathSubtreeCondition matches the element at path and its
+// descendants while respecting idShortPath segment boundaries.
+func submodelElementPathSubtreeCondition(pathColumn exp.IdentifierExpression, path string) exp.Expression {
 	escaped := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(path)
 	return goqu.Or(
-		idShortPath.Eq(path),
-		goqu.L("? LIKE (? || '.%') ESCAPE '!'", idShortPath, escaped),
-		goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", idShortPath, escaped),
-	), []grammar.ResolvedFieldPath{resolved}, nil
+		pathColumn.Eq(path),
+		goqu.L("? LIKE (? || '.%') ESCAPE '!'", pathColumn, escaped),
+		goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", pathColumn, escaped),
+	)
 }
 
 func submodelElementExactExpression(
@@ -1359,10 +1408,5 @@ func smeFragmentRowScopeExpression(
 	if semanticFragmentSuffix(fragment) != "" {
 		return pathColumn.Eq(path), []grammar.ResolvedFieldPath{resolved}, nil
 	}
-	escaped := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(path)
-	return goqu.Or(
-		pathColumn.Eq(path),
-		goqu.L("? LIKE (? || '.%') ESCAPE '!'", pathColumn, escaped),
-		goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", pathColumn, escaped),
-	), []grammar.ResolvedFieldPath{resolved}, nil
+	return submodelElementPathSubtreeCondition(pathColumn, path), []grammar.ResolvedFieldPath{resolved}, nil
 }

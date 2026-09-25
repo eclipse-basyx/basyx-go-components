@@ -1,0 +1,7 @@
+kind: changed
+body: 'Database schema v1.2.2 adds a persistent `auth_uuid` to `aas`, `submodel` and `concept_description` and the `rebac_*` tables. Applying the patch rewrites these three tables under an exclusive lock; plan a maintenance window for large installations and apply schema v1.2.2 with the configuration service before upgrading services.'
+time: 2026-09-25T21:00:01Z
+custom:
+    Impact: High
+    PullRequest: 1
+    SecurityImpact: None.
