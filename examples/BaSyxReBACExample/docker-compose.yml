@@ -22,6 +22,8 @@ services:
       - REBAC_ENABLED=true
       - REBAC_ADMINISTRATORS=http://keycloak.localhost:8080/realms/basyx|group:operators
       - GENERAL_EXTERNALURL=http://localhost:8082
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
     volumes:
       - ./security_env:/security_env:ro
     extra_hosts:

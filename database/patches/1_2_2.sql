@@ -7,8 +7,8 @@
 -- ----------------------------------------------------------------------------
 -- Description:
 --   Adds persistent authorization identities and the relationship, link,
---   derivation and invitation tables of the experimental relationship-based
---   access control.
+--   derivation, invitation and audit tables of the experimental
+--   relationship-based access control.
 --
 -- Copyright (c) Eclipse BaSyx Authors and Fraunhofer IESE
 -- SPDX-License-Identifier: MIT
@@ -112,6 +112,39 @@ CREATE TABLE IF NOT EXISTS rebac_invitation (
 
 CREATE INDEX IF NOT EXISTS ix_rebac_invitation_object ON rebac_invitation (object_key, created_at);
 CREATE INDEX IF NOT EXISTS ix_rebac_invitation_object_uuid ON rebac_invitation (object_uuid);
+
+-- Hash-chained audit trail of access changes. Like the history tables it
+-- is append-only while the history guard is enabled.
+CREATE TABLE IF NOT EXISTS rebac_audit_event (
+  id BIGSERIAL PRIMARY KEY,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  event_type TEXT NOT NULL CHECK (event_type IN (
+    'grants_changed', 'invitation_created', 'invitation_revoked', 'invitation_redeemed',
+    'inheritance_changed', 'reconciled'
+  )),
+  actor_key TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  details JSONB NOT NULL,
+  previous_hash TEXT CHECK (previous_hash ~ '^[0-9a-f]{64}$'),
+  event_hash TEXT NOT NULL UNIQUE CHECK (event_hash ~ '^[0-9a-f]{64}$'),
+  evidence_receipt JSONB
+);
+
+CREATE INDEX IF NOT EXISTS ix_rebac_audit_event_object ON rebac_audit_event (object_key, id);
+
+DROP TRIGGER IF EXISTS rebac_audit_event_prevent_update_delete ON rebac_audit_event;
+CREATE TRIGGER rebac_audit_event_prevent_update_delete
+  BEFORE UPDATE OR DELETE
+  ON rebac_audit_event
+  FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS rebac_audit_event_prevent_truncate ON rebac_audit_event;
+CREATE TRIGGER rebac_audit_event_prevent_truncate
+  BEFORE TRUNCATE
+  ON rebac_audit_event
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
 
 UPDATE basyxsystem
 SET schema_version = 'v1.2.2',

@@ -1,0 +1,7 @@
+kind: fixed
+body: 'The guarded History Audit example and the Submodel repository benchmark start again: MinIO no longer publishes container images, so they now use pinned community builds of MinIO and its client (`pgsty/minio`, `pgsty/mc`) with unchanged object lock settings.'
+time: 2026-09-26T10:00:00Z
+custom:
+    Impact: Low
+    PullRequest: 712
+    SecurityImpact: 'The WORM evidence store of the example keeps compliance-mode object lock. The images are pinned to release tags instead of `latest`.'

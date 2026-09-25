@@ -28,10 +28,13 @@ package rebac
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -195,8 +198,61 @@ func (c *Coordinator) recoverOwners(r *http.Request, tx *sql.Tx, request accessR
 		}
 		desired = append(desired, grant)
 	}
-	if err = applyGrantDiff(r.Context(), tx, request.target.objectKey(), current, desired); err != nil {
+	if err = c.applyGrantDiff(r.Context(), tx, request.target.objectKey(), current, desired); err != nil {
 		return accessDocument{}, err
 	}
 	return c.accessDocument(r.Context(), tx, request.target)
+}
+
+// handleListAudit pages through the audit trail for administrators.
+func (c *Coordinator) handleListAudit(w http.ResponseWriter, r *http.Request) {
+	if _, ok := c.administrator(w, r); !ok {
+		return
+	}
+	afterID, limit, err := auditPage(r)
+	if err != nil {
+		writeManagementError(w, r, err)
+		return
+	}
+	events, err := ListAuditEvents(r.Context(), c.db, afterID, limit)
+	if err != nil {
+		writeManagementError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string][]AuditEvent{"events": events})
+}
+
+func auditPage(r *http.Request) (int64, uint, error) {
+	query := r.URL.Query()
+	afterID, limit := int64(0), uint(defaultAuditPage)
+	if raw := query.Get("afterId"); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed < 0 {
+			return 0, 0, common.NewErrBadRequest("REBAC-LISTAUDIT-AFTERID afterId must be a non-negative integer")
+		}
+		afterID = parsed
+	}
+	if raw := query.Get("limit"); raw != "" {
+		parsed, err := strconv.ParseUint(raw, 10, 32)
+		if err != nil || parsed == 0 || parsed > maxAuditPage {
+			return 0, 0, common.NewErrBadRequest(fmt.Sprintf("REBAC-LISTAUDIT-LIMIT limit must be between 1 and %d", maxAuditPage))
+		}
+		limit = uint(parsed)
+	}
+	return afterID, limit, nil
+}
+
+// handleVerifyAudit verifies the hash chain and, with history evidence
+// enabled, the archived events. expectedHead is a head hash retained
+// outside the database.
+func (c *Coordinator) handleVerifyAudit(w http.ResponseWriter, r *http.Request) {
+	if _, ok := c.administrator(w, r); !ok {
+		return
+	}
+	report, err := VerifyAuditTrail(r.Context(), c.db, history.ActiveConfig().EvidenceStore, r.URL.Query().Get("expectedHead"))
+	if err != nil {
+		writeManagementError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }

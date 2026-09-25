@@ -22,7 +22,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-# Verifies creator ownership, sharing and revocation with ReBAC.
+# Verifies creator ownership, sharing and revocation with ReBAC, including
+# the synchronized registry descriptor that follows its Submodel.
 set -euo pipefail
 
 base_url="${BASYX_REBAC_EXAMPLE_URL:-http://localhost:8082}"
@@ -89,8 +90,12 @@ expect 403 "$(status -H "Authorization: Bearer $bob" "$base_url/submodels/$encod
 
 access="$base_url/submodels/$encoded_id/\$access"
 owner="$(grant owner "$alice_sub")"
+descriptor="$base_url/submodel-descriptors/$encoded_id"
+expect 403 "$(status -H "Authorization: Bearer $bob" "$descriptor")" UNSHARED-DESCRIPTOR
+
 expect 200 "$(put_grants "$alice" "$access" "$owner,$(grant viewer "$bob_sub")")" SHARE
 expect 200 "$(status -H "Authorization: Bearer $bob" "$base_url/submodels/$encoded_id")" SHARED
+expect 200 "$(status -H "Authorization: Bearer $bob" "$descriptor")" SHARED-DESCRIPTOR
 
 expect 200 "$(put_grants "$alice" "$access" "$owner")" REVOKE
 expect 403 "$(status -H "Authorization: Bearer $bob" "$base_url/submodels/$encoded_id")" REVOKED

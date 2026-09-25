@@ -1,4 +1,4 @@
-# Relationship-Based Access Control (ReBAC) with OpenFGA
+# Relationship-Based Access Control (ReBAC)
 
 > **Experimental.** The ReBAC integration, its management API and its
 > database tables may change incompatibly in future releases. Configuration
@@ -6,8 +6,9 @@
 > declares the status.
 
 ReBAC lets resource owners share Asset Administration Shells, Submodels,
-SubmodelElements and Concept Descriptions with other users or groups without
-changing the ABAC policy. It runs next to ABAC as a **strict union**:
+SubmodelElements, Concept Descriptions, registry descriptors, discovery
+entries and AASX packages with other users or groups without changing the
+ABAC policy. It runs next to ABAC as a **strict union**:
 
 ```text
 access = ABAC allows  OR  ReBAC allows
@@ -18,6 +19,10 @@ configurations are unchanged. With `rebac.enabled=false` (the default) no
 ReBAC code is wired into the routers and every service behaves exactly as
 before.
 
+Relationships are stored in the BaSyx PostgreSQL database and evaluated there
+as part of each query. There is no external authorization service. All
+services sharing one database share the same relationships.
+
 ## Contents
 
 - [Covered services and routes](#covered-services-and-routes)
@@ -27,12 +32,15 @@ before.
 - [Identities](#identities)
 - [SubmodelElement grants](#submodelelement-grants)
 - [AAS-to-Submodel inheritance](#aas-to-submodel-inheritance)
+- [Registries, discovery and synchronized descriptors](#registries-discovery-and-synchronized-descriptors)
+- [Aggregates, packages and passports](#aggregates-packages-and-passports)
 - [Ownership and administrators](#ownership-and-administrators)
 - [Management API](#management-api)
 - [Invitation links](#invitation-links)
-- [Deployment](#deployment)
+- [Audit trail and evidence](#audit-trail-and-evidence)
+- [Telemetry](#telemetry)
 - [Configuration](#configuration)
-- [Consistency, outbox and revocation barrier](#consistency-outbox-and-revocation-barrier)
+- [Consistency and revocation](#consistency-and-revocation)
 - [Reconciliation](#reconciliation)
 - [Limits and known restrictions](#limits-and-known-restrictions)
 - [Upgrade notes](#upgrade-notes)
@@ -41,16 +49,19 @@ before.
 
 | Service | Covered resources |
 | --- | --- |
-| AAS Repository | Shells, asset information, thumbnails, Submodel references, Submodel superpaths |
+| AAS Repository | Shells, asset information, thumbnails, Submodel references, Submodel superpaths, `/serialization` |
 | Submodel Repository | Submodels and all representations, SubmodelElements, attachments, operations (sync, async, status, results) |
 | Concept Description Repository | Concept Descriptions |
-| AAS Environment | All of the above |
+| AAS Registry, Submodel Registry, Digital Twin Registry | Shell descriptors including embedded Submodel descriptors, standalone Submodel descriptors, bulk API |
+| Discovery | Discovery entries (the asset links of one shell) and lookups |
+| AASX File Server | AASX packages, asynchronous uploads |
+| AAS Environment | All of the above except AASX packages, plus `/upload` and `/serialization` |
+| DPP API | Current state of Digital Product Passports |
 
 The following stay **ABAC-only**; a ReBAC grant never gives access to them:
 history endpoints (`$history`), `$recent-changes`, event feeds, `$signed`
-representations, `/verify`, the ABAC policy management API, AASX packages,
-`/upload`, `/serialization`, registries, discovery, DPP and the Company Lookup
-service. Registries, discovery and aggregates follow in later releases.
+representations, `/verify`, historical passports (`/v1/dppsByIdAndDate`),
+the ABAC policy management API and the Company Lookup service.
 
 ## ReBAC and ABAC interplay (read this first)
 
@@ -82,7 +93,7 @@ Guidance for administrators:
   Submodel elements with their own owners) instead of relying on ABAC filters
   inside a resource that will be shared.
 - Grant ownership deliberately. Owners can share, invite and delete.
-- Monitor grants through `GET …/$access` and reconcile regularly.
+- Review grants through `GET …/$access` and the audit trail.
 
 A grant only ever widens access to the granted resource. It never widens
 other tables touched by the same request: a Submodel grant does not make the
@@ -96,18 +107,20 @@ evaluated with ABAC visibility only.
    ABAC-only.
 2. ABAC evaluates the request exactly as before.
 3. If ABAC unconditionally allows the required right (formula `true`, no
-   fragment filters), the request proceeds. OpenFGA is not called.
-4. Otherwise BaSyx resolves the concrete resource and asks OpenFGA:
-   - **allowed** – the request proceeds; the granted resource is widened as
-     described above,
+   fragment filters), the request proceeds without ReBAC.
+4. Otherwise BaSyx resolves the addressed resource and decides in one SQL
+   query whether the caller holds the required permission:
+   - **allowed** – the request proceeds. The backend query is widened for the
+     granted resources only. The grant is a subquery that is evaluated again
+     by every backend query of the request.
    - **denied** – the ABAC result stands, including today's `403`/`404` and
-     deny-as-not-found behavior,
-   - **error or timeout** – `503 SECURITY-REBAC-UNAVAILABLE`. There is never a
-     silent ABAC-only fallback when ReBAC was needed.
-5. After OpenFGA allowed, BaSyx checks the revocation barrier (see below).
+     deny-as-not-found behavior.
+   - **error** – `503 SECURITY-REBAC-UNAVAILABLE`. There is never a silent
+     ABAC-only fallback when ReBAC was needed.
 
 Unknown identifiers behave exactly as before; ReBAC never reveals whether a
-resource exists.
+resource exists. Lists are filtered in SQL, so they need no allowlist and
+have no size limit.
 
 ## Roles and relations
 
@@ -118,22 +131,20 @@ resource exists.
 | `executor` | invoke operations and read their status and results |
 | `owner` | everything above, plus delete and manage access |
 
-Concept Descriptions have no `executor` role. Repository families
-(`aas`, `submodel`, `concept_description`) have two further relations:
+`executor` exists for shells, Submodels and SubmodelElements only. Each
+repository family (`aas`, `submodel`, `concept_description`,
+`aas_descriptor`, `submodel_descriptor`, `asset_links`, `aasx_package`) has
+two further relations:
 
 | Repository relation | Meaning |
 | --- | --- |
 | `creator` | may create top-level resources of the family and becomes their owner |
 | `admin` | has every right on every resource of the family and may manage repository grants |
 
-Right mapping: `READ` → `can_read`, `UPDATE` and child `CREATE` →
-`can_update`, top-level `DELETE` → `can_delete`, `EXECUTE` → `can_execute`.
-Deleting SubmodelElements, thumbnails or Submodel references edits the parent
-and therefore needs `can_update` on the parent.
-
-The authorization model is embedded in the release
-(`internal/common/security/rebac/model/model.fga`) and tested with
-`fga model test` (`model.fga.yaml`).
+Right mapping: `READ` → read, `UPDATE` and child `CREATE` → update,
+top-level `DELETE` → delete, `EXECUTE` → execute. Deleting SubmodelElements,
+thumbnails or Submodel references edits the parent and therefore needs update
+on the parent.
 
 ## Identities
 
@@ -142,9 +153,8 @@ The authorization model is embedded in the release
 - Groups are issuer-scoped: `group:<b64url(iss)>.<b64url(name)>`. Group names
   come from the normalized claim configured in `rebac.groupClaim`
   (default `groups`; use the OIDC `claimMappings` to normalize provider
-  claims). Memberships are **never stored**; each check sends the caller's
-  current groups as contextual tuples, so membership changes take effect with
-  the next token.
+  claims). Memberships are **never stored**; each decision uses the caller's
+  current groups, so membership changes take effect with the next token.
 - Resources use the persistent `auth_uuid` of their row. A resource that is
   deleted and recreated with the same identifier gets a new `auth_uuid` and
   never inherits old grants.
@@ -161,8 +171,7 @@ Grants on SubmodelElements are keyed by the Submodel and the idShortPath:
   its grant back. A grant on a list item `list[2]` follows the index, not the
   item.
 - `GET …/submodel-elements` for users with element grants only returns the
-  granted top-level elements. Deeper grants are reachable through their path
-  routes.
+  granted subtrees.
 - ABAC fragment filters on **ancestors** of a granted element still apply.
 - Deleting a Submodel deletes all of its element grants in the same
   transaction.
@@ -172,18 +181,70 @@ Grants on SubmodelElements are keyed by the Submodel and the idShortPath:
 A shell's grants reach a Submodel only through an explicitly approved link:
 
 - `PUT /submodels/{id}/$access/inheritance` with `{"aasIds": [...]}` replaces
-  the approved shells. The caller needs `can_manage` on the Submodel and on
-  each shell, and each shell must reference the Submodel.
+  the approved shells. The caller needs manage on the Submodel and on each
+  shell, and each shell must reference the Submodel.
 - A link carries read, update, create-children and execute, **never** manage
   or delete.
-- Removing the reference from the shell (DELETE submodel-ref, superpath
-  DELETE or a shell update) removes the link in the same transaction.
+- A link only counts while the shell references the Submodel. Removing the
+  reference ends the inheritance at once; the link row is removed as well.
 - Semantic IDs, other references and Concept Description references never
   create inheritance.
 
 Superpath routes (`/shells/{aas}/submodels/{sm}/…`) keep the existing
 reference check: the caller needs read access to the shell (update for
 superpath PUT and DELETE) and the required right on the Submodel.
+
+## Registries, discovery and synchronized descriptors
+
+Shell descriptors, standalone Submodel descriptors and discovery entries are
+ReBAC resources of their own, with `$access` sub-resources and repository
+relations.
+
+- A Submodel descriptor embedded in a shell descriptor is part of that shell
+  descriptor. Its routes need the corresponding right on the shell
+  descriptor.
+- A caller who registers a descriptor or creates a discovery entry through
+  the API becomes its owner.
+- **Derived resources.** Descriptors that the AAS Environment or the DPP API
+  synchronize from a shell or Submodel are *derived* from that source. So are
+  discovery entries that a registry's discovery integration creates for a new
+  shell descriptor. A derived resource has no owner of its own. It inherits
+  every permission of its source, including manage, and may carry additional
+  direct grants. `GET …/$access` reports the source as `derivedFrom`.
+- Derivation is recorded only when the synchronization creates the resource.
+  Matching identifiers alone never grant anything. If someone else already
+  registered a descriptor with the identifier of a shell, the owner of the
+  shell does not gain access to it, and synchronizing the shell over it fails.
+- Requests that synchronize derived resources are authorized for them through
+  their source. For example, an editor of a shell updates its descriptor
+  through `PUT /shells/{id}`. A Submodel update refreshes the embedded
+  descriptors in the descriptors of shells referencing the Submodel, without
+  granting read access to those descriptors.
+- Resources created before ReBAC was enabled have no derivation. Assign
+  owners through ownership recovery if needed.
+
+## Aggregates, packages and passports
+
+- `/serialization` returns only resources the caller may read.
+- `/upload` creates resources for creators of the respective families, who
+  become their owners, and updates resources the caller may update. As with
+  ABAC, the items of one upload are processed one by one.
+- The registry bulk API creates, updates and deletes descriptors with the
+  same rights as the single-item API. Bulk jobs and asynchronous package
+  uploads stay bound to the caller who started them.
+- AASX packages belong to their uploader. The package list shows ReBAC-only
+  callers exactly the packages they may read. The AAS identifiers stored with
+  a package are claims of the uploader and grant nothing.
+- The DPP API authorizes a passport through its shell: reading, updating and
+  deleting a passport needs the right on the shell, and each Submodel of the
+  passport is authorized by its own relations. Submodels created with a
+  passport are linked to the passport shell, so sharing the shell shares the
+  whole passport (read, update and execute; delete and manage stay with the
+  owners). Use the `$access` routes of the AAS and Submodel repositories to
+  share passports.
+- Asynchronous work that runs after the request, such as operation jobs and
+  bulk jobs, evaluates the grants again with each query. A revocation
+  therefore also stops work that is already queued.
 
 ## Ownership and administrators
 
@@ -196,8 +257,8 @@ superpath PUT and DELETE) and the required right on the Submodel.
   owner. Administrators assign owners through ownership recovery.
 - `rebac.administrators` lists bootstrap and recovery principals as
   `issuer|subject` or `issuer|group:<name>`. Administrators may manage every
-  `$access` resource, repository grants, reconciliation and ownership
-  recovery, and may remove the last owner.
+  `$access` resource, repository grants, reconciliation, ownership recovery
+  and the audit trail, and may remove the last owner.
 
 Bootstrap example (administrator grants creators and a repository admin):
 
@@ -216,31 +277,33 @@ If-Match: "0"
 ## Management API
 
 All management routes sit behind OIDC but outside ABAC route evaluation, so a
-missing ABAC rule never hides them. They authorize with ReBAC `can_manage`
+missing ABAC rule never hides them. They authorize with the manage permission
 (or administrator status); ABAC data rights never grant sharing. Denials
-answer `404`, exactly like missing resources.
+answer `404`, exactly like missing resources. Responses carry
+`Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
 
 Every managed resource has an `$access` sub-resource:
 `/shells/{id}/$access`, `/submodels/{id}/$access`,
 `/submodels/{id}/submodel-elements/{idShortPath}/$access`,
-`/concept-descriptions/{id}/$access`.
+`/concept-descriptions/{id}/$access`, `/shell-descriptors/{id}/$access`,
+`/submodel-descriptors/{id}/$access`, `/lookup/shells/{id}/$access` and
+`/packages/{packageId}/$access`. Each service mounts the sub-resources of
+the resources it serves.
 
 | Operation | Contract |
 | --- | --- |
-| `GET …/$access` | Direct grants, approved inheritance links, projection state. `ETag` is the access revision. |
+| `GET …/$access` | Direct grants, approved inheritance links and the source of derived resources. `ETag` is the access revision. |
 | `PUT …/$access/grants` | Replaces the direct grants. `If-Match` required: missing → `428`, stale → `412`. Removing the last owner → `409` unless the caller is an administrator. |
 | `GET …/$access/effective` | The caller's own rights per action with source `abac`, `abac-conditional`, `rebac`, `administrator` or `none`. Callers without any right get `404`. |
 | `PUT /submodels/{id}/$access/inheritance` | Replaces approved AAS links (`If-Match` required). |
 | `GET/POST …/$access/invitations`, `DELETE …/$access/invitations/{id}` | Invitation links, see below. |
-| `GET /security/rebac/operations/{operationId}` | State (`applied`/`pending`) of an accepted change. |
 | `GET/PUT /security/rebac/repositories/{kind}/$access[/grants]` | Creator and admin grants of a repository family. |
-| `GET /security/rebac/status` | Scope, store, model, backlog and barrier state (administrators). |
-| `POST /security/rebac/admin/reconcile` | Removes orphaned state and repairs OpenFGA drift (administrators). |
+| `POST /security/rebac/admin/reconcile` | Removes orphaned state (administrators). |
 | `PUT /security/rebac/admin/owners/{type}/{base64 id}` | Ownership recovery (administrators, `If-Match` required). |
+| `GET /security/rebac/admin/audit?afterId=&limit=` | Pages through the audit trail (administrators). |
+| `GET /security/rebac/admin/audit/verify?expectedHead=` | Verifies the audit trail (administrators). |
 
-Grant changes answer `200` once they reached OpenFGA. If OpenFGA does not
-confirm within a few seconds, they answer `202` with a `Location` of the
-operation; the change is applied by the outbox worker.
+Grant changes take effect when their transaction commits.
 
 ```http
 PUT /submodels/{id}/$access/grants
@@ -257,11 +320,13 @@ There are no public or wildcard grants.
 
 ## Invitation links
 
-- `POST …/$access/invitations` (needs `can_manage`) with
+- `POST …/$access/invitations` (needs manage) with
   `{"relation": "viewer|editor|executor", "expiresAt": "<RFC 3339>", "maxUses": 1}`
   creates an invitation. `expiresAt` is required and at most 90 days ahead;
-  `maxUses` defaults to 1. The response carries a one-time-visible `token`.
-  Invitations never grant `owner`.
+  `maxUses` defaults to 1. An optional `expectedPrincipal`
+  (`{"issuer": …, "subject": …}`) restricts redemption to one user. The
+  response carries a one-time-visible `token`. Invitations never grant
+  `owner`.
 - `POST /security/rebac/invitations/accept` with `{"token": "…"}` requires an
   authenticated caller and creates a normal direct grant for the caller's own
   issuer and subject. The token itself never authorizes data access. The token
@@ -271,104 +336,100 @@ There are no public or wildcard grants.
 - `DELETE …/$access/invitations/{id}` revokes a pending invitation. Grants
   that were already redeemed stay until they are removed individually.
 
-## Deployment
+## Audit trail and evidence
 
-OpenFGA runs as its own service; BaSyx talks to it over HTTP with the OpenFGA
-Go SDK. Pin OpenFGA **1.18.x** (minimum 1.10.0 for idempotent writes).
+Every access change is appended to the audit trail `rebac_audit_event` in
+the transaction of the change. This covers grant changes, invitations
+(created, revoked, redeemed), inheritance changes and reconciliations that
+removed state. Each event records its actor, the object key and the change.
 
-- OpenFGA's datastore is PostgreSQL. Its schema is migrated by
-  `openfga migrate`, run as a one-shot container before `openfga run`.
-  BaSyx never manages that schema.
-- Use a separate database and user for OpenFGA (same server or another one).
-  BaSyx and OpenFGA tables never share a database.
-- Do not publish the OpenFGA port. Only BaSyx services and the provisioning
-  step need write access.
-- `basyxconfigurationservice` provisions the store (`basyx-<scope>`) and the
-  embedded model when `rebac.provisionModel=true` and records the binding in
-  `rebac_model_activation`. Services read the binding at startup.
-- Every service verifies at startup that ABAC is enabled, the OIDC trustlist
-  is readable, the bound store and model exist, and the model content equals
-  the model of the release. Any mismatch aborts startup.
-- One PostgreSQL database is bound to exactly one scope, store and model.
-- Set `OPENFGA_LIST_OBJECTS_MAX_RESULTS` to at least
-  `rebac.listObjectsMaxResults` and keep `OPENFGA_LIST_OBJECTS_DEADLINE`
-  generous.
+- Events form a hash chain. Each event hash covers the event, its id and the
+  hash of its predecessor. Writers are serialized, so the chain never forks.
+- The table is append-only while the history guard is enabled, like the
+  history tables.
+- With history evidence enabled (`history.evidence.*`), each event is
+  archived in the WORM store before its transaction commits. The receipt is
+  stored with the event. If the store is unavailable, the change fails with
+  `503` instead of being applied unaudited.
+- `GET /security/rebac/admin/audit/verify` recomputes the chain. With an
+  evidence store it also verifies every archived event against its WORM
+  object. Pass a head hash retained outside the database as `expectedHead` to
+  detect removed trailing events. The evidence verifier CLI offers the same
+  check:
 
-See `examples/BaSyxReBACExample` for a complete compose setup.
+  ```bash
+  historyevidenceverifier -config config.yaml -rebac-audit -expected-head-hash <hash>
+  ```
+
+Ownership assigned at creation and derivations are part of the resource
+history, not of the audit trail. Denied data requests are not audited in the
+database; they appear in the decision metrics and in the service logs.
+
+## Telemetry
+
+ReBAC uses the service's OpenTelemetry configuration:
+
+- Span `rebac.decision` for every decision, with attributes `http.route` and
+  `rebac.outcome` (`granted`, `none`, `uncovered`, `unavailable`).
+- Counter `basyx.rebac.decisions` and histogram
+  `basyx.rebac.decision.duration` (seconds), by `rebac.outcome` and
+  `http.route`.
+- Counter `basyx.rebac.access.changes` by `rebac.event`.
+- Counter `basyx.rebac.management.denials` by `http.route`.
 
 ## Configuration
 
 | Key | Env | Default | Purpose |
 | --- | --- | --- | --- |
 | `rebac.enabled` | `REBAC_ENABLED` | `false` | Master switch |
-| `rebac.scope` | `REBAC_SCOPE` | `default` | Deployment scope, bound to one store |
-| `rebac.openfga.apiUrl` | `REBAC_OPENFGA_API_URL` | – | OpenFGA HTTP endpoint (required) |
-| `rebac.openfga.storeId` | `REBAC_OPENFGA_STORE_ID` | bound store | Optional; must match the binding |
-| `rebac.openfga.authorizationModelId` | `REBAC_OPENFGA_AUTHORIZATION_MODEL_ID` | bound model | Optional pin; never `latest` |
-| `rebac.openfga.credentials.method` | `REBAC_OPENFGA_CREDENTIALS_METHOD` | `none` | `none`, `apiToken` or `clientCredentials` |
-| `rebac.openfga.credentials.apiToken` | `REBAC_OPENFGA_CREDENTIALS_API_TOKEN` | – | Pre-shared key |
-| `rebac.openfga.credentials.clientId` / `clientSecret` / `apiTokenIssuer` / `apiAudience` | `REBAC_OPENFGA_CREDENTIALS_*` | – | Client credentials |
-| `rebac.openfga.timeoutMillis` | `REBAC_OPENFGA_TIMEOUT_MILLIS` | `2000` | Per-call timeout |
-| `rebac.openfga.consistency` | `REBAC_OPENFGA_CONSISTENCY` | `HIGHER_CONSISTENCY` | Check consistency; no decision cache |
-| `rebac.openfga.batchCheckMaxItems` | `REBAC_OPENFGA_BATCH_CHECK_MAX_ITEMS` | `50` | BatchCheck chunk size (1–50) |
-| `rebac.listObjectsMaxResults` | `REBAC_LIST_OBJECTS_MAX_RESULTS` | `1000` | Above this, lists use the candidate scan |
-| `rebac.maxScanCandidates` | `REBAC_MAX_SCAN_CANDIDATES` | `5000` | Upper bound of the candidate scan |
 | `rebac.groupClaim` | `REBAC_GROUP_CLAIM` | `groups` | Normalized claim with group names |
 | `rebac.administrators` | `REBAC_ADMINISTRATORS` (comma-separated) | `[]` | `issuer\|subject` or `issuer\|group:<name>` |
-| `rebac.provisionModel` | `REBAC_PROVISION_MODEL` | `false` | Configuration service provisions store and model |
 
 `rebac.enabled=true` requires `abac.enabled=true` and an OIDC trustlist.
+Enable ReBAC consistently in all services that share a database.
 
-## Consistency, outbox and barrier
+See `examples/BaSyxReBACExample` for a complete compose setup.
 
-PostgreSQL holds the desired authorization state (`rebac_grant`,
-`rebac_submodel_link`, `rebac_invitation`); OpenFGA is a projection that only
-BaSyx writes.
+## Consistency and revocation
 
-- Resource mutations, grant changes and outbox rows are written in the same
-  database transaction. Changes of one object serialize on its revision row,
-  so the outbox order equals the commit order.
-- Owner grants of new resources are applied before commit (the object is new,
-  so this is always safe). Other changes are applied right after commit; a
-  background worker, elected through a PostgreSQL advisory lock, drains
-  anything left in order with exponential backoff.
-- Pending **additions** are fail-safe: they only deny until applied.
-- Pending **revocations** trip the barrier: after OpenFGA allowed a request,
-  BaSyx checks for unapplied revocations. While one exists, ReBAC allows are
-  not trusted and the request gets `503`. ABAC allows are unaffected.
-- Removing an approved AAS link (including through reference removal) is a
-  revocation.
+The relationships (`rebac_grant`, `rebac_submodel_link`,
+`rebac_derivation`, `rebac_invitation`) live in the database of the
+resources. Decisions and grants are SQL over these tables.
+
+- A grant change takes effect when its transaction commits. There is no
+  cache and no background projection.
+- Resource mutations write the owner grant, derivations and the removal of
+  state of deleted resources in their own transaction.
+- Changes of one object serialize on its access revision, which is also the
+  `ETag` of `$access`.
 
 ## Reconciliation
 
-- **Re-enable reconciliation.** While ReBAC is disabled nothing tracks
-  deletions or removed references. Every startup with `rebac.enabled=true`
-  removes grants, element grants, invitations and links of resources that no
-  longer exist and links whose reference is gone, and queues the tuple
-  deletions. The service only becomes ready afterwards.
-- **Drift repair.** At startup and through
-  `POST /security/rebac/admin/reconcile`, BaSyx compares the desired state
-  with the tuples stored in OpenFGA, writes missing tuples and deletes
-  unexpected ones. Stored group memberships are always unexpected. The report
-  lists how many tuples were repaired.
+While ReBAC is disabled, nothing tracks deletions or removed references.
+Every startup with `rebac.enabled=true` removes grants, element grants,
+invitations, derivations and links of resources that no longer exist and
+links whose reference is gone. The service only becomes ready afterwards.
+Administrators can run the same step through
+`POST /security/rebac/admin/reconcile`. Reconciliation only removes state:
+authorization UUIDs are never reused and links are checked against live
+references, so orphaned state never grants access.
 
 ## Limits and known restrictions
 
-- At most 100 contextual tuples per check: the caller's groups plus the depth
-  of an element path. Callers exceeding it get `503`.
-- Lists: when a caller can see `rebac.listObjectsMaxResults` or more objects
-  of a kind, BaSyx verifies direct and linked grants with BatchCheck. More
-  than `rebac.maxScanCandidates` candidates answer `503`.
 - Repository admins see every resource of the family.
-- `$signed`, history and feeds stay ABAC-only (see above).
+- `$signed`, history, feeds and historical passports stay ABAC-only (see
+  above).
 - Caller query conditions on related resources (`$sm`/`$sme` inside other
   resource queries) only see ABAC-visible related rows.
+- Items of `/upload` and of bulk requests are authorized one by one; an
+  upload can therefore be applied partially, as with ABAC.
 
 ## Upgrade notes
 
-Database schema `v1.2.2` adds `auth_uuid` columns to `aas`, `submodel` and
-`concept_description` and assigns a UUID to every existing row. PostgreSQL
-rewrites these tables while holding an exclusive lock; plan a maintenance
-window for large installations. Run the configuration service before
-upgrading services. The patch also adds the `rebac_*` tables, which stay
-empty while ReBAC is disabled.
+Database schema `v1.2.2` adds `auth_uuid` columns to `aas`, `submodel`,
+`concept_description`, `descriptor`, `aas_identifier` and `aasx_package` and
+assigns a UUID to every existing row. PostgreSQL rewrites these tables while
+holding an exclusive lock; plan a maintenance window for large
+installations. Run the configuration service before upgrading services. The
+patch also adds the `rebac_*` tables, which stay empty while ReBAC is
+disabled.

@@ -54,6 +54,7 @@ type Coordinator struct {
 	management     map[string]struct{}
 	administrators []common.ReBACAdministrator
 	ready          atomic.Bool
+	metrics        instruments
 
 	abacProvider      auth.AccessModelProvider
 	abacImplicitCasts bool
@@ -68,6 +69,7 @@ func NewCoordinator(db *sql.DB, cfg common.ReBACConfig, administrators []common.
 		routes:         newRouteMatrix(),
 		management:     map[string]struct{}{},
 		administrators: administrators,
+		metrics:        newInstruments(),
 	}
 }
 
@@ -100,20 +102,29 @@ func (c *Coordinator) registerManagementRoute(method string, pattern string) {
 // Resolve returns the grants of a covered request that ABAC does not allow
 // unconditionally. An empty set keeps the ABAC decision.
 func (c *Coordinator) Resolve(ctx context.Context, request auth.ReBACRequest) (*auth.ReBACGrantSet, error) {
+	return c.traceDecision(ctx, request.Route, func(ctx context.Context) (*auth.ReBACGrantSet, string, error) {
+		return c.decide(ctx, request)
+	})
+}
+
+func (c *Coordinator) decide(ctx context.Context, request auth.ReBACRequest) (*auth.ReBACGrantSet, string, error) {
 	grants := auth.NewReBACGrantSet(request.Route.Rights...)
 	spec, covered := c.routes.lookup(request.Route.Method, request.Route.Pattern)
 	principal, authenticated := PrincipalFromClaims(request.Claims, c.groupClaim)
 	if !covered || !authenticated {
-		return grants, nil
+		return grants, outcomeUncovered, nil
 	}
 	if !c.Ready() {
-		return nil, ErrNotReady
+		return nil, "", ErrNotReady
 	}
 	resolution := &resolution{coordinator: c, keys: principal.SubjectKeys(), route: request.Route, spec: spec, grants: grants}
 	if err := resolution.resolve(ctx, spec); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return grants, nil
+	if grants.IsEmpty() {
+		return grants, outcomeNone, nil
+	}
+	return grants, outcomeGranted, nil
 }
 
 // resolution evaluates one request.

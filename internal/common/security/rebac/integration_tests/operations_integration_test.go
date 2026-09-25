@@ -27,7 +27,9 @@
 package rebacintegration
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -198,4 +200,47 @@ func TestEffectiveRightsReportSourcesWithoutRevealingExistence(t *testing.T) {
 	adminEffective := call(t, "admin", http.MethodGet, submodelAccess(submodelURL, identifier)+"/effective", nil, nil)
 	expectStatus(t, http.StatusOK, adminEffective, "ABAC administrator")
 	require.Contains(t, string(adminEffective.body), `"source":"abac"`)
+}
+
+func TestAccessChangesAreAuditedInAVerifiableChain(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "audited")
+	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
+
+	auditURL := submodelURL + "/security/rebac/admin/audit"
+	expectStatus(t, http.StatusNotFound, call(t, "bob", http.MethodGet, auditURL, nil, nil), "the audit trail is for administrators only")
+	listed := call(t, "dave", http.MethodGet, auditURL+"?limit=1000", nil, nil)
+	expectStatus(t, http.StatusOK, listed, "list the audit trail")
+	var page struct {
+		Events []struct {
+			Type    string          `json:"type"`
+			Actor   string          `json:"actor"`
+			Object  string          `json:"object"`
+			Details json.RawMessage `json:"details"`
+			Hash    string          `json:"hash"`
+		} `json:"events"`
+	}
+	require.NoError(t, json.Unmarshal(listed.body, &page))
+	found := false
+	for _, event := range page.Events {
+		if event.Type == "grants_changed" && strings.Contains(string(event.Details), "viewer") && strings.HasPrefix(event.Object, "submodel:") {
+			found = found || strings.HasPrefix(event.Actor, "user:")
+		}
+	}
+	require.True(t, found, "sharing is audited with its actor")
+
+	verified := call(t, "dave", http.MethodGet, auditURL+"/verify", nil, nil)
+	expectStatus(t, http.StatusOK, verified, "verify the audit trail")
+	var report struct {
+		Valid            bool   `json:"valid"`
+		Checked          int    `json:"checked"`
+		HeadHash         string `json:"headHash"`
+		EvidenceVerified int    `json:"evidenceVerified"`
+	}
+	require.NoError(t, json.Unmarshal(verified.body, &report))
+	require.True(t, report.Valid, string(verified.body))
+	require.Positive(t, report.Checked)
+	require.Positive(t, report.EvidenceVerified, "changes through the Submodel repository are archived in the WORM store")
+
+	stale := call(t, "dave", http.MethodGet, auditURL+"/verify?expectedHead="+strings.Repeat("0", 64), nil, nil)
+	require.Contains(t, string(stale.body), `"valid":false`, "a different retained head reveals removed events")
 }

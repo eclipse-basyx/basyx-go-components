@@ -1,0 +1,7 @@
+kind: added
+body: 'With ReBAC enabled, every access change (grants, invitations, inheritance links and reconciliations) is recorded in a hash-chained, append-only audit trail. With history evidence enabled, each audit event is archived in the WORM evidence store. Administrators list and verify the trail through `/security/rebac/admin/audit` and `/security/rebac/admin/audit/verify`, and `historyevidenceverifier -rebac-audit` verifies it offline against an independently retained head hash. ReBAC decisions and access changes are reported as OpenTelemetry spans and metrics.'
+time: 2026-09-26T09:00:00Z
+custom:
+    Impact: Low
+    PullRequest: 712
+    SecurityImpact: 'Access changes are attributable and tamper-evident. With history evidence enabled, a change fails with 503 instead of being applied without its WORM audit record. The audit trail is readable by configured ReBAC administrators only.'

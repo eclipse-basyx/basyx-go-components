@@ -73,10 +73,20 @@ func (c *Coordinator) ReconcileOrphans(ctx context.Context) (ReconcileReport, er
 		}
 		invitations, err := deleteMatching(ctx, tx, "REBAC-RECONCILE-INVITATIONS", dialect.Delete(invitationTable).
 			Where(orphanResourceCondition(goqu.I(invitationTable+".object_type"), goqu.I(invitationTable+".object_uuid"))))
+		if err != nil {
+			return err
+		}
 		report = ReconcileReport{OrphanGrants: grants, OrphanLinks: links, OrphanDerivations: derivations, OrphanInvitations: invitations}
-		return err
+		if report.empty() {
+			return nil
+		}
+		return c.audit(ctx, tx, AuditReconciled, auditSystemObject, report)
 	})
 	return report, err
+}
+
+func (r ReconcileReport) empty() bool {
+	return r.OrphanGrants+r.OrphanLinks+r.OrphanDerivations+r.OrphanInvitations == 0
 }
 
 func deleteMatching(ctx context.Context, tx *sql.Tx, code string, ds *goqu.DeleteDataset) (int, error) {

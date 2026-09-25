@@ -88,6 +88,7 @@ type acceptedInvitation struct {
 
 // redeemedInvitation is the target of a redeemed invitation.
 type redeemedInvitation struct {
+	id          string
 	objectType  string
 	objectUUID  string
 	elementPath string
@@ -168,7 +169,17 @@ func (c *Coordinator) handleCreateInvitation(w http.ResponseWriter, r *http.Requ
 		record["expected_subject_key"] = UserKey(strings.TrimSpace(input.ExpectedPrincipal.Issuer), strings.TrimSpace(input.ExpectedPrincipal.Subject))
 		invitation.Restricted = true
 	}
-	if _, err = execDataset(r.Context(), c.db, "REBAC-CREATEINVITATION", dialect.Insert(invitationTable).Rows(record).Prepared(true)); err != nil {
+	details := map[string]any{
+		"invitation": invitation.ID, "relation": invitation.Relation, "expiresAt": invitation.ExpiresAt.Format(time.RFC3339Nano),
+		"maxUses": maxUses, "restricted": invitation.Restricted,
+	}
+	err = common.ExecuteInTransaction(c.db, "REBAC-CREATEINVITATION-STARTTX", "REBAC-CREATEINVITATION-COMMIT", func(tx *sql.Tx) error {
+		if _, txErr := execDataset(r.Context(), tx, "REBAC-CREATEINVITATION", dialect.Insert(invitationTable).Rows(record).Prepared(true)); txErr != nil {
+			return txErr
+		}
+		return c.audit(r.Context(), tx, AuditInvitationCreated, request.target.objectKey(), details)
+	})
+	if err != nil {
 		writeManagementError(w, r, err)
 		return
 	}
@@ -216,13 +227,18 @@ func (c *Coordinator) handleRevokeInvitation(w http.ResponseWriter, r *http.Requ
 		goqu.C("id").Eq(goqu.L("?::uuid", invitationID)), goqu.C("object_key").Eq(request.target.objectKey()),
 		goqu.C("revoked_at").IsNull(),
 	).Prepared(true)
-	result, err := execDataset(r.Context(), c.db, "REBAC-REVOKEINVITATION", ds)
+	err := common.ExecuteInTransaction(c.db, "REBAC-REVOKEINVITATION-STARTTX", "REBAC-REVOKEINVITATION-COMMIT", func(tx *sql.Tx) error {
+		result, txErr := execDataset(r.Context(), tx, "REBAC-REVOKEINVITATION", ds)
+		if txErr != nil {
+			return txErr
+		}
+		if affected, _ := result.RowsAffected(); affected == 0 {
+			return errTargetGone
+		}
+		return c.audit(r.Context(), tx, AuditInvitationRevoked, request.target.objectKey(), map[string]any{"invitation": invitationID})
+	})
 	if err != nil {
 		writeManagementError(w, r, err)
-		return
-	}
-	if affected, _ := result.RowsAffected(); affected == 0 {
-		writeNotFound(w)
 		return
 	}
 	slog.InfoContext(r.Context(), "ReBAC invitation revoked", "event.code", "REBAC-INVITATION-REVOKED", "rebac.invitation_id", invitationID)
@@ -287,7 +303,10 @@ func (c *Coordinator) redeemInvitation(ctx context.Context, tx *sql.Tx, principa
 	if err != nil {
 		return acceptedInvitation{}, err
 	}
-	err = applyGrantDiff(ctx, tx, target.objectKey(), current, append(current, grant))
+	if err = c.applyGrantDiff(ctx, tx, target.objectKey(), current, append(current, grant)); err != nil {
+		return acceptedInvitation{}, err
+	}
+	err = c.audit(ctx, tx, AuditInvitationRedeemed, target.objectKey(), map[string]any{"invitation": redeemed.id, "relation": redeemed.relation})
 	accepted := acceptedInvitation{Object: accessObject{Type: target.objectType(), ID: identifier, IDShortPath: target.elementPath}, Relation: redeemed.relation}
 	return accepted, err
 }
@@ -300,9 +319,9 @@ func consumeInvitation(ctx context.Context, tx *sql.Tx, token string, principal 
 		goqu.C("token_hash").Eq(hashToken(token)), goqu.C("revoked_at").IsNull(),
 		goqu.C("expires_at").Gt(goqu.L("clock_timestamp()")), goqu.C("used_count").Lt(goqu.C("max_uses")),
 		goqu.Or(goqu.C("expected_subject_key").IsNull(), goqu.C("expected_subject_key").Eq(principal.UserKey())),
-	).Returning(goqu.C("object_type"), goqu.L("object_uuid::text"), goqu.L("COALESCE(element_path, '')"), goqu.C("relation")).Prepared(true)
+	).Returning(goqu.L("id::text"), goqu.C("object_type"), goqu.L("object_uuid::text"), goqu.L("COALESCE(element_path, '')"), goqu.C("relation")).Prepared(true)
 	var redeemed redeemedInvitation
 	found, err := queryRowDataset(ctx, tx, "REBAC-CONSUMEINVITATION", ds,
-		&redeemed.objectType, &redeemed.objectUUID, &redeemed.elementPath, &redeemed.relation)
+		&redeemed.id, &redeemed.objectType, &redeemed.objectUUID, &redeemed.elementPath, &redeemed.relation)
 	return redeemed, found, err
 }

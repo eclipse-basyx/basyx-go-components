@@ -68,6 +68,27 @@ services:
       db:
         condition: service_healthy
 
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+
+  minio-init:
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done
+        mc mb --ignore-existing --with-lock local/basyx-evidence
+        mc version enable local/basyx-evidence
+        mc retention set --default compliance 1d local/basyx-evidence
+
   submodel-repository:
     build:
       context: ../../../../../..
@@ -89,9 +110,21 @@ services:
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - REBAC_ENABLED=true
       - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+      - BASYX_HISTORY_EVIDENCE_ENABLED=true
+      - BASYX_HISTORY_EVIDENCE_PROVIDER=s3
+      - BASYX_HISTORY_EVIDENCE_BUCKET=basyx-evidence
+      - BASYX_HISTORY_EVIDENCE_REGION=us-east-1
+      - BASYX_HISTORY_EVIDENCE_ENDPOINT=http://minio:9000
+      - BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID=minioadmin
+      - BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY=minioadmin
+      - BASYX_HISTORY_EVIDENCE_PATH_STYLE=true
+      - BASYX_HISTORY_EVIDENCE_RETENTION_MODE=compliance
+      - BASYX_HISTORY_EVIDENCE_RETENTION_DAYS=1
     ports:
       - "127.0.0.1:${BASYX_IT_SM_PORT:-6014}:5004"
     depends_on:
+      minio-init:
+        condition: service_completed_successfully
       basyx_configuration:
         condition: service_completed_successfully
       keycloak-healthcheck:

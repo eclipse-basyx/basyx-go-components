@@ -109,6 +109,8 @@ func (c *Coordinator) managementRoutes(kinds []ResourceKind) []managementRoute {
 		managementRoute{http.MethodGet, managementRoot + "/repositories/{" + paramRepositoryKind + "}" + accessSuffix, c.handleGetRepositoryAccess},
 		managementRoute{http.MethodPut, managementRoot + "/repositories/{" + paramRepositoryKind + "}" + accessSuffix + "/grants", c.handlePutRepositoryGrants},
 		managementRoute{http.MethodPost, managementRoot + "/admin/reconcile", c.handleReconcile},
+		managementRoute{http.MethodGet, managementRoot + "/admin/audit", c.handleListAudit},
+		managementRoute{http.MethodGet, managementRoot + "/admin/audit/verify", c.handleVerifyAudit},
 		managementRoute{http.MethodPut, managementRoot + "/admin/owners/{" + paramObjectType + "}/{" + paramIdentifier + "}", c.handleRecoverOwners},
 	)
 }
@@ -189,6 +191,7 @@ func (c *Coordinator) withTarget(base accessBase, requireManage bool, next acces
 			return
 		}
 		if !allowed {
+			c.countManagementDenial(r.Context(), base.pattern)
 			writeNotFound(w)
 			return
 		}
@@ -294,6 +297,8 @@ func writeManagementError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusBadRequest
 	case common.IsErrConflict(err):
 		status = http.StatusConflict
+	case common.IsErrServiceUnavailable(err):
+		status = http.StatusServiceUnavailable
 	case errors.Is(err, errPreconditionRequired):
 		status = http.StatusPreconditionRequired
 	case errors.Is(err, errPreconditionFailed):

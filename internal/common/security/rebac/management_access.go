@@ -221,7 +221,7 @@ func (c *Coordinator) replaceGrants(w http.ResponseWriter, r *http.Request, requ
 		if !request.admin && countOwners(current) > 0 && countOwners(desired) == 0 {
 			return common.NewErrConflict("REBAC-PUTGRANTS-LASTOWNER removing the last owner requires an administrator")
 		}
-		if err = applyGrantDiff(r.Context(), tx, request.target.objectKey(), current, desired); err != nil {
+		if err = c.applyGrantDiff(r.Context(), tx, request.target.objectKey(), current, desired); err != nil {
 			return err
 		}
 		document, err = c.accessDocument(r.Context(), tx, request.target)
@@ -265,10 +265,14 @@ func (c *Coordinator) lockTarget(r *http.Request, tx *sql.Tx, target accessTarge
 
 // applyGrantDiff stores the desired grants of one object. Changes take
 // effect when the transaction commits.
-func applyGrantDiff(ctx context.Context, tx *sql.Tx, objectKey string, current []Grant, desired []Grant) error {
+func (c *Coordinator) applyGrantDiff(ctx context.Context, tx *sql.Tx, objectKey string, current []Grant, desired []Grant) error {
 	removed, added := diffGrants(current, desired)
 	if len(removed) == 0 && len(added) == 0 {
 		return nil
+	}
+	details := map[string]any{"added": auditedGrants(added), "removed": auditedGrants(removed)}
+	if err := c.audit(ctx, tx, AuditGrantsChanged, objectKey, details); err != nil {
+		return err
 	}
 	for _, grant := range removed {
 		if err := DeleteGrant(ctx, tx, grant); err != nil {
@@ -282,6 +286,15 @@ func applyGrantDiff(ctx context.Context, tx *sql.Tx, objectKey string, current [
 	}
 	_, err := BumpObjectRevision(ctx, tx, objectKey)
 	return err
+}
+
+// auditedGrants lists relations and subject keys of grants for the audit.
+func auditedGrants(grants []Grant) []map[string]string {
+	audited := make([]map[string]string, 0, len(grants))
+	for _, grant := range grants {
+		audited = append(audited, map[string]string{"relation": grant.Relation, "subject": grant.SubjectKey})
+	}
+	return audited
 }
 
 func diffGrants(current []Grant, desired []Grant) ([]Grant, []Grant) {
@@ -378,7 +391,7 @@ func (c *Coordinator) handlePutInheritance(w http.ResponseWriter, r *http.Reques
 		if lockErr := c.lockTarget(r, tx, request.target); lockErr != nil {
 			return lockErr
 		}
-		if txErr := replaceLinks(r.Context(), tx, request, aasUUIDs); txErr != nil {
+		if txErr := c.replaceLinks(r.Context(), tx, request, aasUUIDs); txErr != nil {
 			return txErr
 		}
 		var txErr error
@@ -423,7 +436,7 @@ func (c *Coordinator) approvedAAS(ctx context.Context, request accessRequest, id
 	return uniqueStrings(aasUUIDs), nil
 }
 
-func replaceLinks(ctx context.Context, tx *sql.Tx, request accessRequest, aasUUIDs []string) error {
+func (c *Coordinator) replaceLinks(ctx context.Context, tx *sql.Tx, request accessRequest, aasUUIDs []string) error {
 	current, err := ListSubmodelLinks(ctx, tx, request.target.authUUID)
 	if err != nil {
 		return err
@@ -434,6 +447,9 @@ func replaceLinks(ctx context.Context, tx *sql.Tx, request accessRequest, aasUUI
 	}
 	added, err := addApprovedLinks(ctx, tx, request, current, aasUUIDs)
 	if err != nil || removed+added == 0 {
+		return err
+	}
+	if err = c.audit(ctx, tx, AuditInheritanceChanged, request.target.objectKey(), map[string]any{"linkedShells": aasUUIDs}); err != nil {
 		return err
 	}
 	_, err = BumpObjectRevision(ctx, tx, request.target.objectKey())

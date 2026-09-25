@@ -35,6 +35,7 @@ BaSyx provides technical controls that can support NIS2-aligned integrity, audit
 - Use `history.evidence.signing.publicKeyPath` or `BASYX_HISTORY_EVIDENCE_SIGNING_PUBLIC_KEY_PATH` for manifest signature verification.
 - Run `cmd/historyevidenceverifier` from cron, Kubernetes CronJobs, or an equivalent scheduler. Treat non-zero exits and `severity: error` findings as alert conditions.
 - Supply `-expected-head-hash` from the independently protected head corresponding to the requested `-to` sequence. Do not derive this expected value from the database under verification.
+- With the experimental ReBAC enabled, access changes are archived as WORM audit events as well. Verify them with `historyevidenceverifier -config <file> -rebac-audit -expected-head-hash <hash>`; the head hash is part of the report and should be retained independently like the history heads. See [REBAC.md](REBAC.md#audit-trail-and-evidence).
 - Use `history.fullSnapshotInterval: 1` when each mutation must be recoverable as a full WORM snapshot without diff replay.
 - With `history.fullSnapshotInterval: N`, recovery starts from the nearest WORM snapshot and replays WORM diff artifacts up to the requested evidence sequence.
 - Recovery is bounded by the retention period and by the mutations for which evidence storage was enabled. The v1.1.8 upgrade does not convert or retroactively copy existing binaries to WORM; those files remain available through compatibility reads without historical receipts.

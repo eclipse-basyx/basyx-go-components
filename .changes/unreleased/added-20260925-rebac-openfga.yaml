@@ -1,7 +1,0 @@
-kind: added
-body: 'Experimental relationship-based access control (ReBAC) with OpenFGA for the AAS repository, Submodel repository, Concept Description repository and AAS Environment. When `rebac.enabled` is set, access is granted when ABAC or ReBAC allows it: creators own new Shells, Submodels and Concept Descriptions, and owners share them, or single SubmodelElement paths, with users and groups as viewer, editor, executor or owner through `$access` sub-resources with optimistic concurrency (`If-Match`), approved AAS-to-Submodel inheritance links, invitation links and administrator bootstrap and recovery. The configuration service provisions the OpenFGA store and model with `rebac.provisionModel`. ReBAC is disabled by default and leaves all existing behavior unchanged. See docu/security/REBAC.md.'
-time: 2026-09-25T21:00:00Z
-custom:
-    Impact: Low
-    PullRequest: 712
-    SecurityImpact: 'OpenFGA is only consulted when ABAC does not allow unconditionally; if it is needed but unavailable, requests fail with 503 instead of falling back to ABAC-only decisions. A ReBAC grant widens only the granted resource and, by design, is not limited by ABAC fragment filters or update conditions of that resource, so administrators should keep sensitive content in separate resources. Denials without grants look exactly like ABAC denials, management routes answer 404 to non-managers, committed revocations invalidate ReBAC allows until applied, anonymous callers stay ABAC-only, and invitation tokens are stored only as SHA-256 hashes.'

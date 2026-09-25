@@ -205,7 +205,8 @@ services:
 
   minio:
     container_name: minio_history_evidence
-    image: quay.io/minio/minio:latest
+    # MinIO no longer publishes container images; use the community build.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -217,7 +218,7 @@ services:
 
   minio-init:
     container_name: minio_history_evidence_init
-    image: quay.io/minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     depends_on:
       minio:
         condition: service_started
