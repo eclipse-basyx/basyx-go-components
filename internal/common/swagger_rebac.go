@@ -524,20 +524,20 @@ func injectReBACManagementAPI(specContent []byte) []byte {
 	if strings.Contains(content, "  /security/rebac/status:") {
 		return specContent
 	}
-	var fragment strings.Builder
+	fragments := make([]string, 0, 2*len(reBACAccessBases)+1)
 	for _, base := range reBACAccessBases {
 		if !strings.Contains(content, base.marker) {
 			continue
 		}
-		fragment.WriteString(expandReBACTemplate(reBACAccessPathTemplate, base))
+		fragments = append(fragments, expandReBACTemplate(reBACAccessPathTemplate, base))
 		if base.inheritance {
-			fragment.WriteString(expandReBACTemplate(reBACInheritancePathTemplate, base))
+			fragments = append(fragments, expandReBACTemplate(reBACInheritancePathTemplate, base))
 		}
 	}
-	fragment.WriteString(reBACGlobalPathsYAML)
+	fragments = append(fragments, reBACGlobalPathsYAML)
 	specContent = injectComponentSchemas(specContent, reBACSchemasYAML)
 	specContent = injectComponentParameters(specContent, reBACParametersYAML)
-	return injectPathFragment(specContent, fragment.String())
+	return injectPathFragment(specContent, strings.Join(fragments, ""))
 }
 
 func expandReBACTemplate(template string, base reBACAccessBase) string {
