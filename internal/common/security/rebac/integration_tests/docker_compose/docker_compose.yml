@@ -188,6 +188,10 @@ services:
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - REBAC_ENABLED=true
       - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://localhost:${BASYX_IT_ENV_PORT:-6017}
     ports:
       - "127.0.0.1:${BASYX_IT_ENV_PORT:-6017}:5004"
     depends_on:

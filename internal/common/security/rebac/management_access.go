@@ -36,7 +36,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
@@ -95,6 +94,7 @@ type accessDocument struct {
 	Revision    int64             `json:"revision"`
 	Grants      []Grant           `json:"grants"`
 	Inheritance []inheritanceLink `json:"inheritance,omitempty"`
+	DerivedFrom *accessObject     `json:"derivedFrom,omitempty"`
 }
 
 type grantInput struct {
@@ -155,7 +155,24 @@ func (c *Coordinator) accessDocument(ctx context.Context, q Queryer, target acce
 			return document, err
 		}
 	}
-	return document, nil
+	if _, derivable := derivationSource(target.kind); derivable {
+		document.DerivedFrom, err = derivedFromObject(ctx, q, target.authUUID)
+	}
+	return document, err
+}
+
+// derivedFromObject names the source a derived object inherits access from.
+func derivedFromObject(ctx context.Context, q Queryer, authUUID string) (*accessObject, error) {
+	sourceType, sourceUUID, found, err := derivationSourceOf(ctx, q, authUUID)
+	if err != nil || !found {
+		return nil, err
+	}
+	sourceKind, _ := KindForObjectType(sourceType)
+	identifier, exists, err := IdentifierByAuthUUID(ctx, q, sourceKind, sourceUUID)
+	if err != nil || !exists {
+		return nil, err
+	}
+	return &accessObject{Type: sourceType, ID: identifier}, nil
 }
 
 func (c *Coordinator) inheritanceLinks(ctx context.Context, q Queryer, submodelUUID string) ([]inheritanceLink, error) {
@@ -174,15 +191,6 @@ func (c *Coordinator) inheritanceLinks(ctx context.Context, q Queryer, submodelU
 		}
 	}
 	return result, nil
-}
-
-// IdentifierByAuthUUID resolves the public identifier of an identifiable.
-func IdentifierByAuthUUID(ctx context.Context, q Queryer, kind ResourceKind, authUUID string) (string, bool, error) {
-	ds := dialect.From(goqu.T(kind.Table)).Select(goqu.C(kind.IdentifierColumn)).
-		Where(goqu.C("auth_uuid").Eq(goqu.L("?::uuid", authUUID))).Limit(1).Prepared(true)
-	var identifier string
-	found, err := queryRowDataset(ctx, q, "REBAC-IDENTIFIERBYAUTHUUID", ds, &identifier)
-	return identifier, found, err
 }
 
 func (c *Coordinator) handlePutGrants(w http.ResponseWriter, r *http.Request, request accessRequest) {

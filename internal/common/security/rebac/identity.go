@@ -37,7 +37,7 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-// OpenFGA object types of the BaSyx authorization model.
+// Object and subject types of the BaSyx relationship model.
 const (
 	TypeUser               = "user"
 	TypeGroup              = "group"
@@ -46,6 +46,9 @@ const (
 	TypeSubmodel           = "submodel"
 	TypeElement            = "element"
 	TypeConceptDescription = "concept_description"
+	TypeAASDescriptor      = "aas_descriptor"
+	TypeSubmodelDescriptor = "submodel_descriptor"
+	TypeAssetLinks         = "asset_links"
 )
 
 // Relations that can be granted.
@@ -215,7 +218,7 @@ func ValidateRelation(objectType string, relation string) error {
 	case RelationOwner, RelationEditor, RelationViewer:
 		return nil
 	case RelationExecutor:
-		if objectType != TypeConceptDescription {
+		if objectType == TypeSubmodel || objectType == TypeElement || objectType == TypeAAS {
 			return nil
 		}
 	}

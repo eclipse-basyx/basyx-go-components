@@ -250,11 +250,7 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASEnvironmentService")
 
-	rebacRuntime, err := rebac.Setup(ctx, cfg, sharedDB)
-	if err != nil {
-		return err
-	}
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepositoryAndExtensions(ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice", rebacRuntime.Extensions())
+	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice")
 	if err != nil {
 		return err
 	}
@@ -264,8 +260,8 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "aasenvironmentservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasenvironmentservice")
-	rebac.ExemptManagementMutationRoutes(versioningGuard, rebacRuntime, rebac.KindAAS, rebac.KindSubmodel, rebac.KindConceptDescription)
-	rebac.RegisterManagementRoutes(apiRouter, rebacRuntime, rebac.KindAAS, rebac.KindSubmodel, rebac.KindConceptDescription)
+	rebac.ExemptManagementMutationRoutes(versioningGuard, rebacRuntime, rebac.AllKinds...)
+	rebac.RegisterManagementRoutes(apiRouter, rebacRuntime, rebac.AllKinds...)
 	if cfg.Server.VerificationEndpointAvailable {
 		common.AddVerificationEndpoint(apiRouter, cfg, environmentStager)
 	}

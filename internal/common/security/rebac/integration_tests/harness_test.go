@@ -308,15 +308,19 @@ func elementAccess(base string, identifier string, path string) string {
 
 var bootstrapOnce sync.Once
 
-// bootstrapCreators lets alice and carol create identifiables. The operators
-// group is configured as ReBAC administrator of the suite.
+// bootstrapCreators lets alice and carol create identifiables, descriptors
+// and discovery entries. The operators group is configured as ReBAC
+// administrator of the suite.
 func bootstrapCreators(t *testing.T) {
 	t.Helper()
 	bootstrapOnce.Do(func() {
 		for _, repository := range []struct {
 			base string
 			kind string
-		}{{submodelURL, "submodel"}, {aasURL, "aas"}, {cdURL, "concept_description"}} {
+		}{
+			{submodelURL, "submodel"}, {aasURL, "aas"}, {cdURL, "concept_description"},
+			{environmentURL, "aas_descriptor"}, {environmentURL, "submodel_descriptor"}, {environmentURL, "asset_links"},
+		} {
 			accessURL := repository.base + "/security/rebac/repositories/" + repository.kind + "/$access"
 			setGrants(t, "dave", accessURL, []grant{
 				userGrant(t, "creator", "alice"),

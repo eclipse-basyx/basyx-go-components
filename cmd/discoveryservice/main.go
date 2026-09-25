@@ -38,6 +38,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
@@ -116,11 +117,12 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "DiscoveryService")
 
 	// Apply OIDC + ABAC once for all discovery endpoints
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "discoveryservice")
+	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "discoveryservice")
 	if err != nil {
 		return err
 	}
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "discoveryservice")
+	rebac.RegisterManagementRoutes(apiRouter, rebacRuntime, rebac.KindAssetLinks)
 	if cfg.Server.VerificationEndpointAvailable {
 		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}

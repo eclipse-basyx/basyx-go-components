@@ -1638,9 +1638,7 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	if includeABACManagement {
 		specContent = injectABACManagementAPI(specContent)
 	}
-	if cfg.IncludeReBACManagement {
-		specContent = injectReBACManagementAPI(specContent)
-	}
+	specContent = injectReBACManagementAPIIf(cfg.IncludeReBACManagement, specContent)
 	includeEventFeed := false
 	if cfg.IncludeEventFeed != nil {
 		includeEventFeed = *cfg.IncludeEventFeed
@@ -1832,7 +1830,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 		IncludeABACManagement:  includeABACManagement,
 		IncludeEventFeed:       includeEventFeed,
 		IncludeEventSchemas:    serverConfig != nil && serverConfig.Eventing.TransportsEnabled(),
-		IncludeReBACManagement: serverConfig != nil && serverConfig.ReBAC.Enabled,
+		IncludeReBACManagement: reBACEnabled(serverConfig),
 	})
 
 	return nil

@@ -199,11 +199,7 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASRepositoryService")
 
-	rebacRuntime, err := rebac.Setup(ctx, cfg, sharedDB)
-	if err != nil {
-		return err
-	}
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepositoryAndExtensions(ctx, cfg, apiRouter, sharedDB, "aasrepositoryservice", rebacRuntime.Extensions())
+	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "aasrepositoryservice")
 	if err != nil {
 		return err
 	}

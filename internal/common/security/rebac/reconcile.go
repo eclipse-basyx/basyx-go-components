@@ -40,11 +40,13 @@ import (
 type ReconcileReport struct {
 	OrphanGrants      int `json:"orphanGrants"`
 	OrphanLinks       int `json:"orphanLinks"`
+	OrphanDerivations int `json:"orphanDerivations"`
 	OrphanInvitations int `json:"orphanInvitations"`
 }
 
 // ReconcileOrphans removes state that no longer applies: grants and
-// invitations of deleted resources and links whose reference is gone. Such
+// invitations of deleted resources, links whose reference is gone and
+// derivations whose object or source is gone. Such
 // state appears when resources change while ReBAC is disabled. It never
 // grants access, because authorization UUIDs are not reused and links are
 // validated against live references, so this is housekeeping.
@@ -61,9 +63,17 @@ func (c *Coordinator) ReconcileOrphans(ctx context.Context) (ReconcileReport, er
 		if err != nil {
 			return err
 		}
+		derivations, err := deleteMatching(ctx, tx, "REBAC-RECONCILE-DERIVATIONS", dialect.Delete(derivationTable).
+			Where(goqu.Or(
+				orphanResourceCondition(goqu.I(derivationTable+".object_type"), goqu.I(derivationTable+".object_uuid")),
+				orphanResourceCondition(goqu.I(derivationTable+".source_type"), goqu.I(derivationTable+".source_uuid")),
+			)))
+		if err != nil {
+			return err
+		}
 		invitations, err := deleteMatching(ctx, tx, "REBAC-RECONCILE-INVITATIONS", dialect.Delete(invitationTable).
 			Where(orphanResourceCondition(goqu.I(invitationTable+".object_type"), goqu.I(invitationTable+".object_uuid"))))
-		report = ReconcileReport{OrphanGrants: grants, OrphanLinks: links, OrphanInvitations: invitations}
+		report = ReconcileReport{OrphanGrants: grants, OrphanLinks: links, OrphanDerivations: derivations, OrphanInvitations: invitations}
 		return err
 	})
 	return report, err
@@ -88,12 +98,18 @@ func resourceExists(table string, uuidColumn exp.IdentifierExpression) *goqu.Sel
 		Where(goqu.I(alias + ".auth_uuid").Eq(uuidColumn))
 }
 
+// orphanResourceCondition matches rows referencing a resource that no
+// longer exists. Element rows reference their Submodel.
 func orphanResourceCondition(typeColumn exp.IdentifierExpression, uuidColumn exp.IdentifierExpression) exp.Expression {
-	return goqu.Or(
-		goqu.And(typeColumn.Eq(TypeAAS), goqu.L("NOT EXISTS (?)", resourceExists("aas", uuidColumn))),
-		goqu.And(typeColumn.In(TypeSubmodel, TypeElement), goqu.L("NOT EXISTS (?)", resourceExists("submodel", uuidColumn))),
-		goqu.And(typeColumn.Eq(TypeConceptDescription), goqu.L("NOT EXISTS (?)", resourceExists("concept_description", uuidColumn))),
-	)
+	conditions := make([]exp.Expression, 0, len(AllKinds))
+	for _, kind := range AllKinds {
+		types := []any{kind.ObjectType}
+		if kind.ObjectType == TypeSubmodel {
+			types = append(types, TypeElement)
+		}
+		conditions = append(conditions, goqu.And(typeColumn.In(types...), goqu.L("NOT EXISTS (?)", resourceExists(kind.AuthTable, uuidColumn))))
+	}
+	return goqu.Or(conditions...)
 }
 
 // submodelReferenceExists matches when the shell of linkAlias still
@@ -111,6 +127,24 @@ func submodelReferenceQuery() *goqu.SelectDataset {
 		InnerJoin(goqu.T("aas_submodel_reference_key").As("ref_key"), goqu.On(goqu.I("ref_key.reference_id").Eq(goqu.I("ref.id")))).
 		InnerJoin(goqu.T("submodel").As("ref_sm"), goqu.On(goqu.I("ref_sm.submodel_identifier").Eq(goqu.I("ref_key.value")))).
 		Select(goqu.L("1"))
+}
+
+// shellsReferencing selects the authorization UUIDs of shells referencing
+// Submodels by identifier. identifiers is one identifier or a query, so the
+// selection also works after the Submodel row was deleted.
+func shellsReferencing(identifiers any) *goqu.SelectDataset {
+	return dialect.From(goqu.T("aas").As("ref_aas")).
+		InnerJoin(goqu.T("aas_submodel_reference").As("ref"), goqu.On(goqu.I("ref.aas_id").Eq(goqu.I("ref_aas.id")))).
+		InnerJoin(goqu.T("aas_submodel_reference_key").As("ref_key"), goqu.On(goqu.I("ref_key.reference_id").Eq(goqu.I("ref.id")))).
+		Select(goqu.I("ref_aas.auth_uuid")).
+		Where(goqu.I("ref_key.value").In(identifiers))
+}
+
+// submodelIdentifiers selects the identifiers of the Submodels in sources.
+func submodelIdentifiers(sources *goqu.SelectDataset) *goqu.SelectDataset {
+	return dialect.From(goqu.T("submodel").As("source_sm")).
+		Select(goqu.I("source_sm.submodel_identifier")).
+		Where(goqu.I("source_sm.auth_uuid").In(sources))
 }
 
 // SubmodelReferenced reports whether the shell references the Submodel.

@@ -31,11 +31,14 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/go-chi/chi/v5"
 )
 
 // Runtime is the running ReBAC integration of one service.
@@ -50,6 +53,25 @@ func (r *Runtime) Extensions() auth.SecurityExtensions {
 		return auth.SecurityExtensions{}
 	}
 	return auth.SecurityExtensions{ReBAC: r.Coordinator}
+}
+
+// SetupSecurity starts ReBAC when rebac.enabled is set and installs OIDC,
+// ABAC and ReBAC on r. It returns the ABAC policy repository and the ReBAC
+// runtime; both are nil when the respective feature is disabled.
+func SetupSecurity(
+	ctx context.Context,
+	cfg *common.Config,
+	r *chi.Mux,
+	db *sql.DB,
+	serviceType string,
+	claimsMiddleware ...func(http.Handler) http.Handler,
+) (*abacpolicy.Repository, *Runtime, error) {
+	runtime, err := Setup(ctx, cfg, db)
+	if err != nil {
+		return nil, nil, err
+	}
+	repository, err := abacpolicy.SetupSecurityWithABACRepositoryAndExtensions(ctx, cfg, r, db, serviceType, runtime.Extensions(), claimsMiddleware...)
+	return repository, runtime, err
 }
 
 // Setup starts ReBAC for a service when rebac.enabled is set. It verifies
@@ -74,7 +96,7 @@ func Setup(ctx context.Context, cfg *common.Config, db *sql.DB) (*Runtime, error
 	coordinator.MarkReady()
 	slog.InfoContext(ctx, "ReBAC enabled",
 		"rebac.orphan_grants", report.OrphanGrants, "rebac.orphan_links", report.OrphanLinks,
-		"rebac.orphan_invitations", report.OrphanInvitations)
+		"rebac.orphan_derivations", report.OrphanDerivations, "rebac.orphan_invitations", report.OrphanInvitations)
 	return &Runtime{Coordinator: coordinator}, nil
 }
 

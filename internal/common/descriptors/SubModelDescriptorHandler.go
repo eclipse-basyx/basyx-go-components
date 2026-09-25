@@ -35,6 +35,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // ListSubmodelDescriptorsForAAS lists the SubmodelDescriptors that belong to a
@@ -568,6 +569,11 @@ func DeleteSubmodelDescriptorsByIDsTx(
 	if len(submodelIDs) == 0 {
 		return nil
 	}
+	for _, submodelID := range submodelIDs {
+		if err := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceSMDesc, submodelID); err != nil {
+			return err
+		}
+	}
 	d := goqu.Dialect(common.Dialect)
 	batch := &common.PostgreSQLBatch{}
 	limit := common.BulkBatchLimitFromContext(ctx)
@@ -663,6 +669,9 @@ func insertSubmodelDescriptorTx(
 	if err != nil {
 		return model.SubmodelDescriptor{}, err
 	}
+	if err = auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceSMDesc, submodel.Id); err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
 
 	return getSubmodelDescriptorByIDOrDenied(ctx, tx, submodel.Id)
 }
@@ -672,6 +681,9 @@ func deleteSubmodelDescriptorByIDTx(
 	tx *sql.Tx,
 	submodelID string,
 ) error {
+	if err := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceSMDesc, submodelID); err != nil {
+		return err
+	}
 	d := goqu.Dialect(common.Dialect)
 	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
 

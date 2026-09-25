@@ -67,9 +67,8 @@ func NewReBACGrantSet(defaultRights ...grammar.RightsEnum) *ReBACGrantSet {
 	return &ReBACGrantSet{defaultRights: slices.Clone(defaultRights)}
 }
 
-// AllowResources grants rights on concrete identifiables of one kind.
-// Supported kinds are SemanticResourceAAS, SemanticResourceSM and
-// SemanticResourceCD. Invalid UUIDs are rejected so they can never be
+// AllowResources grants rights on concrete resources of one kind. Supported
+// kinds are the identifiables, descriptors and discovery entries. Invalid UUIDs are rejected so they can never be
 // interpolated into SQL.
 func (s *ReBACGrantSet) AllowResources(resource SemanticResourceKind, authUUIDs []string, rights ...grammar.RightsEnum) error {
 	if !isReBACIdentifiableKind(resource) {
@@ -196,7 +195,13 @@ func ReBACGrantsFromContext(ctx context.Context) *ReBACGrantSet {
 }
 
 func isReBACIdentifiableKind(resource SemanticResourceKind) bool {
-	return resource == SemanticResourceAAS || resource == SemanticResourceSM || resource == SemanticResourceCD
+	switch resource {
+	case SemanticResourceAAS, SemanticResourceSM, SemanticResourceCD,
+		SemanticResourceAASDesc, SemanticResourceSMDesc, SemanticResourceBD:
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeReBACUUIDs(values []string) ([]string, error) {
@@ -264,6 +269,12 @@ func reBACGrantPredicate(ctx context.Context, collector *grammar.ResolvedFieldPa
 		return identifiableGrantPredicate(rootKey, "concept_description", grants.entriesFor(SemanticResourceCD, rights))
 	case grammar.CollectorRootSME:
 		return submodelElementGrantPredicate(rootAlias, grants.entriesFor(SemanticResourceSM, rights), grants.entriesFor(SemanticResourceSME, rights))
+	case grammar.CollectorRootAASDesc:
+		return identifiableGrantPredicate(rootKey, "descriptor", grants.entriesFor(SemanticResourceAASDesc, rights))
+	case grammar.CollectorRootSMDesc:
+		return identifiableGrantPredicate(rootKey, "descriptor", grants.entriesFor(SemanticResourceSMDesc, rights))
+	case grammar.CollectorRootBD:
+		return identifiableGrantPredicate(rootKey, "aas_identifier", grants.entriesFor(SemanticResourceBD, rights))
 	default:
 		return nil, false
 	}

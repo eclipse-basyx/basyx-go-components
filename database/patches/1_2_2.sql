@@ -6,8 +6,9 @@
 -- Metamodel Ver. : 3.2
 -- ----------------------------------------------------------------------------
 -- Description:
---   Adds persistent authorization identities and the relationship, link and
---   invitation tables of the experimental relationship-based access control.
+--   Adds persistent authorization identities and the relationship, link,
+--   derivation and invitation tables of the experimental relationship-based
+--   access control.
 --
 -- Copyright (c) Eclipse BaSyx Authors and Fraunhofer IESE
 -- SPDX-License-Identifier: MIT
@@ -21,16 +22,25 @@ ALTER TABLE IF EXISTS submodel
   ADD COLUMN IF NOT EXISTS auth_uuid UUID NOT NULL DEFAULT gen_random_uuid();
 ALTER TABLE IF EXISTS concept_description
   ADD COLUMN IF NOT EXISTS auth_uuid UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE IF EXISTS descriptor
+  ADD COLUMN IF NOT EXISTS auth_uuid UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE IF EXISTS aas_identifier
+  ADD COLUMN IF NOT EXISTS auth_uuid UUID NOT NULL DEFAULT gen_random_uuid();
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_aas_auth_uuid ON aas (auth_uuid);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_submodel_auth_uuid ON submodel (auth_uuid);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_concept_description_auth_uuid ON concept_description (auth_uuid);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_descriptor_auth_uuid ON descriptor (auth_uuid);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_aas_identifier_auth_uuid ON aas_identifier (auth_uuid);
 
 -- Direct relationships. Permissions are evaluated from these rows in SQL.
 CREATE TABLE IF NOT EXISTS rebac_grant (
   id BIGSERIAL PRIMARY KEY,
   object_key TEXT NOT NULL,
-  object_type TEXT NOT NULL CHECK (object_type IN ('aas', 'submodel', 'concept_description', 'element', 'repository')),
+  object_type TEXT NOT NULL CHECK (object_type IN (
+    'aas', 'submodel', 'concept_description', 'element',
+    'aas_descriptor', 'submodel_descriptor', 'asset_links', 'repository'
+  )),
   object_uuid UUID,
   element_path TEXT,
   relation TEXT NOT NULL CHECK (relation IN ('owner', 'editor', 'viewer', 'executor', 'creator', 'admin')),
@@ -65,11 +75,26 @@ CREATE TABLE IF NOT EXISTS rebac_submodel_link (
 
 CREATE INDEX IF NOT EXISTS ix_rebac_submodel_link_aas ON rebac_submodel_link (aas_uuid);
 
+-- Registry descriptors synchronized from repository resources and discovery
+-- entries generated from descriptors inherit the access of their source.
+CREATE TABLE IF NOT EXISTS rebac_derivation (
+  object_uuid UUID PRIMARY KEY,
+  object_type TEXT NOT NULL CHECK (object_type IN ('aas_descriptor', 'submodel_descriptor', 'asset_links')),
+  source_uuid UUID NOT NULL,
+  source_type TEXT NOT NULL CHECK (source_type IN ('aas', 'submodel', 'aas_descriptor')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE INDEX IF NOT EXISTS ix_rebac_derivation_source ON rebac_derivation (source_uuid, object_type);
+
 CREATE TABLE IF NOT EXISTS rebac_invitation (
   id UUID PRIMARY KEY,
   token_hash BYTEA NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
   object_key TEXT NOT NULL,
-  object_type TEXT NOT NULL CHECK (object_type IN ('aas', 'submodel', 'concept_description', 'element')),
+  object_type TEXT NOT NULL CHECK (object_type IN (
+    'aas', 'submodel', 'concept_description', 'element',
+    'aas_descriptor', 'submodel_descriptor', 'asset_links'
+  )),
   object_uuid UUID NOT NULL,
   element_path TEXT,
   relation TEXT NOT NULL CHECK (relation IN ('viewer', 'editor', 'executor')),

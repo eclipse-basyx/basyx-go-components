@@ -44,6 +44,7 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/digitaltwinregistry"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
@@ -160,7 +161,7 @@ func runServer(ctx context.Context, configPath string) error {
 		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
 	}
 
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "digitaltwinregistryservice", claimsMiddleware...)
+	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "digitaltwinregistryservice", claimsMiddleware...)
 	if err != nil {
 		return err
 	}
@@ -170,6 +171,8 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "digitaltwinregistryservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "digitaltwinregistryservice")
+	rebac.ExemptManagementMutationRoutes(versioningGuard, rebacRuntime, rebac.KindAASDescriptor, rebac.KindAssetLinks)
+	rebac.RegisterManagementRoutes(apiRouter, rebacRuntime, rebac.KindAASDescriptor, rebac.KindAssetLinks)
 	if cfg.Server.VerificationEndpointAvailable {
 		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}

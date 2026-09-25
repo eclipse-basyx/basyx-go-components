@@ -34,8 +34,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// coveredPrefixes are the route families of the services covered by PR 1.
-var coveredPrefixes = []string{"/shells", "/submodels", "/concept-descriptions", "/query/shells", "/query/submodels", "/query/concept-descriptions"}
+// coveredPrefixes are the route families of the services covered by ReBAC.
+var coveredPrefixes = []string{
+	"/shells", "/submodels", "/concept-descriptions", "/query/shells", "/query/submodels", "/query/concept-descriptions",
+	"/shell-descriptors", "/submodel-descriptors", "/query/shell-descriptors", "/query/submodel-descriptors", "/lookup", "/bulk",
+}
 
 func TestEveryAuthorizableRouteIsClassified(t *testing.T) {
 	t.Parallel()
@@ -81,4 +84,20 @@ func hasCoveredPrefix(pattern string) bool {
 		}
 	}
 	return false
+}
+
+func TestEmbeddedSubmodelDescriptorsBelongToTheirShellDescriptor(t *testing.T) {
+	t.Parallel()
+
+	matrix := newRouteMatrix()
+	embedded := "/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}"
+	for _, method := range []string{"GET", "PUT", "DELETE"} {
+		spec, covered := matrix.lookup(method, embedded)
+		require.True(t, covered)
+		require.Equal(t, TypeAASDescriptor, spec.kind.ObjectType, "%s %s", method, embedded)
+	}
+	deleteSpec, _ := matrix.lookup("DELETE", embedded)
+	require.Equal(t, PermissionUpdate, deleteSpec.relation, "removing an embedded descriptor edits the shell descriptor")
+	upsert, _ := matrix.lookup("POST", "/lookup/shells/{aasIdentifier}")
+	require.Equal(t, actionUpsert, upsert.action, "posting asset links creates or replaces the discovery entry")
 }

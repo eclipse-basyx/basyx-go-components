@@ -50,6 +50,12 @@ var reBACAccessBases = []reBACAccessBase{
 		parameters: "        - $ref: '#/components/parameters/ReBACSubmodelIdentifier'\n        - $ref: '#/components/parameters/ReBACIdShortPath'\n"},
 	{marker: "  /concept-descriptions/{cdIdentifier}:\n", path: "/concept-descriptions/{cdIdentifier}/$access", tag: "ConceptDescription",
 		parameters: "        - $ref: '#/components/parameters/ReBACCDIdentifier'\n"},
+	{marker: "  /shell-descriptors/{aasIdentifier}:\n", path: "/shell-descriptors/{aasIdentifier}/$access", tag: "ShellDescriptor",
+		parameters: "        - $ref: '#/components/parameters/ReBACAASIdentifier'\n"},
+	{marker: "  /submodel-descriptors/{submodelIdentifier}:\n", path: "/submodel-descriptors/{submodelIdentifier}/$access", tag: "SubmodelDescriptor",
+		parameters: "        - $ref: '#/components/parameters/ReBACSubmodelIdentifier'\n"},
+	{marker: "  /lookup/shells/{aasIdentifier}:\n", path: "/lookup/shells/{aasIdentifier}/$access", tag: "AssetLinks",
+		parameters: "        - $ref: '#/components/parameters/ReBACAASIdentifier'\n"},
 }
 
 const reBACAccessPathTemplate = `  {path}:
@@ -294,7 +300,7 @@ const reBACGlobalPathsYAML = `  /security/rebac/invitations/accept:
           required: true
           schema:
             type: string
-            enum: [aas, submodel, concept_description]
+            enum: [aas, submodel, concept_description, aas_descriptor, submodel_descriptor, asset_links]
         - name: identifier
           in: path
           required: true
@@ -368,6 +374,14 @@ const reBACSchemasYAML = `    ReBACGrant:
           type: array
           items:
             $ref: '#/components/schemas/ReBACGrant'
+        derivedFrom:
+          type: object
+          description: Source whose access a synchronized descriptor or discovery entry inherits
+          properties:
+            type:
+              type: string
+            id:
+              type: string
         inheritance:
           type: array
           items:
@@ -478,7 +492,7 @@ const reBACParametersYAML = `    ReBACAASIdentifier:
       required: true
       schema:
         type: string
-        enum: [aas, submodel, concept_description]
+        enum: [aas, submodel, concept_description, aas_descriptor, submodel_descriptor, asset_links]
     ReBACIfMatch:
       name: If-Match
       in: header
@@ -491,6 +505,19 @@ const reBACParametersYAML = `    ReBACAASIdentifier:
 // injectReBACManagementAPI documents the $access sub-resources of the
 // resource families present in a service specification and the global
 // ReBAC management routes.
+// injectReBACManagementAPIIf documents the ReBAC routes when enabled.
+func injectReBACManagementAPIIf(enabled bool, specContent []byte) []byte {
+	if !enabled {
+		return specContent
+	}
+	return injectReBACManagementAPI(specContent)
+}
+
+// reBACEnabled reports whether ReBAC is enabled in cfg.
+func reBACEnabled(cfg *Config) bool {
+	return cfg != nil && cfg.ReBAC.Enabled
+}
+
 func injectReBACManagementAPI(specContent []byte) []byte {
 	content := string(specContent)
 	if strings.Contains(content, "  /security/rebac/invitations/accept:") {

@@ -369,6 +369,54 @@ func TestQueriedReBACGrantsStayOnTheirRootAndRight(t *testing.T) {
 	}
 }
 
+func TestRegistryGrantsStayOnTheirDescriptorRoot(t *testing.T) {
+	t.Parallel()
+
+	marker := func(name string) *goqu.SelectDataset {
+		return goqu.Dialect("postgres").From(name).Select(goqu.C("object_uuid"))
+	}
+	grants := mustGrantSet(t, func(set *ReBACGrantSet) error {
+		if err := set.AllowQueriedResources(SemanticResourceAASDesc, marker("granted_shell_descriptor"), grammar.RightsEnumREAD); err != nil {
+			return err
+		}
+		return set.AllowQueriedResources(SemanticResourceBD, marker("granted_discovery_entry"), grammar.RightsEnumREAD)
+	}, grammar.RightsEnumREAD)
+	ctx := WithReBACGrants(failClosedReadContext(t), grants)
+
+	shellSQL := formulaSQLForRoot(ctx, t, grammar.CollectorRootAASDesc, "descriptor", "descriptor")
+	if !strings.Contains(shellSQL, `"granted_shell_descriptor"`) || !strings.Contains(shellSQL, `"rebac_granted_descriptor"."auth_uuid" IN`) {
+		t.Fatalf("shell descriptor grant must select descriptors by authorization UUID:\n%s", shellSQL)
+	}
+	if strings.Contains(shellSQL, "granted_discovery_entry") {
+		t.Fatalf("discovery grant leaked into shell descriptors:\n%s", shellSQL)
+	}
+	submodelSQL := formulaSQLForRoot(ctx, t, grammar.CollectorRootSMDesc, "submodel_descriptor", "submodel_descriptor")
+	if strings.Contains(submodelSQL, "granted_shell_descriptor") || strings.Contains(submodelSQL, "granted_discovery_entry") {
+		t.Fatalf("grants leaked into standalone Submodel descriptors:\n%s", submodelSQL)
+	}
+	discoverySQL := formulaSQLForRoot(ctx, t, grammar.CollectorRootBD, "aas_identifier", "aas_identifier")
+	if !strings.Contains(discoverySQL, `"rebac_granted_aas_identifier"."auth_uuid" IN`) || strings.Contains(discoverySQL, "granted_shell_descriptor") {
+		t.Fatalf("discovery grant must stay on discovery entries:\n%s", discoverySQL)
+	}
+
+	nested, err := grammar.NewResolvedFieldPathCollectorForNestedSMDesc()
+	if err != nil {
+		t.Fatalf("create nested collector: %v", err)
+	}
+	ds := goqu.Dialect("postgres").From(goqu.T("descriptor")).Select(goqu.I("descriptor.id"))
+	secured, err := AddFormulaQueryFromContext(ctx, ds, nested)
+	if err != nil {
+		t.Fatalf("add formula: %v", err)
+	}
+	nestedSQL, _, err := secured.ToSQL()
+	if err != nil {
+		t.Fatalf("render formula: %v", err)
+	}
+	if !strings.Contains(nestedSQL, `"granted_shell_descriptor"`) {
+		t.Fatalf("embedded Submodel descriptors must follow their shell descriptor grant:\n%s", nestedSQL)
+	}
+}
+
 func TestQueriedElementGrantsAreCorrelatedAndEscaped(t *testing.T) {
 	t.Parallel()
 

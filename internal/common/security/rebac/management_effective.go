@@ -66,17 +66,22 @@ func effectiveActions(target accessTarget) []effectiveAction {
 		{name: "execute", relation: PermissionExecute, method: http.MethodPost, suffix: "/invoke", right: grammar.RightsEnumEXECUTE},
 		{name: "manage", relation: PermissionManage},
 	}
-	switch {
-	case target.elementPath != "":
-		actions[2].relation = PermissionUpdate
-	case target.kind.ObjectType == TypeConceptDescription:
+	switch target.kind.ObjectType {
+	case TypeSubmodel:
+		if target.elementPath != "" {
+			actions[2].relation = PermissionUpdate
+		} else {
+			actions[3].method = ""
+		}
+	case TypeAAS:
+		actions[1].method = http.MethodPut
+		actions[3].method = ""
+	case TypeAssetLinks:
+		actions[1].method = http.MethodPost
+		actions = append(actions[:3], actions[4])
+	default:
 		actions[1].method = http.MethodPut
 		actions = append(actions[:3], actions[4])
-	case target.kind.ObjectType == TypeAAS:
-		actions[1].method = http.MethodPut
-		actions[3].method = ""
-	default:
-		actions[3].method = ""
 	}
 	return actions
 }
@@ -159,7 +164,7 @@ func (c *Coordinator) resourcePath(target accessTarget) string {
 	if basePath == "/" {
 		basePath = ""
 	}
-	path := basePath + resourcePrefix(target.kind) + "/" + common.EncodeString(target.identifier)
+	path := basePath + target.kind.Prefix + "/" + common.EncodeString(target.identifier)
 	if target.elementPath != "" {
 		path += "/submodel-elements/" + target.elementPath
 	}

@@ -70,7 +70,7 @@ func expectLookup(mock sqlmock.Sqlmock, table string, authUUID string) {
 	if authUUID != "" {
 		rows.AddRow(authUUID)
 	}
-	mock.ExpectQuery(`SELECT auth_uuid::text FROM "` + table + `"`).WillReturnRows(rows)
+	mock.ExpectQuery(`SELECT resource\.object_uuid::text FROM \(SELECT .* FROM "` + table + `" AS "object_row"`).WillReturnRows(rows)
 }
 
 func expectDecision(mock sqlmock.Sqlmock, allowed bool) {
@@ -177,4 +177,39 @@ func TestElementDecisionsCoverAncestorsButNotSiblings(t *testing.T) {
 	}
 	require.NotContains(t, sql, "'a.list[10]'")
 	require.Contains(t, sql, "'element'")
+}
+
+func TestDerivedObjectsInheritEveryPermissionOfTheirSource(t *testing.T) {
+	t.Parallel()
+
+	keys := []string{UserKey(testIssuer, "alice")}
+	render := func(t *testing.T, expression any) string {
+		t.Helper()
+		sql, _, err := dialect.Select(expression).ToSQL()
+		require.NoError(t, err)
+		return sql
+	}
+	entry := render(t, permissionCondition(KindAssetLinks, keys, PermissionUpdate, goqu.L("?::uuid", testSubmodelUUID)))
+	for _, fragment := range []string{`"derivation_asset_links"`, `"derivation_aas_descriptor"`, `'asset_links'`, `'aas_descriptor'`, `'aas'`, `'editor', 'owner'`} {
+		require.Contains(t, entry, fragment, "discovery entries inherit through their descriptor from the shell")
+	}
+	require.NotContains(t, render(t, permissionCondition(KindAAS, keys, PermissionRead, goqu.L("?::uuid", testSubmodelUUID))), derivationTable,
+		"repository resources are never derived")
+
+	list, _, err := liveObjects(KindSubmodelDescriptor, keys, PermissionRead).ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, list, `"derived_submodel_descriptor"`)
+	require.Contains(t, list, `"rebac_submodel_link"`, "descriptors follow Submodel access including approved links")
+	require.Contains(t, list, `"aas_descriptor_id" IS NULL`, "embedded descriptors are no standalone objects")
+}
+
+func TestSubmodelWritesFollowReferencingShellsByIdentifier(t *testing.T) {
+	t.Parallel()
+
+	sql, _, err := shellsReferencing("urn:sm").ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, sql, `"ref_key"."value" IN ('urn:sm')`, "the reference survives the deletion of the Submodel row")
+	require.NotContains(t, sql, `"submodel"`)
+	require.True(t, writes([]grammar.RightsEnum{grammar.RightsEnumDELETE}))
+	require.False(t, writes([]grammar.RightsEnum{grammar.RightsEnumREAD, grammar.RightsEnumEXECUTE}))
 }

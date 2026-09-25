@@ -164,19 +164,30 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasI
 // The deletion is performed atomically. If the AAS identifier is not found (no rows affected),
 // an ErrNotFound error is returned.
 func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, aasID string) error {
-	d := goqu.Dialect("postgres")
-	sqlStr, args, err := d.Delete("aas_identifier").
+	sqlStr, args, err := goqu.Dialect("postgres").Delete("aas_identifier").
 		Where(goqu.C("aasid").Eq(aasID)).
 		ToSQL()
 	if err != nil {
 		slog.ErrorContext(ctx, "delete query construction failed", "error.code", "DISCOVERY-DELETE-BUILDQUERY", "error", err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
-	result, err := p.writerDB.ExecContext(ctx, sqlStr, args...)
+	var deleted int64
+	err = descriptors.WithTx(ctx, p.writerDB, func(tx *sql.Tx) error {
+		if reBACErr := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceBD, aasID); reBACErr != nil {
+			return reBACErr
+		}
+		result, execErr := tx.ExecContext(ctx, sqlStr, args...)
+		if execErr != nil {
+			return execErr
+		}
+		deleted, _ = result.RowsAffected()
+		return nil
+	})
 	if err != nil {
+		slog.ErrorContext(ctx, "delete query failed", "error.code", "DISCOVERY-DELETE-EXECQUERY", "error", err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
-	if rows, _ := result.RowsAffected(); rows == 0 {
+	if deleted == 0 {
 		return common.NewErrNotFound(fmt.Sprintf("AAS identifier %s not found. See console for information.", aasID))
 	}
 	return nil

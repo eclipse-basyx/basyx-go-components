@@ -500,7 +500,7 @@ func replaceAdministrationShellDescriptorAssetIDsTx(
 
 	var aasReference sql.NullInt64
 	if discoveryIntegrationEnabled(ctx) {
-		reference, referenceErr := ensureAASIdentifierTx(ctx, tx, descriptor.Id)
+		reference, referenceErr := ensureIntegratedDiscoveryEntryTx(ctx, tx, descriptor.Id)
 		if referenceErr != nil {
 			return referenceErr
 		}

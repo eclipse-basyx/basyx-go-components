@@ -117,8 +117,8 @@ func (c *Coordinator) accessBases(kinds []ResourceKind) []accessBase {
 	var bases []accessBase
 	for _, kind := range kinds {
 		kind := kind
-		param := identifierParam(kind)
-		prefix := resourcePrefix(kind) + "/{" + param + "}"
+		param := kind.Param
+		prefix := kind.Prefix + "/{" + param + "}"
 		bases = append(bases, accessBase{pattern: prefix + accessSuffix, target: func(r *http.Request) (accessTarget, bool) {
 			return c.resolveTarget(r, kind, param, "")
 		}})
@@ -133,17 +133,6 @@ func (c *Coordinator) accessBases(kinds []ResourceKind) []accessBase {
 		}
 	}
 	return bases
-}
-
-func resourcePrefix(kind ResourceKind) string {
-	switch kind.ObjectType {
-	case TypeAAS:
-		return "/shells"
-	case TypeConceptDescription:
-		return "/concept-descriptions"
-	default:
-		return "/submodels"
-	}
 }
 
 func (c *Coordinator) accessRoutes(base accessBase) []managementRoute {

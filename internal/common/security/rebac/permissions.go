@@ -75,8 +75,8 @@ func linkedSubmodels(subjectKeys []string, permission string) *goqu.SelectDatase
 		)
 }
 
-// permittedObjects selects every object of kind the subjects hold permission
-// on, including permissions inherited through approved links.
+// permittedObjects selects every object of kind the subjects hold a
+// relation implying permission on, including approved links.
 func permittedObjects(kind ResourceKind, subjectKeys []string, permission string) *goqu.SelectDataset {
 	direct := grantedObjects(kind.ObjectType, subjectKeys, permission)
 	if kind.ObjectType == TypeSubmodel && linkedPermissions[permission] {
@@ -85,22 +85,86 @@ func permittedObjects(kind ResourceKind, subjectKeys []string, permission string
 	return direct
 }
 
-// liveObjects selects every object of kind the subjects hold permission on,
-// including all objects when they administer the repository. Grants built
-// from it are re-evaluated by every backend query, so revocations also stop
-// asynchronous work that captured the request context.
+// liveObjects selects every object of kind the subjects hold permission on:
+// through relations, repository administration or the source of a derived
+// object. Grants built from it are re-evaluated by every backend query, so
+// revocations also stop asynchronous work that captured the request context.
 func liveObjects(kind ResourceKind, subjectKeys []string, permission string) *goqu.SelectDataset {
-	admin := dialect.From(goqu.T(kind.Table).As("admin_scope")).
-		Select(goqu.I("admin_scope.auth_uuid")).
+	admin := dialect.From(kind.Rows().As("admin_scope")).
+		Select(goqu.I("admin_scope.object_uuid")).
 		Where(existsQuery(repositoryGrant(kind, subjectKeys, RelationAdmin)))
-	return permittedObjects(kind, subjectKeys, permission).Union(admin)
+	live := permittedObjects(kind, subjectKeys, permission).Union(admin)
+	if source, derived := derivationSource(kind); derived {
+		live = live.Union(derivedObjects(kind, liveObjects(source, subjectKeys, permission)))
+	}
+	return live
 }
 
-// liveObject restricts liveObjects to one object.
+// liveObject selects authUUID when the subjects hold permission on it.
 func liveObject(kind ResourceKind, subjectKeys []string, permission string, authUUID string) *goqu.SelectDataset {
-	return dialect.From(liveObjects(kind, subjectKeys, permission).As("live")).
-		Select(goqu.I("live.object_uuid")).
-		Where(goqu.I("live.object_uuid").Eq(goqu.L("?::uuid", authUUID)))
+	target := goqu.L("?::uuid", authUUID)
+	return dialect.Select(target.As("object_uuid")).
+		Where(permissionCondition(kind, subjectKeys, permission, target))
+}
+
+// permissionCondition matches when the subjects hold permission on the
+// object whose authorization UUID is target. It is correlated, so single
+// objects never scan a whole repository.
+func permissionCondition(kind ResourceKind, subjectKeys []string, permission string, target exp.Expression) exp.Expression {
+	conditions := []exp.Expression{
+		goqu.L("? IN (?)", target, permittedObjects(kind, subjectKeys, permission)),
+		existsQuery(repositoryGrant(kind, subjectKeys, RelationAdmin)),
+	}
+	if source, derived := derivationSource(kind); derived {
+		alias := "derivation_" + kind.ObjectType
+		sourceUUID := goqu.I(alias + ".source_uuid")
+		conditions = append(conditions, existsQuery(dialect.From(goqu.T(derivationTable).As(alias)).
+			Select(goqu.L("1")).
+			Where(
+				goqu.I(alias+".object_uuid").Eq(target),
+				goqu.I(alias+".object_type").Eq(kind.ObjectType),
+				permissionCondition(source, subjectKeys, permission, sourceUUID),
+			)))
+	}
+	return goqu.Or(conditions...)
+}
+
+// derivedObjects selects the objects of kind derived from the sources query.
+func derivedObjects(kind ResourceKind, sources *goqu.SelectDataset) *goqu.SelectDataset {
+	alias := "derived_" + kind.ObjectType
+	return dialect.From(goqu.T(derivationTable).As(alias)).
+		Select(goqu.I(alias+".object_uuid")).
+		Where(
+			goqu.I(alias+".object_type").Eq(kind.ObjectType),
+			goqu.I(alias+".source_uuid").In(sources),
+		)
+}
+
+// derivationSource returns the kind that objects of kind can be derived
+// from: registry descriptors generated from repository resources and
+// discovery entries generated from descriptors.
+func derivationSource(kind ResourceKind) (ResourceKind, bool) {
+	switch kind.ObjectType {
+	case TypeAASDescriptor:
+		return KindAAS, true
+	case TypeSubmodelDescriptor:
+		return KindSubmodel, true
+	case TypeAssetLinks:
+		return KindAASDescriptor, true
+	default:
+		return ResourceKind{}, false
+	}
+}
+
+// derivedKinds returns the kinds whose objects can be derived from kind.
+func derivedKinds(kind ResourceKind) []ResourceKind {
+	var kinds []ResourceKind
+	for _, candidate := range AllKinds {
+		if source, derived := derivationSource(candidate); derived && source.ObjectType == kind.ObjectType {
+			kinds = append(kinds, candidate)
+		}
+	}
+	return kinds
 }
 
 // liveElements selects the granted element subtrees of one Submodel.
@@ -161,16 +225,13 @@ func isRepositoryCreator(ctx context.Context, q Queryer, kind ResourceKind, subj
 }
 
 // hasPermission reports whether the subjects hold permission on one object,
-// directly, through an approved link or as repository admin.
+// directly, through an approved link, as repository admin or through the
+// source of a derived object.
 func hasPermission(ctx context.Context, q Queryer, kind ResourceKind, authUUID string, subjectKeys []string, permission string) (bool, error) {
 	if _, known := permissionRelations[permission]; !known {
 		return false, fmt.Errorf("REBAC-HASPERMISSION-UNKNOWN permission %q", permission)
 	}
-	target := goqu.L("?::uuid", authUUID)
-	return exists(ctx, q, "REBAC-HASPERMISSION",
-		goqu.L("? IN (?)", target, permittedObjects(kind, subjectKeys, permission)),
-		existsQuery(repositoryGrant(kind, subjectKeys, RelationAdmin)),
-	)
+	return exists(ctx, q, "REBAC-HASPERMISSION", permissionCondition(kind, subjectKeys, permission, goqu.L("?::uuid", authUUID)))
 }
 
 // hasElementPermission reports whether the subjects hold permission on an
@@ -182,10 +243,8 @@ func hasElementPermission(ctx context.Context, q Queryer, submodelUUID string, p
 	}
 	onPath := grantedElements(subjectKeys, permission, submodelUUID).
 		Where(goqu.I("g.element_path").In(ElementPathChain(path)))
-	target := goqu.L("?::uuid", submodelUUID)
 	return exists(ctx, q, "REBAC-HASELEMENTPERMISSION",
 		existsQuery(onPath),
-		goqu.L("? IN (?)", target, permittedObjects(KindSubmodel, subjectKeys, permission)),
-		existsQuery(repositoryGrant(KindSubmodel, subjectKeys, RelationAdmin)),
+		permissionCondition(KindSubmodel, subjectKeys, permission, goqu.L("?::uuid", submodelUUID)),
 	)
 }

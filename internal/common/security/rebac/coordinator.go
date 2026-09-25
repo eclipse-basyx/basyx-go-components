@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"sync/atomic"
 
@@ -161,19 +162,8 @@ func (r *resolution) identifier(param string) (string, bool) {
 	return decoded, true
 }
 
-func identifierParam(kind ResourceKind) string {
-	switch kind.ObjectType {
-	case TypeAAS:
-		return paramAAS
-	case TypeConceptDescription:
-		return paramCD
-	default:
-		return paramSubmodel
-	}
-}
-
 func (r *resolution) lookup(ctx context.Context, kind ResourceKind) (string, bool, error) {
-	identifier, ok := r.identifier(identifierParam(kind))
+	identifier, ok := r.identifier(kind.Param)
 	if !ok {
 		return "", false, nil
 	}
@@ -189,7 +179,7 @@ func (r *resolution) resolveSuperpathAAS(ctx context.Context, permission string)
 	if err != nil || !allowed {
 		return err
 	}
-	return r.grants.AllowQueriedResources(auth.SemanticResourceAAS, liveObject(KindAAS, r.keys, permission, authUUID), r.rights()...)
+	return r.allowObject(KindAAS, permission, authUUID, r.rights())
 }
 
 func (r *resolution) resolveIdentifiable(ctx context.Context, spec routeSpec) error {
@@ -214,7 +204,54 @@ func (r *resolution) resolveIdentifiable(ctx context.Context, spec routeSpec) er
 	if err != nil || !allowed {
 		return err
 	}
-	return r.grants.AllowQueriedResources(spec.kind.Semantic, liveObject(spec.kind, r.keys, permission, authUUID), rights...)
+	return r.allowObject(spec.kind, permission, authUUID, rights)
+}
+
+// allowObject grants one object as a live query, together with the objects
+// derived from it that the same request synchronizes.
+func (r *resolution) allowObject(kind ResourceKind, permission string, authUUID string, rights []grammar.RightsEnum) error {
+	if err := r.grants.AllowQueriedResources(kind.Semantic, liveObject(kind, r.keys, permission, authUUID), rights...); err != nil {
+		return err
+	}
+	synchronized := r.synchronizedRights(rights)
+	if err := r.allowDerived(kind, uuidQuery(authUUID), synchronized); err != nil {
+		return err
+	}
+	identifier, known := r.identifier(kind.Param)
+	if kind.ObjectType != TypeSubmodel || !known || !writes(synchronized) {
+		return nil
+	}
+	return r.allowDerived(KindAAS, shellsReferencing(identifier), synchronized)
+}
+
+// synchronizedRights are the rights of objects that a request synchronizes
+// with its target. Synchronization runs with the route's rights, which may
+// be wider than the right selected for the target, for example CREATE and
+// UPDATE of an upsert.
+func (r *resolution) synchronizedRights(rights []grammar.RightsEnum) []grammar.RightsEnum {
+	union := slices.Clone(rights)
+	for _, right := range r.rights() {
+		if !slices.Contains(union, right) {
+			union = append(union, right)
+		}
+	}
+	return union
+}
+
+// allowDerived grants the objects derived from the sources query, so that
+// registry and discovery entries synchronized by the same request follow
+// their source. A derived object inherits every permission of its source.
+func (r *resolution) allowDerived(kind ResourceKind, sources *goqu.SelectDataset, rights []grammar.RightsEnum) error {
+	for _, derived := range derivedKinds(kind) {
+		objects := derivedObjects(derived, sources)
+		if err := r.grants.AllowQueriedResources(derived.Semantic, objects, rights...); err != nil {
+			return err
+		}
+		if err := r.allowDerived(derived, objects, rights); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *resolution) resolveCreate(ctx context.Context, kind ResourceKind) error {
@@ -222,7 +259,27 @@ func (r *resolution) resolveCreate(ctx context.Context, kind ResourceKind) error
 	if err != nil || !allowed {
 		return err
 	}
-	return r.grants.AllowAllOfKind(kind.Semantic, grammar.RightsEnumCREATE)
+	if err = r.grants.AllowAllOfKind(kind.Semantic, grammar.RightsEnumCREATE); err != nil {
+		return err
+	}
+	rights := r.synchronizedRights([]grammar.RightsEnum{grammar.RightsEnumCREATE})
+	sources := liveObjects(kind, r.keys, PermissionUpdate)
+	if err = r.allowDerived(kind, sources, rights); err != nil || kind.ObjectType != TypeSubmodel {
+		return err
+	}
+	return r.allowDerived(KindAAS, shellsReferencing(submodelIdentifiers(sources)), rights)
+}
+
+// writes reports rights of mutating requests. Submodel mutations
+// synchronize the Submodel descriptors embedded in referencing shell
+// descriptors, which therefore follow the Submodel in such requests.
+func writes(rights []grammar.RightsEnum) bool {
+	for _, right := range rights {
+		if right == grammar.RightsEnumCREATE || right == grammar.RightsEnumUPDATE || right == grammar.RightsEnumDELETE {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *resolution) resolveElement(ctx context.Context, spec routeSpec) error {
@@ -256,7 +313,7 @@ func (r *resolution) resolveElement(ctx context.Context, spec routeSpec) error {
 // it, and every element subtree the caller holds permission on, both as live
 // queries. The preceding decision guarantees that the target is covered.
 func (r *resolution) allowLiveElements(submodelUUID string, permission string, rights []grammar.RightsEnum) error {
-	if err := r.grants.AllowQueriedResources(auth.SemanticResourceSM, liveObject(KindSubmodel, r.keys, permission, submodelUUID), rights...); err != nil {
+	if err := r.allowObject(KindSubmodel, permission, submodelUUID, rights); err != nil {
 		return err
 	}
 	return r.grants.AllowQueriedSubmodelElements(liveElements(r.keys, permission, submodelUUID), rights...)
@@ -288,6 +345,10 @@ func (r *resolution) resolveList(ctx context.Context, kind ResourceKind) error {
 		return err
 	}
 	return r.grants.AllowQueriedResources(kind.Semantic, readable, r.rights()...)
+}
+
+func uuidQuery(authUUID string) *goqu.SelectDataset {
+	return dialect.Select(goqu.L("?::uuid", authUUID).As("object_uuid"))
 }
 
 func elementExists(ctx context.Context, q Queryer, submodelUUID string, path string) (bool, error) {

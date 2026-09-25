@@ -50,6 +50,14 @@ func TestReBACManagementAPIIsDocumentedPerResourceFamily(t *testing.T) {
 			present: []string{"/shells/{aasIdentifier}/$access/grants", "/security/rebac/invitations/accept"},
 			absent:  []string{"/submodels/{submodelIdentifier}/$access/grants"},
 		},
+		"../../cmd/aasenvironmentservice/openapi.yaml": {
+			present: []string{"/shell-descriptors/{aasIdentifier}/$access/grants", "/submodel-descriptors/{submodelIdentifier}/$access",
+				"/lookup/shells/{aasIdentifier}/$access/effective", "/shells/{aasIdentifier}/$access"},
+		},
+		"../../cmd/discoveryservice/openapi.yaml": {
+			present: []string{"/lookup/shells/{aasIdentifier}/$access/grants"},
+			absent:  []string{"/shells/{aasIdentifier}/$access", "/shell-descriptors/{aasIdentifier}/$access"},
+		},
 	} {
 		injected, parsed := injectedReBACSpec(t, spec)
 		paths := parsed["paths"].(map[string]any)

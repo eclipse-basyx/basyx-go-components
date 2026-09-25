@@ -111,8 +111,8 @@ func validateInvitation(target accessTarget, input invitationRequest) (int, erro
 	switch input.Relation {
 	case RelationViewer, RelationEditor:
 	case RelationExecutor:
-		if target.objectType() == TypeConceptDescription {
-			return 0, common.NewErrBadRequest("REBAC-INVITATION-RELATION executor is not supported for Concept Descriptions")
+		if err := ValidateRelation(target.objectType(), RelationExecutor); err != nil {
+			return 0, common.NewErrBadRequest(err.Error())
 		}
 	default:
 		return 0, common.NewErrBadRequest("REBAC-INVITATION-RELATION relation must be viewer, editor or executor")

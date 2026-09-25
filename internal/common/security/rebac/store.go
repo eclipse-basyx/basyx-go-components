@@ -31,13 +31,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	"github.com/google/uuid"
 )
 
 // Queryer is satisfied by *sql.DB and *sql.Tx.
@@ -49,30 +48,81 @@ type Queryer interface {
 
 var dialect = goqu.Dialect(common.Dialect)
 
-// ResourceKind maps a BaSyx identifiable to its table and OpenFGA type.
+// ResourceKind maps a BaSyx resource to its rows and object type. The
+// authorization UUID lives in AuthTable; identifiers may live in a joined
+// table, for example for descriptors.
 type ResourceKind struct {
-	Semantic         auth.SemanticResourceKind
-	ObjectType       string
-	Table            string
-	IdentifierColumn string
+	Semantic   auth.SemanticResourceKind
+	ObjectType string
+	AuthTable  string
+	// Prefix and Param address one resource in the HTTP API.
+	Prefix string
+	Param  string
+	// rows selects auth_uuid and identifier of every resource of the kind.
+	rows func() *goqu.SelectDataset
 }
 
 // Resource kinds covered by ReBAC.
 var (
 	KindAAS = ResourceKind{
-		Semantic: auth.SemanticResourceAAS, ObjectType: TypeAAS, Table: "aas", IdentifierColumn: "aas_id",
+		Semantic: auth.SemanticResourceAAS, ObjectType: TypeAAS, AuthTable: "aas",
+		Prefix: "/shells", Param: paramAAS, rows: plainRows("aas", "aas_id"),
 	}
 	KindSubmodel = ResourceKind{
-		Semantic: auth.SemanticResourceSM, ObjectType: TypeSubmodel, Table: "submodel", IdentifierColumn: "submodel_identifier",
+		Semantic: auth.SemanticResourceSM, ObjectType: TypeSubmodel, AuthTable: "submodel",
+		Prefix: "/submodels", Param: paramSubmodel, rows: plainRows("submodel", "submodel_identifier"),
 	}
 	KindConceptDescription = ResourceKind{
-		Semantic: auth.SemanticResourceCD, ObjectType: TypeConceptDescription, Table: "concept_description", IdentifierColumn: "id",
+		Semantic: auth.SemanticResourceCD, ObjectType: TypeConceptDescription, AuthTable: "concept_description",
+		Prefix: "/concept-descriptions", Param: paramCD, rows: plainRows("concept_description", "id"),
+	}
+	KindAASDescriptor = ResourceKind{
+		Semantic: auth.SemanticResourceAASDesc, ObjectType: TypeAASDescriptor, AuthTable: "descriptor",
+		Prefix: "/shell-descriptors", Param: paramAAS, rows: descriptorRows("aas_descriptor", nil),
+	}
+	KindSubmodelDescriptor = ResourceKind{
+		Semantic: auth.SemanticResourceSMDesc, ObjectType: TypeSubmodelDescriptor, AuthTable: "descriptor",
+		Prefix: "/submodel-descriptors", Param: paramSubmodel,
+		rows: descriptorRows("submodel_descriptor", goqu.I("object_row.aas_descriptor_id").IsNull()),
+	}
+	KindAssetLinks = ResourceKind{
+		Semantic: auth.SemanticResourceBD, ObjectType: TypeAssetLinks, AuthTable: "aas_identifier",
+		Prefix: "/lookup/shells", Param: paramAAS, rows: plainRows("aas_identifier", "aasid"),
 	}
 )
 
+// AllKinds lists every covered resource kind.
+var AllKinds = []ResourceKind{KindAAS, KindSubmodel, KindConceptDescription, KindAASDescriptor, KindSubmodelDescriptor, KindAssetLinks}
+
+// Rows selects object_uuid and identifier of every resource of the kind.
+func (k ResourceKind) Rows() *goqu.SelectDataset {
+	return k.rows()
+}
+
+func plainRows(table string, identifierColumn string) func() *goqu.SelectDataset {
+	return func() *goqu.SelectDataset {
+		return dialect.From(goqu.T(table).As("object_row")).
+			Select(goqu.I("object_row.auth_uuid").As("object_uuid"), goqu.I("object_row."+identifierColumn).As("identifier"))
+	}
+}
+
+// descriptorRows selects descriptors of one type, whose authorization UUID
+// lives in the shared descriptor table.
+func descriptorRows(table string, condition exp.Expression) func() *goqu.SelectDataset {
+	return func() *goqu.SelectDataset {
+		ds := dialect.From(goqu.T(table).As("object_row")).
+			InnerJoin(goqu.T("descriptor").As("object_auth"), goqu.On(goqu.I("object_auth.id").Eq(goqu.I("object_row.descriptor_id")))).
+			Select(goqu.I("object_auth.auth_uuid").As("object_uuid"), goqu.I("object_row.id").As("identifier"))
+		if condition != nil {
+			ds = ds.Where(condition)
+		}
+		return ds
+	}
+}
+
 // KindForSemantic returns the covered kind of a semantic resource.
 func KindForSemantic(resource auth.SemanticResourceKind) (ResourceKind, bool) {
-	for _, kind := range []ResourceKind{KindAAS, KindSubmodel, KindConceptDescription} {
+	for _, kind := range AllKinds {
 		if kind.Semantic == resource {
 			return kind, true
 		}
@@ -80,9 +130,9 @@ func KindForSemantic(resource auth.SemanticResourceKind) (ResourceKind, bool) {
 	return ResourceKind{}, false
 }
 
-// KindForObjectType returns the covered kind of an OpenFGA object type.
+// KindForObjectType returns the covered kind of an object type.
 func KindForObjectType(objectType string) (ResourceKind, bool) {
-	for _, kind := range []ResourceKind{KindAAS, KindSubmodel, KindConceptDescription} {
+	for _, kind := range AllKinds {
 		if kind.ObjectType == objectType {
 			return kind, true
 		}
@@ -156,52 +206,22 @@ func queryRowDataset(ctx context.Context, q Queryer, code string, ds interface {
 // LookupAuthUUID resolves the authorization UUID of an identifiable. found is
 // false for unknown identifiers so callers keep today's 404/403 behavior.
 func LookupAuthUUID(ctx context.Context, q Queryer, kind ResourceKind, identifier string) (string, bool, error) {
-	ds := dialect.From(goqu.T(kind.Table)).
-		Select(goqu.L("auth_uuid::text")).
-		Where(goqu.C(kind.IdentifierColumn).Eq(identifier)).
+	ds := dialect.From(kind.Rows().As("resource")).
+		Select(goqu.L("resource.object_uuid::text")).
+		Where(goqu.I("resource.identifier").Eq(identifier)).
 		Limit(1).Prepared(true)
 	var authUUID string
 	found, err := queryRowDataset(ctx, q, "REBAC-LOOKUPAUTHUUID", ds, &authUUID)
 	return authUUID, found, err
 }
 
-// ExistingAuthUUIDs returns the subset of authUUIDs that still exist for kind.
-func ExistingAuthUUIDs(ctx context.Context, q Queryer, kind ResourceKind, authUUIDs []string) (map[string]struct{}, error) {
-	existing := make(map[string]struct{}, len(authUUIDs))
-	if len(authUUIDs) == 0 {
-		return existing, nil
-	}
-	literal, err := uuidArrayLiteral(authUUIDs)
-	if err != nil {
-		return nil, err
-	}
-	ds := dialect.From(goqu.T(kind.Table)).
-		Select(goqu.L("auth_uuid::text")).
-		Where(goqu.L("auth_uuid = ANY(?::uuid[])", literal))
-	rows, err := queryDataset(ctx, q, "REBAC-EXISTINGAUTHUUIDS", ds)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var authUUID string
-		if err = rows.Scan(&authUUID); err != nil {
-			return nil, fmt.Errorf("REBAC-EXISTINGAUTHUUIDS-SCAN: %w", err)
-		}
-		existing[authUUID] = struct{}{}
-	}
-	return existing, rows.Err()
-}
-
-// uuidArrayLiteral renders validated UUIDs as a PostgreSQL array parameter.
-func uuidArrayLiteral(values []string) (string, error) {
-	normalized := make([]string, len(values))
-	for index, value := range values {
-		parsed, err := uuid.Parse(value)
-		if err != nil {
-			return "", fmt.Errorf("REBAC-UUIDARRAY-PARSE: %w", err)
-		}
-		normalized[index] = parsed.String()
-	}
-	return "{" + strings.Join(normalized, ",") + "}", nil
+// IdentifierByAuthUUID resolves the public identifier of a resource.
+func IdentifierByAuthUUID(ctx context.Context, q Queryer, kind ResourceKind, authUUID string) (string, bool, error) {
+	ds := dialect.From(kind.Rows().As("resource")).
+		Select(goqu.I("resource.identifier")).
+		Where(goqu.I("resource.object_uuid").Eq(goqu.L("?::uuid", authUUID))).
+		Limit(1).Prepared(true)
+	var identifier string
+	found, err := queryRowDataset(ctx, q, "REBAC-IDENTIFIERBYAUTHUUID", ds, &identifier)
+	return identifier, found, err
 }

@@ -35,39 +35,113 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-// ResourceCreated makes an authenticated creator the owner of a new
-// identifiable in the creating transaction. Anonymous creation assigns no
-// owner.
+// ResourceCreated records the access of a new resource in the creating
+// transaction. A resource created under an auth.ReBACSource it can be
+// derived from inherits the access of that source. Otherwise an
+// authenticated creator becomes its owner; anonymous creation assigns none.
 func (c *Coordinator) ResourceCreated(ctx context.Context, tx *sql.Tx, resource auth.SemanticResourceKind, identifier string) error {
 	kind, covered := KindForSemantic(resource)
-	if !covered || !auth.IsAuthenticated(ctx) {
-		return nil
-	}
-	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.groupClaim)
-	if !ok {
+	if !covered {
 		return nil
 	}
 	authUUID, found, err := LookupAuthUUID(ctx, tx, kind, identifier)
 	if err != nil || !found {
 		return firstError(err, fmt.Errorf("REBAC-RESOURCECREATED-LOOKUP created resource not found"))
 	}
+	if kind.ObjectType == TypeAssetLinks {
+		unclaimed, claimErr := unclaimedAssetLinks(ctx, tx, authUUID)
+		if claimErr != nil || !unclaimed {
+			return claimErr
+		}
+	}
+	if err = c.recordCreated(ctx, tx, kind, identifier, authUUID); err != nil {
+		return err
+	}
+	if kind.ObjectType == TypeAASDescriptor {
+		return claimDiscoveryEntry(ctx, tx, identifier, authUUID)
+	}
+	return nil
+}
+
+func (c *Coordinator) recordCreated(ctx context.Context, tx *sql.Tx, kind ResourceKind, identifier string, authUUID string) error {
+	derived, err := recordSourceOfCreated(ctx, tx, kind, identifier, authUUID)
+	if err != nil || derived {
+		return err
+	}
+	return c.assignCreatorOwner(ctx, tx, kind, authUUID)
+}
+
+// unclaimedAssetLinks reports whether a discovery entry was inserted by the
+// current transaction and has no access yet. Discovery writes upsert their
+// entry, so only a new entry may be claimed by its creator.
+func unclaimedAssetLinks(ctx context.Context, q Queryer, authUUID string) (bool, error) {
+	target := goqu.L("?::uuid", authUUID)
+	created := dialect.From(goqu.T(KindAssetLinks.AuthTable).As("entry")).Select(goqu.L("1")).
+		Where(goqu.I("entry.auth_uuid").Eq(target), goqu.I("entry.db_created_at").Eq(goqu.L("now()")))
+	granted := dialect.From(goqu.T(grantTable).As("g")).Select(goqu.L("1")).Where(goqu.I("g.object_uuid").Eq(target))
+	derived := dialect.From(goqu.T(derivationTable).As("d")).Select(goqu.L("1")).Where(goqu.I("d.object_uuid").Eq(target))
+	return exists(ctx, q, "REBAC-UNCLAIMEDASSETLINKS",
+		goqu.And(existsQuery(created), goqu.L("NOT EXISTS (?)", granted), goqu.L("NOT EXISTS (?)", derived)))
+}
+
+// claimDiscoveryEntry derives the discovery entry that the discovery
+// integration of a registry created together with a shell descriptor.
+func claimDiscoveryEntry(ctx context.Context, tx *sql.Tx, aasIdentifier string, descriptorUUID string) error {
+	entryUUID, found, err := LookupAuthUUID(ctx, tx, KindAssetLinks, aasIdentifier)
+	if err != nil || !found {
+		return err
+	}
+	unclaimed, err := unclaimedAssetLinks(ctx, tx, entryUUID)
+	if err != nil || !unclaimed {
+		return err
+	}
+	return recordDerivation(ctx, tx, KindAssetLinks, entryUUID, KindAASDescriptor, descriptorUUID)
+}
+
+// recordSourceOfCreated records the derivation of a new resource when ctx
+// names a source of the resource's kind that exists.
+func recordSourceOfCreated(ctx context.Context, tx *sql.Tx, kind ResourceKind, identifier string, authUUID string) (bool, error) {
+	marked, hasSource := auth.ReBACSourceFromContext(ctx)
+	sourceKind, derivable := derivationSource(kind)
+	if !hasSource || !derivable || sourceKind.Semantic != marked.Resource {
+		return false, nil
+	}
+	sourceIdentifier := marked.Identifier
+	if sourceIdentifier == "" {
+		sourceIdentifier = identifier
+	}
+	sourceUUID, found, err := LookupAuthUUID(ctx, tx, sourceKind, sourceIdentifier)
+	if err != nil || !found {
+		return false, err
+	}
+	return true, recordDerivation(ctx, tx, kind, authUUID, sourceKind, sourceUUID)
+}
+
+func (c *Coordinator) assignCreatorOwner(ctx context.Context, tx *sql.Tx, kind ResourceKind, authUUID string) error {
+	if !auth.IsAuthenticated(ctx) {
+		return nil
+	}
+	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.groupClaim)
+	if !ok {
+		return nil
+	}
 	grant := Grant{
 		ObjectKey: ResourceKey(kind.ObjectType, authUUID), ObjectType: kind.ObjectType, ObjectUUID: authUUID,
 		Relation: RelationOwner, SubjectType: TypeUser, SubjectKey: principal.UserKey(),
 		SubjectIssuer: principal.Issuer, SubjectName: principal.Subject, CreatedBy: principal.UserKey(),
 	}
-	if _, err = InsertGrant(ctx, tx, grant); err != nil {
+	if _, err := InsertGrant(ctx, tx, grant); err != nil {
 		return fmt.Errorf("REBAC-RESOURCECREATED-GRANT: %w", err)
 	}
-	if _, err = LockObjectRevision(ctx, tx, grant.ObjectKey); err != nil {
+	if _, err := LockObjectRevision(ctx, tx, grant.ObjectKey); err != nil {
 		return err
 	}
-	_, err = BumpObjectRevision(ctx, tx, grant.ObjectKey)
+	_, err := BumpObjectRevision(ctx, tx, grant.ObjectKey)
 	return err
 }
 
-// ResourceDeleted removes the grants, element grants, links, invitations and
-// revisions of an identifiable in the deleting transaction.
+// ResourceDeleted removes the grants, element grants, links, derivation,
+// invitations and revisions of a resource in the deleting transaction.
 func (c *Coordinator) ResourceDeleted(ctx context.Context, tx *sql.Tx, resource auth.SemanticResourceKind, identifier string) error {
 	kind, covered := KindForSemantic(resource)
 	if !covered {
@@ -89,6 +163,9 @@ func (c *Coordinator) ResourceDeleted(ctx context.Context, tx *sql.Tx, resource 
 		return err
 	}
 	if err = DeleteInvitationsOfResource(ctx, tx, authUUID); err != nil {
+		return err
+	}
+	if err = deleteDerivation(ctx, tx, authUUID); err != nil {
 		return err
 	}
 	objectKeys := []string{resourceKey}

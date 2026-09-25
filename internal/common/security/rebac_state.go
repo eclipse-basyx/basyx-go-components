@@ -33,6 +33,33 @@ import (
 
 type reBACStateContextKey struct{}
 
+type reBACSourceContextKey struct{}
+
+// ReBACSource names the resource that resources created under a context are
+// generated from, for example the shell of a synchronized descriptor. An
+// empty Identifier names the source with the created resource's identifier.
+type ReBACSource struct {
+	Resource   SemanticResourceKind
+	Identifier string
+}
+
+// WithReBACSource marks resources created under ctx as derived from source.
+// Derived resources inherit the access of their source instead of making
+// the caller their owner. Pass an empty identifier when every resource
+// created under ctx is generated from the source with its own identifier.
+func WithReBACSource(ctx context.Context, resource SemanticResourceKind, identifier string) context.Context {
+	return context.WithValue(ctx, reBACSourceContextKey{}, ReBACSource{Resource: resource, Identifier: identifier})
+}
+
+// ReBACSourceFromContext returns the source marked with WithReBACSource.
+func ReBACSourceFromContext(ctx context.Context) (ReBACSource, bool) {
+	if ctx == nil {
+		return ReBACSource{}, false
+	}
+	source, ok := ctx.Value(reBACSourceContextKey{}).(ReBACSource)
+	return source, ok
+}
+
 // ReBACState records desired relationship-based authorization state inside
 // the transaction of a resource mutation. Identifiers are the public
 // identifiers of the resources. Implementations are only present while ReBAC
@@ -61,7 +88,8 @@ func ReBACStateFromContext(ctx context.Context) ReBACState {
 }
 
 // RecordReBACResourceCreated makes an authenticated creator the owner of a new
-// identifiable. Call it after the resource row was inserted in tx.
+// resource, or records its derivation when ctx carries a ReBACSource. Call
+// it after the resource row was inserted in tx.
 func RecordReBACResourceCreated(ctx context.Context, tx *sql.Tx, resource SemanticResourceKind, identifier string) error {
 	state := ReBACStateFromContext(ctx)
 	if state == nil {
