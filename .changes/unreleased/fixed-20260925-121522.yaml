@@ -1,0 +1,7 @@
+kind: fixed
+body: Expose Edc-Bpn consistently in Swagger when header injection is configured and apply the existing opt-in claim enrichment across services using shared security setup.
+time: 2026-09-25T12:15:22.3321135+02:00
+custom:
+    Impact: Low
+    PullRequest: 708
+    SecurityImpact: Extends existing Edc-Bpn claim overriding beyond Digital Twin Registry and Submodel Repository. In additional services a nonblank header can now influence ABAC decisions when header injection and ABAC are enabled. Injection remains disabled by default and requires a trusted header source.

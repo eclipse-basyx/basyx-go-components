@@ -586,14 +586,14 @@ func TestAddSwaggerUIInjectsEventFeedOnlyWhenEnabled(t *testing.T) {
 
 	disabledRouter := chi.NewRouter()
 	includeEventFeed := false
-	AddSwaggerUI(disabledRouter, SwaggerUIConfig{
+	require.NoError(t, AddSwaggerUI(disabledRouter, SwaggerUIConfig{
 		Title:            "test",
 		SpecURL:          "/api-docs/openapi.yaml",
 		UIPath:           "/swagger",
 		SpecPath:         "/api-docs/openapi.yaml",
 		SpecContent:      spec,
 		IncludeEventFeed: &includeEventFeed,
-	})
+	}))
 	disabledRecorder := httptest.NewRecorder()
 	disabledRouter.ServeHTTP(disabledRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
 	if strings.Contains(disabledRecorder.Body.String(), "\n  /events:\n") {
@@ -608,14 +608,14 @@ func TestAddSwaggerUIInjectsEventFeedOnlyWhenEnabled(t *testing.T) {
 
 	enabledRouter := chi.NewRouter()
 	includeEventFeed = true
-	AddSwaggerUI(enabledRouter, SwaggerUIConfig{
+	require.NoError(t, AddSwaggerUI(enabledRouter, SwaggerUIConfig{
 		Title:            "test",
 		SpecURL:          "/api-docs/openapi.yaml",
 		UIPath:           "/swagger",
 		SpecPath:         "/api-docs/openapi.yaml",
 		SpecContent:      spec,
 		IncludeEventFeed: &includeEventFeed,
-	})
+	}))
 	enabledRecorder := httptest.NewRecorder()
 	enabledRouter.ServeHTTP(enabledRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
 	body := enabledRecorder.Body.String()
@@ -633,5 +633,41 @@ func TestAddSwaggerUIInjectsEventFeedOnlyWhenEnabled(t *testing.T) {
 	}
 	if !strings.Contains(body, "eventing.feed.maxPageSize") {
 		t.Fatal("expected omitted limit to document configured maxPageSize")
+	}
+}
+
+func TestSwaggerEdcBpnHeadersCoverEventFeedPaths(t *testing.T) {
+	for _, includeHeader := range []bool{false, true} {
+		for _, includeFeed := range []bool{false, true} {
+			name := "schemas"
+			if includeFeed {
+				name = "feed"
+			}
+			if includeHeader {
+				name += " with header"
+			}
+			t.Run(name, func(t *testing.T) {
+				router := chi.NewRouter()
+				require.NoError(t, AddSwaggerUI(router, SwaggerUIConfig{
+					SpecPath:            "/openapi.yaml",
+					UIPath:              "/swagger",
+					SpecContent:         []byte("openapi: 3.0.3\npaths:\n  /x:\n    get:\n      responses:\n        '200': {description: OK}\n"),
+					IncludeEventFeed:    &includeFeed,
+					IncludeEventSchemas: true,
+					IncludeEdcBpnHeader: includeHeader,
+				}))
+				recorder := httptest.NewRecorder()
+				router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
+				require.Equal(t, http.StatusOK, recorder.Code)
+				assertSwaggerEdcBpnHeader(t, recorder.Body.Bytes(), includeHeader)
+				var spec struct {
+					Paths map[string]any `yaml:"paths"`
+				}
+				require.NoError(t, yaml.Unmarshal(recorder.Body.Bytes(), &spec))
+				require.Contains(t, spec.Paths, "/.well-known/event-feed/schemas/{schema}")
+				_, hasFeed := spec.Paths["/events"]
+				require.Equal(t, includeFeed, hasFeed)
+			})
+		}
 	}
 }
