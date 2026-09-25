@@ -101,6 +101,7 @@ type semanticObjectCoverage struct {
 	allSubmodelElements bool
 	submodelElementPath string
 	submodelFragment    string
+	rebacElementGrants  []ReBACElementReadGrant
 }
 
 type semanticRouteRepresentation uint8
@@ -160,6 +161,7 @@ type AuthorizationSession struct {
 	options     grammar.SimplifyOptions
 	policyID    string
 	outerAccess SemanticAccessView
+	rebacRead   map[SemanticResourceKind]ReBACReadGrantSet
 }
 
 func newAuthorizationSession(
@@ -217,7 +219,7 @@ func (s *AuthorizationSession) evaluate(method string, requestPath string) Autho
 	}, s.options)
 }
 
-func (s *AuthorizationSession) semanticView(
+func (s *AuthorizationSession) abacSemanticView(
 	resource SemanticResourceKind,
 	outerResource SemanticResourceKind,
 ) SemanticAccessView {
@@ -1176,5 +1178,8 @@ func cloneSemanticObjectCoverages(coverages []semanticObjectCoverage) []semantic
 	}
 	cloned := make([]semanticObjectCoverage, len(coverages))
 	copy(cloned, coverages)
+	for index := range cloned {
+		cloned[index].rebacElementGrants = append([]ReBACElementReadGrant(nil), coverages[index].rebacElementGrants...)
+	}
 	return cloned
 }

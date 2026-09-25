@@ -99,6 +99,9 @@ func SetupSecurityWithClaimsMiddleware(
 	r *api.Mux,
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) error {
+	if cfg.ReBAC.Enabled {
+		return fmt.Errorf("REBAC-SETUP-COVERAGE ReBAC endpoint enforcement is not yet installed; refusing to start with ABAC-only enforcement")
+	}
 	if !cfg.ABAC.Enabled {
 		eventfeed.SetRecordAuthorizer(nil)
 		return nil
@@ -147,6 +150,9 @@ func SetupSecurityWithAccessModelProvider(
 	provider AccessModelProvider,
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) error {
+	if cfg.ReBAC.Enabled {
+		return fmt.Errorf("REBAC-SETUP-COVERAGE ReBAC endpoint enforcement is not yet installed; refusing to start with ABAC-only enforcement")
+	}
 	if !cfg.ABAC.Enabled {
 		eventfeed.SetRecordAuthorizer(nil)
 		return nil

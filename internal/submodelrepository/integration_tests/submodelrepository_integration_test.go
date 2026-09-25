@@ -36,9 +36,11 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/netip"
 	"net/textproto"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -82,6 +84,45 @@ var submodelRepositoryAASExternalURL = testenv.LocalURLFromEnv("BASYX_IT_AAS_API
 var submodelRepositorySyncBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_SYNC_API_PORT", 6008)
 var submodelRepositorySyncExternalURL = testenv.LocalURLFromEnv("BASYX_IT_SYNC_API_PORT", 6008)
 var submodelRepositoryIntegrationTestDSN = testenv.PostgresURLFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
+
+const delegationGatewayEnvironmentVariable = "BASYX_IT_DELEGATION_GATEWAY_IP"
+
+func configureDelegationGatewayEnvironment() error {
+	if value, exists := os.LookupEnv(delegationGatewayEnvironmentVariable); exists {
+		if _, err := netip.ParseAddr(value); err == nil {
+			return nil
+		}
+		return fmt.Errorf("%s must contain a valid IP address", delegationGatewayEnvironmentVariable)
+	}
+
+	output, err := exec.Command(
+		"docker",
+		"run",
+		"--rm",
+		"--add-host",
+		"delegation.testserver:host-gateway",
+		"postgres:18",
+		"cat",
+		"/etc/hosts",
+	).Output()
+	if err != nil {
+		return fmt.Errorf("SMREPO-IT-DELEGATIONGATEWAY failed to resolve Docker host gateway: %w", err)
+	}
+
+	for _, line := range strings.Split(string(output), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[1] != "delegation.testserver" {
+			continue
+		}
+		address, parseErr := netip.ParseAddr(fields[0])
+		if parseErr != nil {
+			return fmt.Errorf("SMREPO-IT-DELEGATIONGATEWAY invalid Docker host gateway address %q", fields[0])
+		}
+		return os.Setenv(delegationGatewayEnvironmentVariable, address.Unmap().String())
+	}
+
+	return fmt.Errorf("SMREPO-IT-DELEGATIONGATEWAY Docker did not map delegation.testserver")
+}
 
 // uploadFileAttachment uploads a file to the attachment endpoint
 func uploadFileAttachment(endpoint string, filePath string, fileName string) (int, error) {
@@ -2593,6 +2634,10 @@ func TestMain(m *testing.M) {
 			"BASYX_IT_INVALID_API_URL":    submodelRepositoryInvalidBaseURL,
 		})
 		os.Exit(m.Run())
+	}
+	if err := configureDelegationGatewayEnvironment(); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
 	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{

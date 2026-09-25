@@ -36,6 +36,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const submodelDescriptorSemanticIDTable = "submodel_descriptor_semantic_id_reference"
@@ -514,7 +515,15 @@ func replaceAdministrationShellDescriptorAssetIDsTx(
 	); err != nil {
 		return common.NewInternalServerError("AASDESC-UPDATE-ASSETIDS-INSERT " + err.Error())
 	}
-	return nil
+	return notifyIntegratedDiscoveryMutation(ctx, tx, descriptor.Id)
+}
+
+func notifyIntegratedDiscoveryMutation(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+	if !discoveryIntegrationEnabled(ctx) {
+		return nil
+	}
+	derived := auth.ContextWithReBACDerivedTarget(ctx, "aas_descriptor", aasIdentifier, "discovery", aasIdentifier)
+	return auth.NotifyReBACMutation(derived, tx, "discovery", aasIdentifier, false)
 }
 
 func updateSubmodelDescriptorRowTx(

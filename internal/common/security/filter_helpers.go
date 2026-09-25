@@ -682,6 +682,144 @@ func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, col
 	return ds, nil
 }
 
+// AddSMEFormulaQueryFromContext appends the authorization formula for a
+// Submodel Element candidate row. ReBAC element grants are evaluated with a
+// row-correlated collector so one granted element never authorizes siblings.
+func AddSMEFormulaQueryFromContext(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	collector *grammar.ResolvedFieldPathCollector,
+	rowAlias string,
+) (*goqu.SelectDataset, error) {
+	filter, authorized, denied := scopedFormulaFilter(ctx)
+	if denied {
+		return ds.Where(goqu.L("FALSE")), nil
+	}
+	if filter == nil || filter.SMERowFormula == nil {
+		return AddFormulaQueryFromContext(ctx, ds, collector)
+	}
+
+	rowCollector, err := grammar.NewResolvedFieldPathCollectorForSMERow(rowAlias)
+	if err != nil {
+		return nil, err
+	}
+	grant, _, err := filter.SMERowFormula.EvaluateToExpression(rowCollector.WithoutFieldValueDecorator())
+	if err != nil {
+		return nil, err
+	}
+	expressions := []exp.Expression{grant}
+	if filter.Formula != nil {
+		formulaCollector := collector
+		if authorized {
+			formulaCollector = collector.WithoutFieldValueDecorator()
+		}
+		formula, _, evaluateErr := filter.Formula.EvaluateToExpression(formulaCollector)
+		if evaluateErr != nil {
+			return nil, evaluateErr
+		}
+		expressions = append(expressions, formula)
+	}
+	ds = ds.Where(goqu.Or(expressions...))
+	if authorized {
+		caller := AuthorizedQueryFromContext(ctx).callerForBackend()
+		if caller.Condition != nil {
+			condition, _, evaluateErr := caller.Condition.EvaluateToExpression(conditionVisibleCollector(ctx, collector))
+			if evaluateErr != nil {
+				return nil, evaluateErr
+			}
+			ds = ds.Where(condition)
+		}
+	}
+	return ds, nil
+}
+
+// AddSubmodelDescriptorFormulaQueryFromContext appends the ABAC formula and
+// the ReBAC grant formula matching the current descriptor representation.
+// Standalone descriptor IDs and AAS-embedded descriptor pairs are intentionally
+// compiled in separate query scopes.
+func AddSubmodelDescriptorFormulaQueryFromContext(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	collector *grammar.ResolvedFieldPathCollector,
+	embedded bool,
+) (*goqu.SelectDataset, error) {
+	filter, authorized, denied := scopedFormulaFilter(ctx)
+	if denied {
+		return ds.Where(goqu.L("FALSE")), nil
+	}
+	if filter == nil {
+		return AddFormulaQueryFromContext(ctx, ds, collector)
+	}
+	grant := filter.SMDescStandaloneFormula
+	if embedded {
+		grant = filter.SMDescEmbeddedFormula
+	}
+	if grant == nil {
+		return AddFormulaQueryFromContext(ctx, ds, collector)
+	}
+	grantExpression, _, err := grant.EvaluateToExpression(collector.WithoutFieldValueDecorator())
+	if err != nil {
+		return nil, err
+	}
+	expressions := []exp.Expression{grantExpression}
+	if filter.Formula != nil {
+		formulaCollector := collector
+		if authorized {
+			formulaCollector = collector.WithoutFieldValueDecorator()
+		}
+		formulaExpression, _, evaluateErr := filter.Formula.EvaluateToExpression(formulaCollector)
+		if evaluateErr != nil {
+			return nil, evaluateErr
+		}
+		expressions = append(expressions, formulaExpression)
+	}
+	ds = ds.Where(goqu.Or(expressions...))
+	if authorized {
+		caller := AuthorizedQueryFromContext(ctx).callerForBackend()
+		if caller.Condition != nil {
+			condition, _, evaluateErr := caller.Condition.EvaluateToExpression(conditionVisibleCollector(ctx, collector))
+			if evaluateErr != nil {
+				return nil, evaluateErr
+			}
+			ds = ds.Where(condition)
+		}
+	}
+	return ds, nil
+}
+
+// ContextWithSubmodelDescriptorGrantScope applies the matching ReBAC grant to
+// descriptor fragment visibility. It preserves ABAC fragments and prevents a
+// standalone grant from unmasking an embedded descriptor, or the reverse.
+func ContextWithSubmodelDescriptorGrantScope(ctx context.Context, embedded bool) context.Context {
+	filter := GetQueryFilter(ctx)
+	if filter == nil {
+		return ctx
+	}
+	clone, err := CloneQueryFilter(filter)
+	if err != nil || clone == nil {
+		return ctx
+	}
+	grant := clone.SMDescStandaloneFormula
+	if embedded {
+		grant = clone.SMDescEmbeddedFormula
+	}
+	if grant == nil {
+		return ctx
+	}
+	unionReBACFragmentFilters(clone, *grant)
+	return WithQueryFilter(ctx, clone)
+}
+
+func scopedFormulaFilter(ctx context.Context) (*QueryFilter, bool, bool) {
+	if authorized := AuthorizedQueryFromContext(ctx); authorized != nil {
+		if authorized.outer.decision == AccessViewDenied {
+			return nil, true, true
+		}
+		return authorized.outer.queryFilter, true, false
+	}
+	return GetQueryFilter(ctx), false, false
+}
+
 func conditionVisibleCollector(
 	ctx context.Context,
 	collector *grammar.ResolvedFieldPathCollector,
@@ -952,6 +1090,9 @@ func compileSMEObjectCoverage(
 	if !coverageCoversSMEField(coverage, target.Field, targetPath) {
 		return nil, nil, false, nil
 	}
+	if len(coverage.rebacElementGrants) > 0 {
+		return compileReBACElementCoverage(coverage.rebacElementGrants)
+	}
 	expressions := make([]exp.Expression, 0, 2)
 	var resolved []grammar.ResolvedFieldPath
 	identifier, paths, _, err := compileSubmodelIdentifierCoverage(coverage)
@@ -979,6 +1120,14 @@ func coverageCoversSMEField(
 	field grammar.ModelStringPattern,
 	targetPath string,
 ) bool {
+	if len(coverage.rebacElementGrants) > 0 {
+		for _, grant := range coverage.rebacElementGrants {
+			if targetPath == "" || submodelElementPathCovered(grant.ElementPath, targetPath) {
+				return true
+			}
+		}
+		return false
+	}
 	if coverage.submodelFragment != "" {
 		if submodelElementFragment(field) != coverage.submodelFragment {
 			return false
@@ -989,6 +1138,31 @@ func coverageCoversSMEField(
 		return true
 	}
 	return submodelElementPathCovered(coverage.submodelElementPath, targetPath)
+}
+
+func compileReBACElementCoverage(grants []ReBACElementReadGrant) (exp.Expression, []grammar.ResolvedFieldPath, bool, error) {
+	expressions := make([]exp.Expression, 0, len(grants))
+	resolved := make([]grammar.ResolvedFieldPath, 0, len(grants)*2)
+	for _, grant := range grants {
+		identifier, identifierPaths, _, err := compileSubmodelIdentifierCoverage(semanticObjectCoverage{
+			resource:   SemanticResourceSME,
+			submodelID: grant.SubmodelID,
+		})
+		if err != nil {
+			return nil, nil, false, err
+		}
+		path, pathPaths, err := submodelElementSubtreeExpression(grant.ElementPath)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		expressions = append(expressions, goqu.And(identifier, path))
+		resolved = append(resolved, identifierPaths...)
+		resolved = append(resolved, pathPaths...)
+	}
+	if len(expressions) == 1 {
+		return expressions[0], resolved, true, nil
+	}
+	return goqu.Or(expressions...), resolved, true, nil
 }
 
 func submodelElementCoverageExpression(

@@ -460,7 +460,12 @@ func buildSubmodelDescriptorArraySubquery(
 	dialect goqu.DialectWrapper,
 	aasDescriptorID exp.Expression,
 ) (*goqu.SelectDataset, error) {
-	if !hasAASDescriptorFilters(ctx) {
+	cfg, configured := common.ConfigFromContext(ctx)
+	rebacEnabled := configured && cfg.ReBAC.Enabled
+	if rebacEnabled {
+		ctx = auth.ContextWithSubmodelDescriptorGrantScope(auth.ContextWithReBACEmbeddedRead(ctx), true)
+	}
+	if !rebacEnabled && !hasAASDescriptorFilters(ctx) {
 		return buildUnfilteredSubmodelDescriptorArraySubquery(ctx, dialect, aasDescriptorID)
 	}
 	submodel := goqu.T(common.TblSubmodelDescriptor).As(common.AliasSubmodelDescriptor)
@@ -554,6 +559,17 @@ func buildSubmodelDescriptorArraySubquery(
 	inner, err = auth.AddCorrelatedFilterQueryFromContext(ctx, inner, "$aasdesc#submodelDescriptors[]", collector)
 	if err != nil {
 		return nil, err
+	}
+
+	if rebacEnabled {
+		grantCollector, err := grammar.NewResolvedFieldPathCollectorForNestedSMDesc()
+		if err != nil {
+			return nil, err
+		}
+		inner, err = auth.AddSubmodelDescriptorFormulaQueryFromContext(ctx, inner, grantCollector, true)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	data := goqu.T(dataAlias)

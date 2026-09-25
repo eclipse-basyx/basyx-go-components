@@ -78,6 +78,7 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 	db DBQueryer,
 	descriptorIDs []int64,
 ) (map[int64][]model.SubmodelDescriptor, error) {
+	ctx = auth.ContextWithSubmodelDescriptorGrantScope(ctx, false)
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
 			slog.DebugContext(ctx, "submodel descriptor read completed", "duration", time.Since(start))
@@ -158,7 +159,7 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 		return nil, common.NewInternalServerError("SMDESC-READ-SHOULDENFORCE " + enforceErr.Error())
 	}
 	if shouldEnforceFormula {
-		inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
+		inner, err = auth.AddSubmodelDescriptorFormulaQueryFromContext(ctx, inner, collector, false)
 		if err != nil {
 			return nil, err
 		}
@@ -222,6 +223,10 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	aasDescriptorIDs []int64,
 	isMain bool,
 ) (map[int64][]model.SubmodelDescriptor, error) {
+	if !isMain {
+		ctx = auth.ContextWithReBACEmbeddedRead(ctx)
+	}
+	ctx = auth.ContextWithSubmodelDescriptorGrantScope(ctx, true)
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
 			slog.DebugContext(ctx, "AAS submodel descriptor read completed", "duration", time.Since(start))
@@ -302,13 +307,19 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	if isMain {
+	cfg, configured := common.ConfigFromContext(ctx)
+	if configured && cfg.ReBAC.Enabled {
+		inner, err = auth.AddSubmodelDescriptorFormulaQueryFromContext(ctx, inner, collector, true)
+		if err != nil {
+			return nil, err
+		}
+	} else if isMain {
 		shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 		if enforceErr != nil {
 			return nil, common.NewInternalServerError("SMDESC-READBYAAS-SHOULDENFORCE " + enforceErr.Error())
 		}
 		if shouldEnforceFormula {
-			inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
+			inner, err = auth.AddSubmodelDescriptorFormulaQueryFromContext(ctx, inner, collector, true)
 			if err != nil {
 				return nil, err
 			}

@@ -28,6 +28,7 @@ package dppapi
 
 import (
 	"errors"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"net/http"
 	"strings"
 	"time"
@@ -82,6 +83,12 @@ func errorCode(err error) string {
 }
 
 func mapPersistenceError(err error, fallbackStatus int) ImplResponse {
+	if strings.Contains(err.Error(), "REBAC-") && common.IsErrDenied(err) {
+		return errorResponse(http.StatusForbidden, err)
+	}
+	if strings.Contains(err.Error(), "REBAC-") && common.IsErrServiceUnavailable(err) {
+		return errorResponse(http.StatusServiceUnavailable, err)
+	}
 	status := fallbackStatus
 	text := strings.ToLower(err.Error())
 	if strings.Contains(text, "not found") || strings.Contains(text, "no rows") {

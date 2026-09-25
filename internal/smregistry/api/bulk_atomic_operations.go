@@ -45,6 +45,7 @@ func (s *SubmodelRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 	ctx context.Context,
 	descriptors []model.SubmodelDescriptor,
 ) asyncjob.BulkResult {
+	ctx, finishAudit := auth.BeginReBACMutationAudit(ctx)
 	if len(descriptors) == 0 {
 		return successfulAtomicResult(0)
 	}
@@ -60,6 +61,9 @@ func (s *SubmodelRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 			return s.executeBulkCreateSubmodelDescriptorsTx(ctx, tx, descriptors, &failure)
 		},
 	)
+	if auditErr := finishAudit(err); auditErr != nil {
+		err = auditErr
+	}
 	if err != nil {
 		if failure.StatusCode == 0 {
 			failure = asyncjob.ItemFailure{
@@ -108,12 +112,18 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelDescriptorBulk(
 	execute func(context.Context, *sql.Tx, model.SubmodelDescriptor) (int, error),
 ) asyncjob.BulkResult {
 	failure := asyncjob.ItemFailure{}
+	ctx, finishAudit := auth.BeginReBACMutationAudit(ctx)
 	err := s.smRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
 		if lockErr := history.LockMutationsTx(ctx, tx, history.TableSubmodelDescriptor, descriptorIDsFromSubmodelDescriptors(descriptors)); lockErr != nil {
 			return lockErr
 		}
 		for idx, descriptor := range descriptors {
-			statusCode, descriptorErr := execute(ctx, tx, descriptor)
+			resourceCtx, authorizationErr := auth.AuthorizeReBACResource(ctx, tx, "submodel_descriptor", descriptor.Id, "PUT")
+			if authorizationErr != nil {
+				failure = asyncjob.ItemFailure{Index: idx, Identifier: descriptor.Id, StatusCode: http.StatusForbidden, Message: authorizationErr.Error()}
+				return authorizationErr
+			}
+			statusCode, descriptorErr := execute(resourceCtx, tx, descriptor)
 			if descriptorErr != nil {
 				failure = asyncjob.ItemFailure{
 					Index:      idx,
@@ -126,6 +136,9 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelDescriptorBulk(
 		}
 		return nil
 	})
+	if auditErr := finishAudit(err); auditErr != nil {
+		err = auditErr
+	}
 	if err != nil {
 		if failure.StatusCode == 0 {
 			failure = asyncjob.ItemFailure{
@@ -146,9 +159,13 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelIdentifierBulk(
 	commitErrorCode string,
 ) asyncjob.BulkResult {
 	failure := asyncjob.ItemFailure{}
+	ctx, finishAudit := auth.BeginReBACMutationAudit(ctx)
 	err := s.smRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
 		return s.executeBulkDeleteSubmodelIdentifiersTx(ctx, tx, submodelIdentifiers, &failure)
 	})
+	if auditErr := finishAudit(err); auditErr != nil {
+		err = auditErr
+	}
 	if err != nil {
 		if failure.StatusCode == 0 {
 			failure = asyncjob.ItemFailure{
@@ -175,20 +192,29 @@ func (s *SubmodelRegistryAPIAPIService) executeBulkCreateSubmodelDescriptorsTx(
 	if err := validateBulkCreateSubmodelDescriptorGraphs(descriptors, failure); err != nil {
 		return err
 	}
-	failedIndex, err := s.smRegistryBackend.InsertSubmodelDescriptorsInTransaction(ctx, tx, descriptors)
-	if err == nil {
-		return nil
+	if cfg, ok := common.ConfigFromContext(ctx); !ok || !cfg.ReBAC.Enabled {
+		failedIndex, insertErr := s.smRegistryBackend.InsertSubmodelDescriptorsInTransaction(ctx, tx, descriptors)
+		if insertErr == nil {
+			return nil
+		}
+		if failedIndex < 0 || failedIndex >= len(descriptors) {
+			failedIndex = 0
+		}
+		*failure = asyncjob.ItemFailure{Index: failedIndex, Identifier: descriptors[failedIndex].Id, StatusCode: smBulkCreateErrorStatusCode(insertErr), Message: insertErr.Error()}
+		return insertErr
 	}
-	if failedIndex < 0 || failedIndex >= len(descriptors) {
-		failedIndex = 0
+	for index, descriptor := range descriptors {
+		resourceCtx, authorizationErr := auth.AuthorizeReBACResource(ctx, tx, "submodel_descriptor", descriptor.Id, "PUT")
+		if authorizationErr != nil {
+			*failure = asyncjob.ItemFailure{Index: index, Identifier: descriptor.Id, StatusCode: http.StatusForbidden, Message: authorizationErr.Error()}
+			return authorizationErr
+		}
+		if statusCode, insertErr := s.upsertDescriptorInTransaction(resourceCtx, tx, descriptor); insertErr != nil {
+			*failure = asyncjob.ItemFailure{Index: index, Identifier: descriptor.Id, StatusCode: statusCode, Message: insertErr.Error()}
+			return insertErr
+		}
 	}
-	*failure = asyncjob.ItemFailure{
-		Index:      failedIndex,
-		Identifier: descriptors[failedIndex].Id,
-		StatusCode: smBulkCreateErrorStatusCode(err),
-		Message:    err.Error(),
-	}
-	return err
+	return nil
 }
 
 func (s *SubmodelRegistryAPIAPIService) ensureSubmodelDescriptorsDoNotExist(
@@ -263,20 +289,38 @@ func (s *SubmodelRegistryAPIAPIService) executeBulkDeleteSubmodelIdentifiersTx(
 	if err != nil {
 		return err
 	}
-	failedIndex, err := s.smRegistryBackend.DeleteSubmodelDescriptorsByIDsInTransaction(ctx, tx, identifiers)
-	if err == nil {
+	authorized := make([]context.Context, len(identifiers))
+	for index, identifier := range identifiers {
+		authorized[index], err = auth.AuthorizeReBACResource(ctx, tx, "submodel_descriptor", identifier, "DELETE")
+		if err != nil {
+			*failure = asyncjob.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusForbidden, Message: err.Error()}
+			return err
+		}
+	}
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.ReBAC.Enabled {
+		for index, identifier := range identifiers {
+			if err = s.smRegistryBackend.DeleteSubmodelDescriptorByIDInTransaction(authorized[index], tx, identifier); err != nil {
+				*failure = asyncjob.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusInternalServerError, Message: err.Error()}
+				return err
+			}
+		}
 		return nil
 	}
-	if failedIndex < 0 || failedIndex >= len(identifiers) {
-		failedIndex = 0
+	failedIndex, err := s.smRegistryBackend.DeleteSubmodelDescriptorsByIDsInTransaction(ctx, tx, identifiers)
+	if err != nil {
+		if failedIndex < 0 || failedIndex >= len(identifiers) {
+			failedIndex = 0
+		}
+		*failure = asyncjob.ItemFailure{Index: failedIndex, Identifier: identifiers[failedIndex], StatusCode: smBulkDeleteErrorStatusCode(err), Message: err.Error()}
+		return err
 	}
-	*failure = asyncjob.ItemFailure{
-		Index:      failedIndex,
-		Identifier: identifiers[failedIndex],
-		StatusCode: smBulkDeleteErrorStatusCode(err),
-		Message:    err.Error(),
+	for index, identifier := range identifiers {
+		if err = auth.NotifyReBACMutation(authorized[index], tx, "submodel_descriptor", identifier, true); err != nil {
+			*failure = asyncjob.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusInternalServerError, Message: err.Error()}
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 func (s *SubmodelRegistryAPIAPIService) validateBulkDeleteSubmodelIdentifiersTx(

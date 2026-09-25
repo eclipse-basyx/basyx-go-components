@@ -41,7 +41,7 @@ services:
       - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - SERVER_STRICTVERIFICATION=off
-      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,172.17.0.1:*,192.168.65.2:*,192.168.65.254:*
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,delegation.testserver:*,${BASYX_IT_DELEGATION_GATEWAY_IP:?BASYX_IT_DELEGATION_GATEWAY_IP is required}:*
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
@@ -49,6 +49,7 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
       - "host.docker.internal:host-gateway"
+      - "delegation.testserver:host-gateway"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
@@ -93,7 +94,7 @@ services:
       - BASYX_EVENTING_OUTBOX_ENABLED=true
       - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
       - BASYX_EVENTING_MQTT_CLIENT_ID=submodel-feed
-      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,172.17.0.1:*,192.168.65.2:*,192.168.65.254:*
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,delegation.testserver:*,${BASYX_IT_DELEGATION_GATEWAY_IP:?BASYX_IT_DELEGATION_GATEWAY_IP is required}:*
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
@@ -101,6 +102,7 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
       - "host.docker.internal:host-gateway"
+      - "delegation.testserver:host-gateway"
     depends_on:
       kafka_init:
         condition: service_completed_successfully
@@ -147,7 +149,7 @@ services:
       - BASYX_EVENTING_OUTBOX_ENABLED=true
       - BASYX_EVENTING_MQTT_BROKER=mqtt://mqtt_it:1883
       - BASYX_EVENTING_MQTT_CLIENT_ID=submodel-mqtt-only
-      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,172.17.0.1:*,192.168.65.2:*,192.168.65.254:*
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,delegation.testserver:*,${BASYX_IT_DELEGATION_GATEWAY_IP:?BASYX_IT_DELEGATION_GATEWAY_IP is required}:*
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
@@ -155,6 +157,7 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
       - "host.docker.internal:host-gateway"
+      - "delegation.testserver:host-gateway"
     depends_on:
       kafka_init:
         condition: service_completed_successfully
@@ -182,7 +185,7 @@ services:
       - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - SERVER_STRICTVERIFICATION=off
-      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,172.17.0.1:*,192.168.65.2:*,192.168.65.254:*
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,delegation.testserver:*,${BASYX_IT_DELEGATION_GATEWAY_IP:?BASYX_IT_DELEGATION_GATEWAY_IP is required}:*
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
@@ -190,6 +193,7 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
       - "host.docker.internal:host-gateway"
+      - "delegation.testserver:host-gateway"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
@@ -359,7 +363,7 @@ services:
       - BASYX_EVENTING_SINKS=kafka
       - BASYX_EVENTING_KAFKA_BROKERS=kafka_it:19092
       - BASYX_EVENTING_OUTBOX_ENABLED=true
-      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,172.17.0.1:*,192.168.65.2:*,192.168.65.254:*
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,delegation.testserver:*,${BASYX_IT_DELEGATION_GATEWAY_IP:?BASYX_IT_DELEGATION_GATEWAY_IP is required}:*
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
@@ -367,6 +371,7 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
       - "host.docker.internal:host-gateway"
+      - "delegation.testserver:host-gateway"
     depends_on:
       kafka_init:
         condition: service_completed_successfully
@@ -415,7 +420,7 @@ services:
       - BASYX_EVENTING_AMQP_USERNAME=basyx
       - BASYX_EVENTING_AMQP_PASSWORD=secret
       - BASYX_EVENTING_OUTBOX_ENABLED=true
-      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,172.17.0.1:*,192.168.65.2:*,192.168.65.254:*
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,delegation.testserver:*,${BASYX_IT_DELEGATION_GATEWAY_IP:?BASYX_IT_DELEGATION_GATEWAY_IP is required}:*
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
@@ -423,6 +428,7 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
       - "host.docker.internal:host-gateway"
+      - "delegation.testserver:host-gateway"
     depends_on:
       amqp_it:
         condition: service_healthy

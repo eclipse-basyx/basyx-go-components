@@ -42,6 +42,7 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const defaultPackageContentType = "application/asset-administration-shell-package"
@@ -53,6 +54,8 @@ type PackageRecord struct {
 	FileName    string
 	ContentType string
 	AASIDs      []string
+	manifest    *auth.ReBACPackageManifest
+	manifestErr error
 }
 
 // PackageBinary combines package metadata with a streamed package body.
@@ -102,6 +105,9 @@ func (p *AASXFileServerDatabase) readDB(ctx context.Context) *sql.DB {
 
 // ListPackages returns package metadata for a page and the next cursor identifier, if any.
 func (p *AASXFileServerDatabase) ListPackages(ctx context.Context, limit int32, cursorID int64, aasID string) ([]PackageRecord, int64, error) {
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.ReBAC.Enabled {
+		return p.listVisiblePackages(ctx, limit, cursorID, aasID)
+	}
 	var records []PackageRecord
 	var nextCursor int64
 	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "AASXFS-LISTPACKAGES-STARTTX", "AASXFS-LISTPACKAGES-COMMIT", func(tx *sql.Tx) error {
@@ -193,7 +199,12 @@ func (p *AASXFileServerDatabase) listPackagesInTransaction(ctx context.Context, 
 //   - *PackageRecord: Persisted package metadata.
 //   - error: Validation, conflict, inspection, promotion, or database error.
 func (p *AASXFileServerDatabase) CreatePackage(ctx context.Context, packageID string, file common.StagedUpload, aasIDs []string, fileName string) (*PackageRecord, error) {
-	record, _, err := p.putPackage(ctx, strings.TrimSpace(packageID), file, aasIDs, fileName, false)
+	return p.CreatePackageWithManifest(ctx, packageID, file, aasIDs, fileName, nil)
+}
+
+// CreatePackageWithManifest atomically persists a staged package and its ReBAC manifest.
+func (p *AASXFileServerDatabase) CreatePackageWithManifest(ctx context.Context, packageID string, file common.StagedUpload, aasIDs []string, fileName string, manifest *auth.ReBACPackageManifest) (*PackageRecord, error) {
+	record, _, err := p.putPackage(ctx, strings.TrimSpace(packageID), file, aasIDs, fileName, false, manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -217,14 +228,19 @@ func (p *AASXFileServerDatabase) CreatePackage(ctx context.Context, packageID st
 //   - *PackageRecord: Persisted package metadata.
 //   - error: Validation, inspection, promotion, or database error.
 func (p *AASXFileServerDatabase) PutPackage(ctx context.Context, packageID string, file common.StagedUpload, aasIDs []string, fileName string) (bool, *PackageRecord, error) {
-	record, updated, err := p.putPackage(ctx, strings.TrimSpace(packageID), file, aasIDs, fileName, true)
+	return p.PutPackageWithManifest(ctx, packageID, file, aasIDs, fileName, nil)
+}
+
+// PutPackageWithManifest atomically creates or replaces a staged package and manifest.
+func (p *AASXFileServerDatabase) PutPackageWithManifest(ctx context.Context, packageID string, file common.StagedUpload, aasIDs []string, fileName string, manifest *auth.ReBACPackageManifest) (bool, *PackageRecord, error) {
+	record, updated, err := p.putPackage(ctx, strings.TrimSpace(packageID), file, aasIDs, fileName, true, manifest)
 	if err != nil {
 		return false, nil, err
 	}
 	return updated, record, nil
 }
 
-func (p *AASXFileServerDatabase) putPackage(ctx context.Context, packageID string, file common.StagedUpload, aasIDs []string, fileName string, allowUpdate bool) (*PackageRecord, bool, error) {
+func (p *AASXFileServerDatabase) putPackage(ctx context.Context, packageID string, file common.StagedUpload, aasIDs []string, fileName string, allowUpdate bool, manifest *auth.ReBACPackageManifest) (*PackageRecord, bool, error) {
 	if strings.TrimSpace(packageID) == "" {
 		return nil, false, common.NewErrBadRequest("AASXFS-PUTPACKAGE-EMPTYPACKAGEID packageId must not be empty")
 	}
@@ -246,7 +262,7 @@ func (p *AASXFileServerDatabase) putPackage(ctx context.Context, packageID strin
 	updated := false
 	err = file.Promote(ctx, func(ctx context.Context, tx *sql.Tx, newOID int64, _ int64) error {
 		var persistErr error
-		record, updated, persistErr = persistStagedPackage(ctx, tx, packageID, newOID, normalizedAASIDs, resolvedFileName, detectedContentType, allowUpdate)
+		record, updated, persistErr = persistStagedPackage(ctx, tx, packageID, newOID, normalizedAASIDs, resolvedFileName, detectedContentType, allowUpdate, manifest)
 		return persistErr
 	})
 	if err != nil {
@@ -255,7 +271,17 @@ func (p *AASXFileServerDatabase) putPackage(ctx context.Context, packageID strin
 	return record, updated, nil
 }
 
-func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, newOID int64, aasIDs []string, fileName string, contentType string, allowUpdate bool) (*PackageRecord, bool, error) {
+func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, newOID int64, aasIDs []string, fileName string, contentType string, allowUpdate bool, manifest *auth.ReBACPackageManifest) (*PackageRecord, bool, error) {
+	if manifest != nil {
+		resolved, err := auth.ResolveReBACPackageManifestMutation(ctx, tx, *manifest)
+		if err != nil {
+			return nil, false, err
+		}
+		manifest = &resolved
+		if err = auth.ValidateReBACPackageManifestMutation(ctx, tx, *manifest); err != nil {
+			return nil, false, err
+		}
+	}
 	dialect := goqu.Dialect("postgres")
 	selectSQL, selectArgs, err := dialect.From("aasx_package").Select("id", "file_oid", "file_name").
 		Where(goqu.C("package_id").Eq(packageID)).ForUpdate(exp.Wait).ToSQL()
@@ -291,6 +317,12 @@ func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, new
 		if err = replaceAASIDs(ctx, tx, existingID, aasIDs); err != nil {
 			return nil, false, err
 		}
+		if err = replacePackageManifest(ctx, tx, existingID, manifest); err != nil {
+			return nil, false, err
+		}
+		if err = auth.NotifyReBACMutation(ctx, tx, "package", packageID, false); err != nil {
+			return nil, false, err
+		}
 		if err = binarycontent.UnlinkOIDTx(ctx, tx, existingOID); err != nil {
 			return nil, false, err
 		}
@@ -310,6 +342,12 @@ func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, new
 		return nil, false, common.NewInternalServerError("AASXFS-PUTPACKAGE-INSERT " + err.Error())
 	}
 	if err = replaceAASIDs(ctx, tx, newID, aasIDs); err != nil {
+		return nil, false, err
+	}
+	if err = replacePackageManifest(ctx, tx, newID, manifest); err != nil {
+		return nil, false, err
+	}
+	if err = auth.NotifyReBACMutation(ctx, tx, "package", packageID, false); err != nil {
 		return nil, false, err
 	}
 	return &PackageRecord{DBID: newID, PackageID: packageID, FileName: fileName, ContentType: contentType, AASIDs: aasIDs}, false, nil
@@ -365,6 +403,15 @@ func (p *AASXFileServerDatabase) GetPackageByID(ctx context.Context, packageID s
 		return nil, err
 	}
 
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.ReBAC.Enabled {
+		var manifest auth.ReBACPackageManifest
+		if err := readPackageManifestTx(ctx, tx, packageID, &manifest); err != nil {
+			return nil, err
+		}
+		if err := auth.AuthorizeReBACPackageManifest(ctx, manifest); err != nil {
+			return nil, err
+		}
+	}
 	content, err := binarycontent.OpenOIDTx(ctx, tx, fileOID)
 	if err != nil {
 		return nil, err
@@ -427,6 +474,9 @@ func (p *AASXFileServerDatabase) DeletePackageByID(ctx context.Context, packageI
 	}
 
 	if err = binarycontent.UnlinkOIDTx(ctx, tx, fileOID); err != nil {
+		return err
+	}
+	if err = auth.NotifyReBACMutation(ctx, tx, "package", packageID, true); err != nil {
 		return err
 	}
 

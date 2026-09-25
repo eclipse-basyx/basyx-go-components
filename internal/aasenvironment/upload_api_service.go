@@ -237,6 +237,9 @@ func (s *uploadAPIService) processAASXPackage(ctx context.Context, fileName stri
 		return err
 	}
 
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.ReBAC.Enabled {
+		return s.processReBACAASXPackage(ctx, packageReader, specPart, environment)
+	}
 	if err = s.processEnvironment(ctx, "", "", environment); err != nil {
 		return err
 	}
@@ -254,6 +257,9 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 	}
 	if s.persistence.ConceptDescriptionRepository == nil || s.persistence.SubmodelRepository == nil || s.persistence.AASRepository == nil {
 		return common.NewErrBadRequest("AASENV-PROCESSENV-NILBACKEND one or more repository backends are not initialized")
+	}
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.ReBAC.Enabled {
+		return s.processReBACEnvironment(ctx, environment)
 	}
 
 	for _, conceptDescription := range environment.ConceptDescriptions() {
@@ -812,7 +818,7 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 			if contentType := location.FileElement.ContentType(); contentType != nil {
 				fileElementContentType = *contentType
 			}
-			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistory(
+			uploadErr := s.storeImportedSupplementary(
 				ctx,
 				location.SubmodelID,
 				location.IDShortPath,
@@ -887,7 +893,7 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 		if streamErr != nil {
 			return fmt.Errorf("AASENV-UPLDTHUMB-OPENSTREAM failed to open thumbnail for AAS '%s': %w", aas.ID(), streamErr)
 		}
-		uploadErr := s.persistence.AASRepository.PutThumbnailByAASIDReader(ctx, aas.ID(), thumbnailName, partStream)
+		uploadErr := s.storeImportedThumbnail(ctx, aas.ID(), thumbnailName, partStream)
 		closeErr := partStream.Close()
 		if uploadErr != nil {
 			return fmt.Errorf("AASENV-UPLDTHUMB-UPLOAD failed to store thumbnail for AAS '%s': %w", aas.ID(), uploadErr)

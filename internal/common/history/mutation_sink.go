@@ -47,14 +47,22 @@ type MutationSink interface {
 }
 
 var (
-	mutationSinkMu sync.RWMutex
-	mutationSink   MutationSink
+	mutationSinkMu    sync.RWMutex
+	mutationSink      MutationSink
+	authorizationSink MutationSink
 )
 
 // SetMutationSink registers the process-wide mutation sink. Pass nil to clear.
 func SetMutationSink(sink MutationSink) {
 	mutationSinkMu.Lock()
 	mutationSink = sink
+	mutationSinkMu.Unlock()
+}
+
+// SetAuthorizationMutationSink installs the required authorization observer independently of event publishing.
+func SetAuthorizationMutationSink(sink MutationSink) {
+	mutationSinkMu.Lock()
+	authorizationSink = sink
 	mutationSinkMu.Unlock()
 }
 
@@ -66,7 +74,7 @@ func ClearMutationSink() {
 func mutationSinkRegistered() bool {
 	mutationSinkMu.RLock()
 	defer mutationSinkMu.RUnlock()
-	return mutationSink != nil
+	return mutationSink != nil || authorizationSink != nil
 }
 
 func notifyMutationSink(ctx context.Context, tx *sql.Tx, mutation Mutation) error {
@@ -75,7 +83,13 @@ func notifyMutationSink(ctx context.Context, tx *sql.Tx, mutation Mutation) erro
 	}
 	mutationSinkMu.RLock()
 	sink := mutationSink
+	required := authorizationSink
 	mutationSinkMu.RUnlock()
+	if required != nil {
+		if err := required.HandleMutation(ctx, tx, mutation); err != nil {
+			return err
+		}
+	}
 	if sink == nil {
 		return nil
 	}

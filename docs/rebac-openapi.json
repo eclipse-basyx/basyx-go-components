@@ -1,0 +1,3349 @@
+{
+  "openapi": "3.1.0",
+  "x-basyx-profile": "https://basyx.org/aas/API/3/2/ResourceBoundAccessControl/1.0",
+  "info": {
+    "title": "BaSyx ReBAC access management extensions",
+    "version": "1.0.0",
+    "description": "Experimental opt-in OpenFGA extensions. Enable with REBAC_ENABLED. ABAC syntax and history/event-feed enforcement remain unchanged. Identifiers use the encoding of the corresponding BaSyx resource endpoint. Generated inheritance is read-only."
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/shells/$access": {
+      "get": {
+        "operationId": "shellsRepository_access",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/shells/$access/grants": {
+      "put": {
+        "operationId": "shellsRepository_access_grants",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shells/$access/effective": {
+      "get": {
+        "operationId": "shellsRepository_access_effective",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/submodels/$access": {
+      "get": {
+        "operationId": "submodelsRepository_access",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/submodels/$access/grants": {
+      "put": {
+        "operationId": "submodelsRepository_access_grants",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submodels/$access/effective": {
+      "get": {
+        "operationId": "submodelsRepository_access_effective",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/shell-descriptors/$access": {
+      "get": {
+        "operationId": "shell_descriptorsRepository_access",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/shell-descriptors/$access/grants": {
+      "put": {
+        "operationId": "shell_descriptorsRepository_access_grants",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shell-descriptors/$access/effective": {
+      "get": {
+        "operationId": "shell_descriptorsRepository_access_effective",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/submodel-descriptors/$access": {
+      "get": {
+        "operationId": "submodel_descriptorsRepository_access",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/submodel-descriptors/$access/grants": {
+      "put": {
+        "operationId": "submodel_descriptorsRepository_access_grants",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submodel-descriptors/$access/effective": {
+      "get": {
+        "operationId": "submodel_descriptorsRepository_access_effective",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/concept-descriptions/$access": {
+      "get": {
+        "operationId": "concept_descriptionsRepository_access",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/concept-descriptions/$access/grants": {
+      "put": {
+        "operationId": "concept_descriptionsRepository_access_grants",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/concept-descriptions/$access/effective": {
+      "get": {
+        "operationId": "concept_descriptionsRepository_access_effective",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/packages/$access": {
+      "get": {
+        "operationId": "packagesRepository_access",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/packages/$access/grants": {
+      "put": {
+        "operationId": "packagesRepository_access_grants",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/packages/$access/effective": {
+      "get": {
+        "operationId": "packagesRepository_access_effective",
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/shells/{id}/$access": {
+      "get": {
+        "operationId": "shells_access",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/shells/{id}/$access/grants": {
+      "put": {
+        "operationId": "shells_access_grants",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shells/{id}/$access/effective": {
+      "get": {
+        "operationId": "shells_access_effective",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/submodels/{id}/$access": {
+      "get": {
+        "operationId": "submodels_access",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/submodels/{id}/$access/grants": {
+      "put": {
+        "operationId": "submodels_access_grants",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submodels/{id}/$access/effective": {
+      "get": {
+        "operationId": "submodels_access_effective",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/shell-descriptors/{id}/$access": {
+      "get": {
+        "operationId": "shell_descriptors_access",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/shell-descriptors/{id}/$access/grants": {
+      "put": {
+        "operationId": "shell_descriptors_access_grants",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shell-descriptors/{id}/$access/effective": {
+      "get": {
+        "operationId": "shell_descriptors_access_effective",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/submodel-descriptors/{id}/$access": {
+      "get": {
+        "operationId": "submodel_descriptors_access",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/submodel-descriptors/{id}/$access/grants": {
+      "put": {
+        "operationId": "submodel_descriptors_access_grants",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submodel-descriptors/{id}/$access/effective": {
+      "get": {
+        "operationId": "submodel_descriptors_access_effective",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/concept-descriptions/{id}/$access": {
+      "get": {
+        "operationId": "concept_descriptions_access",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/concept-descriptions/{id}/$access/grants": {
+      "put": {
+        "operationId": "concept_descriptions_access_grants",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/concept-descriptions/{id}/$access/effective": {
+      "get": {
+        "operationId": "concept_descriptions_access_effective",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/packages/{id}/$access": {
+      "get": {
+        "operationId": "packages_access",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/packages/{id}/$access/grants": {
+      "put": {
+        "operationId": "packages_access_grants",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/packages/{id}/$access/effective": {
+      "get": {
+        "operationId": "packages_access_effective",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/lookup/shells/{id}/$access": {
+      "get": {
+        "operationId": "discovery_access",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/lookup/shells/{id}/$access/grants": {
+      "put": {
+        "operationId": "discovery_access_grants",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lookup/shells/{id}/$access/effective": {
+      "get": {
+        "operationId": "discovery_access_effective",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/shell-descriptors/{aasId}/submodel-descriptors/{id}/$access": {
+      "get": {
+        "operationId": "embeddedDescriptor_access",
+        "parameters": [
+          {
+            "name": "aasId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/shell-descriptors/{aasId}/submodel-descriptors/{id}/$access/grants": {
+      "put": {
+        "operationId": "embeddedDescriptor_access_grants",
+        "parameters": [
+          {
+            "name": "aasId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shell-descriptors/{aasId}/submodel-descriptors/{id}/$access/effective": {
+      "get": {
+        "operationId": "embeddedDescriptor_access_effective",
+        "parameters": [
+          {
+            "name": "aasId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/submodels/{submodelId}/submodel-elements/{idShortPath}/$access": {
+      "get": {
+        "operationId": "element_access",
+        "parameters": [
+          {
+            "name": "submodelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idShortPath",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Current grants and inheritance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong revision ETag required for changes."
+              }
+            }
+          }
+        },
+        "summary": "Inspect grants and synchronization state"
+      }
+    },
+    "/submodels/{submodelId}/submodel-elements/{idShortPath}/$access/grants": {
+      "put": {
+        "operationId": "element_access_grants",
+        "parameters": [
+          {
+            "name": "submodelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idShortPath",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace all direct grants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grants"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "grants": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Grant"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submodels/{submodelId}/submodel-elements/{idShortPath}/$access/effective": {
+      "get": {
+        "operationId": "element_access_effective",
+        "parameters": [
+          {
+            "name": "submodelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idShortPath",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "Per-action effective decisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect caller effective permissions"
+      }
+    },
+    "/submodels/{id}/$access/inheritance": {
+      "put": {
+        "operationId": "replaceSubmodelInheritance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"7\""
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          },
+          "200": {
+            "description": "No projection change required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted; projection pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Protected synchronization status snapshot."
+              }
+            }
+          },
+          "412": {
+            "description": "Revision is stale. Reload access snapshot and recompute."
+          },
+          "428": {
+            "description": "If-Match is required."
+          }
+        },
+        "summary": "Replace approved AAS inheritance links",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "aasIdentifiers"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "aasIdentifiers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Unencoded AAS identifiers."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires management authority on the Submodel and every selected AAS, plus an existing AAS reference. Inherits data permissions only; delete and sharing authority never propagate."
+      }
+    },
+    "/security/rebac/audit": {
+      "get": {
+        "operationId": "authorizationAuditSearch",
+        "summary": "Administrator-only authorization audit search",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resource",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "correlation",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit page or integrity report; pending archival is distinct from verified WORM protection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          }
+        }
+      }
+    },
+    "/security/rebac/audit/export": {
+      "get": {
+        "operationId": "authorizationAuditExport",
+        "summary": "Administrator-only authorization audit export",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resource",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "correlation",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit page or integrity report; pending archival is distinct from verified WORM protection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          }
+        }
+      }
+    },
+    "/security/rebac/audit/verify": {
+      "get": {
+        "operationId": "authorizationAuditVerify",
+        "summary": "Administrator-only authorization audit verify",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resource",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "correlation",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit page or integrity report; pending archival is distinct from verified WORM protection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed identifier or request."
+          },
+          "401": {
+            "description": "Missing or invalid identity."
+          },
+          "403": {
+            "description": "Insufficient ReBAC management authority; ABAC data permission does not confer sharing rights."
+          },
+          "404": {
+            "description": "Resource unavailable."
+          },
+          "503": {
+            "description": "OpenFGA, synchronization, or required durable audit persistence unavailable. No ABAC fallback on OpenFGA failure."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Principal": {
+        "type": "object",
+        "required": [
+          "kind",
+          "issuer",
+          "id"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group"
+            ]
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "Grant": {
+        "type": "object",
+        "required": [
+          "principal",
+          "role"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "principal": {
+            "$ref": "#/components/schemas/Principal"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "editor",
+              "executor",
+              "owner",
+              "creator"
+            ]
+          }
+        }
+      },
+      "Tuple": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "relation": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string"
+          }
+        }
+      },
+      "Snapshot": {
+        "type": "object",
+        "required": [
+          "revision",
+          "appliedRevision",
+          "grants",
+          "inheritance"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "appliedRevision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Grant"
+            }
+          },
+          "inheritance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tuple"
+            }
+          }
+        }
+      },
+      "Change": {
+        "type": "object",
+        "required": [
+          "revision",
+          "statusURL"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "statusURL": {
+            "type": "string",
+            "description": "Poll the protected access snapshot until appliedRevision equals revision."
+          }
+        }
+      },
+      "Decision": {
+        "type": "object",
+        "required": [
+          "allowed",
+          "source"
+        ],
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "rebac",
+              "abac"
+            ]
+          },
+          "partial": {
+            "type": "boolean",
+            "description": "ABAC permission is conditional and does not authorize every field or member."
+          }
+        }
+      }
+    }
+  }
+}

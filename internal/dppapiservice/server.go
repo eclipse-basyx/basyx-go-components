@@ -38,6 +38,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -113,7 +114,7 @@ func newHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, 
 
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "DPPAPIService")
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+	if err := setupDPPSecurity(ctx, cfg, apiRouter, dppService); err != nil {
 		return nil, err
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
@@ -175,4 +176,12 @@ func swaggerRedirectPath(contextPath string) string {
 		return "/swagger"
 	}
 	return contextPath + "/swagger"
+}
+
+func setupDPPSecurity(ctx context.Context, cfg *common.Config, router *chi.Mux, service *dppapi.DPPRepositoryService) error {
+	if !cfg.ReBAC.Enabled {
+		return auth.SetupSecurity(ctx, cfg, router)
+	}
+	_, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, router, service.WriterDB(), "dppapiservice")
+	return err
 }

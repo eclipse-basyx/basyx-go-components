@@ -305,7 +305,7 @@ func buildAuthorizedSubmodelPaths(
 		return nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-SHOULDENFORCE " + err.Error())
 	}
 	if shouldEnforce {
-		candidate, err = auth.AddFormulaQueryFromContext(ctx, candidate, collector)
+		candidate, err = auth.AddSMEFormulaQueryFromContext(ctx, candidate, collector, "sme")
 		if err != nil {
 			return nil, common.NewInternalServerError("SMREPO-GETALLSMPATH-ABACFORMULA " + err.Error())
 		}
@@ -481,7 +481,7 @@ func buildVisibleSubmodelRoots(
 		return nil, common.NewInternalServerError("SMREPO-GETSMEPAGE-SHOULDENFORCE " + err.Error())
 	}
 	if shouldEnforce {
-		query, err = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		query, err = auth.AddSMEFormulaQueryFromContext(ctx, query, collector, "sme")
 		if err != nil {
 			return nil, common.NewInternalServerError("SMREPO-GETSMEPAGE-ROOTFORMULA " + err.Error())
 		}

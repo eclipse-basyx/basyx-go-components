@@ -291,6 +291,13 @@ func aasxStagingLimit(ctx context.Context) (int64, error) {
 // optionally concept descriptions, and returns an environment object suitable
 // for downstream serialization.
 func (s *SerializationAPIService) loadEnvironment(ctx context.Context, aasIDs []string, submodelIDs []string, includeConceptDescriptions bool) (aastypes.IEnvironment, error) {
+	if serializationReBACEnabled(ctx) {
+		return s.loadCompleteReBACEnvironment(ctx, aasIDs, submodelIDs, includeConceptDescriptions)
+	}
+	return s.loadEnvironmentUnchecked(ctx, aasIDs, submodelIDs, includeConceptDescriptions)
+}
+
+func (s *SerializationAPIService) loadEnvironmentUnchecked(ctx context.Context, aasIDs []string, submodelIDs []string, includeConceptDescriptions bool) (aastypes.IEnvironment, error) {
 	if s == nil || s.persistence == nil {
 		return nil, common.NewInternalServerError("AASENV-LOADENV-NILSERVICE service must not be nil")
 	}
@@ -828,7 +835,11 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 	seenSupplementaries := make(map[string]struct{}, len(fileLocations))
 
 	for _, fileLocation := range fileLocations {
-		part, resolvedReference, resolveErr := s.resolveSerializationSupplementaryPart(ctx, specURI, fileLocation)
+		resourceCtx, contextErr := serializationReBACResourceContext(ctx, "submodel", fileLocation.SubmodelID)
+		if contextErr != nil {
+			return nil, contextErr
+		}
+		part, resolvedReference, resolveErr := s.resolveSerializationSupplementaryPart(resourceCtx, specURI, fileLocation)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
@@ -1213,7 +1224,11 @@ func (s *SerializationAPIService) resolveSerializationThumbnailParts(
 	seenThumbnailURIs := make(map[string]struct{}, len(resolvedAASIDs))
 
 	for _, aasID := range resolvedAASIDs {
-		thumbnailPart, resolvedThumbnailURI, resolveErr := s.resolveSerializationThumbnailPart(ctx, aasID)
+		resourceCtx, contextErr := serializationReBACResourceContext(ctx, "aas", aasID)
+		if contextErr != nil {
+			return nil, contextErr
+		}
+		thumbnailPart, resolvedThumbnailURI, resolveErr := s.resolveSerializationThumbnailPart(resourceCtx, aasID)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}

@@ -84,6 +84,8 @@ var DefaultConfig = struct {
 	ABACPolicyFileImport                 string
 	ABACPolicyScope                      string
 	ABACManagementAPIEnabled             bool
+	ReBACEnabled                         bool
+	ReBACTimeoutSeconds                  int
 	GeneralImplicitCasts                 bool
 	GeneralDescriptorDebug               bool
 	GeneralDiscoveryIntegration          bool
@@ -159,6 +161,8 @@ var DefaultConfig = struct {
 	ABACPolicyFileImport:                 "",
 	ABACPolicyScope:                      "",
 	ABACManagementAPIEnabled:             false,
+	ReBACEnabled:                         false,
+	ReBACTimeoutSeconds:                  defaultReBACTimeoutSeconds,
 	GeneralImplicitCasts:                 true,
 	GeneralDescriptorDebug:               false,
 	GeneralDiscoveryIntegration:          false,
@@ -281,9 +285,11 @@ type Config struct {
 	General  GeneralConfig  `mapstructure:"general" yaml:"general"`   // General configuration
 	OIDC     OIDCConfig     `mapstructure:"oidc" yaml:"oidc"`         // OpenID Connect authentication
 	ABAC     ABACConfig     `mapstructure:"abac" yaml:"abac"`         // Attribute-Based Access Control
+	ReBAC    ReBACConfig    `mapstructure:"rebac" yaml:"rebac"`       // Relationship-Based Access Control
 	JWS      JWSConfig      `mapstructure:"jws" yaml:"jws"`           // JWS signing configuration
 	Swagger  SwaggerConfig  `mapstructure:"swagger" yaml:"swagger"`   // Swagger/OpenAPI documentation configuration
 	History  HistoryConfig  `mapstructure:"history" yaml:"history"`   // History/audit behavior
+	Audit    AuditConfig    `mapstructure:"audit" yaml:"audit"`       // Shared audit and evidence behavior
 	Eventing EventingConfig `mapstructure:"eventing" yaml:"eventing"` // Experimental eventing
 }
 
@@ -547,13 +553,26 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 	applyABACEnvOverrides(cfg)
+	if err = applyReBACEnvOverrides(cfg); err != nil {
+		return nil, err
+	}
 	if err = validateGeneralConfig(cfg); err != nil {
 		return nil, err
 	}
 	if err = validateABACConfig(cfg); err != nil {
 		return nil, err
 	}
+	if err = validateReBACConfig(cfg); err != nil {
+		return nil, err
+	}
 	applyHistoryEnvOverrides(cfg)
+	applyAuditEnvOverrides(cfg)
+	if err = normalizeAuditConfig(v, cfg, cfg.ReBAC.Enabled); err != nil {
+		return nil, err
+	}
+	if err = validateAuditConfig(cfg); err != nil {
+		return nil, err
+	}
 	applyEventingEnvOverrides(cfg)
 	if err = applyMQTTEnvOverrides(cfg); err != nil {
 		return nil, err
@@ -1306,6 +1325,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("abac.policyScope", DefaultConfig.ABACPolicyScope)
 	v.SetDefault("abac.managementApi.enabled", DefaultConfig.ABACManagementAPIEnabled)
 
+	v.SetDefault("rebac.enabled", DefaultConfig.ReBACEnabled)
+	v.SetDefault("rebac.url", "")
+	v.SetDefault("rebac.storeId", "")
+	v.SetDefault("rebac.modelId", "")
+	v.SetDefault("rebac.scope", "")
+	v.SetDefault("rebac.token", "")
+	v.SetDefault("rebac.timeoutSeconds", DefaultConfig.ReBACTimeoutSeconds)
+
 	// JWS defaults
 	v.SetDefault("jws.privateKeyPath", "")
 	v.SetDefault("jws.certificateChainPath", "")
@@ -1332,6 +1359,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("history.evidence.signing.publicKeyPath", DefaultConfig.HistoryEvidenceSigningPublicKey)
 	v.SetDefault("history.evidence.signing.required", DefaultConfig.HistoryEvidenceSigningRequired)
 	v.SetDefault("history.integrityAnchor.provider", DefaultConfig.HistoryIntegrityAnchorProvider)
+	setAuditDefaults(v)
 
 	// Eventing / Event Feed
 	v.SetDefault("eventing.enabled", false)

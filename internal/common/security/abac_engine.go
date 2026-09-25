@@ -118,9 +118,12 @@ func (m *AccessModel) BasePath() string {
 // mutations, or redact fields. The Discovery Service currently does not require
 // a concrete filter structure; extend this struct when needed.
 type QueryFilter struct {
-	Formula         *grammar.LogicalExpression                       `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
-	FormulasByRight map[grammar.RightsEnum]grammar.LogicalExpression `json:"FormulasByRight,omitempty" yaml:"FormulasByRight,omitempty" mapstructure:"FormulasByRight,omitempty"`
-	Filters         FragmentFilters                                  `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
+	Formula                 *grammar.LogicalExpression                       `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
+	SMERowFormula           *grammar.LogicalExpression                       `json:"-" yaml:"-" mapstructure:"-"`
+	SMDescStandaloneFormula *grammar.LogicalExpression                       `json:"-" yaml:"-" mapstructure:"-"`
+	SMDescEmbeddedFormula   *grammar.LogicalExpression                       `json:"-" yaml:"-" mapstructure:"-"`
+	FormulasByRight         map[grammar.RightsEnum]grammar.LogicalExpression `json:"FormulasByRight,omitempty" yaml:"FormulasByRight,omitempty" mapstructure:"FormulasByRight,omitempty"`
+	Filters                 FragmentFilters                                  `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
 }
 
 // DecisionCode represents the result of an authorization check.

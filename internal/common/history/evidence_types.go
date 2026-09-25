@@ -28,23 +28,24 @@ package history
 import (
 	"context"
 	"fmt"
-	"io"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/evidence"
 )
 
 // Evidence and integrity constants define supported providers, artifact types, and signature states.
 const (
-	EvidenceProviderNone = "none"
-	EvidenceProviderS3   = "s3"
+	EvidenceProviderNone = evidence.ProviderNone
+	EvidenceProviderS3   = evidence.ProviderS3
 
 	IntegrityAnchorProviderNone = "none"
 
-	EvidenceArtifactManifest     = "manifest"
-	EvidenceArtifactSnapshot     = "snapshot"
-	EvidenceArtifactHistoryEvent = "history_event"
-	EvidenceArtifactABACPolicy   = "abac_policy_version"
-	EvidenceArtifactBinary       = "binary_content"
-	EvidenceArtifactBinaryRef    = "binary_reference"
+	EvidenceArtifactManifest     = evidence.ArtifactManifest
+	EvidenceArtifactSnapshot     = evidence.ArtifactSnapshot
+	EvidenceArtifactHistoryEvent = evidence.ArtifactHistoryEvent
+	EvidenceArtifactABACPolicy   = evidence.ArtifactABACPolicy
+	EvidenceArtifactBinary       = evidence.ArtifactBinary
+	EvidenceArtifactBinaryRef    = evidence.ArtifactBinaryRef
 
 	SignatureStateUnsigned = "unsigned"
 	SignatureStateSigned   = "signed"
@@ -53,73 +54,29 @@ const (
 	historyRangeContract   = "basyx-history-range-v1"
 )
 
-// EvidenceStore writes immutable evidence artifacts and can later re-read them for verification.
-type EvidenceStore interface {
-	PutArtifact(ctx context.Context, artifact EvidenceArtifact) (*EvidenceReceipt, error)
-	GetArtifact(ctx context.Context, ref EvidenceReference) (*EvidenceObject, error)
-	VerifyArtifact(ctx context.Context, ref EvidenceReference, expectedHash string) (*EvidenceReceipt, error)
-}
+// EvidenceStore retains the history API for shared evidence storage.
+type EvidenceStore = evidence.Store
 
-// EvidenceStreamStore writes large immutable objects without materializing
-// their complete payload in process memory.
-type EvidenceStreamStore interface {
-	PutArtifactReader(ctx context.Context, artifact EvidenceArtifact, reader io.Reader, sizeBytes int64, sha256 string) (*EvidenceReceipt, error)
-}
+// EvidenceStreamStore retains the history streaming evidence API.
+type EvidenceStreamStore = evidence.StreamStore
 
-// EvidenceRetentionExtender lengthens retention on a reused immutable object.
-type EvidenceRetentionExtender interface {
-	ExtendArtifactRetention(ctx context.Context, ref EvidenceReference, current EvidenceReceipt, artifact EvidenceArtifact) (*EvidenceReceipt, error)
-}
+// EvidenceRetentionExtender retains the history retention extension API.
+type EvidenceRetentionExtender = evidence.RetentionExtender
 
-// EvidenceRetentionVerifier verifies WORM retention state from the evidence backend.
-//
-// Implementations use provider-specific APIs to compare the stored object version
-// against the PostgreSQL receipt. The S3 implementation checks Object Lock
-// retention and legal hold state for the referenced version.
-type EvidenceRetentionVerifier interface {
-	VerifyArtifactRetention(ctx context.Context, ref EvidenceReference, expected EvidenceReceipt) error
-}
+// EvidenceRetentionVerifier retains the history retention verification API.
+type EvidenceRetentionVerifier = evidence.RetentionVerifier
 
-// EvidenceArtifact is a byte artifact destined for WORM-compatible object storage.
-type EvidenceArtifact struct {
-	ArtifactType  string
-	ObjectKey     string
-	ContentType   string
-	Data          []byte
-	Metadata      map[string]string
-	RetentionMode string
-	RetainUntil   time.Time
-	LegalHold     bool
-}
+// EvidenceArtifact is the shared immutable evidence artifact.
+type EvidenceArtifact = evidence.Artifact
 
-// EvidenceReference identifies a stored evidence object.
-type EvidenceReference struct {
-	Provider  string `json:"provider"`
-	Bucket    string `json:"bucket,omitempty"`
-	ObjectKey string `json:"object_key"`
-	VersionID string `json:"version_id,omitempty"`
-}
+// EvidenceReference is the shared version-specific evidence reference.
+type EvidenceReference = evidence.Reference
 
-// EvidenceReceipt records immutable object-store metadata returned after a write or verification.
-type EvidenceReceipt struct {
-	Reference     EvidenceReference `json:"reference"`
-	SHA256        string            `json:"sha256"`
-	SizeBytes     int64             `json:"size_bytes"`
-	ContentType   string            `json:"content_type"`
-	RetentionMode string            `json:"retention_mode,omitempty"`
-	RetainUntil   *time.Time        `json:"retain_until,omitempty"`
-	LegalHold     bool              `json:"legal_hold"`
-	StoredAt      time.Time         `json:"stored_at"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
-}
+// EvidenceReceipt is the shared verified storage receipt.
+type EvidenceReceipt = evidence.Receipt
 
-// EvidenceObject is the downloaded representation of a stored evidence artifact.
-type EvidenceObject struct {
-	Reference   EvidenceReference
-	Data        []byte
-	ContentType string
-	Metadata    map[string]string
-}
+// EvidenceObject is the shared downloaded evidence object.
+type EvidenceObject = evidence.Object
 
 // IntegrityAnchor is reserved for optional external ledgers or timestamping services.
 type IntegrityAnchor interface {

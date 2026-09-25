@@ -45,6 +45,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 	ctx context.Context,
 	descriptors []model.AssetAdministrationShellDescriptor,
 ) asyncjob.BulkResult {
+	ctx, finishAudit := auth.BeginReBACMutationAudit(ctx)
 	if len(descriptors) == 0 {
 		return successfulAtomicResult(0)
 	}
@@ -61,23 +62,35 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 			if existsErr := s.ensureAASDescriptorsDoNotExist(ctx, tx, identifiers, &failure); existsErr != nil {
 				return existsErr
 			}
-
-			failedIndex, insertErr := s.aasRegistryBackend.InsertAdministrationShellDescriptorsInTransaction(ctx, tx, descriptors)
-			if insertErr != nil {
+			if cfg, ok := common.ConfigFromContext(ctx); !ok || !cfg.ReBAC.Enabled {
+				failedIndex, insertErr := s.aasRegistryBackend.InsertAdministrationShellDescriptorsInTransaction(ctx, tx, descriptors)
+				if insertErr == nil {
+					return nil
+				}
 				if failedIndex < 0 || failedIndex >= len(descriptors) {
 					failedIndex = 0
 				}
-				failure = asyncjob.ItemFailure{
-					Index:      failedIndex,
-					Identifier: descriptors[failedIndex].Id,
-					StatusCode: aasBulkCreateErrorStatusCode(insertErr),
-					Message:    insertErr.Error(),
-				}
+				failure = asyncjob.ItemFailure{Index: failedIndex, Identifier: descriptors[failedIndex].Id, StatusCode: aasBulkCreateErrorStatusCode(insertErr), Message: insertErr.Error()}
 				return insertErr
+			}
+
+			for index, descriptor := range descriptors {
+				resourceCtx, authorizationErr := auth.AuthorizeReBACResource(ctx, tx, "aas_descriptor", descriptor.Id, "PUT")
+				if authorizationErr != nil {
+					failure = asyncjob.ItemFailure{Index: index, Identifier: descriptor.Id, StatusCode: http.StatusForbidden, Message: authorizationErr.Error()}
+					return authorizationErr
+				}
+				if statusCode, insertErr := s.upsertDescriptorInTransaction(resourceCtx, tx, descriptor); insertErr != nil {
+					failure = asyncjob.ItemFailure{Index: index, Identifier: descriptor.Id, StatusCode: statusCode, Message: insertErr.Error()}
+					return insertErr
+				}
 			}
 			return nil
 		},
 	)
+	if auditErr := finishAudit(err); auditErr != nil {
+		err = auditErr
+	}
 	if err != nil {
 		if failure.StatusCode == 0 {
 			failure = asyncjob.ItemFailure{
@@ -169,12 +182,18 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASDescript
 	execute func(context.Context, *sql.Tx, model.AssetAdministrationShellDescriptor) (int, error),
 ) asyncjob.BulkResult {
 	failure := asyncjob.ItemFailure{}
+	ctx, finishAudit := auth.BeginReBACMutationAudit(ctx)
 	err := s.aasRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
 		if lockErr := history.LockMutationsTx(ctx, tx, history.TableDescriptor, descriptorIDsFromAASDescriptors(descriptors)); lockErr != nil {
 			return lockErr
 		}
 		for idx, descriptor := range descriptors {
-			statusCode, descriptorErr := execute(ctx, tx, descriptor)
+			resourceCtx, authorizationErr := auth.AuthorizeReBACResource(ctx, tx, "aas_descriptor", descriptor.Id, "PUT")
+			if authorizationErr != nil {
+				failure = asyncjob.ItemFailure{Index: idx, Identifier: descriptor.Id, StatusCode: http.StatusForbidden, Message: authorizationErr.Error()}
+				return authorizationErr
+			}
+			statusCode, descriptorErr := execute(resourceCtx, tx, descriptor)
 			if descriptorErr != nil {
 				failure = asyncjob.ItemFailure{
 					Index:      idx,
@@ -187,6 +206,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASDescript
 		}
 		return nil
 	})
+	if auditErr := finishAudit(err); auditErr != nil {
+		err = auditErr
+	}
 	if err != nil {
 		if failure.StatusCode == 0 {
 			failure = asyncjob.ItemFailure{
@@ -207,9 +229,13 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASIdentifi
 	commitErrorCode string,
 ) asyncjob.BulkResult {
 	failure := asyncjob.ItemFailure{}
+	ctx, finishAudit := auth.BeginReBACMutationAudit(ctx)
 	err := s.aasRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
 		return s.executeBulkDeleteAASIdentifiersTx(ctx, tx, aasIdentifiers, &failure)
 	})
+	if auditErr := finishAudit(err); auditErr != nil {
+		err = auditErr
+	}
 	if err != nil {
 		if failure.StatusCode == 0 {
 			failure = asyncjob.ItemFailure{
@@ -233,20 +259,38 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeBulkDeleteAASIden
 	if err != nil {
 		return err
 	}
-	failedIndex, err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorsByIDsInTransaction(ctx, tx, identifiers)
-	if err == nil {
+	authorized := make([]context.Context, len(identifiers))
+	for index, identifier := range identifiers {
+		authorized[index], err = auth.AuthorizeReBACResource(ctx, tx, "aas_descriptor", identifier, "DELETE")
+		if err != nil {
+			*failure = asyncjob.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusForbidden, Message: err.Error()}
+			return err
+		}
+	}
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.ReBAC.Enabled {
+		for index, identifier := range identifiers {
+			if err = s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorByIDInTransaction(authorized[index], tx, identifier); err != nil {
+				*failure = asyncjob.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusInternalServerError, Message: err.Error()}
+				return err
+			}
+		}
 		return nil
 	}
-	if failedIndex < 0 || failedIndex >= len(identifiers) {
-		failedIndex = 0
+	failedIndex, err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorsByIDsInTransaction(ctx, tx, identifiers)
+	if err != nil {
+		if failedIndex < 0 || failedIndex >= len(identifiers) {
+			failedIndex = 0
+		}
+		*failure = asyncjob.ItemFailure{Index: failedIndex, Identifier: identifiers[failedIndex], StatusCode: aasBulkDeleteErrorStatusCode(err), Message: err.Error()}
+		return err
 	}
-	*failure = asyncjob.ItemFailure{
-		Index:      failedIndex,
-		Identifier: identifiers[failedIndex],
-		StatusCode: aasBulkDeleteErrorStatusCode(err),
-		Message:    err.Error(),
+	for index, identifier := range identifiers {
+		if err = auth.NotifyReBACMutation(authorized[index], tx, "aas_descriptor", identifier, true); err != nil {
+			*failure = asyncjob.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusInternalServerError, Message: err.Error()}
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 func (s *AssetAdministrationShellRegistryAPIAPIService) validateBulkDeleteAASIdentifiersTx(

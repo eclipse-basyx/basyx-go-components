@@ -1,0 +1,136 @@
+name: basyx-openfga-demo
+
+x-database: &database
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: basyx
+  POSTGRES_PASSWORD: demo-database
+  POSTGRES_DBNAME: basyx
+
+services:
+  db:
+    image: postgres:17.6-alpine3.22
+    environment:
+      POSTGRES_USER: basyx
+      POSTGRES_PASSWORD: demo-database
+      POSTGRES_DB: basyx
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/20-databases.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U basyx -d basyx]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  configuration:
+    build:
+      context: ../..
+      dockerfile: cmd/basyxconfigurationservice/Dockerfile
+    environment: *database
+    depends_on:
+      db:
+        condition: service_healthy
+
+  openfga-migrate:
+    image: openfga/openfga:v1.21.0
+    command: migrate
+    environment: &openfga-database
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://basyx:demo-database@db:5432/openfga?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+
+  openfga:
+    image: openfga/openfga:v1.21.0
+    command: run
+    environment:
+      <<: *openfga-database
+      OPENFGA_AUTHN_METHOD: preshared
+      OPENFGA_AUTHN_PRESHARED_KEYS: demo-openfga-key
+      OPENFGA_PLAYGROUND_ENABLED: "false"
+    ports:
+      - 127.0.0.1:28089:8080
+    depends_on:
+      openfga-migrate:
+        condition: service_completed_successfully
+
+  keycloak:
+    image: keycloak/keycloak:26.0.6
+    command: [start-dev, --import-realm]
+    environment:
+      KC_HTTP_PORT: "28080"
+      KC_HOSTNAME: http://keycloak.localhost:28080
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: demo-admin
+    ports:
+      - 127.0.0.1:28080:28080
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    networks:
+      default:
+        aliases: [keycloak.localhost]
+    healthcheck:
+      test: [CMD, bash, -c, "exec 3<>/dev/tcp/127.0.0.1/28080"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  aas-environment:
+    build:
+      context: ../..
+      dockerfile: cmd/aasenvironmentservice/Dockerfile
+    environment:
+      <<: *database
+      SERVER_PORT: "8082"
+      CORS_ALLOWEDORIGINS: http://localhost:28030
+      CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWCREDENTIALS: "true"
+      CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      ABAC_ENABLED: "true"
+      ABAC_MODELPATH: /security/access-rules.json
+      ABAC_POLICY_FILE_IMPORT: if_missing
+      OIDC_TRUSTLISTPATH: /security/trustlist.json
+      REBAC_ENABLED: "true"
+      REBAC_URL: http://openfga:8080
+      REBAC_STORE_ID: ${REBAC_STORE_ID:-bootstrap-required}
+      REBAC_MODEL_ID: ${REBAC_MODEL_ID:-bootstrap-required}
+      REBAC_SCOPE: openfga-demo
+      REBAC_TOKEN: demo-openfga-key
+      REBAC_ADMINISTRATORS: '[{"type":"user","issuer":"http://keycloak.localhost:28080/realms/basyx","subject":"11111111-1111-4111-8111-111111111111"}]'
+      AUDIT_ENABLED: "false"
+      GENERAL_AASREGISTRYINTEGRATION: "true"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
+      GENERAL_DISCOVERYINTEGRATION: "true"
+      GENERAL_EXTERNALURL: http://localhost:28082
+    volumes:
+      - ./security:/security:ro
+    ports:
+      - 127.0.0.1:28082:8082
+    depends_on:
+      configuration:
+        condition: service_completed_successfully
+      openfga:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+
+  aas-ui:
+    image: ${AAS_UI_IMAGE:-eclipsebasyx/aas-gui:SNAPSHOT}
+    #pull_policy: always
+    environment:
+      ENDPOINT_CONFIG_AVAILABLE: "false"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    ports:
+      - 127.0.0.1:28030:3000
+    depends_on:
+      aas-environment:
+        condition: service_healthy
+
+volumes:
+  database:

@@ -1,0 +1,10 @@
+[
+  {
+    "issuer": "http://keycloak.localhost:28080/realms/basyx",
+    "audience": "basyx-demo",
+    "scopes": [
+      "email",
+      "profile"
+    ]
+  }
+]

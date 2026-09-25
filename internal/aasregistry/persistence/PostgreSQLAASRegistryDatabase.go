@@ -180,7 +180,8 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 ) (model.AssetAdministrationShellDescriptor, error) {
 	if common.SupportsPostgreSQLBatch(p.writerDB) &&
 		!history.MutationRecordingEnabled() &&
-		descriptors.CanSkipPostInsertReadback(ctx) {
+		descriptors.CanSkipPostInsertReadback(ctx) &&
+		!requiresIntegratedDiscoveryMutation(ctx) {
 		return p.insertAdministrationShellDescriptorBatch(ctx, aasd)
 	}
 
@@ -196,6 +197,9 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 		}
 		if batchErr := common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); batchErr != nil {
 			return mapInsertAASDescriptorError(batchErr)
+		}
+		if mutationErr := notifyIntegratedDiscoveryMutations(ctx, tx, []model.AssetAdministrationShellDescriptor{aasd}); mutationErr != nil {
+			return mutationErr
 		}
 
 		stored, getErr := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
@@ -286,6 +290,9 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
 		return mapInsertAASDescriptorError(err)
 	}
+	if err = notifyIntegratedDiscoveryMutations(ctx, tx, []model.AssetAdministrationShellDescriptor{aasd}); err != nil {
+		return err
+	}
 
 	if descriptors.CanSkipCreateReadback(ctx) && !history.MutationRecordingEnabled() {
 		return nil
@@ -337,6 +344,9 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
 		return 0, mapInsertAASDescriptorError(err)
 	}
+	if err = notifyIntegratedDiscoveryMutations(ctx, tx, aasDescriptors); err != nil {
+		return 0, err
+	}
 
 	if descriptors.CanSkipCreateReadback(ctx) && !history.MutationRecordingEnabled() {
 		return -1, nil
@@ -355,6 +365,25 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 		}
 	}
 	return -1, nil
+}
+
+func notifyIntegratedDiscoveryMutations(ctx context.Context, tx *sql.Tx, descriptorsToNotify []model.AssetAdministrationShellDescriptor) error {
+	cfg, configured := common.ConfigFromContext(ctx)
+	if !configured || !cfg.General.DiscoveryIntegration {
+		return nil
+	}
+	for _, descriptor := range descriptorsToNotify {
+		derived := auth.ContextWithReBACDerivedTarget(ctx, "aas_descriptor", descriptor.Id, "discovery", descriptor.Id)
+		if err := auth.NotifyReBACMutation(derived, tx, "discovery", descriptor.Id, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func requiresIntegratedDiscoveryMutation(ctx context.Context) bool {
+	cfg, configured := common.ConfigFromContext(ctx)
+	return configured && cfg.General.DiscoveryIntegration && cfg.ReBAC.Enabled
 }
 
 // ExistingAASDescriptorIDsInTransaction returns existing AAS descriptor ids.
@@ -488,7 +517,7 @@ func loadAASDescriptorForUpdateTx(
 	aasID string,
 ) (model.AssetAdministrationShellDescriptor, error) {
 	readDescriptor := func() (model.AssetAdministrationShellDescriptor, error) {
-		return descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
+		return descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ReBACPlanningContext(ctx), tx, aasID)
 	}
 	if descriptors.CanSkipUpdateReadback(ctx) {
 		return common.WithPostgreSQLGenericPlanTx(ctx, tx, readDescriptor)
@@ -497,7 +526,7 @@ func loadAASDescriptorForUpdateTx(
 	if err != nil {
 		return descriptor, err
 	}
-	return descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ContextWithoutQueryFilter(ctx), tx, aasID)
+	return descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ReBACPlanningContext(auth.ContextWithoutQueryFilter(ctx)), tx, aasID)
 }
 
 func loadAuthorizedAASDescriptorEvidenceSnapshotTx(

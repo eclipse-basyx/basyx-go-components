@@ -196,8 +196,7 @@ func TestSubmodelRepositoryHistoryExtentAndCoreLevel(t *testing.T) {
 		_, _, _ = requestJSON(http.MethodDelete, baseURL+"/submodels/"+submodelIDEncoded, nil)
 	})
 
-	time.Sleep(30 * time.Millisecond)
-	historyDate := url.QueryEscape(time.Now().UTC().Format(time.RFC3339Nano))
+	historyDate := url.QueryEscape(latestSubmodelHistoryValidFrom(t, submodelID).Format(time.RFC3339Nano))
 
 	status, responseBody, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s&level=deep&extent=withBlobValue", baseURL, submodelIDEncoded, historyDate), nil)
 	require.NoError(t, err)

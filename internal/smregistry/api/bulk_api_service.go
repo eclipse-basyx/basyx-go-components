@@ -28,6 +28,7 @@ package smregistryapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -57,6 +58,10 @@ type BulkService struct {
 	descriptorService smBulkDescriptorService
 	manager           *asyncjob.Manager
 }
+type bulkTarget struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+}
 
 // NewBulkService creates a new submodel registry bulk service instance.
 func NewBulkService(descriptorService smBulkDescriptorService, manager *asyncjob.Manager) *BulkService {
@@ -71,21 +76,21 @@ func NewBulkService(descriptorService smBulkDescriptorService, manager *asyncjob
 
 // StartCreate starts a bulk create job.
 func (s *BulkService) StartCreate(ctx context.Context, descriptors []model.SubmodelDescriptor) model.ImplResponse {
-	return s.start(ctx, "submodel-registry.bulk.create", "CreateBulkSubmodelDescriptors", "SMR-BULK-CREATE-COMPLETE", func(executionContext context.Context) asyncjob.BulkResult {
+	return s.start(ctx, "submodel-registry.bulk.create", "CreateBulkSubmodelDescriptors", "SMR-BULK-CREATE-COMPLETE", bulkTargetMetadata("submodel_descriptor", descriptorIDsFromSubmodelDescriptors(descriptors), false), func(executionContext context.Context) asyncjob.BulkResult {
 		return s.descriptorService.ExecuteBulkCreateAtomic(executionContext, descriptors)
 	})
 }
 
 // StartPut starts a bulk upsert job.
 func (s *BulkService) StartPut(ctx context.Context, descriptors []model.SubmodelDescriptor) model.ImplResponse {
-	return s.start(ctx, "submodel-registry.bulk.put", "PutBulkSubmodelDescriptorsById", "SMR-BULK-PUT-COMPLETE", func(executionContext context.Context) asyncjob.BulkResult {
+	return s.start(ctx, "submodel-registry.bulk.put", "PutBulkSubmodelDescriptorsById", "SMR-BULK-PUT-COMPLETE", bulkTargetMetadata("submodel_descriptor", descriptorIDsFromSubmodelDescriptors(descriptors), false), func(executionContext context.Context) asyncjob.BulkResult {
 		return s.descriptorService.ExecuteBulkPutAtomic(executionContext, descriptors)
 	})
 }
 
 // StartDelete starts a bulk delete job.
 func (s *BulkService) StartDelete(ctx context.Context, submodelIdentifiers []string) model.ImplResponse {
-	return s.start(ctx, "submodel-registry.bulk.delete", "DeleteBulkSubmodelDescriptorsById", "SMR-BULK-DELETE-COMPLETE", func(executionContext context.Context) asyncjob.BulkResult {
+	return s.start(ctx, "submodel-registry.bulk.delete", "DeleteBulkSubmodelDescriptorsById", "SMR-BULK-DELETE-COMPLETE", bulkTargetMetadata("submodel_descriptor", submodelIdentifiers, true), func(executionContext context.Context) asyncjob.BulkResult {
 		return s.descriptorService.ExecuteBulkDeleteAtomic(executionContext, submodelIdentifiers)
 	})
 }
@@ -95,6 +100,7 @@ func (s *BulkService) start(
 	jobKind string,
 	operationName string,
 	completionErrorCode string,
+	metadata map[string]string,
 	execute func(context.Context) asyncjob.BulkResult,
 ) model.ImplResponse {
 	releaseExecutionSlot, acquired := s.manager.TryAcquireExecutionSlot()
@@ -107,7 +113,7 @@ func (s *BulkService) start(
 	executionDeadline, _ := executionContext.Deadline()
 	handleID, err := s.manager.Start(ctx, auth.OwnerKeyFromContext(ctx), asyncjob.StartOptions{
 		JobKind:           jobKind,
-		ExecutionDeadline: executionDeadline,
+		ExecutionDeadline: executionDeadline, Metadata: metadata,
 	})
 	if err != nil {
 		releaseExecutionSlot()
@@ -135,7 +141,13 @@ func (s *BulkService) execute(
 	stopHeartbeat := s.manager.KeepAlive(executionContext, handleID)
 	defer stopHeartbeat()
 
-	result := execute(executionContext)
+	refreshedContext, refreshErr := auth.RefreshReBACExecutionContext(executionContext)
+	var result asyncjob.BulkResult
+	if refreshErr != nil {
+		result = asyncjob.BulkResult{ExecutionState: "Completed", FailedCount: 1, Failures: []asyncjob.ItemFailure{{Index: 0, StatusCode: http.StatusServiceUnavailable, Message: refreshErr.Error()}}}
+	} else {
+		result = execute(refreshedContext)
+	}
 	persistenceContext, cancelPersistence := asyncjob.NewPersistenceContext(executionContext)
 	defer cancelPersistence()
 	if err := s.manager.Complete(persistenceContext, handleID, result); err != nil {
@@ -160,9 +172,46 @@ func (s *BulkService) GetStatus(ctx context.Context, handleID string) model.Impl
 			"retryAfter":     bulkJobRetryAfterSeconds,
 		})
 	}
+	if err = authorizeBulkResult(ctx, record); err != nil {
+		return common.NewErrorResponse(err, http.StatusForbidden, componentName, "GetBulkAsyncResult", "ReBACAuthorization")
+	}
 
 	location := fmt.Sprintf("/bulk/result/%s", url.PathEscape(handleID))
 	return model.ResponseWithHeaders(http.StatusFound, nil, map[string]string{"Location": location})
+}
+
+func bulkTargetMetadata(kind string, ids []string, deleted bool) map[string]string {
+	targets := make([]bulkTarget, 0, len(ids))
+	for _, id := range ids {
+		targets = append(targets, bulkTarget{Kind: kind, ID: id})
+	}
+	raw, _ := json.Marshal(targets)
+	return map[string]string{"rebac.targets": string(raw), "rebac.deleted": fmt.Sprint(deleted)}
+}
+func authorizeBulkResult(ctx context.Context, record asyncjob.Record) error {
+	if record.Metadata["rebac.targets"] == "" {
+		if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.ReBAC.Enabled {
+			return common.NewErrServiceUnavailable("REBAC-BULK-RESULT target proof is required")
+		}
+		return nil
+	}
+	if record.Metadata["rebac.deleted"] == "true" {
+		return nil
+	}
+	refreshed, err := auth.RefreshReBACReadContext(ctx)
+	if err != nil {
+		return err
+	}
+	var targets []bulkTarget
+	if err = json.Unmarshal([]byte(record.Metadata["rebac.targets"]), &targets); err != nil {
+		return err
+	}
+	for _, target := range targets {
+		if _, err = auth.AuthorizeReBACReadResource(refreshed, target.Kind, target.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetResult returns a bulk job result by handle id.

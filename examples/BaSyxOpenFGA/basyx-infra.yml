@@ -1,0 +1,27 @@
+infrastructures:
+  default: openfga
+
+  openfga:
+    name: BaSyx OpenFGA ReBAC
+    components:
+      aasDiscovery:
+        baseUrl: http://localhost:28082/lookup/shells
+      aasRegistry:
+        baseUrl: http://localhost:28082/shell-descriptors
+        hasDiscoveryIntegration: true
+      submodelRegistry:
+        baseUrl: http://localhost:28082/submodel-descriptors
+      aasRepository:
+        baseUrl: http://localhost:28082/shells
+        hasRegistryIntegration: true
+      submodelRepository:
+        baseUrl: http://localhost:28082/submodels
+        hasRegistryIntegration: true
+      conceptDescriptionRepository:
+        baseUrl: http://localhost:28082/concept-descriptions
+    security:
+      type: oauth2
+      config:
+        flow: auth_code
+        issuer: http://keycloak.localhost:28080/realms/basyx
+        clientId: basyx-demo

@@ -2797,7 +2797,7 @@ func (s *SubmodelRepositoryAPIAPIService) startPreparedOperationAsync(
 	}
 
 	delegatedInput := buildDelegatedOperationInput(operationRequest)
-	go s.executePreparedOperationAsync(ctx, handleID, delegationURL, delegatedInput, timeout, operation)
+	go s.executePreparedOperationAsync(ctx, handleID, delegationURL, delegatedInput, timeout, operation, decodedSubmodelIdentifier, idShortPath)
 
 	location := fmt.Sprintf(
 		"/submodels/%s/submodel-elements/%s/operation-status/%s",
@@ -2816,10 +2816,22 @@ func (s *SubmodelRepositoryAPIAPIService) executePreparedOperationAsync(
 	delegatedInput []types.IOperationVariable,
 	timeout time.Duration,
 	operation string,
+	submodelIdentifier string,
+	idShortPath string,
 ) {
 	defer s.releaseAsyncDelegationSlot()
 	delegationCtx, cancelDelegation := s.newAsyncDelegationContext(ctx, timeout)
 	defer cancelDelegation()
+	refreshedCtx, refreshErr := auth.RefreshReBACExecutionContext(delegationCtx)
+	if refreshErr != nil {
+		s.failPreparedOperationAsync(delegationCtx, handleID, newAPIErrorResponse(refreshErr, rebacAsyncAuthorizationStatus(refreshErr, http.StatusUnauthorized), operation, "RefreshReBACAuthorization"), "SMREPO-INVOKEOPASY-REFRESH")
+		return
+	}
+	delegationCtx, refreshErr = auth.AuthorizeReBACExecuteElement(refreshedCtx, submodelIdentifier, idShortPath)
+	if refreshErr != nil {
+		s.failPreparedOperationAsync(refreshedCtx, handleID, newAPIErrorResponse(refreshErr, rebacAsyncAuthorizationStatus(refreshErr, http.StatusForbidden), operation, "AuthorizeReBACExecution"), "SMREPO-INVOKEOPASY-AUTH")
+		return
+	}
 	stopHeartbeat := s.asyncJobManager.KeepAlive(delegationCtx, handleID)
 	defer stopHeartbeat()
 
@@ -2954,8 +2966,22 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Co
 		}
 		return gen.Response(record.ErrorStatus, record.ErrorBody), nil
 	}
+	refreshedCtx, refreshErr := auth.RefreshReBACReadContext(ctx)
+	if refreshErr != nil {
+		return newAPIErrorResponse(refreshErr, rebacAsyncAuthorizationStatus(refreshErr, http.StatusUnauthorized), operation, "RefreshReBACAuthorization"), nil
+	}
+	if _, refreshErr = auth.AuthorizeReBACExecuteElement(refreshedCtx, decodedSubmodelIdentifier, idShortPath); refreshErr != nil {
+		return newAPIErrorResponse(refreshErr, rebacAsyncAuthorizationStatus(refreshErr, http.StatusForbidden), operation, "AuthorizeReBACResult"), nil
+	}
 
 	return gen.Response(http.StatusOK, record.Payload), nil
+}
+
+func rebacAsyncAuthorizationStatus(err error, fallback int) int {
+	if common.IsErrServiceUnavailable(err) {
+		return http.StatusServiceUnavailable
+	}
+	return fallback
 }
 
 // GetOperationAsyncResultValueOnly - Returns the Operation result of an asynchronously invoked Operation

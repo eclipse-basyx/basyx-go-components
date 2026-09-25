@@ -77,6 +77,12 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 		},
 	},
 
+	"aasId": {
+		ByContext: map[resolveContext]string{
+			ctxBD: "aas_identifier.aasid",
+		},
+	},
+
 	"createdAt": {
 		ByContext: map[resolveContext]string{
 			ctxAASDesc:            "aas_descriptor.created_at",

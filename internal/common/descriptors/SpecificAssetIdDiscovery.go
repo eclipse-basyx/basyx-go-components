@@ -255,13 +255,16 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 		if _, err := tx.ExecContext(ctx, `DELETE FROM specific_asset_id WHERE aasRef = $1`, aasRef); err != nil {
 			return err
 		}
-		return common.InsertSpecificAssetIDs(
+		if err = common.InsertSpecificAssetIDs(
 			tx,
 			sql.NullInt64{},
 			sql.NullInt64{},
 			sql.NullInt64{Int64: aasRef, Valid: true},
 			specificAssetIDs,
-		)
+		); err != nil {
+			return err
+		}
+		return auth.NotifyReBACMutation(ctx, tx, "discovery", aasID, false)
 	})
 }
 
@@ -296,14 +299,17 @@ func AddSpecificAssetIDsByAASIdentifier(
 			return err
 		}
 
-		return common.InsertSpecificAssetIDsWithPositionStart(
+		if err = common.InsertSpecificAssetIDsWithPositionStart(
 			tx,
 			descriptorID,
 			sql.NullInt64{},
 			sql.NullInt64{Int64: aasRef, Valid: true},
 			specificAssetIDs,
 			positionStart,
-		)
+		); err != nil {
+			return err
+		}
+		return auth.NotifyReBACMutation(ctx, tx, "discovery", aasID, false)
 	})
 }
 

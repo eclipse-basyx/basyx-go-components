@@ -145,6 +145,9 @@ func NewAssetAdministrationShellDatabaseFromPools(writer *sql.DB, reader *sql.DB
 	}, nil
 }
 
+// WriterDB returns the caller-owned writer pool for shared security infrastructure.
+func (s *AssetAdministrationShellDatabase) WriterDB() *sql.DB { return s.db }
+
 func (s *AssetAdministrationShellDatabase) readDB(ctx context.Context) *sql.DB {
 	return common.PostgresReadPool(ctx, s.db, s.readerDB)
 }
@@ -1901,7 +1904,18 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+	if err = s.PutThumbnailByAASIDReaderInTransaction(ctx, tx, aasIdentifier, fileName, file); err != nil {
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-COMMIT " + err.Error())
+	}
+	return nil
+}
 
+// PutThumbnailByAASIDReaderInTransaction streams a thumbnail and records history in tx.
+func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReaderInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, fileName string, file io.Reader) error {
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTTHUMBNAIL-SHOULDENFORCE")
 	if enforceErr != nil {
 		return enforceErr
@@ -1993,18 +2007,9 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 	if err = s.appendUploadedThumbnailHistoryTx(mutationCtx, tx, aasIdentifier, previousSnapshot); err != nil {
 		return err
 	}
-	if err = history.RecordBinaryReferenceEvidenceTx(
+	return history.RecordBinaryReferenceEvidenceTx(
 		mutationCtx, tx, history.TableAAS, aasIdentifier, expectation,
-	); err != nil {
-		return err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-COMMIT " + err.Error())
-	}
-
-	return nil
+	)
 }
 
 // DeleteThumbnailByAASID removes the thumbnail and checks ABAC visibility.

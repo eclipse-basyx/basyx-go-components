@@ -48,7 +48,7 @@ const pattern = `^(?:` +
 	`\$cd#(?:idShort|id)|` +
 	`\$aasdesc#(?:idShort|id|assetKind|assetType|globalAssetId|createdAt|` + specificAssetIDValuePattern + `|` + endpointValuePattern + `|` + submodelDescriptorValuePattern + `)|` +
 	`\$smdesc#(?:` + semanticIDValuePattern + `|` + supplementalSemanticIDValuePattern + `|idShort|id|createdAt|` + endpointValuePattern + `)|` +
-	`\$bd#(?:globalAssetId|createdAt|` + specificAssetIDValuePattern + `)` +
+	`\$bd#(?:aasId|globalAssetId|createdAt|` + specificAssetIDValuePattern + `)` +
 	`)$`
 
 var modelPatternRegex = regexp.MustCompile(pattern)

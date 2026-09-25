@@ -29,6 +29,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 )
 
@@ -53,8 +54,7 @@ func NewDescriptionAPIAPIService(asyncProfileEnabled bool) *DescriptionAPIAPISer
 
 // GetSelfDescription returns the supported profile for the AASX file server.
 func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (openapi.ImplResponse, error) {
-	_ = ctx
 	return openapi.Response(http.StatusOK, openapi.ServiceDescription{
-		Profiles: s.profiles,
+		Profiles: common.ProfilesWithReBAC(ctx, s.profiles),
 	}), nil
 }

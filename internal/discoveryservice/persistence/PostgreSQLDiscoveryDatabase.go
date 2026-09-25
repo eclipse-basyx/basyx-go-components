@@ -172,12 +172,23 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 		slog.ErrorContext(ctx, "delete query construction failed", "error.code", "DISCOVERY-DELETE-BUILDQUERY", "error", err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
-	result, err := p.writerDB.ExecContext(ctx, sqlStr, args...)
+	tx, err := p.writerDB.BeginTx(ctx, nil)
+	if err != nil {
+		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
+	}
+	defer func() { _ = tx.Rollback() }()
+	result, err := tx.ExecContext(ctx, sqlStr, args...)
 	if err != nil {
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
 	if rows, _ := result.RowsAffected(); rows == 0 {
 		return common.NewErrNotFound(fmt.Sprintf("AAS identifier %s not found. See console for information.", aasID))
+	}
+	if err = auth.NotifyReBACMutation(ctx, tx, "discovery", aasID, true); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
 	return nil
 }

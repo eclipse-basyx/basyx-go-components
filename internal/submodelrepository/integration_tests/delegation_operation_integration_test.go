@@ -152,7 +152,7 @@ func startAdderMicroservice(t *testing.T) (string, func()) {
 	}()
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	delegationURL := fmt.Sprintf("http://host.docker.internal:%d/delegate/add?a=5&b=3", port)
+	delegationURL := fmt.Sprintf("http://delegation.testserver:%d/delegate/add?a=5&b=3", port)
 
 	shutdown := func() {
 		_ = server.Close()

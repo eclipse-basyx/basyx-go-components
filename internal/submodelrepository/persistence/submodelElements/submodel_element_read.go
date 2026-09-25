@@ -210,7 +210,7 @@ func GetSubmodelElementPathsBySubmodelID(ctx context.Context, db DBQueryer, subm
 	}
 	if shouldEnforceFormula {
 		var addFormulaErr error
-		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		query, addFormulaErr = auth.AddSMEFormulaQueryFromContext(ctx, query, collector, "sme")
 		if addFormulaErr != nil {
 			return nil, common.NewInternalServerError("SMREPO-GETSMEPATHS-ABACFORMULA " + addFormulaErr.Error())
 		}
@@ -298,7 +298,7 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db DBQueryer, 
 	}
 	if shouldEnforceFormula {
 		var addFormulaErr error
-		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		query, addFormulaErr = auth.AddSMEFormulaQueryFromContext(ctx, query, collector, "sme")
 		if addFormulaErr != nil {
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-ABACFORMULA " + addFormulaErr.Error())
 		}
@@ -412,7 +412,7 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db DBQueryer, submodelID
 	}
 	if shouldEnforceFormula {
 		var addFormulaErr error
-		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		query, addFormulaErr = auth.AddSMEFormulaQueryFromContext(ctx, query, collector, "sme")
 		if addFormulaErr != nil {
 			return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-ABACFORMULA " + addFormulaErr.Error())
 		}
@@ -802,7 +802,7 @@ func getRootElementPage(ctx context.Context, db DBQueryer, submodelDatabaseID in
 	}
 	if shouldEnforceFormula {
 		var addFormulaErr error
-		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		query, addFormulaErr = auth.AddSMEFormulaQueryFromContext(ctx, query, collector, "sme")
 		if addFormulaErr != nil {
 			return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-ABACFORMULA " + addFormulaErr.Error())
 		}
@@ -1253,7 +1253,7 @@ func buildSMEPathAuthorizationQuery(
 	}
 	if shouldEnforceFormula {
 		var formulaErr error
-		query, formulaErr = auth.AddFormulaQueryFromContext(ctx, query, formulaCollector)
+		query, formulaErr = auth.AddSMEFormulaQueryFromContext(ctx, query, formulaCollector, "sme")
 		if formulaErr != nil {
 			return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACFORMULA " + formulaErr.Error())
 		}

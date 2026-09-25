@@ -57,6 +57,18 @@ func CloneQueryFilter(queryFilter *QueryFilter) (*QueryFilter, error) {
 		formula := cloneLogicalExpression(*queryFilter.Formula)
 		cloned.Formula = &formula
 	}
+	if queryFilter.SMERowFormula != nil {
+		formula := cloneLogicalExpression(*queryFilter.SMERowFormula)
+		cloned.SMERowFormula = &formula
+	}
+	if queryFilter.SMDescStandaloneFormula != nil {
+		formula := cloneLogicalExpression(*queryFilter.SMDescStandaloneFormula)
+		cloned.SMDescStandaloneFormula = &formula
+	}
+	if queryFilter.SMDescEmbeddedFormula != nil {
+		formula := cloneLogicalExpression(*queryFilter.SMDescEmbeddedFormula)
+		cloned.SMDescEmbeddedFormula = &formula
+	}
 	if queryFilter.FormulasByRight != nil {
 		cloned.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression, len(queryFilter.FormulasByRight))
 		for right, formula := range queryFilter.FormulasByRight {

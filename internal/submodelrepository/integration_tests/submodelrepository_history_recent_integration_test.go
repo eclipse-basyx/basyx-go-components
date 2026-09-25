@@ -105,9 +105,7 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	requireSubmodelListContainsID(t, decodeMap(t, body), submodelIDShort, submodelID)
 
-	time.Sleep(30 * time.Millisecond)
-	v1Date := time.Now().UTC()
-	time.Sleep(30 * time.Millisecond)
+	v1Date := latestSubmodelHistoryValidFrom(t, submodelID)
 
 	updatedElement := map[string]any{
 		"modelType": "Property",
@@ -125,7 +123,8 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	historical := decodeMap(t, body)
 	require.Equal(t, "v1", getPropertyValueByIDShort(t, historical, "Temperature"))
 
-	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	v2Date := latestSubmodelHistoryValidFrom(t, submodelID)
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, v2Date.Format(time.RFC3339Nano)), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	require.Equal(t, "v2-from-sme", getPropertyValueByIDShort(t, decodeMap(t, body), "Temperature"))
@@ -134,7 +133,8 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
 
-	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	v3Date := latestSubmodelHistoryValidFrom(t, submodelID)
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, v3Date.Format(time.RFC3339Nano)), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	require.Equal(t, "v3-from-value-only", getPropertyValueByIDShort(t, decodeMap(t, body), "Temperature"))
@@ -144,7 +144,8 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.NoError(t, uploadErr)
 	require.Equal(t, http.StatusNoContent, statusCode)
 
-	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	uploadedDate := latestSubmodelHistoryValidFrom(t, submodelID)
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, uploadedDate.Format(time.RFC3339Nano)), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	uploadedFile := getElementByIDShort(t, decodeMap(t, body), "Attachment")
@@ -155,7 +156,8 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 
-	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	deletedAttachmentDate := latestSubmodelHistoryValidFrom(t, submodelID)
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, deletedAttachmentDate.Format(time.RFC3339Nano)), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	deletedFile := getElementByIDShort(t, decodeMap(t, body), "Attachment")
@@ -185,7 +187,8 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
 	requireSubmodelHistoryPayloadTypes(t, submodelID, []string{"snapshot", "diff", "diff", "snapshot", "diff", "snapshot"})
 
-	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	deletedSubmodelDate := latestSubmodelHistoryValidFrom(t, submodelID)
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, deletedSubmodelDate.Format(time.RFC3339Nano)), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotFound, status, "response=%s", string(body))
 
@@ -236,6 +239,25 @@ func requireSubmodelHistoryPayloadTypes(t *testing.T, id string, expected []stri
 	}
 	require.NoError(t, rows.Err())
 	require.Equal(t, expected, actual)
+}
+
+func latestSubmodelHistoryValidFrom(t *testing.T, id string) time.Time {
+	t.Helper()
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	query, args, err := goqu.From("submodel_history").
+		Select(goqu.C("valid_from")).
+		Where(goqu.C("identifier").Eq(id)).
+		Order(goqu.C("history_id").Desc()).
+		Limit(1).
+		ToSQL()
+	require.NoError(t, err)
+
+	var validFrom time.Time
+	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&validFrom))
+	return validFrom.UTC()
 }
 
 func decodeMap(t *testing.T, body []byte) map[string]any {

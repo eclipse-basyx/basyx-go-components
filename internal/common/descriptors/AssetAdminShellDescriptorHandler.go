@@ -275,8 +275,10 @@ func insertAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.T
 	if err = common.CreateSpecificAssetIDDescriptor(tx, descriptorID, aasRef, specificAssetIds); err != nil {
 		return err
 	}
-
-	return createSubModelDescriptors(tx, sql.NullInt64{Int64: descriptorID, Valid: true}, aasd.SubmodelDescriptors)
+	if err = createSubModelDescriptors(tx, sql.NullInt64{Int64: descriptorID, Valid: true}, aasd.SubmodelDescriptors); err != nil {
+		return err
+	}
+	return notifyIntegratedDiscoveryMutation(ctx, tx, aasd.Id)
 }
 
 // UpsertAdministrationShellDescriptorTx upserts an AssetAdministrationShellDescriptor
@@ -585,6 +587,11 @@ func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *s
 	if len(aasIdentifiers) == 0 {
 		return nil
 	}
+	for _, aasIdentifier := range aasIdentifiers {
+		if err := notifyIntegratedDiscoveryMutation(ctx, tx, aasIdentifier); err != nil {
+			return err
+		}
+	}
 	d := goqu.Dialect(common.Dialect)
 	batch := &common.PostgreSQLBatch{}
 	limit := common.BulkBatchLimitFromContext(ctx)
@@ -636,6 +643,9 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 			return common.NewErrNotFound("AAS Descriptor not found")
 		}
 		return scanErr
+	}
+	if err := notifyIntegratedDiscoveryMutation(ctx, tx, aasIdentifier); err != nil {
+		return err
 	}
 
 	childDescriptorIDs := d.

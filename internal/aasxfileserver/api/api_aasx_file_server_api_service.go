@@ -126,6 +126,9 @@ func (s *AASXFileServerAPIAPIService) GetAllAASXPackageIds(ctx context.Context, 
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
+		if common.IsErrServiceUnavailable(err) {
+			return newAPIErrorResponse(err, http.StatusServiceUnavailable, operation, "ListPackages"), nil
+		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ListPackages"), nil
 	}
 
@@ -167,7 +170,16 @@ func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file 
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GeneratePackageId"), nil
 	}
-	record, err := s.packageCreator.CreatePackage(ctx, rawPackageID, file, aasIDs, fileName)
+	manifest, err := prepareReBACPackageManifest(ctx, file)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusServiceUnavailable, operation, "ReBACManifest"), nil
+	}
+	var record *persistence.PackageRecord
+	if manifest != nil {
+		record, err = s.backend.CreatePackageWithManifest(ctx, rawPackageID, file, aasIDs, fileName, manifest)
+	} else {
+		record, err = s.packageCreator.CreatePackage(ctx, rawPackageID, file, aasIDs, fileName)
+	}
 	if err != nil {
 		if common.IsErrPayloadTooLarge(err) {
 			return newAPIErrorResponse(err, http.StatusRequestEntityTooLarge, operation, "PayloadTooLarge"), nil
@@ -187,6 +199,15 @@ func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file 
 // PostAsyncAASXPackage durably accepts a staged package and processes it independently.
 func (s *AASXFileServerAPIAPIService) PostAsyncAASXPackage(ctx context.Context, file openapi.StagedUpload, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
 	const operation = "PostAsyncAASXPackage"
+	var authorizationErr error
+	ctx, authorizationErr = auth.AuthorizeReBACPackageCreation(ctx)
+	if authorizationErr != nil {
+		status := http.StatusServiceUnavailable
+		if common.IsErrDenied(authorizationErr) {
+			status = http.StatusForbidden
+		}
+		return newAPIErrorResponse(authorizationErr, status, operation, "AuthorizeCreation"), nil
+	}
 	if file == nil {
 		return newAPIErrorResponse(errors.New("multipart form field 'file' is required"), http.StatusBadRequest, operation, "MissingFile"), nil
 	}
@@ -338,9 +359,24 @@ func (s *AASXFileServerAPIAPIService) processAsyncPackage(
 		persistAsyncPackageFailure(ctx, manager, handleID, file, asyncPackageProcessingFailureMessage)
 	}()
 
-	packageID, err := generatePackageID()
+	ctx, err := auth.RefreshReBACExecutionContext(ctx)
 	if err == nil {
-		_, err = s.packageCreator.CreatePackage(ctx, packageID, file, aasIDs, fileName)
+		ctx, err = auth.AuthorizeReBACPackageCreation(ctx)
+	}
+	if err == nil {
+		packageID, idErr := generatePackageID()
+		err = idErr
+		if err == nil {
+			manifest, manifestErr := prepareReBACPackageManifest(ctx, file)
+			switch {
+			case manifestErr != nil:
+				err = manifestErr
+			case manifest != nil:
+				_, err = s.backend.CreatePackageWithManifest(ctx, packageID, file, aasIDs, fileName, manifest)
+			default:
+				_, err = s.packageCreator.CreatePackage(ctx, packageID, file, aasIDs, fileName)
+			}
+		}
 	}
 	if err == nil {
 		return
@@ -435,6 +471,12 @@ func (s *AASXFileServerAPIAPIService) GetAASXByPackageId(ctx context.Context, pa
 
 	pkg, err := s.backend.GetPackageByID(ctx, decodedPackageID)
 	if err != nil {
+		if common.IsErrServiceUnavailable(err) {
+			return newAPIErrorResponse(err, http.StatusServiceUnavailable, operation, "ReBACContent"), nil
+		}
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "ReBACContent"), nil
+		}
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "PackageNotFound"), nil
 		}
@@ -478,7 +520,17 @@ func (s *AASXFileServerAPIAPIService) PutAASXByPackageId(ctx context.Context, pa
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedPackageId"), nil
 	}
 
-	updated, record, err := s.backend.PutPackage(ctx, decodedPackageID, file, aasIDs, fileName)
+	manifest, err := prepareReBACPackageManifest(ctx, file)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusServiceUnavailable, operation, "ReBACManifest"), nil
+	}
+	var updated bool
+	var record *persistence.PackageRecord
+	if manifest != nil {
+		updated, record, err = s.backend.PutPackageWithManifest(ctx, decodedPackageID, file, aasIDs, fileName, manifest)
+	} else {
+		updated, record, err = s.backend.PutPackage(ctx, decodedPackageID, file, aasIDs, fileName)
+	}
 	if err != nil {
 		if common.IsErrPayloadTooLarge(err) {
 			return newAPIErrorResponse(err, http.StatusRequestEntityTooLarge, operation, "PayloadTooLarge"), nil

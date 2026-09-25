@@ -206,6 +206,7 @@ func buildSubmodelDescriptorListQuery(
 	updatedFrom time.Time,
 	scope submodelDescriptorListScope,
 ) (*goqu.SelectDataset, error) {
+	ctx = auth.ContextWithSubmodelDescriptorGrantScope(ctx, scope.aasDescriptorID != nil)
 	if scope.aasDescriptorID == nil {
 		return buildStandaloneSubmodelDescriptorListQuery(
 			ctx,
@@ -511,7 +512,7 @@ func buildAuthorizedSubmodelDescriptorRows(
 		return nil, nil, nil, common.NewInternalServerError("SMDESC-LIST-SHOULDENFORCE " + err.Error())
 	}
 	if shouldEnforce {
-		query, err = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		query, err = auth.AddSubmodelDescriptorFormulaQueryFromContext(ctx, query, collector, scope.aasDescriptorID != nil)
 		if err != nil {
 			return nil, nil, nil, err
 		}

@@ -33,17 +33,12 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/stretchr/testify/require"
 )
@@ -256,124 +251,6 @@ func TestEvidenceEventArtifactCatalogRowLinksPublishedEventsToManifest(t *testin
 	require.Equal(t, int64(99), row["manifest_id"])
 	require.Equal(t, EvidenceArtifactHistoryEvent, row["artifact_type"])
 	require.Equal(t, int64(1), row["history_id"])
-}
-
-func TestS3EvidenceStoreReceiptAppliesPrefixAndRetention(t *testing.T) {
-	now := time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC)
-	store := &S3EvidenceStore{
-		cfg: S3EvidenceStoreConfig{
-			Bucket:        "evidence",
-			Prefix:        "tenant-a",
-			RetentionMode: "governance",
-			RetentionDays: 7,
-		},
-		now: func() time.Time { return now },
-	}
-
-	key := store.objectKey("manifests/one.json")
-	receipt := store.receiptForArtifact(key, EvidenceArtifact{ArtifactType: EvidenceArtifactManifest, ContentType: manifestJSONContentType, Data: []byte(`{"ok":true}`)})
-
-	require.Equal(t, "tenant-a/manifests/one.json", receipt.Reference.ObjectKey)
-	require.Equal(t, "governance", receipt.RetentionMode)
-	require.NotNil(t, receipt.RetainUntil)
-	require.Equal(t, now.AddDate(0, 0, 7), *receipt.RetainUntil)
-	require.Equal(t, SHA256Hex([]byte(`{"ok":true}`)), receipt.SHA256)
-}
-
-func TestS3EvidenceStorePutRequiresRetention(t *testing.T) {
-	store := &S3EvidenceStore{
-		client: &s3.Client{},
-		cfg:    S3EvidenceStoreConfig{Bucket: "evidence", Region: "us-east-1"},
-		now:    func() time.Time { return time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC) },
-	}
-
-	_, err := store.PutArtifact(t.Context(), EvidenceArtifact{ArtifactType: EvidenceArtifactHistoryEvent, ObjectKey: "events/one.json", ContentType: manifestJSONContentType, Data: []byte(`{}`)})
-
-	require.ErrorContains(t, err, "HISTORY-EVIDENCE-S3-RETENTION")
-}
-
-func TestCommittedEvidenceReceiptRequiresImmutableRetention(t *testing.T) {
-	now := time.Now().UTC()
-	receipt := EvidenceReceipt{
-		Reference: EvidenceReference{
-			Provider: EvidenceProviderS3, ObjectKey: "mutation-events/1.json", VersionID: "version-1",
-		},
-		SHA256: strings.Repeat("a", 64), SizeBytes: 10,
-	}
-
-	err := validateCommittedEvidenceReceipt(receipt, receipt.SHA256, receipt.SizeBytes, now)
-	require.ErrorContains(t, err, "retention mode")
-
-	retainUntil := now.Add(time.Hour)
-	receipt.RetentionMode = "governance"
-	receipt.RetainUntil = &retainUntil
-	require.NoError(t, validateCommittedEvidenceReceipt(receipt, receipt.SHA256, receipt.SizeBytes, now))
-}
-
-func TestS3EvidenceStorePutRequiresVersionID(t *testing.T) {
-	client := s3.NewFromConfig(aws.Config{
-		Region:      "us-east-1",
-		Credentials: credentials.NewStaticCredentialsProvider("access", "secret", ""),
-		HTTPClient: httpClientFunc(func(*http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Header:     make(http.Header),
-				Body:       io.NopCloser(strings.NewReader("")),
-			}, nil
-		}),
-	})
-	store := &S3EvidenceStore{
-		client: client,
-		cfg: S3EvidenceStoreConfig{
-			Bucket:        "evidence",
-			RetentionMode: "governance",
-			RetentionDays: 7,
-		},
-		now: func() time.Time { return time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC) },
-	}
-
-	receipt, err := store.PutArtifact(t.Context(), EvidenceArtifact{
-		ArtifactType: EvidenceArtifactHistoryEvent,
-		ObjectKey:    "events/one.json",
-		ContentType:  manifestJSONContentType,
-		Data:         []byte(`{}`),
-	})
-
-	require.Nil(t, receipt)
-	require.ErrorContains(t, err, "HISTORY-EVIDENCE-S3-VERSIONID")
-}
-
-func TestS3EvidenceStoreVerifiesRetentionState(t *testing.T) {
-	retainUntil := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
-	client := s3.NewFromConfig(aws.Config{
-		Region:      "us-east-1",
-		Credentials: credentials.NewStaticCredentialsProvider("access", "secret", ""),
-		HTTPClient: httpClientFunc(func(request *http.Request) (*http.Response, error) {
-			body := `<LegalHold><Status>OFF</Status></LegalHold>`
-			if strings.Contains(request.URL.RawQuery, "retention") {
-				body = `<Retention><Mode>GOVERNANCE</Mode><RetainUntilDate>2026-06-12T12:00:00Z</RetainUntilDate></Retention>`
-			}
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Header:     make(http.Header),
-				Body:       io.NopCloser(strings.NewReader(body)),
-			}, nil
-		}),
-	})
-	store := &S3EvidenceStore{client: client, cfg: S3EvidenceStoreConfig{Bucket: "evidence"}}
-
-	err := store.VerifyArtifactRetention(t.Context(), EvidenceReference{
-		Provider:  EvidenceProviderS3,
-		Bucket:    "evidence",
-		ObjectKey: "history-events/aas_history/aas-1/1-row.json",
-		VersionID: "version-1",
-	}, EvidenceReceipt{
-		RetentionMode: "governance",
-		RetainUntil:   &retainUntil,
-		LegalHold:     false,
-	})
-
-	require.NoError(t, err)
 }
 
 func TestStoreHistoryEventArtifactsBackfillsSnapshotAndDiffRows(t *testing.T) {
@@ -726,10 +603,4 @@ func (store *retentionCheckingEvidenceStore) VerifyArtifact(_ context.Context, _
 
 func (store *retentionCheckingEvidenceStore) VerifyArtifactRetention(_ context.Context, _ EvidenceReference, _ EvidenceReceipt) error {
 	return store.retentionErr
-}
-
-type httpClientFunc func(*http.Request) (*http.Response, error)
-
-func (fn httpClientFunc) Do(request *http.Request) (*http.Response, error) {
-	return fn(request)
 }

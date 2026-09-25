@@ -194,37 +194,51 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(
 	contentType string,
 	fallbackContentType string,
 ) error {
+	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		return s.UploadFileAttachmentReaderWithHistoryInTransaction(ctx, tx, submodelID, idShortPath, file, fileName, contentType, fallbackContentType)
+	})
+}
+
+// UploadFileAttachmentReaderWithHistoryInTransaction streams attachment content and records history in tx.
+func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistoryInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	idShortPath string,
+	file io.Reader,
+	fileName string,
+	contentType string,
+	fallbackContentType string,
+) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
 	if err != nil {
 		return err
 	}
 
-	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
-			return visibilityErr
-		}
-		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
-		if snapshotErr != nil {
-			return snapshotErr
-		}
-		reference, resolvedContentType, uploadErr := fileHandler.UploadManagedFileAttachmentReaderTx(
-			ctx,
-			tx,
-			submodelID,
-			idShortPath,
-			file,
-			fileName,
-			contentType,
-			fallbackContentType,
-		)
-		if uploadErr != nil {
-			return uploadErr
-		}
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST-PROSPECTIVE", true); visibilityErr != nil {
-			return visibilityErr
-		}
-		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, resolvedContentType)
-	})
+	if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
+		return visibilityErr
+	}
+	previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if snapshotErr != nil {
+		return snapshotErr
+	}
+	reference, resolvedContentType, uploadErr := fileHandler.UploadManagedFileAttachmentReaderTx(
+		ctx,
+		tx,
+		submodelID,
+		idShortPath,
+		file,
+		fileName,
+		contentType,
+		fallbackContentType,
+	)
+	if uploadErr != nil {
+		return uploadErr
+	}
+	if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST-PROSPECTIVE", true); visibilityErr != nil {
+		return visibilityErr
+	}
+	return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, resolvedContentType)
 }
 
 func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, previousSnapshot map[string]any, reference binarycontent.Reference, contentType string) error {

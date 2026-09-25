@@ -40,6 +40,7 @@ package smregistryapi
 import (
 	"context"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -69,11 +70,11 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (mode
 	// return Response(0, Result{}), nil
 
 	return model.Response(200, model.ServiceDescription{
-		Profiles: []string{
+		Profiles: common.ProfilesWithReBAC(ctx, []string{
 			"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001",
 			"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-003",
 			"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-004",
 			"https://basyx.org/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001",
-		},
+		}),
 	}), nil
 }

@@ -111,6 +111,15 @@ func SetupSecurityWithABACRepository(
 	if err = initializeRepository(ctx, repo, cfg.ABAC.ModelPath, policyScope, mode); err != nil {
 		return nil, err
 	}
+	if cfg.ReBAC.Enabled {
+		runtime, setupErr := auth.SetupReBACSecurity(ctx, cfg, r, db, repo, claimsMiddleware...)
+		if setupErr != nil {
+			return nil, setupErr
+		}
+		history.SetAuthorizationMutationSink(runtime)
+		return repo, nil
+	}
+	history.SetAuthorizationMutationSink(nil)
 	if err = auth.SetupSecurityWithAccessModelProvider(ctx, cfg, r, repo, claimsMiddleware...); err != nil {
 		return nil, err
 	}

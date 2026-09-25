@@ -633,15 +633,32 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 
 // PutConceptDescription creates or replaces the concept description with the given identifier and reports whether an existing row was replaced.
 func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, id string, cd types.IConceptDescription) (bool, error) {
-	if id != cd.ID() {
-		return false, common.NewErrBadRequest("CDREPO-PUTCD-IDMISMATCH Concept Description ID in path and body do not match")
-	}
-
 	tx, cleanup, err := common.StartTransaction(b.db)
 	if err != nil {
 		return false, common.NewInternalServerError("CDREPO-PUTCD-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+
+	isUpdate, err := b.PutConceptDescriptionInTransaction(ctx, tx, id, cd)
+	if err != nil {
+		return false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return false, common.NewInternalServerError("CDREPO-PUTCD-COMMIT " + err.Error())
+	}
+
+	return isUpdate, nil
+}
+
+// PutConceptDescriptionInTransaction creates or replaces a Concept Description in the caller's transaction.
+func (b *ConceptDescriptionBackend) PutConceptDescriptionInTransaction(ctx context.Context, tx *sql.Tx, id string, cd types.IConceptDescription) (bool, error) {
+	if tx == nil {
+		return false, common.NewInternalServerError("CDREPO-PUTCD-NILTX transaction must not be nil")
+	}
+	if id != cd.ID() {
+		return false, common.NewErrBadRequest("CDREPO-PUTCD-IDMISMATCH Concept Description ID in path and body do not match")
+	}
+	var err error
 	if err = history.LockMutationTx(ctx, tx, history.TableConcept, id); err != nil {
 		return false, err
 	}
@@ -705,10 +722,6 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 	}
 	if err = b.appendConceptDescriptionHistoryTx(ctx, tx, cd, previousSnapshot, changeType, false); err != nil {
 		return false, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return false, common.NewInternalServerError("CDREPO-PUTCD-COMMIT " + err.Error())
 	}
 
 	return isUpdate, nil

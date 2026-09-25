@@ -131,7 +131,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		}
 
 		if _, insertErr := s.persistence.SubmodelRegistry.InsertSubmodelDescriptorInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(auth.ContextWithoutQueryFilter(ctx), submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistryAddAuditMetadataIfNotAvailable(auth.ContextWithReBACDerivedTarget(auth.ContextWithoutQueryFilter(ctx), "submodel", submodel.ID(), "submodel_descriptor", descriptor.Id), submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); insertErr != nil {
 			return insertErr
 		}
@@ -196,7 +196,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 			return nil
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistryAddAuditMetadataIfNotAvailable(auth.ContextWithReBACDerivedTarget(ctx, "submodel", decodedIdentifier, "submodel_descriptor", descriptor.Id), submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -251,7 +251,7 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 			return deleteErr
 		}
 		if deleteDescriptorErr := s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
+			submodelRegistryAddAuditMetadataIfNotAvailable(auth.ContextWithReBACDerivedTarget(ctx, "submodel", decodedSubmodelIdentifier, "submodel_descriptor", decodedSubmodelIdentifier), submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
 		); deleteDescriptorErr != nil {
 			return deleteDescriptorErr
 		}
@@ -348,7 +348,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 			return descriptorErr
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistryAddAuditMetadataIfNotAvailable(auth.ContextWithReBACDerivedTarget(ctx, "submodel", decodedIdentifier, "submodel_descriptor", descriptor.Id), submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -439,7 +439,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 			return descriptorErr
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistryAddAuditMetadataIfNotAvailable(auth.ContextWithReBACDerivedTarget(ctx, "submodel", decodedIdentifier, "submodel_descriptor", descriptor.Id), submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -539,7 +539,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 		operation = aasRegistrySyncDeleteEmbeddedOperation
 	}
 	for _, aasID := range referencingAASIDs {
-		aasDescriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, aasID)
+		aasDescriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(auth.ReBACPlanningContext(ctx), tx, aasID)
 		if getDescriptorErr != nil {
 			if common.IsErrNotFound(getDescriptorErr) {
 				continue
@@ -551,6 +551,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 			aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor.Id)
 		} else {
 			aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
+			ctx = auth.ContextWithReBACEmbeddedSource(ctx, aasDescriptor.Id, submodelDescriptor.Id)
 		}
 
 		if len(aasDescriptor.Endpoints) == 0 {
@@ -558,7 +559,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 		}
 
 		if upsertErr := s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
-			aasRegistryAddAuditMetadataIfNotAvailable(ctx, operation), tx, aasDescriptor,
+			aasRegistryAddAuditMetadataIfNotAvailable(auth.ContextWithReBACDerivedTarget(ctx, "submodel", submodelDescriptor.Id, "aas_descriptor", aasDescriptor.Id), operation), tx, aasDescriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
