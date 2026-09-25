@@ -189,7 +189,7 @@ func (r *resolution) resolveSuperpathAAS(ctx context.Context, permission string)
 	if err != nil || !allowed {
 		return err
 	}
-	return r.grants.AllowResources(auth.SemanticResourceAAS, []string{authUUID}, r.rights()...)
+	return r.grants.AllowQueriedResources(auth.SemanticResourceAAS, liveObject(KindAAS, r.keys, permission, authUUID), r.rights()...)
 }
 
 func (r *resolution) resolveIdentifiable(ctx context.Context, spec routeSpec) error {
@@ -214,7 +214,7 @@ func (r *resolution) resolveIdentifiable(ctx context.Context, spec routeSpec) er
 	if err != nil || !allowed {
 		return err
 	}
-	return r.grants.AllowResources(spec.kind.Semantic, []string{authUUID}, rights...)
+	return r.grants.AllowQueriedResources(spec.kind.Semantic, liveObject(spec.kind, r.keys, permission, authUUID), rights...)
 }
 
 func (r *resolution) resolveCreate(ctx context.Context, kind ResourceKind) error {
@@ -249,43 +249,40 @@ func (r *resolution) resolveElement(ctx context.Context, spec routeSpec) error {
 	if err != nil || !allowed {
 		return err
 	}
-	return r.grants.AllowSubmodelElement(submodelUUID, path, rights...)
+	return r.allowLiveElements(submodelUUID, permission, rights)
+}
+
+// allowLiveElements grants the Submodel when the caller holds permission on
+// it, and every element subtree the caller holds permission on, both as live
+// queries. The preceding decision guarantees that the target is covered.
+func (r *resolution) allowLiveElements(submodelUUID string, permission string, rights []grammar.RightsEnum) error {
+	if err := r.grants.AllowQueriedResources(auth.SemanticResourceSM, liveObject(KindSubmodel, r.keys, permission, submodelUUID), rights...); err != nil {
+		return err
+	}
+	return r.grants.AllowQueriedSubmodelElements(liveElements(r.keys, permission, submodelUUID), rights...)
 }
 
 // resolveSubmodelElements grants the element list of a Submodel: the whole
-// Submodel when the caller can read it, otherwise the granted subtrees.
+// Submodel when the caller can read it and the granted subtrees otherwise.
 func (r *resolution) resolveSubmodelElements(ctx context.Context) error {
 	submodelUUID, found, err := r.lookup(ctx, KindSubmodel)
 	if err != nil || !found {
 		return err
 	}
-	allowed, err := hasPermission(ctx, r.db(), KindSubmodel, submodelUUID, r.keys, PermissionRead)
-	if err != nil {
+	allowed, err := exists(ctx, r.db(), "REBAC-RESOLVEELEMENTS-EXISTS",
+		goqu.L("?::uuid IN (?)", submodelUUID, liveObjects(KindSubmodel, r.keys, PermissionRead)),
+		existsQuery(liveElements(r.keys, PermissionRead, submodelUUID)))
+	if err != nil || !allowed {
 		return err
 	}
-	if allowed {
-		return r.grants.AllowResources(auth.SemanticResourceSM, []string{submodelUUID}, r.rights()...)
-	}
-	elements := grantedElements(r.keys, PermissionRead, submodelUUID)
-	granted, err := exists(ctx, r.db(), "REBAC-RESOLVEELEMENTS-EXISTS", existsQuery(elements))
-	if err != nil || !granted {
-		return err
-	}
-	return r.grants.AllowQueriedSubmodelElements(elements, r.rights()...)
+	return r.allowLiveElements(submodelUUID, PermissionRead, r.rights())
 }
 
 // resolveList grants the objects of a list route. The grant is a SQL
 // subquery evaluated by the backend, so lists need no allowlist and no cap.
 // Callers without any readable object keep today's ABAC decision.
 func (r *resolution) resolveList(ctx context.Context, kind ResourceKind) error {
-	admin, err := isRepositoryAdmin(ctx, r.db(), kind, r.keys)
-	if err != nil {
-		return err
-	}
-	if admin {
-		return r.grants.AllowAllOfKind(kind.Semantic, r.rights()...)
-	}
-	readable := permittedObjects(kind, r.keys, PermissionRead)
+	readable := liveObjects(kind, r.keys, PermissionRead)
 	readableExists, err := exists(ctx, r.db(), "REBAC-RESOLVELIST-EXISTS", existsQuery(readable))
 	if err != nil || !readableExists {
 		return err

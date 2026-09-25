@@ -126,22 +126,20 @@ func TestListsAreGrantedAsQueriesOnlyWhenSomethingIsReadable(t *testing.T) {
 	listRequest := request(http.MethodGet, "/concept-descriptions", nil, "alice", grammar.RightsEnumREAD)
 	coordinator, mock := testCoordinator(t)
 	expectDecision(mock, false)
-	expectDecision(mock, false)
 	grants, err := coordinator.Resolve(t.Context(), listRequest)
 	require.NoError(t, err)
 	require.True(t, grants.IsEmpty(), "callers without readable objects keep the ABAC denial")
 
-	expectDecision(mock, false)
 	expectDecision(mock, true)
 	grants, err = coordinator.Resolve(t.Context(), listRequest)
 	require.NoError(t, err)
 	require.False(t, grants.IsEmpty())
-
-	expectDecision(mock, true)
-	grants, err = coordinator.Resolve(t.Context(), listRequest)
-	require.NoError(t, err)
-	require.False(t, grants.IsEmpty(), "repository admins see every object of the kind")
 	require.NoError(t, mock.ExpectationsWereMet())
+
+	sql, _, err := liveObjects(KindConceptDescription, []string{UserKey(testIssuer, "alice")}, PermissionRead).ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, sql, "'admin'", "repository admins see every object of the kind")
+	require.Contains(t, sql, "UNION")
 }
 
 func TestPermissionQueriesFollowTheRelationModel(t *testing.T) {

@@ -85,6 +85,29 @@ func permittedObjects(kind ResourceKind, subjectKeys []string, permission string
 	return direct
 }
 
+// liveObjects selects every object of kind the subjects hold permission on,
+// including all objects when they administer the repository. Grants built
+// from it are re-evaluated by every backend query, so revocations also stop
+// asynchronous work that captured the request context.
+func liveObjects(kind ResourceKind, subjectKeys []string, permission string) *goqu.SelectDataset {
+	admin := dialect.From(goqu.T(kind.Table).As("admin_scope")).
+		Select(goqu.I("admin_scope.auth_uuid")).
+		Where(existsQuery(repositoryGrant(kind, subjectKeys, RelationAdmin)))
+	return permittedObjects(kind, subjectKeys, permission).Union(admin)
+}
+
+// liveObject restricts liveObjects to one object.
+func liveObject(kind ResourceKind, subjectKeys []string, permission string, authUUID string) *goqu.SelectDataset {
+	return dialect.From(liveObjects(kind, subjectKeys, permission).As("live")).
+		Select(goqu.I("live.object_uuid")).
+		Where(goqu.I("live.object_uuid").Eq(goqu.L("?::uuid", authUUID)))
+}
+
+// liveElements selects the granted element subtrees of one Submodel.
+func liveElements(subjectKeys []string, permission string, submodelUUID string) *goqu.SelectDataset {
+	return grantedElements(subjectKeys, permission, submodelUUID)
+}
+
 // grantedElements selects (submodel_uuid, element_path) pairs of element
 // grants implying permission, optionally restricted to one Submodel.
 func grantedElements(subjectKeys []string, permission string, submodelUUID string) *goqu.SelectDataset {
