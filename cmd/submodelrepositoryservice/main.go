@@ -45,7 +45,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
@@ -210,11 +209,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "SubmodelRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
-	var claimsMiddleware []func(http.Handler) http.Handler
-	if cfg.General.EnableCustomMiddlewareHeaderInjection {
-		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
-	}
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "submodelrepositoryservice", claimsMiddleware...)
+	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "submodelrepositoryservice")
 	if err != nil {
 		return err
 	}

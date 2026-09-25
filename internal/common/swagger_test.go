@@ -29,11 +29,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/require"
+	"go.yaml.in/yaml/v3"
 )
 
 func TestDetectPart2SchemaVersion(t *testing.T) {
@@ -95,14 +100,14 @@ func TestLocalizePart1SchemaReferences_RewritesRemoteAndRelativeRefs(t *testing.
 
 func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 	r := chi.NewRouter()
-	AddSwaggerUI(r, SwaggerUIConfig{
+	require.NoError(t, AddSwaggerUI(r, SwaggerUIConfig{
 		Title:       "test",
 		SpecURL:     "/api-docs/openapi.yaml",
 		UIPath:      "/swagger",
 		SpecPath:    "/api-docs/openapi.yaml",
 		SpecContent: []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\npaths:\n  /x:\n    get:\n      responses:\n        '400':\n          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'\n"),
 		BasePath:    "/",
-	})
+	}))
 
 	specReq := httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil)
 	specRecorder := httptest.NewRecorder()
@@ -130,14 +135,14 @@ func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 
 func TestAddSwaggerUIServesLocalPart1Schemas(t *testing.T) {
 	r := chi.NewRouter()
-	AddSwaggerUI(r, SwaggerUIConfig{
+	require.NoError(t, AddSwaggerUI(r, SwaggerUIConfig{
 		Title:       "test",
 		SpecURL:     "/api-docs/openapi.yaml",
 		UIPath:      "/swagger",
 		SpecPath:    "/api-docs/openapi.yaml",
 		SpecContent: []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\npaths:\n  /x:\n    get:\n      responses:\n        '200':\n          description: ok\n          content:\n            application/json:\n              schema:\n                $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/Reference'\n"),
 		BasePath:    "/",
-	})
+	}))
 
 	specReq := httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil)
 	specRecorder := httptest.NewRecorder()
@@ -175,14 +180,14 @@ func TestAddSwaggerUIServesLocalPart1Schemas(t *testing.T) {
 
 func TestAddSwaggerUIReturnsStandardizedErrorForUnknownSchemaVersions(t *testing.T) {
 	r := chi.NewRouter()
-	AddSwaggerUI(r, SwaggerUIConfig{
+	require.NoError(t, AddSwaggerUI(r, SwaggerUIConfig{
 		Title:       "test",
 		SpecURL:     "/api-docs/openapi.yaml",
 		UIPath:      "/swagger",
 		SpecPath:    "/api-docs/openapi.yaml",
 		SpecContent: []byte("openapi: 3.0.3\n"),
 		BasePath:    "/",
-	})
+	}))
 
 	for _, schemaPath := range []string{
 		"/api-docs/part1-schemas/unknown/openapi.yaml",
@@ -241,6 +246,143 @@ func TestAddSwaggerUIFromFSHonorsSwaggerEnabled(t *testing.T) {
 	}
 }
 
+func TestAddSwaggerUIFromFSHonorsHeaderInjectionEnvironment(t *testing.T) {
+	specFiles, err := filepath.Glob("../../cmd/*/openapi.yaml")
+	require.NoError(t, err)
+	require.NotEmpty(t, specFiles)
+	for _, setting := range []string{"unset", "false", "true", "nil config"} {
+		t.Run(setting, func(t *testing.T) {
+			withUnsetEnv(t, "GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION")
+			if setting == "false" || setting == "true" {
+				t.Setenv("GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION", setting)
+			}
+			var cfg *Config
+			if setting != "nil config" {
+				var err error
+				cfg, err = LoadConfig("")
+				require.NoError(t, err)
+				cfg.Swagger.Enabled = true
+				cfg.Server.ContextPath = "/api"
+				cfg.ABAC.Enabled = true
+				cfg.ABAC.ManagementAPI.Enabled = true
+			}
+			for _, specFile := range specFiles {
+				service := filepath.Base(filepath.Dir(specFile))
+				t.Run(service, func(t *testing.T) {
+					router := chi.NewRouter()
+					err := AddSwaggerUIFromFS(router, os.DirFS("../../cmd/"+service), "openapi.yaml", service, "/swagger", "/api-docs/openapi.yaml", cfg)
+					require.NoError(t, err)
+					specPath := "/api-docs/openapi.yaml"
+					if cfg != nil {
+						specPath = "/api" + specPath
+					}
+					recorder := httptest.NewRecorder()
+					router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, specPath, nil))
+					require.Equal(t, http.StatusOK, recorder.Code)
+					assertSwaggerEdcBpnHeader(t, recorder.Body.Bytes(), setting == "true" && service != "companylookupservice")
+					if service == "companylookupservice" {
+						require.NotContains(t, recorder.Body.String(), "Edc-Bpn")
+						require.NotContains(t, recorder.Body.String(), "/security/abac/")
+					}
+				})
+			}
+		})
+	}
+}
+
+func assertSwaggerEdcBpnHeader(t *testing.T, content []byte, enabled bool) {
+	t.Helper()
+	var spec struct {
+		Components struct {
+			Parameters map[string]any `yaml:"parameters"`
+		} `yaml:"components"`
+		Paths map[string]struct {
+			Parameters []map[string]any `yaml:"parameters"`
+			Get        struct {
+				Responses map[string]any `yaml:"responses"`
+			} `yaml:"get"`
+		} `yaml:"paths"`
+	}
+	require.NoError(t, yaml.Unmarshal(content, &spec))
+	require.NotEmpty(t, spec.Paths)
+	_, hasHeader := spec.Components.Parameters["EdcBpnHeader"]
+	require.Equal(t, enabled, hasHeader)
+	headerRef := map[string]any{"$ref": "#/components/parameters/EdcBpnHeader"}
+	for path, pathItem := range spec.Paths {
+		if enabled {
+			require.Contains(t, pathItem.Parameters, headerRef, path)
+		} else {
+			require.NotContains(t, pathItem.Parameters, headerRef, path)
+		}
+	}
+	if !enabled {
+		require.NotContains(t, string(content), "EdcBpnHeader")
+	} else {
+		require.Equal(t, len(spec.Paths), strings.Count(string(content), "#/components/parameters/EdcBpnHeader"))
+	}
+	if description, exists := spec.Paths["/description"]; exists {
+		require.Contains(t, description.Get.Responses, "200")
+	}
+}
+
+func TestAddSwaggerUIFromFSFiltersPathAndInlineHeaders(t *testing.T) {
+	spec := `openapi: 3.0.3
+paths:
+  /items:
+    parameters:
+      - name: edc-bpn
+        in: header
+        schema: {type: string}
+      - name: Edc-Bpn
+        in: query
+        schema: {type: string}
+    get:
+      parameters:
+        - $ref: '#/components/parameters/EdcBpnHeader'
+      responses:
+        '200': {description: OK}
+    post:
+      parameters:
+        - name: Edc-Bpn
+          in: header
+          schema: {type: string}
+      responses:
+        '201': {description: Created}
+components:
+  parameters:
+    EdcBpnHeader:
+      name: Edc-Bpn
+      in: header
+      schema: {type: string}
+`
+	router := chi.NewRouter()
+	err := AddSwaggerUIFromFS(router, fstest.MapFS{"openapi.yaml": {Data: []byte(spec)}}, "openapi.yaml", "test", "/swagger", "/api-docs/openapi.yaml", nil)
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var served map[string]any
+	require.NoError(t, yaml.Unmarshal(recorder.Body.Bytes(), &served))
+	paths := served["paths"].(map[string]any)
+	items := paths["/items"].(map[string]any)
+	require.Equal(t, []any{map[string]any{
+		"name": "Edc-Bpn", "in": "query", "schema": map[string]any{"type": "string"},
+	}}, items["parameters"])
+	require.NotContains(t, items["get"], "parameters")
+	require.NotContains(t, items["post"], "parameters")
+	require.Contains(t, paths, "/verify")
+	require.NotContains(t, recorder.Body.String(), "EdcBpnHeader")
+}
+
+func TestAddSwaggerUIFromFSRejectsMalformedSpec(t *testing.T) {
+	router := chi.NewRouter()
+	err := AddSwaggerUIFromFS(router, fstest.MapFS{"openapi.yaml": {Data: []byte("paths: [")}}, "openapi.yaml", "test", "/swagger", "/api-docs/openapi.yaml", nil)
+	require.ErrorContains(t, err, "SWAGGER-SPEC-PARSE")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
+	require.Equal(t, http.StatusNotFound, recorder.Code)
+}
+
 func TestAddSwaggerUIFromFSDisablesAllDocumentationWhenABACManagementIsEnabled(t *testing.T) {
 	r := chi.NewRouter()
 	cfg := &Config{
@@ -281,7 +423,7 @@ func TestAddSwaggerUIFromFSDisablesAllDocumentationWhenABACManagementIsEnabled(t
 func TestAddSwaggerUIDoesNotInjectVerifyEndpointWhenDisabled(t *testing.T) {
 	r := chi.NewRouter()
 	includeVerifyEndpoint := false
-	AddSwaggerUI(r, SwaggerUIConfig{
+	require.NoError(t, AddSwaggerUI(r, SwaggerUIConfig{
 		Title:                 "test",
 		SpecURL:               "/api-docs/openapi.yaml",
 		UIPath:                "/swagger",
@@ -289,7 +431,7 @@ func TestAddSwaggerUIDoesNotInjectVerifyEndpointWhenDisabled(t *testing.T) {
 		SpecContent:           []byte("openapi: 3.0.3\npaths:\n  /x:\n    get:\n      responses:\n        '200':\n          description: ok\n"),
 		BasePath:              "/",
 		IncludeVerifyEndpoint: &includeVerifyEndpoint,
-	})
+	}))
 
 	specReq := httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil)
 	specRecorder := httptest.NewRecorder()
@@ -307,14 +449,14 @@ func TestAddSwaggerUIInjectsABACManagementOnlyWhenEnabled(t *testing.T) {
 
 	disabledRouter := chi.NewRouter()
 	includeABACManagement := false
-	AddSwaggerUI(disabledRouter, SwaggerUIConfig{
+	require.NoError(t, AddSwaggerUI(disabledRouter, SwaggerUIConfig{
 		Title:                 "test",
 		SpecURL:               "/api-docs/openapi.yaml",
 		UIPath:                "/swagger",
 		SpecPath:              "/api-docs/openapi.yaml",
 		SpecContent:           spec,
 		IncludeABACManagement: &includeABACManagement,
-	})
+	}))
 	disabledRecorder := httptest.NewRecorder()
 	disabledRouter.ServeHTTP(disabledRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
 	if strings.Contains(disabledRecorder.Body.String(), "/security/abac/policy-versions") {
@@ -326,14 +468,14 @@ func TestAddSwaggerUIInjectsABACManagementOnlyWhenEnabled(t *testing.T) {
 
 	enabledRouter := chi.NewRouter()
 	includeABACManagement = true
-	AddSwaggerUI(enabledRouter, SwaggerUIConfig{
+	require.NoError(t, AddSwaggerUI(enabledRouter, SwaggerUIConfig{
 		Title:                 "test",
 		SpecURL:               "/api-docs/openapi.yaml",
 		UIPath:                "/swagger",
 		SpecPath:              "/api-docs/openapi.yaml",
 		SpecContent:           spec,
 		IncludeABACManagement: &includeABACManagement,
-	})
+	}))
 	enabledRecorder := httptest.NewRecorder()
 	enabledRouter.ServeHTTP(enabledRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
 	if !strings.Contains(enabledRecorder.Body.String(), "/security/abac/policy-versions") {

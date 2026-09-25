@@ -1,4 +1,5 @@
 openapi: 3.0.3
+x-basyx-security: true
 info:
   title: DotAAS Part 2 | HTTP/REST | Concept Description Repository Service Specification
   description: "The ConceptDescription Repository Service Specification as part of [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).  \nCopyright: Industrial Digital Twin Association (IDTA) March 2023"

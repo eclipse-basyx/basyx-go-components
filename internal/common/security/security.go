@@ -129,7 +129,7 @@ func SetupSecurityWithClaimsMiddleware(
 		DenyAsNotFoundPrefixes: abacDeniedAsNotFoundPrefixes(cfg.Server.ContextPath),
 	}
 
-	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), claimsMiddleware...)
+	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), cfg.General.EnableCustomMiddlewareHeaderInjection, claimsMiddleware...)
 	BindEventFeedAuthorizer(abacSettings)
 	return nil
 }
@@ -161,7 +161,7 @@ func SetupSecurityWithAccessModelProvider(
 		ModelProvider:          provider,
 		DenyAsNotFoundPrefixes: abacDeniedAsNotFoundPrefixes(cfg.Server.ContextPath),
 	}
-	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), claimsMiddleware...)
+	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), cfg.General.EnableCustomMiddlewareHeaderInjection, claimsMiddleware...)
 	BindEventFeedAuthorizer(abacSettings)
 	return nil
 }
@@ -210,16 +210,16 @@ func applySecurityMiddleware(
 	r *api.Mux,
 	oidcMiddleware func(http.Handler) http.Handler,
 	abacMiddleware func(http.Handler) http.Handler,
+	includeEdcBpnHeader bool,
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) {
-	if len(claimsMiddleware) > 0 {
-		chain := append([]func(http.Handler) http.Handler{oidcMiddleware}, claimsMiddleware...)
-		chain = append(chain, abacMiddleware)
-		r.Use(chain...)
-		return
+	chain := []func(http.Handler) http.Handler{oidcMiddleware}
+	if includeEdcBpnHeader {
+		chain = append(chain, EdcBpnHeaderMiddleware)
 	}
-
-	r.Use(oidcMiddleware, abacMiddleware)
+	chain = append(chain, claimsMiddleware...)
+	chain = append(chain, abacMiddleware)
+	r.Use(chain...)
 }
 
 func toClaimMappingSettings(configs []common.OIDCClaimMappingConfig) []OIDCClaimMappingSettings {

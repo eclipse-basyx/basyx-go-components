@@ -379,11 +379,12 @@ Registry-specific operation semantics:
 
 ## Claims enrichment
 
-- Digital Twin Registry injects a non-empty `Edc-Bpn` header into a request-local
-  copy of the verified claims before ABAC. A missing or whitespace-only header
-  does not create or overwrite a claim.
+- Every API component using the shared security setup injects a non-empty `Edc-Bpn` header into a request-local copy of the claims after OIDC and before ABAC only when `general.enableCustomMiddlewareHeaderInjection` (`GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION`) is `true` and ABAC is enabled. The default is `false`.
   - [internal/common/security/edc_bpn.go](../../internal/common/security/edc_bpn.go)
-  - [cmd/digitaltwinregistryservice/main.go](../../cmd/digitaltwinregistryservice/main.go)
+  - [internal/common/security/security.go](../../internal/common/security/security.go)
+- This applies to AAS Environment, Digital Twin Registry, the AAS and Submodel registries and repositories, Discovery, Concept Description Repository, AASX File Server, and DPP API. Company Lookup has no security middleware or header injection and does not expose the header or ABAC management endpoints in Swagger, regardless of these settings.
+- For these secured components, Swagger/OpenAPI exposes `Edc-Bpn` on every documented API path only when the header injection setting is enabled, including Submodel endpoints and enabled verification or ABAC management endpoints. When disabled, headers cannot override token claims.
+- A nonblank header overrides an existing `Edc-Bpn` token claim; a missing or blank header preserves it. Only enable injection behind trusted infrastructure that controls this header, because caller-controlled values can change access decisions.
 
 ## Access model structure (high level)
 

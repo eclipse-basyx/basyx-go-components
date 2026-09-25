@@ -42,7 +42,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/digitaltwinregistry"
@@ -155,12 +154,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "DigitalTwinRegistryService")
-	var claimsMiddleware []func(http.Handler) http.Handler
-	if cfg.General.EnableCustomMiddlewareHeaderInjection {
-		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
-	}
-
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "digitaltwinregistryservice", claimsMiddleware...)
+	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "digitaltwinregistryservice")
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,5 @@
 openapi: 3.0.3
+x-basyx-security: true
 info:
   title: AAS Environment Service API
   description: Combined API for Asset Administration Shell Registry, Submodel Registry,

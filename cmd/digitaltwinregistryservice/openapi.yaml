@@ -1,12 +1,14 @@
 openapi: 3.0.3
+x-basyx-security: true
 info:
   title: Digital Twin Registry API
   description: |-
     Combined API for Asset Administration Shell Registry Service and
     Asset Administration Shell Basic Discovery Service.
 
-    Edc-Bpn header: Optional header used in the query language for access control
-    and filtering. If the end user can change this header, the access control is
+    Edc-Bpn header: Available when GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION=true
+    (disabled by default). Used in the query language for access control and
+    filtering. If the end user can change this header, the access control is
     not secure because it is not derived from the token.
 
     Discovery integration:

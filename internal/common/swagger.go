@@ -27,7 +27,6 @@
 package common
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
 	"html/template"
@@ -100,6 +99,7 @@ type SwaggerUIConfig struct {
 	IncludeABACManagement *bool          // nil/default=false, true injects ABAC management API paths
 	IncludeEventSchemas   bool
 	IncludeEventFeed      *bool // nil/default=false, true injects Event Feed API paths when eventing is enabled
+	IncludeEdcBpnHeader   bool  // Expose the Edc-Bpn header on every documented API path
 }
 
 // ContactConfig holds contact information for OpenAPI spec
@@ -1598,55 +1598,19 @@ func injectContact(specContent []byte, contact *ContactConfig) []byte {
 // When enabled, this adds these endpoints:
 //   - cfg.UIPath: Serves the Swagger UI HTML page
 //   - cfg.SpecPath: Serves the OpenAPI specification file
-func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
+func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) error {
 	enabled := true
 	if cfg.Enabled != nil {
 		enabled = *cfg.Enabled
 	}
 	if !enabled {
 		slog.Info("Swagger disabled")
-		return
+		return nil
 	}
 
-	// Inject server URL into spec if configured
-	specContent := cfg.SpecContent
-	if cfg.ServerURL != "" {
-		specContent = injectServerURL(specContent, cfg.ServerURL)
-	}
-
-	// Inject contact information if configured
-	if cfg.Contact != nil {
-		specContent = injectContact(specContent, cfg.Contact)
-	}
-
-	// Repoint schema references to local, bundled schema snapshots so Swagger works offline.
-	specContent = localizeSchemaReferences(specContent, cfg.SpecPath)
-
-	includeVerifyEndpoint := true
-	if cfg.IncludeVerifyEndpoint != nil {
-		includeVerifyEndpoint = *cfg.IncludeVerifyEndpoint
-	}
-	if includeVerifyEndpoint {
-		specContent = injectVerifyEndpoint(specContent)
-	}
-	includeABACManagement := false
-	if cfg.IncludeABACManagement != nil {
-		includeABACManagement = *cfg.IncludeABACManagement
-	}
-	if includeABACManagement {
-		specContent = injectABACManagementAPI(specContent)
-	}
-	includeEventFeed := false
-	if cfg.IncludeEventFeed != nil {
-		includeEventFeed = *cfg.IncludeEventFeed
-	}
-	if includeEventFeed {
-		specContent = injectEventFeedEndpoints(specContent)
-	} else if cfg.IncludeEventSchemas {
-		_, schemaPaths, found := strings.Cut(eventFeedPathsYAML, "  /.well-known/event-feed/schemas/{schema}:")
-		if found {
-			specContent = injectPathFragment(specContent, "  /.well-known/event-feed/schemas/{schema}:"+schemaPaths)
-		}
+	specContent, err := prepareSwaggerSpec(cfg)
+	if err != nil {
+		return err
 	}
 
 	// Serve the OpenAPI spec
@@ -1724,6 +1688,28 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 
 	slog.Info("Swagger UI available", "path", cfg.UIPath)
 	slog.Info("OpenAPI specification available", "path", cfg.SpecPath)
+	return nil
+}
+
+func prepareSwaggerSpec(cfg SwaggerUIConfig) ([]byte, error) {
+	specContent := injectServerURL(cfg.SpecContent, cfg.ServerURL)
+	specContent = injectContact(specContent, cfg.Contact)
+	specContent = localizeSchemaReferences(specContent, cfg.SpecPath)
+	if cfg.IncludeVerifyEndpoint == nil || *cfg.IncludeVerifyEndpoint {
+		specContent = injectVerifyEndpoint(specContent)
+	}
+	if cfg.IncludeABACManagement != nil && *cfg.IncludeABACManagement {
+		specContent = injectABACManagementAPI(specContent)
+	}
+	if cfg.IncludeEventFeed != nil && *cfg.IncludeEventFeed {
+		specContent = injectEventFeedEndpoints(specContent)
+	} else if cfg.IncludeEventSchemas {
+		_, schemaPaths, found := strings.Cut(eventFeedPathsYAML, "  /.well-known/event-feed/schemas/{schema}:")
+		if found {
+			specContent = injectPathFragment(specContent, "  /.well-known/event-feed/schemas/{schema}:"+schemaPaths)
+		}
+	}
+	return configureSwaggerEdcBpnHeader(specContent, cfg.IncludeEdcBpnHeader)
 }
 
 func writeSwaggerSchemaNotFound(w http.ResponseWriter, part, version string) {
@@ -1739,6 +1725,8 @@ func writeSwaggerSchemaNotFound(w http.ResponseWriter, part, version string) {
 
 // AddSwaggerUIFromFS adds Swagger/OpenAPI documentation endpoints using a filesystem.
 // When serverConfig.Swagger.Enabled is false, no documentation endpoints are added.
+// Specs declare shared security support with x-basyx-security: true to expose
+// configured claim headers and ABAC management documentation.
 //
 // Parameters:
 //   - r: Chi router to add endpoints to
@@ -1758,28 +1746,12 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 	if err != nil {
 		return err
 	}
-
-	// Build server URL and paths from config
-	serverURL := ""
-	contextPath := ""
-	if serverConfig != nil {
-		host := serverConfig.Server.Host
-		// Use localhost for display if host is 0.0.0.0
-		if host == "0.0.0.0" || host == "" {
-			host = "localhost"
-		}
-		serverURL = fmt.Sprintf("http://%s:%d", host, serverConfig.Server.Port)
-		if serverConfig.Server.ContextPath != "" {
-			// Ensure context path starts with / but doesn't end with /
-			contextPath = serverConfig.Server.ContextPath
-			if !bytes.HasPrefix([]byte(contextPath), []byte("/")) {
-				contextPath = "/" + contextPath
-			}
-			// Remove trailing slash if present
-			contextPath = strings.TrimSuffix(contextPath, "/")
-			serverURL += contextPath
-		}
+	supportsSecurity, err := swaggerSupportsSecurity(content)
+	if err != nil {
+		return err
 	}
+
+	serverURL, contextPath := swaggerServerURL(serverConfig)
 
 	// Prepend context path to UI and spec paths
 	fullUIPath := contextPath + uiPath
@@ -1807,13 +1779,13 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 	if serverConfig != nil {
 		enabled = &serverConfig.Swagger.Enabled
 		includeVerifyEndpoint = &serverConfig.Server.VerificationEndpointAvailable
-		abacManagementEnabled := shouldIncludeABACManagement(serverConfig)
+		abacManagementEnabled := supportsSecurity && shouldIncludeABACManagement(serverConfig)
 		includeABACManagement = &abacManagementEnabled
 		eventFeedEnabled := serverConfig.Eventing.Feed.Enabled
 		includeEventFeed = &eventFeedEnabled
 	}
 
-	AddSwaggerUI(r, SwaggerUIConfig{
+	return AddSwaggerUI(r, SwaggerUIConfig{
 		Title:                 title,
 		SpecURL:               fullSpecPath,
 		UIPath:                fullUIPath,
@@ -1827,9 +1799,26 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string,
 		IncludeABACManagement: includeABACManagement,
 		IncludeEventFeed:      includeEventFeed,
 		IncludeEventSchemas:   serverConfig != nil && serverConfig.Eventing.TransportsEnabled(),
+		IncludeEdcBpnHeader:   supportsSecurity && serverConfig != nil && serverConfig.General.EnableCustomMiddlewareHeaderInjection,
 	})
+}
 
-	return nil
+func swaggerServerURL(serverConfig *Config) (string, string) {
+	if serverConfig == nil {
+		return "", ""
+	}
+	host := serverConfig.Server.Host
+	if host == "0.0.0.0" || host == "" {
+		host = "localhost"
+	}
+	contextPath := serverConfig.Server.ContextPath
+	if contextPath != "" {
+		if !strings.HasPrefix(contextPath, "/") {
+			contextPath = "/" + contextPath
+		}
+		contextPath = strings.TrimSuffix(contextPath, "/")
+	}
+	return fmt.Sprintf("http://%s:%d%s", host, serverConfig.Server.Port, contextPath), contextPath
 }
 
 func shouldIncludeABACManagement(serverConfig *Config) bool {

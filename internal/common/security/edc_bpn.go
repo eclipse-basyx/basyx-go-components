@@ -32,8 +32,7 @@ import (
 	"strings"
 )
 
-// EdcBpnHeaderMiddleware injects the Edc-Bpn header value into JWT claims
-// when security is enabled.
+// EdcBpnHeaderMiddleware injects the Edc-Bpn header value into the Edc-Bpn claim.
 func EdcBpnHeaderMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bpn := strings.TrimSpace(r.Header.Get("Edc-Bpn"))

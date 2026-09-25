@@ -1,4 +1,5 @@
 openapi: 3.0.3
+x-basyx-security: true
 info:
   description: |
     Digital Product Passport API aligned with the IDTA-01001 v3.2 DPP metamodel annex and the IDTA-01002 v3.2 DPP API mapping annex.
