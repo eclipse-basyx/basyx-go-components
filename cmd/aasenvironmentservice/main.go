@@ -250,7 +250,7 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASEnvironmentService")
 
-	rebacRuntime, err := rebac.Setup(ctx, cfg, sharedDB, "aasenvironmentservice")
+	rebacRuntime, err := rebac.Setup(ctx, cfg, sharedDB)
 	if err != nil {
 		return err
 	}

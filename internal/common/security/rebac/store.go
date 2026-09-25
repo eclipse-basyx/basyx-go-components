@@ -105,12 +105,7 @@ type Grant struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
-// Tuple returns the OpenFGA tuple projected from the grant.
-func (g Grant) Tuple() Tuple {
-	return Tuple{User: g.SubjectKey, Relation: g.Relation, Object: g.ObjectKey}
-}
-
-// SameRelationship reports whether two grants describe the same tuple.
+// SameRelationship reports whether two grants describe the same relationship.
 func (g Grant) SameRelationship(other Grant) bool {
 	return g.ObjectKey == other.ObjectKey && g.Relation == other.Relation && g.SubjectKey == other.SubjectKey
 }

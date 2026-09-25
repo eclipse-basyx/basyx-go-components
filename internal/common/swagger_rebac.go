@@ -60,7 +60,7 @@ const reBACAccessPathTemplate = `  {path}:
       parameters:
 {parameters}      responses:
         '200':
-          description: Direct grants, approved inheritance links and projection state. The ETag is the access revision.
+          description: Direct grants and approved inheritance links. The ETag is the access revision.
           headers:
             ETag:
               schema:
@@ -71,8 +71,6 @@ const reBACAccessPathTemplate = `  {path}:
                 $ref: '#/components/schemas/ReBACAccess'
         '404':
           description: Missing resource or caller without can_manage
-        '503':
-          description: OpenFGA unavailable
   {path}/grants:
     put:
       tags: [ReBAC Access Management]
@@ -98,13 +96,11 @@ const reBACAccessPathTemplate = `  {path}:
                   subject: engineering
       responses:
         '200':
-          description: Grants replaced and applied to OpenFGA
+          description: Grants replaced; they take effect immediately
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReBACAccess'
-        '202':
-          description: Grants stored; the Location header points to the projection operation
         '404':
           description: Missing resource or caller without can_manage
         '409':
@@ -209,7 +205,7 @@ const reBACInheritancePathTemplate = `  {path}/inheritance:
                     type: string
       responses:
         '200':
-          description: Links replaced and applied
+          description: Links replaced
           content:
             application/json:
               schema:
@@ -239,38 +235,9 @@ const reBACGlobalPathsYAML = `  /security/rebac/invitations/accept:
                   type: string
       responses:
         '200':
-          description: A direct grant for the caller was created and applied
-        '202':
-          description: Grant stored; projection pending
+          description: A direct grant for the caller was created
         '404':
-          description: Unknown, expired, revoked or exhausted invitation
-  /security/rebac/status:
-    get:
-      tags: [ReBAC Administration]
-      summary: Gets scope, store, model and projection state
-      operationId: GetReBACStatus
-      responses:
-        '200':
-          description: ReBAC status for administrators
-        '404':
-          description: Caller is not a configured administrator
-  /security/rebac/operations/{operationId}:
-    get:
-      tags: [ReBAC Access Management]
-      summary: Gets the projection state of an accepted access change
-      operationId: GetReBACOperation
-      parameters:
-        - name: operationId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: applied or pending
-        '404':
-          description: Unknown operation
+          description: Unknown, expired, revoked, exhausted or foreign invitation
   /security/rebac/repositories/{repositoryKind}/$access:
     get:
       tags: [ReBAC Administration]
@@ -309,7 +276,7 @@ const reBACGlobalPathsYAML = `  /security/rebac/invitations/accept:
   /security/rebac/admin/reconcile:
     post:
       tags: [ReBAC Administration]
-      summary: Removes orphaned desired state and repairs OpenFGA drift
+      summary: Removes grants, links and invitations of deleted resources
       operationId: PostReBACReconcile
       responses:
         '200':
@@ -413,13 +380,6 @@ const reBACSchemasYAML = `    ReBACGrant:
               approvedAt:
                 type: string
                 format: date-time
-        sync:
-          type: object
-          properties:
-            pendingOperations:
-              type: integer
-            revocationPending:
-              type: boolean
     ReBACEffectiveRights:
       type: object
       properties:
@@ -449,6 +409,15 @@ const reBACSchemasYAML = `    ReBACGrant:
           minimum: 1
           maximum: 1000
           default: 1
+        expectedPrincipal:
+          type: object
+          description: Restricts redemption to one verified user
+          required: [issuer, subject]
+          properties:
+            issuer:
+              type: string
+            subject:
+              type: string
     ReBACInvitation:
       type: object
       properties:
@@ -464,6 +433,9 @@ const reBACSchemasYAML = `    ReBACGrant:
           type: integer
         usedCount:
           type: integer
+        restricted:
+          type: boolean
+          description: Only the expected principal may redeem the invitation
         token:
           type: string
           description: Only returned when the invitation is created
@@ -521,7 +493,7 @@ const reBACParametersYAML = `    ReBACAASIdentifier:
 // ReBAC management routes.
 func injectReBACManagementAPI(specContent []byte) []byte {
 	content := string(specContent)
-	if strings.Contains(content, "  /security/rebac/status:") {
+	if strings.Contains(content, "  /security/rebac/invitations/accept:") {
 		return specContent
 	}
 	fragments := make([]string, 0, 2*len(reBACAccessBases)+1)

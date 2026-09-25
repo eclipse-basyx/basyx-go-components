@@ -133,56 +133,6 @@ func DeleteGrantsOfResource(ctx context.Context, tx *sql.Tx, authUUID string) ([
 	return scanGrants(rows)
 }
 
-// ElementGrantPaths returns the element paths of a Submodel with grants of
-// any of the given subjects.
-func ElementGrantPaths(ctx context.Context, q Queryer, submodelAuthUUID string, subjectKeys []string) ([]string, error) {
-	ds := dialect.From(goqu.T(grantTable)).
-		SelectDistinct(goqu.C("element_path")).
-		Where(
-			goqu.C("object_type").Eq(TypeElement),
-			goqu.C("object_uuid").Eq(goqu.L("?::uuid", submodelAuthUUID)),
-			goqu.C("subject_key").In(subjectKeys),
-		).
-		Order(goqu.C("element_path").Asc())
-	return queryStrings(ctx, q, "REBAC-ELEMENTGRANTPATHS", ds)
-}
-
-// CandidateObjects returns the objects of a type that carry direct grants of
-// any of the given subjects, bounded by limit.
-func CandidateObjects(ctx context.Context, q Queryer, objectType string, subjectKeys []string, limit int) ([]string, error) {
-	ds := dialect.From(goqu.T(grantTable)).
-		SelectDistinct(goqu.L("object_uuid::text")).
-		Where(goqu.C("object_type").Eq(objectType), goqu.C("subject_key").In(subjectKeys)).
-		Limit(uint(limit)) //nolint:gosec // limit is a validated positive configuration value
-	return queryStrings(ctx, q, "REBAC-CANDIDATEOBJECTS", ds)
-}
-
-func queryStrings(ctx context.Context, q Queryer, code string, ds *goqu.SelectDataset) ([]string, error) {
-	rows, err := queryDataset(ctx, q, code, ds)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var values []string
-	for rows.Next() {
-		var value string
-		if err = rows.Scan(&value); err != nil {
-			return nil, fmt.Errorf("%s-SCAN: %w", code, err)
-		}
-		values = append(values, value)
-	}
-	return values, rows.Err()
-}
-
-// CountRelation counts the grants of one relation on an object.
-func CountRelation(ctx context.Context, q Queryer, objectKey string, relation string) (int, error) {
-	ds := dialect.From(goqu.T(grantTable)).Select(goqu.COUNT(goqu.Star())).
-		Where(goqu.C("object_key").Eq(objectKey), goqu.C("relation").Eq(relation)).Prepared(true)
-	var count int
-	_, err := queryRowDataset(ctx, q, "REBAC-COUNTRELATION", ds, &count)
-	return count, err
-}
-
 // ObjectRevision returns the grant revision of an object.
 func ObjectRevision(ctx context.Context, q Queryer, objectKey string) (int64, error) {
 	ds := dialect.From(goqu.T("rebac_object_revision")).Select(goqu.C("revision")).
@@ -238,15 +188,6 @@ type SubmodelLink struct {
 	ApprovedAt   time.Time `json:"approvedAt"`
 }
 
-// Tuple returns the OpenFGA tuple projected from the link.
-func (l SubmodelLink) Tuple() Tuple {
-	return Tuple{
-		User:     ResourceObject(TypeAAS, l.AASUUID),
-		Relation: RelationLinkedAAS,
-		Object:   ResourceObject(TypeSubmodel, l.SubmodelUUID),
-	}
-}
-
 func selectLinks(ctx context.Context, q Queryer, code string, where exp.Expression) ([]SubmodelLink, error) {
 	ds := dialect.From(goqu.T("rebac_submodel_link")).
 		Select(goqu.L("submodel_uuid::text"), goqu.L("aas_uuid::text"), goqu.C("approved_by"), goqu.C("approved_at")).
@@ -270,20 +211,6 @@ func selectLinks(ctx context.Context, q Queryer, code string, where exp.Expressi
 // ListSubmodelLinks returns the approved AAS links of a Submodel.
 func ListSubmodelLinks(ctx context.Context, q Queryer, submodelUUID string) ([]SubmodelLink, error) {
 	return selectLinks(ctx, q, "REBAC-LISTSUBMODELLINKS", goqu.C("submodel_uuid").Eq(goqu.L("?::uuid", submodelUUID)))
-}
-
-// LinkedSubmodels returns Submodels linked to any of the given AAS.
-func LinkedSubmodels(ctx context.Context, q Queryer, aasUUIDs []string) ([]string, error) {
-	if len(aasUUIDs) == 0 {
-		return nil, nil
-	}
-	literal, err := uuidArrayLiteral(aasUUIDs)
-	if err != nil {
-		return nil, err
-	}
-	ds := dialect.From(goqu.T("rebac_submodel_link")).SelectDistinct(goqu.L("submodel_uuid::text")).
-		Where(goqu.L("aas_uuid = ANY(?::uuid[])", literal))
-	return queryStrings(ctx, q, "REBAC-LINKEDSUBMODELS", ds)
 }
 
 // InsertSubmodelLink stores an approved link.

@@ -96,7 +96,7 @@ func newRouteMatrix() routeMatrix {
 	addListRoutes(matrix)
 	addAASRoutes(matrix)
 	addSubmodelRoutes(matrix, "", "")
-	addSubmodelRoutes(matrix, superpathShell, RelationCanRead)
+	addSubmodelRoutes(matrix, superpathShell, PermissionRead)
 	addConceptDescriptionRoutes(matrix)
 	return matrix
 }
@@ -130,12 +130,12 @@ func addListRoutes(matrix routeMatrix) {
 }
 
 func addAASRoutes(matrix routeMatrix) {
-	read := routeSpec{target: targetAAS, kind: KindAAS, relation: RelationCanRead}
-	update := routeSpec{target: targetAAS, kind: KindAAS, relation: RelationCanUpdate}
+	read := routeSpec{target: targetAAS, kind: KindAAS, relation: PermissionRead}
+	update := routeSpec{target: targetAAS, kind: KindAAS, relation: PermissionUpdate}
 	shell := superpathShell
 	matrix.add(http.MethodGet, shell, read)
 	matrix.add(http.MethodPut, shell, routeSpec{target: targetAAS, kind: KindAAS, action: actionUpsert})
-	matrix.add(http.MethodDelete, shell, routeSpec{target: targetAAS, kind: KindAAS, relation: RelationCanDelete})
+	matrix.add(http.MethodDelete, shell, routeSpec{target: targetAAS, kind: KindAAS, relation: PermissionDelete})
 	for _, suffix := range []string{"/$reference", "/asset-information", "/asset-information/thumbnail", "/submodel-refs"} {
 		matrix.add(http.MethodGet, shell+suffix, read)
 	}
@@ -165,48 +165,48 @@ func addSubmodelRoutes(matrix routeMatrix, prefix string, aasRelation string) {
 	el := func(action routeAction, relation string) routeSpec {
 		return withAAS(routeSpec{target: targetElement, kind: KindSubmodel, action: action, relation: relation}, aasRelation)
 	}
-	elementList := withAAS(routeSpec{target: targetSubmodelElements, kind: KindSubmodel, relation: RelationCanRead}, aasRelation)
+	elementList := withAAS(routeSpec{target: targetSubmodelElements, kind: KindSubmodel, relation: PermissionRead}, aasRelation)
 
-	matrix.add(http.MethodGet, submodel, sm(RelationCanRead))
-	matrix.add(http.MethodPut, submodel, withAAS(routeSpec{target: targetSubmodel, kind: KindSubmodel, action: actionUpsert}, RelationCanUpdate))
-	matrix.add(http.MethodDelete, submodel, withAAS(routeSpec{target: targetSubmodel, kind: KindSubmodel, relation: RelationCanDelete}, RelationCanUpdate))
-	matrix.add(http.MethodPatch, submodel, sm(RelationCanUpdate))
+	matrix.add(http.MethodGet, submodel, sm(PermissionRead))
+	matrix.add(http.MethodPut, submodel, withAAS(routeSpec{target: targetSubmodel, kind: KindSubmodel, action: actionUpsert}, PermissionUpdate))
+	matrix.add(http.MethodDelete, submodel, withAAS(routeSpec{target: targetSubmodel, kind: KindSubmodel, relation: PermissionDelete}, PermissionUpdate))
+	matrix.add(http.MethodPatch, submodel, sm(PermissionUpdate))
 	for _, representation := range []string{"/$metadata", "/$value", "/$reference", "/$path"} {
-		matrix.add(http.MethodGet, submodel+representation, sm(RelationCanRead))
+		matrix.add(http.MethodGet, submodel+representation, sm(PermissionRead))
 	}
-	matrix.add(http.MethodPatch, submodel+"/$metadata", sm(RelationCanUpdate))
-	matrix.add(http.MethodPatch, submodel+"/$value", sm(RelationCanUpdate))
+	matrix.add(http.MethodPatch, submodel+"/$metadata", sm(PermissionUpdate))
+	matrix.add(http.MethodPatch, submodel+"/$value", sm(PermissionUpdate))
 
 	matrix.add(http.MethodGet, elements, elementList)
 	for _, representation := range []string{"/$metadata", "/$value", "/$reference", "/$path"} {
 		matrix.add(http.MethodGet, elements+representation, elementList)
-		matrix.add(http.MethodGet, element+representation, el(actionRelation, RelationCanRead))
+		matrix.add(http.MethodGet, element+representation, el(actionRelation, PermissionRead))
 	}
-	matrix.add(http.MethodPost, elements, sm(RelationCanUpdate))
+	matrix.add(http.MethodPost, elements, sm(PermissionUpdate))
 
-	matrix.add(http.MethodGet, element, el(actionRelation, RelationCanRead))
+	matrix.add(http.MethodGet, element, el(actionRelation, PermissionRead))
 	matrix.add(http.MethodPut, element, el(actionUpsert, ""))
-	matrix.add(http.MethodPost, element, el(actionRelation, RelationCanUpdate))
+	matrix.add(http.MethodPost, element, el(actionRelation, PermissionUpdate))
 	matrix.add(http.MethodDelete, element, el(actionParentUpdate, ""))
-	matrix.add(http.MethodPatch, element, el(actionRelation, RelationCanUpdate))
-	matrix.add(http.MethodPatch, element+"/$metadata", el(actionRelation, RelationCanUpdate))
-	matrix.add(http.MethodPatch, element+"/$value", el(actionRelation, RelationCanUpdate))
-	matrix.add(http.MethodGet, element+"/attachment", el(actionRelation, RelationCanRead))
-	matrix.add(http.MethodPut, element+"/attachment", el(actionRelation, RelationCanUpdate))
-	matrix.add(http.MethodDelete, element+"/attachment", el(actionRelation, RelationCanUpdate))
+	matrix.add(http.MethodPatch, element, el(actionRelation, PermissionUpdate))
+	matrix.add(http.MethodPatch, element+"/$metadata", el(actionRelation, PermissionUpdate))
+	matrix.add(http.MethodPatch, element+"/$value", el(actionRelation, PermissionUpdate))
+	matrix.add(http.MethodGet, element+"/attachment", el(actionRelation, PermissionRead))
+	matrix.add(http.MethodPut, element+"/attachment", el(actionRelation, PermissionUpdate))
+	matrix.add(http.MethodDelete, element+"/attachment", el(actionRelation, PermissionUpdate))
 	for _, operation := range []string{"/invoke", "/invoke/$value", "/invoke-async", "/invoke-async/$value"} {
-		matrix.add(http.MethodPost, element+operation, el(actionRelation, RelationCanExecute))
+		matrix.add(http.MethodPost, element+operation, el(actionRelation, PermissionExecute))
 	}
 	for _, operation := range []string{"/operation-status/{handleId}", "/operation-results/{handleId}", "/operation-results/{handleId}/$value"} {
-		matrix.add(http.MethodGet, element+operation, el(actionRelation, RelationCanExecute))
+		matrix.add(http.MethodGet, element+operation, el(actionRelation, PermissionExecute))
 	}
 }
 
 func addConceptDescriptionRoutes(matrix routeMatrix) {
 	cd := "/concept-descriptions/{" + paramCD + "}"
-	matrix.add(http.MethodGet, cd, routeSpec{target: targetConceptDescription, kind: KindConceptDescription, relation: RelationCanRead})
+	matrix.add(http.MethodGet, cd, routeSpec{target: targetConceptDescription, kind: KindConceptDescription, relation: PermissionRead})
 	matrix.add(http.MethodPut, cd, routeSpec{target: targetConceptDescription, kind: KindConceptDescription, action: actionUpsert})
-	matrix.add(http.MethodDelete, cd, routeSpec{target: targetConceptDescription, kind: KindConceptDescription, relation: RelationCanDelete})
+	matrix.add(http.MethodDelete, cd, routeSpec{target: targetConceptDescription, kind: KindConceptDescription, relation: PermissionDelete})
 }
 
 // isExcludedRoute reports routes that intentionally stay ABAC-only.

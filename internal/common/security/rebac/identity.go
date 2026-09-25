@@ -48,35 +48,27 @@ const (
 	TypeConceptDescription = "concept_description"
 )
 
-// Relations of the BaSyx authorization model.
+// Relations that can be granted.
 const (
-	RelationOwner      = "owner"
-	RelationEditor     = "editor"
-	RelationViewer     = "viewer"
-	RelationExecutor   = "executor"
-	RelationMember     = "member"
-	RelationAdmin      = "admin"
-	RelationCreator    = "creator"
-	RelationLinkedAAS  = "linked_aas"
-	RelationSubmodel   = "submodel"
-	RelationParent     = "parent"
-	RelationCanRead    = "can_read"
-	RelationCanUpdate  = "can_update"
-	RelationCanDelete  = "can_delete"
-	RelationCanExecute = "can_execute"
-	RelationCanManage  = "can_manage"
+	RelationOwner    = "owner"
+	RelationEditor   = "editor"
+	RelationViewer   = "viewer"
+	RelationExecutor = "executor"
+	RelationAdmin    = "admin"
+	RelationCreator  = "creator"
 )
 
-// maxOpenFGAIdentifierLength keeps generated identifiers below the OpenFGA
-// object identifier limit.
-const maxOpenFGAIdentifierLength = 250
+// Permissions derived from granted relations.
+const (
+	PermissionRead    = "can_read"
+	PermissionUpdate  = "can_update"
+	PermissionDelete  = "can_delete"
+	PermissionExecute = "can_execute"
+	PermissionManage  = "can_manage"
+)
 
-// Tuple is one OpenFGA relationship tuple.
-type Tuple struct {
-	User     string
-	Relation string
-	Object   string
-}
+// maxIdentifierLength bounds generated subject and object keys.
+const maxIdentifierLength = 250
 
 // Principal is the issuer-scoped identity of an authenticated caller.
 type Principal struct {
@@ -123,94 +115,59 @@ func claimStrings(raw any) []string {
 	return slices.Compact(groups)
 }
 
-// UserObject returns the OpenFGA user identifier of the principal.
-func (p Principal) UserObject() string {
-	return UserObject(p.Issuer, p.Subject)
+// UserKey returns the subject key of the principal.
+func (p Principal) UserKey() string {
+	return UserKey(p.Issuer, p.Subject)
 }
 
-// UserObject returns the issuer-scoped OpenFGA identifier of a user.
-func UserObject(issuer string, subject string) string {
+// UserKey returns the issuer-scoped subject key of a user.
+func UserKey(issuer string, subject string) string {
 	return TypeUser + ":" + scopedIdentifier(issuer, subject)
 }
 
-// GroupObject returns the issuer-scoped OpenFGA identifier of a group.
-func GroupObject(issuer string, name string) string {
+// GroupKey returns the issuer-scoped key of a group.
+func GroupKey(issuer string, name string) string {
 	return TypeGroup + ":" + scopedIdentifier(issuer, name)
 }
 
-// GroupMembers returns the userset that grants a group's members access.
-func GroupMembers(issuer string, name string) string {
-	return GroupObject(issuer, name) + "#" + RelationMember
-}
-
-// GroupTuples returns the group memberships of the current token. They are
-// sent as contextual tuples and never stored, so membership changes take
-// effect with the next token.
-func (p Principal) GroupTuples() []Tuple {
-	tuples := make([]Tuple, 0, len(p.Groups))
-	for _, group := range p.Groups {
-		tuples = append(tuples, Tuple{User: p.UserObject(), Relation: RelationMember, Object: GroupObject(p.Issuer, group)})
-	}
-	return tuples
-}
-
-// SubjectKeys returns the stored subject keys that can grant the principal
-// access: the user itself and the member usersets of its groups.
+// SubjectKeys returns the stored subject keys that grant the principal
+// access: the user itself and the groups of the current token. Group
+// memberships are never stored, so they take effect with the next token.
 func (p Principal) SubjectKeys() []string {
 	keys := make([]string, 0, 1+len(p.Groups))
-	keys = append(keys, p.UserObject())
+	keys = append(keys, p.UserKey())
 	for _, group := range p.Groups {
-		keys = append(keys, GroupMembers(p.Issuer, group))
+		keys = append(keys, GroupKey(p.Issuer, group))
 	}
 	return keys
 }
 
-// scopedIdentifier encodes issuer and value without separators OpenFGA
-// reserves. Overlong identifiers use a deterministic digest form, which can
+// scopedIdentifier encodes issuer and value without separators. Overlong identifiers use a deterministic digest form, which can
 // never collide with the plain form because base64url contains no dot.
 func scopedIdentifier(issuer string, value string) string {
 	encoding := base64.RawURLEncoding
 	plain := encoding.EncodeToString([]byte(issuer)) + "." + encoding.EncodeToString([]byte(value))
-	if len(plain) <= maxOpenFGAIdentifierLength {
+	if len(plain) <= maxIdentifierLength {
 		return plain
 	}
 	digest := sha256.Sum256([]byte(issuer + "\x00" + value))
 	return "h." + encoding.EncodeToString(digest[:])
 }
 
-// ResourceObject returns the OpenFGA object of an identifiable.
-func ResourceObject(objectType string, authUUID string) string {
+// ResourceKey returns the object key of an identifiable.
+func ResourceKey(objectType string, authUUID string) string {
 	return objectType + ":" + authUUID
 }
 
-// RepositoryObject returns the OpenFGA object of a repository family.
-func RepositoryObject(objectType string) string {
+// RepositoryKey returns the object key of a repository family.
+func RepositoryKey(objectType string) string {
 	return TypeRepository + ":" + objectType
 }
 
-// ElementObject returns the OpenFGA object of a SubmodelElement path.
-func ElementObject(submodelAuthUUID string, idShortPath string) string {
+// ElementKey returns the object key of a SubmodelElement path.
+func ElementKey(submodelAuthUUID string, idShortPath string) string {
 	digest := sha256.Sum256([]byte(idShortPath))
 	return TypeElement + ":" + submodelAuthUUID + "." + hex.EncodeToString(digest[:])[:32]
-}
-
-// ElementAncestry returns the contextual tuples that connect an element path
-// to its ancestors and its Submodel. Elements exist as stored objects only
-// when they carry direct grants, so the structure is always sent per check.
-func ElementAncestry(submodelAuthUUID string, idShortPath string) []Tuple {
-	submodel := ResourceObject(TypeSubmodel, submodelAuthUUID)
-	paths := ElementPathChain(idShortPath)
-	tuples := make([]Tuple, 0, len(paths))
-	for index, path := range paths {
-		object := ElementObject(submodelAuthUUID, path)
-		if index == 0 {
-			tuples = append(tuples, Tuple{User: submodel, Relation: RelationSubmodel, Object: object})
-			continue
-		}
-		parent := ElementObject(submodelAuthUUID, paths[index-1])
-		tuples = append(tuples, Tuple{User: parent, Relation: RelationParent, Object: object})
-	}
-	return tuples
 }
 
 // ElementPathChain returns every ancestor path of idShortPath from the

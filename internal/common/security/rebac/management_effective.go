@@ -60,15 +60,15 @@ type effectiveDocument struct {
 
 func effectiveActions(target accessTarget) []effectiveAction {
 	actions := []effectiveAction{
-		{name: "read", relation: RelationCanRead, method: http.MethodGet, right: grammar.RightsEnumREAD},
-		{name: "update", relation: RelationCanUpdate, method: http.MethodPatch, right: grammar.RightsEnumUPDATE},
-		{name: "delete", relation: RelationCanDelete, method: http.MethodDelete, right: grammar.RightsEnumDELETE},
-		{name: "execute", relation: RelationCanExecute, method: http.MethodPost, suffix: "/invoke", right: grammar.RightsEnumEXECUTE},
-		{name: "manage", relation: RelationCanManage},
+		{name: "read", relation: PermissionRead, method: http.MethodGet, right: grammar.RightsEnumREAD},
+		{name: "update", relation: PermissionUpdate, method: http.MethodPatch, right: grammar.RightsEnumUPDATE},
+		{name: "delete", relation: PermissionDelete, method: http.MethodDelete, right: grammar.RightsEnumDELETE},
+		{name: "execute", relation: PermissionExecute, method: http.MethodPost, suffix: "/invoke", right: grammar.RightsEnumEXECUTE},
+		{name: "manage", relation: PermissionManage},
 	}
 	switch {
 	case target.elementPath != "":
-		actions[2].relation = RelationCanUpdate
+		actions[2].relation = PermissionUpdate
 	case target.kind.ObjectType == TypeConceptDescription:
 		actions[1].method = http.MethodPut
 		actions = append(actions[:3], actions[4])
@@ -105,24 +105,29 @@ func (c *Coordinator) handleEffective(w http.ResponseWriter, r *http.Request, re
 }
 
 func (c *Coordinator) effectiveReBAC(r *http.Request, request accessRequest, actions []effectiveAction) ([]bool, error) {
-	resolution := &resolution{coordinator: c, principal: request.principal}
+	keys := request.principal.SubjectKeys()
 	results := make([]bool, len(actions))
 	for index, action := range actions {
-		object, structure := request.target.objectKey(), request.target.structure()
-		if action.name == "delete" && request.target.elementPath != "" {
-			parent := ParentElementPath(request.target.elementPath)
-			object, structure = ResourceObject(TypeSubmodel, request.target.authUUID), nil
-			if parent != "" {
-				object, structure = ElementObject(request.target.authUUID, parent), ElementAncestry(request.target.authUUID, parent)
-			}
+		target := request.target
+		if action.name == "delete" && target.elementPath != "" {
+			target.elementPath = ParentElementPath(target.elementPath)
 		}
-		allowed, err := resolution.checkResource(r.Context(), request.target.kind, action.relation, object, structure)
+		allowed, err := c.effectivePermission(r, keys, target, action.relation)
 		if err != nil {
 			return nil, err
 		}
 		results[index] = allowed
 	}
 	return results, nil
+}
+
+// effectivePermission evaluates a permission; an element target whose path
+// became empty addresses the containing Submodel.
+func (c *Coordinator) effectivePermission(r *http.Request, keys []string, target accessTarget, permission string) (bool, error) {
+	if target.kind.ObjectType == TypeSubmodel {
+		return hasElementPermission(r.Context(), c.db, target.authUUID, target.elementPath, keys, permission)
+	}
+	return hasPermission(r.Context(), c.db, target.kind, target.authUUID, keys, permission)
 }
 
 func (c *Coordinator) effectiveSource(r *http.Request, request accessRequest, action effectiveAction, rebacAllowed bool) string {

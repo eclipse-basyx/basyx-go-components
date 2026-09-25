@@ -36,48 +36,25 @@ func TestLoadConfigKeepsReBACDisabledByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	rebac := cfg.ReBAC
-	if rebac.Enabled || rebac.ProvisionModel || rebac.Required() {
-		t.Fatalf("ReBAC must be disabled by default: %#v", rebac)
-	}
-	if rebac.OpenFGA.TimeoutMillis != 2000 || rebac.OpenFGA.BatchCheckMaxItems != 50 ||
-		rebac.ListObjectsMaxResults != 1000 || rebac.MaxScanCandidates != 5000 ||
-		rebac.GroupClaim != "groups" || rebac.OpenFGA.Consistency != ReBACConsistencyHigher ||
-		rebac.OpenFGA.Credentials.Method != ReBACCredentialsNone || rebac.Scope != "default" {
-		t.Fatalf("unexpected ReBAC defaults: %#v", rebac)
+	if cfg.ReBAC.Enabled || cfg.ReBAC.GroupClaim != "groups" || len(cfg.ReBAC.Administrators) != 0 {
+		t.Fatalf("unexpected ReBAC defaults: %#v", cfg.ReBAC)
 	}
 }
 
 func TestLoadConfigAppliesReBACEnvOverrides(t *testing.T) {
 	t.Setenv("REBAC_ENABLED", "true")
-	t.Setenv("REBAC_SCOPE", "plant-a")
-	t.Setenv("REBAC_OPENFGA_API_URL", "http://openfga:8080/")
-	t.Setenv("REBAC_OPENFGA_STORE_ID", "01STORE")
-	t.Setenv("REBAC_OPENFGA_AUTHORIZATION_MODEL_ID", "01MODEL")
-	t.Setenv("REBAC_OPENFGA_CREDENTIALS_METHOD", "apiToken")
-	t.Setenv("REBAC_OPENFGA_CREDENTIALS_API_TOKEN", "secret")
-	t.Setenv("REBAC_OPENFGA_TIMEOUT_MILLIS", "750")
-	t.Setenv("REBAC_OPENFGA_CONSISTENCY", "minimize_latency")
-	t.Setenv("REBAC_LIST_OBJECTS_MAX_RESULTS", "10")
-	t.Setenv("REBAC_MAX_SCAN_CANDIDATES", "20")
 	t.Setenv("REBAC_GROUP_CLAIM", "basyx.groups")
 	t.Setenv("REBAC_ADMINISTRATORS", "https://idp|admin-sub, https://idp|group:ops")
-	t.Setenv("REBAC_PROVISION_MODEL", "true")
 
 	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	rebac := cfg.ReBAC
-	if !rebac.Enabled || rebac.Scope != "plant-a" || rebac.OpenFGA.APIURL != "http://openfga:8080" ||
-		rebac.OpenFGA.StoreID != "01STORE" || rebac.OpenFGA.AuthorizationModelID != "01MODEL" ||
-		rebac.OpenFGA.Credentials.APIToken != "secret" || rebac.OpenFGA.TimeoutMillis != 750 ||
-		rebac.OpenFGA.Consistency != ReBACConsistencyMinimizeLatency || rebac.ListObjectsMaxResults != 10 ||
-		rebac.MaxScanCandidates != 20 || rebac.GroupClaim != "basyx.groups" || !rebac.ProvisionModel {
-		t.Fatalf("ReBAC env overrides not applied: %#v", rebac)
+	if !cfg.ReBAC.Enabled || cfg.ReBAC.GroupClaim != "basyx.groups" {
+		t.Fatalf("ReBAC env overrides not applied: %#v", cfg.ReBAC)
 	}
-	if len(rebac.Administrators) != 2 || rebac.Administrators[1] != "https://idp|group:ops" {
-		t.Fatalf("administrators not parsed: %#v", rebac.Administrators)
+	if len(cfg.ReBAC.Administrators) != 2 || cfg.ReBAC.Administrators[1] != "https://idp|group:ops" {
+		t.Fatalf("administrators not parsed: %#v", cfg.ReBAC.Administrators)
 	}
 }
 
@@ -86,23 +63,12 @@ func TestLoadConfigRejectsInvalidReBACSettings(t *testing.T) {
 		env  map[string]string
 		code string
 	}{
-		"missing api url":      {env: map[string]string{}, code: "CONFIG-REBAC-APIURL"},
-		"relative api url":     {env: map[string]string{"REBAC_OPENFGA_API_URL": "openfga:8080"}, code: "CONFIG-REBAC-APIURL"},
-		"latest model":         {env: map[string]string{"REBAC_OPENFGA_AUTHORIZATION_MODEL_ID": "latest"}, code: "CONFIG-REBAC-MODELID"},
-		"bad scope":            {env: map[string]string{"REBAC_SCOPE": "a b"}, code: "CONFIG-REBAC-SCOPE"},
-		"bad consistency":      {env: map[string]string{"REBAC_OPENFGA_CONSISTENCY": "EVENTUAL"}, code: "CONFIG-REBAC-CONSISTENCY"},
-		"batch check too big":  {env: map[string]string{"REBAC_OPENFGA_BATCH_CHECK_MAX_ITEMS": "51"}, code: "CONFIG-REBAC-BATCHCHECK"},
-		"token without secret": {env: map[string]string{"REBAC_OPENFGA_CREDENTIALS_METHOD": "apiToken"}, code: "CONFIG-REBAC-CREDENTIALS"},
-		"unknown credentials":  {env: map[string]string{"REBAC_OPENFGA_CREDENTIALS_METHOD": "basic"}, code: "CONFIG-REBAC-CREDENTIALS"},
-		"bad administrator":    {env: map[string]string{"REBAC_ADMINISTRATORS": "no-separator"}, code: "CONFIG-REBAC-ADMINISTRATORS"},
-		"empty admin group":    {env: map[string]string{"REBAC_ADMINISTRATORS": "https://idp|group:"}, code: "CONFIG-REBAC-ADMINISTRATORS"},
-		"zero scan candidates": {env: map[string]string{"REBAC_MAX_SCAN_CANDIDATES": "0"}, code: "CONFIG-REBAC-MAXSCAN"},
+		"bad administrator": {env: map[string]string{"REBAC_ADMINISTRATORS": "no-separator"}, code: "CONFIG-REBAC-ADMINISTRATORS"},
+		"empty admin group": {env: map[string]string{"REBAC_ADMINISTRATORS": "https://idp|group:"}, code: "CONFIG-REBAC-ADMINISTRATORS"},
+		"empty group claim": {env: map[string]string{"REBAC_GROUP_CLAIM": " "}, code: "CONFIG-REBAC-GROUPCLAIM"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("REBAC_ENABLED", "true")
-			if _, apiURLOverridden := test.env["REBAC_OPENFGA_API_URL"]; !apiURLOverridden && test.code != "CONFIG-REBAC-APIURL" {
-				t.Setenv("REBAC_OPENFGA_API_URL", "http://openfga:8080")
-			}
 			for key, value := range test.env {
 				t.Setenv(key, value)
 			}
@@ -115,8 +81,8 @@ func TestLoadConfigRejectsInvalidReBACSettings(t *testing.T) {
 }
 
 func TestLoadConfigSkipsReBACValidationWhenDisabled(t *testing.T) {
-	t.Setenv("REBAC_OPENFGA_CONSISTENCY", "EVENTUAL")
+	t.Setenv("REBAC_ADMINISTRATORS", "no-separator")
 	if _, err := LoadConfig(""); err != nil {
-		t.Fatalf("disabled ReBAC must not validate OpenFGA settings: %v", err)
+		t.Fatalf("disabled ReBAC must not validate its settings: %v", err)
 	}
 }

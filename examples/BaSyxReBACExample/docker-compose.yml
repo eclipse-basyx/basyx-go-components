@@ -1,7 +1,6 @@
-# Experimental relationship-based access control (ReBAC) with OpenFGA.
-# BaSyx keeps the desired authorization state in its own database; OpenFGA
-# runs as a separate service with its own database and user and is not
-# published on the host.
+# Experimental relationship-based access control (ReBAC). Relationships are
+# stored and evaluated in the BaSyx PostgreSQL database; no extra service is
+# needed.
 services:
   aas-environment:
     container_name: rebac-aas-environment
@@ -21,10 +20,6 @@ services:
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - REBAC_ENABLED=true
-      - REBAC_SCOPE=example
-      - REBAC_OPENFGA_API_URL=http://openfga:8080
-      - REBAC_OPENFGA_CREDENTIALS_METHOD=apiToken
-      - REBAC_OPENFGA_CREDENTIALS_API_TOKEN=basyx-example-openfga-key
       - REBAC_ADMINISTRATORS=http://keycloak.localhost:8080/realms/basyx|group:operators
       - GENERAL_EXTERNALURL=http://localhost:8082
     volumes:
@@ -36,8 +31,6 @@ services:
         condition: service_completed_successfully
       keycloak-healthcheck:
         condition: service_completed_successfully
-      openfga:
-        condition: service_healthy
     restart: unless-stopped
 
   basyx_configuration:
@@ -50,49 +43,9 @@ services:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
       - POSTGRES_DBNAME=basyxTestDB
-      - REBAC_SCOPE=example
-      - REBAC_PROVISION_MODEL=true
-      - REBAC_OPENFGA_API_URL=http://openfga:8080
-      - REBAC_OPENFGA_CREDENTIALS_METHOD=apiToken
-      - REBAC_OPENFGA_CREDENTIALS_API_TOKEN=basyx-example-openfga-key
     depends_on:
       db:
         condition: service_healthy
-      openfga:
-        condition: service_healthy
-
-  openfga-migrate:
-    container_name: rebac-openfga-migrate
-    image: openfga/openfga:v1.18.1
-    command: ["migrate"]
-    environment:
-      OPENFGA_DATASTORE_ENGINE: postgres
-      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@db:5432/openfga?sslmode=disable
-    depends_on:
-      db:
-        condition: service_healthy
-
-  openfga:
-    container_name: rebac-openfga
-    image: openfga/openfga:v1.18.1
-    command: ["run"]
-    environment:
-      OPENFGA_DATASTORE_ENGINE: postgres
-      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@db:5432/openfga?sslmode=disable
-      OPENFGA_AUTHN_METHOD: preshared
-      OPENFGA_AUTHN_PRESHARED_KEYS: basyx-example-openfga-key
-      OPENFGA_PLAYGROUND_ENABLED: "false"
-      OPENFGA_LOG_FORMAT: json
-      OPENFGA_LIST_OBJECTS_MAX_RESULTS: "1000"
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=openfga:8081"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    depends_on:
-      openfga-migrate:
-        condition: service_completed_successfully
-    restart: unless-stopped
 
   keycloak:
     container_name: rebac-keycloak
@@ -140,10 +93,8 @@ services:
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     command: ["postgres", "-c", "listen_addresses=*"]
-    volumes:
-      - ./postgres/init-openfga.sql:/docker-entrypoint-initdb.d/init-openfga.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB && pg_isready -U openfga -d openfga"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
       interval: 5s
       timeout: 5s
       retries: 20

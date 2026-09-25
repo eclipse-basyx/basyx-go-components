@@ -336,6 +336,67 @@ func TestDeniedOuterViewIsWidenedOnlyByTheGrant(t *testing.T) {
 	}
 }
 
+func TestQueriedReBACGrantsStayOnTheirRootAndRight(t *testing.T) {
+	t.Parallel()
+
+	granted := goqu.Dialect("postgres").From("granted_aas_marker").Select(goqu.C("object_uuid"))
+	grants := mustGrantSet(t, func(set *ReBACGrantSet) error {
+		return set.AllowQueriedResources(SemanticResourceAAS, granted, grammar.RightsEnumREAD)
+	}, grammar.RightsEnumREAD)
+	ctx := WithReBACGrants(failClosedReadContext(t), grants)
+
+	aasSQL := formulaSQLForRoot(ctx, t, grammar.CollectorRootAAS, "aas", "aas")
+	if !strings.Contains(aasSQL, `"granted_aas_marker"`) || !strings.Contains(aasSQL, `"rebac_granted_aas"."auth_uuid" IN`) {
+		t.Fatalf("queried grant must select AAS rows by authorization UUID:\n%s", aasSQL)
+	}
+	for _, target := range []struct {
+		root  grammar.CollectorRoot
+		table string
+		alias string
+	}{
+		{grammar.CollectorRootSM, "submodel", "submodel"},
+		{grammar.CollectorRootSME, "submodel_element", "sme"},
+		{grammar.CollectorRootCD, "concept_description", "concept_description"},
+	} {
+		if sql := formulaSQLForRoot(ctx, t, target.root, target.table, target.alias); strings.Contains(sql, "granted_aas_marker") {
+			t.Fatalf("queried AAS grant leaked into %s:\n%s", target.root, sql)
+		}
+	}
+	updateCtx := SelectFormulaForRight(WithReBACGrants(WithQueryFilter(t.Context(),
+		failClosedQueryFilter(grammar.RightsEnumREAD, grammar.RightsEnumUPDATE)), grants), grammar.RightsEnumUPDATE)
+	if sql := formulaSQLForRoot(updateCtx, t, grammar.CollectorRootAAS, "aas", "aas"); strings.Contains(sql, "granted_aas_marker") {
+		t.Fatalf("queried READ grant must not authorize UPDATE:\n%s", sql)
+	}
+}
+
+func TestQueriedElementGrantsAreCorrelatedAndEscaped(t *testing.T) {
+	t.Parallel()
+
+	granted := goqu.Dialect("postgres").From("granted_element_marker").
+		Select(goqu.C("submodel_uuid"), goqu.C("element_path"))
+	grants := mustGrantSet(t, func(set *ReBACGrantSet) error {
+		return set.AllowQueriedSubmodelElements(granted, grammar.RightsEnumREAD)
+	}, grammar.RightsEnumREAD)
+	ctx := WithReBACGrants(failClosedReadContext(t), grants)
+
+	smeSQL := formulaSQLForRoot(ctx, t, grammar.CollectorRootSME, "submodel_element", "sme")
+	for _, fragment := range []string{
+		`"granted_element_marker"`,
+		`("rebac_granted_submodel"."id" = "sme"."submodel_id")`,
+		`"sme"."idshort_path" = "rebac_granted_element"."element_path"`,
+		`replace(replace(replace("rebac_granted_element"."element_path", '!', '!!'), '%', '!%'), '_', '!_')`,
+		`|| '.%') ESCAPE '!'`,
+		`|| '[%]%') ESCAPE '!'`,
+	} {
+		if !strings.Contains(smeSQL, fragment) {
+			t.Fatalf("queried element grant must be correlated, segment-bounded and escaped (missing %q):\n%s", fragment, smeSQL)
+		}
+	}
+	if sql := formulaSQLForRoot(ctx, t, grammar.CollectorRootSM, "submodel", "submodel"); strings.Contains(sql, "granted_element_marker") {
+		t.Fatalf("element grants must never expose the containing Submodel:\n%s", sql)
+	}
+}
+
 func TestReBACGrantRejectsUnsafeIdentifiers(t *testing.T) {
 	t.Parallel()
 

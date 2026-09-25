@@ -54,7 +54,10 @@ type reBACGrantEntry struct {
 	authUUIDs   []string
 	allOfKind   bool
 	elementPath string
-	rights      []grammar.RightsEnum
+	// query selects granted authorization UUIDs, or for SubmodelElements
+	// (submodel_uuid, element_path) pairs. Datasets are immutable.
+	query  *goqu.SelectDataset
+	rights []grammar.RightsEnum
 }
 
 // NewReBACGrantSet creates an empty grant set. defaultRights are the rights of
@@ -118,6 +121,30 @@ func (s *ReBACGrantSet) AllowSubmodelElement(submodelAuthUUID string, idShortPat
 		elementPath: idShortPath,
 		rights:      slices.Clone(rights),
 	})
+	return nil
+}
+
+// AllowQueriedResources grants rights on the identifiables of one kind whose
+// authorization UUIDs the query selects in its only column. The query is
+// embedded into the backend SQL, so lists need no materialized allowlist.
+func (s *ReBACGrantSet) AllowQueriedResources(resource SemanticResourceKind, query *goqu.SelectDataset, rights ...grammar.RightsEnum) error {
+	if !isReBACIdentifiableKind(resource) {
+		return fmt.Errorf("AUTH-REBACGRANT-KIND unsupported resource kind %q", resource)
+	}
+	if query == nil || len(rights) == 0 {
+		return nil
+	}
+	s.entries = append(s.entries, reBACGrantEntry{resource: resource, query: query, rights: slices.Clone(rights)})
+	return nil
+}
+
+// AllowQueriedSubmodelElements grants rights on the SubmodelElement subtrees
+// whose (submodel_uuid, element_path) pairs the query selects.
+func (s *ReBACGrantSet) AllowQueriedSubmodelElements(query *goqu.SelectDataset, rights ...grammar.RightsEnum) error {
+	if query == nil || len(rights) == 0 {
+		return nil
+	}
+	s.entries = append(s.entries, reBACGrantEntry{resource: SemanticResourceSME, query: query, rights: slices.Clone(rights)})
 	return nil
 }
 
@@ -247,13 +274,21 @@ func identifiableGrantPredicate(rootKey exp.IdentifierExpression, table string, 
 		return nil, false
 	}
 	var authUUIDs []string
+	alternatives := make([]exp.Expression, 0, len(entries))
 	for _, entry := range entries {
-		if entry.allOfKind {
+		switch {
+		case entry.allOfKind:
 			return goqu.L("TRUE"), true
+		case entry.query != nil:
+			alternatives = append(alternatives, rootKey.In(queriedRowIDs(table, entry.query)))
+		default:
+			authUUIDs = append(authUUIDs, entry.authUUIDs...)
 		}
-		authUUIDs = append(authUUIDs, entry.authUUIDs...)
 	}
-	return rootKey.In(authUUIDRowIDs(table, authUUIDs)), true
+	if len(authUUIDs) > 0 {
+		alternatives = append(alternatives, rootKey.In(authUUIDRowIDs(table, authUUIDs)))
+	}
+	return orAlternatives(alternatives)
 }
 
 func submodelElementGrantPredicate(
@@ -268,11 +303,19 @@ func submodelElementGrantPredicate(
 		alternatives = append(alternatives, predicate)
 	}
 	for _, entry := range elementEntries {
+		if entry.query != nil {
+			alternatives = append(alternatives, queriedElementCondition(submodelColumn, pathColumn, entry.query))
+			continue
+		}
 		alternatives = append(alternatives, goqu.And(
 			submodelColumn.In(authUUIDRowIDs("submodel", entry.authUUIDs)),
 			submodelElementPathSubtreeCondition(pathColumn, entry.elementPath),
 		))
 	}
+	return orAlternatives(alternatives)
+}
+
+func orAlternatives(alternatives []exp.Expression) (exp.Expression, bool) {
 	switch len(alternatives) {
 	case 0:
 		return nil, false
@@ -289,6 +332,36 @@ func authUUIDRowIDs(table string, authUUIDs []string) *goqu.SelectDataset {
 		From(goqu.T(table).As(alias)).
 		Select(goqu.I(alias + ".id")).
 		Where(goqu.L("? = ANY(?::uuid[])", goqu.I(alias+".auth_uuid"), "{"+strings.Join(authUUIDs, ",")+"}"))
+}
+
+func queriedRowIDs(table string, query *goqu.SelectDataset) *goqu.SelectDataset {
+	alias := "rebac_granted_" + table
+	return goqu.Dialect("postgres").
+		From(goqu.T(table).As(alias)).
+		Select(goqu.I(alias + ".id")).
+		Where(goqu.I(alias + ".auth_uuid").In(query))
+}
+
+// queriedElementCondition matches rows below any granted element path of
+// their Submodel. Paths from the database are escaped for LIKE in SQL.
+func queriedElementCondition(submodelColumn exp.IdentifierExpression, pathColumn exp.IdentifierExpression, query *goqu.SelectDataset) exp.Expression {
+	const grant = "rebac_granted_element"
+	grantPath := goqu.I(grant + ".element_path")
+	escaped := goqu.L("replace(replace(replace(?, '!', '!!'), '%', '!%'), '_', '!_')", grantPath)
+	granted := goqu.Dialect("postgres").
+		From(query.As(grant)).
+		InnerJoin(goqu.T("submodel").As("rebac_granted_submodel"),
+			goqu.On(goqu.I("rebac_granted_submodel.auth_uuid").Eq(goqu.I(grant+".submodel_uuid")))).
+		Select(goqu.L("1")).
+		Where(
+			goqu.I("rebac_granted_submodel.id").Eq(submodelColumn),
+			goqu.Or(
+				pathColumn.Eq(grantPath),
+				goqu.L("? LIKE (? || '.%') ESCAPE '!'", pathColumn, escaped),
+				goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", pathColumn, escaped),
+			),
+		)
+	return goqu.L("EXISTS (?)", granted)
 }
 
 // orReBACGrant widens a security condition by the ReBAC grant of the

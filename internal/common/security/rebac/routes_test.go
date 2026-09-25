@@ -69,9 +69,9 @@ func TestSuperpathsRequireTheEnclosingShell(t *testing.T) {
 		require.Equalf(t, isSuperpath, spec.aasRelation != "", "%s", key)
 	}
 	deleteSpec, _ := newRouteMatrix().lookup("DELETE", superpathShell+"/submodels/{submodelIdentifier}")
-	require.Equal(t, RelationCanUpdate, deleteSpec.aasRelation, "removing a Submodel from a shell edits the shell")
+	require.Equal(t, PermissionUpdate, deleteSpec.aasRelation, "removing a Submodel from a shell edits the shell")
 	putSpec, _ := newRouteMatrix().lookup("PUT", superpathShell+"/submodels/{submodelIdentifier}")
-	require.Equal(t, RelationCanUpdate, putSpec.aasRelation, "superpath PUT writes a shell reference")
+	require.Equal(t, PermissionUpdate, putSpec.aasRelation, "superpath PUT writes a shell reference")
 }
 
 func hasCoveredPrefix(pattern string) bool {

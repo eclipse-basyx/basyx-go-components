@@ -30,16 +30,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 
 	"github.com/doug-martin/goqu/v9"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // ResourceCreated makes an authenticated creator the owner of a new
-// identifiable. The owner tuple is written to OpenFGA before commit: the
-// object is new and its UUID is never reused, so a rolled-back creation only
-// leaves an inert tuple. Anonymous creation assigns no owner.
+// identifiable in the creating transaction. Anonymous creation assigns no
+// owner.
 func (c *Coordinator) ResourceCreated(ctx context.Context, tx *sql.Tx, resource auth.SemanticResourceKind, identifier string) error {
 	kind, covered := KindForSemantic(resource)
 	if !covered || !auth.IsAuthenticated(ctx) {
@@ -54,9 +52,9 @@ func (c *Coordinator) ResourceCreated(ctx context.Context, tx *sql.Tx, resource 
 		return firstError(err, fmt.Errorf("REBAC-RESOURCECREATED-LOOKUP created resource not found"))
 	}
 	grant := Grant{
-		ObjectKey: ResourceObject(kind.ObjectType, authUUID), ObjectType: kind.ObjectType, ObjectUUID: authUUID,
-		Relation: RelationOwner, SubjectType: TypeUser, SubjectKey: principal.UserObject(),
-		SubjectIssuer: principal.Issuer, SubjectName: principal.Subject, CreatedBy: principal.UserObject(),
+		ObjectKey: ResourceKey(kind.ObjectType, authUUID), ObjectType: kind.ObjectType, ObjectUUID: authUUID,
+		Relation: RelationOwner, SubjectType: TypeUser, SubjectKey: principal.UserKey(),
+		SubjectIssuer: principal.Issuer, SubjectName: principal.Subject, CreatedBy: principal.UserKey(),
 	}
 	if _, err = InsertGrant(ctx, tx, grant); err != nil {
 		return fmt.Errorf("REBAC-RESOURCECREATED-GRANT: %w", err)
@@ -64,22 +62,12 @@ func (c *Coordinator) ResourceCreated(ctx context.Context, tx *sql.Tx, resource 
 	if _, err = LockObjectRevision(ctx, tx, grant.ObjectKey); err != nil {
 		return err
 	}
-	if _, err = BumpObjectRevision(ctx, tx, grant.ObjectKey); err != nil {
-		return err
-	}
-	mode := OutboxApplied
-	if err = c.client.Write(ctx, []Tuple{grant.Tuple()}, nil); err != nil {
-		slog.WarnContext(ctx, "ReBAC owner tuple deferred to outbox", "error.code", "REBAC-RESOURCECREATED-DIRECTWRITE", "error", err)
-		mode = OutboxPending
-		c.projector.Notify()
-	}
-	_, err = EnqueueOutbox(ctx, tx, c.scope, []OutboxOperation{{Tuple: grant.Tuple()}}, mode)
+	_, err = BumpObjectRevision(ctx, tx, grant.ObjectKey)
 	return err
 }
 
-// ResourceDeleted removes the grants, element grants, links and invitations
-// of a deleted identifiable. Removing links revokes access to live Submodels
-// and therefore engages the barrier until applied.
+// ResourceDeleted removes the grants, element grants, links, invitations and
+// revisions of an identifiable in the deleting transaction.
 func (c *Coordinator) ResourceDeleted(ctx context.Context, tx *sql.Tx, resource auth.SemanticResourceKind, identifier string) error {
 	kind, covered := KindForSemantic(resource)
 	if !covered {
@@ -89,15 +77,11 @@ func (c *Coordinator) ResourceDeleted(ctx context.Context, tx *sql.Tx, resource 
 	if err != nil || !found {
 		return err
 	}
-	resourceKey := ResourceObject(kind.ObjectType, authUUID)
+	resourceKey := ResourceKey(kind.ObjectType, authUUID)
 	if _, err = LockObjectRevision(ctx, tx, resourceKey); err != nil {
 		return err
 	}
-	links, err := deleteLinksOfResource(ctx, tx, kind, authUUID)
-	if err != nil {
-		return err
-	}
-	if err = lockLinkedObjects(ctx, tx, links); err != nil {
+	if _, err = deleteLinksOfResource(ctx, tx, kind, authUUID); err != nil {
 		return err
 	}
 	grants, err := DeleteGrantsOfResource(ctx, tx, authUUID)
@@ -108,22 +92,10 @@ func (c *Coordinator) ResourceDeleted(ctx context.Context, tx *sql.Tx, resource 
 		return err
 	}
 	objectKeys := []string{resourceKey}
-	operations := make([]OutboxOperation, 0, len(grants)+len(links))
 	for _, grant := range grants {
 		objectKeys = append(objectKeys, grant.ObjectKey)
-		operations = append(operations, OutboxOperation{Delete: true, Tuple: grant.Tuple()})
 	}
-	if err = DeleteObjectRevisions(ctx, tx, uniqueStrings(objectKeys)); err != nil {
-		return err
-	}
-	mode := OutboxPending
-	for _, link := range links {
-		operations = append(operations, OutboxOperation{Delete: true, Tuple: link.Tuple()})
-		mode = OutboxRevocation
-	}
-	_, err = EnqueueOutbox(ctx, tx, c.scope, operations, mode)
-	c.projector.Notify()
-	return err
+	return DeleteObjectRevisions(ctx, tx, uniqueStrings(objectKeys))
 }
 
 func deleteLinksOfResource(ctx context.Context, tx *sql.Tx, kind ResourceKind, authUUID string) ([]SubmodelLink, error) {
@@ -137,10 +109,11 @@ func deleteLinksOfResource(ctx context.Context, tx *sql.Tx, kind ResourceKind, a
 	}
 }
 
-// SubmodelReferenceRemoved removes the approved link between an AAS and a
-// Submodel whose reference was removed from the AAS.
+// SubmodelReferenceRemoved removes the approved link between a shell and a
+// Submodel whose reference the shell dropped. Links are also validated
+// against live references when evaluated, so this only keeps state tidy.
 func (c *Coordinator) SubmodelReferenceRemoved(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
-	aasAuthUUID, found, err := LookupAuthUUID(ctx, tx, KindAAS, aasIdentifier)
+	aasUUID, found, err := LookupAuthUUID(ctx, tx, KindAAS, aasIdentifier)
 	if err != nil || !found {
 		return err
 	}
@@ -148,42 +121,16 @@ func (c *Coordinator) SubmodelReferenceRemoved(ctx context.Context, tx *sql.Tx, 
 	if err != nil || !found {
 		return err
 	}
-	links, err := DeleteSubmodelLinks(ctx, tx, LinkBetween(aasAuthUUID, submodelUUID))
-	if err != nil {
+	links, err := DeleteSubmodelLinks(ctx, tx, LinkBetween(aasUUID, submodelUUID))
+	if err != nil || len(links) == 0 {
 		return err
 	}
-	return c.revokeLinks(ctx, tx, links)
-}
-
-func (c *Coordinator) revokeLinks(ctx context.Context, tx *sql.Tx, links []SubmodelLink) error {
-	if len(links) == 0 {
-		return nil
-	}
-	if err := lockLinkedObjects(ctx, tx, links); err != nil {
+	submodelKey := ResourceKey(TypeSubmodel, submodelUUID)
+	if _, err = LockObjectRevision(ctx, tx, submodelKey); err != nil {
 		return err
 	}
-	operations := make([]OutboxOperation, len(links))
-	for index, link := range links {
-		operations[index] = OutboxOperation{Delete: true, Tuple: link.Tuple()}
-	}
-	_, err := EnqueueOutbox(ctx, tx, c.scope, operations, OutboxRevocation)
-	c.projector.Notify()
+	_, err = BumpObjectRevision(ctx, tx, submodelKey)
 	return err
-}
-
-// lockLinkedObjects serializes link changes with grant changes of the linked
-// Submodels and bumps their access revision.
-func lockLinkedObjects(ctx context.Context, tx *sql.Tx, links []SubmodelLink) error {
-	for _, link := range links {
-		object := link.Tuple().Object
-		if _, err := LockObjectRevision(ctx, tx, object); err != nil {
-			return err
-		}
-		if _, err := BumpObjectRevision(ctx, tx, object); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // DeleteInvitationsOfResource removes pending invitations of a deleted
@@ -193,4 +140,26 @@ func DeleteInvitationsOfResource(ctx context.Context, tx *sql.Tx, authUUID strin
 		Where(goqu.C("object_uuid").Eq(goqu.L("?::uuid", authUUID))).Prepared(true)
 	_, err := execDataset(ctx, tx, "REBAC-DELETEINVITATIONS", ds)
 	return err
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	unique := values[:0]
+	for _, value := range values {
+		if _, duplicate := seen[value]; duplicate {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
+}
+
+func firstError(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

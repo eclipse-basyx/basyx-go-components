@@ -66,6 +66,14 @@ func TestInvitationsCreateNormalGrantsForTheRedeemer(t *testing.T) {
 	expectStatus(t, http.StatusOK, call(t, "eve", http.MethodGet, target, nil, nil), "redeemer reads")
 	expectStatus(t, http.StatusNotFound, call(t, "bob", http.MethodPost, accept, map[string]any{"token": invitationToken}, nil), "maxUses defaults to one")
 
+	personal := call(t, "alice", http.MethodPost, invitations, map[string]any{"relation": "viewer", "expiresAt": expiry,
+		"expectedPrincipal": map[string]any{"issuer": issuer, "subject": subject(t, "carol")}}, nil)
+	expectStatus(t, http.StatusCreated, personal, "invitation for one recipient")
+	personalToken, _ := personal.json(t)["token"].(string)
+	expectStatus(t, http.StatusNotFound, call(t, "bob", http.MethodPost, accept, map[string]any{"token": personalToken}, nil), "foreign recipient")
+	expectStatus(t, http.StatusOK, call(t, "carol", http.MethodPost, accept, map[string]any{"token": personalToken}, nil), "expected recipient")
+	require.Equal(t, "no-store", personal.header.Get("Cache-Control"), "tokens are never cached")
+
 	second := call(t, "alice", http.MethodPost, invitations, map[string]any{"relation": "editor", "expiresAt": expiry, "maxUses": 5}, nil)
 	expectStatus(t, http.StatusCreated, second, "second invitation")
 	secondID, _ := second.json(t)["id"].(string)
@@ -77,12 +85,13 @@ func TestInvitationsCreateNormalGrantsForTheRedeemer(t *testing.T) {
 
 func TestAdministratorEndpointsAreHiddenFromOthers(t *testing.T) {
 	bootstrapCreators(t)
-	expectStatus(t, http.StatusOK, call(t, "dave", http.MethodGet, submodelURL+"/security/rebac/status", nil, nil), "administrator status")
-	expectStatus(t, http.StatusNotFound, call(t, "alice", http.MethodGet, submodelURL+"/security/rebac/status", nil, nil), "status is hidden")
+	repository := submodelURL + "/security/rebac/repositories/submodel/$access"
+	expectStatus(t, http.StatusOK, call(t, "dave", http.MethodGet, repository, nil, nil), "administrator reads repository grants")
+	expectStatus(t, http.StatusNotFound, call(t, "alice", http.MethodGet, repository, nil, nil), "repository grants are hidden")
 	expectStatus(t, http.StatusNotFound, call(t, "alice", http.MethodPost, submodelURL+"/security/rebac/admin/reconcile", nil, nil), "reconcile is hidden")
 	reconciled := call(t, "dave", http.MethodPost, submodelURL+"/security/rebac/admin/reconcile", nil, nil)
 	expectStatus(t, http.StatusOK, reconciled, "administrator reconcile")
-	require.EqualValues(t, 0, reconciled.json(t)["unexpectedTuples"], "only BaSyx writes the projection")
+	require.Equal(t, "no-store", reconciled.header.Get("Cache-Control"), "management responses are never cached")
 }
 
 func TestConcurrentGrantChangesAllowOneWriter(t *testing.T) {
@@ -103,46 +112,28 @@ func TestConcurrentGrantChangesAllowOneWriter(t *testing.T) {
 	require.ElementsMatch(t, []int{http.StatusOK, http.StatusPreconditionFailed}, statuses)
 }
 
-func TestPendingRevocationRejectsReBACAllowsButNotABACAllows(t *testing.T) {
-	identifier := createSubmodel(t, submodelURL, "alice", "barrier")
-	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
-	target := submodelURL + "/submodels/" + enc(identifier)
-	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, target, nil, nil), "before revocation")
+func TestApprovedLinksRequireALiveReference(t *testing.T) {
+	bootstrapCreators(t)
+	submodelID := createSubmodel(t, environmentURL, "alice", "live-reference")
+	shellID := unique("aas")
+	expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, environmentURL+"/shells", shell(shellID, submodelID), nil), "create shell")
+	addGrants(t, "alice", environmentURL+"/shells/"+enc(shellID)+"/$access", userGrant(t, "viewer", "eve"))
+	accessURL := submodelAccess(environmentURL, submodelID)
+	_, etag := readAccess(t, "alice", accessURL)
+	expectStatus(t, http.StatusOK, call(t, "alice", http.MethodPut, accessURL+"/inheritance",
+		map[string]any{"aasIds": []string{shellID}}, map[string]string{"If-Match": etag}), "approve link")
+	target := environmentURL + "/submodels/" + enc(submodelID)
+	expectStatus(t, http.StatusOK, call(t, "eve", http.MethodGet, target, nil, nil), "linked read")
 
 	db := openDB(t)
-	insert, args, err := goqu.Dialect("postgres").Insert("rebac_outbox").Rows(goqu.Record{
-		"scope": "it", "operation_id": goqu.L("gen_random_uuid()"), "operation": "delete",
-		"tuple_object": "submodel:00000000-0000-0000-0000-000000000000", "tuple_relation": "viewer",
-		"tuple_user": "user:barrier-test", "revokes": true, "next_attempt_at": time.Now().Add(time.Hour),
-	}).Returning("seq").ToSQL()
+	references := goqu.Dialect("postgres").From("aas_submodel_reference_key").Select("reference_id").
+		Where(goqu.C("value").Eq(submodelID))
+	removal, args, err := goqu.Dialect("postgres").Delete("aas_submodel_reference").
+		Where(goqu.C("id").In(references)).ToSQL()
 	require.NoError(t, err)
-	var seq int64
-	require.NoError(t, db.QueryRowContext(t.Context(), insert, args...).Scan(&seq))
-
-	expectStatus(t, http.StatusServiceUnavailable, call(t, "bob", http.MethodGet, target, nil, nil), "pending revocation invalidates ReBAC allows")
-	expectStatus(t, http.StatusOK, call(t, "admin", http.MethodGet, target, nil, nil), "ABAC allows are unaffected")
-
-	remove, args, err := goqu.Dialect("postgres").Delete("rebac_outbox").Where(goqu.C("seq").Eq(seq)).ToSQL()
-	require.NoError(t, err)
-	_, err = db.ExecContext(t.Context(), remove, args...)
-	require.NoError(t, err)
-	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, target, nil, nil), "barrier lifts once applied")
-}
-
-func TestOpenFGAOutageOnlyAffectsRequestsThatNeedReBAC(t *testing.T) {
-	identifier := createSubmodel(t, submodelURL, "alice", "outage")
-	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
-	target := submodelURL + "/submodels/" + enc(identifier)
-
-	compose(t, "stop", "openfga")
-	t.Cleanup(func() { compose(t, "start", "openfga") })
-	expectStatus(t, http.StatusServiceUnavailable, call(t, "bob", http.MethodGet, target, nil, nil), "ReBAC needed but unavailable")
-	expectStatus(t, http.StatusOK, call(t, "admin", http.MethodGet, target, nil, nil), "unconditional ABAC allow does not call OpenFGA")
-
-	compose(t, "start", "openfga")
-	require.Eventually(t, func() bool {
-		return call(t, "bob", http.MethodGet, target, nil, nil).status == http.StatusOK
-	}, 90*time.Second, time.Second, "ReBAC recovers after OpenFGA restarts")
+	_, err = db.ExecContext(t.Context(), removal, args...)
+	require.NoError(t, err, "simulates a reference removed while ReBAC was disabled")
+	expectStatus(t, http.StatusForbidden, call(t, "eve", http.MethodGet, target, nil, nil), "a link without reference grants nothing")
 }
 
 func TestReenableReconciliationRemovesStateOfResourcesDeletedMeanwhile(t *testing.T) {
@@ -179,6 +170,9 @@ func TestGrantsAreSharedAcrossServicesOfOneScope(t *testing.T) {
 	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
 	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, environmentURL+"/submodels/"+enc(identifier), nil, nil), "AAS Environment")
 	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, submodelURL+"/submodels/"+enc(identifier), nil, nil), "Submodel repository")
+	setGrants(t, "alice", submodelAccess(submodelURL, identifier), []grant{userGrant(t, "owner", "alice")})
+	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, environmentURL+"/submodels/"+enc(identifier), nil, nil),
+		"revocations take effect at commit in every service")
 
 	shellID := unique("aas")
 	expectStatus(t, http.StatusCreated, call(t, "carol", http.MethodPost, aasURL+"/shells", shell(shellID), nil), "create shell in AAS repository")

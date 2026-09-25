@@ -8,41 +8,11 @@ services:
     command: ["postgres", "-c", "listen_addresses=*", "-c", "max_connections=500"]
     ports:
       - "127.0.0.1:${BASYX_IT_DB_PORT:-6432}:5432"
-    volumes:
-      - ./postgres/init-openfga.sql:/docker-entrypoint-initdb.d/init-openfga.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB && pg_isready -U openfga -d openfga"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
       interval: 5s
       timeout: 5s
       retries: 20
-
-  openfga-migrate:
-    image: openfga/openfga:v1.18.1
-    command: ["migrate"]
-    environment:
-      OPENFGA_DATASTORE_ENGINE: postgres
-      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@db:5432/openfga?sslmode=disable
-    depends_on:
-      db:
-        condition: service_healthy
-
-  openfga:
-    image: openfga/openfga:v1.18.1
-    command: ["run"]
-    environment:
-      OPENFGA_DATASTORE_ENGINE: postgres
-      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@db:5432/openfga?sslmode=disable
-      OPENFGA_PLAYGROUND_ENABLED: "false"
-      OPENFGA_LOG_FORMAT: json
-      OPENFGA_LIST_OBJECTS_MAX_RESULTS: "1000"
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=openfga:8081"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    depends_on:
-      openfga-migrate:
-        condition: service_completed_successfully
 
   keycloak:
     image: keycloak/keycloak:26.0.6
@@ -94,13 +64,8 @@ services:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
       - POSTGRES_DBNAME=basyxTestDB
-      - REBAC_SCOPE=it
-      - REBAC_PROVISION_MODEL=true
-      - REBAC_OPENFGA_API_URL=http://openfga:8080
     depends_on:
       db:
-        condition: service_healthy
-      openfga:
         condition: service_healthy
 
   submodel-repository:
@@ -123,8 +88,6 @@ services:
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - REBAC_ENABLED=true
-      - REBAC_SCOPE=it
-      - REBAC_OPENFGA_API_URL=http://openfga:8080
       - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
     ports:
       - "127.0.0.1:${BASYX_IT_SM_PORT:-6014}:5004"
@@ -133,8 +96,6 @@ services:
         condition: service_completed_successfully
       keycloak-healthcheck:
         condition: service_completed_successfully
-      openfga:
-        condition: service_healthy
     volumes:
       - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
     extra_hosts:
@@ -160,8 +121,6 @@ services:
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - REBAC_ENABLED=true
-      - REBAC_SCOPE=it
-      - REBAC_OPENFGA_API_URL=http://openfga:8080
       - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
     ports:
       - "127.0.0.1:${BASYX_IT_AAS_PORT:-6015}:5004"
@@ -170,8 +129,6 @@ services:
         condition: service_completed_successfully
       keycloak-healthcheck:
         condition: service_completed_successfully
-      openfga:
-        condition: service_healthy
     volumes:
       - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
     extra_hosts:
@@ -197,8 +154,6 @@ services:
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - REBAC_ENABLED=true
-      - REBAC_SCOPE=it
-      - REBAC_OPENFGA_API_URL=http://openfga:8080
       - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
     ports:
       - "127.0.0.1:${BASYX_IT_CD_PORT:-6016}:5004"
@@ -207,8 +162,6 @@ services:
         condition: service_completed_successfully
       keycloak-healthcheck:
         condition: service_completed_successfully
-      openfga:
-        condition: service_healthy
     volumes:
       - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
     extra_hosts:
@@ -234,8 +187,6 @@ services:
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - REBAC_ENABLED=true
-      - REBAC_SCOPE=it
-      - REBAC_OPENFGA_API_URL=http://openfga:8080
       - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
     ports:
       - "127.0.0.1:${BASYX_IT_ENV_PORT:-6017}:5004"
@@ -244,8 +195,6 @@ services:
         condition: service_completed_successfully
       keycloak-healthcheck:
         condition: service_completed_successfully
-      openfga:
-        condition: service_healthy
     volumes:
       - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
     extra_hosts:

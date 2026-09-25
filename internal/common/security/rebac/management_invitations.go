@@ -60,12 +60,21 @@ type Invitation struct {
 	CreatedBy string    `json:"createdBy"`
 	CreatedAt time.Time `json:"createdAt"`
 	Token     string    `json:"token,omitempty"`
+	// Restricted reports whether only one expected user may redeem.
+	Restricted bool `json:"restricted"`
 }
 
 type invitationRequest struct {
-	Relation  string    `json:"relation"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	MaxUses   *int      `json:"maxUses,omitempty"`
+	Relation          string             `json:"relation"`
+	ExpiresAt         time.Time          `json:"expiresAt"`
+	MaxUses           *int               `json:"maxUses,omitempty"`
+	ExpectedPrincipal *expectedPrincipal `json:"expectedPrincipal,omitempty"`
+}
+
+// expectedPrincipal restricts an invitation to one verified user.
+type expectedPrincipal struct {
+	Issuer  string `json:"issuer"`
+	Subject string `json:"subject"`
 }
 
 type acceptRequest struct {
@@ -112,6 +121,10 @@ func validateInvitation(target accessTarget, input invitationRequest) (int, erro
 	if !input.ExpiresAt.After(now) || input.ExpiresAt.After(now.Add(maxInvitationLifetime)) {
 		return 0, common.NewErrBadRequest("REBAC-INVITATION-EXPIRY expiresAt must be in the future and within 90 days")
 	}
+	if expected := input.ExpectedPrincipal; expected != nil &&
+		(strings.TrimSpace(expected.Issuer) == "" || strings.TrimSpace(expected.Subject) == "") {
+		return 0, common.NewErrBadRequest("REBAC-INVITATION-EXPECTEDPRINCIPAL expectedPrincipal needs issuer and subject")
+	}
 	maxUses := 1
 	if input.MaxUses != nil {
 		maxUses = *input.MaxUses
@@ -140,7 +153,7 @@ func (c *Coordinator) handleCreateInvitation(w http.ResponseWriter, r *http.Requ
 	}
 	invitation := Invitation{
 		ID: uuid.NewString(), Relation: input.Relation, ExpiresAt: input.ExpiresAt.UTC(), MaxUses: maxUses,
-		CreatedBy: request.principal.UserObject(), CreatedAt: time.Now().UTC(), Token: token,
+		CreatedBy: request.principal.UserKey(), CreatedAt: time.Now().UTC(), Token: token,
 	}
 	record := goqu.Record{
 		"id": goqu.L("?::uuid", invitation.ID), "token_hash": hashToken(token), "object_key": request.target.objectKey(),
@@ -151,20 +164,23 @@ func (c *Coordinator) handleCreateInvitation(w http.ResponseWriter, r *http.Requ
 	if request.target.elementPath != "" {
 		record["element_path"] = request.target.elementPath
 	}
+	if input.ExpectedPrincipal != nil {
+		record["expected_subject_key"] = UserKey(strings.TrimSpace(input.ExpectedPrincipal.Issuer), strings.TrimSpace(input.ExpectedPrincipal.Subject))
+		invitation.Restricted = true
+	}
 	if _, err = execDataset(r.Context(), c.db, "REBAC-CREATEINVITATION", dialect.Insert(invitationTable).Rows(record).Prepared(true)); err != nil {
 		writeManagementError(w, r, err)
 		return
 	}
 	slog.InfoContext(r.Context(), "ReBAC invitation created", "event.code", "REBAC-INVITATION-CREATED",
 		"rebac.invitation_id", invitation.ID, "rebac.object", request.target.objectKey(), "rebac.relation", invitation.Relation)
-	w.Header().Set("Location", managementLocation(r, "/invitations/accept"))
 	writeJSON(w, http.StatusCreated, invitation)
 }
 
 func (c *Coordinator) handleListInvitations(w http.ResponseWriter, r *http.Request, request accessRequest) {
 	ds := dialect.From(goqu.T(invitationTable)).Select(
 		goqu.L("id::text"), goqu.C("relation"), goqu.C("expires_at"), goqu.C("max_uses"), goqu.C("used_count"),
-		goqu.C("created_by"), goqu.C("created_at"),
+		goqu.C("created_by"), goqu.C("created_at"), goqu.L("expected_subject_key IS NOT NULL"),
 	).Where(
 		goqu.C("object_key").Eq(request.target.objectKey()), goqu.C("revoked_at").IsNull(),
 		goqu.C("expires_at").Gt(goqu.L("clock_timestamp()")), goqu.C("used_count").Lt(goqu.C("max_uses")),
@@ -179,7 +195,7 @@ func (c *Coordinator) handleListInvitations(w http.ResponseWriter, r *http.Reque
 	for rows.Next() {
 		var invitation Invitation
 		if err = rows.Scan(&invitation.ID, &invitation.Relation, &invitation.ExpiresAt, &invitation.MaxUses,
-			&invitation.UsedCount, &invitation.CreatedBy, &invitation.CreatedAt); err != nil {
+			&invitation.UsedCount, &invitation.CreatedBy, &invitation.CreatedAt, &invitation.Restricted); err != nil {
 			writeManagementError(w, r, fmt.Errorf("REBAC-LISTINVITATIONS-SCAN: %w", err))
 			return
 		}
@@ -226,11 +242,10 @@ func (c *Coordinator) handleAcceptInvitation(w http.ResponseWriter, r *http.Requ
 		writeNotFound(w)
 		return
 	}
-	var operationID string
 	var accepted acceptedInvitation
 	err := common.ExecuteInTransaction(c.db, "REBAC-ACCEPTINVITATION-STARTTX", "REBAC-ACCEPTINVITATION-COMMIT", func(tx *sql.Tx) error {
 		var txErr error
-		operationID, accepted, txErr = c.redeemInvitation(r.Context(), tx, principal, strings.TrimSpace(input.Token))
+		accepted, txErr = c.redeemInvitation(r.Context(), tx, principal, strings.TrimSpace(input.Token))
 		return txErr
 	})
 	if err != nil {
@@ -239,16 +254,16 @@ func (c *Coordinator) handleAcceptInvitation(w http.ResponseWriter, r *http.Requ
 	}
 	slog.InfoContext(r.Context(), "ReBAC invitation redeemed", "event.code", "REBAC-INVITATION-REDEEMED",
 		"rebac.object_type", accepted.Object.Type, "rebac.relation", accepted.Relation)
-	writeApplied(w, r, c.waitForProjection(r.Context(), operationID), operationID, accepted)
+	writeJSON(w, http.StatusOK, accepted)
 }
 
-func (c *Coordinator) redeemInvitation(ctx context.Context, tx *sql.Tx, principal Principal, token string) (string, acceptedInvitation, error) {
-	redeemed, found, err := consumeInvitation(ctx, tx, token)
+func (c *Coordinator) redeemInvitation(ctx context.Context, tx *sql.Tx, principal Principal, token string) (acceptedInvitation, error) {
+	redeemed, found, err := consumeInvitation(ctx, tx, token, principal)
 	if err != nil {
-		return "", acceptedInvitation{}, err
+		return acceptedInvitation{}, err
 	}
 	if !found {
-		return "", acceptedInvitation{}, errTargetGone
+		return acceptedInvitation{}, errTargetGone
 	}
 	kind := KindSubmodel
 	if redeemed.objectType != TypeElement {
@@ -256,45 +271,38 @@ func (c *Coordinator) redeemInvitation(ctx context.Context, tx *sql.Tx, principa
 	}
 	identifier, exists, err := IdentifierByAuthUUID(ctx, tx, kind, redeemed.objectUUID)
 	if err != nil || !exists {
-		return "", acceptedInvitation{}, firstError(err, errTargetGone)
+		return acceptedInvitation{}, firstError(err, errTargetGone)
 	}
 	target := accessTarget{kind: kind, identifier: identifier, authUUID: redeemed.objectUUID, elementPath: redeemed.elementPath}
 	if _, err = LockObjectRevision(ctx, tx, target.objectKey()); err != nil {
-		return "", acceptedInvitation{}, err
+		return acceptedInvitation{}, err
 	}
 	grant, err := buildGrant(accessRequest{principal: principal, target: target}, grantInput{
 		Relation: redeemed.relation, SubjectType: TypeUser, Issuer: principal.Issuer, Subject: principal.Subject,
 	})
 	if err != nil {
-		return "", acceptedInvitation{}, err
+		return acceptedInvitation{}, err
 	}
 	current, err := ListGrants(ctx, tx, target.objectKey())
 	if err != nil {
-		return "", acceptedInvitation{}, err
+		return acceptedInvitation{}, err
 	}
-	operationID, err := c.applyGrantDiff(ctx, tx, target.objectKey(), current, append(current, grant))
+	err = applyGrantDiff(ctx, tx, target.objectKey(), current, append(current, grant))
 	accepted := acceptedInvitation{Object: accessObject{Type: target.objectType(), ID: identifier, IDShortPath: target.elementPath}, Relation: redeemed.relation}
-	return operationID, accepted, err
+	return accepted, err
 }
 
 // consumeInvitation atomically counts one use of a valid invitation, so
-// concurrent redemptions never exceed maxUses.
-func consumeInvitation(ctx context.Context, tx *sql.Tx, token string) (redeemedInvitation, bool, error) {
+// concurrent redemptions never exceed maxUses. Invalid, expired, revoked,
+// exhausted and foreign invitations are indistinguishable.
+func consumeInvitation(ctx context.Context, tx *sql.Tx, token string, principal Principal) (redeemedInvitation, bool, error) {
 	ds := dialect.Update(invitationTable).Set(goqu.Record{"used_count": goqu.L("used_count + 1")}).Where(
 		goqu.C("token_hash").Eq(hashToken(token)), goqu.C("revoked_at").IsNull(),
 		goqu.C("expires_at").Gt(goqu.L("clock_timestamp()")), goqu.C("used_count").Lt(goqu.C("max_uses")),
+		goqu.Or(goqu.C("expected_subject_key").IsNull(), goqu.C("expected_subject_key").Eq(principal.UserKey())),
 	).Returning(goqu.C("object_type"), goqu.L("object_uuid::text"), goqu.L("COALESCE(element_path, '')"), goqu.C("relation")).Prepared(true)
 	var redeemed redeemedInvitation
 	found, err := queryRowDataset(ctx, tx, "REBAC-CONSUMEINVITATION", ds,
 		&redeemed.objectType, &redeemed.objectUUID, &redeemed.elementPath, &redeemed.relation)
 	return redeemed, found, err
-}
-
-func firstError(errs ...error) error {
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

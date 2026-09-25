@@ -130,7 +130,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "ConceptDescriptionRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
-	rebacRuntime, err := rebac.Setup(ctx, cfg, sharedDB, "conceptdescriptionrepositoryservice")
+	rebacRuntime, err := rebac.Setup(ctx, cfg, sharedDB)
 	if err != nil {
 		return err
 	}

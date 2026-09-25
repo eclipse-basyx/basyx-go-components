@@ -35,17 +35,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type statusDocument struct {
-	Ready      bool       `json:"ready"`
-	Activation Activation `json:"activation"`
-	State      ScopeState `json:"state"`
-}
-
-type operationDocument struct {
-	OperationID string `json:"operationId"`
-	Status      string `json:"status"`
-}
-
 type ownersDocument struct {
 	Owners []grantInput `json:"owners"`
 }
@@ -61,47 +50,6 @@ func (c *Coordinator) administrator(w http.ResponseWriter, r *http.Request) (Pri
 		return Principal{}, false
 	}
 	return principal, true
-}
-
-func (c *Coordinator) handleStatus(w http.ResponseWriter, r *http.Request) {
-	if _, ok := c.administrator(w, r); !ok {
-		return
-	}
-	activation, _, err := ReadActivation(r.Context(), c.db)
-	if err != nil {
-		writeManagementError(w, r, err)
-		return
-	}
-	state, err := ReadScopeState(r.Context(), c.db, c.scope)
-	if err != nil {
-		writeManagementError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, statusDocument{Ready: c.Ready(), Activation: activation, State: state})
-}
-
-// handleOperation reports whether an accepted access change reached OpenFGA.
-// Operation IDs are random and only returned to the caller that made the
-// change.
-func (c *Coordinator) handleOperation(w http.ResponseWriter, r *http.Request) {
-	if _, ok := c.managementPrincipal(w, r); !ok {
-		return
-	}
-	operationID := chi.URLParam(r, paramOperation)
-	found, applied, err := OperationApplied(r.Context(), c.db, operationID)
-	if err != nil {
-		writeManagementError(w, r, err)
-		return
-	}
-	if !found {
-		writeNotFound(w)
-		return
-	}
-	status := "pending"
-	if applied {
-		status = "applied"
-	}
-	writeJSON(w, http.StatusOK, operationDocument{OperationID: operationID, Status: status})
 }
 
 // repositoryRequest authorizes repository access management for configured
@@ -120,9 +68,8 @@ func (c *Coordinator) repositoryRequest(w http.ResponseWriter, r *http.Request) 
 		target: accessTarget{kind: kindRepository, identifier: kind.ObjectType}}
 	allowed := request.admin
 	if !allowed {
-		resolution := &resolution{coordinator: c, principal: principal}
 		var err error
-		allowed, err = resolution.check(r.Context(), CheckItem{User: principal.UserObject(), Relation: RelationAdmin, Object: request.target.objectKey()})
+		allowed, err = isRepositoryAdmin(r.Context(), c.db, kind, principal.SubjectKeys())
 		if err != nil {
 			writeUnavailable(w, r, err)
 			return accessRequest{}, false
@@ -177,20 +124,14 @@ func (c *Coordinator) handleReconcile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	orphans, err := c.ReconcileOrphans(r.Context())
+	report, err := c.ReconcileOrphans(r.Context())
 	if err != nil {
 		writeManagementError(w, r, err)
 		return
 	}
-	drift, err := c.RepairDrift(r.Context())
-	if err != nil {
-		writeUnavailable(w, r, err)
-		return
-	}
-	orphans.MissingTuples, orphans.UnexpectedTuples = drift.MissingTuples, drift.UnexpectedTuples
 	slog.InfoContext(r.Context(), "ReBAC reconciliation requested", "event.code", "REBAC-ADMIN-RECONCILE",
-		"rebac.actor", principal.UserObject(), "rebac.unexpected_tuples", drift.UnexpectedTuples)
-	writeJSON(w, http.StatusOK, orphans)
+		"rebac.actor", principal.UserKey(), "rebac.orphan_grants", report.OrphanGrants)
+	writeJSON(w, http.StatusOK, report)
 }
 
 // handleRecoverOwners replaces the owners of an identifiable. It is the
@@ -217,27 +158,28 @@ func (c *Coordinator) handleRecoverOwners(w http.ResponseWriter, r *http.Request
 		return
 	}
 	request := accessRequest{principal: principal, target: target, admin: true}
-	var operationID string
 	var document accessDocument
 	err := common.ExecuteInTransaction(c.db, "REBAC-RECOVEROWNERS-STARTTX", "REBAC-RECOVEROWNERS-COMMIT", func(tx *sql.Tx) error {
-		return c.recoverOwners(r, tx, request, body.Owners, &operationID, &document)
+		var txErr error
+		document, txErr = c.recoverOwners(r, tx, request, body.Owners)
+		return txErr
 	})
 	if err != nil {
 		writeManagementError(w, r, err)
 		return
 	}
 	slog.InfoContext(r.Context(), "ReBAC ownership recovered", "event.code", "REBAC-ADMIN-OWNERS",
-		"rebac.actor", principal.UserObject(), "rebac.object", target.objectKey())
-	c.respondAccessChange(w, r, operationID, document)
+		"rebac.actor", principal.UserKey(), "rebac.object", target.objectKey())
+	respondAccess(w, document)
 }
 
-func (c *Coordinator) recoverOwners(r *http.Request, tx *sql.Tx, request accessRequest, owners []grantInput, operationID *string, document *accessDocument) error {
+func (c *Coordinator) recoverOwners(r *http.Request, tx *sql.Tx, request accessRequest, owners []grantInput) (accessDocument, error) {
 	if err := c.lockTarget(r, tx, request.target); err != nil {
-		return err
+		return accessDocument{}, err
 	}
 	current, err := ListGrants(r.Context(), tx, request.target.objectKey())
 	if err != nil {
-		return err
+		return accessDocument{}, err
 	}
 	desired := make([]Grant, 0, len(current)+len(owners))
 	for _, grant := range current {
@@ -249,13 +191,12 @@ func (c *Coordinator) recoverOwners(r *http.Request, tx *sql.Tx, request accessR
 		owner.Relation = RelationOwner
 		grant, buildErr := buildGrant(request, owner)
 		if buildErr != nil {
-			return buildErr
+			return accessDocument{}, buildErr
 		}
 		desired = append(desired, grant)
 	}
-	if *operationID, err = c.applyGrantDiff(r.Context(), tx, request.target.objectKey(), current, desired); err != nil {
-		return err
+	if err = applyGrantDiff(r.Context(), tx, request.target.objectKey(), current, desired); err != nil {
+		return accessDocument{}, err
 	}
-	*document, err = c.accessDocument(r.Context(), tx, request.target)
-	return err
+	return c.accessDocument(r.Context(), tx, request.target)
 }

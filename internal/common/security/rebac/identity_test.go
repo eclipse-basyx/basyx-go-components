@@ -51,32 +51,27 @@ func TestElementPathChainFollowsSegmentsAndListIndexes(t *testing.T) {
 	require.Equal(t, "a.list[2]", ParentElementPath("a.list[2].c"))
 }
 
-func TestElementAncestryConnectsEveryLevelToTheSubmodel(t *testing.T) {
+func TestElementKeysArePathAndSubmodelSpecific(t *testing.T) {
 	t.Parallel()
 
 	const submodelUUID = "1c7d6b4f-7b90-4c75-8b1d-1e2e503b2f02"
-	ancestry := ElementAncestry(submodelUUID, "a.b")
-	require.Equal(t, []Tuple{
-		{User: "submodel:" + submodelUUID, Relation: RelationSubmodel, Object: ElementObject(submodelUUID, "a")},
-		{User: ElementObject(submodelUUID, "a"), Relation: RelationParent, Object: ElementObject(submodelUUID, "a.b")},
-	}, ancestry)
-	require.NotEqual(t, ElementObject(submodelUUID, "list[1]"), ElementObject(submodelUUID, "list[10]"))
-	require.NotEqual(t, ElementObject(submodelUUID, "a"), ElementObject("2d8e7c50-8ca1-4d86-9c2e-2f3f614c3003", "a"))
+	require.NotEqual(t, ElementKey(submodelUUID, "list[1]"), ElementKey(submodelUUID, "list[10]"))
+	require.NotEqual(t, ElementKey(submodelUUID, "a"), ElementKey("2d8e7c50-8ca1-4d86-9c2e-2f3f614c3003", "a"))
 }
 
 func TestIdentitiesAreIssuerScopedAndBounded(t *testing.T) {
 	t.Parallel()
 
-	require.NotEqual(t, UserObject("https://a.example", "alice"), UserObject("https://b.example", "alice"))
-	require.NotEqual(t, UserObject("https://a.example", "x.y"), UserObject("https://a.example.x", "y"))
-	require.NotEqual(t, GroupObject("https://a.example", "ops"), UserObject("https://a.example", "ops"))
+	require.NotEqual(t, UserKey("https://a.example", "alice"), UserKey("https://b.example", "alice"))
+	require.NotEqual(t, UserKey("https://a.example", "x.y"), UserKey("https://a.example.x", "y"))
+	require.NotEqual(t, GroupKey("https://a.example", "ops"), UserKey("https://a.example", "ops"))
 	long := strings.Repeat("s", 400)
-	object := UserObject("https://a.example", long)
-	require.LessOrEqual(t, len(object), maxOpenFGAIdentifierLength+len(TypeUser)+1)
-	require.Equal(t, object, UserObject("https://a.example", long), "overlong identifiers must stay deterministic")
-	require.NotEqual(t, object, UserObject("https://a.example", long+"t"))
-	require.NotContains(t, strings.TrimPrefix(UserObject("https://a.example", "alice"), "user:"), ":")
-	require.NotContains(t, UserObject("https://a.example", "alice#member"), "#")
+	object := UserKey("https://a.example", long)
+	require.LessOrEqual(t, len(object), maxIdentifierLength+len(TypeUser)+1)
+	require.Equal(t, object, UserKey("https://a.example", long), "overlong identifiers must stay deterministic")
+	require.NotEqual(t, object, UserKey("https://a.example", long+"t"))
+	require.NotContains(t, strings.TrimPrefix(UserKey("https://a.example", "alice"), "user:"), ":")
+	require.NotContains(t, UserKey("https://a.example", "alice#member"), "#")
 }
 
 func TestPrincipalRequiresIssuerAndSubject(t *testing.T) {
@@ -92,8 +87,7 @@ func TestPrincipalRequiresIssuerAndSubject(t *testing.T) {
 	}, "groups")
 	require.True(t, ok)
 	require.Equal(t, []string{"dev", "ops"}, principal.Groups)
-	require.Len(t, principal.GroupTuples(), 2)
-	require.Equal(t, []string{principal.UserObject(), GroupMembers("https://idp", "dev"), GroupMembers("https://idp", "ops")}, principal.SubjectKeys())
+	require.Equal(t, []string{principal.UserKey(), GroupKey("https://idp", "dev"), GroupKey("https://idp", "ops")}, principal.SubjectKeys())
 
 	single, _ := PrincipalFromClaims(auth.Claims{"iss": "https://idp", "sub": "bob", "role": "ops"}, "role")
 	require.Equal(t, []string{"ops"}, single.Groups)
@@ -107,7 +101,7 @@ func TestOnlyResourceRolesCanBeGrantedDirectly(t *testing.T) {
 		require.NoError(t, ValidateRelation(TypeElement, relation))
 	}
 	require.Error(t, ValidateRelation(TypeConceptDescription, RelationExecutor))
-	for _, relation := range []string{RelationCanRead, RelationLinkedAAS, RelationAdmin, RelationMember, ""} {
+	for _, relation := range []string{PermissionRead, RelationAdmin, RelationCreator, ""} {
 		require.Error(t, ValidateRelation(TypeAAS, relation), relation)
 	}
 	require.NoError(t, ValidateRelation(TypeRepository, RelationCreator))

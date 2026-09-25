@@ -215,7 +215,7 @@ func runServer(ctx context.Context, configPath string) error {
 	if cfg.General.EnableCustomMiddlewareHeaderInjection {
 		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
 	}
-	rebacRuntime, err := rebac.Setup(ctx, cfg, sharedDB, "submodelrepositoryservice")
+	rebacRuntime, err := rebac.Setup(ctx, cfg, sharedDB)
 	if err != nil {
 		return err
 	}

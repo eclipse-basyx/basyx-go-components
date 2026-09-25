@@ -33,7 +33,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -42,8 +41,6 @@ import (
 // Runtime is the running ReBAC integration of one service.
 type Runtime struct {
 	Coordinator *Coordinator
-	Projector   *Projector
-	Activation  Activation
 }
 
 // Extensions returns the security extensions that install ReBAC. A nil
@@ -55,11 +52,10 @@ func (r *Runtime) Extensions() auth.SecurityExtensions {
 	return auth.SecurityExtensions{ReBAC: r.Coordinator}
 }
 
-// Setup starts ReBAC for a service when rebac.enabled is set. It verifies the
-// scope binding and the pinned model, removes desired state of resources
-// deleted while ReBAC was disabled, repairs drift and starts the projector.
-// Any failure aborts startup; ReBAC decisions are enabled only afterwards.
-func Setup(ctx context.Context, cfg *common.Config, db *sql.DB, serviceName string) (*Runtime, error) {
+// Setup starts ReBAC for a service when rebac.enabled is set. It verifies
+// that ABAC and OIDC are configured and removes state of resources that
+// changed while ReBAC was disabled before enabling decisions.
+func Setup(ctx context.Context, cfg *common.Config, db *sql.DB) (*Runtime, error) {
 	if cfg == nil || !cfg.ReBAC.Enabled {
 		return nil, nil
 	}
@@ -70,32 +66,16 @@ func Setup(ctx context.Context, cfg *common.Config, db *sql.DB, serviceName stri
 	if err != nil {
 		return nil, err
 	}
-	activation, err := resolveActivation(ctx, cfg.ReBAC, db, serviceName)
+	coordinator := NewCoordinator(db, cfg.ReBAC, administrators)
+	report, err := coordinator.ReconcileOrphans(ctx)
 	if err != nil {
-		return nil, err
-	}
-	client, err := NewOpenFGAClient(cfg.ReBAC.OpenFGA, activation.StoreID, activation.ModelID)
-	if err != nil {
-		return nil, err
-	}
-	if err = verifyModel(ctx, client, activation); err != nil {
-		return nil, err
-	}
-	if err = EnsureScopeState(ctx, db, cfg.ReBAC.Scope); err != nil {
-		return nil, err
-	}
-	projector := NewProjector(db, client, cfg.ReBAC.Scope)
-	coordinator := NewCoordinator(CoordinatorOptions{
-		DB: db, Client: client, Projector: projector, Config: cfg.ReBAC, Administrators: administrators,
-	})
-	go projector.Run(ctx)
-	if err = coordinator.reconcileOnStartup(ctx); err != nil {
 		return nil, err
 	}
 	coordinator.MarkReady()
 	slog.InfoContext(ctx, "ReBAC enabled",
-		"rebac.scope", activation.Scope, "rebac.store_id", activation.StoreID, "rebac.model_id", activation.ModelID)
-	return &Runtime{Coordinator: coordinator, Projector: projector, Activation: activation}, nil
+		"rebac.orphan_grants", report.OrphanGrants, "rebac.orphan_links", report.OrphanLinks,
+		"rebac.orphan_invitations", report.OrphanInvitations)
+	return &Runtime{Coordinator: coordinator}, nil
 }
 
 func validateServiceRequirements(cfg *common.Config) error {
@@ -122,86 +102,4 @@ func parseAdministrators(entries []string) ([]common.ReBACAdministrator, error) 
 		administrators = append(administrators, administrator)
 	}
 	return administrators, nil
-}
-
-// resolveActivation returns the store and model the database is bound to.
-// An unbound database is bound to explicitly configured IDs.
-func resolveActivation(ctx context.Context, cfg common.ReBACConfig, db *sql.DB, serviceName string) (Activation, error) {
-	activation, bound, err := ReadActivation(ctx, db)
-	if err != nil {
-		return Activation{}, err
-	}
-	if !bound {
-		if cfg.OpenFGA.StoreID == "" || cfg.OpenFGA.AuthorizationModelID == "" {
-			return Activation{}, fmt.Errorf("REBAC-SETUP-UNBOUND no model is provisioned for scope %q; run basyxconfigurationservice with rebac.provisionModel=true or configure rebac.openfga.storeId and authorizationModelId", cfg.Scope)
-		}
-		hash, hashErr := EmbeddedModelHash()
-		if hashErr != nil {
-			return Activation{}, hashErr
-		}
-		if err = InsertActivation(ctx, db, Activation{
-			Scope: cfg.Scope, StoreID: cfg.OpenFGA.StoreID, ModelID: cfg.OpenFGA.AuthorizationModelID,
-			ModelHash: hash, ActivatedBy: "service:" + serviceName,
-		}); err != nil {
-			return Activation{}, err
-		}
-		if activation, _, err = ReadActivation(ctx, db); err != nil {
-			return Activation{}, err
-		}
-	}
-	return activation, checkActivation(cfg, activation)
-}
-
-func checkActivation(cfg common.ReBACConfig, activation Activation) error {
-	if activation.Scope != cfg.Scope {
-		return fmt.Errorf("REBAC-SETUP-SCOPEMISMATCH database is bound to scope %q, not %q", activation.Scope, cfg.Scope)
-	}
-	if cfg.OpenFGA.StoreID != "" && cfg.OpenFGA.StoreID != activation.StoreID {
-		return fmt.Errorf("REBAC-SETUP-STOREMISMATCH scope %q is bound to store %q", activation.Scope, activation.StoreID)
-	}
-	if cfg.OpenFGA.AuthorizationModelID != "" && cfg.OpenFGA.AuthorizationModelID != activation.ModelID {
-		return fmt.Errorf("REBAC-SETUP-MODELMISMATCH scope %q is bound to model %q", activation.Scope, activation.ModelID)
-	}
-	return nil
-}
-
-// verifyModel ensures the pinned model exists and equals the model of this
-// release, so the service never evaluates relations it does not understand.
-func verifyModel(ctx context.Context, client Client, activation Activation) error {
-	stored, err := client.ReadModel(ctx, activation.ModelID)
-	if err != nil {
-		return fmt.Errorf("REBAC-SETUP-MODELUNREACHABLE: %w", err)
-	}
-	storedHash, err := ModelContentHash(stored)
-	if err != nil {
-		return err
-	}
-	embeddedHash, err := EmbeddedModelHash()
-	if err != nil {
-		return err
-	}
-	if storedHash != embeddedHash || activation.ModelHash != embeddedHash {
-		return fmt.Errorf("REBAC-SETUP-MODELHASH model %q does not match the model of this release", activation.ModelID)
-	}
-	return nil
-}
-
-func (c *Coordinator) reconcileOnStartup(ctx context.Context) error {
-	enabledAt := time.Now()
-	orphans, err := c.ReconcileOrphans(ctx)
-	if err != nil {
-		return err
-	}
-	drift, err := c.RepairDrift(ctx)
-	if err != nil {
-		return err
-	}
-	if err = MarkScopeReconciled(ctx, c.db, c.scope, enabledAt); err != nil {
-		return err
-	}
-	slog.InfoContext(ctx, "ReBAC startup reconciliation completed",
-		"rebac.orphan_grants", orphans.OrphanGrants, "rebac.orphan_links", orphans.OrphanLinks,
-		"rebac.orphan_invitations", orphans.OrphanInvitations,
-		"rebac.missing_tuples", drift.MissingTuples, "rebac.unexpected_tuples", drift.UnexpectedTuples)
-	return nil
 }

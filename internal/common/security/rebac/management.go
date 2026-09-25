@@ -34,7 +34,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
@@ -48,7 +47,6 @@ const (
 	managementComponent   = "REBAC"
 	maxManagementBodySize = 1 << 20
 	paramInvitation       = "invitationId"
-	paramOperation        = "operationId"
 	paramRepositoryKind   = "repositoryKind"
 	paramObjectType       = "objectType"
 	paramIdentifier       = "identifier"
@@ -108,8 +106,6 @@ func (c *Coordinator) managementRoutes(kinds []ResourceKind) []managementRoute {
 	}
 	return append(routes,
 		managementRoute{http.MethodPost, managementRoot + "/invitations/accept", c.handleAcceptInvitation},
-		managementRoute{http.MethodGet, managementRoot + "/status", c.handleStatus},
-		managementRoute{http.MethodGet, managementRoot + "/operations/{" + paramOperation + "}", c.handleOperation},
 		managementRoute{http.MethodGet, managementRoot + "/repositories/{" + paramRepositoryKind + "}" + accessSuffix, c.handleGetRepositoryAccess},
 		managementRoute{http.MethodPut, managementRoot + "/repositories/{" + paramRepositoryKind + "}" + accessSuffix + "/grants", c.handlePutRepositoryGrants},
 		managementRoute{http.MethodPost, managementRoot + "/admin/reconcile", c.handleReconcile},
@@ -255,48 +251,20 @@ func (c *Coordinator) isAdministrator(principal Principal) bool {
 	return false
 }
 
+// canManage reports whether the caller may manage the target's access.
 func (c *Coordinator) canManage(ctx context.Context, request accessRequest) (bool, error) {
 	if request.admin {
 		return true, nil
 	}
-	resolution := &resolution{coordinator: c, principal: request.principal}
-	return resolution.checkResource(ctx, request.target.kind, RelationCanManage, request.target.objectKey(), request.target.structure())
+	return c.targetPermission(ctx, request.principal.SubjectKeys(), request.target, PermissionManage)
 }
 
-// waitForProjection waits briefly for an operation to reach OpenFGA.
-func (c *Coordinator) waitForProjection(ctx context.Context, operationID string) bool {
-	if operationID == "" {
-		return true
+// targetPermission evaluates permission on a management target.
+func (c *Coordinator) targetPermission(ctx context.Context, subjectKeys []string, target accessTarget, permission string) (bool, error) {
+	if target.kind.ObjectType == TypeSubmodel && target.elementPath != "" {
+		return hasElementPermission(ctx, c.db, target.authUUID, target.elementPath, subjectKeys, permission)
 	}
-	waitCtx, cancel := context.WithTimeout(ctx, managementWaitTimeout)
-	defer cancel()
-	applied, err := c.projector.WaitApplied(waitCtx, operationID)
-	if err != nil {
-		slog.WarnContext(ctx, "ReBAC operation not yet applied", "error.code", "REBAC-MANAGEMENT-WAITAPPLIED", "error", err)
-	}
-	return applied
-}
-
-const managementWaitTimeout = 5 * time.Second
-
-// writeApplied answers 200 once an operation reached OpenFGA and 202 with an
-// operation location otherwise.
-func writeApplied(w http.ResponseWriter, r *http.Request, applied bool, operationID string, body any) {
-	if applied {
-		writeJSON(w, http.StatusOK, body)
-		return
-	}
-	w.Header().Set("Location", managementLocation(r, "/operations/"+operationID))
-	writeJSON(w, http.StatusAccepted, map[string]string{"operationId": operationID, "status": "pending"})
-}
-
-func managementLocation(r *http.Request, suffix string) string {
-	path := r.URL.Path
-	if index := strings.Index(path, managementRoot); index >= 0 {
-		return path[:index] + managementRoot + suffix
-	}
-	base := strings.TrimSuffix(path, chi.RouteContext(r.Context()).RoutePattern())
-	return strings.TrimSuffix(base, "/") + managementRoot + suffix
+	return hasPermission(ctx, c.db, target.kind, target.authUUID, subjectKeys, permission)
 }
 
 func decodeBody(r *http.Request, target any) error {
@@ -308,8 +276,12 @@ func decodeBody(r *http.Request, target any) error {
 	return nil
 }
 
+// writeJSON writes a management response. Access data and invitation
+// tokens must never be cached or leak through referrers.
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.WriteHeader(status)
 	if body == nil {
 		return

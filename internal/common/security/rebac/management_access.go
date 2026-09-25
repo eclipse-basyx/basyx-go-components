@@ -70,19 +70,12 @@ func (t accessTarget) objectType() string {
 func (t accessTarget) objectKey() string {
 	switch {
 	case t.elementPath != "":
-		return ElementObject(t.authUUID, t.elementPath)
+		return ElementKey(t.authUUID, t.elementPath)
 	case t.kind.ObjectType == TypeRepository:
-		return RepositoryObject(t.identifier)
+		return RepositoryKey(t.identifier)
 	default:
-		return ResourceObject(t.kind.ObjectType, t.authUUID)
+		return ResourceKey(t.kind.ObjectType, t.authUUID)
 	}
-}
-
-func (t accessTarget) structure() []Tuple {
-	if t.elementPath != "" {
-		return ElementAncestry(t.authUUID, t.elementPath)
-	}
-	return nil
 }
 
 type accessObject struct {
@@ -97,17 +90,11 @@ type inheritanceLink struct {
 	ApprovedAt time.Time `json:"approvedAt"`
 }
 
-type syncState struct {
-	PendingOperations int64 `json:"pendingOperations"`
-	RevocationPending bool  `json:"revocationPending"`
-}
-
 type accessDocument struct {
 	Object      accessObject      `json:"object"`
 	Revision    int64             `json:"revision"`
 	Grants      []Grant           `json:"grants"`
 	Inheritance []inheritanceLink `json:"inheritance,omitempty"`
-	Sync        syncState         `json:"sync"`
 }
 
 type grantInput struct {
@@ -168,11 +155,7 @@ func (c *Coordinator) accessDocument(ctx context.Context, q Queryer, target acce
 			return document, err
 		}
 	}
-	if document.Sync.PendingOperations, err = pendingObjectOperations(ctx, q, c.scope, target.objectKey()); err != nil {
-		return document, err
-	}
-	document.Sync.RevocationPending, err = RevocationPending(ctx, q, c.scope)
-	return document, err
+	return document, nil
 }
 
 func (c *Coordinator) inheritanceLinks(ctx context.Context, q Queryer, submodelUUID string) ([]inheritanceLink, error) {
@@ -202,15 +185,6 @@ func IdentifierByAuthUUID(ctx context.Context, q Queryer, kind ResourceKind, aut
 	return identifier, found, err
 }
 
-func pendingObjectOperations(ctx context.Context, q Queryer, scope string, objectKey string) (int64, error) {
-	ds := dialect.From(goqu.T(outboxTable)).Select(goqu.COUNT(goqu.Star())).Where(
-		goqu.C("scope").Eq(scope), goqu.C("applied_at").IsNull(), goqu.C("tuple_object").Eq(objectKey),
-	).Prepared(true)
-	var count int64
-	_, err := queryRowDataset(ctx, q, "REBAC-PENDINGOBJECTOPS", ds, &count)
-	return count, err
-}
-
 func (c *Coordinator) handlePutGrants(w http.ResponseWriter, r *http.Request, request accessRequest) {
 	var body grantsDocument
 	if err := decodeBody(r, &body); err != nil {
@@ -227,7 +201,6 @@ func (c *Coordinator) handlePutGrants(w http.ResponseWriter, r *http.Request, re
 
 // replaceGrants replaces the direct grants of the request target.
 func (c *Coordinator) replaceGrants(w http.ResponseWriter, r *http.Request, request accessRequest, desired []Grant) {
-	var operationID string
 	var document accessDocument
 	err := common.ExecuteInTransaction(c.db, "REBAC-PUTGRANTS-STARTTX", "REBAC-PUTGRANTS-COMMIT", func(tx *sql.Tx) error {
 		if err := c.lockTarget(r, tx, request.target); err != nil {
@@ -240,7 +213,7 @@ func (c *Coordinator) replaceGrants(w http.ResponseWriter, r *http.Request, requ
 		if !request.admin && countOwners(current) > 0 && countOwners(desired) == 0 {
 			return common.NewErrConflict("REBAC-PUTGRANTS-LASTOWNER removing the last owner requires an administrator")
 		}
-		if operationID, err = c.applyGrantDiff(r.Context(), tx, request.target.objectKey(), current, desired); err != nil {
+		if err = applyGrantDiff(r.Context(), tx, request.target.objectKey(), current, desired); err != nil {
 			return err
 		}
 		document, err = c.accessDocument(r.Context(), tx, request.target)
@@ -250,16 +223,13 @@ func (c *Coordinator) replaceGrants(w http.ResponseWriter, r *http.Request, requ
 		writeManagementError(w, r, err)
 		return
 	}
-	c.respondAccessChange(w, r, operationID, document)
+	respondAccess(w, document)
 }
 
-func (c *Coordinator) respondAccessChange(w http.ResponseWriter, r *http.Request, operationID string, document accessDocument) {
-	applied := c.waitForProjection(r.Context(), operationID)
+// respondAccess answers with the committed access document and its ETag.
+func respondAccess(w http.ResponseWriter, document accessDocument) {
 	w.Header().Set("ETag", revisionETag(document.Revision))
-	if applied {
-		document.Sync.PendingOperations = 0
-	}
-	writeApplied(w, r, applied, operationID, document)
+	writeJSON(w, http.StatusOK, document)
 }
 
 // lockTarget serializes access changes of the target, validates If-Match and
@@ -285,34 +255,25 @@ func (c *Coordinator) lockTarget(r *http.Request, tx *sql.Tx, target accessTarge
 	return nil
 }
 
-// applyGrantDiff stores the desired grants of one object and enqueues the
-// resulting tuple changes. Removed grants engage the revocation barrier.
-func (c *Coordinator) applyGrantDiff(ctx context.Context, tx *sql.Tx, objectKey string, current []Grant, desired []Grant) (string, error) {
+// applyGrantDiff stores the desired grants of one object. Changes take
+// effect when the transaction commits.
+func applyGrantDiff(ctx context.Context, tx *sql.Tx, objectKey string, current []Grant, desired []Grant) error {
 	removed, added := diffGrants(current, desired)
 	if len(removed) == 0 && len(added) == 0 {
-		return "", nil
+		return nil
 	}
-	operations := make([]OutboxOperation, 0, len(removed)+len(added))
 	for _, grant := range removed {
 		if err := DeleteGrant(ctx, tx, grant); err != nil {
-			return "", err
+			return err
 		}
-		operations = append(operations, OutboxOperation{Delete: true, Tuple: grant.Tuple()})
 	}
 	for _, grant := range added {
 		if _, err := InsertGrant(ctx, tx, grant); err != nil {
-			return "", err
+			return err
 		}
-		operations = append(operations, OutboxOperation{Tuple: grant.Tuple()})
 	}
-	if _, err := BumpObjectRevision(ctx, tx, objectKey); err != nil {
-		return "", err
-	}
-	mode := OutboxPending
-	if len(removed) > 0 {
-		mode = OutboxRevocation
-	}
-	return EnqueueOutbox(ctx, tx, c.scope, operations, mode)
+	_, err := BumpObjectRevision(ctx, tx, objectKey)
+	return err
 }
 
 func diffGrants(current []Grant, desired []Grant) ([]Grant, []Grant) {
@@ -380,13 +341,13 @@ func buildGrant(request accessRequest, input grantInput) (Grant, error) {
 	grant := Grant{
 		ObjectKey: target.objectKey(), ObjectType: target.objectType(), ObjectUUID: target.authUUID,
 		ElementPath: target.elementPath, Relation: relation, SubjectType: input.SubjectType,
-		SubjectIssuer: issuer, SubjectName: subject, CreatedBy: request.principal.UserObject(),
+		SubjectIssuer: issuer, SubjectName: subject, CreatedBy: request.principal.UserKey(),
 	}
 	switch input.SubjectType {
 	case TypeUser:
-		grant.SubjectKey = UserObject(issuer, subject)
+		grant.SubjectKey = UserKey(issuer, subject)
 	case TypeGroup:
-		grant.SubjectKey = GroupMembers(issuer, subject)
+		grant.SubjectKey = GroupKey(issuer, subject)
 	default:
 		return Grant{}, common.NewErrBadRequest("REBAC-PUTGRANTS-SUBJECTTYPE subjectType must be user or group")
 	}
@@ -404,16 +365,15 @@ func (c *Coordinator) handlePutInheritance(w http.ResponseWriter, r *http.Reques
 		writeManagementError(w, r, err)
 		return
 	}
-	var operationID string
 	var document accessDocument
 	err = common.ExecuteInTransaction(c.db, "REBAC-PUTINHERITANCE-STARTTX", "REBAC-PUTINHERITANCE-COMMIT", func(tx *sql.Tx) error {
 		if lockErr := c.lockTarget(r, tx, request.target); lockErr != nil {
 			return lockErr
 		}
-		var txErr error
-		if operationID, txErr = c.replaceLinks(r.Context(), tx, request, aasUUIDs); txErr != nil {
+		if txErr := replaceLinks(r.Context(), tx, request, aasUUIDs); txErr != nil {
 			return txErr
 		}
+		var txErr error
 		document, txErr = c.accessDocument(r.Context(), tx, request.target)
 		return txErr
 	})
@@ -421,7 +381,7 @@ func (c *Coordinator) handlePutInheritance(w http.ResponseWriter, r *http.Reques
 		writeManagementError(w, r, err)
 		return
 	}
-	c.respondAccessChange(w, r, operationID, document)
+	respondAccess(w, document)
 }
 
 // approvedAAS resolves the AAS to link. Every AAS must reference the
@@ -455,68 +415,57 @@ func (c *Coordinator) approvedAAS(ctx context.Context, request accessRequest, id
 	return uniqueStrings(aasUUIDs), nil
 }
 
-func (c *Coordinator) replaceLinks(ctx context.Context, tx *sql.Tx, request accessRequest, aasUUIDs []string) (string, error) {
+func replaceLinks(ctx context.Context, tx *sql.Tx, request accessRequest, aasUUIDs []string) error {
 	current, err := ListSubmodelLinks(ctx, tx, request.target.authUUID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	removed, err := removeUnapprovedLinks(ctx, tx, current, aasUUIDs)
 	if err != nil {
-		return "", err
+		return err
 	}
 	added, err := addApprovedLinks(ctx, tx, request, current, aasUUIDs)
-	if err != nil {
-		return "", err
+	if err != nil || removed+added == 0 {
+		return err
 	}
-	operations := make([]OutboxOperation, 0, len(removed)+len(added))
-	operations = append(append(operations, removed...), added...)
-	if len(operations) == 0 {
-		return "", nil
-	}
-	if _, err = BumpObjectRevision(ctx, tx, request.target.objectKey()); err != nil {
-		return "", err
-	}
-	mode := OutboxPending
-	if len(removed) > 0 {
-		mode = OutboxRevocation
-	}
-	return EnqueueOutbox(ctx, tx, c.scope, operations, mode)
+	_, err = BumpObjectRevision(ctx, tx, request.target.objectKey())
+	return err
 }
 
-func removeUnapprovedLinks(ctx context.Context, tx *sql.Tx, current []SubmodelLink, aasUUIDs []string) ([]OutboxOperation, error) {
-	var operations []OutboxOperation
+func removeUnapprovedLinks(ctx context.Context, tx *sql.Tx, current []SubmodelLink, aasUUIDs []string) (int, error) {
+	removed := 0
 	for _, link := range current {
 		if containsString(aasUUIDs, link.AASUUID) {
 			continue
 		}
 		if _, err := DeleteSubmodelLinks(ctx, tx, LinkBetween(link.AASUUID, link.SubmodelUUID)); err != nil {
-			return nil, err
+			return 0, err
 		}
-		operations = append(operations, OutboxOperation{Delete: true, Tuple: link.Tuple()})
+		removed++
 	}
-	return operations, nil
+	return removed, nil
 }
 
-func addApprovedLinks(ctx context.Context, tx *sql.Tx, request accessRequest, current []SubmodelLink, aasUUIDs []string) ([]OutboxOperation, error) {
-	var operations []OutboxOperation
+func addApprovedLinks(ctx context.Context, tx *sql.Tx, request accessRequest, current []SubmodelLink, aasUUIDs []string) (int, error) {
+	added := 0
 	for _, aasUUID := range aasUUIDs {
 		if containsLink(current, aasUUID) {
 			continue
 		}
-		link := SubmodelLink{SubmodelUUID: request.target.authUUID, AASUUID: aasUUID, ApprovedBy: request.principal.UserObject()}
+		link := SubmodelLink{SubmodelUUID: request.target.authUUID, AASUUID: aasUUID, ApprovedBy: request.principal.UserKey()}
 		referenced, err := SubmodelReferenced(ctx, tx, aasUUID, link.SubmodelUUID)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 		if !referenced {
-			return nil, common.NewErrConflict("REBAC-PUTINHERITANCE-REFERENCE a reference was removed concurrently")
+			return 0, common.NewErrConflict("REBAC-PUTINHERITANCE-REFERENCE a reference was removed concurrently")
 		}
 		if err = InsertSubmodelLink(ctx, tx, link); err != nil {
-			return nil, err
+			return 0, err
 		}
-		operations = append(operations, OutboxOperation{Tuple: link.Tuple()})
+		added++
 	}
-	return operations, nil
+	return added, nil
 }
 
 func containsString(values []string, candidate string) bool {
