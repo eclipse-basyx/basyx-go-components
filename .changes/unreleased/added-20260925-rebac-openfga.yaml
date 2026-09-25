@@ -3,5 +3,5 @@ body: 'Experimental relationship-based access control (ReBAC) with OpenFGA for t
 time: 2026-09-25T21:00:00Z
 custom:
     Impact: Low
-    PullRequest: 1
+    PullRequest: 712
     SecurityImpact: 'OpenFGA is only consulted when ABAC does not allow unconditionally; if it is needed but unavailable, requests fail with 503 instead of falling back to ABAC-only decisions. A ReBAC grant widens only the granted resource and, by design, is not limited by ABAC fragment filters or update conditions of that resource, so administrators should keep sensitive content in separate resources. Denials without grants look exactly like ABAC denials, management routes answer 404 to non-managers, committed revocations invalidate ReBAC allows until applied, anonymous callers stay ABAC-only, and invitation tokens are stored only as SHA-256 hashes.'

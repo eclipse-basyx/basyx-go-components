@@ -3,5 +3,5 @@ body: 'Database schema v1.2.2 adds a persistent `auth_uuid` to `aas`, `submodel`
 time: 2026-09-25T21:00:01Z
 custom:
     Impact: High
-    PullRequest: 1
+    PullRequest: 712
     SecurityImpact: None.
