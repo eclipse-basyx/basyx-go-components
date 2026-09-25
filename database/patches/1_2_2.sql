@@ -26,12 +26,15 @@ ALTER TABLE IF EXISTS descriptor
   ADD COLUMN IF NOT EXISTS auth_uuid UUID NOT NULL DEFAULT gen_random_uuid();
 ALTER TABLE IF EXISTS aas_identifier
   ADD COLUMN IF NOT EXISTS auth_uuid UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE IF EXISTS aasx_package
+  ADD COLUMN IF NOT EXISTS auth_uuid UUID NOT NULL DEFAULT gen_random_uuid();
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_aas_auth_uuid ON aas (auth_uuid);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_submodel_auth_uuid ON submodel (auth_uuid);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_concept_description_auth_uuid ON concept_description (auth_uuid);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_descriptor_auth_uuid ON descriptor (auth_uuid);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_aas_identifier_auth_uuid ON aas_identifier (auth_uuid);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_aasx_package_auth_uuid ON aasx_package (auth_uuid);
 
 -- Direct relationships. Permissions are evaluated from these rows in SQL.
 CREATE TABLE IF NOT EXISTS rebac_grant (
@@ -39,7 +42,7 @@ CREATE TABLE IF NOT EXISTS rebac_grant (
   object_key TEXT NOT NULL,
   object_type TEXT NOT NULL CHECK (object_type IN (
     'aas', 'submodel', 'concept_description', 'element',
-    'aas_descriptor', 'submodel_descriptor', 'asset_links', 'repository'
+    'aas_descriptor', 'submodel_descriptor', 'asset_links', 'aasx_package', 'repository'
   )),
   object_uuid UUID,
   element_path TEXT,
@@ -93,7 +96,7 @@ CREATE TABLE IF NOT EXISTS rebac_invitation (
   object_key TEXT NOT NULL,
   object_type TEXT NOT NULL CHECK (object_type IN (
     'aas', 'submodel', 'concept_description', 'element',
-    'aas_descriptor', 'submodel_descriptor', 'asset_links'
+    'aas_descriptor', 'submodel_descriptor', 'asset_links', 'aasx_package'
   )),
   object_uuid UUID NOT NULL,
   element_path TEXT,

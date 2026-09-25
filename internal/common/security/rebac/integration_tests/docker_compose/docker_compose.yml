@@ -167,6 +167,72 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
 
+  aasx-fileserver:
+    build:
+      context: ../../../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=20
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_HISTORY_MODE=api
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - REBAC_ENABLED=true
+      - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+    ports:
+      - "127.0.0.1:${BASYX_IT_AASX_PORT:-6018}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  dpp:
+    build:
+      context: ../../../../../..
+      dockerfile: ./cmd/dppapiservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=20
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_HISTORY_MODE=api
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - REBAC_ENABLED=true
+      - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+    ports:
+      - "127.0.0.1:${BASYX_IT_DPP_PORT:-6019}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"
+
   aas-environment:
     build:
       context: ../../../../../..

@@ -42,6 +42,7 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const defaultPackageContentType = "application/asset-administration-shell-package"
@@ -134,6 +135,10 @@ func (p *AASXFileServerDatabase) listPackagesInTransaction(ctx context.Context, 
 				trimmedAASID,
 			),
 		)
+	}
+
+	if granted, restricted := auth.ReBACOnlyRowCondition(ctx, auth.SemanticResourceAASXPackage, goqu.I("aasx_package.auth_uuid")); restricted {
+		ds = ds.Where(granted)
 	}
 
 	// #nosec G115 -- limit is normalized to a positive int32 value above.
@@ -309,7 +314,7 @@ func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, new
 		}
 		return nil, false, common.NewInternalServerError("AASXFS-PUTPACKAGE-INSERT " + err.Error())
 	}
-	if err = replaceAASIDs(ctx, tx, newID, aasIDs); err != nil {
+	if err = insertPackageAASIDs(ctx, tx, packageID, newID, aasIDs); err != nil {
 		return nil, false, err
 	}
 	return &PackageRecord{DBID: newID, PackageID: packageID, FileName: fileName, ContentType: contentType, AASIDs: aasIDs}, false, nil
@@ -415,6 +420,9 @@ func (p *AASXFileServerDatabase) DeletePackageByID(ctx context.Context, packageI
 		return common.NewInternalServerError("AASXFS-DELETEPACKAGE-SELECT " + err.Error())
 	}
 
+	if err = auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceAASXPackage, packageID); err != nil {
+		return err
+	}
 	deleteSQL, deleteArgs, err := dialect.Delete("aasx_package").
 		Where(goqu.C("id").Eq(packageDBID)).
 		ToSQL()
@@ -470,6 +478,15 @@ func (p *AASXFileServerDatabase) getAASIDsTx(ctx context.Context, queryable inte
 	}
 
 	return aasIDs, nil
+}
+
+// insertPackageAASIDs stores the AAS identifiers of a new package and
+// records the access of its uploader.
+func insertPackageAASIDs(ctx context.Context, tx *sql.Tx, packageID string, packageDBID int64, aasIDs []string) error {
+	if err := replaceAASIDs(ctx, tx, packageDBID, aasIDs); err != nil {
+		return err
+	}
+	return auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceAASXPackage, packageID)
 }
 
 func replaceAASIDs(ctx context.Context, tx *sql.Tx, packageDBID int64, aasIDs []string) error {

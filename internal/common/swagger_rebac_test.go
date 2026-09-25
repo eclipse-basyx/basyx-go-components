@@ -54,6 +54,10 @@ func TestReBACManagementAPIIsDocumentedPerResourceFamily(t *testing.T) {
 			present: []string{"/shell-descriptors/{aasIdentifier}/$access/grants", "/submodel-descriptors/{submodelIdentifier}/$access",
 				"/lookup/shells/{aasIdentifier}/$access/effective", "/shells/{aasIdentifier}/$access"},
 		},
+		"../../cmd/aasxfileserverservice/openapi.yaml": {
+			present: []string{"/packages/{packageId}/$access/grants", "/packages/{packageId}/$access/invitations"},
+			absent:  []string{"/shells/{aasIdentifier}/$access"},
+		},
 		"../../cmd/discoveryservice/openapi.yaml": {
 			present: []string{"/lookup/shells/{aasIdentifier}/$access/grants"},
 			absent:  []string{"/shells/{aasIdentifier}/$access", "/shell-descriptors/{aasIdentifier}/$access"},

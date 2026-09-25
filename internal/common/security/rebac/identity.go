@@ -49,6 +49,7 @@ const (
 	TypeAASDescriptor      = "aas_descriptor"
 	TypeSubmodelDescriptor = "submodel_descriptor"
 	TypeAssetLinks         = "asset_links"
+	TypeAASXPackage        = "aasx_package"
 )
 
 // Relations that can be granted.

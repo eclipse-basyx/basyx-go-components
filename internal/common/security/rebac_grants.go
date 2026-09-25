@@ -197,7 +197,7 @@ func ReBACGrantsFromContext(ctx context.Context) *ReBACGrantSet {
 func isReBACIdentifiableKind(resource SemanticResourceKind) bool {
 	switch resource {
 	case SemanticResourceAAS, SemanticResourceSM, SemanticResourceCD,
-		SemanticResourceAASDesc, SemanticResourceSMDesc, SemanticResourceBD:
+		SemanticResourceAASDesc, SemanticResourceSMDesc, SemanticResourceBD, SemanticResourceAASXPackage:
 		return true
 	default:
 		return false
@@ -373,6 +373,38 @@ func queriedElementCondition(submodelColumn exp.IdentifierExpression, pathColumn
 			),
 		)
 	return goqu.L("EXISTS (?)", granted)
+}
+
+// ReBACOnlyRowCondition restricts the rows of a backend without formula
+// support to the resources that ReBAC grants the request for the active
+// right. It applies only when ABAC denied that right, so requests ABAC
+// allows keep their behavior; ok is false when no restriction applies.
+// authUUID names the column holding the rows' authorization UUID.
+func ReBACOnlyRowCondition(ctx context.Context, resource SemanticResourceKind, authUUID exp.IdentifierExpression) (exp.Expression, bool) {
+	grants := ReBACGrantsFromContext(ctx)
+	queryFilter := GetQueryFilter(ctx)
+	if grants.IsEmpty() || queryFilter == nil || !isFalseFormula(queryFilter.Formula) {
+		return nil, false
+	}
+	alternatives := []exp.Expression{}
+	for _, entry := range grants.entriesFor(resource, activeReBACRights(ctx, grants)) {
+		switch {
+		case entry.allOfKind:
+			return goqu.L("TRUE"), true
+		case entry.query != nil:
+			alternatives = append(alternatives, authUUID.In(entry.query))
+		default:
+			alternatives = append(alternatives, goqu.L("? = ANY(?::uuid[])", authUUID, "{"+strings.Join(entry.authUUIDs, ",")+"}"))
+		}
+	}
+	if condition, ok := orAlternatives(alternatives); ok {
+		return condition, true
+	}
+	return goqu.L("FALSE"), true
+}
+
+func isFalseFormula(formula *grammar.LogicalExpression) bool {
+	return formula != nil && formula.Boolean != nil && !*formula.Boolean
 }
 
 // orReBACGrant widens a security condition by the ReBAC grant of the

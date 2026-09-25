@@ -210,6 +210,43 @@ func (c *Coordinator) SubmodelReferenceRemoved(ctx context.Context, tx *sql.Tx, 
 	return err
 }
 
+// SubmodelCreatedWithShell approves the link between a shell and a Submodel
+// created together with it, so the shell's viewers, editors and executors
+// reach the Submodel. Only an owner of the Submodel approves links, as with
+// the inheritance API, and only while the shell references the Submodel.
+func (c *Coordinator) SubmodelCreatedWithShell(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
+	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.groupClaim)
+	if !ok || !auth.IsAuthenticated(ctx) {
+		return nil
+	}
+	aasUUID, found, err := LookupAuthUUID(ctx, tx, KindAAS, aasIdentifier)
+	if err != nil || !found {
+		return err
+	}
+	submodelUUID, found, err := LookupAuthUUID(ctx, tx, KindSubmodel, submodelIdentifier)
+	if err != nil || !found {
+		return err
+	}
+	owner, err := hasPermission(ctx, tx, KindSubmodel, submodelUUID, principal.SubjectKeys(), PermissionManage)
+	if err != nil || !owner {
+		return err
+	}
+	referenced, err := SubmodelReferenced(ctx, tx, aasUUID, submodelUUID)
+	if err != nil || !referenced {
+		return err
+	}
+	link := SubmodelLink{SubmodelUUID: submodelUUID, AASUUID: aasUUID, ApprovedBy: principal.UserKey()}
+	if err = InsertSubmodelLink(ctx, tx, link); err != nil {
+		return err
+	}
+	submodelKey := ResourceKey(TypeSubmodel, submodelUUID)
+	if _, err = LockObjectRevision(ctx, tx, submodelKey); err != nil {
+		return err
+	}
+	_, err = BumpObjectRevision(ctx, tx, submodelKey)
+	return err
+}
+
 // DeleteInvitationsOfResource removes pending invitations of a deleted
 // identifiable, including invitations to its element paths.
 func DeleteInvitationsOfResource(ctx context.Context, tx *sql.Tx, authUUID string) error {

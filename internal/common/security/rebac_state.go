@@ -68,6 +68,7 @@ type ReBACState interface {
 	ResourceCreated(ctx context.Context, tx *sql.Tx, resource SemanticResourceKind, identifier string) error
 	ResourceDeleted(ctx context.Context, tx *sql.Tx, resource SemanticResourceKind, identifier string) error
 	SubmodelReferenceRemoved(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error
+	SubmodelCreatedWithShell(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error
 }
 
 // WithReBACState attaches the ReBAC state recorder to ctx.
@@ -116,4 +117,15 @@ func RecordReBACSubmodelReferenceRemoved(ctx context.Context, tx *sql.Tx, aasIde
 		return nil
 	}
 	return state.SubmodelReferenceRemoved(ctx, tx, aasIdentifier, submodelIdentifier)
+}
+
+// RecordReBACSubmodelCreatedWithShell approves the inheritance link between
+// a shell and a Submodel the caller created together with it in tx, for
+// example the Submodels of a Digital Product Passport.
+func RecordReBACSubmodelCreatedWithShell(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
+	state := ReBACStateFromContext(ctx)
+	if state == nil {
+		return nil
+	}
+	return state.SubmodelCreatedWithShell(ctx, tx, aasIdentifier, submodelIdentifier)
 }

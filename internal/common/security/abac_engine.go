@@ -81,6 +81,11 @@ func (m *AccessModel) WithPolicyID(policyID string) *AccessModel {
 	return m
 }
 
+// ActiveAccessModel returns m, so a fixed model is its own provider.
+func (m *AccessModel) ActiveAccessModel() *AccessModel {
+	return m
+}
+
 // ParseAccessModel parses a JSON (or YAML converted to JSON) payload that
 // conforms to the Access Rule Model schema and returns a compiled AccessModel.
 func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessModel, error) {

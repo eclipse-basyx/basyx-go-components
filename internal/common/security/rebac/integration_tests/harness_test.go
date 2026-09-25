@@ -62,6 +62,8 @@ var (
 	aasURL         string
 	cdURL          string
 	environmentURL string
+	packagesURL    string
+	passportsURL   string
 	tokenURL       string
 	issuer         string
 	tokens         *testenv.PasswordGrantTokenProvider
@@ -75,6 +77,8 @@ func TestMain(m *testing.M) {
 		{Name: "aas", EnvVar: "BASYX_IT_AAS_PORT"},
 		{Name: "cd", EnvVar: "BASYX_IT_CD_PORT"},
 		{Name: "env", EnvVar: "BASYX_IT_ENV_PORT"},
+		{Name: "aasx", EnvVar: "BASYX_IT_AASX_PORT"},
+		{Name: "dpp", EnvVar: "BASYX_IT_DPP_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
 	})
@@ -82,6 +86,8 @@ func TestMain(m *testing.M) {
 	aasURL = composeRuntime.LocalhostURL("aas")
 	cdURL = composeRuntime.LocalhostURL("cd")
 	environmentURL = composeRuntime.LocalhostURL("env")
+	packagesURL = composeRuntime.LocalhostURL("aasx")
+	passportsURL = composeRuntime.LocalhostURL("dpp")
 	issuer = composeRuntime.LocalhostURL("keycloak") + "/realms/basyx"
 	tokenURL = issuer + "/protocol/openid-connect/token"
 	tokens = testenv.NewPasswordGrantTokenProvider(tokenURL, "basyx-ui", 10*time.Second)
@@ -102,7 +108,7 @@ func TestMain(m *testing.M) {
 }
 
 func waitForServices() error {
-	for _, base := range []string{submodelURL, aasURL, cdURL, environmentURL} {
+	for _, base := range []string{submodelURL, aasURL, cdURL, environmentURL, packagesURL, passportsURL} {
 		if err := testenv.WaitHealthyURL(base+"/health", healthTimeout); err != nil {
 			return err
 		}
@@ -156,16 +162,21 @@ func (r response) json(t *testing.T) map[string]any {
 
 func call(t *testing.T, user string, method string, url string, body any, headers map[string]string) response {
 	t.Helper()
-	var reader io.Reader
-	if body != nil {
-		payload, err := json.Marshal(body)
-		require.NoError(t, err)
-		reader = bytes.NewReader(payload)
+	if body == nil {
+		return callRaw(t, user, method, url, nil, "", headers)
 	}
-	request, err := http.NewRequestWithContext(t.Context(), method, url, reader)
+	payload, err := json.Marshal(body)
 	require.NoError(t, err)
-	if body != nil {
-		request.Header.Set("Content-Type", "application/json")
+	return callRaw(t, user, method, url, bytes.NewReader(payload), "application/json", headers)
+}
+
+// callRaw sends body with contentType, e.g. a multipart upload.
+func callRaw(t *testing.T, user string, method string, url string, body io.Reader, contentType string, headers map[string]string) response {
+	t.Helper()
+	request, err := http.NewRequestWithContext(t.Context(), method, url, body)
+	require.NoError(t, err)
+	if contentType != "" {
+		request.Header.Set("Content-Type", contentType)
 	}
 	for key, value := range headers {
 		request.Header.Set(key, value)
@@ -320,6 +331,7 @@ func bootstrapCreators(t *testing.T) {
 		}{
 			{submodelURL, "submodel"}, {aasURL, "aas"}, {cdURL, "concept_description"},
 			{environmentURL, "aas_descriptor"}, {environmentURL, "submodel_descriptor"}, {environmentURL, "asset_links"},
+			{packagesURL, "aasx_package"},
 		} {
 			accessURL := repository.base + "/security/rebac/repositories/" + repository.kind + "/$access"
 			setGrants(t, "dave", accessURL, []grant{

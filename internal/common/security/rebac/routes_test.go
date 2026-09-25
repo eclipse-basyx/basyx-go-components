@@ -38,6 +38,7 @@ import (
 var coveredPrefixes = []string{
 	"/shells", "/submodels", "/concept-descriptions", "/query/shells", "/query/submodels", "/query/concept-descriptions",
 	"/shell-descriptors", "/submodel-descriptors", "/query/shell-descriptors", "/query/submodel-descriptors", "/lookup", "/bulk",
+	"/packages", "/packages-async", "/v1",
 }
 
 func TestEveryAuthorizableRouteIsClassified(t *testing.T) {

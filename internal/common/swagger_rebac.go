@@ -56,6 +56,8 @@ var reBACAccessBases = []reBACAccessBase{
 		parameters: "        - $ref: '#/components/parameters/ReBACSubmodelIdentifier'\n"},
 	{marker: "  /lookup/shells/{aasIdentifier}:\n", path: "/lookup/shells/{aasIdentifier}/$access", tag: "AssetLinks",
 		parameters: "        - $ref: '#/components/parameters/ReBACAASIdentifier'\n"},
+	{marker: "  /packages/{packageId}:\n", path: "/packages/{packageId}/$access", tag: "AASXPackage",
+		parameters: "        - $ref: '#/components/parameters/ReBACPackageIdentifier'\n"},
 }
 
 const reBACAccessPathTemplate = `  {path}:
@@ -300,7 +302,7 @@ const reBACGlobalPathsYAML = `  /security/rebac/invitations/accept:
           required: true
           schema:
             type: string
-            enum: [aas, submodel, concept_description, aas_descriptor, submodel_descriptor, asset_links]
+            enum: [aas, submodel, concept_description, aas_descriptor, submodel_descriptor, asset_links, aasx_package]
         - name: identifier
           in: path
           required: true
@@ -480,6 +482,12 @@ const reBACParametersYAML = `    ReBACAASIdentifier:
       required: true
       schema:
         type: string
+    ReBACPackageIdentifier:
+      name: packageId
+      in: path
+      required: true
+      schema:
+        type: string
     ReBACIdShortPath:
       name: idShortPath
       in: path
@@ -492,7 +500,7 @@ const reBACParametersYAML = `    ReBACAASIdentifier:
       required: true
       schema:
         type: string
-        enum: [aas, submodel, concept_description, aas_descriptor, submodel_descriptor, asset_links]
+        enum: [aas, submodel, concept_description, aas_descriptor, submodel_descriptor, asset_links, aasx_package]
     ReBACIfMatch:
       name: If-Match
       in: header

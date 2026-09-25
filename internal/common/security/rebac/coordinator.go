@@ -109,7 +109,7 @@ func (c *Coordinator) Resolve(ctx context.Context, request auth.ReBACRequest) (*
 	if !c.Ready() {
 		return nil, ErrNotReady
 	}
-	resolution := &resolution{coordinator: c, keys: principal.SubjectKeys(), route: request.Route, grants: grants}
+	resolution := &resolution{coordinator: c, keys: principal.SubjectKeys(), route: request.Route, spec: spec, grants: grants}
 	if err := resolution.resolve(ctx, spec); err != nil {
 		return nil, err
 	}
@@ -121,6 +121,7 @@ type resolution struct {
 	coordinator *Coordinator
 	keys        []string
 	route       auth.ReBACRoute
+	spec        routeSpec
 	grants      *auth.ReBACGrantSet
 }
 
@@ -141,6 +142,10 @@ func (r *resolution) resolve(ctx context.Context, spec routeSpec) error {
 		return r.resolveElement(ctx, spec)
 	case targetSubmodelElements:
 		return r.resolveSubmodelElements(ctx)
+	case targetJob:
+		return r.resolveJob(ctx, spec.kinds)
+	case targetAggregate:
+		return r.resolveAggregate(ctx, spec)
 	default:
 		return r.resolveIdentifiable(ctx, spec)
 	}
@@ -150,10 +155,15 @@ func (r *resolution) rights() []grammar.RightsEnum {
 	return r.route.Rights
 }
 
+// identifier returns the identifier in a route parameter: base64url encoded
+// as in the AAS API, or plain for the spec's plain parameter.
 func (r *resolution) identifier(param string) (string, bool) {
 	raw, ok := r.route.Params[param]
 	if !ok {
 		return "", false
+	}
+	if param == r.spec.plainParam {
+		return raw, strings.TrimSpace(raw) != ""
 	}
 	decoded, err := common.DecodeString(raw)
 	if err != nil || strings.TrimSpace(decoded) == "" {
@@ -163,7 +173,11 @@ func (r *resolution) identifier(param string) (string, bool) {
 }
 
 func (r *resolution) lookup(ctx context.Context, kind ResourceKind) (string, bool, error) {
-	identifier, ok := r.identifier(kind.Param)
+	param := kind.Param
+	if r.spec.plainParam != "" && kind.ObjectType == r.spec.kind.ObjectType {
+		param = r.spec.plainParam
+	}
+	identifier, ok := r.identifier(param)
 	if !ok {
 		return "", false, nil
 	}
@@ -204,7 +218,15 @@ func (r *resolution) resolveIdentifiable(ctx context.Context, spec routeSpec) er
 	if err != nil || !allowed {
 		return err
 	}
-	return r.allowObject(spec.kind, permission, authUUID, rights)
+	if err = r.allowObject(spec.kind, permission, authUUID, rights); err != nil {
+		return err
+	}
+	for _, companion := range spec.kinds {
+		if err = r.allowPermitted(ctx, companion, permission, rights); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // allowObject grants one object as a live query, together with the objects
@@ -337,14 +359,67 @@ func (r *resolution) resolveSubmodelElements(ctx context.Context) error {
 
 // resolveList grants the objects of a list route. The grant is a SQL
 // subquery evaluated by the backend, so lists need no allowlist and no cap.
-// Callers without any readable object keep today's ABAC decision.
 func (r *resolution) resolveList(ctx context.Context, kind ResourceKind) error {
-	readable := liveObjects(kind, r.keys, PermissionRead)
-	readableExists, err := exists(ctx, r.db(), "REBAC-RESOLVELIST-EXISTS", existsQuery(readable))
-	if err != nil || !readableExists {
+	return r.allowPermitted(ctx, kind, PermissionRead, r.rights())
+}
+
+// resolveJob lets creators and readers of the job kinds reach asynchronous
+// jobs; the job store only reveals jobs the caller owns.
+func (r *resolution) resolveJob(ctx context.Context, kinds []ResourceKind) error {
+	for _, kind := range kinds {
+		readable := liveObjects(kind, r.keys, PermissionRead)
+		allowed, err := exists(ctx, r.db(), "REBAC-RESOLVEJOB-EXISTS",
+			existsQuery(repositoryGrant(kind, r.keys, RelationCreator, RelationAdmin)), existsQuery(readable))
+		if err != nil {
+			return err
+		}
+		if allowed {
+			if err = r.grants.AllowQueriedResources(kind.Semantic, readable, r.rights()...); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// resolveAggregate grants every kind an aggregate route reads or writes:
+// creation to repository creators, and each other right on the objects
+// the caller holds the matching permission on.
+func (r *resolution) resolveAggregate(ctx context.Context, spec routeSpec) error {
+	for _, kind := range spec.kinds {
+		if err := r.resolveAggregateKind(ctx, kind, spec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *resolution) resolveAggregateKind(ctx context.Context, kind ResourceKind, spec routeSpec) error {
+	if spec.action != actionCreate && spec.action != actionUpsert {
+		return r.allowPermitted(ctx, kind, spec.relation, r.rights())
+	}
+	if err := r.resolveCreate(ctx, kind); err != nil {
 		return err
 	}
-	return r.grants.AllowQueriedResources(kind.Semantic, readable, r.rights()...)
+	if spec.action == actionCreate {
+		return nil
+	}
+	return r.allowPermitted(ctx, kind, PermissionUpdate, []grammar.RightsEnum{grammar.RightsEnumUPDATE})
+}
+
+// allowPermitted grants rights on every object of kind the caller holds
+// permission on, and the objects derived from them, as live queries.
+// Callers without any such object keep today's ABAC decision.
+func (r *resolution) allowPermitted(ctx context.Context, kind ResourceKind, permission string, rights []grammar.RightsEnum) error {
+	objects := liveObjects(kind, r.keys, permission)
+	found, err := exists(ctx, r.db(), "REBAC-ALLOWPERMITTED-EXISTS", existsQuery(objects))
+	if err != nil || !found {
+		return err
+	}
+	if err = r.grants.AllowQueriedResources(kind.Semantic, objects, rights...); err != nil {
+		return err
+	}
+	return r.allowDerived(kind, objects, r.synchronizedRights(rights))
 }
 
 func uuidQuery(authUUID string) *goqu.SelectDataset {

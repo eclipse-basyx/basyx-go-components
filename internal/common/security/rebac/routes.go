@@ -37,6 +37,7 @@ const (
 	paramSubmodel  = "submodelIdentifier"
 	paramPath      = "idShortPath"
 	paramCD        = "cdIdentifier"
+	paramPackage   = "packageId"
 	superpathShell = "/shells/{" + paramAAS + "}"
 )
 
@@ -47,6 +48,10 @@ const (
 	targetResource
 	targetElement
 	targetSubmodelElements
+	// targetJob addresses asynchronous jobs, which are bound to their owner.
+	targetJob
+	// targetAggregate reads or writes many resources of several kinds.
+	targetAggregate
 )
 
 type routeAction uint8
@@ -66,9 +71,13 @@ const (
 type routeSpec struct {
 	target      routeTarget
 	kind        ResourceKind
+	kinds       []ResourceKind
 	action      routeAction
 	relation    string
 	aasRelation string
+	// plainParam names a route parameter carrying a plain identifier of kind
+	// instead of a base64url encoded one.
+	plainParam string
 }
 
 // routeMatrix maps "METHOD pattern" of covered routes to their spec. Routes
@@ -98,7 +107,63 @@ func newRouteMatrix() routeMatrix {
 	addConceptDescriptionRoutes(matrix)
 	addRegistryRoutes(matrix)
 	addDiscoveryRoutes(matrix)
+	addPackageRoutes(matrix)
+	addAggregateRoutes(matrix)
+	addPassportRoutes(matrix)
 	return matrix
+}
+
+// addPassportRoutes registers the Digital Product Passport API. A passport
+// is a shell with its Submodels: the shell decides the request, and each
+// Submodel is authorized by its own relations. Historical passports stay
+// ABAC-only.
+func addPassportRoutes(matrix routeMatrix) {
+	passport := func(relation string) routeSpec {
+		return routeSpec{
+			target: targetResource, kind: KindAAS, relation: relation,
+			plainParam: "dppId", kinds: []ResourceKind{KindSubmodel},
+		}
+	}
+	dpp := "/v1/dpps/{dppId}"
+	matrix.add(http.MethodGet, dpp, passport(PermissionRead))
+	matrix.add(http.MethodPatch, dpp, passport(PermissionUpdate))
+	matrix.add(http.MethodDelete, dpp, passport(PermissionDelete))
+	for _, element := range []string{dpp + "/elements/{elementIdPath}", dpp + "/elements/*"} {
+		matrix.add(http.MethodGet, element, passport(PermissionRead))
+		matrix.add(http.MethodPatch, element, passport(PermissionUpdate))
+	}
+	passports := []ResourceKind{KindAAS, KindSubmodel}
+	matrix.add(http.MethodPost, "/v1/dpps", routeSpec{target: targetAggregate, kinds: passports, action: actionCreate})
+	matrix.add(http.MethodGet, "/v1/dppsByProductId/{productId}", routeSpec{target: targetAggregate, kinds: passports, relation: PermissionRead})
+	matrix.add(http.MethodPost, "/v1/dppsByProductIds", routeSpec{target: targetAggregate, kinds: []ResourceKind{KindAAS}, relation: PermissionRead})
+}
+
+// addAggregateRoutes registers routes that read or write many resources:
+// every resource is authorized by its own kind's grants, so an aggregate
+// only ever contains resources the caller may access.
+func addAggregateRoutes(matrix routeMatrix) {
+	repositories := []ResourceKind{KindAAS, KindSubmodel, KindConceptDescription}
+	matrix.add(http.MethodGet, "/serialization", routeSpec{target: targetAggregate, kinds: repositories, relation: PermissionRead})
+	matrix.add(http.MethodPost, "/upload", routeSpec{target: targetAggregate, kinds: repositories, action: actionUpsert})
+	for _, kind := range []ResourceKind{KindAASDescriptor, KindSubmodelDescriptor} {
+		bulk := "/bulk" + kind.Prefix
+		matrix.add(http.MethodPost, bulk, routeSpec{target: targetAggregate, kinds: []ResourceKind{kind}, action: actionCreate})
+		matrix.add(http.MethodPut, bulk, routeSpec{target: targetAggregate, kinds: []ResourceKind{kind}, action: actionUpsert})
+		matrix.add(http.MethodDelete, bulk, routeSpec{target: targetAggregate, kinds: []ResourceKind{kind}, relation: PermissionDelete})
+	}
+	registryJob := routeSpec{target: targetJob, kinds: []ResourceKind{KindAASDescriptor, KindSubmodelDescriptor}}
+	matrix.add(http.MethodGet, "/bulk/status/{handleId}", registryJob)
+	matrix.add(http.MethodGet, "/bulk/result/{handleId}", registryJob)
+}
+
+// addPackageRoutes registers the AASX file server. Asynchronous uploads
+// create packages; their status and result are bound to the uploader.
+func addPackageRoutes(matrix routeMatrix) {
+	addResourceRoutes(matrix, KindAASXPackage, KindAASXPackage.Prefix)
+	matrix.add(http.MethodPost, "/packages-async", resourceAction(KindAASXPackage, actionCreate))
+	job := routeSpec{target: targetJob, kinds: []ResourceKind{KindAASXPackage}}
+	matrix.add(http.MethodGet, "/packages-async/status/{handleId}", job)
+	matrix.add(http.MethodGet, "/packages-async/result/{handleId}", job)
 }
 
 func resourceRoute(kind ResourceKind, relation string) routeSpec {
@@ -264,7 +329,7 @@ func addConceptDescriptionRoutes(matrix routeMatrix) {
 
 // isExcludedRoute reports routes that intentionally stay ABAC-only.
 func isExcludedRoute(pattern string) bool {
-	for _, marker := range []string{"/$history", "/$recent-changes", "/$signed", "/events", "/event-feed", "/security/", "/verify", "/description", "/bulk/"} {
+	for _, marker := range []string{"/$history", "/$recent-changes", "/$signed", "/events", "/event-feed", "/security/", "/verify", "/description", "ByIdAndDate"} {
 		if strings.Contains(pattern, marker) {
 			return true
 		}

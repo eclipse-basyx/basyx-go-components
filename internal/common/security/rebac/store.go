@@ -89,10 +89,16 @@ var (
 		Semantic: auth.SemanticResourceBD, ObjectType: TypeAssetLinks, AuthTable: "aas_identifier",
 		Prefix: "/lookup/shells", Param: paramAAS, rows: plainRows("aas_identifier", "aasid"),
 	}
+	KindAASXPackage = ResourceKind{
+		Semantic: auth.SemanticResourceAASXPackage, ObjectType: TypeAASXPackage, AuthTable: "aasx_package",
+		Prefix: "/packages", Param: paramPackage, rows: plainRows("aasx_package", "package_id"),
+	}
 )
 
 // AllKinds lists every covered resource kind.
-var AllKinds = []ResourceKind{KindAAS, KindSubmodel, KindConceptDescription, KindAASDescriptor, KindSubmodelDescriptor, KindAssetLinks}
+var AllKinds = []ResourceKind{
+	KindAAS, KindSubmodel, KindConceptDescription, KindAASDescriptor, KindSubmodelDescriptor, KindAssetLinks, KindAASXPackage,
+}
 
 // Rows selects object_uuid and identifier of every resource of the kind.
 func (k ResourceKind) Rows() *goqu.SelectDataset {
