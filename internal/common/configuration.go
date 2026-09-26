@@ -1464,7 +1464,7 @@ func ConfigureLogging(cfg *Config, serviceName string, configPath string, output
 //   - Allowed origins (domains that can make requests)
 //   - Allowed methods (HTTP methods permitted)
 //   - Allowed headers (request headers permitted)
-//   - Exposed response headers (request metadata and Location)
+//   - Exposed response headers (request metadata, Location and ETag)
 //   - Credentials support (whether to include cookies/auth headers)
 //
 // Example:
@@ -1477,7 +1477,7 @@ func AddCors(r *chi.Mux, config *Config) {
 		commonlogging.RequestIDHeader,
 		commonlogging.CorrelationIDHeader,
 	}
-	exposedResponseHeaders := appendUniqueHeaders(requestMetadataHeaders, "Location")
+	exposedResponseHeaders := appendUniqueHeaders(requestMetadataHeaders, "Location", "ETag")
 	c := cors.New(cors.Options{
 		AllowedOrigins:   config.CorsConfig.AllowedOrigins,
 		AllowedMethods:   config.CorsConfig.AllowedMethods,

@@ -118,6 +118,14 @@ func TestElementGrantsArePathScoped(t *testing.T) {
 	expectStatus(t, http.StatusOK, list, "element-only list")
 	require.ElementsMatch(t, []string{"a"}, resultIDShorts(t, list))
 
+	listed := createSubmodel(t, submodelURL, "alice", "listed", map[string]any{
+		"modelType": "SubmodelElementList", "idShort": "items", "typeValueListElement": "Property", "valueTypeListElement": "xs:string",
+		"value": []any{map[string]any{"modelType": "Property", "valueType": "xs:string", "value": "first"}},
+	})
+	listElements := submodelURL + "/submodels/" + enc(listed) + "/submodel-elements"
+	addGrants(t, "alice", elementAccess(submodelURL, listed, neturl.PathEscape("items[0]")), userGrant(t, "viewer", "bob"))
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, listElements+"/"+neturl.PathEscape("items[0]"), nil, nil), "escaped list item paths address the granted item")
+
 	addGrants(t, "alice", elementAccess(submodelURL, identifier, "x"), userGrant(t, "editor", "carol"))
 	expectStatus(t, http.StatusNoContent, call(t, "carol", http.MethodPatch, elements+"/x/$value", "edited", nil), "element editor updates")
 	expectStatus(t, http.StatusForbidden, call(t, "carol", http.MethodPatch, elements+"/a.b.c/$value", "edited", nil), "element grant does not reach siblings")

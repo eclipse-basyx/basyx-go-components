@@ -24,6 +24,10 @@ services:
       - GENERAL_EXTERNALURL=http://localhost:8082
       - GENERAL_AASREGISTRYINTEGRATION=true
       - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - CORS_ALLOWEDORIGINS=http://localhost:3000
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
     volumes:
       - ./security_env:/security_env:ro
     extra_hosts:
@@ -33,6 +37,21 @@ services:
         condition: service_completed_successfully
       keycloak-healthcheck:
         condition: service_completed_successfully
+    restart: unless-stopped
+
+  aas-ui:
+    container_name: rebac-aas-web-ui
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "3000:3000"
+    environment:
+      - ENDPOINT_CONFIG_AVAILABLE=false
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    depends_on:
+      aas-environment:
+        condition: service_started
     restart: unless-stopped
 
   basyx_configuration:

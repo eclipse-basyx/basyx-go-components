@@ -22,40 +22,36 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
 
-package api
+package common
 
 import (
-	"context"
-	"net/http"
-
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
+	"reflect"
+	"testing"
 )
 
-const (
-	aasxFileServerSSP001 = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001"
-	aasxFileServerSSP002 = "https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-002"
-)
+func TestServiceProfilesAppendsAnnouncedProfilesOnce(t *testing.T) {
+	serviceProfilesMu.Lock()
+	previous := additionalProfiles
+	additionalProfiles = nil
+	serviceProfilesMu.Unlock()
+	t.Cleanup(func() {
+		serviceProfilesMu.Lock()
+		additionalProfiles = previous
+		serviceProfilesMu.Unlock()
+	})
 
-// DescriptionAPIAPIService provides the configured self-description response.
-type DescriptionAPIAPIService struct {
-	profiles []string
-}
-
-// NewDescriptionAPIAPIService creates a new description service.
-func NewDescriptionAPIAPIService(asyncProfileEnabled bool) *DescriptionAPIAPIService {
-	profiles := []string{aasxFileServerSSP001}
-	if asyncProfileEnabled {
-		profiles = append(profiles, aasxFileServerSSP002)
+	const static = "https://example.org/profile/static"
+	if got := ServiceProfiles(static); !reflect.DeepEqual(got, []string{static}) {
+		t.Fatalf("unexpected profiles without announcements: %v", got)
 	}
-	return &DescriptionAPIAPIService{profiles: profiles}
-}
 
-// GetSelfDescription returns the supported profile for the AASX file server.
-func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (openapi.ImplResponse, error) {
-	_ = ctx
-	return openapi.Response(http.StatusOK, openapi.ServiceDescription{
-		Profiles: common.ServiceProfiles(s.profiles...),
-	}), nil
+	AddServiceProfile(ReBACServiceProfile)
+	AddServiceProfile(ReBACServiceProfile)
+	got := ServiceProfiles(static, ReBACServiceProfile, static)
+	want := []string{static, ReBACServiceProfile}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("expected %v, got %v", want, got)
+	}
 }

@@ -305,6 +305,13 @@ the resources it serves.
 
 Grant changes take effect when their transaction commits.
 
+Services with ReBAC enabled list the profile
+`https://basyx.org/aas/API/3/2/RelationshipBasedAccessControl/1.0` in
+`GET /description`. Clients such as the BaSyx UI show sharing only for
+services that announce it. CORS responses expose `ETag` for browser clients.
+The idShort path of an element `$access` route may be URL encoded, for
+example `Markings%5B0%5D` for `Markings[0]`.
+
 ```http
 PUT /submodels/{id}/$access/grants
 If-Match: "3"

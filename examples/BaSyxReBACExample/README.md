@@ -14,6 +14,7 @@ interplay.
 | Service | Purpose |
 | --- | --- |
 | `aas-environment` | BaSyx AAS Environment on <http://localhost:8082> with `ABAC_ENABLED=true`, `REBAC_ENABLED=true` and registry synchronization |
+| `aas-ui` | BaSyx AAS Web UI on <http://localhost:3000>, configured by [basyx-infra.yml](basyx-infra.yml) |
 | `basyx_configuration` | Applies the BaSyx database schema |
 | `keycloak` | Identity provider on <http://keycloak.localhost:8080> (realm `basyx`) |
 | `db` | PostgreSQL with the BaSyx database |
@@ -38,6 +39,34 @@ The smoke script walks through the basic flow:
 3. `alice` shares the Submodel with `bob` as `viewer`. `bob` gets `200` for
    the Submodel and for the descriptor, which follows its Submodel.
 4. `alice` revokes the grant. `bob` gets `403` again.
+
+## Try it in the BaSyx UI
+
+Open <http://localhost:3000> and sign in, for example as `alice`. Sharing
+needs a UI version with ReBAC support; until it is released, build the UI
+locally and start the example without pulling:
+
+```bash
+docker build -t eclipsebasyx/aas-gui:SNAPSHOT <basyx-aas-web-ui>/aas-web-ui
+docker compose up -d --pull never
+```
+
+1. As `dave`, open **Access Management** in the module menu and grant
+   `alice` the `creator` role on the shell and Submodel repositories
+   (tab *Repositories*). Your user ID is shown in the user menu.
+2. As `alice`, create a shell with a Submodel in the AAS Editor. Choose
+   **Share** in the menu of the shell, the Submodel or any element to add
+   people or groups, create invitation links, or let viewers of a shell
+   also see a Submodel (*Shell links*).
+3. Open an invitation link in another browser session and accept it, for
+   example as `bob`. `bob` now finds the shared resource in the viewer.
+4. As `dave`, review and verify all access changes in the *Audit trail*
+   tab.
+
+The ABAC rules of this example allow every signed-in user to list
+resources, but the list rules match no resource on their own. Lists
+therefore only contain what ReBAC shares with the user, and `eve` sees
+empty lists instead of errors.
 
 ## Manual walkthrough
 

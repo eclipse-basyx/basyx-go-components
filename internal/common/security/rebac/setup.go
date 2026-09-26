@@ -94,6 +94,7 @@ func Setup(ctx context.Context, cfg *common.Config, db *sql.DB) (*Runtime, error
 		return nil, err
 	}
 	coordinator.MarkReady()
+	common.AddServiceProfile(common.ReBACServiceProfile)
 	slog.InfoContext(ctx, "ReBAC enabled",
 		"rebac.orphan_grants", report.OrphanGrants, "rebac.orphan_links", report.OrphanLinks,
 		"rebac.orphan_derivations", report.OrphanDerivations, "rebac.orphan_invitations", report.OrphanInvitations)
