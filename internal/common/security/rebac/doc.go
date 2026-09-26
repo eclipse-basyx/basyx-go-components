@@ -25,11 +25,12 @@
 // Author: Aaron Zielstorff ( Fraunhofer IESE )
 
 // Package rebac implements the experimental relationship-based access
-// control of BaSyx with OpenFGA.
+// control of BaSyx.
 //
-// PostgreSQL holds the desired authorization state; OpenFGA is a projection
-// that only BaSyx writes through an ordered outbox. The Coordinator resolves
-// ReBAC grants for requests ABAC does not allow unconditionally, records
-// ownership and deletions inside resource transactions, and serves the $access
-// management API. Access is always the union of ABAC and ReBAC.
+// Relationships are stored in the BaSyx PostgreSQL database and evaluated
+// there as subqueries of the backend queries. The Coordinator resolves ReBAC
+// grants for requests ABAC does not allow unconditionally, records ownership
+// and deletions inside resource transactions, and serves the $access
+// management API. Access is always the union of ABAC and ReBAC. See
+// docu/developer/rebac.md.
 package rebac

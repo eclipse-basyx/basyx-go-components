@@ -13,7 +13,7 @@ With ReBAC, access follows relationships between people and resources:
   for everyday sharing.
 
 In about 15 minutes you will see all of this with a few example users. The
-full reference is [docu/security/REBAC.md](../../docu/security/REBAC.md).
+full documentation is in [docu/security/rebac](../../docu/security/rebac/README.md).
 
 ## Start the example
 
@@ -242,8 +242,9 @@ against the API and is a quick way to check that the example works:
 ./smoke.sh
 ```
 
-See [docu/security/REBAC.md](../../docu/security/REBAC.md) for all
-endpoints, the evaluation order and the configuration options.
+See the [Sharing API](../../docu/security/rebac/sharing-api.md) for all
+endpoints and the [administration guide](../../docu/security/rebac/administration.md)
+to set up ReBAC in your own environment.
 
 ## Notes
 
