@@ -52,6 +52,10 @@ const (
 	auditSystemObject = "rebac"
 	defaultAuditPage  = 100
 	maxAuditPage      = 1000
+	// defaultAuditVerifyRange and maxAuditVerifyRange bound the events one
+	// verification request checks; clients continue from the returned head.
+	defaultAuditVerifyRange = 1000
+	maxAuditVerifyRange     = 10000
 )
 
 // Audit event types.
@@ -76,6 +80,18 @@ type AuditEvent struct {
 	PreviousHash string          `json:"previousHash,omitempty"`
 	Hash         string          `json:"hash"`
 	Evidence     json.RawMessage `json:"evidence,omitempty"`
+	// Resource identifies the object for readers while it still exists. It
+	// is resolved when listing and is not part of the hashed content.
+	Resource *AuditResource `json:"resource,omitempty"`
+}
+
+// AuditResource is the public identity of an audited object: a resource
+// identifier, a Submodel identifier with an idShort path, or a repository
+// family.
+type AuditResource struct {
+	Type        string `json:"type"`
+	ID          string `json:"id"`
+	IDShortPath string `json:"idShortPath,omitempty"`
 }
 
 // hashedContent returns the canonical content the event hash covers.
@@ -136,8 +152,17 @@ func (c *Coordinator) audit(ctx context.Context, tx *sql.Tx, eventType string, o
 	return nil
 }
 
+// auditTarget appends an event of a management target. Element events carry
+// their idShort path, which the object key only contains as a digest.
+func (c *Coordinator) auditTarget(ctx context.Context, tx *sql.Tx, eventType string, target accessTarget, details map[string]any) error {
+	if target.elementPath != "" {
+		details["idShortPath"] = target.elementPath
+	}
+	return c.audit(ctx, tx, eventType, target.objectKey(), details)
+}
+
 func (c *Coordinator) actor(ctx context.Context) string {
-	if principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.groupClaim); ok && auth.IsAuthenticated(ctx) {
+	if principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.claims); ok && auth.IsAuthenticated(ctx) {
 		return principal.UserKey()
 	}
 	return systemActor
@@ -219,15 +244,57 @@ func execSelect(ctx context.Context, q Queryer, code string, ds *goqu.SelectData
 	return queryRowDataset(ctx, q, code, ds, &ignored)
 }
 
-// ListAuditEvents returns up to limit events with an id greater than afterID.
-func ListAuditEvents(ctx context.Context, q Queryer, afterID int64, limit uint) ([]AuditEvent, error) {
-	events := []AuditEvent{}
-	ds := auditEventsQuery().Where(goqu.C("id").Gt(afterID)).Order(goqu.C("id").Asc()).Limit(limit)
-	err := streamAuditEvents(ctx, q, "REBAC-LISTAUDIT", ds, func(event AuditEvent) error {
-		events = append(events, event)
+// AuditQuery selects one page of the audit trail. Pages run from the newest
+// event backwards and continue before BeforeID, or, with Ascending, forwards
+// after AfterID. Object and Actor restrict the page to one object or actor
+// key.
+type AuditQuery struct {
+	Ascending bool
+	AfterID   int64
+	BeforeID  int64
+	Object    string
+	Actor     string
+	Limit     uint
+}
+
+// AuditPage is one page of audit events and whether more events follow.
+type AuditPage struct {
+	Events  []AuditEvent `json:"events"`
+	HasMore bool         `json:"hasMore"`
+}
+
+// ListAuditEvents returns one page of the audit trail. Every filter and
+// direction is served by an index on (key, id), so pages stay cheap on long
+// trails.
+func ListAuditEvents(ctx context.Context, q Queryer, query AuditQuery) (AuditPage, error) {
+	ds := auditEventsQuery().Limit(query.Limit + 1)
+	if query.Object != "" {
+		ds = ds.Where(goqu.C("object_key").Eq(query.Object))
+	}
+	if query.Actor != "" {
+		ds = ds.Where(goqu.C("actor_key").Eq(query.Actor))
+	}
+	switch {
+	case query.Ascending:
+		ds = ds.Where(goqu.C("id").Gt(query.AfterID)).Order(goqu.C("id").Asc())
+	case query.BeforeID > 0:
+		ds = ds.Where(goqu.C("id").Lt(query.BeforeID)).Order(goqu.C("id").Desc())
+	default:
+		ds = ds.Order(goqu.C("id").Desc())
+	}
+	page := AuditPage{Events: []AuditEvent{}}
+	err := streamAuditEvents(ctx, q, "REBAC-LISTAUDIT", ds.Prepared(true), func(event AuditEvent) error {
+		if uint(len(page.Events)) == query.Limit {
+			page.HasMore = true
+			return nil
+		}
+		page.Events = append(page.Events, event)
 		return nil
 	})
-	return events, err
+	if err != nil {
+		return AuditPage{}, err
+	}
+	return page, resolveAuditResources(ctx, q, page.Events)
 }
 
 func auditEventsQuery() *goqu.SelectDataset {
@@ -264,10 +331,14 @@ func streamAuditEvents(ctx context.Context, q Queryer, code string, ds *goqu.Sel
 	return rows.Err()
 }
 
-// AuditVerification reports the result of verifying the audit trail.
+// AuditVerification reports the result of verifying the audit trail or a
+// range of it. HeadHash and LastID identify the last verified event; a
+// client continues a range with them until Complete.
 type AuditVerification struct {
 	Valid            bool   `json:"valid"`
+	Complete         bool   `json:"complete"`
 	Checked          int    `json:"checked"`
+	LastID           int64  `json:"lastId,omitempty"`
 	HeadHash         string `json:"headHash,omitempty"`
 	FirstInvalidID   int64  `json:"firstInvalidId,omitempty"`
 	Reason           string `json:"reason,omitempty"`
@@ -275,32 +346,92 @@ type AuditVerification struct {
 	EvidenceMissing  int    `json:"evidenceMissing"`
 }
 
+// AuditRange selects the events a verification checks. A checkpoint
+// (AfterID with the AfterHash retained from an earlier verification) starts
+// the range after that event; Limit 0 checks all remaining events.
+// ExpectedHead, retained independently of the database, is compared once
+// the range reaches the end of the trail and detects removed trailing
+// events.
+type AuditRange struct {
+	AfterID      int64
+	AfterHash    string
+	Limit        uint
+	ExpectedHead string
+}
+
 // VerifyAuditTrail recomputes the hash chain of every audit event. With a
-// store it also verifies each archived event against the WORM object. A
-// non-empty expectedHead, retained independently of the database, detects
-// removed trailing events.
+// store it also verifies each archived event against the WORM object.
 func VerifyAuditTrail(ctx context.Context, q Queryer, store history.EvidenceStore, expectedHead string) (AuditVerification, error) {
-	report := AuditVerification{Valid: true}
-	err := streamAuditEvents(ctx, q, "REBAC-VERIFYAUDIT", auditEventsQuery().Order(goqu.C("id").Asc()), func(event AuditEvent) error {
+	return VerifyAuditRange(ctx, q, store, AuditRange{ExpectedHead: expectedHead})
+}
+
+// VerifyAuditRange verifies the events of rng in order, continuing the chain
+// from its checkpoint.
+func VerifyAuditRange(ctx context.Context, q Queryer, store history.EvidenceStore, rng AuditRange) (AuditVerification, error) {
+	report, err := verifyAuditCheckpoint(ctx, q, rng)
+	if err != nil || !report.Valid {
+		return report, err
+	}
+	ds := auditEventsQuery().Where(goqu.C("id").Gt(rng.AfterID)).Order(goqu.C("id").Asc())
+	if rng.Limit > 0 {
+		ds = ds.Limit(rng.Limit + 1)
+	}
+	report.Complete = true
+	err = streamAuditEvents(ctx, q, "REBAC-VERIFYAUDIT", ds.Prepared(true), func(event AuditEvent) error {
 		if !report.Valid {
 			return nil
 		}
-		reason, err := verifyAuditEvent(ctx, store, event, report.HeadHash, &report)
-		if err != nil {
-			return err
-		}
-		report.Checked++
-		if reason != "" {
-			report.Valid, report.FirstInvalidID, report.Reason = false, event.ID, reason
+		if rng.Limit > 0 && uint(report.Checked) == rng.Limit {
+			report.Complete = false
 			return nil
 		}
-		report.HeadHash = event.Hash
-		return nil
+		return verifyNextAuditEvent(ctx, store, event, &report)
 	})
-	if err == nil && report.Valid && expectedHead != "" && expectedHead != report.HeadHash {
+	if err == nil && report.Valid && report.Complete && rng.ExpectedHead != "" && rng.ExpectedHead != report.HeadHash {
 		report.Valid, report.Reason = false, "the head of the trail differs from the expected head hash"
 	}
 	return report, err
+}
+
+// verifyAuditCheckpoint starts a report at the checkpoint of rng. The
+// checkpoint event must still exist with the retained hash and content.
+func verifyAuditCheckpoint(ctx context.Context, q Queryer, rng AuditRange) (AuditVerification, error) {
+	report := AuditVerification{Valid: true}
+	if rng.AfterID == 0 {
+		return report, nil
+	}
+	var checkpoint *AuditEvent
+	ds := auditEventsQuery().Where(goqu.C("id").Eq(rng.AfterID)).Prepared(true)
+	err := streamAuditEvents(ctx, q, "REBAC-VERIFYAUDIT-CHECKPOINT", ds, func(event AuditEvent) error {
+		checkpoint = &event
+		return nil
+	})
+	if err != nil {
+		return AuditVerification{}, err
+	}
+	if checkpoint == nil || checkpoint.Hash != rng.AfterHash {
+		return AuditVerification{FirstInvalidID: rng.AfterID, Reason: "the checkpoint does not match the trail"}, nil
+	}
+	if recomputed, hashErr := checkpoint.computeHash(); hashErr != nil || recomputed != checkpoint.Hash {
+		return AuditVerification{FirstInvalidID: rng.AfterID, Reason: "the checkpoint event content does not match its hash"}, hashErr
+	}
+	report.LastID, report.HeadHash = checkpoint.ID, checkpoint.Hash
+	return report, nil
+}
+
+// verifyNextAuditEvent checks one event against the head of report.
+func verifyNextAuditEvent(ctx context.Context, store history.EvidenceStore, event AuditEvent, report *AuditVerification) error {
+	reason, err := verifyAuditEvent(ctx, store, event, report.HeadHash, report)
+	if err != nil {
+		return err
+	}
+	report.Checked++
+	if reason != "" {
+		report.Valid, report.FirstInvalidID, report.Reason = false, event.ID, reason
+		return nil
+	}
+	report.LastID, report.HeadHash = event.ID, event.Hash
+	return nil
 }
 
 func verifyAuditEvent(ctx context.Context, store history.EvidenceStore, event AuditEvent, previous string, report *AuditVerification) (string, error) {

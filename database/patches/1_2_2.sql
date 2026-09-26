@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS rebac_audit_event (
 );
 
 CREATE INDEX IF NOT EXISTS ix_rebac_audit_event_object ON rebac_audit_event (object_key, id);
+CREATE INDEX IF NOT EXISTS ix_rebac_audit_event_actor ON rebac_audit_event (actor_key, id);
 
 DROP TRIGGER IF EXISTS rebac_audit_event_prevent_update_delete ON rebac_audit_event;
 CREATE TRIGGER rebac_audit_event_prevent_update_delete

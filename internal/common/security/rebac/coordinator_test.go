@@ -48,7 +48,7 @@ func testCoordinator(t *testing.T) (*Coordinator, sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	coordinator := NewCoordinator(db, common.ReBACConfig{GroupClaim: "groups"}, nil)
+	coordinator := NewCoordinator(db, common.ReBACConfig{SubjectClaim: "sub", GroupClaim: "groups"}, nil)
 	coordinator.MarkReady()
 	return coordinator, mock
 }

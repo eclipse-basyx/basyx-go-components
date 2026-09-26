@@ -177,7 +177,7 @@ func (c *Coordinator) handleCreateInvitation(w http.ResponseWriter, r *http.Requ
 		if _, txErr := execDataset(r.Context(), tx, "REBAC-CREATEINVITATION", dialect.Insert(invitationTable).Rows(record).Prepared(true)); txErr != nil {
 			return txErr
 		}
-		return c.audit(r.Context(), tx, AuditInvitationCreated, request.target.objectKey(), details)
+		return c.auditTarget(r.Context(), tx, AuditInvitationCreated, request.target, details)
 	})
 	if err != nil {
 		writeManagementError(w, r, err)
@@ -235,7 +235,7 @@ func (c *Coordinator) handleRevokeInvitation(w http.ResponseWriter, r *http.Requ
 		if affected, _ := result.RowsAffected(); affected == 0 {
 			return errTargetGone
 		}
-		return c.audit(r.Context(), tx, AuditInvitationRevoked, request.target.objectKey(), map[string]any{"invitation": invitationID})
+		return c.auditTarget(r.Context(), tx, AuditInvitationRevoked, request.target, map[string]any{"invitation": invitationID})
 	})
 	if err != nil {
 		writeManagementError(w, r, err)
@@ -303,10 +303,10 @@ func (c *Coordinator) redeemInvitation(ctx context.Context, tx *sql.Tx, principa
 	if err != nil {
 		return acceptedInvitation{}, err
 	}
-	if err = c.applyGrantDiff(ctx, tx, target.objectKey(), current, append(current, grant)); err != nil {
+	if err = c.applyGrantDiff(ctx, tx, target, current, append(current, grant)); err != nil {
 		return acceptedInvitation{}, err
 	}
-	err = c.audit(ctx, tx, AuditInvitationRedeemed, target.objectKey(), map[string]any{"invitation": redeemed.id, "relation": redeemed.relation})
+	err = c.auditTarget(ctx, tx, AuditInvitationRedeemed, target, map[string]any{"invitation": redeemed.id, "relation": redeemed.relation})
 	accepted := acceptedInvitation{Object: accessObject{Type: target.objectType(), ID: identifier, IDShortPath: target.elementPath}, Relation: redeemed.relation}
 	return accepted, err
 }

@@ -77,20 +77,33 @@ func TestIdentitiesAreIssuerScopedAndBounded(t *testing.T) {
 func TestPrincipalRequiresIssuerAndSubject(t *testing.T) {
 	t.Parallel()
 
-	_, ok := PrincipalFromClaims(auth.Claims{}, "groups")
+	names := ClaimNames{Subject: "sub", Groups: "groups"}
+	_, ok := PrincipalFromClaims(auth.Claims{}, names)
 	require.False(t, ok, "anonymous callers are no principals")
-	_, ok = PrincipalFromClaims(auth.Claims{"sub": "alice"}, "groups")
+	_, ok = PrincipalFromClaims(auth.Claims{"sub": "alice"}, names)
 	require.False(t, ok, "subjects without issuer are no principals")
 
 	principal, ok := PrincipalFromClaims(auth.Claims{
 		"iss": "https://idp", "sub": "alice", "groups": []any{"ops", " ", "dev", "ops", 42},
-	}, "groups")
+	}, names)
 	require.True(t, ok)
 	require.Equal(t, []string{"dev", "ops"}, principal.Groups)
 	require.Equal(t, []string{principal.UserKey(), GroupKey("https://idp", "dev"), GroupKey("https://idp", "ops")}, principal.SubjectKeys())
 
-	single, _ := PrincipalFromClaims(auth.Claims{"iss": "https://idp", "sub": "bob", "role": "ops"}, "role")
+	single, _ := PrincipalFromClaims(auth.Claims{"iss": "https://idp", "sub": "bob", "role": "ops"}, ClaimNames{Subject: "sub", Groups: "role"})
 	require.Equal(t, []string{"ops"}, single.Groups)
+}
+
+func TestPrincipalUsesTheConfiguredSubjectClaim(t *testing.T) {
+	t.Parallel()
+
+	claims := auth.Claims{"iss": "https://login.microsoftonline.com/tenant/v2.0", "sub": "pairwise", "oid": "object-id"}
+	principal, ok := PrincipalFromClaims(claims, ClaimNames{Subject: "oid", Groups: "groups"})
+	require.True(t, ok)
+	require.Equal(t, "object-id", principal.Subject)
+
+	_, ok = PrincipalFromClaims(auth.Claims{"iss": "https://idp", "sub": "alice"}, ClaimNames{Subject: "oid", Groups: "groups"})
+	require.False(t, ok, "tokens without the configured subject claim are no principals")
 }
 
 func TestOnlyResourceRolesCanBeGrantedDirectly(t *testing.T) {

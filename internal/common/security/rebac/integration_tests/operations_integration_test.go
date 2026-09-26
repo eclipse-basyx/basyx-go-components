@@ -29,6 +29,8 @@ package rebacintegration
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -243,4 +245,130 @@ func TestAccessChangesAreAuditedInAVerifiableChain(t *testing.T) {
 
 	stale := call(t, "dave", http.MethodGet, auditURL+"/verify?expectedHead="+strings.Repeat("0", 64), nil, nil)
 	require.Contains(t, string(stale.body), `"valid":false`, "a different retained head reveals removed events")
+}
+
+type auditResource struct {
+	Type        string `json:"type"`
+	ID          string `json:"id"`
+	IDShortPath string `json:"idShortPath,omitempty"`
+}
+
+type auditListing struct {
+	Events []struct {
+		ID       int64          `json:"id"`
+		Type     string         `json:"type"`
+		Actor    string         `json:"actor"`
+		Resource *auditResource `json:"resource"`
+	} `json:"events"`
+	HasMore bool `json:"hasMore"`
+}
+
+type auditReport struct {
+	Valid    bool   `json:"valid"`
+	Complete bool   `json:"complete"`
+	Checked  int    `json:"checked"`
+	LastID   int64  `json:"lastId"`
+	HeadHash string `json:"headHash"`
+	Reason   string `json:"reason"`
+}
+
+func listAudit(t *testing.T, query string) auditListing {
+	t.Helper()
+	listed := call(t, "dave", http.MethodGet, submodelURL+"/security/rebac/admin/audit?"+query, nil, nil)
+	expectStatus(t, http.StatusOK, listed, "list the audit trail with "+query)
+	var page auditListing
+	require.NoError(t, json.Unmarshal(listed.body, &page))
+	return page
+}
+
+func verifyAudit(t *testing.T, query string) auditReport {
+	t.Helper()
+	verified := call(t, "dave", http.MethodGet, submodelURL+"/security/rebac/admin/audit/verify?"+query, nil, nil)
+	expectStatus(t, http.StatusOK, verified, "verify the audit trail with "+query)
+	var report auditReport
+	require.NoError(t, json.Unmarshal(verified.body, &report))
+	return report
+}
+
+func TestAuditTrailPagesNewestFirstAndFiltersByResourceAndActor(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "paged", property("Name", "pump"))
+	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
+	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "editor", "carol"))
+	addGrants(t, "alice", elementAccess(submodelURL, identifier, "Name"), userGrant(t, "viewer", "eve"))
+	resource := "objectType=submodel&objectId=" + url.QueryEscape(identifier)
+
+	page := listAudit(t, resource)
+	require.Len(t, page.Events, 2, "only the events of the Submodel")
+	require.Greater(t, page.Events[0].ID, page.Events[1].ID, "newest events come first")
+	require.Equal(t, &auditResource{Type: "submodel", ID: identifier}, page.Events[0].Resource)
+	require.False(t, page.HasMore)
+
+	first := listAudit(t, resource+"&limit=1")
+	require.True(t, first.HasMore)
+	second := listAudit(t, resource+"&limit=1&beforeId="+strconv.FormatInt(first.Events[0].ID, 10))
+	require.Equal(t, page.Events[1].ID, second.Events[0].ID, "beforeId continues with older events")
+	require.False(t, second.HasMore)
+	ascending := listAudit(t, resource+"&afterId=0")
+	require.Equal(t, page.Events[1].ID, ascending.Events[0].ID, "afterId pages from the oldest event")
+
+	element := listAudit(t, "objectType=element&idShortPath=Name&objectId="+url.QueryEscape(identifier))
+	require.Len(t, element.Events, 1)
+	require.Equal(t, &auditResource{Type: "element", ID: identifier, IDShortPath: "Name"}, element.Events[0].Resource)
+
+	byAlice := listAudit(t, resource+"&actorIssuer="+url.QueryEscape(issuer)+"&actorSubject="+subject(t, "alice"))
+	require.Len(t, byAlice.Events, 2)
+	byBob := listAudit(t, resource+"&actorIssuer="+url.QueryEscape(issuer)+"&actorSubject="+subject(t, "bob"))
+	require.Empty(t, byBob.Events)
+	require.Empty(t, listAudit(t, "objectType=submodel&objectId=urn:unknown").Events, "unknown resources have no events")
+
+	for _, query := range []string{"afterId=1&beforeId=5", "actorSubject=alone", "objectType=aas", "objectType=submodel&objectId=x&idShortPath=a", "limit=0"} {
+		expectStatus(t, http.StatusBadRequest, call(t, "dave", http.MethodGet, submodelURL+"/security/rebac/admin/audit?"+query, nil, nil), query)
+	}
+}
+
+func TestAuditTrailVerifiesInRangesFromACheckpoint(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "ranged")
+	for _, user := range []string{"bob", "carol", "eve"} {
+		addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", user))
+	}
+
+	full := verifyAudit(t, "limit=10000")
+	require.True(t, full.Valid && full.Complete, full.Reason)
+	require.GreaterOrEqual(t, full.Checked, 3)
+
+	report := verifyAudit(t, "limit=2")
+	require.True(t, report.Valid)
+	require.False(t, report.Complete, "a range stops at its limit")
+	checked := report.Checked
+	for !report.Complete {
+		report = verifyAudit(t, "limit=2&afterId="+strconv.FormatInt(report.LastID, 10)+"&afterHash="+report.HeadHash)
+		require.True(t, report.Valid, report.Reason)
+		checked += report.Checked
+	}
+	require.Equal(t, full.Checked, checked, "ranges cover the whole chain")
+	require.Equal(t, full.HeadHash, report.HeadHash)
+
+	wrong := verifyAudit(t, "afterId="+strconv.FormatInt(full.LastID, 10)+"&afterHash="+strings.Repeat("0", 64))
+	require.False(t, wrong.Valid, "a checkpoint must match the trail")
+	expectStatus(t, http.StatusBadRequest, call(t, "dave", http.MethodGet, submodelURL+"/security/rebac/admin/audit/verify?afterId=1", nil, nil), "checkpoint without hash")
+}
+
+func TestPrincipalReportsTheIdentityGrantsMatch(t *testing.T) {
+	principalURL := submodelURL + "/security/rebac/principal"
+	var alice struct {
+		Issuer        string   `json:"issuer"`
+		Subject       string   `json:"subject"`
+		Groups        []string `json:"groups"`
+		Administrator bool     `json:"administrator"`
+	}
+	result := call(t, "alice", http.MethodGet, principalURL, nil, nil)
+	expectStatus(t, http.StatusOK, result, "read own principal")
+	require.NoError(t, json.Unmarshal(result.body, &alice))
+	require.Equal(t, issuer, alice.Issuer)
+	require.Equal(t, subject(t, "alice"), alice.Subject)
+	require.False(t, alice.Administrator)
+
+	dave := call(t, "dave", http.MethodGet, principalURL, nil, nil).json(t)
+	require.Equal(t, true, dave["administrator"])
+	require.Contains(t, dave["groups"], "operators")
 }

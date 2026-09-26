@@ -81,18 +81,26 @@ type Principal struct {
 	Groups  []string
 }
 
+// ClaimNames names the claims that identify a caller: Subject holds the
+// stable user identifier (for example sub, or oid for Microsoft Entra ID)
+// and Groups the normalized group names.
+type ClaimNames struct {
+	Subject string
+	Groups  string
+}
+
 // PrincipalFromClaims extracts the caller identity from validated OIDC claims.
-// groupClaim names the normalized claim carrying group names. Anonymous
-// callers and tokens without issuer or subject are no ReBAC principals.
-func PrincipalFromClaims(claims auth.Claims, groupClaim string) (Principal, bool) {
+// Anonymous callers and tokens without issuer or subject are no ReBAC
+// principals.
+func PrincipalFromClaims(claims auth.Claims, names ClaimNames) (Principal, bool) {
 	issuer, _ := claims.GetString("iss")
-	subject, _ := claims.GetString("sub")
+	subject, _ := claims.GetString(names.Subject)
 	issuer = strings.TrimSpace(issuer)
 	subject = strings.TrimSpace(subject)
 	if issuer == "" || subject == "" {
 		return Principal{}, false
 	}
-	return Principal{Issuer: issuer, Subject: subject, Groups: claimStrings(claims[groupClaim])}, true
+	return Principal{Issuer: issuer, Subject: subject, Groups: claimStrings(claims[names.Groups])}, true
 }
 
 func claimStrings(raw any) []string {

@@ -106,6 +106,7 @@ func (c *Coordinator) managementRoutes(kinds []ResourceKind) []managementRoute {
 		routes = append(routes, c.accessRoutes(base)...)
 	}
 	return append(routes,
+		managementRoute{http.MethodGet, managementRoot + "/principal", c.handleGetPrincipal},
 		managementRoute{http.MethodPost, managementRoot + "/invitations/accept", c.handleAcceptInvitation},
 		managementRoute{http.MethodGet, managementRoot + "/repositories/{" + paramRepositoryKind + "}" + accessSuffix, c.handleGetRepositoryAccess},
 		managementRoute{http.MethodPut, managementRoot + "/repositories/{" + paramRepositoryKind + "}" + accessSuffix + "/grants", c.handlePutRepositoryGrants},
@@ -210,12 +211,36 @@ func (c *Coordinator) managementPrincipal(w http.ResponseWriter, r *http.Request
 		writeUnavailable(w, r, ErrNotReady)
 		return Principal{}, false
 	}
-	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(r.Context()), c.groupClaim)
+	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(r.Context()), c.claims)
 	if !ok || !auth.IsAuthenticated(r.Context()) {
 		writeNotFound(w)
 		return Principal{}, false
 	}
 	return principal, true
+}
+
+// principalDocument is the caller identity as ReBAC evaluates it.
+type principalDocument struct {
+	Issuer        string   `json:"issuer"`
+	Subject       string   `json:"subject"`
+	Groups        []string `json:"groups"`
+	Administrator bool     `json:"administrator"`
+}
+
+// handleGetPrincipal returns the identity grants are matched against, so
+// clients show the user ID that others share with.
+func (c *Coordinator) handleGetPrincipal(w http.ResponseWriter, r *http.Request) {
+	principal, ok := c.managementPrincipal(w, r)
+	if !ok {
+		return
+	}
+	groups := principal.Groups
+	if groups == nil {
+		groups = []string{}
+	}
+	writeJSON(w, http.StatusOK, principalDocument{
+		Issuer: principal.Issuer, Subject: principal.Subject, Groups: groups, Administrator: c.isAdministrator(principal),
+	})
 }
 
 func (c *Coordinator) resolveTarget(r *http.Request, kind ResourceKind, param string, elementPath string) (accessTarget, bool) {

@@ -49,7 +49,7 @@ var ErrNotReady = errors.New("REBAC-COORDINATOR-NOTREADY relationship-based auth
 // PostgreSQL and are evaluated there, so changes take effect at commit.
 type Coordinator struct {
 	db             *sql.DB
-	groupClaim     string
+	claims         ClaimNames
 	routes         routeMatrix
 	management     map[string]struct{}
 	administrators []common.ReBACAdministrator
@@ -65,7 +65,7 @@ type Coordinator struct {
 func NewCoordinator(db *sql.DB, cfg common.ReBACConfig, administrators []common.ReBACAdministrator) *Coordinator {
 	return &Coordinator{
 		db:             db,
-		groupClaim:     cfg.GroupClaim,
+		claims:         ClaimNames{Subject: cfg.SubjectClaim, Groups: cfg.GroupClaim},
 		routes:         newRouteMatrix(),
 		management:     map[string]struct{}{},
 		administrators: administrators,
@@ -110,7 +110,7 @@ func (c *Coordinator) Resolve(ctx context.Context, request auth.ReBACRequest) (*
 func (c *Coordinator) decide(ctx context.Context, request auth.ReBACRequest) (*auth.ReBACGrantSet, string, error) {
 	grants := auth.NewReBACGrantSet(request.Route.Rights...)
 	spec, covered := c.routes.lookup(request.Route.Method, request.Route.Pattern)
-	principal, authenticated := PrincipalFromClaims(request.Claims, c.groupClaim)
+	principal, authenticated := PrincipalFromClaims(request.Claims, c.claims)
 	if !covered || !authenticated {
 		return grants, outcomeUncovered, nil
 	}

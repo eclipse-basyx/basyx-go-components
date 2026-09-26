@@ -36,13 +36,14 @@ func TestLoadConfigKeepsReBACDisabledByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if cfg.ReBAC.Enabled || cfg.ReBAC.GroupClaim != "groups" || len(cfg.ReBAC.Administrators) != 0 {
+	if cfg.ReBAC.Enabled || cfg.ReBAC.SubjectClaim != "sub" || cfg.ReBAC.GroupClaim != "groups" || len(cfg.ReBAC.Administrators) != 0 {
 		t.Fatalf("unexpected ReBAC defaults: %#v", cfg.ReBAC)
 	}
 }
 
 func TestLoadConfigAppliesReBACEnvOverrides(t *testing.T) {
 	t.Setenv("REBAC_ENABLED", "true")
+	t.Setenv("REBAC_SUBJECT_CLAIM", "oid")
 	t.Setenv("REBAC_GROUP_CLAIM", "basyx.groups")
 	t.Setenv("REBAC_ADMINISTRATORS", "https://idp|admin-sub, https://idp|group:ops")
 
@@ -50,7 +51,7 @@ func TestLoadConfigAppliesReBACEnvOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if !cfg.ReBAC.Enabled || cfg.ReBAC.GroupClaim != "basyx.groups" {
+	if !cfg.ReBAC.Enabled || cfg.ReBAC.SubjectClaim != "oid" || cfg.ReBAC.GroupClaim != "basyx.groups" {
 		t.Fatalf("ReBAC env overrides not applied: %#v", cfg.ReBAC)
 	}
 	if len(cfg.ReBAC.Administrators) != 2 || cfg.ReBAC.Administrators[1] != "https://idp|group:ops" {
@@ -63,9 +64,10 @@ func TestLoadConfigRejectsInvalidReBACSettings(t *testing.T) {
 		env  map[string]string
 		code string
 	}{
-		"bad administrator": {env: map[string]string{"REBAC_ADMINISTRATORS": "no-separator"}, code: "CONFIG-REBAC-ADMINISTRATORS"},
-		"empty admin group": {env: map[string]string{"REBAC_ADMINISTRATORS": "https://idp|group:"}, code: "CONFIG-REBAC-ADMINISTRATORS"},
-		"empty group claim": {env: map[string]string{"REBAC_GROUP_CLAIM": " "}, code: "CONFIG-REBAC-GROUPCLAIM"},
+		"bad administrator":   {env: map[string]string{"REBAC_ADMINISTRATORS": "no-separator"}, code: "CONFIG-REBAC-ADMINISTRATORS"},
+		"empty admin group":   {env: map[string]string{"REBAC_ADMINISTRATORS": "https://idp|group:"}, code: "CONFIG-REBAC-ADMINISTRATORS"},
+		"empty group claim":   {env: map[string]string{"REBAC_GROUP_CLAIM": " "}, code: "CONFIG-REBAC-GROUPCLAIM"},
+		"empty subject claim": {env: map[string]string{"REBAC_SUBJECT_CLAIM": " "}, code: "CONFIG-REBAC-SUBJECTCLAIM"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("REBAC_ENABLED", "true")

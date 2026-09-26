@@ -221,7 +221,7 @@ func (c *Coordinator) replaceGrants(w http.ResponseWriter, r *http.Request, requ
 		if !request.admin && countOwners(current) > 0 && countOwners(desired) == 0 {
 			return common.NewErrConflict("REBAC-PUTGRANTS-LASTOWNER removing the last owner requires an administrator")
 		}
-		if err = c.applyGrantDiff(r.Context(), tx, request.target.objectKey(), current, desired); err != nil {
+		if err = c.applyGrantDiff(r.Context(), tx, request.target, current, desired); err != nil {
 			return err
 		}
 		document, err = c.accessDocument(r.Context(), tx, request.target)
@@ -265,13 +265,13 @@ func (c *Coordinator) lockTarget(r *http.Request, tx *sql.Tx, target accessTarge
 
 // applyGrantDiff stores the desired grants of one object. Changes take
 // effect when the transaction commits.
-func (c *Coordinator) applyGrantDiff(ctx context.Context, tx *sql.Tx, objectKey string, current []Grant, desired []Grant) error {
+func (c *Coordinator) applyGrantDiff(ctx context.Context, tx *sql.Tx, target accessTarget, current []Grant, desired []Grant) error {
 	removed, added := diffGrants(current, desired)
 	if len(removed) == 0 && len(added) == 0 {
 		return nil
 	}
 	details := map[string]any{"added": auditedGrants(added), "removed": auditedGrants(removed)}
-	if err := c.audit(ctx, tx, AuditGrantsChanged, objectKey, details); err != nil {
+	if err := c.auditTarget(ctx, tx, AuditGrantsChanged, target, details); err != nil {
 		return err
 	}
 	for _, grant := range removed {
@@ -284,7 +284,7 @@ func (c *Coordinator) applyGrantDiff(ctx context.Context, tx *sql.Tx, objectKey 
 			return err
 		}
 	}
-	_, err := BumpObjectRevision(ctx, tx, objectKey)
+	_, err := BumpObjectRevision(ctx, tx, target.objectKey())
 	return err
 }
 
@@ -449,7 +449,7 @@ func (c *Coordinator) replaceLinks(ctx context.Context, tx *sql.Tx, request acce
 	if err != nil || removed+added == 0 {
 		return err
 	}
-	if err = c.audit(ctx, tx, AuditInheritanceChanged, request.target.objectKey(), map[string]any{"linkedShells": aasUUIDs}); err != nil {
+	if err = c.auditTarget(ctx, tx, AuditInheritanceChanged, request.target, map[string]any{"linkedShells": aasUUIDs}); err != nil {
 		return err
 	}
 	_, err = BumpObjectRevision(ctx, tx, request.target.objectKey())

@@ -33,7 +33,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-const defaultReBACGroupClaim = "groups"
+const (
+	defaultReBACSubjectClaim = "sub"
+	defaultReBACGroupClaim   = "groups"
+)
 
 // ReBACConfig configures the experimental relationship-based access control.
 //
@@ -42,12 +45,14 @@ const defaultReBACGroupClaim = "groups"
 // PostgreSQL database; all services sharing a database share them.
 type ReBACConfig struct {
 	Enabled        bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	SubjectClaim   string   `mapstructure:"subjectClaim" yaml:"subjectClaim" json:"subjectClaim"`
 	GroupClaim     string   `mapstructure:"groupClaim" yaml:"groupClaim" json:"groupClaim"`
 	Administrators []string `mapstructure:"administrators" yaml:"administrators" json:"administrators"`
 }
 
 func setReBACDefaults(v *viper.Viper) {
 	v.SetDefault("rebac.enabled", false)
+	v.SetDefault("rebac.subjectClaim", defaultReBACSubjectClaim)
 	v.SetDefault("rebac.groupClaim", defaultReBACGroupClaim)
 	v.SetDefault("rebac.administrators", []string{})
 }
@@ -55,6 +60,9 @@ func setReBACDefaults(v *viper.Viper) {
 func applyReBACEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
+	}
+	if value, ok := lookupFirstTrimmedEnv("REBAC_SUBJECT_CLAIM"); ok {
+		cfg.ReBAC.SubjectClaim = value
 	}
 	if value, ok := lookupFirstTrimmedEnv("REBAC_GROUP_CLAIM"); ok {
 		cfg.ReBAC.GroupClaim = value
@@ -73,6 +81,10 @@ func validateReBACConfig(cfg *Config) error {
 	rebac := &cfg.ReBAC
 	if !rebac.Enabled {
 		return nil
+	}
+	rebac.SubjectClaim = strings.TrimSpace(rebac.SubjectClaim)
+	if rebac.SubjectClaim == "" {
+		return fmt.Errorf("CONFIG-REBAC-SUBJECTCLAIM rebac.subjectClaim must not be empty")
 	}
 	rebac.GroupClaim = strings.TrimSpace(rebac.GroupClaim)
 	if rebac.GroupClaim == "" {

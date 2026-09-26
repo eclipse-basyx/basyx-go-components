@@ -121,7 +121,7 @@ func (c *Coordinator) assignCreatorOwner(ctx context.Context, tx *sql.Tx, kind R
 	if !auth.IsAuthenticated(ctx) {
 		return nil
 	}
-	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.groupClaim)
+	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.claims)
 	if !ok {
 		return nil
 	}
@@ -215,7 +215,7 @@ func (c *Coordinator) SubmodelReferenceRemoved(ctx context.Context, tx *sql.Tx, 
 // reach the Submodel. Only an owner of the Submodel approves links, as with
 // the inheritance API, and only while the shell references the Submodel.
 func (c *Coordinator) SubmodelCreatedWithShell(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
-	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.groupClaim)
+	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.claims)
 	if !ok || !auth.IsAuthenticated(ctx) {
 		return nil
 	}

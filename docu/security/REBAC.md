@@ -40,6 +40,7 @@ services sharing one database share the same relationships.
 - [Audit trail and evidence](#audit-trail-and-evidence)
 - [Telemetry](#telemetry)
 - [Configuration](#configuration)
+- [Microsoft Entra ID](#microsoft-entra-id)
 - [Consistency and revocation](#consistency-and-revocation)
 - [Reconciliation](#reconciliation)
 - [Limits and known restrictions](#limits-and-known-restrictions)
@@ -148,8 +149,15 @@ on the parent.
 
 ## Identities
 
-- Users are issuer-scoped: `user:<b64url(iss)>.<b64url(sub)>`. The same `sub`
-  from another issuer is a different user.
+- Users are issuer-scoped: `user:<b64url(iss)>.<b64url(subject)>`. The
+  subject is the claim configured in `rebac.subjectClaim` (default `sub`).
+  The same subject from another issuer is a different user. Choose a claim
+  that is stable for a person across all clients of the API, for example
+  `oid` with Microsoft Entra ID.
+- `GET /security/rebac/principal` returns the caller as ReBAC identifies
+  them: issuer, subject, current groups and whether they are an
+  administrator. Clients show this subject as the user ID others share
+  with.
 - Groups are issuer-scoped: `group:<b64url(iss)>.<b64url(name)>`. Group names
   come from the normalized claim configured in `rebac.groupClaim`
   (default `groups`; use the OIDC `claimMappings` to normalize provider
@@ -300,8 +308,9 @@ the resources it serves.
 | `GET/PUT /security/rebac/repositories/{kind}/$access[/grants]` | Creator and admin grants of a repository family. |
 | `POST /security/rebac/admin/reconcile` | Removes orphaned state (administrators). |
 | `PUT /security/rebac/admin/owners/{type}/{base64 id}` | Ownership recovery (administrators, `If-Match` required). |
-| `GET /security/rebac/admin/audit?afterId=&limit=` | Pages through the audit trail (administrators). |
-| `GET /security/rebac/admin/audit/verify?expectedHead=` | Verifies the audit trail (administrators). |
+| `GET /security/rebac/principal` | The caller's issuer, subject, groups and administrator status. |
+| `GET /security/rebac/admin/audit` | Pages through the audit trail, newest first, with filters (administrators). See below. |
+| `GET /security/rebac/admin/audit/verify` | Verifies a range of the audit trail (administrators). See below. |
 
 Grant changes take effect when their transaction commits.
 
@@ -358,11 +367,32 @@ removed state. Each event records its actor, the object key and the change.
   archived in the WORM store before its transaction commits. The receipt is
   stored with the event. If the store is unavailable, the change fails with
   `503` instead of being applied unaudited.
-- `GET /security/rebac/admin/audit/verify` recomputes the chain. With an
-  evidence store it also verifies every archived event against its WORM
-  object. Pass a head hash retained outside the database as `expectedHead` to
-  detect removed trailing events. The evidence verifier CLI offers the same
-  check:
+- `GET /security/rebac/admin/audit` returns pages of events, newest first,
+  and `hasMore` when older events follow. Parameters:
+
+  | Parameter | Meaning |
+  | --- | --- |
+  | `limit` | Events per page, 1 to 1000 (default 100). |
+  | `beforeId` | Continue with events older than this event id. |
+  | `afterId` | Page forwards, oldest first, from events newer than this id (for example to export the trail). Not combinable with `beforeId`. |
+  | `objectType`, `objectId` | Only events of one object: `aas`, `submodel`, `concept_description`, `aas_descriptor`, `submodel_descriptor`, `asset_links` or `aasx_package` with its identifier, `element` with the Submodel identifier and `idShortPath`, or `repository` with a repository family. Unknown resources return an empty page. |
+  | `object` | Only events of one object key as returned in `object`, also for deleted resources. |
+  | `actorIssuer`, `actorSubject` | Only changes made by one user. |
+
+  Each event reports `resource` (type, identifier and, for elements, the
+  idShort path) while the object still exists. Filters and both directions
+  use indexes, so pages stay fast on long trails.
+- `GET /security/rebac/admin/audit/verify` recomputes the chain in ranges of
+  `limit` events (default 1000, at most 10000). With an evidence store it
+  also verifies every archived event against its WORM object. The report
+  contains `lastId` and `headHash` of the last verified event and `complete`
+  once the end of the trail is reached. Continue with
+  `afterId=<lastId>&afterHash=<headHash>` until `complete` is true. The same
+  pair, kept outside the database, is a checkpoint: a later verification
+  from it only checks newer events and fails if the checkpoint event was
+  changed. Pass a head hash retained outside the database as `expectedHead`
+  to detect removed trailing events; it is compared when the range reaches
+  the end. The evidence verifier CLI checks the whole chain at once:
 
   ```bash
   historyevidenceverifier -config config.yaml -rebac-audit -expected-head-hash <hash>
@@ -389,13 +419,47 @@ ReBAC uses the service's OpenTelemetry configuration:
 | Key | Env | Default | Purpose |
 | --- | --- | --- | --- |
 | `rebac.enabled` | `REBAC_ENABLED` | `false` | Master switch |
+| `rebac.subjectClaim` | `REBAC_SUBJECT_CLAIM` | `sub` | Claim with the stable user identifier, for example `oid` with Microsoft Entra ID |
 | `rebac.groupClaim` | `REBAC_GROUP_CLAIM` | `groups` | Normalized claim with group names |
-| `rebac.administrators` | `REBAC_ADMINISTRATORS` (comma-separated) | `[]` | `issuer\|subject` or `issuer\|group:<name>` |
+| `rebac.administrators` | `REBAC_ADMINISTRATORS` (comma-separated) | `[]` | `issuer\|subject` (value of the subject claim) or `issuer\|group:<name>` |
 
 `rebac.enabled=true` requires `abac.enabled=true` and an OIDC trustlist.
 Enable ReBAC consistently in all services that share a database.
 
 See `examples/BaSyxReBACExample` for a complete compose setup.
+
+## Microsoft Entra ID
+
+ReBAC works with any OIDC provider in the trustlist. For Microsoft Entra ID,
+keep the following in mind:
+
+- **User IDs.** `sub` is pairwise in Entra ID: it differs per application.
+  Set `rebac.subjectClaim` to `oid`, the object id of the user in the
+  tenant, so that grants match the same person in every client. The BaSyx UI
+  shows this value as the user ID.
+- **Token version.** The issuer of v1 tokens (`https://sts.windows.net/<tenant>/`)
+  differs from v2 tokens (`https://login.microsoftonline.com/<tenant>/v2.0`).
+  Identities are issuer-scoped, so set `accessTokenAcceptedVersion` of the
+  API app registration to `2` and trust only the v2 issuer.
+- **Groups.** Entra ID emits group object ids, not names, in the `groups`
+  claim. People then share with a group by its object id. App roles are
+  usually more practical: define roles such as `engineering` on the API app
+  registration, assign groups to them, and map the `roles` claim into the
+  group claim in the trustlist entry of the issuer:
+
+  ```json
+  "claimMappings": [
+    { "target": "groups", "mode": "list", "sources": ["/roles"] }
+  ]
+  ```
+
+  and set `rebac.groupClaim` to `basyx.groups`.
+- **Group overage.** If a user belongs to more than 200 groups, Entra ID
+  omits the `groups` claim and only links to Microsoft Graph. ReBAC then
+  sees no groups for that user, and group grants do not apply. Use app roles
+  as above, or emit only the groups assigned to the application.
+- **Scale.** Users and memberships are not stored. Only grants are, so the
+  number of users in the tenant does not affect ReBAC.
 
 ## Consistency and revocation
 
