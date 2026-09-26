@@ -1,0 +1,304 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*", "-c", "max_connections=500"]
+    ports:
+      - "127.0.0.1:${BASYX_IT_DB_PORT:-6432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    image: keycloak/keycloak:26.0.6
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "${BASYX_IT_KEYCLOAK_PORT:-8080}"
+      KC_HOSTNAME_URL: "http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - "0.0.0.0:${BASYX_IT_KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import
+    depends_on:
+      db:
+        condition: service_healthy
+
+  keycloak-healthcheck:
+    image: curlimages/curl:latest
+    command: >
+      sh -c "
+        echo 'Waiting for Keycloak to become ready...';
+        until curl -sf http://keycloak:9000/health/ready; do
+          sleep 5;
+        done;
+        echo 'Keycloak is ready!'"
+    depends_on:
+      - keycloak
+
+  basyx_configuration:
+    build:
+      context: ../../../../../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+    depends_on:
+      db:
+        condition: service_healthy
+
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+
+  minio-init:
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done
+        mc mb --ignore-existing --with-lock local/basyx-evidence
+        mc version enable local/basyx-evidence
+        mc retention set --default compliance 1d local/basyx-evidence
+
+  submodel-repository:
+    build:
+      context: ../../../../../..
+      dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=20
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_HISTORY_MODE=api
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - REBAC_ENABLED=true
+      - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+      - BASYX_HISTORY_EVIDENCE_ENABLED=true
+      - BASYX_HISTORY_EVIDENCE_PROVIDER=s3
+      - BASYX_HISTORY_EVIDENCE_BUCKET=basyx-evidence
+      - BASYX_HISTORY_EVIDENCE_REGION=us-east-1
+      - BASYX_HISTORY_EVIDENCE_ENDPOINT=http://minio:9000
+      - BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID=minioadmin
+      - BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY=minioadmin
+      - BASYX_HISTORY_EVIDENCE_PATH_STYLE=true
+      - BASYX_HISTORY_EVIDENCE_RETENTION_MODE=compliance
+      - BASYX_HISTORY_EVIDENCE_RETENTION_DAYS=1
+    ports:
+      - "127.0.0.1:${BASYX_IT_SM_PORT:-6014}:5004"
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  aas-repository:
+    build:
+      context: ../../../../../..
+      dockerfile: ./cmd/aasrepositoryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=20
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_HISTORY_MODE=api
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - REBAC_ENABLED=true
+      - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+    ports:
+      - "127.0.0.1:${BASYX_IT_AAS_PORT:-6015}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  cd-repository:
+    build:
+      context: ../../../../../..
+      dockerfile: ./cmd/conceptdescriptionrepositoryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=20
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_HISTORY_MODE=api
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - REBAC_ENABLED=true
+      - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+    ports:
+      - "127.0.0.1:${BASYX_IT_CD_PORT:-6016}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  aasx-fileserver:
+    build:
+      context: ../../../../../..
+      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=20
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_HISTORY_MODE=api
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - REBAC_ENABLED=true
+      - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+    ports:
+      - "127.0.0.1:${BASYX_IT_AASX_PORT:-6018}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  dpp:
+    build:
+      context: ../../../../../..
+      dockerfile: ./cmd/dppapiservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=20
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_HISTORY_MODE=api
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - REBAC_ENABLED=true
+      - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+    ports:
+      - "127.0.0.1:${BASYX_IT_DPP_PORT:-6019}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  aas-environment:
+    build:
+      context: ../../../../../..
+      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=20
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - BASYX_HISTORY_MODE=api
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - REBAC_ENABLED=true
+      - REBAC_ADMINISTRATORS=http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}/realms/basyx|group:operators
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://localhost:${BASYX_IT_ENV_PORT:-6017}
+    ports:
+      - "127.0.0.1:${BASYX_IT_ENV_PORT:-6017}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"

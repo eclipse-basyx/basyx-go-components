@@ -29,6 +29,7 @@ package auth
 import (
 	"strings"
 
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
@@ -45,6 +46,9 @@ type FragmentFilterPredicate struct {
 	fragment  *grammar.FragmentStringPattern
 	global    bool
 	caller    bool
+	// reBACGrant widens a policy leaf for rows granted by ReBAC. It is only
+	// set on evaluation copies and never on caller-requested leaves.
+	reBACGrant exp.Expression
 }
 
 // FragmentFilterEntry associates a concrete fragment with its predicate.
@@ -173,4 +177,32 @@ func (predicate FragmentFilterPredicate) globalBooleanValue() (bool, bool) {
 
 func (predicate FragmentFilterPredicate) isZero() bool {
 	return predicate.Condition == nil && len(predicate.And) == 0 && len(predicate.Or) == 0
+}
+
+// liftSecurityFragmentPredicate returns an evaluation copy in which every
+// policy leaf is widened by grant. Predicates are monotone AND/OR trees, so
+// widening each policy leaf equals widening the policy part as a whole while
+// caller-requested leaves keep restricting granted rows.
+func liftSecurityFragmentPredicate(predicate FragmentFilterPredicate, grant exp.Expression) FragmentFilterPredicate {
+	lifted := predicate
+	if predicate.Condition != nil {
+		if !predicate.caller {
+			lifted.reBACGrant = grant
+		}
+		return lifted
+	}
+	lifted.And = liftSecurityFragmentPredicates(predicate.And, grant)
+	lifted.Or = liftSecurityFragmentPredicates(predicate.Or, grant)
+	return lifted
+}
+
+func liftSecurityFragmentPredicates(predicates []FragmentFilterPredicate, grant exp.Expression) []FragmentFilterPredicate {
+	if predicates == nil {
+		return nil
+	}
+	lifted := make([]FragmentFilterPredicate, len(predicates))
+	for index, predicate := range predicates {
+		lifted[index] = liftSecurityFragmentPredicate(predicate, grant)
+	}
+	return lifted
 }

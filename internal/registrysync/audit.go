@@ -30,6 +30,7 @@ import (
 	"context"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const (
@@ -43,12 +44,16 @@ const (
 )
 
 // WithAASRegistryAudit attributes an internal AAS descriptor mutation while preserving system audit attribution.
+// Descriptors created by the mutation derive their access from the shell they describe.
 func WithAASRegistryAudit(ctx context.Context, operation string) context.Context {
+	ctx = auth.WithReBACSource(ctx, auth.SemanticResourceAAS, "")
 	return withRegistryAudit(ctx, operation, aasRegistrySyncEndpoint)
 }
 
 // WithSubmodelRegistryAudit attributes an internal Submodel descriptor mutation while preserving system audit attribution.
+// Descriptors created by the mutation derive their access from the Submodel they describe.
 func WithSubmodelRegistryAudit(ctx context.Context, operation string) context.Context {
+	ctx = auth.WithReBACSource(ctx, auth.SemanticResourceSM, "")
 	return withRegistryAudit(ctx, operation, submodelRegistrySyncEndpoint)
 }
 

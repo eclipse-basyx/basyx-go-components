@@ -333,3 +333,19 @@ func (m *AccessModel) routeExistsForAnyMethod(requestPath string) bool {
 	}
 	return false
 }
+
+// MappedRoute is a method and route pattern with an ABAC rights mapping.
+type MappedRoute struct {
+	Method  string
+	Pattern string
+}
+
+// MappedRoutes returns every route that ABAC maps to rights. Extensions use it
+// to verify that they classify each authorizable route.
+func MappedRoutes() []MappedRoute {
+	routes := make([]MappedRoute, 0, len(mapMethodAndPatternToRightsData))
+	for _, mapping := range mapMethodAndPatternToRightsData {
+		routes = append(routes, MappedRoute{Method: mapping.Method, Pattern: mapping.Pattern})
+	}
+	return routes
+}

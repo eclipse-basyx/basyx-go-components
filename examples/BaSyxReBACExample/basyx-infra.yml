@@ -1,0 +1,17 @@
+infrastructures:
+  default: rebac
+
+  rebac:
+    name: BaSyx ReBAC Example
+    template: mono-all
+    components:
+      aasEnvironment:
+        baseUrl: "http://localhost:8082"
+        hasRegistryIntegration: true
+        hasDiscoveryIntegration: true
+    security:
+      type: oauth2
+      config:
+        flow: auth_code
+        issuer: "http://keycloak.localhost:8080/realms/basyx"
+        clientId: "basyx-ui"

@@ -134,14 +134,18 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 	if err != nil {
 		return nil, err
 	}
-	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
+	collector := NewResolvedFieldPathCollectorWithConfig(&cfg)
+	collector.root = root
+	return collector, nil
 }
 
 // NewResolvedFieldPathCollectorForAAS creates an AAS collector with optional
 // access to the referenced Submodel hierarchy.
 func NewResolvedFieldPathCollectorForAAS(hierarchyQueriesEnabled bool) *ResolvedFieldPathCollector {
 	cfg := joinPlanConfigForAAS(hierarchyQueriesEnabled)
-	return NewResolvedFieldPathCollectorWithConfig(&cfg)
+	collector := NewResolvedFieldPathCollectorWithConfig(&cfg)
+	collector.root = CollectorRootAAS
+	return collector
 }
 
 // NewResolvedFieldPathCollectorForNestedSMDesc creates a collector that
@@ -159,6 +163,7 @@ func NewResolvedFieldPathCollectorForNestedSMDesc() (*ResolvedFieldPathCollector
 
 	collector := NewResolvedFieldPathCollectorWithConfig(&matchCfg)
 	collector.nonMatchJoinConfig = &nonMatchCfg
+	collector.ownerRoot = CollectorRootAASDesc
 	return collector, nil
 }
 
@@ -203,6 +208,7 @@ func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPat
 	}
 	collector.nonMatchJoinConfig = &nonMatchCfg
 	collector.smeRowAlias = rootAlias
+	collector.root = CollectorRootSME
 	collector.fragmentBindingAliasRewrites = map[string]string{
 		"submodel_element": rootAlias,
 	}
@@ -1085,6 +1091,10 @@ type ResolvedFieldPathCollector struct {
 	matchFragment                *FragmentStringPattern
 	smeRowAlias                  string
 	fieldValueDecorator          FieldValueDecorator
+	root                         CollectorRoot
+	// ownerRoot is the semantic resource owning the rows of a nested
+	// collector without a root of its own, correlated by the non-MATCH key.
+	ownerRoot CollectorRoot
 }
 
 // SemanticFieldAccess is the provider-neutral IR for one field read. It keeps
@@ -1200,6 +1210,25 @@ func (c *ResolvedFieldPathCollector) ForFragmentMatch(fragment FragmentStringPat
 	clone := *c
 	clone.matchFragment = &fragment
 	return &clone
+}
+
+// AuthorizationRoot returns the semantic resource evaluated by the collector
+// and the alias of the caller's root row. For SubmodelElement collectors the
+// alias always names a submodel_element row of the caller's dataset.
+// Nested Submodel descriptor collectors report their owning AAS descriptor.
+// ok is false for collectors that were not created for a semantic root.
+func (c *ResolvedFieldPathCollector) AuthorizationRoot() (root CollectorRoot, rootKey exp.IdentifierExpression, rootAlias string, ok bool) {
+	if c == nil {
+		return "", nil, "", false
+	}
+	root, config := c.root, c.effectiveJoinConfig()
+	if root == "" {
+		root, config = c.ownerRoot, c.nonMatchConfig()
+	}
+	if root == "" || config.RootJoinKey == nil || config.RootJoinKeyAlias == nil {
+		return "", nil, "", false
+	}
+	return root, config.RootJoinKey(), config.RootJoinKeyAlias(), true
 }
 
 // SetRootJoinKey configures the outer alias and column used to correlate

@@ -157,8 +157,22 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelCreateDoesNotExist(ctx context.C
 	)
 }
 
+// createSubmodelInTransaction inserts a new Submodel and makes an
+// authenticated creator its ReBAC owner.
 func (s *SubmodelDatabase) createSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
-	ids, args, err := submodelqueries.BuildInsertSubmodelSQL(submodel)
+	if err := s.insertSubmodelInTransaction(ctx, tx, submodel, ""); err != nil {
+		return err
+	}
+	if err := auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceSM, submodel.ID()); err != nil {
+		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-REBACOWNER " + err.Error())
+	}
+	return nil
+}
+
+// insertSubmodelInTransaction inserts the Submodel rows. A non-empty
+// authUUID keeps the authorization identity of a replaced Submodel.
+func (s *SubmodelDatabase) insertSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel, authUUID string) error {
+	ids, args, err := submodelqueries.BuildInsertSubmodelSQLWithAuthUUID(submodel, authUUID)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-INSERTSQL " + err.Error())
 	}
@@ -818,12 +832,37 @@ func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *
 		return err
 	}
 
-	err = cleanupAndDeleteSubmodelByDatabaseID(ctx, tx, int64(submodelDatabaseID))
+	err = deleteSubmodelWithReBACStateTx(ctx, tx, submodelID, int64(submodelDatabaseID))
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// deleteSubmodelWithReBACStateTx removes the ReBAC state of a Submodel and
+// then its rows in the same transaction.
+func deleteSubmodelWithReBACStateTx(ctx context.Context, tx *sql.Tx, submodelID string, submodelDatabaseID int64) error {
+	if err := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceSM, submodelID); err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-REBACSTATE " + err.Error())
+	}
+	return cleanupAndDeleteSubmodelByDatabaseID(ctx, tx, submodelDatabaseID)
+}
+
+// submodelAuthUUID reads the authorization identity of a Submodel row.
+func submodelAuthUUID(ctx context.Context, tx *sql.Tx, submodelDatabaseID int64) (string, error) {
+	query, args, err := goqu.Dialect(common.Dialect).From(goqu.T("submodel")).
+		Select(goqu.L("auth_uuid::text")).
+		Where(goqu.C("id").Eq(submodelDatabaseID)).
+		Prepared(true).ToSQL()
+	if err != nil {
+		return "", common.NewInternalServerError("SMREPO-UPDSM-BUILDAUTHUUID " + err.Error())
+	}
+	var authUUID string
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&authUUID); err != nil {
+		return "", common.NewInternalServerError("SMREPO-UPDSM-READAUTHUUID " + err.Error())
+	}
+	return authUUID, nil
 }
 
 func cleanupAndDeleteSubmodelByDatabaseID(ctx context.Context, tx *sql.Tx, submodelDatabaseID int64) error {
@@ -870,12 +909,17 @@ func (s *SubmodelDatabase) replaceSubmodelInTransaction(ctx context.Context, tx 
 		return false, err
 	}
 
+	authUUID, err := submodelAuthUUID(ctx, tx, int64(submodelDatabaseID))
+	if err != nil {
+		return false, err
+	}
+
 	err = deleteSubmodelByDatabaseID(tx, int64(submodelDatabaseID))
 	if err != nil {
 		return false, err
 	}
 
-	err = s.createSubmodelInTransaction(ctx, tx, submodel)
+	err = s.insertSubmodelInTransaction(ctx, tx, submodel, authUUID)
 	if err != nil {
 		return false, err
 	}

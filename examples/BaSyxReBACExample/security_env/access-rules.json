@@ -1,0 +1,70 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonymous", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "admin_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] },
+      { "name": "authenticated", "attributes": [ { "CLAIM": "sub" } ] }
+    ],
+    "DEFOBJECTS": [
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "submodel_read_routes", "objects": [
+        { "ROUTE": "/submodels" },
+        { "ROUTE": "/submodels/*" },
+        { "ROUTE": "/query/submodels" }
+      ]},
+      { "name": "shell_lists", "objects": [ { "ROUTE": "/shells" }, { "ROUTE": "/query/shells" } ] },
+      { "name": "submodel_lists", "objects": [ { "ROUTE": "/submodels" }, { "ROUTE": "/query/submodels" } ] },
+      { "name": "concept_description_lists", "objects": [ { "ROUTE": "/concept-descriptions" }, { "ROUTE": "/query/concept-descriptions" } ] },
+      { "name": "shell_descriptor_lists", "objects": [ { "ROUTE": "/shell-descriptors" }, { "ROUTE": "/query/shell-descriptors" } ] },
+      { "name": "submodel_descriptor_lists", "objects": [ { "ROUTE": "/submodel-descriptors" }, { "ROUTE": "/query/submodel-descriptors" } ] },
+      { "name": "discovery_lists", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shellsByAssetLink" } ] }
+    ],
+    "DEFACLS": [
+      { "name": "public_read", "acl": { "USEATTRIBUTES": "anonymous", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "role_read", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "admin_all", "acl": { "USEATTRIBUTES": "admin_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } },
+      { "name": "authenticated_read", "acl": { "USEATTRIBUTES": "authenticated", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } }
+    ],
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      { "name": "no_shell_lists", "formula": { "$eq": [ { "$field": "$aas#id" }, { "$strVal": "urn:basyx:rebac-example:none" } ] } },
+      { "name": "no_submodel_lists", "formula": { "$eq": [ { "$field": "$sm#id" }, { "$strVal": "urn:basyx:rebac-example:none" } ] } },
+      { "name": "no_concept_description_lists", "formula": { "$eq": [ { "$field": "$cd#id" }, { "$strVal": "urn:basyx:rebac-example:none" } ] } },
+      { "name": "no_shell_descriptor_lists", "formula": { "$eq": [ { "$field": "$aasdesc#id" }, { "$strVal": "urn:basyx:rebac-example:none" } ] } },
+      { "name": "no_submodel_descriptor_lists", "formula": { "$eq": [ { "$field": "$smdesc#id" }, { "$strVal": "urn:basyx:rebac-example:none" } ] } },
+      { "name": "no_discovery_lists", "formula": { "$eq": [ { "$field": "$bd#globalAssetId" }, { "$strVal": "urn:basyx:rebac-example:none" } ] } },
+      { "name": "is_admin", "formula": {
+        "$and": [
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+          { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 10 } ] }
+        ]
+      }},
+      { "name": "editor_public_submodels", "formula": {
+        "$and": [
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+          { "$eq": [ { "$field": "$sm#idShort" }, { "$strVal": "public" } ] }
+        ]
+      }},
+      { "name": "not_secret_element", "formula": {
+        "$ne": [ { "$field": "$sme#idShort" }, { "$strVal": "secret" } ]
+      }}
+    ],
+    "rules": [
+      { "USEACL": "admin_all", "OBJECTS": [ { "ROUTE": "*" } ], "USEFORMULA": "is_admin" },
+      { "USEACL": "public_read", "USEOBJECTS": [ "description" ], "USEFORMULA": "always_true" },
+      {
+        "USEACL": "role_read",
+        "USEOBJECTS": [ "submodel_read_routes" ],
+        "USEFORMULA": "editor_public_submodels",
+        "FILTER": { "FRAGMENT": "$sme", "MATCH": true, "USEFORMULA": "not_secret_element" }
+      },
+      { "USEACL": "authenticated_read", "USEOBJECTS": [ "shell_lists" ], "USEFORMULA": "no_shell_lists" },
+      { "USEACL": "authenticated_read", "USEOBJECTS": [ "submodel_lists" ], "USEFORMULA": "no_submodel_lists" },
+      { "USEACL": "authenticated_read", "USEOBJECTS": [ "concept_description_lists" ], "USEFORMULA": "no_concept_description_lists" },
+      { "USEACL": "authenticated_read", "USEOBJECTS": [ "shell_descriptor_lists" ], "USEFORMULA": "no_shell_descriptor_lists" },
+      { "USEACL": "authenticated_read", "USEOBJECTS": [ "submodel_descriptor_lists" ], "USEFORMULA": "no_submodel_descriptor_lists" },
+      { "USEACL": "authenticated_read", "USEOBJECTS": [ "discovery_lists" ], "USEFORMULA": "no_discovery_lists" }
+    ]
+  }
+}

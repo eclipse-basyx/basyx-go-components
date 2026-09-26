@@ -26,14 +26,15 @@ services:
         condition: service_healthy
 
   minio:
-    image: quay.io/minio/minio:latest
+    # MinIO no longer publishes container images; use the community build.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     command: ["server", "/data"]
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
 
   minio-init:
-    image: quay.io/minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     depends_on:
       minio:
         condition: service_started

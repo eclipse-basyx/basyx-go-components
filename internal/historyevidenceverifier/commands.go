@@ -36,6 +36,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 )
 
 func writeEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options cliOptions, stdout io.Writer) error {
@@ -72,6 +73,9 @@ func verifyEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options
 	if options.mutationEvidence {
 		return verifyMutationEvidence(ctx, cfg, db, options, stdout)
 	}
+	if options.reBACAudit {
+		return verifyReBACAudit(ctx, cfg, db, options, stdout)
+	}
 	verifyOptions, err := buildVerifyOptions(ctx, cfg, options)
 	if err != nil {
 		return err
@@ -105,6 +109,30 @@ func verifyMutationEvidence(ctx context.Context, cfg *common.Config, db *sql.DB,
 	}
 	if !report.Valid {
 		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONVERIFYFAILED verification report contains critical findings")
+	}
+	return nil
+}
+
+// verifyReBACAudit verifies the hash chain of the ReBAC audit trail and,
+// with an S3 evidence store configured, every archived audit event.
+func verifyReBACAudit(ctx context.Context, cfg *common.Config, db *sql.DB, options cliOptions, stdout io.Writer) error {
+	s3Store, err := optionalS3EvidenceStore(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	var store history.EvidenceStore
+	if s3Store != nil {
+		store = s3Store
+	}
+	report, err := rebac.VerifyAuditTrail(ctx, db, store, strings.ToLower(strings.TrimSpace(options.expectedHeadHash)))
+	if err != nil {
+		return err
+	}
+	if err = writeJSONOutput(report, options.outputPath, stdout); err != nil {
+		return err
+	}
+	if !report.Valid {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-REBACAUDITFAILED %s", report.Reason)
 	}
 	return nil
 }

@@ -50,6 +50,9 @@ type ABACSettings struct {
 	// DenyAsNotFoundPrefixes hides denied requests below sensitive route
 	// prefixes by returning 404 instead of 403.
 	DenyAsNotFoundPrefixes []string
+	// ReBAC optionally adds relationship-based grants for covered routes that
+	// ABAC does not allow unconditionally. Nil keeps ABAC-only behavior.
+	ReBAC ReBACResolver
 }
 
 // Resource represents the target object of an authorization request.
@@ -120,77 +123,128 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			}
 
 			model := activeAccessModel(settings)
-			if model != nil {
-				policyPath := r.URL.Path
-				routePath := r.URL.Path
-				if r.URL.RawPath != "" {
-					routePath = r.URL.RawPath
-				}
-				opts := grammar.DefaultSimplifyOptions()
-				opts.EnableImplicitCasts = settings.EnableImplicitCasts
-				session := newAuthorizationSession(model, claims, nil, opts)
-				evaluation := session.evaluate(r.Method, policyPath)
-				if policyPath != routePath {
-					evaluation = model.AuthorizeWithFilterWithOptions(EvalInput{
-						Method:    r.Method,
-						Path:      policyPath,
-						RoutePath: routePath,
-						Claims:    session.claims,
-						Globals:   session.globals,
-					}, opts)
-				}
-				if !evaluation.Allowed {
-					if evaluation.Reason == DecisionRouteNotFound {
-						component := routerErrorComponent(model)
-						if model.routeExistsForAnyMethod(routePath) {
-							common.WriteRouterMethodNotAllowed(w, component)
-							return
-						}
-						common.WriteRouterNotFound(w, component)
-						return
-					}
-					if denyAsNotFound(settings, policyPath) {
-						common.WriteRouterNotFound(w, routerErrorComponent(model))
-						return
-					}
-
-					slog.ErrorContext(
-						r.Context(),
-						"ABAC access denied",
-						"error.code", "SECURITY-ABACMIDDLEWARE-DENIED",
-						"reason", evaluation.Reason,
-					)
-
-					if err := common.WriteErrorResponse(w, errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied"); err != nil {
-						slog.ErrorContext(r.Context(), "access denial response encoding failed", "error.code", "SECURITY-ABACMIDDLEWARE-ENCODERESPONSE", "error", err)
-					}
-					return
-				}
-
-				ctx := ContextWithAuthorizationDecision(r.Context(), AuthorizationDecision{
-					Result:        string(DecisionAllow),
-					PolicyID:      evaluation.PolicyID,
-					MatchedRuleID: evaluation.MatchedRuleID,
-				})
-				if evaluation.QueryFilter != nil {
-					ctx = context.WithValue(ctx, filterKey, evaluation.QueryFilter)
-				}
-				session = session.withOuterAccess(accessViewFromEvaluation("", evaluation))
-				ctx = context.WithValue(ctx, authorizationSessionContextKey{}, session)
-
-				next.ServeHTTP(w, r.WithContext(ctx))
+			if model == nil {
+				_ = common.WriteErrorResponse(
+					w,
+					errors.New("resource resolution failed"),
+					http.StatusForbidden,
+					"Middleware",
+					"ABACMiddleware",
+					"ResourceResolution",
+				)
 				return
 			}
-
-			_ = common.WriteErrorResponse(
-				w,
-				errors.New("resource resolution failed"),
-				http.StatusForbidden,
-				"Middleware",
-				"ABACMiddleware",
-				"ResourceResolution",
-			)
+			serveAuthorizedRequest(w, r, next, settings, model, claims)
 		})
+	}
+}
+
+func serveAuthorizedRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+	next http.Handler,
+	settings ABACSettings,
+	model *AccessModel,
+	claims Claims,
+) {
+	policyPath := r.URL.Path
+	routePath := r.URL.Path
+	if r.URL.RawPath != "" {
+		routePath = r.URL.RawPath
+	}
+	opts := grammar.DefaultSimplifyOptions()
+	opts.EnableImplicitCasts = settings.EnableImplicitCasts
+	session := newAuthorizationSession(model, claims, nil, opts)
+	evaluation := session.evaluate(r.Method, policyPath)
+	if policyPath != routePath {
+		evaluation = model.AuthorizeWithFilterWithOptions(EvalInput{
+			Method:    r.Method,
+			Path:      policyPath,
+			RoutePath: routePath,
+			Claims:    session.claims,
+			Globals:   session.globals,
+		}, opts)
+	}
+
+	outcome, route, grants := resolveReBAC(r, settings, model, evaluation, routePath)
+	switch outcome {
+	case reBACOutcomeManagement:
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), reBACRouteContextKey{}, route)))
+		return
+	case reBACOutcomeUnavailable:
+		writeReBACUnavailable(w, r)
+		return
+	case reBACOutcomeGranted:
+		evaluation = reBACGrantedEvaluation(evaluation, route.Rights)
+	}
+
+	if !evaluation.Allowed {
+		writeABACDenied(w, r, settings, model, evaluation, policyPath, routePath)
+		return
+	}
+
+	ctx := ContextWithAuthorizationDecision(r.Context(), AuthorizationDecision{
+		Result:        string(DecisionAllow),
+		PolicyID:      evaluation.PolicyID,
+		MatchedRuleID: decisionRuleID(evaluation.MatchedRuleID, outcome),
+	})
+	if evaluation.QueryFilter != nil {
+		ctx = context.WithValue(ctx, filterKey, evaluation.QueryFilter)
+	}
+	session = session.withOuterAccess(accessViewFromEvaluation("", evaluation))
+	ctx = context.WithValue(ctx, authorizationSessionContextKey{}, session)
+	if outcome == reBACOutcomeGranted {
+		ctx = context.WithValue(WithReBACGrants(ctx, grants), reBACRouteContextKey{}, route)
+	}
+	if state, ok := settings.ReBAC.(ReBACState); ok {
+		ctx = WithReBACState(ctx, state)
+	}
+
+	next.ServeHTTP(w, r.WithContext(ctx))
+}
+
+func decisionRuleID(matchedRuleID string, outcome reBACOutcome) string {
+	if outcome != reBACOutcomeGranted || matchedRuleID == ReBACDecisionRuleID {
+		return matchedRuleID
+	}
+	if matchedRuleID == "" {
+		return ReBACDecisionRuleID
+	}
+	return matchedRuleID + "," + ReBACDecisionRuleID
+}
+
+func writeABACDenied(
+	w http.ResponseWriter,
+	r *http.Request,
+	settings ABACSettings,
+	model *AccessModel,
+	evaluation AuthorizationEvaluation,
+	policyPath string,
+	routePath string,
+) {
+	if evaluation.Reason == DecisionRouteNotFound {
+		component := routerErrorComponent(model)
+		if model.routeExistsForAnyMethod(routePath) {
+			common.WriteRouterMethodNotAllowed(w, component)
+			return
+		}
+		common.WriteRouterNotFound(w, component)
+		return
+	}
+	if denyAsNotFound(settings, policyPath) {
+		common.WriteRouterNotFound(w, routerErrorComponent(model))
+		return
+	}
+
+	slog.ErrorContext(
+		r.Context(),
+		"ABAC access denied",
+		"error.code", "SECURITY-ABACMIDDLEWARE-DENIED",
+		"reason", evaluation.Reason,
+	)
+
+	if err := common.WriteErrorResponse(w, errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied"); err != nil {
+		slog.ErrorContext(r.Context(), "access denial response encoding failed", "error.code", "SECURITY-ABACMIDDLEWARE-ENCODERESPONSE", "error", err)
 	}
 }
 

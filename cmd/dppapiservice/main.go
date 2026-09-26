@@ -116,6 +116,7 @@ func runServer(ctx context.Context, configPath string) error {
 		aasRegistryPersistence,
 		submodelRegistryPersistence,
 		registrySyncConfig,
+		pools.Writer,
 	)
 	if err != nil {
 		return err

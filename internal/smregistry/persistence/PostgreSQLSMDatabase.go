@@ -205,7 +205,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 	if err != nil {
 		return model.SubmodelDescriptor{}, err
 	}
-	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+	if err = descriptors.ExecuteCreateBatchTx(ctx, tx, batch, auth.SemanticResourceSMDesc, submodel.Id); err != nil {
 		return model.SubmodelDescriptor{}, mapInsertSubmodelDescriptorError(err)
 	}
 
@@ -262,7 +262,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 	if err != nil {
 		return 0, err
 	}
-	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+	if err = descriptors.ExecuteCreateBatchTx(ctx, tx, batch, auth.SemanticResourceSMDesc, identifiers...); err != nil {
 		return 0, mapBulkInsertSubmodelDescriptorError(err)
 	}
 

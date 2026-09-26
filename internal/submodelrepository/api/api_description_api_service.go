@@ -29,6 +29,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -46,7 +47,7 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 // GetSelfDescription - Returns the self-describing information of a network resource (ServiceDescription)
 func (s *DescriptionAPIAPIService) GetSelfDescription(_ context.Context) (model.ImplResponse, error) {
 	sd := model.ServiceDescription{
-		Profiles: []string{
+		Profiles: common.ServiceProfiles(
 			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-001",
 			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-003",
 			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-004",
@@ -54,7 +55,7 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(_ context.Context) (model.
 			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-006",
 			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-007",
 			"https://basyx.org/aas/API/3/2/SubmodelRepositoryService/1.0",
-		},
+		),
 	}
 
 	return model.Response(http.StatusOK, sd), nil

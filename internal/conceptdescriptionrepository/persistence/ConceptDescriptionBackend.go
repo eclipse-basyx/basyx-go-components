@@ -231,6 +231,9 @@ func (b *ConceptDescriptionBackend) createConceptDescriptionInTx(ctx context.Con
 	if _, err = tx.ExecContext(ctx, insertQuery, args...); err != nil {
 		return common.NewInternalServerError("CDREPO-CRTCD-EXECSQL " + err.Error())
 	}
+	if err = auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceCD, cd.ID()); err != nil {
+		return common.NewInternalServerError("CDREPO-CRTCD-REBACOWNER " + err.Error())
+	}
 
 	return nil
 }
@@ -275,6 +278,9 @@ func (b *ConceptDescriptionBackend) updateConceptDescriptionInTx(
 }
 
 func (b *ConceptDescriptionBackend) deleteConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
+	if err := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceCD, id); err != nil {
+		return false, common.NewInternalServerError("CDREPO-DELCD-REBACSTATE " + err.Error())
+	}
 	delQuery, args, err := goqu.Delete("concept_description").Where(goqu.Ex{"id": id}).ToSQL()
 	if err != nil {
 		return false, common.NewInternalServerError("CDREPO-DELCD-BUILDSQL " + err.Error())
