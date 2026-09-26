@@ -25,17 +25,6 @@ docker compose up -d
 
 Then open the BaSyx UI at <http://localhost:3000>.
 
-> **UI version.** Sharing needs a BaSyx UI with ReBAC support. Until
-> [eclipse-basyx/basyx-aas-web-ui#1552](https://github.com/eclipse-basyx/basyx-aas-web-ui/pull/1552)
-> is released, build the UI image yourself and start the example without
-> pulling images:
->
-> ```bash
-> git clone -b feat/rebac https://github.com/FriedJannik/basyx-aas-web-ui.git
-> docker build -t eclipsebasyx/aas-gui:SNAPSHOT basyx-aas-web-ui/aas-web-ui
-> docker compose up -d --pull never
-> ```
-
 Sign-in runs through Keycloak at `http://keycloak.localhost:8080`. Most
 browsers resolve `*.localhost` on their own. If yours does not (for example
 Safari), add `127.0.0.1 keycloak.localhost` to your hosts file.
