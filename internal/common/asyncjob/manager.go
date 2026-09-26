@@ -128,6 +128,7 @@ type Manager struct {
 	executionSlots      chan struct{}
 	maintenanceMu       sync.Mutex
 	lastCleanupAt       time.Time
+	clock               func() time.Time
 }
 
 // ExecutionSlotLease transfers one execution slot from request admission to a worker.
@@ -141,6 +142,17 @@ type ExecutionSlotLease struct {
 // NewManager creates an in-memory manager intended for isolated tests.
 func NewManager(prefix string, ttl time.Duration) *Manager {
 	return newManager(context.TODO(), newMemoryStore(), prefix, ttl)
+}
+
+// NewManagerWithClock creates an in-memory manager whose lease and expiry
+// decisions use the supplied clock, allowing tests to control time.
+func NewManagerWithClock(prefix string, ttl time.Duration, clock func() time.Time) (*Manager, error) {
+	if clock == nil {
+		return nil, errors.New("ASYNCJOB-NEWMANAGER-NILCLOCK clock must not be nil")
+	}
+	manager := NewManager(prefix, ttl)
+	manager.clock = clock
+	return manager, nil
 }
 
 // NewManagerWithExecutionCapacity creates a capacity-constrained in-memory manager.
@@ -224,7 +236,12 @@ func newManagerWithExecutionCapacity(
 		maintenanceInterval: defaultMaintenanceInterval,
 		lifecycleContext:    lifecycleContext,
 		executionSlots:      make(chan struct{}, maximumConcurrentExecutions),
+		clock:               time.Now,
 	}
+}
+
+func (m *Manager) now() time.Time {
+	return m.clock().UTC()
 }
 
 // TryAcquireExecutionSlotLease reserves capacity that can be handed to a worker.
@@ -342,7 +359,7 @@ func (m *Manager) start(ctx context.Context, tx *sql.Tx, ownerKey string, option
 		return "", fmt.Errorf("ASYNCJOB-START-GENERATEHANDLE %w", err)
 	}
 
-	now := time.Now().UTC()
+	now := m.now()
 	jobKind := options.JobKind
 	if jobKind == "" {
 		jobKind = m.prefix
@@ -400,7 +417,7 @@ func (m *Manager) CompletePayloadTx(ctx context.Context, tx *sql.Tx, handleID st
 		return errors.New("ASYNCJOB-COMPLETETX-UNSUPPORTED transactional asynchronous job storage is unavailable")
 	}
 	terminal := Record{ExecutionState: executionStateCompleted, Payload: payload}
-	updated, err := store.TransitionTx(ctx, tx, handleID, m.prefix, m.workerID, terminal, time.Now().UTC().Add(m.ttl))
+	updated, err := store.TransitionTx(ctx, tx, handleID, m.prefix, m.workerID, terminal, m.now().Add(m.ttl))
 	if err != nil {
 		return fmt.Errorf("ASYNCJOB-COMPLETETX-EXECUTE %w", err)
 	}
@@ -431,7 +448,7 @@ func (m *Manager) transition(ctx context.Context, handleID string, terminal Reco
 			m.prefix,
 			m.workerID,
 			terminal,
-			time.Now().UTC().Add(m.ttl),
+			m.now().Add(m.ttl),
 		)
 		if updated {
 			return nil
@@ -488,7 +505,7 @@ func (m *Manager) get(ctx context.Context, handleID string, ownerKey string) (Re
 		return Record{}, false, nil
 	}
 
-	now := time.Now().UTC()
+	now := m.now()
 	if record.ExecutionState != executionStateRunning {
 		if record.ExpiresAt.IsZero() || record.ExpiresAt.After(now) {
 			return record, true, nil
@@ -544,13 +561,13 @@ func (m *Manager) KeepAlive(ctx context.Context, handleID string) func() {
 			select {
 			case <-heartbeatCtx.Done():
 				return
-			case now := <-ticker.C:
+			case <-ticker.C:
 				renewed, err := m.store.RenewLease(
 					heartbeatCtx,
 					handleID,
 					m.prefix,
 					m.workerID,
-					now.UTC().Add(m.leaseDuration),
+					m.now().Add(m.leaseDuration),
 				)
 				if err != nil {
 					slog.ErrorContext(heartbeatCtx, "async handle lease renewal failed", "error.code", "ASYNCJOB-KEEPALIVE-RENEW", "error", err, "async_job.handle_id", handleID)
@@ -590,7 +607,7 @@ func (m *Manager) maintain(ctx context.Context, force bool) error {
 func (m *Manager) cleanup(ctx context.Context, force bool) error {
 	m.maintenanceMu.Lock()
 	defer m.maintenanceMu.Unlock()
-	now := time.Now().UTC()
+	now := m.now()
 	if !force && !m.lastCleanupAt.IsZero() && now.Sub(m.lastCleanupAt) < m.maintenanceInterval {
 		return nil
 	}
@@ -602,7 +619,7 @@ func (m *Manager) cleanup(ctx context.Context, force bool) error {
 }
 
 func (m *Manager) recover(ctx context.Context, handleID string, ownerKey string) error {
-	now := time.Now().UTC()
+	now := m.now()
 	if _, err := m.store.RecoverAbandoned(ctx, m.prefix, handleID, ownerKey, now, now.Add(m.ttl)); err != nil {
 		return fmt.Errorf("ASYNCJOB-RECOVER-EXECUTE %w", err)
 	}
