@@ -27,10 +27,11 @@
 package persistence
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -127,51 +128,60 @@ func wrapReconciliationDeleteRows(paths []string) []reconciliationDeleteJSONRow 
 	return result
 }
 
+func (s *SubmodelDatabase) buildPersistedSubmodelReconciliationPlanTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelDatabaseID int,
+	oldSubmodel types.ISubmodel,
+	newSubmodel types.ISubmodel,
+) (submodelReconciliationPlan, error) {
+	persistedPositions, err := submodelelements.LoadPersistedPositionsTx(ctx, tx, submodelDatabaseID, "")
+	if err != nil {
+		return submodelReconciliationPlan{}, err
+	}
+	return s.buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, persistedPositions)
+}
+
 func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 	oldSubmodel types.ISubmodel,
 	newSubmodel types.ISubmodel,
+	persistedPositions map[string]int,
 ) (submodelReconciliationPlan, error) {
 	metadata, err := buildSubmodelReconciliationMetadata(oldSubmodel, newSubmodel)
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	oldRows, err := submodelelements.BuildReconciliationElementRows(s.db, oldSubmodel.SubmodelElements())
+	plan, err := s.buildElementReconciliationPlan(oldSubmodel.SubmodelElements(), newSubmodel.SubmodelElements(), nil, persistedPositions)
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	newRows, err := submodelelements.BuildReconciliationElementRows(s.db, newSubmodel.SubmodelElements())
+	plan.Metadata = metadata
+	return plan, nil
+}
+
+// buildElementReconciliationPlan diffs two element trees placed below the
+// parent described by insertCtx. The plan leaves the Submodel metadata unchanged.
+func (s *SubmodelDatabase) buildElementReconciliationPlan(
+	oldElements []types.ISubmodelElement,
+	newElements []types.ISubmodelElement,
+	insertCtx *submodelelements.BatchInsertContext,
+	persistedPositions map[string]int,
+) (submodelReconciliationPlan, error) {
+	oldRows, err := submodelelements.BuildReconciliationElementRowsWithContext(s.db, oldElements, insertCtx)
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	updates, inserts, deletes, err := reconcileSubmodelElementRows(oldRows, newRows)
+	submodelelements.AlignPersistedPositions(oldRows, persistedPositions)
+	newRows, err := submodelelements.BuildReconciliationElementRowsWithContext(s.db, newElements, insertCtx)
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	return submodelReconciliationPlan{
-		Metadata:                metadata,
-		Updates:                 updates,
-		Inserts:                 inserts,
-		Deletes:                 deletes,
-		ExpectedDeletedElements: countDeletedReconciliationRows(oldRows, deletes),
-	}, nil
+	return reconcileSubmodelElementRows(oldRows, newRows)
 }
 
 type reconciliationSiblingPosition struct {
 	parentPath string
 	position   int
-}
-
-func countDeletedReconciliationRows(rows []submodelelements.ReconciliationElementRow, roots []string) int {
-	count := 0
-	for _, row := range rows {
-		for _, root := range roots {
-			if row.Path == root || strings.HasPrefix(row.Path, root+".") || strings.HasPrefix(row.Path, root+"[") {
-				count++
-				break
-			}
-		}
-	}
-	return count
 }
 
 func buildSubmodelReconciliationMetadata(
@@ -253,10 +263,14 @@ func nullableRawJSON(value *string) json.RawMessage {
 	return json.RawMessage(*value)
 }
 
+// reconcileSubmodelElementRows diffs old and new rows. Deletes lists every
+// deleted element path, not only subtree roots, so the reconciliation
+// statement resolves them with indexed equality lookups. The old rows are the
+// complete stored subtree read under the Submodel lock.
 func reconcileSubmodelElementRows(
 	oldRows []submodelelements.ReconciliationElementRow,
 	newRows []submodelelements.ReconciliationElementRow,
-) ([]submodelelements.ReconciliationElementRow, []submodelelements.ReconciliationElementRow, []string, error) {
+) (submodelReconciliationPlan, error) {
 	oldByPath := indexReconciliationRows(oldRows)
 	targetInsertedByPath := make(map[string]bool, len(newRows))
 	positions := make(map[reconciliationSiblingPosition]struct{}, len(newRows))
@@ -265,7 +279,7 @@ func reconcileSubmodelElementRows(
 
 	for _, target := range newRows {
 		if err := validateTargetReconciliationRow(target, targetInsertedByPath, positions); err != nil {
-			return nil, nil, nil, err
+			return submodelReconciliationPlan{}, err
 		}
 
 		parentInserted := target.ParentPath != "" && targetInsertedByPath[target.ParentPath]
@@ -283,25 +297,20 @@ func reconcileSubmodelElementRows(
 		}
 	}
 
-	deleteCandidates := make(map[string]bool)
+	deletes := make([]string, 0)
 	for _, previous := range oldRows {
 		inserted, exists := targetInsertedByPath[previous.Path]
 		if !exists || inserted {
-			deleteCandidates[previous.Path] = true
+			deletes = append(deletes, previous.Path)
 		}
-	}
-	deletes := make([]string, 0, len(deleteCandidates))
-	for _, previous := range oldRows {
-		if !deleteCandidates[previous.Path] {
-			continue
-		}
-		if previous.ParentPath != "" && deleteCandidates[previous.ParentPath] {
-			continue
-		}
-		deletes = append(deletes, previous.Path)
 	}
 	sort.Strings(deletes)
-	return updates, inserts, deletes, nil
+	return submodelReconciliationPlan{
+		Updates:                 updates,
+		Inserts:                 inserts,
+		Deletes:                 deletes,
+		ExpectedDeletedElements: len(deletes),
+	}, nil
 }
 
 func validateTargetReconciliationRow(

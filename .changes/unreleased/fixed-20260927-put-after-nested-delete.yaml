@@ -1,0 +1,7 @@
+kind: fixed
+body: 'A Submodel `PUT` no longer fails with a conflict when an element was deleted from a SubmodelElementCollection, Entity or AnnotatedRelationshipElement before and the new state adds elements to it. Reconciliation now compares against the stored sibling positions instead of assuming gapless positions.'
+time: 2026-09-27T12:00:00Z
+custom:
+    Impact: Low
+    PullRequest: 716
+    SecurityImpact: None.

@@ -218,14 +218,15 @@ func resolvedInsertRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 		)
 }
 
+// deleteElementTargets resolves the deleted paths, which include every
+// descendant, by equality on the indexed (submodel_id, idshort_path) pair.
 func deleteElementTargets(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-	return dialect.From(goqu.T("target_submodel").As("sm")).
-		Join(goqu.T("submodel_element").As("sme"), goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
-		Join(goqu.T("delete_paths").As("d"), goqu.On(goqu.Or(
+	return dialect.From(goqu.T("delete_paths").As("d")).
+		CrossJoin(goqu.T("target_submodel").As("sm")).
+		Join(goqu.T("submodel_element").As("sme"), goqu.On(
+			goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")),
 			goqu.I("sme.idshort_path").Eq(goqu.I("d.path")),
-			goqu.L("left(?, length(?) + 1) = ? || '.'", goqu.I("sme.idshort_path"), goqu.I("d.path"), goqu.I("d.path")),
-			goqu.L("left(?, length(?) + 1) = ? || '['", goqu.I("sme.idshort_path"), goqu.I("d.path"), goqu.I("d.path")),
-		))).
+		)).
 		SelectDistinct(goqu.I("sme.id"))
 }
 

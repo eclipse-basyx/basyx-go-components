@@ -332,7 +332,21 @@ Named children are matched by `idShort`; `SubmodelElementList` children are
 matched by position. Added, removed, moved, or model-type-changed subtrees are
 replaced, while same-type elements are updated in place. Any failed mutation,
 readback, authorization check, or history/evidence append rolls back the entire
-replacement.
+replacement. Before comparing, the stored sibling positions are read, so gaps
+left by deleted elements are detected as position changes.
+
+`PATCH /submodels/{submodelIdentifier}` merges the patch into the current
+Submodel and then reconciles the stored Submodel with the merged state in the
+same way. The Submodel and its unchanged elements keep their rows.
+
+Writes of a single container element reconcile its children the same way. This
+applies to `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}`
+on a SubmodelElementCollection, SubmodelElementList, Entity or
+AnnotatedRelationshipElement, and to `PATCH` on such an element when the patch
+contains `value`, `statements` or `annotations`. The given children replace the
+stored children: missing children are deleted, changed children are updated in
+place, and new children are inserted. A `PATCH` without these fields, including
+a `$metadata` `PATCH`, leaves the children untouched.
 
 ## Submodel Element History FAQ
 

@@ -54,26 +54,3 @@ func TestDeleteSubmodelElementByPathCleansLargeObjectsBeforeDeletingTree(t *test
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
-
-func TestDeleteAllChildrenCleansLargeObjectsBeforeDeletingChildren(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() { _ = db.Close() }()
-
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	require.NoError(t, err)
-
-	mock.ExpectQuery(`SELECT .*FROM "submodel".*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(43))
-	mock.ExpectQuery(`SELECT COUNT\(\*\).*lo_unlink.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
-	mock.ExpectExec(`DELETE FROM "submodel_element"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectRollback()
-
-	err = DeleteAllChildren(db, "sm-1", "Parent", tx)
-	require.NoError(t, err)
-	require.NoError(t, tx.Rollback())
-	require.NoError(t, mock.ExpectationsWereMet())
-}

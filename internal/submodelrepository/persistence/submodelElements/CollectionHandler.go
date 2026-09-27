@@ -36,7 +36,6 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 // PostgreSQLSubmodelElementCollectionHandler provides PostgreSQL-based persistence operations
@@ -67,7 +66,7 @@ func NewPostgreSQLSubmodelElementCollectionHandler(db *sql.DB) (*PostgreSQLSubmo
 
 // Update modifies an existing SubmodelElementCollection element identified by its idShort or path.
 // This method delegates the update operation to the decorated CRUD handler which handles
-// the common submodel element update logic.
+// the common submodel element update logic. Child elements are reconciled by the caller.
 //
 // Parameters:
 //   - submodelID: The ID of the parent submodel
@@ -79,71 +78,10 @@ func NewPostgreSQLSubmodelElementCollectionHandler(db *sql.DB) (*PostgreSQLSubmo
 // Returns:
 //   - error: Error if update fails or element is not of correct type
 func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
-	collection, ok := submodelElement.(*types.SubmodelElementCollection)
-	if !ok {
+	if _, ok := submodelElement.(*types.SubmodelElementCollection); !ok {
 		return common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
 	}
-
-	var err error
-	cu, localTx, err := common.StartTXIfNeeded(tx, err, p.db)
-	if err != nil {
-		return err
-	}
-	defer cu(&err)
-	// For PUT operations, delete all children first (complete replacement)
-	if isPut {
-		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
-		if err != nil {
-			return err
-		}
-	}
-
-	// PATCH operations preserve existing children, so no deletion needed - TODO
-
-	// Update base submodel element properties
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
-	if err != nil {
-		return err
-	}
-	effectivePath := resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
-
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-UPDSMECOL-GETSMDATABASEID " + err.Error())
-	}
-
-	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, effectivePath)
-	if err != nil {
-		return err
-	}
-
-	rootSmeID, err := p.decorated.GetRootSmeIDByElementID(elementID)
-	if err != nil {
-		return err
-	}
-
-	if isPut || collection.Value() != nil {
-		if len(collection.Value()) > 0 {
-			_, insertErr := InsertSubmodelElements(
-				p.db,
-				submodelID,
-				collection.Value(),
-				localTx,
-				&BatchInsertContext{
-					ParentID:      elementID,
-					ParentPath:    effectivePath,
-					RootSmeID:     rootSmeID,
-					IsFromList:    false,
-					StartPosition: 0,
-				},
-			)
-			if insertErr != nil {
-				return common.NewInternalServerError("SMREPO-UPDSMECOL-INSCHILDREN " + insertErr.Error())
-			}
-		}
-	}
-
-	return common.CommitTransactionIfNeeded(tx, localTx)
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 }
 
 // UpdateValueOnly updates only the value of an existing SubmodelElementCollection submodel element identified by its idShort or path.

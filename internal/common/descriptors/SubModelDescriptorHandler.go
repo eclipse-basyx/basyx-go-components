@@ -179,44 +179,6 @@ func insertSubmodelDescriptorForAASTx(
 	return getSubmodelDescriptorForAASByIDOrDenied(ctx, tx, aasID, submodel.Id)
 }
 
-// ReplaceSubmodelDescriptorForAAS atomically replaces the submodel descriptor
-// with the same Id under the given AAS. If a descriptor exists, the base
-// descriptor row is deleted (cascade removes related rows), then the provided
-// descriptor is inserted. The operation occurs within a single transaction.
-//
-// Returns a boolean indicating whether a descriptor existed before the replace.
-// If the AAS does not exist, a NotFound error is returned.
-func ReplaceSubmodelDescriptorForAAS(
-	ctx context.Context,
-	db *sql.DB,
-	aasID string,
-	submodel model.SubmodelDescriptor,
-) (model.SubmodelDescriptor, error) {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
-	}
-
-	if _, err = GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodel.Id); err != nil {
-		_ = tx.Rollback()
-		return model.SubmodelDescriptor{}, err
-	}
-
-	err = deleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodel.Id)
-
-	if err != nil {
-		_ = tx.Rollback()
-		return model.SubmodelDescriptor{}, err
-	}
-	result, err := InsertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
-	if err != nil {
-		_ = tx.Rollback()
-		return model.SubmodelDescriptor{}, err
-	}
-
-	return result, tx.Commit()
-}
-
 // GetSubmodelDescriptorForAASByID returns a single SubmodelDescriptor for a
 // given AAS (by AAS Id string) and Submodel Id. The function resolves the
 // internal AAS descriptor id, loads all submodels via
@@ -433,41 +395,6 @@ func InsertSubmodelDescriptorTx(
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
 	return insertSubmodelDescriptorTx(ctx, tx, submodel)
-}
-
-// ReplaceSubmodelDescriptor atomically replaces a SubmodelDescriptor (global,
-// non-AAS) by deleting the existing descriptor and inserting the new one.
-func ReplaceSubmodelDescriptor(
-	ctx context.Context,
-	db *sql.DB,
-	submodel model.SubmodelDescriptor,
-) (model.SubmodelDescriptor, error) {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
-	}
-	defer func() {
-		if rec := recover(); rec != nil {
-			_ = tx.Rollback()
-		}
-	}()
-
-	if _, err = GetSubmodelDescriptorByID(ctx, tx, submodel.Id); err != nil {
-		_ = tx.Rollback()
-		return model.SubmodelDescriptor{}, err
-	}
-
-	if err = deleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
-		_ = tx.Rollback()
-		return model.SubmodelDescriptor{}, err
-	}
-	result, err := InsertSubmodelDescriptorTx(ctx, tx, submodel)
-	if err != nil {
-		_ = tx.Rollback()
-		return model.SubmodelDescriptor{}, err
-	}
-
-	return result, tx.Commit()
 }
 
 // GetSubmodelDescriptorByID returns a single SubmodelDescriptor that is not

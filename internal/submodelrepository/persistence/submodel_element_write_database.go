@@ -106,7 +106,7 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.C
 	return *idShort, nil
 }
 
-func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
+func (s *SubmodelDatabase) updateSubmodelElementInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
 	modelType, err := getSMEModelTypeByPathInTx(tx, submodelID, idShortOrPath)
 	if err != nil {
 		return err
@@ -121,7 +121,21 @@ func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submod
 		return err
 	}
 
-	return handler.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	children, reconcileChildren := submodelElementChildrenToReconcile(*modelType, submodelElement, isPut)
+	submodelDatabaseID := 0
+	if reconcileChildren {
+		if submodelDatabaseID, err = lockSubmodelForChildReconciliationTx(ctx, tx, submodelID); err != nil {
+			return err
+		}
+	}
+	if err = handler.Update(submodelID, idShortOrPath, submodelElement, tx, isPut); err != nil {
+		return err
+	}
+	if !reconcileChildren {
+		return nil
+	}
+	updatedPath := submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut)
+	return s.reconcileSubmodelElementChildrenTx(ctx, tx, submodelID, submodelDatabaseID, updatedPath, children)
 }
 
 // GetSubmodelElement retrieves a submodel element by path and applies optional ABAC formula filters from ctx.
@@ -500,7 +514,7 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 	}
 
 	if elementExists {
-		historyMutation, err = s.replaceSubmodelElementForPut(tx, submodelID, idShortPath, submodelElement)
+		historyMutation, err = s.replaceSubmodelElementForPut(ctx, tx, submodelID, idShortPath, submodelElement)
 		if err != nil {
 			return false, err
 		}
@@ -583,12 +597,13 @@ func (s *SubmodelDatabase) ensureExistingSubmodelElementCanBeReplaced(ctx contex
 }
 
 func (s *SubmodelDatabase) replaceSubmodelElementForPut(
+	ctx context.Context,
 	tx *sql.Tx,
 	submodelID string,
 	idShortPath string,
 	submodelElement types.ISubmodelElement,
 ) (submodelElementRootMutation, error) {
-	if err := s.updateSubmodelElementInTransaction(tx, submodelID, idShortPath, submodelElement, true); err != nil {
+	if err := s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, submodelElement, true); err != nil {
 		return submodelElementRootMutation{}, err
 	}
 
@@ -747,7 +762,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		return err
 	}
 
-	err = s.updateSubmodelElementInTransaction(tx, submodelID, idShortOrPath, submodelElement, isPut)
+	err = s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortOrPath, submodelElement, isPut)
 	if err != nil {
 		return err
 	}

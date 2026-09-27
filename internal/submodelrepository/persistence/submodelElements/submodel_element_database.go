@@ -570,60 +570,6 @@ func updateListChildPosition(tx *sql.Tx, submodelDatabaseID int, childID int, ne
 	return nil
 }
 
-// DeleteAllChildren removes all associated children
-//
-// Parameters:
-// - db: The database connection
-// - submodelId: The Identifier of the Submodel the SubmodelElement belongs to
-// - idShortPath: The parents idShortPath to delete the children from
-// - tx: transaction context (will be set if nil)
-func DeleteAllChildren(db *sql.DB, submodelId string, idShortPath string, tx *sql.Tx) error {
-	var err error
-	localTx := tx
-	if tx == nil {
-		var cu func(*error)
-		localTx, cu, err = common.StartTransaction(db)
-		if err != nil {
-			return err
-		}
-
-		defer cu(&err)
-	}
-
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(localTx, submodelId)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return common.NewErrNotFound("SMREPO-DELALLCHILDREN-SMNOTFOUND Submodel with ID '" + submodelId + "' not found")
-		}
-		return common.NewInternalServerError("SMREPO-DELALLCHILDREN-GETSMDATABASEID Failed to resolve Submodel database ID: " + err.Error())
-	}
-
-	err = cleanupSubmodelElementTreeLargeObjects(localTx, submodelDatabaseID, idShortPath, false, "SMREPO-DELALLCHILDREN")
-	if err != nil {
-		return err
-	}
-
-	del := goqu.Delete("submodel_element").Where(
-		submodelElementTreeWhere(submodelDatabaseID, idShortPath, false, ""),
-	)
-	sqlQuery, args, err := del.ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = localTx.Exec(sqlQuery, args...)
-	if err != nil {
-		return err
-	}
-
-	if tx == nil {
-		if err = localTx.Commit(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // InsertSubmodelElements inserts submodel elements with maximum throughput while preserving
 // data-equivalent persistence semantics of BatchInsert.
 //
