@@ -224,6 +224,33 @@ func TestCompleteStartsTerminalRetention(t *testing.T) {
 	require.True(t, record.HasResult)
 }
 
+func TestNewManagerWithClockRejectsNilClock(t *testing.T) {
+	manager, err := NewManagerWithClock("ASYNC-TEST", time.Minute, nil)
+	require.Error(t, err)
+	require.Nil(t, manager)
+}
+
+func TestTerminalRecordExpiresExactlyAtTTL(t *testing.T) {
+	now := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	manager, err := NewManagerWithClock("ASYNC-TEST", time.Minute, func() time.Time { return now })
+	require.NoError(t, err)
+
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
+	require.NoError(t, err)
+	require.NoError(t, manager.CompletePayload(t.Context(), handleID, map[string]any{"success": true}))
+
+	now = now.Add(time.Minute - time.Nanosecond)
+	record, found, err := manager.Get(t.Context(), handleID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, now.Add(time.Nanosecond), record.ExpiresAt)
+
+	now = now.Add(time.Nanosecond)
+	_, found, err = manager.Get(t.Context(), handleID)
+	require.NoError(t, err)
+	require.False(t, found)
+}
+
 func TestAbandonedRunningRecordBecomesFailed(t *testing.T) {
 	manager := NewManager("ASYNC-TEST", time.Minute)
 	manager.leaseDuration = time.Millisecond
