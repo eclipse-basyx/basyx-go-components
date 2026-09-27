@@ -14,6 +14,7 @@ package openapi
 import (
 	"context"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -31,9 +32,9 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 // GetDescription - Returns the self-describing information of a network resource (ServiceDescription)
 func (s *DescriptionAPIAPIService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
 	return model.Response(200, model.ServiceDescription{
-		Profiles: []string{
+		Profiles: common.ServiceProfiles(
 			"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
 			"https://basyx.org/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
-		},
+		),
 	}), nil
 }

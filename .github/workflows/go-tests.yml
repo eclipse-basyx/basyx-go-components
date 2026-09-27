@@ -790,6 +790,27 @@ jobs:
           cd internal/aasrepository/security_tests
           go test -v .
 
+  rebac-security-tests:
+    name: ReBAC Security Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run ReBAC security tests
+        run: |
+          cd internal/common/security/rebac/integration_tests
+          go test -v .
+
   aasx-file-server-integration-tests:
     name: AASX File Server Integration Tests
     runs-on: ubuntu-latest

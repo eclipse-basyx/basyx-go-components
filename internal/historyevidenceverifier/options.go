@@ -50,6 +50,7 @@ type cliOptions struct {
 	requireSignedManifest bool
 	mutationEvidence      bool
 	expectedHeadHash      string
+	reBACAudit            bool
 }
 
 func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
@@ -80,7 +81,8 @@ func bindFlags(flags *flag.FlagSet, options *cliOptions) {
 	flags.StringVar(&options.signerKeyID, "signer-key-id", "", "Optional manifest signer key id")
 	flags.BoolVar(&options.requireSignedManifest, "require-signed-manifest", false, "Reject unsigned manifests during verification")
 	flags.BoolVar(&options.mutationEvidence, "mutation", false, "Verify independent mutation evidence; -from and -to select event sequences")
-	flags.StringVar(&options.expectedHeadHash, "expected-head-hash", "", "Independently retained terminal event hash required for mutation verification")
+	flags.StringVar(&options.expectedHeadHash, "expected-head-hash", "", "Independently retained terminal event hash required for mutation verification, optional for -rebac-audit")
+	flags.BoolVar(&options.reBACAudit, "rebac-audit", false, "Verify the hash chain and WORM evidence of the ReBAC audit trail")
 }
 
 func validateCLIOptions(options cliOptions) error {
@@ -90,18 +92,11 @@ func validateCLIOptions(options cliOptions) error {
 	if strings.TrimSpace(options.recoveryCatalogPath) != "" && !options.recover {
 		return fmt.Errorf("HISTORY-EVIDENCE-CLI-RECOVERYCATALOG -recovery-catalog is only valid with -recover")
 	}
-	if options.mutationEvidence {
-		if options.writeEvidence || options.catalogExport || strings.TrimSpace(options.recoveryCatalogPath) != "" {
-			return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONMODE -mutation supports verification and direct recovery only")
-		}
-		if strings.TrimSpace(options.identifier) == "" {
-			return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONIDENTIFIER -identifier is required with -mutation")
-		}
-		if !validExpectedHeadHash(options.expectedHeadHash) {
-			return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONHEAD -expected-head-hash must be a 64-character SHA-256 value")
-		}
-	} else if strings.TrimSpace(options.expectedHeadHash) != "" {
-		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONHEADMODE -expected-head-hash is only valid with -mutation")
+	if options.reBACAudit {
+		return validateReBACAuditOptions(options)
+	}
+	if err := validateMutationOptions(options); err != nil {
+		return err
 	}
 	if !isCatalogRecovery(options) {
 		if err := validateHistoryRangeOptions(options); err != nil {
@@ -109,6 +104,37 @@ func validateCLIOptions(options cliOptions) error {
 		}
 	}
 	return validateManifestReferenceOptions(options)
+}
+
+func validateMutationOptions(options cliOptions) error {
+	if !options.mutationEvidence {
+		if strings.TrimSpace(options.expectedHeadHash) != "" {
+			return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONHEADMODE -expected-head-hash is only valid with -mutation")
+		}
+		return nil
+	}
+	if options.writeEvidence || options.catalogExport || strings.TrimSpace(options.recoveryCatalogPath) != "" {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONMODE -mutation supports verification and direct recovery only")
+	}
+	if strings.TrimSpace(options.identifier) == "" {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONIDENTIFIER -identifier is required with -mutation")
+	}
+	if !validExpectedHeadHash(options.expectedHeadHash) {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONHEAD -expected-head-hash must be a 64-character SHA-256 value")
+	}
+	return nil
+}
+
+// validateReBACAuditOptions accepts verification of the ReBAC audit trail
+// with an optional independently retained head hash.
+func validateReBACAuditOptions(options cliOptions) error {
+	if enabledModeCount(options) > 0 || options.mutationEvidence || strings.TrimSpace(options.historyTable) != "" {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-REBACAUDITMODE -rebac-audit only verifies and takes no history range")
+	}
+	if strings.TrimSpace(options.expectedHeadHash) != "" && !validExpectedHeadHash(options.expectedHeadHash) {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-REBACAUDITHEAD -expected-head-hash must be a 64-character SHA-256 value")
+	}
+	return nil
 }
 
 func validExpectedHeadHash(value string) bool {

@@ -48,6 +48,7 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 )
@@ -133,7 +134,7 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASXFileServerService")
 
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(
+	abacRepo, rebacRuntime, err := rebac.SetupSecurity(
 		ctx,
 		cfg,
 		apiRouter,
@@ -145,6 +146,7 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasxfileserverservice")
+	rebac.RegisterManagementRoutes(apiRouter, rebacRuntime, rebac.KindAASXPackage)
 	if cfg.Server.VerificationEndpointAvailable {
 		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}

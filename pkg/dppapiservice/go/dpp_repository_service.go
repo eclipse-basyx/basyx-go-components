@@ -316,7 +316,7 @@ func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byt
 			return fmt.Errorf("DPP-CREATEDPP-CREATEAAS create AAS: %w", err)
 		}
 		for _, submodel := range submodels {
-			if err := s.submodelRepo.CreateSubmodelInTransaction(ctx, tx, submodel); err != nil {
+			if err := s.createPassportSubmodelInTransaction(ctx, tx, aas.ID(), submodel); err != nil {
 				return fmt.Errorf("DPP-CREATEDPP-CREATESUBMODEL create submodel %s: %w", submodel.ID(), err)
 			}
 		}
@@ -451,7 +451,7 @@ func (s *DPPRepositoryService) persistDPPUpdateInTransaction(
 	if err != nil {
 		return err
 	}
-	descriptorUpdates, err := s.persistUpdatedDPPSubmodels(ctx, tx, update)
+	descriptorUpdates, err := s.persistUpdatedDPPSubmodels(ctx, tx, aasID, update)
 	if err != nil {
 		return err
 	}
@@ -477,11 +477,12 @@ func (s *DPPRepositoryService) persistUpdatedDPPAAS(
 func (s *DPPRepositoryService) persistUpdatedDPPSubmodels(
 	ctx context.Context,
 	tx *sql.Tx,
+	aasID string,
 	update preparedDPPUpdate,
 ) ([]submodelDescriptorUpdate, error) {
 	descriptorUpdates := make([]submodelDescriptorUpdate, 0, len(update.submodels))
 	for _, submodel := range update.submodels {
-		descriptorUpdate, err := s.persistUpdatedDPPSubmodel(ctx, tx, submodel, update.newSubmodelIDs)
+		descriptorUpdate, err := s.persistUpdatedDPPSubmodel(ctx, tx, aasID, submodel, update.newSubmodelIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -490,14 +491,24 @@ func (s *DPPRepositoryService) persistUpdatedDPPSubmodels(
 	return descriptorUpdates, nil
 }
 
+// createPassportSubmodelInTransaction creates a Submodel of a passport and
+// links it to the passport shell, so the passport is shared as a whole.
+func (s *DPPRepositoryService) createPassportSubmodelInTransaction(ctx context.Context, tx *sql.Tx, aasID string, submodel types.ISubmodel) error {
+	if err := s.submodelRepo.CreateSubmodelInTransaction(ctx, tx, submodel); err != nil {
+		return err
+	}
+	return auth.RecordReBACSubmodelCreatedWithShell(ctx, tx, aasID, submodel.ID())
+}
+
 func (s *DPPRepositoryService) persistUpdatedDPPSubmodel(
 	ctx context.Context,
 	tx *sql.Tx,
+	aasID string,
 	submodel types.ISubmodel,
 	newSubmodelIDs map[string]struct{},
 ) (submodelDescriptorUpdate, error) {
 	if _, isNew := newSubmodelIDs[submodel.ID()]; isNew {
-		if err := s.submodelRepo.CreateSubmodelInTransaction(ctx, tx, submodel); err != nil {
+		if err := s.createPassportSubmodelInTransaction(ctx, tx, aasID, submodel); err != nil {
 			return submodelDescriptorUpdate{}, fmt.Errorf("DPP-UPDDPP-CREATESUBMODEL create submodel %s: %w", submodel.ID(), err)
 		}
 		return submodelDescriptorUpdate{submitted: submodel}, nil

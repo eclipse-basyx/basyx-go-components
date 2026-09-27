@@ -47,6 +47,7 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
@@ -214,7 +215,7 @@ func runServer(ctx context.Context, configPath string) error {
 	if cfg.General.EnableCustomMiddlewareHeaderInjection {
 		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
 	}
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "submodelrepositoryservice", claimsMiddleware...)
+	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "submodelrepositoryservice", claimsMiddleware...)
 	if err != nil {
 		return err
 	}
@@ -224,6 +225,8 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "submodelrepositoryservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "submodelrepositoryservice")
+	rebac.ExemptManagementMutationRoutes(versioningGuard, rebacRuntime, rebac.KindSubmodel)
+	rebac.RegisterManagementRoutes(apiRouter, rebacRuntime, rebac.KindSubmodel)
 	if cfg.Server.VerificationEndpointAvailable {
 		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}

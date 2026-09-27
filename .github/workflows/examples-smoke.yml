@@ -128,6 +128,13 @@ jobs:
               eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
             smoke_script: examples/BaSyxObservabilityExample/smoke.sh --check-collector-outage
+          - target_name: ReBAC Example
+            compose_files: |
+              examples/BaSyxReBACExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+            smoke_script: examples/BaSyxReBACExample/smoke.sh
           - target_name: PostgreSQL Read Replica Example
             compose_files: |
               examples/BaSyxReadReplicaExample/docker-compose.yml

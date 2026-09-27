@@ -41,6 +41,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
@@ -129,7 +130,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "ConceptDescriptionRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "conceptdescriptionrepositoryservice")
+	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "conceptdescriptionrepositoryservice")
 	if err != nil {
 		return err
 	}
@@ -139,6 +140,8 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "conceptdescriptionrepositoryservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "conceptdescriptionrepositoryservice")
+	rebac.ExemptManagementMutationRoutes(versioningGuard, rebacRuntime, rebac.KindConceptDescription)
+	rebac.RegisterManagementRoutes(apiRouter, rebacRuntime, rebac.KindConceptDescription)
 	if cfg.Server.VerificationEndpointAvailable {
 		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}

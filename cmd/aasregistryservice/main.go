@@ -43,6 +43,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
@@ -136,7 +137,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "AASRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasregistryservice")
+	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "aasregistryservice")
 	if err != nil {
 		return err
 	}
@@ -146,6 +147,8 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "aasregistryservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasregistryservice")
+	rebac.ExemptManagementMutationRoutes(versioningGuard, rebacRuntime, rebac.KindAASDescriptor)
+	rebac.RegisterManagementRoutes(apiRouter, rebacRuntime, rebac.KindAASDescriptor)
 	if cfg.Server.VerificationEndpointAvailable {
 		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}

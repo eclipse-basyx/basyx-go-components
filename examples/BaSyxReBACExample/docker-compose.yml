@@ -1,0 +1,122 @@
+# Experimental relationship-based access control (ReBAC). Relationships are
+# stored and evaluated in the BaSyx PostgreSQL database; no extra service is
+# needed.
+services:
+  aas-environment:
+    container_name: rebac-aas-environment
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: always
+    command: ["/app/aasenvironmentservice"]
+    ports:
+      - "8082:8082"
+    environment:
+      - SERVER_PORT=8082
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - REBAC_ENABLED=true
+      - REBAC_ADMINISTRATORS=http://keycloak.localhost:8080/realms/basyx|group:operators
+      - GENERAL_EXTERNALURL=http://localhost:8082
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - CORS_ALLOWEDORIGINS=http://localhost:3000
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+    volumes:
+      - ./security_env:/security_env:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  aas-ui:
+    container_name: rebac-aas-web-ui
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "3000:3000"
+    environment:
+      - ENDPOINT_CONFIG_AVAILABLE=false
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    depends_on:
+      aas-environment:
+        condition: service_started
+    restart: unless-stopped
+
+  basyx_configuration:
+    container_name: rebac-basyx-configuration
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+    depends_on:
+      db:
+        condition: service_healthy
+
+  keycloak:
+    container_name: rebac-keycloak
+    image: keycloak/keycloak:26.0.6
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: keycloak.localhost
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  keycloak-healthcheck:
+    container_name: rebac-keycloak-healthcheck
+    image: curlimages/curl:latest
+    command: >
+      sh -c "
+        until curl -sf http://keycloak:9000/health/ready; do
+          sleep 5;
+        done"
+    depends_on:
+      - keycloak
+
+  db:
+    container_name: rebac-postgres
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped

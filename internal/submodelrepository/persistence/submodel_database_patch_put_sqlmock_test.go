@@ -97,9 +97,10 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 	expectNoManagedFileReferences(mock)
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
+	expectPreservedSubmodelAuthUUID(mock)
 	mock.ExpectExec(`DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
+	mock.ExpectQuery(`INSERT INTO .*submodel.*auth_uuid.*` + preservedSubmodelAuthUUID + `.*RETURNING`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -132,9 +133,10 @@ func TestPatchSubmodelInTransactionAppendsHistory(t *testing.T) {
 	expectNoManagedFileReferences(mock)
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
+	expectPreservedSubmodelAuthUUID(mock)
 	mock.ExpectExec(`DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
+	mock.ExpectQuery(`INSERT INTO .*submodel.*auth_uuid.*` + preservedSubmodelAuthUUID + `.*RETURNING`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -608,4 +610,13 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 	err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm-1", "oldIdShort", patchElement, false)
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+const preservedSubmodelAuthUUID = "4f9f2c1e-5b1a-4c7e-9d2a-6e8b0c3d4f50"
+
+// expectPreservedSubmodelAuthUUID expects the authorization identity read that
+// keeps ReBAC grants across a PATCH replacement.
+func expectPreservedSubmodelAuthUUID(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT auth_uuid::text FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"auth_uuid"}).AddRow(preservedSubmodelAuthUUID))
 }

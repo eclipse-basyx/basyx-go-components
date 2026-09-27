@@ -203,8 +203,10 @@ func insertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	if err := tx.QueryRow(sqlStr, args...).Scan(&descriptorID); err != nil {
 		return err
 	}
-
-	return insertAdministrationShellDescriptorDetailsTx(ctx, tx, descriptorID, aasd, true)
+	if err := insertAdministrationShellDescriptorDetailsTx(ctx, tx, descriptorID, aasd, true); err != nil {
+		return err
+	}
+	return auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceAASDesc, aasd.Id)
 }
 
 func insertAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.Tx, descriptorID int64, aasd model.AssetAdministrationShellDescriptor, insertAASDescriptor bool) error {
@@ -263,7 +265,7 @@ func insertAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.T
 
 	var aasRef sql.NullInt64
 	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.General.DiscoveryIntegration {
-		ref, err := ensureAASIdentifierTx(ctx, tx, aasd.Id)
+		ref, err := ensureIntegratedDiscoveryEntryTx(ctx, tx, aasd.Id)
 		if err != nil {
 			return err
 		}
@@ -585,6 +587,11 @@ func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *s
 	if len(aasIdentifiers) == 0 {
 		return nil
 	}
+	for _, identifier := range aasIdentifiers {
+		if err := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceAASDesc, identifier); err != nil {
+			return err
+		}
+	}
 	d := goqu.Dialect(common.Dialect)
 	batch := &common.PostgreSQLBatch{}
 	limit := common.BulkBatchLimitFromContext(ctx)
@@ -617,6 +624,9 @@ func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *s
 // descriptor row plus descriptor rows of linked submodel descriptors.
 // Dependent rows are removed via ON DELETE CASCADE.
 func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+	if err := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceAASDesc, aasIdentifier); err != nil {
+		return err
+	}
 	d := goqu.Dialect(common.Dialect)
 	aas := goqu.T(common.TblAASDescriptor).As("aas")
 

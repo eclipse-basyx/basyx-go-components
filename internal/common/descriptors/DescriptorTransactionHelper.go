@@ -31,6 +31,7 @@ import (
 	"database/sql"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // DBQueryer abstracts *sql.DB and *sql.Tx for read-only operations.
@@ -58,4 +59,24 @@ func WithTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) (err err
 		return err
 	}
 	return tx.Commit()
+}
+
+// ExecuteCreateBatchTx executes a descriptor create batch in tx and records
+// the access of the created descriptors, whose identifiers are given.
+func ExecuteCreateBatchTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	batch *common.PostgreSQLBatch,
+	resource auth.SemanticResourceKind,
+	identifiers ...string,
+) error {
+	if err := common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		return err
+	}
+	for _, identifier := range identifiers {
+		if err := auth.RecordReBACResourceCreated(ctx, tx, resource, identifier); err != nil {
+			return err
+		}
+	}
+	return nil
 }

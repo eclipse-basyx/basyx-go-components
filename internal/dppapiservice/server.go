@@ -29,6 +29,7 @@ package dppapiservice
 
 import (
 	"context"
+	"database/sql"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -38,6 +39,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -59,7 +61,7 @@ import (
 //   - error: Setup error if security or router assembly fails
 func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) (http.Handler, error) {
 	dppService := dppapi.NewDPPRepositoryService(aasRepo, submodelRepo)
-	return newHTTPHandler(ctx, cfg, openapiSpec, dppService)
+	return newHTTPHandler(ctx, cfg, openapiSpec, dppService, nil)
 }
 
 // NewHTTPHandlerWithRegistrySync assembles the DPP API handler with atomic descriptor synchronization.
@@ -73,6 +75,7 @@ func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, 
 //   - aasRegistry: Optional AAS registry persistence dependency, required when enabled
 //   - submodelRegistry: Optional Submodel registry persistence dependency, required when enabled
 //   - registrySyncConfig: Validated descriptor synchronization configuration
+//   - db: Shared database holding the relationships of ReBAC, when enabled
 //
 // Returns:
 //   - http.Handler: Configured root HTTP handler for the DPP API service
@@ -86,6 +89,7 @@ func NewHTTPHandlerWithRegistrySync(
 	aasRegistry *aasregistrydb.PostgreSQLAASRegistryDatabase,
 	submodelRegistry *smregistrydb.PostgreSQLSMDatabase,
 	registrySyncConfig registrysync.Config,
+	db *sql.DB,
 ) (http.Handler, error) {
 	dppService, err := dppapi.NewDPPRepositoryServiceWithRegistrySync(
 		aasRepo, submodelRepo, aasRegistry, submodelRegistry, registrySyncConfig,
@@ -93,10 +97,10 @@ func NewHTTPHandlerWithRegistrySync(
 	if err != nil {
 		return nil, err
 	}
-	return newHTTPHandler(ctx, cfg, openapiSpec, dppService)
+	return newHTTPHandler(ctx, cfg, openapiSpec, dppService, db)
 }
 
-func newHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, dppService *dppapi.DPPRepositoryService) (http.Handler, error) {
+func newHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, dppService *dppapi.DPPRepositoryService, db *sql.DB) (http.Handler, error) {
 	dppRouter := dppapi.NewDPPRepositoryRouter(dppService)
 	contextPath := common.NormalizeBasePath(cfg.Server.ContextPath)
 
@@ -113,7 +117,7 @@ func newHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, 
 
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "DPPAPIService")
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+	if err := setupSecurity(ctx, cfg, apiRouter, db); err != nil {
 		return nil, err
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
@@ -126,6 +130,20 @@ func newHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, 
 
 	rootRouter.Mount(contextPath, apiRouter)
 	return rootRouter, nil
+}
+
+// setupSecurity installs OIDC and ABAC and, with a database, ReBAC for the
+// current state of passports.
+func setupSecurity(ctx context.Context, cfg *common.Config, apiRouter *chi.Mux, db *sql.DB) error {
+	var extensions auth.SecurityExtensions
+	if db != nil {
+		runtime, err := rebac.Setup(ctx, cfg, db)
+		if err != nil {
+			return err
+		}
+		extensions = runtime.Extensions()
+	}
+	return auth.SetupSecurityWithFileModel(ctx, cfg, apiRouter, extensions)
 }
 
 // ConfigureHistory applies DPP history settings.
@@ -149,6 +167,7 @@ func dppSwaggerConfig(cfg *common.Config) *common.Config {
 
 	swaggerConfig := *cfg
 	swaggerConfig.Server.VerificationEndpointAvailable = false
+	swaggerConfig.ReBAC.Enabled = false
 	return &swaggerConfig
 }
 

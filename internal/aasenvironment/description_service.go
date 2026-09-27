@@ -29,6 +29,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -43,7 +44,7 @@ func NewDescriptionService() *DescriptionService {
 // GetDescription returns merged service profile metadata for all bundled components.
 func (s *DescriptionService) GetDescription(_ context.Context) (model.ImplResponse, error) {
 	return model.Response(http.StatusOK, model.ServiceDescription{
-		Profiles: mergedProfiles(),
+		Profiles: common.ServiceProfiles(mergedProfiles()...),
 	}), nil
 }
 

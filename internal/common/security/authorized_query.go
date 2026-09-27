@@ -53,6 +53,8 @@ const (
 	SemanticResourceSME     SemanticResourceKind = "sme"
 	SemanticResourceCD      SemanticResourceKind = "cd"
 	SemanticResourceBD      SemanticResourceKind = "bd"
+	// SemanticResourceAASXPackage identifies AASX packages of the file server.
+	SemanticResourceAASXPackage SemanticResourceKind = "aasx"
 )
 
 // SemanticAccessTarget identifies one resource or fragment observed by an

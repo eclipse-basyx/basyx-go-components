@@ -178,9 +178,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	ctx context.Context,
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	if common.SupportsPostgreSQLBatch(p.writerDB) &&
-		!history.MutationRecordingEnabled() &&
-		descriptors.CanSkipPostInsertReadback(ctx) {
+	if p.canInsertWithoutTransaction(ctx) {
 		return p.insertAdministrationShellDescriptorBatch(ctx, aasd)
 	}
 
@@ -194,7 +192,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 		if lockErr := history.LockMutationTx(ctx, tx, history.TableDescriptor, aasd.Id); lockErr != nil {
 			return lockErr
 		}
-		if batchErr := common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); batchErr != nil {
+		if batchErr := descriptors.ExecuteCreateBatchTx(ctx, tx, batch, auth.SemanticResourceAASDesc, aasd.Id); batchErr != nil {
 			return mapInsertAASDescriptorError(batchErr)
 		}
 
@@ -216,6 +214,15 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 		return model.AssetAdministrationShellDescriptor{}, mapInsertAASDescriptorError(err)
 	}
 	return result, nil
+}
+
+// canInsertWithoutTransaction reports whether a descriptor can be inserted
+// by one PostgreSQL batch without readback, history or ReBAC state.
+func (p *PostgreSQLAASRegistryDatabase) canInsertWithoutTransaction(ctx context.Context) bool {
+	return common.SupportsPostgreSQLBatch(p.writerDB) &&
+		!history.MutationRecordingEnabled() &&
+		auth.ReBACStateFromContext(ctx) == nil &&
+		descriptors.CanSkipPostInsertReadback(ctx)
 }
 
 func mapInsertAASDescriptorError(err error) error {
@@ -283,7 +290,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 	if err != nil {
 		return err
 	}
-	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+	if err = descriptors.ExecuteCreateBatchTx(ctx, tx, batch, auth.SemanticResourceAASDesc, aasd.Id); err != nil {
 		return mapInsertAASDescriptorError(err)
 	}
 
@@ -334,7 +341,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 	if err != nil {
 		return 0, err
 	}
-	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+	if err = descriptors.ExecuteCreateBatchTx(ctx, tx, batch, auth.SemanticResourceAASDesc, identifiers...); err != nil {
 		return 0, mapInsertAASDescriptorError(err)
 	}
 

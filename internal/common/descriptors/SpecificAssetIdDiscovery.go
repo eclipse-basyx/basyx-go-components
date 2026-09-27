@@ -247,7 +247,7 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 	specificAssetIDs []types.ISpecificAssetID,
 ) error {
 	return WithTx(ctx, db, func(tx *sql.Tx) error {
-		aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
+		aasRef, err := ensureDiscoveryEntryTx(ctx, tx, aasID)
 		if err != nil {
 			return err
 		}
@@ -278,7 +278,7 @@ func AddSpecificAssetIDsByAASIdentifier(
 			return nil
 		}
 
-		aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
+		aasRef, err := ensureDiscoveryEntryTx(ctx, tx, aasID)
 		if err != nil {
 			return err
 		}
@@ -346,6 +346,28 @@ func nextSpecificAssetIDPositionByAASRefTx(ctx context.Context, tx *sql.Tx, aasR
 		return 0, err
 	}
 	return positionStart, nil
+}
+
+// ensureDiscoveryEntryTx upserts the discovery entry of aasID for a
+// discovery write; a caller creating the entry becomes its owner.
+func ensureDiscoveryEntryTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {
+	aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
+	if err != nil {
+		return 0, err
+	}
+	return aasRef, auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceBD, aasID)
+}
+
+// ensureIntegratedDiscoveryEntryTx upserts the discovery entry that the
+// discovery integration maintains for a shell descriptor. A new entry
+// inherits the access of the descriptor.
+func ensureIntegratedDiscoveryEntryTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {
+	aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
+	if err != nil {
+		return 0, err
+	}
+	sourceCtx := auth.WithReBACSource(ctx, auth.SemanticResourceAASDesc, aasID)
+	return aasRef, auth.RecordReBACResourceCreated(sourceCtx, tx, auth.SemanticResourceBD, aasID)
 }
 
 func ensureAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {
