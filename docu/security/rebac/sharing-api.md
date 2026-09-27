@@ -36,7 +36,11 @@ operations in the [administration guide](administration.md).
   ```
 
 - **Concurrency.** Every managed object has an access revision, returned as
-  `ETag`. Changes need `If-Match` with the current revision.
+  `ETag` (for example `"3-5c1e7a0d"`). The ETag is bound to its object, so
+  it never matches another resource. Changes need `If-Match` with the
+  current ETag; `*` matches any revision. Changes are authorized again
+  while the object is locked, so a caller whose access was revoked in the
+  meantime cannot complete them.
 - **Management root.** Endpoints that do not belong to one resource live
   below `/security/rebac` of any ReBAC-enabled service; all services of one
   database share the same state.
@@ -65,7 +69,7 @@ URL encoded, for example `Markings%5B0%5D` for `Markings[0]`.
 | --- | --- |
 | `GET …/$access` | The access document; `ETag` is the access revision. Needs manage. |
 | `PUT …/$access/grants` | Replaces the direct grants. `If-Match` required. Needs manage. |
-| `GET …/$access/effective` | The caller's own rights per action. Needs any right on the resource. |
+| `GET …/$access/effective` | The caller's own rights per action. Needs a confirmed right on the resource. |
 | `GET/POST …/$access/invitations`, `DELETE …/$access/invitations/{id}` | [Invitation links](#invitation-links). Needs manage. |
 | `PUT /submodels/{id}/$access/inheritance` | [Shell links](#shell-links). `If-Match` required. |
 
@@ -94,7 +98,7 @@ grants per object are allowed.
 
 ```http
 PUT /submodels/{id}/$access/grants
-If-Match: "3"
+If-Match: "3-5c1e7a0d"
 Content-Type: application/json
 
 {"grants": [
@@ -108,8 +112,11 @@ always keeps one owner: removing the last one fails with `409` unless an
 administrator does it.
 
 Effective rights report each action with its source: `abac` (the policy
-allows it), `abac-conditional` (the policy allows it for matching content),
-`rebac` (shared), `administrator` or `none`.
+allows it), `abac-conditional` (the policy allows it only for content that
+matches its conditions; whether this resource matches is not evaluated, so
+the right is not confirmed), `rebac` (shared), `administrator` or `none`.
+Callers without a confirmed right, including callers with only conditional
+rights, get `404`, so the endpoint never reveals whether a resource exists.
 
 ```json
 {"object": {"type": "aas", "id": "urn:example:aas:compressor"},
@@ -167,8 +174,15 @@ the Submodel.
 
 - **Lists** contain exactly the resources the caller may read through ABAC
   or ReBAC. Paging works as usual.
+- **Query conditions** match the fields and elements of resources shared
+  with the caller, like a direct read shows them. Conditions on other,
+  related resources (for example `$sm` fields in a shell query) only see
+  what ABAC allows.
 - **Creation.** Creating a top-level resource needs `creator` on its
   repository family (or an ABAC `CREATE` right); the creator becomes owner.
+  `PUT` creates or replaces; the right it needs is checked for what it
+  actually does when the resource is written, so a creation right never
+  replaces a resource someone else created in the meantime.
   Creating children (elements, references) needs update on the parent.
 - **Deletion** needs delete on the resource. Deleting SubmodelElements,
   thumbnails or Submodel references edits the parent and needs update on
@@ -224,10 +238,10 @@ Creators and repository admins are granted per repository family (`aas`,
 
 ```http
 GET /security/rebac/repositories/submodel/$access
-→ ETag: "0"
+→ ETag: "0-9a3f1c2b"
 
 PUT /security/rebac/repositories/submodel/$access/grants
-If-Match: "0"
+If-Match: "0-9a3f1c2b"
 Content-Type: application/json
 
 {"grants": [

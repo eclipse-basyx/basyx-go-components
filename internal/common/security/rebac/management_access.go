@@ -28,10 +28,13 @@ package rebac
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -112,17 +115,21 @@ type inheritanceDocument struct {
 	AASIDs []string `json:"aasIds"`
 }
 
-func revisionETag(revision int64) string {
-	return `"` + strconv.FormatInt(revision, 10) + `"`
+// revisionETag is the entity tag of an object's access revision. It is
+// bound to the object, so the ETag of one resource never matches another
+// resource with the same revision number.
+func revisionETag(objectKey string, revision int64) string {
+	digest := sha256.Sum256([]byte(objectKey))
+	return `"` + strconv.FormatInt(revision, 10) + "-" + hex.EncodeToString(digest[:4]) + `"`
 }
 
 // requireRevision validates If-Match against the locked object revision.
-func requireRevision(r *http.Request, current int64) error {
+func requireRevision(r *http.Request, objectKey string, current int64) error {
 	ifMatch := strings.TrimSpace(r.Header.Get("If-Match"))
 	if ifMatch == "" {
 		return errPreconditionRequired
 	}
-	if ifMatch != revisionETag(current) && ifMatch != "*" {
+	if ifMatch != revisionETag(objectKey, current) && ifMatch != "*" {
 		return errPreconditionFailed
 	}
 	return nil
@@ -134,7 +141,7 @@ func (c *Coordinator) handleGetAccess(w http.ResponseWriter, r *http.Request, re
 		writeManagementError(w, r, err)
 		return
 	}
-	w.Header().Set("ETag", revisionETag(document.Revision))
+	w.Header().Set("ETag", revisionETag(request.target.objectKey(), document.Revision))
 	writeJSON(w, http.StatusOK, document)
 }
 
@@ -211,7 +218,7 @@ func (c *Coordinator) handlePutGrants(w http.ResponseWriter, r *http.Request, re
 func (c *Coordinator) replaceGrants(w http.ResponseWriter, r *http.Request, request accessRequest, desired []Grant) {
 	var document accessDocument
 	err := common.ExecuteInTransaction(c.db, "REBAC-PUTGRANTS-STARTTX", "REBAC-PUTGRANTS-COMMIT", func(tx *sql.Tx) error {
-		if err := c.lockTarget(r, tx, request.target); err != nil {
+		if err := c.lockTarget(r, tx, request); err != nil {
 			return err
 		}
 		current, err := ListGrants(r.Context(), tx, request.target.objectKey())
@@ -231,36 +238,52 @@ func (c *Coordinator) replaceGrants(w http.ResponseWriter, r *http.Request, requ
 		writeManagementError(w, r, err)
 		return
 	}
-	respondAccess(w, document)
+	respondAccess(w, request.target, document)
 }
 
 // respondAccess answers with the committed access document and its ETag.
-func respondAccess(w http.ResponseWriter, document accessDocument) {
-	w.Header().Set("ETag", revisionETag(document.Revision))
+func respondAccess(w http.ResponseWriter, target accessTarget, document accessDocument) {
+	w.Header().Set("ETag", revisionETag(target.objectKey(), document.Revision))
 	writeJSON(w, http.StatusOK, document)
 }
 
-// lockTarget serializes access changes of the target, validates If-Match and
-// ensures the resource still exists.
-func (c *Coordinator) lockTarget(r *http.Request, tx *sql.Tx, target accessTarget) error {
-	revision, err := LockObjectRevision(r.Context(), tx, target.objectKey())
+// lockTarget locks the target like lockManaged and validates If-Match.
+func (c *Coordinator) lockTarget(r *http.Request, tx *sql.Tx, request accessRequest) error {
+	revision, err := c.lockManaged(r.Context(), tx, request)
 	if err != nil {
 		return err
 	}
-	if err = requireRevision(r, revision); err != nil {
-		return err
-	}
-	if target.kind.ObjectType == TypeRepository {
-		return nil
-	}
-	authUUID, found, err := LookupAuthUUID(r.Context(), tx, target.kind, target.identifier)
+	return requireRevision(r, request.target.objectKey(), revision)
+}
+
+// lockManaged serializes access changes of the request target, ensures the
+// resource still exists and authorizes the caller again under the lock. The
+// check before the transaction may be stale: a revocation that committed
+// while the request waited for the lock always wins, whatever If-Match the
+// request carries.
+func (c *Coordinator) lockManaged(ctx context.Context, tx *sql.Tx, request accessRequest) (int64, error) {
+	target := request.target
+	revision, err := LockObjectRevision(ctx, tx, target.objectKey())
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if !found || authUUID != target.authUUID {
-		return errTargetGone
+	if target.kind.ObjectType != TypeRepository {
+		authUUID, found, lookupErr := LookupAuthUUID(ctx, tx, target.kind, target.identifier)
+		if lookupErr != nil {
+			return 0, lookupErr
+		}
+		if !found || authUUID != target.authUUID {
+			return 0, errTargetGone
+		}
 	}
-	return nil
+	allowed, err := c.canManage(ctx, tx, request)
+	if err != nil {
+		return 0, err
+	}
+	if !allowed {
+		return 0, errTargetGone
+	}
+	return revision, nil
 }
 
 // applyGrantDiff stores the desired grants of one object. Changes take
@@ -381,15 +404,14 @@ func (c *Coordinator) handlePutInheritance(w http.ResponseWriter, r *http.Reques
 		writeManagementError(w, r, err)
 		return
 	}
-	aasUUIDs, err := c.approvedAAS(r.Context(), request, body.AASIDs)
-	if err != nil {
-		writeManagementError(w, r, err)
-		return
-	}
 	var document accessDocument
-	err = common.ExecuteInTransaction(c.db, "REBAC-PUTINHERITANCE-STARTTX", "REBAC-PUTINHERITANCE-COMMIT", func(tx *sql.Tx) error {
-		if lockErr := c.lockTarget(r, tx, request.target); lockErr != nil {
+	err := common.ExecuteInTransaction(c.db, "REBAC-PUTINHERITANCE-STARTTX", "REBAC-PUTINHERITANCE-COMMIT", func(tx *sql.Tx) error {
+		if lockErr := c.lockTarget(r, tx, request); lockErr != nil {
 			return lockErr
+		}
+		aasUUIDs, approveErr := c.approvedAAS(r.Context(), tx, request, body.AASIDs)
+		if approveErr != nil {
+			return approveErr
 		}
 		if txErr := c.replaceLinks(r.Context(), tx, request, aasUUIDs); txErr != nil {
 			return txErr
@@ -402,38 +424,67 @@ func (c *Coordinator) handlePutInheritance(w http.ResponseWriter, r *http.Reques
 		writeManagementError(w, r, err)
 		return
 	}
-	respondAccess(w, document)
+	respondAccess(w, request.target, document)
 }
 
-// approvedAAS resolves the AAS to link. Every AAS must reference the
-// Submodel and be manageable by the caller; the error does not reveal which
-// condition failed.
-func (c *Coordinator) approvedAAS(ctx context.Context, request accessRequest, identifiers []string) ([]string, error) {
-	aasUUIDs := make([]string, 0, len(identifiers))
-	for _, identifier := range identifiers {
-		identifier = strings.TrimSpace(identifier)
-		authUUID, found, err := LookupAuthUUID(ctx, c.db, KindAAS, identifier)
-		if err != nil {
+// approvedAAS resolves the AAS to link inside the transaction of the change.
+// Every AAS must reference the Submodel and be manageable by the caller; the
+// error does not reveal which condition failed. The shells' revisions are
+// locked in a fixed order before the check, so revoking a caller's
+// management of a shell cannot race with linking it.
+func (c *Coordinator) approvedAAS(ctx context.Context, tx *sql.Tx, request accessRequest, identifiers []string) ([]string, error) {
+	shells, err := lookupLinkedShells(ctx, tx, identifiers)
+	if err != nil {
+		return nil, err
+	}
+	aasUUIDs := make([]string, 0, len(shells))
+	for _, shell := range shells {
+		if _, err = LockObjectRevision(ctx, tx, shell.objectKey()); err != nil {
 			return nil, err
 		}
-		rejected := common.NewErrBadRequest(fmt.Sprintf("REBAC-PUTINHERITANCE-AAS AAS %q is unknown, does not reference the Submodel, or is not manageable", identifier))
-		if !found {
-			return nil, rejected
+		aasUUIDs = append(aasUUIDs, shell.authUUID)
+	}
+	for _, shell := range shells {
+		manageable, checkErr := c.canManage(ctx, tx, accessRequest{principal: request.principal, admin: request.admin, target: shell})
+		if checkErr != nil {
+			return nil, checkErr
 		}
-		manageable, err := c.canManage(ctx, accessRequest{principal: request.principal, admin: request.admin, target: accessTarget{kind: KindAAS, identifier: identifier, authUUID: authUUID}})
-		if err != nil {
-			return nil, err
-		}
-		referenced, err := SubmodelReferenced(ctx, c.db, authUUID, request.target.authUUID)
-		if err != nil {
-			return nil, err
+		referenced, checkErr := SubmodelReferenced(ctx, tx, shell.authUUID, request.target.authUUID)
+		if checkErr != nil {
+			return nil, checkErr
 		}
 		if !manageable || !referenced {
-			return nil, rejected
+			return nil, rejectedShell(shell.identifier)
 		}
-		aasUUIDs = append(aasUUIDs, authUUID)
 	}
-	return uniqueStrings(aasUUIDs), nil
+	return aasUUIDs, nil
+}
+
+// lookupLinkedShells resolves the shells to link, without duplicates and in
+// the order of their authorization UUIDs.
+func lookupLinkedShells(ctx context.Context, q Queryer, identifiers []string) ([]accessTarget, error) {
+	byUUID := map[string]accessTarget{}
+	for _, identifier := range identifiers {
+		identifier = strings.TrimSpace(identifier)
+		authUUID, found, err := LookupAuthUUID(ctx, q, KindAAS, identifier)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, rejectedShell(identifier)
+		}
+		byUUID[authUUID] = accessTarget{kind: KindAAS, identifier: identifier, authUUID: authUUID}
+	}
+	shells := make([]accessTarget, 0, len(byUUID))
+	for _, shell := range byUUID {
+		shells = append(shells, shell)
+	}
+	slices.SortFunc(shells, func(a, b accessTarget) int { return strings.Compare(a.authUUID, b.authUUID) })
+	return shells, nil
+}
+
+func rejectedShell(identifier string) error {
+	return common.NewErrBadRequest(fmt.Sprintf("REBAC-PUTINHERITANCE-AAS AAS %q is unknown, does not reference the Submodel, or is not manageable", identifier))
 }
 
 func (c *Coordinator) replaceLinks(ctx context.Context, tx *sql.Tx, request accessRequest, aasUUIDs []string) error {

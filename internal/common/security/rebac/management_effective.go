@@ -87,7 +87,9 @@ func effectiveActions(target accessTarget) []effectiveAction {
 }
 
 // handleEffective reports the caller's own rights on a target. Callers
-// without any right receive 404, so the endpoint never reveals existence.
+// without a confirmed right receive 404, so the endpoint never reveals
+// existence. A conditional ABAC right is not confirmed: whether its formula
+// holds for this resource is not evaluated here.
 func (c *Coordinator) handleEffective(w http.ResponseWriter, r *http.Request, request accessRequest) {
 	actions := effectiveActions(request.target)
 	rebac, err := c.effectiveReBAC(r, request, actions)
@@ -96,13 +98,13 @@ func (c *Coordinator) handleEffective(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 	document := effectiveDocument{Object: accessObject{Type: request.target.objectType(), ID: request.target.identifier, IDShortPath: request.target.elementPath}}
-	anyRight := false
+	confirmed := false
 	for index, action := range actions {
 		source := c.effectiveSource(r, request, action, rebac[index])
-		anyRight = anyRight || source != string(auth.ABACAccessNone)
+		confirmed = confirmed || confirmsAccess(source)
 		document.Rights = append(document.Rights, effectiveRight{Action: action.name, Source: source})
 	}
-	if !anyRight {
+	if !confirmed {
 		writeNotFound(w)
 		return
 	}
@@ -151,6 +153,11 @@ func (c *Coordinator) effectiveSource(r *http.Request, request accessRequest, ac
 	default:
 		return string(abac)
 	}
+}
+
+// confirmsAccess reports sources that prove the caller may use the resource.
+func confirmsAccess(source string) bool {
+	return source != string(auth.ABACAccessNone) && source != string(auth.ABACAccessConditional)
 }
 
 // resourcePath returns the API path of a target including the context path.

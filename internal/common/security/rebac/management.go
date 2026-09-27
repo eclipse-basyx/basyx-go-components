@@ -191,7 +191,7 @@ func (c *Coordinator) withTarget(base accessBase, requireManage bool, next acces
 			next(w, r, request)
 			return
 		}
-		allowed, err := c.canManage(r.Context(), request)
+		allowed, err := c.canManage(r.Context(), c.db, request)
 		if err != nil {
 			writeUnavailable(w, r, err)
 			return
@@ -273,20 +273,29 @@ func (c *Coordinator) isAdministrator(principal Principal) bool {
 	return false
 }
 
-// canManage reports whether the caller may manage the target's access.
-func (c *Coordinator) canManage(ctx context.Context, request accessRequest) (bool, error) {
+// canManage reports whether the caller may manage the target's access:
+// configured administrators, repository admins for repository targets, and
+// callers holding can_manage on other targets.
+func (c *Coordinator) canManage(ctx context.Context, q Queryer, request accessRequest) (bool, error) {
 	if request.admin {
 		return true, nil
 	}
-	return c.targetPermission(ctx, request.principal.SubjectKeys(), request.target, PermissionManage)
+	if request.target.kind.ObjectType == TypeRepository {
+		kind, covered := KindForObjectType(request.target.identifier)
+		if !covered {
+			return false, nil
+		}
+		return isRepositoryAdmin(ctx, q, kind, request.principal.SubjectKeys())
+	}
+	return targetPermission(ctx, q, request.principal.SubjectKeys(), request.target, PermissionManage)
 }
 
 // targetPermission evaluates permission on a management target.
-func (c *Coordinator) targetPermission(ctx context.Context, subjectKeys []string, target accessTarget, permission string) (bool, error) {
+func targetPermission(ctx context.Context, q Queryer, subjectKeys []string, target accessTarget, permission string) (bool, error) {
 	if target.kind.ObjectType == TypeSubmodel && target.elementPath != "" {
-		return hasElementPermission(ctx, c.db, target.authUUID, target.elementPath, subjectKeys, permission)
+		return hasElementPermission(ctx, q, target.authUUID, target.elementPath, subjectKeys, permission)
 	}
-	return hasPermission(ctx, c.db, target.kind, target.authUUID, subjectKeys, permission)
+	return hasPermission(ctx, q, target.kind, target.authUUID, subjectKeys, permission)
 }
 
 func decodeBody(r *http.Request, target any) error {

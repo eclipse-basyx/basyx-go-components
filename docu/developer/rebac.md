@@ -57,8 +57,15 @@ implemented and how to extend it. For behavior and concepts see the
 6. The grant set is stored in the request context. When a backend turns the
    ABAC QueryFilter into SQL, `reBACGrantPredicate` ORs the grant predicate
    of the matching resource kind and right into the condition. Backends need
-   no ReBAC-specific read code.
-7. An empty grant set keeps the ABAC decision; an error becomes `503`.
+   no ReBAC-specific read code. Caller query conditions also see the
+   operands of the outer row, and the elements of an outer Submodel, where
+   the grant predicate holds (`widenWithReBACGrant`).
+7. Upserts decide inside their transaction whether they create or update.
+   Backends then select the matching right (`SelectPutFormulaByExistence`)
+   and enforce it for the actual row, for example with
+   `ReBACOnlyRowCondition` and `ReBACOnlyCreateAllowed`, because the
+   decision of step 5 may predate a concurrent creation or deletion.
+8. An empty grant set keeps the ABAC decision; an error becomes `503`.
 
 Because grants are subqueries, every backend query of a request evaluates
 them again. Asynchronous work that captured the request context therefore
@@ -139,9 +146,18 @@ guard, because access changes are not resource mutations. The routes sit
 behind OIDC but outside ABAC route evaluation and authorize with
 `can_manage` or administrator status.
 
-Changes lock the object revision (`LockObjectRevision`), compare it with
+Changes lock the object revision (`lockManaged`), check that the resource
+still exists, authorize the caller **again under the lock**, compare
 `If-Match`, apply the grant diff, append an audit event and bump the
-revision in one transaction.
+revision in one transaction. The check before the transaction may be stale:
+a revocation that commits while the change waits for the lock always wins.
+Shell links also lock the linked shells, in the order of their
+authorization UUIDs. ETags have the form `"<revision>-<hash of the object
+key>"`, so the ETag of one object never matches another.
+
+`/effective` only answers `200` for a confirmed right. `abac-conditional`
+means the ABAC formula was not evaluated for the resource; it never counts
+as proof of access, so the endpoint never reveals existence.
 
 ## Audit trail
 

@@ -205,22 +205,25 @@ func TestRevocationKeepsSurvivingABACAccess(t *testing.T) {
 }
 
 func TestQueryOperandsOnlySeeVisibleRows(t *testing.T) {
-	visibleID := createSubmodel(t, submodelURL, "alice", "query-visible")
-	hiddenID := createSubmodel(t, submodelURL, "alice", "query-hidden")
+	serial := unique("serial")
+	visibleID := createSubmodel(t, submodelURL, "alice", "query-visible", property("SerialNumber", serial))
+	hiddenID := createSubmodel(t, submodelURL, "alice", "query-hidden", property("SerialNumber", serial))
 	addGrants(t, "alice", submodelAccess(submodelURL, visibleID), userGrant(t, "viewer", "bob"))
 	for _, test := range []struct {
-		idShort  string
+		field    string
+		value    string
 		expected []string
 	}{
-		{"query-visible", []string{visibleID}},
-		{"query-hidden", nil},
+		{"$sm#idShort", "query-visible", []string{visibleID}},
+		{"$sm#idShort", "query-hidden", nil},
+		{"$sme.SerialNumber#value", serial, []string{visibleID}},
 	} {
 		query := map[string]any{"$condition": map[string]any{
-			"$eq": []any{map[string]any{"$field": "$sm#idShort"}, map[string]any{"$strVal": test.idShort}},
+			"$eq": []any{map[string]any{"$field": test.field}, map[string]any{"$strVal": test.value}},
 		}}
 		result := call(t, "bob", http.MethodPost, submodelURL+"/query/submodels", query, nil)
 		expectStatus(t, http.StatusOK, result, "query")
-		require.ElementsMatch(t, test.expected, resultIDs(t, result), "query operands must not reach hidden rows (%s)", hiddenID)
+		require.ElementsMatch(t, test.expected, resultIDs(t, result), "%s must match shared rows only, never %s", test.field, hiddenID)
 	}
 }
 

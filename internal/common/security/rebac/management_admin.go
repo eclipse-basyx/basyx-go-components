@@ -66,14 +66,10 @@ func (c *Coordinator) repositoryRequest(w http.ResponseWriter, r *http.Request) 
 	}
 	request := accessRequest{principal: principal, admin: c.isAdministrator(principal),
 		target: accessTarget{kind: kindRepository, identifier: kind.ObjectType}}
-	allowed := request.admin
-	if !allowed {
-		var err error
-		allowed, err = isRepositoryAdmin(r.Context(), c.db, kind, principal.SubjectKeys())
-		if err != nil {
-			writeUnavailable(w, r, err)
-			return accessRequest{}, false
-		}
+	allowed, err := c.canManage(r.Context(), c.db, request)
+	if err != nil {
+		writeUnavailable(w, r, err)
+		return accessRequest{}, false
 	}
 	if !allowed {
 		writeNotFound(w)
@@ -170,11 +166,11 @@ func (c *Coordinator) handleRecoverOwners(w http.ResponseWriter, r *http.Request
 	}
 	slog.InfoContext(r.Context(), "ReBAC ownership recovered", "event.code", "REBAC-ADMIN-OWNERS",
 		"rebac.actor", principal.UserKey(), "rebac.object", target.objectKey())
-	respondAccess(w, document)
+	respondAccess(w, request.target, document)
 }
 
 func (c *Coordinator) recoverOwners(r *http.Request, tx *sql.Tx, request accessRequest, owners []grantInput) (accessDocument, error) {
-	if err := c.lockTarget(r, tx, request.target); err != nil {
+	if err := c.lockTarget(r, tx, request); err != nil {
 		return accessDocument{}, err
 	}
 	current, err := ListGrants(r.Context(), tx, request.target.objectKey())

@@ -199,6 +199,8 @@ func TestEffectiveRightsReportSourcesWithoutRevealingExistence(t *testing.T) {
 	}
 	require.Equal(t, map[string]string{"read": "rebac", "update": "rebac", "delete": "none", "execute": "none", "manage": "none"}, sources)
 	expectStatus(t, http.StatusNotFound, call(t, "eve", http.MethodGet, submodelAccess(submodelURL, identifier)+"/effective", nil, nil), "no rights, no existence")
+	expectStatus(t, http.StatusNotFound, call(t, "userx", http.MethodGet, submodelAccess(submodelURL, identifier)+"/effective", nil, nil),
+		"a conditional ABAC right that does not hold for the Submodel must not reveal its existence")
 	adminEffective := call(t, "admin", http.MethodGet, submodelAccess(submodelURL, identifier)+"/effective", nil, nil)
 	expectStatus(t, http.StatusOK, adminEffective, "ABAC administrator")
 	require.Contains(t, string(adminEffective.body), `"source":"abac"`)

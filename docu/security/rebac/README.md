@@ -104,7 +104,8 @@ Therefore:
 - A grant only widens access to the granted resource. A Submodel grant does
   not make the enclosing shell of a superpath visible, and query conditions
   over related resources (for example `$sm` fields inside an AAS query) are
-  still evaluated with ABAC visibility only.
+  still evaluated with ABAC visibility only. Conditions on the fields and
+  elements of a shared resource itself match as for a direct read.
 
 ## Covered services and routes
 

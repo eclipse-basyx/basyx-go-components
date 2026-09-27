@@ -350,8 +350,9 @@ prerequisite; `CONFIG-REBAC-*` codes name an invalid setting.
 - Repository admins see every resource of their family.
 - History, `$recent-changes`, event feeds, `$signed`, `/verify` and
   historical passports stay ABAC-only.
-- Query conditions over related resources (`$sm`/`$sme` inside other
-  resource queries) only see ABAC-visible related rows.
+- Query conditions on related resources (for example `$sm` fields in a
+  shell query) only see ABAC-visible related rows. Conditions on the fields
+  and elements of a shared resource itself match as for a direct read.
 - Items of `/upload` and of bulk requests are authorized one by one, so an
   upload can be applied partially, as with ABAC.
 

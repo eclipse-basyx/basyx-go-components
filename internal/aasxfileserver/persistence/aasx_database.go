@@ -260,6 +260,39 @@ func (p *AASXFileServerDatabase) putPackage(ctx context.Context, packageID strin
 	return record, updated, nil
 }
 
+// authorizePackageUpsert enforces the right that the upsert actually needs.
+// The access decision is taken before the upload is staged, so the package
+// may have been created or deleted by someone else in the meantime: an
+// existing package needs UPDATE on that package, a new one the right to
+// create packages.
+func authorizePackageUpsert(ctx context.Context, tx *sql.Tx, packageDBID int64, exists bool) error {
+	if !exists {
+		if allowed, restricted := auth.ReBACOnlyCreateAllowed(ctx, auth.SemanticResourceAASXPackage); restricted && !allowed {
+			return common.NewErrDenied("AASXFS-PUTPACKAGE-CREATEDENIED creating this package is not allowed")
+		}
+		return nil
+	}
+	updateCtx := auth.SelectPutFormulaByExistence(ctx, true)
+	granted, restricted := auth.ReBACOnlyRowCondition(updateCtx, auth.SemanticResourceAASXPackage, goqu.I("aasx_package.auth_uuid"))
+	if !restricted {
+		return nil
+	}
+	query, args, err := goqu.Dialect("postgres").From("aasx_package").Select(goqu.L("1")).
+		Where(goqu.C("id").Eq(packageDBID), granted).Prepared(true).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("AASXFS-PUTPACKAGE-BUILDAUTHORIZE " + err.Error())
+	}
+	var marker int
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&marker)
+	if errors.Is(err, sql.ErrNoRows) {
+		return common.NewErrDenied("AASXFS-PUTPACKAGE-UPDATEDENIED updating this package is not allowed")
+	}
+	if err != nil {
+		return common.NewInternalServerError("AASXFS-PUTPACKAGE-AUTHORIZE " + err.Error())
+	}
+	return nil
+}
+
 func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, newOID int64, aasIDs []string, fileName string, contentType string, allowUpdate bool) (*PackageRecord, bool, error) {
 	dialect := goqu.Dialect("postgres")
 	selectSQL, selectArgs, err := dialect.From("aasx_package").Select("id", "file_oid", "file_name").
@@ -276,6 +309,9 @@ func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, new
 	}
 	if exists && !allowUpdate {
 		return nil, false, common.NewErrConflict("AASXFS-PUTPACKAGE-CONFLICT packageId already exists")
+	}
+	if err = authorizePackageUpsert(ctx, tx, existingID, exists); err != nil {
+		return nil, false, err
 	}
 	if fileName == "" {
 		fileName = strings.TrimSpace(existingFileName)

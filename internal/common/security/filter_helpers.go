@@ -747,38 +747,81 @@ func decorateConditionVisibleCollector(
 	if collector == nil || authorized == nil {
 		return collector
 	}
+	grant, hasGrant := reBACGrantPredicate(ctx, collector)
 	return collector.WithFieldValueDecorator(func(access grammar.SemanticFieldAccess) (grammar.FieldValueDecoration, error) {
 		target := SemanticAccessTarget{
 			Resource: semanticResourceFromField(access.Field),
 			Field:    access.Field,
 		}
-		view, found := authorized.accessView(target.Resource)
-		if !found || view.decision == AccessViewDenied {
-			return grammar.FieldValueDecoration{SQLValue: goqu.L("NULL")}, nil
+		decoration, err := abacConditionDecoration(authorized, target, access)
+		if err != nil || !hasGrant || !withinOuterRow(authorized.outer.resource, target.Resource) {
+			return decoration, err
 		}
-		if view.decision == AccessViewUnrestricted ||
-			view.queryFilter == nil && len(view.alternatives) == 0 {
-			return grammar.FieldValueDecoration{SQLValue: access.SQLValue, IncludeResolved: true}, nil
-		}
-		if target.Resource == authorized.outer.resource &&
-			fieldVisibleAfterOuterSelection(view, target) {
-			return grammar.FieldValueDecoration{SQLValue: access.SQLValue, IncludeResolved: true}, nil
-		}
-
-		guard, resolved, guarded, err := compileConditionVisibilityGuard(view, target)
-		if err != nil {
-			return grammar.FieldValueDecoration{}, err
-		}
-		if !guarded {
-			return grammar.FieldValueDecoration{SQLValue: access.SQLValue, IncludeResolved: true}, nil
-		}
-		return grammar.FieldValueDecoration{
-			SQLValue:           access.SQLValue,
-			AdditionalResolved: resolved,
-			IncludeResolved:    true,
-			VisibilityWitness:  guard,
-		}, nil
+		return widenWithReBACGrant(decoration, access, grant), nil
 	})
+}
+
+// abacConditionDecoration returns the value of a caller condition operand as
+// the ABAC views of the query allow to observe it.
+func abacConditionDecoration(
+	authorized *AuthorizedQuery,
+	target SemanticAccessTarget,
+	access grammar.SemanticFieldAccess,
+) (grammar.FieldValueDecoration, error) {
+	view, found := authorized.accessView(target.Resource)
+	if !found || view.decision == AccessViewDenied {
+		return grammar.FieldValueDecoration{SQLValue: goqu.L("NULL")}, nil
+	}
+	visible := grammar.FieldValueDecoration{SQLValue: access.SQLValue, IncludeResolved: true}
+	if view.decision == AccessViewUnrestricted ||
+		view.queryFilter == nil && len(view.alternatives) == 0 {
+		return visible, nil
+	}
+	if target.Resource == authorized.outer.resource &&
+		fieldVisibleAfterOuterSelection(view, target) {
+		return visible, nil
+	}
+
+	guard, resolved, guarded, err := compileConditionVisibilityGuard(view, target)
+	if err != nil {
+		return grammar.FieldValueDecoration{}, err
+	}
+	if !guarded {
+		return visible, nil
+	}
+	return grammar.FieldValueDecoration{
+		SQLValue:           access.SQLValue,
+		AdditionalResolved: resolved,
+		IncludeResolved:    true,
+		VisibilityWitness:  guard,
+	}, nil
+}
+
+// withinOuterRow reports operands that belong to the row the query returns:
+// fields of the outer resource and the elements of an outer Submodel.
+func withinOuterRow(outer SemanticResourceKind, resource SemanticResourceKind) bool {
+	return resource == outer || outer == SemanticResourceSM && resource == SemanticResourceSME
+}
+
+// widenWithReBACGrant also shows an operand of the outer row where ReBAC
+// grants read access to that row. A ReBAC grant is not limited by ABAC
+// filters of the granted resource, so the caller may match everything a
+// direct read of the row returns. Operands of other resources keep the ABAC
+// visibility.
+func widenWithReBACGrant(
+	decoration grammar.FieldValueDecoration,
+	access grammar.SemanticFieldAccess,
+	grant exp.Expression,
+) grammar.FieldValueDecoration {
+	switch {
+	case !decoration.IncludeResolved:
+		return grammar.FieldValueDecoration{SQLValue: access.SQLValue, IncludeResolved: true, VisibilityWitness: grant}
+	case decoration.VisibilityWitness != nil:
+		decoration.VisibilityWitness = goqu.Or(decoration.VisibilityWitness, grant)
+		return decoration
+	default:
+		return decoration
+	}
 }
 
 func fieldVisibleAfterOuterSelection(

@@ -403,6 +403,25 @@ func ReBACOnlyRowCondition(ctx context.Context, resource SemanticResourceKind, a
 	return goqu.L("FALSE"), true
 }
 
+// ReBACOnlyCreateAllowed reports whether the ReBAC grants of a request that
+// only ReBAC allows permit creating resources of the kind. restricted is
+// false when ABAC decides the request. Backends call it when they find out
+// inside their transaction that an upsert creates the resource.
+func ReBACOnlyCreateAllowed(ctx context.Context, resource SemanticResourceKind) (allowed bool, restricted bool) {
+	createCtx := SelectFormulaForRight(ctx, grammar.RightsEnumCREATE)
+	grants := ReBACGrantsFromContext(createCtx)
+	queryFilter := GetQueryFilter(createCtx)
+	if grants.IsEmpty() || queryFilter == nil || !isFalseFormula(queryFilter.Formula) {
+		return false, false
+	}
+	for _, entry := range grants.entriesFor(resource, []grammar.RightsEnum{grammar.RightsEnumCREATE}) {
+		if entry.allOfKind {
+			return true, true
+		}
+	}
+	return false, true
+}
+
 func isFalseFormula(formula *grammar.LogicalExpression) bool {
 	return formula != nil && formula.Boolean != nil && !*formula.Boolean
 }

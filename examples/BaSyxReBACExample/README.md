@@ -226,8 +226,8 @@ ALICE=$(token alice)
 curl -i -H "Authorization: Bearer $ALICE" \
   "http://localhost:8082/submodels/<base64url id>/\$access"
 
-# Replace the grants; If-Match must carry the current ETag
-curl -X PUT -H "Authorization: Bearer $ALICE" -H 'If-Match: "1"' \
+# Replace the grants; If-Match must carry the ETag returned above
+curl -X PUT -H "Authorization: Bearer $ALICE" -H 'If-Match: <ETag from above, with quotes>' \
   -H 'Content-Type: application/json' \
   "http://localhost:8082/submodels/<base64url id>/\$access/grants" \
   -d '{"grants":[

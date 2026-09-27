@@ -489,6 +489,9 @@ func (s *AASXFileServerAPIAPIService) PutAASXByPackageId(ctx context.Context, pa
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutPackage"), nil
 	}
 

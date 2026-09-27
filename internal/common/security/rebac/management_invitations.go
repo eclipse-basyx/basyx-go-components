@@ -174,6 +174,9 @@ func (c *Coordinator) handleCreateInvitation(w http.ResponseWriter, r *http.Requ
 		"maxUses": maxUses, "restricted": invitation.Restricted,
 	}
 	err = common.ExecuteInTransaction(c.db, "REBAC-CREATEINVITATION-STARTTX", "REBAC-CREATEINVITATION-COMMIT", func(tx *sql.Tx) error {
+		if _, lockErr := c.lockManaged(r.Context(), tx, request); lockErr != nil {
+			return lockErr
+		}
 		if _, txErr := execDataset(r.Context(), tx, "REBAC-CREATEINVITATION", dialect.Insert(invitationTable).Rows(record).Prepared(true)); txErr != nil {
 			return txErr
 		}
@@ -228,6 +231,9 @@ func (c *Coordinator) handleRevokeInvitation(w http.ResponseWriter, r *http.Requ
 		goqu.C("revoked_at").IsNull(),
 	).Prepared(true)
 	err := common.ExecuteInTransaction(c.db, "REBAC-REVOKEINVITATION-STARTTX", "REBAC-REVOKEINVITATION-COMMIT", func(tx *sql.Tx) error {
+		if _, lockErr := c.lockManaged(r.Context(), tx, request); lockErr != nil {
+			return lockErr
+		}
 		result, txErr := execDataset(r.Context(), tx, "REBAC-REVOKEINVITATION", ds)
 		if txErr != nil {
 			return txErr
