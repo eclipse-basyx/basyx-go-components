@@ -263,9 +263,10 @@ func nullableRawJSON(value *string) json.RawMessage {
 	return json.RawMessage(*value)
 }
 
-// reconcileSubmodelElementRows diffs old and new rows. Every deleted old row is
-// a delete candidate, so the candidate count is the expected number of deleted
-// elements; deletes only lists the topmost candidates.
+// reconcileSubmodelElementRows diffs old and new rows. Deletes lists every
+// deleted element path, not only subtree roots, so the reconciliation
+// statement resolves them with indexed equality lookups. The old rows are the
+// complete stored subtree read under the Submodel lock.
 func reconcileSubmodelElementRows(
 	oldRows []submodelelements.ReconciliationElementRow,
 	newRows []submodelelements.ReconciliationElementRow,
@@ -296,29 +297,19 @@ func reconcileSubmodelElementRows(
 		}
 	}
 
-	deleteCandidates := make(map[string]bool)
+	deletes := make([]string, 0)
 	for _, previous := range oldRows {
 		inserted, exists := targetInsertedByPath[previous.Path]
 		if !exists || inserted {
-			deleteCandidates[previous.Path] = true
+			deletes = append(deletes, previous.Path)
 		}
-	}
-	deletes := make([]string, 0, len(deleteCandidates))
-	for _, previous := range oldRows {
-		if !deleteCandidates[previous.Path] {
-			continue
-		}
-		if previous.ParentPath != "" && deleteCandidates[previous.ParentPath] {
-			continue
-		}
-		deletes = append(deletes, previous.Path)
 	}
 	sort.Strings(deletes)
 	return submodelReconciliationPlan{
 		Updates:                 updates,
 		Inserts:                 inserts,
 		Deletes:                 deletes,
-		ExpectedDeletedElements: len(deleteCandidates),
+		ExpectedDeletedElements: len(deletes),
 	}, nil
 }
 

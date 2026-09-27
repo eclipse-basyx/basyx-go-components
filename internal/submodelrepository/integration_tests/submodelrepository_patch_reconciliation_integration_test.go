@@ -187,6 +187,23 @@ func TestPutSubmodelElementReconcilesEntityStatementsAndAnnotations(t *testing.T
 	require.Equal(t, "2", fixture.element("Machine.Serial")["value"])
 }
 
+func TestPutSubmodelElementClearsLargeCollection(t *testing.T) {
+	const childCount = 5000
+	children := make([]any, 0, childCount)
+	for index := range childCount {
+		children = append(children, reconciliationTestProperty(fmt.Sprintf("P%05d", index), "value"))
+	}
+	fixture := newElementReconciliationFixture(t, "put-sme-large-clear", reconciliationTestCollection("Items", children...))
+	before := fixture.rows()
+	require.Len(t, before, childCount+1)
+
+	fixture.send(http.MethodPut, fixture.elementEndpoint("Items"), reconciliationTestCollection("Items"))
+
+	after := fixture.rows()
+	require.Len(t, after, 1)
+	require.Equal(t, before["Items"].id, after["Items"].id)
+}
+
 func TestPatchSubmodelElementValueReplacesCollectionChildren(t *testing.T) {
 	fixture := newElementReconciliationFixture(t, "patch-sme-collection",
 		reconciliationTestCollection("Items", reconciliationTestProperty("A", "a"), reconciliationTestProperty("B", "b")),

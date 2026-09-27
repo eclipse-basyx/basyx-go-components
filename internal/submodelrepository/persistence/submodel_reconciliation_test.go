@@ -66,6 +66,17 @@ func TestSubmodelReconciliationQueryHasConstantSingleStatementShape(t *testing.T
 	require.Len(t, args, 2)
 }
 
+func TestReconciliationDeleteTargetsUseEqualityLookups(t *testing.T) {
+	query, _, err := newReconciliationQueryBuilder().build([]byte(`{}`), "sm")
+	require.NoError(t, err)
+
+	deleteTargets := regexp.MustCompile(`delete_element_targets AS \((.*?)\), changed_file_rows AS`).FindStringSubmatch(query)
+	require.Len(t, deleteTargets, 2)
+	require.Contains(t, deleteTargets[1], `("sme"."idshort_path" = "d"."path")`)
+	require.NotContains(t, deleteTargets[1], "left(")
+	require.NotContains(t, deleteTargets[1], " OR ")
+}
+
 func TestExecuteSubmodelReconciliationUsesOneQueryRowStatement(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -165,7 +176,7 @@ func TestReconciliationPlanDeletesOmittedSubtreeAndCompactsSiblingPosition(t *te
 
 	plan := buildReconciliationPlanForTest(t, previous, target)
 
-	require.Equal(t, []string{"Group.Removed"}, plan.Deletes)
+	require.Equal(t, []string{"Group.Removed", "Group.Removed.Descendant"}, plan.Deletes)
 	require.Equal(t, 2, plan.ExpectedDeletedElements)
 	require.Len(t, plan.Updates, 1)
 	require.Equal(t, "Group.Keep", plan.Updates[0].Path)
@@ -180,7 +191,7 @@ func TestReconciliationPlanCountsSubtreeOfTypeChangedElement(t *testing.T) {
 
 	plan := buildReconciliationPlanForTest(t, previous, target)
 
-	require.Equal(t, []string{"Group"}, plan.Deletes)
+	require.Equal(t, []string{"Group", "Group.Child"}, plan.Deletes)
 	require.Equal(t, 2, plan.ExpectedDeletedElements)
 	require.Len(t, plan.Inserts, 1)
 }
