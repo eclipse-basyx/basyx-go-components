@@ -129,7 +129,7 @@ transaction of a mutation. They are no-ops while ReBAC is disabled.
   records derivations of synchronized descriptors and discovery entries.
 - `RecordReBACResourceDeleted` removes grants, invitations, links and
   derivations of the resource.
-- `RecordReBACSubmodelReferenceRemoved` ends shell links whose reference is
+- `RecordReBACSubmodelReferencesRemoved` ends shell links whose reference is
   gone.
 - `RecordReBACSubmodelCreatedWithShell` links Submodels created with a
   passport to its shell.
@@ -154,12 +154,15 @@ a revocation that commits while the change waits for the lock always wins.
 Shell links also lock the linked shells, in the order of their
 authorization UUIDs.
 
-**Lock order.** Every writer locks access revisions (`rebac_object_revision`,
-several in key order) before it touches invitation or grant rows. Accepting
-an invitation therefore reads the invitation's object first, locks its
-revision and only then consumes the invitation, and deleting a resource
-locks the revisions of the resource and all its element paths first.
-Keep this order in new code, or concurrent requests deadlock. ETags have the form `"<revision>-<hash of the object
+**Lock order.** Every writer locks access revisions (`rebac_object_revision`)
+before it touches invitation, grant or link rows. When it locks several
+revisions, it locks Submodel revisions before shell revisions and each kind
+in key order. Accepting an invitation therefore reads the invitation's
+object first, locks its revision and only then consumes the invitation;
+deleting a resource locks the revisions of the resource and all its element
+paths first; and removing Submodel references locks the affected Submodels'
+revisions, sorted, before it deletes their links. Keep this order in new
+code, or concurrent requests deadlock. ETags have the form `"<revision>-<hash of the object
 key>"`, so the ETag of one object never matches another.
 
 `/effective` only answers `200` for a confirmed right. `abac-conditional`

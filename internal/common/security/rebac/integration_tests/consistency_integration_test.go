@@ -244,3 +244,27 @@ func TestAcceptingAndRevokingAnInvitationConcurrentlyNeverFails(t *testing.T) {
 		require.Equal(t, http.StatusNoContent, revocation.status, "attempt %d: revoke: %s", attempt, revocation.body)
 	}
 }
+
+func TestChangingLinksWhileRemovingTheReferenceNeverFails(t *testing.T) {
+	bootstrapCreators(t)
+	aliceBearer := token(t, "alice")
+	for attempt := 0; attempt < 20; attempt++ {
+		submodelID := createSubmodel(t, environmentURL, "alice", "link-race")
+		shellID := unique("aas")
+		expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, environmentURL+"/shells", shell(shellID, submodelID), nil), "create shell")
+		accessURL := submodelAccess(environmentURL, submodelID)
+		_, etag := readAccess(t, "alice", accessURL)
+		approved := call(t, "alice", http.MethodPut, accessURL+"/inheritance", map[string]any{"aasIds": []string{shellID}}, map[string]string{"If-Match": etag})
+		expectStatus(t, http.StatusOK, approved, "approve link")
+
+		start := make(chan struct{})
+		unlinked := asyncCallAfter(start, aliceBearer, http.MethodPut, accessURL+"/inheritance",
+			jsonBody(t, map[string]any{"aasIds": []string{}}), "application/json", map[string]string{"If-Match": approved.header.Get("ETag")})
+		dereferenced := asyncCallAfter(start, aliceBearer, http.MethodDelete,
+			environmentURL+"/shells/"+enc(shellID)+"/submodel-refs/"+enc(submodelID), nil, "", nil)
+		close(start)
+		links, reference := <-unlinked, <-dereferenced
+		require.Contains(t, []int{http.StatusOK, http.StatusPreconditionFailed}, links.status, "attempt %d: links: %s", attempt, links.body)
+		require.Equal(t, http.StatusNoContent, reference.status, "attempt %d: reference: %s", attempt, reference.body)
+	}
+}

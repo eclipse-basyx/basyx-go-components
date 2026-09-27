@@ -187,28 +187,64 @@ func deleteLinksOfResource(ctx context.Context, tx *sql.Tx, kind ResourceKind, a
 	}
 }
 
-// SubmodelReferenceRemoved removes the approved link between a shell and a
-// Submodel whose reference the shell dropped. Links are also validated
-// against live references when evaluated, so this only keeps state tidy.
-func (c *Coordinator) SubmodelReferenceRemoved(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
+// SubmodelReferencesRemoved removes the approved links between a shell and
+// the Submodels whose references the shell dropped. Like changes of the
+// links, it locks the Submodels' access revisions in key order before it
+// touches a link, so both never deadlock. Links are also validated against
+// live references when evaluated, so this only keeps state tidy.
+func (c *Coordinator) SubmodelReferencesRemoved(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifiers []string) error {
 	aasUUID, found, err := LookupAuthUUID(ctx, tx, KindAAS, aasIdentifier)
 	if err != nil || !found {
 		return err
 	}
-	submodelUUID, found, err := LookupAuthUUID(ctx, tx, KindSubmodel, submodelIdentifier)
-	if err != nil || !found {
+	submodelUUIDs, err := submodelsLinkedToShell(ctx, tx, aasUUID, submodelIdentifiers)
+	if err != nil {
 		return err
 	}
-	links, err := DeleteSubmodelLinks(ctx, tx, LinkBetween(aasUUID, submodelUUID))
-	if err != nil || len(links) == 0 {
-		return err
+	for _, submodelUUID := range submodelUUIDs {
+		if _, err = LockObjectRevision(ctx, tx, ResourceKey(TypeSubmodel, submodelUUID)); err != nil {
+			return err
+		}
 	}
-	submodelKey := ResourceKey(TypeSubmodel, submodelUUID)
-	if _, err = LockObjectRevision(ctx, tx, submodelKey); err != nil {
-		return err
+	for _, submodelUUID := range submodelUUIDs {
+		links, deleteErr := DeleteSubmodelLinks(ctx, tx, LinkBetween(aasUUID, submodelUUID))
+		if deleteErr != nil {
+			return deleteErr
+		}
+		if len(links) > 0 {
+			if _, err = BumpObjectRevision(ctx, tx, ResourceKey(TypeSubmodel, submodelUUID)); err != nil {
+				return err
+			}
+		}
 	}
-	_, err = BumpObjectRevision(ctx, tx, submodelKey)
-	return err
+	return nil
+}
+
+// submodelsLinkedToShell selects, without locking, the authorization UUIDs of the
+// given Submodels that have a link to the shell, in key order.
+func submodelsLinkedToShell(ctx context.Context, q Queryer, aasUUID string, submodelIdentifiers []string) ([]string, error) {
+	ds := dialect.From(goqu.T("rebac_submodel_link").As("link")).
+		InnerJoin(KindSubmodel.Rows().As("linked"), goqu.On(goqu.I("linked.object_uuid").Eq(goqu.I("link.submodel_uuid")))).
+		Select(goqu.L("link.submodel_uuid::text")).
+		Where(
+			goqu.I("link.aas_uuid").Eq(goqu.L("?::uuid", aasUUID)),
+			goqu.I("linked.identifier").In(submodelIdentifiers),
+		).
+		Order(goqu.I("link.submodel_uuid").Asc()).Prepared(true)
+	rows, err := queryDataset(ctx, q, "REBAC-LINKEDSUBMODELS", ds)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var submodelUUIDs []string
+	for rows.Next() {
+		var submodelUUID string
+		if err = rows.Scan(&submodelUUID); err != nil {
+			return nil, fmt.Errorf("REBAC-LINKEDSUBMODELS-SCAN: %w", err)
+		}
+		submodelUUIDs = append(submodelUUIDs, submodelUUID)
+	}
+	return submodelUUIDs, rows.Err()
 }
 
 // SubmodelCreatedWithShell approves the link between a shell and a Submodel

@@ -2358,7 +2358,7 @@ func deleteSubmodelReferenceInAssetAdministrationShellTx(ctx context.Context, tx
 	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 		return common.NewInternalServerError("AASREPO-DELSMREF-EXECDELETEREFERENCE " + err.Error())
 	}
-	if err = auth.RecordReBACSubmodelReferenceRemoved(ctx, tx, aasIdentifier, submodelIdentifier); err != nil {
+	if err = auth.RecordReBACSubmodelReferencesRemoved(ctx, tx, aasIdentifier, []string{submodelIdentifier}); err != nil {
 		return common.NewInternalServerError("AASREPO-DELSMREF-REBACLINK " + err.Error())
 	}
 	return nil
@@ -2390,13 +2390,14 @@ func recordRemovedSubmodelReferences(ctx context.Context, tx *sql.Tx, aasIdentif
 	for _, submodelIdentifier := range referencedSubmodelIdentifiers(current) {
 		kept[submodelIdentifier] = struct{}{}
 	}
+	var removed []string
 	for _, submodelIdentifier := range referencedSubmodelIdentifiers(previous) {
-		if _, stillReferenced := kept[submodelIdentifier]; stillReferenced {
-			continue
+		if _, stillReferenced := kept[submodelIdentifier]; !stillReferenced {
+			removed = append(removed, submodelIdentifier)
 		}
-		if err := auth.RecordReBACSubmodelReferenceRemoved(ctx, tx, aasIdentifier, submodelIdentifier); err != nil {
-			return common.NewInternalServerError("AASREPO-PUTAAS-REBACLINK " + err.Error())
-		}
+	}
+	if err := auth.RecordReBACSubmodelReferencesRemoved(ctx, tx, aasIdentifier, removed); err != nil {
+		return common.NewInternalServerError("AASREPO-PUTAAS-REBACLINK " + err.Error())
 	}
 	return nil
 }

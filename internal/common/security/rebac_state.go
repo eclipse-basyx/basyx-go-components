@@ -67,7 +67,7 @@ func ReBACSourceFromContext(ctx context.Context) (ReBACSource, bool) {
 type ReBACState interface {
 	ResourceCreated(ctx context.Context, tx *sql.Tx, resource SemanticResourceKind, identifier string) error
 	ResourceDeleted(ctx context.Context, tx *sql.Tx, resource SemanticResourceKind, identifier string) error
-	SubmodelReferenceRemoved(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error
+	SubmodelReferencesRemoved(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifiers []string) error
 	SubmodelCreatedWithShell(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error
 }
 
@@ -109,14 +109,15 @@ func RecordReBACResourceDeleted(ctx context.Context, tx *sql.Tx, resource Semant
 	return state.ResourceDeleted(ctx, tx, resource, identifier)
 }
 
-// RecordReBACSubmodelReferenceRemoved removes the approved inheritance link
-// between an AAS and a Submodel whose reference was removed in tx.
-func RecordReBACSubmodelReferenceRemoved(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
+// RecordReBACSubmodelReferencesRemoved removes the approved inheritance
+// links between an AAS and the Submodels whose references were removed in
+// tx. Pass all references one mutation removes in a single call.
+func RecordReBACSubmodelReferencesRemoved(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifiers []string) error {
 	state := ReBACStateFromContext(ctx)
-	if state == nil {
+	if state == nil || len(submodelIdentifiers) == 0 {
 		return nil
 	}
-	return state.SubmodelReferenceRemoved(ctx, tx, aasIdentifier, submodelIdentifier)
+	return state.SubmodelReferencesRemoved(ctx, tx, aasIdentifier, submodelIdentifiers)
 }
 
 // RecordReBACSubmodelCreatedWithShell approves the inheritance link between

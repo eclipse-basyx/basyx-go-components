@@ -326,9 +326,6 @@ func (c *Coordinator) redeemInvitation(ctx context.Context, tx *sql.Tx, principa
 	return accepted, err
 }
 
-// consumeInvitation atomically counts one use of a valid invitation, so
-// concurrent redemptions never exceed maxUses. Invalid, expired, revoked,
-// exhausted and foreign invitations are indistinguishable.
 // invitationObjectKey returns the object an invitation token belongs to,
 // without locking the invitation.
 func invitationObjectKey(ctx context.Context, q Queryer, token string) (string, bool, error) {
@@ -339,6 +336,9 @@ func invitationObjectKey(ctx context.Context, q Queryer, token string) (string, 
 	return objectKey, found, err
 }
 
+// consumeInvitation atomically counts one use of a valid invitation, so
+// concurrent redemptions never exceed maxUses. Invalid, expired, revoked,
+// exhausted and foreign invitations are indistinguishable.
 func consumeInvitation(ctx context.Context, tx *sql.Tx, token string, principal Principal) (redeemedInvitation, bool, error) {
 	ds := dialect.Update(invitationTable).Set(goqu.Record{"used_count": goqu.L("used_count + 1")}).Where(
 		goqu.C("token_hash").Eq(hashToken(token)), goqu.C("revoked_at").IsNull(),
