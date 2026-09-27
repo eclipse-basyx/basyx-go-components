@@ -32,6 +32,7 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -152,7 +153,7 @@ func (c *Coordinator) ResourceDeleted(ctx context.Context, tx *sql.Tx, resource 
 		return err
 	}
 	resourceKey := ResourceKey(kind.ObjectType, authUUID)
-	if _, err = LockObjectRevision(ctx, tx, resourceKey); err != nil {
+	if err = lockResourceRevisions(ctx, tx, resourceKey, authUUID); err != nil {
 		return err
 	}
 	if _, err = deleteLinksOfResource(ctx, tx, kind, authUUID); err != nil {
@@ -245,6 +246,31 @@ func (c *Coordinator) SubmodelCreatedWithShell(ctx context.Context, tx *sql.Tx, 
 	}
 	_, err = BumpObjectRevision(ctx, tx, submodelKey)
 	return err
+}
+
+// lockResourceRevisions locks the access revisions of a resource and of its
+// element paths in key order. Every writer locks revisions before invitation
+// and grant rows, so deleting a resource never deadlocks with an access
+// change of one of its elements.
+func lockResourceRevisions(ctx context.Context, tx *sql.Tx, resourceKey string, authUUID string) error {
+	if _, err := LockObjectRevision(ctx, tx, resourceKey); err != nil {
+		return err
+	}
+	ds := dialect.From("rebac_object_revision").Select(goqu.C("object_key")).
+		Where(goqu.C("object_key").Like(TypeElement + ":" + authUUID + ".%")).
+		Order(goqu.C("object_key").Asc()).ForUpdate(exp.Wait).Prepared(true)
+	rows, err := queryDataset(ctx, tx, "REBAC-LOCKRESOURCEREVISIONS", ds)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	var locked string
+	for rows.Next() {
+		if err = rows.Scan(&locked); err != nil {
+			return fmt.Errorf("REBAC-LOCKRESOURCEREVISIONS-SCAN: %w", err)
+		}
+	}
+	return rows.Err()
 }
 
 // DeleteInvitationsOfResource removes pending invitations of a deleted

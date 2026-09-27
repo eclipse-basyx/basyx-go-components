@@ -48,8 +48,17 @@ import (
 // asyncCall sends a request from another goroutine, so a test can hold
 // database locks meanwhile. It never calls t, which is not goroutine-safe.
 func asyncCall(bearer string, method string, url string, body io.Reader, contentType string, headers map[string]string) <-chan response {
+	return asyncCallAfter(nil, bearer, method, url, body, contentType, headers)
+}
+
+// asyncCallAfter sends the request once start is closed; a nil start sends
+// it right away.
+func asyncCallAfter(start <-chan struct{}, bearer string, method string, url string, body io.Reader, contentType string, headers map[string]string) <-chan response {
 	done := make(chan response, 1)
 	go func() {
+		if start != nil {
+			<-start
+		}
 		result := response{status: -1}
 		defer func() { done <- result }()
 		request, err := http.NewRequestWithContext(context.Background(), method, url, body)
@@ -214,4 +223,24 @@ func TestAccessETagsAreBoundToTheirObject(t *testing.T) {
 	body := map[string]any{"grants": []grant{userGrant(t, "owner", "alice"), userGrant(t, "viewer", "bob")}}
 	stale := call(t, "alice", http.MethodPut, submodelAccess(submodelURL, second)+"/grants", body, map[string]string{"If-Match": firstTag})
 	expectStatus(t, http.StatusPreconditionFailed, stale, "the ETag of another object is rejected")
+}
+
+func TestAcceptingAndRevokingAnInvitationConcurrentlyNeverFails(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "invitation-race")
+	accessURL := submodelAccess(submodelURL, identifier)
+	aliceBearer, bobBearer := token(t, "alice"), token(t, "bob")
+	expiresAt := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	for attempt := 0; attempt < 30; attempt++ {
+		created := call(t, "alice", http.MethodPost, accessURL+"/invitations", map[string]any{"relation": "viewer", "expiresAt": expiresAt}, nil)
+		expectStatus(t, http.StatusCreated, created, "create invitation")
+		invitation := created.json(t)
+		start := make(chan struct{})
+		accepted := asyncCallAfter(start, bobBearer, http.MethodPost, submodelURL+"/security/rebac/invitations/accept",
+			jsonBody(t, map[string]any{"token": invitation["token"]}), "application/json", nil)
+		revoked := asyncCallAfter(start, aliceBearer, http.MethodDelete, accessURL+"/invitations/"+invitation["id"].(string), nil, "", nil)
+		close(start)
+		acceptance, revocation := <-accepted, <-revoked
+		require.Contains(t, []int{http.StatusOK, http.StatusNotFound}, acceptance.status, "attempt %d: accept: %s", attempt, acceptance.body)
+		require.Equal(t, http.StatusNoContent, revocation.status, "attempt %d: revoke: %s", attempt, revocation.body)
+	}
 }

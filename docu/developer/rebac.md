@@ -38,7 +38,7 @@ implemented and how to extend it. For behavior and concepts see the
 | `internal/common/security/rebac/audit*.go` | Hash-chained audit trail and its evidence |
 | `internal/common/security/rebac/reconcile.go` | Removal of orphaned state |
 | `internal/common/security/rebac/telemetry.go` | Spans and metrics |
-| `database/patches/1_2_2.sql` | `auth_uuid` columns and `rebac_*` tables |
+| `database/patches/1_2_2.sql` | Introduced the `auth_uuid` columns and `rebac_*` tables (reference only; never edit a released patch) |
 
 ## Request flow
 
@@ -152,7 +152,14 @@ still exists, authorize the caller **again under the lock**, compare
 revision in one transaction. The check before the transaction may be stale:
 a revocation that commits while the change waits for the lock always wins.
 Shell links also lock the linked shells, in the order of their
-authorization UUIDs. ETags have the form `"<revision>-<hash of the object
+authorization UUIDs.
+
+**Lock order.** Every writer locks access revisions (`rebac_object_revision`,
+several in key order) before it touches invitation or grant rows. Accepting
+an invitation therefore reads the invitation's object first, locks its
+revision and only then consumes the invitation, and deleting a resource
+locks the revisions of the resource and all its element paths first.
+Keep this order in new code, or concurrent requests deadlock. ETags have the form `"<revision>-<hash of the object
 key>"`, so the ETag of one object never matches another.
 
 `/effective` only answers `200` for a confirmed right. `abac-conditional`
@@ -194,12 +201,19 @@ derivations whose object or source is gone. It only removes state.
 
 ### Adding a resource kind
 
-1. Add an `auth_uuid` column and unique index to its table in the current
-   schema patch.
+Released patches are never edited, because existing installations do not
+run them again. Put all schema changes into the one new, unreleased patch of
+your pull request under `database/patches/`, register it in
+`cmd/basyxconfigurationservice/main.go` and update the schema version in
+`internal/common/database.go`.
+
+1. In that patch, add an `auth_uuid` column with a unique index to the
+   table of the new kind, and extend the `object_type` checks of
+   `rebac_grant` and the other `rebac_*` tables that list object types.
 2. Define a `ResourceKind` in `store.go` (semantic kind, object type, table,
    route prefix and parameter, rows query) and add it to `AllKinds`.
 3. Call the `RecordReBAC*` helpers in the create and delete transactions.
-4. Extend the object type checks in `1_2_2.sql` and `ValidateRelation`.
+4. Extend `ValidateRelation`.
 5. Mount its `$access` routes through `RegisterManagementRoutes` in the
    service's `main.go`.
 

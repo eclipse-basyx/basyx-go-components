@@ -280,6 +280,18 @@ func (c *Coordinator) handleAcceptInvitation(w http.ResponseWriter, r *http.Requ
 }
 
 func (c *Coordinator) redeemInvitation(ctx context.Context, tx *sql.Tx, principal Principal, token string) (acceptedInvitation, error) {
+	// Like every other writer, lock the object's access revision before the
+	// invitation row, so accepting and revoking never deadlock.
+	objectKey, found, err := invitationObjectKey(ctx, tx, token)
+	if err != nil {
+		return acceptedInvitation{}, err
+	}
+	if !found {
+		return acceptedInvitation{}, errTargetGone
+	}
+	if _, err = LockObjectRevision(ctx, tx, objectKey); err != nil {
+		return acceptedInvitation{}, err
+	}
 	redeemed, found, err := consumeInvitation(ctx, tx, token, principal)
 	if err != nil {
 		return acceptedInvitation{}, err
@@ -296,9 +308,6 @@ func (c *Coordinator) redeemInvitation(ctx context.Context, tx *sql.Tx, principa
 		return acceptedInvitation{}, firstError(err, errTargetGone)
 	}
 	target := accessTarget{kind: kind, identifier: identifier, authUUID: redeemed.objectUUID, elementPath: redeemed.elementPath}
-	if _, err = LockObjectRevision(ctx, tx, target.objectKey()); err != nil {
-		return acceptedInvitation{}, err
-	}
 	grant, err := buildGrant(accessRequest{principal: principal, target: target}, grantInput{
 		Relation: redeemed.relation, SubjectType: TypeUser, Issuer: principal.Issuer, Subject: principal.Subject,
 	})
@@ -320,6 +329,16 @@ func (c *Coordinator) redeemInvitation(ctx context.Context, tx *sql.Tx, principa
 // consumeInvitation atomically counts one use of a valid invitation, so
 // concurrent redemptions never exceed maxUses. Invalid, expired, revoked,
 // exhausted and foreign invitations are indistinguishable.
+// invitationObjectKey returns the object an invitation token belongs to,
+// without locking the invitation.
+func invitationObjectKey(ctx context.Context, q Queryer, token string) (string, bool, error) {
+	ds := dialect.From(invitationTable).Select(goqu.C("object_key")).
+		Where(goqu.C("token_hash").Eq(hashToken(token))).Prepared(true)
+	var objectKey string
+	found, err := queryRowDataset(ctx, q, "REBAC-INVITATIONOBJECT", ds, &objectKey)
+	return objectKey, found, err
+}
+
 func consumeInvitation(ctx context.Context, tx *sql.Tx, token string, principal Principal) (redeemedInvitation, bool, error) {
 	ds := dialect.Update(invitationTable).Set(goqu.Record{"used_count": goqu.L("used_count + 1")}).Where(
 		goqu.C("token_hash").Eq(hashToken(token)), goqu.C("revoked_at").IsNull(),
