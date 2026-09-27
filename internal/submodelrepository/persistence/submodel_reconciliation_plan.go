@@ -32,7 +32,6 @@ import (
 	"encoding/json"
 	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -177,34 +176,12 @@ func (s *SubmodelDatabase) buildElementReconciliationPlan(
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	updates, inserts, deletes, err := reconcileSubmodelElementRows(oldRows, newRows)
-	if err != nil {
-		return submodelReconciliationPlan{}, err
-	}
-	return submodelReconciliationPlan{
-		Updates:                 updates,
-		Inserts:                 inserts,
-		Deletes:                 deletes,
-		ExpectedDeletedElements: countDeletedReconciliationRows(oldRows, deletes),
-	}, nil
+	return reconcileSubmodelElementRows(oldRows, newRows)
 }
 
 type reconciliationSiblingPosition struct {
 	parentPath string
 	position   int
-}
-
-func countDeletedReconciliationRows(rows []submodelelements.ReconciliationElementRow, roots []string) int {
-	count := 0
-	for _, row := range rows {
-		for _, root := range roots {
-			if row.Path == root || strings.HasPrefix(row.Path, root+".") || strings.HasPrefix(row.Path, root+"[") {
-				count++
-				break
-			}
-		}
-	}
-	return count
 }
 
 func buildSubmodelReconciliationMetadata(
@@ -286,10 +263,13 @@ func nullableRawJSON(value *string) json.RawMessage {
 	return json.RawMessage(*value)
 }
 
+// reconcileSubmodelElementRows diffs old and new rows. Every deleted old row is
+// a delete candidate, so the candidate count is the expected number of deleted
+// elements; deletes only lists the topmost candidates.
 func reconcileSubmodelElementRows(
 	oldRows []submodelelements.ReconciliationElementRow,
 	newRows []submodelelements.ReconciliationElementRow,
-) ([]submodelelements.ReconciliationElementRow, []submodelelements.ReconciliationElementRow, []string, error) {
+) (submodelReconciliationPlan, error) {
 	oldByPath := indexReconciliationRows(oldRows)
 	targetInsertedByPath := make(map[string]bool, len(newRows))
 	positions := make(map[reconciliationSiblingPosition]struct{}, len(newRows))
@@ -298,7 +278,7 @@ func reconcileSubmodelElementRows(
 
 	for _, target := range newRows {
 		if err := validateTargetReconciliationRow(target, targetInsertedByPath, positions); err != nil {
-			return nil, nil, nil, err
+			return submodelReconciliationPlan{}, err
 		}
 
 		parentInserted := target.ParentPath != "" && targetInsertedByPath[target.ParentPath]
@@ -334,7 +314,12 @@ func reconcileSubmodelElementRows(
 		deletes = append(deletes, previous.Path)
 	}
 	sort.Strings(deletes)
-	return updates, inserts, deletes, nil
+	return submodelReconciliationPlan{
+		Updates:                 updates,
+		Inserts:                 inserts,
+		Deletes:                 deletes,
+		ExpectedDeletedElements: len(deleteCandidates),
+	}, nil
 }
 
 func validateTargetReconciliationRow(

@@ -112,7 +112,7 @@ func LoadReconciliationParentTx(ctx context.Context, tx *sql.Tx, submodelDatabas
 
 // LoadPersistedPositionsTx returns the stored sibling positions of all
 // elements below parentPath, or of all elements of the Submodel when
-// parentPath is empty.
+// parentPath is empty. Elements without a stored position are left out.
 func LoadPersistedPositionsTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, parentPath string) (map[string]int, error) {
 	var scope goqu.Expression = goqu.C("submodel_id").Eq(submodelDatabaseID)
 	if parentPath != "" {
@@ -134,11 +134,13 @@ func LoadPersistedPositionsTx(ctx context.Context, tx *sql.Tx, submodelDatabaseI
 	positions := make(map[string]int)
 	for rows.Next() {
 		var path string
-		var position int
+		var position sql.NullInt64
 		if err = rows.Scan(&path, &position); err != nil {
 			return nil, common.NewInternalServerError("SMREPO-RECONPOS-SCANQ " + err.Error())
 		}
-		positions[path] = position
+		if position.Valid {
+			positions[path] = int(position.Int64)
+		}
 	}
 	if err = rows.Err(); err != nil {
 		return nil, common.NewInternalServerError("SMREPO-RECONPOS-ROWSERR " + err.Error())

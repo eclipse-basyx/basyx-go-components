@@ -207,6 +207,14 @@ func TestPatchSubmodelElementValueReplacesCollectionChildren(t *testing.T) {
 	require.Len(t, children, 2)
 	require.Equal(t, "changed", children[0].(map[string]any)["value"])
 	require.Equal(t, "C", children[1].(map[string]any)["idShort"])
+
+	fixture.send(http.MethodPatch, fixture.elementEndpoint("Items"), map[string]any{
+		"modelType": "SubmodelElementCollection",
+		"value":     []any{},
+	})
+	cleared := fixture.rows()
+	require.Equal(t, before["Items"].id, cleared["Items"].id)
+	require.Len(t, cleared, 1, "an empty value removes all children")
 }
 
 func TestPatchSubmodelElementValueReplacesListItems(t *testing.T) {

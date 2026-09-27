@@ -147,12 +147,12 @@ func TestReconcileSubmodelElementRowsRejectsDuplicateSiblingPositions(t *testing
 		{Path: "Group.B", ParentPath: "Group", Position: 0},
 	}
 
-	_, _, _, err := reconcileSubmodelElementRows(nil, rows)
+	_, err := reconcileSubmodelElementRows(nil, rows)
 
 	require.Error(t, err)
 	require.Truef(t, common.IsErrConflict(err), "got %v", err)
 	require.Contains(t, err.Error(), "SMREPO-RECON-DUPLICATEPOSITION")
-	_, _, _, err = reconcileSubmodelElementRows(nil, []submodelelements.ReconciliationElementRow{
+	_, err = reconcileSubmodelElementRows(nil, []submodelelements.ReconciliationElementRow{
 		{Path: "First.A", ParentPath: "First", Position: 0},
 		{Path: "Second.B", ParentPath: "Second", Position: 0},
 	})
@@ -172,6 +172,48 @@ func TestReconciliationPlanDeletesOmittedSubtreeAndCompactsSiblingPosition(t *te
 	require.Equal(t, 0, plan.Updates[0].Position)
 	require.True(t, plan.Updates[0].Changes.Core)
 	require.Empty(t, plan.Inserts)
+}
+
+func TestReconciliationPlanCountsSubtreeOfTypeChangedElement(t *testing.T) {
+	previous := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"SubmodelElementCollection","value":[{"idShort":"Child","modelType":"Property","valueType":"xs:string","value":"delete"}]}]}`)
+	target := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"Group","modelType":"Property","valueType":"xs:string","value":"new"}]}`)
+
+	plan := buildReconciliationPlanForTest(t, previous, target)
+
+	require.Equal(t, []string{"Group"}, plan.Deletes)
+	require.Equal(t, 2, plan.ExpectedDeletedElements)
+	require.Len(t, plan.Inserts, 1)
+}
+
+func TestReconcileSubmodelElementRowsClearsLargeContainer(t *testing.T) {
+	const childCount = 20000
+	plan, err := reconcileSubmodelElementRows(largeContainerChildRows(childCount), nil)
+
+	require.NoError(t, err)
+	require.Len(t, plan.Deletes, childCount)
+	require.Equal(t, childCount, plan.ExpectedDeletedElements)
+}
+
+func BenchmarkReconcileSubmodelElementRowsClearsLargeContainer(b *testing.B) {
+	rows := largeContainerChildRows(20000)
+	for b.Loop() {
+		if _, err := reconcileSubmodelElementRows(rows, nil); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func largeContainerChildRows(count int) []submodelelements.ReconciliationElementRow {
+	rows := make([]submodelelements.ReconciliationElementRow, 0, count)
+	for index := range count {
+		rows = append(rows, submodelelements.ReconciliationElementRow{
+			Path:       "Items.Child" + strconv.Itoa(index),
+			ParentPath: "Items",
+			RootPath:   "Items",
+			Position:   index,
+		})
+	}
+	return rows
 }
 
 func TestReconciliationPlanCompactsAllSubmodelReferencePositions(t *testing.T) {

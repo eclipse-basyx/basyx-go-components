@@ -365,7 +365,7 @@ func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(ctx context.Conte
 // stored Submodel and the patched Submodel, so the Submodel and its unchanged
 // elements keep their rows.
 func (s *SubmodelDatabase) reconcileExistingSubmodelForPatchTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodel.ID())
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdateContext(ctx, tx, submodel.ID())
 	if errors.Is(err, sql.ErrNoRows) {
 		return common.NewErrNotFound("SMREPO-PATCHSM-NOTFOUND Submodel with ID '" + submodel.ID() + "' not found")
 	}

@@ -55,8 +55,8 @@ func submodelElementChildrenToReconcile(
 // lockSubmodelForChildReconciliationTx serializes child reconciliations of one
 // Submodel. It must run before element rows are updated to keep the lock order
 // of other element writes.
-func lockSubmodelForChildReconciliationTx(tx *sql.Tx, submodelID string) (int, error) {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
+func lockSubmodelForChildReconciliationTx(ctx context.Context, tx *sql.Tx, submodelID string) (int, error) {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdateContext(ctx, tx, submodelID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, common.NewErrNotFound("SMREPO-RECONSMECHILDREN-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
 	}

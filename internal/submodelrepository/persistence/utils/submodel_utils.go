@@ -69,6 +69,23 @@ func GetSubmodelDatabaseIDForUpdate(tx *sql.Tx, submodelID string) (int, error) 
 	return getSubmodelDatabaseID(tx, submodelID, true)
 }
 
+// GetSubmodelDatabaseIDForUpdateContext resolves and locks a Submodel like
+// GetSubmodelDatabaseIDForUpdate and stops waiting for the lock when ctx ends.
+func GetSubmodelDatabaseIDForUpdateContext(ctx context.Context, tx *sql.Tx, submodelID string) (int, error) {
+	query, args, err := submodelDatabaseIDDataset(submodelID).
+		ForUpdate(goqu.Wait).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	var databaseID int
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&databaseID); err != nil {
+		return 0, err
+	}
+	return databaseID, nil
+}
+
 // GetSubmodelDatabaseIDForNoKeyUpdateContext resolves and locks a Submodel for
 // child mutations without blocking compatible nested-child operations.
 func GetSubmodelDatabaseIDForNoKeyUpdateContext(ctx context.Context, tx *sql.Tx, submodelID string) (int, error) {

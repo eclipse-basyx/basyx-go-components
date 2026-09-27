@@ -124,7 +124,7 @@ func (s *SubmodelDatabase) updateSubmodelElementInTransaction(ctx context.Contex
 	children, reconcileChildren := submodelElementChildrenToReconcile(*modelType, submodelElement, isPut)
 	submodelDatabaseID := 0
 	if reconcileChildren {
-		if submodelDatabaseID, err = lockSubmodelForChildReconciliationTx(tx, submodelID); err != nil {
+		if submodelDatabaseID, err = lockSubmodelForChildReconciliationTx(ctx, tx, submodelID); err != nil {
 			return err
 		}
 	}
