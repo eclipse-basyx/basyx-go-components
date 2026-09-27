@@ -35,7 +35,7 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 ```
 
 For your own deployment or Kafka client, see the
-[Kafka configuration guide](../../docu/user/kafka_eventing.md).
+[Kafka configuration guide](../../docu/eventing/kafka_eventing.md).
 
 ## Check and stop
 

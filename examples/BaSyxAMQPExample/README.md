@@ -34,7 +34,7 @@ removes it from this queue. Multiple consumers of this queue share work; use
 an exchange with separate bound queues if each application needs its own copy.
 
 For deployment settings and a Go consumer, see the
-[AMQP configuration guide](../../docu/user/amqp_eventing.md).
+[AMQP configuration guide](../../docu/eventing/amqp_eventing.md).
 
 ## Check and stop
 

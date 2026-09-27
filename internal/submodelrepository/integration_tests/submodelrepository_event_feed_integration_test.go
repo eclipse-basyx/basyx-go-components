@@ -119,7 +119,7 @@ func TestSubmodelRepositoryEventFeedIgnoresNoOpPuts(t *testing.T) {
 // waitForSubmodelFeedEventCounts polls the event feed until at least
 // wantCreated created and wantUpdated updated events for subject are
 // visible, or timeout elapses, returning whatever counts it last observed.
-// Necessary because publish_seq assignment (see docu/user/event_feed.md)
+// Necessary because publish_seq assignment (see docu/eventing/event_feed.md)
 // runs on a background interval, so a just-written event is not guaranteed
 // to be visible through the feed immediately.
 func waitForSubmodelFeedEventCounts(t *testing.T, client *http.Client, baseURL, subject string, wantCreated, wantUpdated int, timeout time.Duration) (created, updated int) {

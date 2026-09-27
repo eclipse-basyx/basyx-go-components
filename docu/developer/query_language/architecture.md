@@ -1,0 +1,719 @@
+# Query Language Architecture and Flow
+
+This document explains how logical expressions are simplified and converted into SQL. It focuses on the internal pipeline: expression trees, implicit casts, field identifiers, fragment identifiers, and filter mapping.
+
+For request/response examples, including query-endpoint and ABAC composition,
+see [Query Language Examples](../../query_language/examples.md).
+
+For the planned cross-resource authorization model for AAS hierarchy queries,
+see [AAS Hierarchy Query Authorization Plan](aas_hierarchy_authorization.md).
+
+## Policy dialect and deployment compatibility
+
+This implementation uses a BaSyx policy dialect; it does not claim complete
+IDTA Part 4 conformance. `CLAIMPATH` is an extension. Claim casts retain the
+JWT JSON types described below, and REFERABLE grants cover the target and its
+descendants at SME segment boundaries. Audit existing policies and actual token
+types when upgrading, including rights inherited by descendants.
+
+The current evaluator preserves its existing indeterminate semantics:
+`OR(true, indeterminate)` is true, and `NOT(AND(false, indeterminate))` is true.
+This differs from the whole-expression invalidity rule in
+[IDTA Part 4 v3.1](https://industrialdigitaltwin.io/aas-specifications/IDTA-01004/v3.1/access-rule-model.html#_formulas_and_logical_expressions).
+Full conformance requires a separate evaluator change and migration decision;
+the query-visibility fixes do not establish it.
+
+Policy `ROUTE` literals are relative to `server.contextPath`. With context path
+`/sub`, `/submodels/*` covers direct requests under `/sub/submodels/*` and the
+same Submodel scope in queries. Do not include the context path in a policy
+literal: `/api/submodels/*` with context path `/api` means
+`/api/api/submodels/*`, and does not grant the standard Submodel query scope.
+
+Caller expressions resolve every field through its visibility checks, including
+fields inside nested casts and date-part operators. Hidden fields cannot select
+returned resources through these operators. Test upgrades with existing policies
+and representative data; correctness tests do not establish throughput or latency
+equivalence. Measure item reads, filtered queries, large hierarchies, and restricted
+value updates with ABAC enabled and disabled before setting deployment capacity.
+
+Queries and policy expressions are limited to 64 nested JSON container levels
+and 8,192 JSON tokens (including keys and delimiters), checked before recursive
+expression decoding. Query limits include all response filters together. Split
+larger requests or policies into smaller expressions when upgrading; query
+requests exceeding these limits return HTTP 400.
+
+Updated services require database schema `v1.1.19`. Run the configuration service
+to install `basyx_validated_cast_input` before starting the updated services.
+The helper validates each textual cast input once; nested casts generate SQL
+whose size grows linearly with nesting depth. Its PostgreSQL function-call cost
+still needs representative workload measurement.
+
+## Quick mental model (no background required)
+
+- A query is a tree of logical operators (AND/OR/NOT) and comparisons (EQ/GT/etc).
+- If a value is known up front (for example, a claim or a time constant), it can be simplified before SQL.
+- Everything that still depends on data in the database becomes SQL.
+- Fragment filters are special: they apply only to a subset of array items, so they must be guarded.
+
+Full logical expression example (from access rules):
+
+```json
+{
+  "$and": [
+    { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+    { "$ge": [ { "$field": "$aasdesc#createdAt" }, { "$dateTimeVal": "2024-01-01T00:00:00Z" } ] }
+  ]
+}
+```
+
+## Glossary
+
+- LogicalExpression: the parsed tree for $and, $or, $eq, $gt, etc.
+- Attribute: a value resolved at request time (for example, a claim or time).
+- Field identifier: a path like $aasdesc#specificAssetIds[].value that points to data in the DB model.
+- Fragment identifier: a field identifier that ends in an array segment, used to scope filters (for example, $aasdesc#endpoints[]).
+- Binding: a concrete array index constraint derived from a fragment (for example, position = 2).
+- Simplify: reduce what can be decided before SQL is built.
+
+## High-level architecture
+
+```mermaid
+flowchart LR
+  Parse[Parse Query JSON
+QueryWrapper + LogicalExpression]
+  Simplify[SimplifyForBackendFilter
+with options + resolver]
+  Resolve[Resolve field identifiers
+Field -> SQL column + bindings]
+  Build[EvaluateToExpression
+LogicalExpression -> goqu expression]
+  Guard[Fragment guards
+OR with NOT fragment]
+
+  Parse --> Simplify --> Build --> Guard
+  Resolve --> Build
+```
+
+## Core components
+
+- Query model
+  - [internal/common/model/grammar/query.go](../../../internal/common/model/grammar/query.go)
+- Logical expression AST
+  - [internal/common/model/grammar/logical_expression.go](../../../internal/common/model/grammar/logical_expression.go)
+- Simplification (partial evaluation)
+  - [internal/common/model/grammar/logical_expression_simplify_backend.go](../../../internal/common/model/grammar/logical_expression_simplify_backend.go)
+- SQL conversion and fragment guards
+  - [internal/common/model/grammar/logical_expression_to_sql.go](../../../internal/common/model/grammar/logical_expression_to_sql.go)
+- Field and fragment resolution
+  - [internal/common/model/grammar/fieldidentifier_processing.go](../../../internal/common/model/grammar/fieldidentifier_processing.go)
+  - [internal/common/model/grammar/field_column_mapping.go](../../../internal/common/model/grammar/field_column_mapping.go)
+  - [internal/common/model/grammar/fragment_string_pattern.go](../../../internal/common/model/grammar/fragment_string_pattern.go)
+
+## Step-by-step details
+
+### 1) Parse logical expressions
+
+- The query payload is unmarshaled into QueryWrapper and LogicalExpression.
+- Validation enforces operator structure (for example, $and and $or sizes, comparison operand counts).
+
+Key types:
+- QueryWrapper and Query in [internal/common/model/grammar/query.go](../../../internal/common/model/grammar/query.go)
+- LogicalExpression in [internal/common/model/grammar/logical_expression.go](../../../internal/common/model/grammar/logical_expression.go)
+
+### 2) Simplify the logical expression
+
+- Simplification partially evaluates the expression using a resolver and leaves backend-only parts intact.
+- A four-state decision is produced:
+  - SimplifyTrue: expression becomes a boolean true literal.
+  - SimplifyFalse: expression becomes a boolean false literal.
+  - SimplifyUndecided: expression still depends on backend fields.
+  - SimplifyIndeterminate: evaluation failed; authorization must fail closed.
+
+Implicit casts:
+- Simplification can insert implicit casts when field types and literal types differ.
+- This is controlled by SimplifyOptions.EnableImplicitCasts.
+- When disabled, mismatched comparisons remain undecided or fail validation downstream.
+
+Key functions:
+- SimplifyForBackendFilterWithOptions in [internal/common/model/grammar/logical_expression_simplify_backend.go](../../../internal/common/model/grammar/logical_expression_simplify_backend.go)
+- SimplifyForBackendFilterNoResolver in [internal/common/model/grammar/logical_expression_simplify_backend.go](../../../internal/common/model/grammar/logical_expression_simplify_backend.go)
+
+### 3) Resolve attributes
+
+- Attribute values (for example, `CLAIM`, `CLAIMPATH`, or `GLOBAL`) are resolved by a caller-provided resolver.
+- An unavailable or unusable attribute is indeterminate, not backend-undecided. `$not` preserves indeterminate; false dominates `$and`, true dominates `$or`, and otherwise indeterminate propagates through `$and`, `$or`, and `$match`.
+- `CLAIM` selects a top-level JWT claim. `CLAIMPATH` selects a nested claim with an RFC 6901 JSON Pointer.
+- `$eq` permits direct `CLAIMPATH` only against a scalar string operand, in either order. `$contains` with a first-position `CLAIMPATH` tests exact, case-sensitive membership in a JSON string array. Other `$contains` forms keep substring semantics. The former `$in` operator is rejected.
+- Claim casts preserve JWT JSON typing: `str`, `num`, and `bool` accept only strings, numbers, and Booleans respectively; hexadecimal/date-time/time casts accept matching lexical strings. Claim strings are not coerced to other primitive types.
+- Arrays and objects are never converted to JSON text for `$contains` or `$regex`.
+
+Key references:
+- AttributeResolver usage in [internal/common/model/grammar/logical_expression_simplify_backend.go](../../../internal/common/model/grammar/logical_expression_simplify_backend.go)
+- Claim and global resolution in [internal/common/security/abac_engine_attributes.go](../../../internal/common/security/abac_engine_attributes.go)
+
+### 4) Resolve field identifiers
+
+- Field identifiers (for example, $aasdesc#specificAssetIds[].value) are parsed into tokens.
+- Each token is mapped to a SQL column and optional array bindings.
+- Fragment identifiers resolve to bindings only, enabling fragment guards.
+
+Key functions:
+- ResolveScalarFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](../../../internal/common/model/grammar/fieldidentifier_processing.go)
+- ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](../../../internal/common/model/grammar/fieldidentifier_processing.go)
+- ResolveAASQLFieldToSQLColumn in [internal/common/model/grammar/field_column_mapping.go](../../../internal/common/model/grammar/field_column_mapping.go)
+
+Beginner notes:
+- Think of a field identifier as a path inside a JSON-like object, but mapped to SQL columns.
+- The part before # is the root type ($aasdesc, $smdesc, $sm, $sme, $bd).
+- The part after # is a dotted path with optional array selectors.
+
+Example mappings:
+- $aasdesc#idShort -> aas_descriptor.id_short
+- $aasdesc#specificAssetIds[].value -> specific_asset_id.value with no index binding
+- $aasdesc#specificAssetIds[2].value -> specific_asset_id.value with position = 2
+
+### 5) Build SQL expressions
+
+- The simplified expression is converted to a goqu expression tree.
+- When a ResolvedFieldPathCollector is provided, the builder can inject EXISTS or CTE structures for complex paths.
+- When no collector is provided, the expression is built with direct SQL conditions and bindings.
+
+Key functions:
+- EvaluateToExpression in [internal/common/model/grammar/logical_expression_to_sql.go](../../../internal/common/model/grammar/logical_expression_to_sql.go)
+- EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](../../../internal/common/model/grammar/logical_expression_to_sql.go)
+
+### 6) Combine expressions and filters
+
+- Logical expressions are combined explicitly via $and, $or, and $not in the expression tree.
+- Filter lists can be merged per fragment by AND-ing conditions that target the same fragment.
+- When multiple filters target different fragments, each fragment gets its own logical expression tree.
+
+Key helpers:
+- QueryFilter merging in [internal/common/security/authorize.go](../../../internal/common/security/authorize.go)
+- Fragment matching in [internal/common/security/abac_engine.go](../../../internal/common/security/abac_engine.go)
+
+## Combination formulas (detailed)
+
+### Logical operator normalization
+
+For a simplified expression tree, normalization follows the semantics below:
+
+$$
+\begin{aligned}
+          AND([E_1,\dots,E_n]) &= E_1 \land \cdots \land E_n \\
+          OR([E_1,\dots,E_n]) &= E_1 \lor \cdots \lor E_n \\
+          NOT(E) &= \lnot E
+\end{aligned}
+$$
+
+Short-circuit behavior during simplification:
+
+$$
+\begin{aligned}
+          AND([\text{false}, \dots]) &= \text{false} \\
+          AND([\text{true}, E]) &= E \\
+          OR([\text{true}, \dots]) &= \text{true} \\
+          OR([\text{false}, E]) &= E
+\end{aligned}
+$$
+
+Example (short-circuit):
+
+```json
+{ "$and": [ { "$boolean": false }, { "$eq": [ { "$field": "$aasdesc#id" }, { "$strVal": "x" } ] } ] }
+```
+
+Simplifies to:
+
+```json
+{ "$boolean": false }
+```
+
+Example (short-circuit OR):
+
+```json
+{ "$or": [ { "$boolean": true }, { "$eq": [ { "$field": "$aasdesc#id" }, { "$strVal": "x" } ] } ] }
+```
+
+Simplifies to:
+
+```json
+{ "$boolean": true }
+```
+
+### Implicit casts in comparisons
+
+When implicit casts are enabled, comparisons are normalized to compare like types:
+
+$$
+            op(\text{field}, \text{literal}_T) \Rightarrow op(\text{cast}(\text{field}, T), \text{literal}_T)
+$$
+
+Example:
+
+```json
+{ "$gt": [ { "$field": "$sme#value" }, { "$numVal": 10 } ] }
+```
+
+Normalized form (conceptual):
+
+```json
+{ "$gt": [{"$numCast": { "$field": "$sme#value" }}, { "$numVal": 10 } ] }
+```
+
+If the field is stored as text, an implicit cast converts it to numeric before the comparison.
+
+This is controlled by `SimplifyOptions.EnableImplicitCasts` in
+[internal/common/model/grammar/logical_expression_simplify_backend.go](../../../internal/common/model/grammar/logical_expression_simplify_backend.go).
+
+### Attribute resolution
+
+Attribute references are resolved to concrete scalar or string-array values via a resolver function:
+
+$$
+          resolve(\$\text{attribute}(k)) \rightarrow v \quad \text{or} \quad \varnothing
+$$
+
+Example (attribute in expression):
+
+```json
+{ "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+```
+
+If claims contain role=admin, this becomes:
+
+```json
+{ "$eq": [ { "$strVal": "admin" }, { "$strVal": "admin" } ] }
+```
+
+Which simplifies to:
+
+```json
+{ "$boolean": true }
+```
+
+For an exact nested role membership check:
+
+```json
+{ "$contains": [ { "$attribute": { "CLAIMPATH": "/realm_access/roles" } }, { "$strVal": "admin" } ] }
+```
+
+If $v$ is a scalar string, the uncast attribute node is replaced with the corresponding literal during simplification. String arrays remain typed and are accepted only by first-position `CLAIMPATH` `$contains`. An empty array evaluates false. Missing paths, `null`, objects, mixed arrays, wrong types, and invalid casts are indeterminate; logical negation cannot turn them into true.
+
+For writes, CREATE formulas evaluate the staged created target before commit. UPDATE formulas evaluate both the current state and the complete prospective state, and both evaluations must be true. Partial operations use their normal merge semantics when constructing the prospective state.
+
+### Rule combination into QueryFilter (ABAC)
+
+Each rule $r$ that passes gates yields a simplified formula $F_r$ and an optional
+set of fragment filters $F_{r,k}$ per fragment $k$.
+
+Combined formula across all matching rules:
+
+$$
+F_{\text{combined}} = \bigvee_{r \in R} F_r
+$$
+
+Combined fragment filters across all matching rules:
+
+$$
+F_{k,\text{combined}} = \bigvee_{r \in R} \begin{cases}
+F_{r,k} & \text{if rule } r \text{ defines fragment } k \\
+F_r & \text{otherwise}
+\end{cases}
+$$
+
+For routes mapped to multiple rights (for example `PUT` with `[CREATE, UPDATE]`),
+the engine also builds right-scoped formulas:
+
+$$
+F_{\text{combined},x} = \bigvee_{r \in R_x} F_r
+$$
+
+where $x$ is a right (for example `CREATE` or `UPDATE`) and $R_x$ are matching
+rules that grant that right. Missing right-specific formulas default to
+`{ "$boolean": false }`.
+
+This logic is implemented in [internal/common/security/abac_engine.go](../../../internal/common/security/abac_engine.go).
+
+Example with two rules:
+
+Rule A: $F_A = (role = admin)$
+
+Rule B: $F_B = (createdAt \ge 2024-01-01)$
+
+Combined:
+
+$$
+F_{\text{combined}} = F_A \lor F_B
+$$
+
+Example (combined logical expression):
+
+```json
+{
+  "$or": [
+    { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+    { "$ge": [ { "$field": "$aasdesc#createdAt" }, { "$dateTimeVal": "2024-01-01T00:00:00Z" } ] }
+  ]
+}
+```
+
+### Rule-local filter aggregation
+
+Within a single rule, multiple filter conditions targeting the same fragment are
+ANDed with the rule formula:
+
+$$
+F_{r,k} = F_r \land C_{r,k,1} \land \cdots \land C_{r,k,m}
+$$
+
+When multiple fragments are present, each fragment gets its own $F_{r,k}$.
+
+Example (same fragment twice):
+
+$$
+F_{r,k} = F_r \land (k.name = \text{"customerPartId"}) \land (k.value = \text{"X"})
+$$
+
+Example (filter list targeting the same fragment):
+
+```json
+{
+  "$filters": [
+    { "$fragment": "$aasdesc#specificAssetIds[]", "$condition": { "$eq": [ { "$field": "$aasdesc#specificAssetIds[].name" }, { "$strVal": "customerPartId" } ] } },
+    { "$fragment": "$aasdesc#specificAssetIds[]", "$condition": { "$eq": [ { "$field": "$aasdesc#specificAssetIds[].value" }, { "$strVal": "X" } ] } }
+  ]
+}
+```
+
+### QueryFilter merging with user queries
+
+When a user query is merged into an existing QueryFilter, the condition is ANDed
+into the global formula and into the fragment-specific filters:
+
+$$
+F' = F \land Q
+$$
+
+$$
+F'_{k} = F_{k} \land Q_{k}
+$$
+
+This logic is implemented in [internal/common/security/authorize.go](../../../internal/common/security/authorize.go).
+
+Example (merge):
+
+$$
+F' = (role = admin) \land (createdAt \ge 2024-01-01)
+$$
+
+Example (merged logical expression):
+
+```json
+{
+  "$and": [
+    { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+    { "$ge": [ { "$field": "$aasdesc#createdAt" }, { "$dateTimeVal": "2024-01-01T00:00:00Z" } ] }
+  ]
+}
+```
+
+## Fragment filters and guards
+
+- Fragment filters apply conditions to a specific array fragment (for example, $aasdesc#specificAssetIds[]).
+- To avoid excluding other rows, the filter is combined as:
+
+$$
+\text{combined} = \text{mainExpr} \lor \bigvee_i \lnot(\text{fragmentExpr}_i)
+$$
+
+Example (fragment guard with index):
+
+```json
+{
+  "mainExpr": { "$eq": [ { "$field": "$aasdesc#idShort" }, { "$strVal": "motor-1" } ] },
+  "fragment": "$aasdesc#specificAssetIds[2]"
+}
+```
+
+Conceptual combined guard:
+
+```text
+mainExpr OR NOT(fragment(position = 2))
+```
+
+- This guard behavior is implemented in EvaluateToExpressionWithNegatedFragments.
+
+### When are fragment expressions negated?
+
+- Negation is applied only for fragment filters, not for every logical expression.
+- Each fragment filter produces a fragment expression based on the fragment identifier bindings.
+- The guard adds NOT(fragmentExpr) terms only when a fragment identifier resolves to concrete bindings.
+
+Binding rules and effects:
+- Wildcard fragments like $aasdesc#specificAssetIds[] have no concrete bindings, so no NOT(fragmentExpr) term is added.
+- Indexed fragments like $aasdesc#specificAssetIds[2] resolve to bindings (for example, position = 2) and DO add NOT(fragmentExpr).
+- Fragments that encode bindings through other indices (for example, nested keys arrays) also add NOT(fragmentExpr) terms for each resolved binding.
+
+Why this matters:
+- The guard keeps unrelated rows in the result set when a fragment filter targets a specific fragment.
+- If a fragment has no bindings, negation would be redundant, so it is skipped.
+
+### Query endpoints and ABAC rules use the same QL
+
+Query-endpoint filters and ABAC rule filters are translated into the same
+internal query-filter representation and use the same logical-expression
+grammar. They therefore support the same field identifiers, comparison and
+string operators, fragment guards, and row-local matching semantics. Their
+different JSON naming reflects their different sources, not different filter
+logic.
+
+| Concept | Query endpoint | ABAC rule |
+| --- | --- | --- |
+| Main resource condition | Required top-level `$condition` | Rule `FORMULA` or `USEFORMULA` |
+| Fragment filters | `$filters` | `FILTER` or `FILTERLIST` |
+| Target fragment | `$fragment` | `FRAGMENT` |
+| Fragment condition | `$condition` | `CONDITION` or `USEFORMULA` |
+| Row-local evaluation | `$match` | `MATCH` |
+
+When used as properties of a fragment filter, `$match` and `MATCH` are optional
+flags. They do not add another condition, select a parent resource, or decide
+whether an ABAC rule permits a request. They only control how that filter's
+condition is correlated to the fragment row being reconstructed.
+
+This fragment flag is distinct from the logical `$match` operator inside a
+`$condition`. Logical `$match` contains a list of predicates and evaluates them
+in one shared list or hierarchy scope. On the AAS Repository query endpoint of
+the AAS Environment Service, that permits `$sm` and `$sme` predicates to be
+correlated to one Submodel referenced by the candidate AAS. This hierarchy
+extension is not currently enabled by the standalone AAS Repository Service.
+
+The two sources have different responsibilities:
+
+- An ABAC rule first matches the route, operation, objects, and caller. Its
+  formula constrains the resources visible to that caller, and its fragment
+  filters are mandatory response masks. A client cannot remove them.
+- A query endpoint's top-level `$condition` selects parent resources. Its
+  `$filters` shape fragments inside those results and can only narrow what the
+  active ABAC policy already allows.
+- When both sources are present, the policy formula and query condition are
+  combined with `AND`. Policy and request predicates for the same fragment are
+  also combined with `AND`.
+- Alternatives from multiple permitting ABAC rules are combined with `OR`
+  before the request query is applied. Each fragment predicate retains its own
+  `MATCH` or `$match` value throughout this composition.
+
+Conceptually, persistence reads apply:
+
+```text
+resources visible through ABAC AND resources selected by the query
+```
+
+and then reconstruct each fragment using:
+
+```text
+mandatory ABAC fragment filter AND optional request fragment filter
+```
+
+This means a query can narrow a result but can never use QL to widen access
+granted by the policy. If ABAC is disabled, the query condition and request
+fragment filters are applied on their own.
+
+### Explicit row-local fragment matching
+
+Fragment filters use parent-level existential evaluation by default. A condition
+may therefore be satisfied by another row belonging to the same parent. This
+preserves the complete fragment when at least one matching row exists.
+
+Set `$match` explicitly in a request query when the condition must be evaluated
+against the fragment row currently being reconstructed:
+
+```json
+{
+  "$condition": {
+    "$eq": [
+      { "$field": "$smdesc#supplementalSemanticIds[].keys[].value" },
+      { "$strVal": "QUERY_ALLOWED" }
+    ]
+  },
+  "$filters": [
+    {
+      "$fragment": "$smdesc#supplementalSemanticIds[]",
+      "$match": true,
+      "$condition": {
+        "$eq": [
+          { "$field": "$smdesc#supplementalSemanticIds[].keys[].value" },
+          { "$strVal": "FILTER_VISIBLE" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+With `$match: true`, only supplemental semantic ID rows satisfying the filter
+condition are returned. Omitting `$match`, or setting it to `false`, keeps the
+existential behavior. Array-ended fragments never enable matching implicitly.
+
+ABAC policy filters use the equivalent uppercase `MATCH` property because the
+access-rule schema uses uppercase property names:
+
+```json
+{
+  "FRAGMENT": "$aasdesc#specificAssetIds[]",
+  "MATCH": true,
+  "USEFORMULA": "bpn_or_public"
+}
+```
+
+Both forms are explicit and are supported for every fragment handled by its
+reader. Row-local behavior is especially relevant for arrays and nested arrays,
+where it keeps conditions bound to the same item and array indices.
+
+#### Root scope and correlation boundaries
+
+The root prefix describes the resource through which a fragment is read. It is
+not changed by a fragment filter's `$match` or `MATCH` flag:
+
+| Query context | Fragment and field prefix | Scope without matching | Scope with matching |
+| --- | --- | --- | --- |
+| Submodel Descriptor nested in an AAS Descriptor | `$aasdesc#submodelDescriptors[]...` | The owning AAS Descriptor. A sibling Submodel Descriptor in that AAS Descriptor may satisfy the condition, preserving the complete requested child fragment. | The currently reconstructed nested Submodel Descriptor or child row. |
+| Standalone Submodel Descriptor | `$smdesc#...` | The current Submodel Descriptor. | The currently reconstructed child row. |
+
+For example, a DTR policy that filters supplemental-semantic-ID keys of nested
+Submodel Descriptors uses the AAS Descriptor root consistently in both the
+fragment and the formula field:
+
+```json
+{
+  "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
+  "MATCH": true,
+  "USEFORMULA": "submodel_descriptor_bpn_or_public_filter"
+}
+```
+
+The referenced formula must use the same root, for example:
+
+```json
+{
+  "$eq": [
+    {
+      "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
+    },
+    { "$strVal": "PUBLIC_READABLE" }
+  ]
+}
+```
+
+`$smdesc#supplementalSemanticIds[].keys[]` is the corresponding path only when
+the query result itself is rooted at a standalone Submodel Descriptor. The
+correlation never crosses the resource boundary: a nested descriptor condition
+cannot be satisfied by a descriptor belonging to another AAS Descriptor.
+
+The same boundary applies to Submodel Element descendant filters. Descendant
+paths are correlated by both `idShortPath` and the containing Submodel. An
+identical path in another Submodel cannot satisfy the condition.
+
+#### How the SQL correlation is selected
+
+Fragment conditions are evaluated through correlated `EXISTS` expressions. The
+correlation key depends on the root and match mode:
+
+| Context | Correlation |
+| --- | --- |
+| Nested `$aasdesc#submodelDescriptors[]...`, matching disabled | `inner_submodel_descriptor.aas_descriptor_id = outer_submodel_descriptor.aas_descriptor_id` |
+| Nested `$aasdesc#submodelDescriptors[]...`, matching enabled | `inner_submodel_descriptor.descriptor_id = outer_submodel_descriptor.descriptor_id`, followed by the applicable child owner keys for deeper arrays |
+| Standalone `$smdesc#...` | `inner_submodel_descriptor.descriptor_id = outer_submodel_descriptor.descriptor_id`, followed by the applicable child owner keys |
+| Submodel Element descendant | `inner.submodel_id = outer.submodel_id` plus an `idShortPath` descendant comparison |
+
+Using `aas_descriptor_id` for a non-matching nested condition is deliberate: it
+implements parent-level existential semantics, so one Submodel Descriptor may
+satisfy the condition while the complete fragment of its siblings in the same
+AAS Descriptor is retained. Correlation by the current Submodel Descriptor is
+retained for `MATCH`, which masks non-matching siblings or child rows.
+
+The nested and standalone collectors are selected independently by the child
+readers. This applies consistently to Submodel Descriptor endpoints,
+`semanticId.keys[]`, supplemental semantic ID references, and their `keys[]`.
+Consequently, a `$aasdesc` filter is never evaluated with the standalone
+`$smdesc` scope merely because both paths read the same database tables.
+
+For Submodel Element descendants, the generated correlation is equivalent to:
+
+```sql
+inner.submodel_id = outer.submodel_id
+AND (
+  inner.idshort_path LIKE (escaped_outer_path || '.%') ESCAPE '!'
+  OR inner.idshort_path LIKE (escaped_outer_path || '[%]%') ESCAPE '!'
+)
+```
+
+Here `escaped_outer_path` is the outer `idshort_path` with SQL `LIKE` wildcard
+characters escaped. The `submodel_id` equality is required because
+`idShortPath` is unique only within a Submodel. Without it, an identically
+structured Submodel could satisfy the `EXISTS` condition for the wrong
+Submodel.
+
+#### Behavior and compatibility
+
+| Filter source | `$match` / `MATCH` omitted or `false` | `$match` / `MATCH` set to `true` |
+| --- | --- | --- |
+| Request query (`$filters`) | The condition is evaluated at parent scope. A matching sibling can keep the complete fragment in the response. | The condition is evaluated against the current fragment row. Only matching rows of that fragment are reconstructed. |
+| ABAC policy (`FILTER` / `FILTERLIST`) | The policy condition keeps parent-level existential semantics. | The policy condition masks the current fragment row. Each condition retains its own match mode when filters and rules are combined. |
+
+This changes the previous request-query behavior for wildcard array fragments:
+an array-ended `$fragment` no longer enables row-local matching automatically.
+Clients that depend on receiving only the matching array entries must add
+`"$match": true`. Existing queries remain valid, but their returned fragment
+contents can be broader when `$match` is omitted.
+
+Implementation reference:
+- Request query parsing in [internal/common/model/grammar/query.go](../../../internal/common/model/grammar/query.go)
+- QueryFilter merging in [internal/common/security/authorize.go](../../../internal/common/security/authorize.go)
+- ABAC match propagation in [internal/common/security/abac_engine.go](../../../internal/common/security/abac_engine.go)
+- Row-local and existential evaluation in [internal/common/security/filter_helpers.go](../../../internal/common/security/filter_helpers.go)
+- EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](../../../internal/common/model/grammar/logical_expression_to_sql.go)
+- Nested and standalone Submodel Descriptor collector selection in [internal/common/descriptors/AASFilterQuery.go](../../../internal/common/descriptors/AASFilterQuery.go)
+- Submodel Descriptor endpoint filtering in [internal/common/descriptors/ReadEndpoint.go](../../../internal/common/descriptors/ReadEndpoint.go)
+- Submodel Descriptor reference filtering in [internal/common/descriptors/ReadReferences.go](../../../internal/common/descriptors/ReadReferences.go)
+- ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](../../../internal/common/model/grammar/fieldidentifier_processing.go)
+
+Beginner notes:
+- A fragment identifies an array position, not a single scalar value.
+- The guard makes sure a filter only applies to the intended array element.
+
+## Common pitfalls
+
+- Invalid field identifiers are rejected during parsing or resolution.
+- Field-to-field comparisons are not supported in SQL conversion.
+- If an expression is undecidable, the SQL still includes backend-resolved predicates.
+
+## Example (end-to-end without endpoint context)
+
+Query condition:
+
+```json
+{
+  "$and": [
+    { "$eq": [ { "$field": "$aasdesc#idShort" }, { "$strVal": "motor-1" } ] },
+    { "$gt": [ { "$field": "$aasdesc#createdAt" }, { "$dateTimeVal": "2024-01-01T00:00:00Z" } ] }
+  ]
+}
+```
+
+What happens:
+- Parse into a LogicalExpression tree.
+- Simplify: no attributes here, so it stays undecided and unchanged.
+- Resolve fields to columns.
+- Build SQL: AND of two comparisons on those columns.
+
+If you add a fragment filter (example fragment: $aasdesc#specificAssetIds[2]):
+- Resolve fragment to bindings (position = 2).
+- Build fragmentExpr from bindings.
+- Final WHERE becomes: mainExpr OR NOT(fragmentExpr).
+
+## Related tests
+
+- SQL conversion tests in [internal/common/model/grammar](../../../internal/common/model/grammar)
+  - logical_expression_to_sql_*_test.go
+  - logical_expression_simplify_backend.go tests

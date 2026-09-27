@@ -7,13 +7,13 @@ This guide explains how to export the Keycloak realm configuration from a runnin
 Recommended path from the repository root:
 
 ```bash
-bash docu/security/export_keycloak_realm.sh
+bash docu/security/keycloak/export_keycloak_realm.sh
 ```
 
 The script supports Docker and Podman, auto-detects a single running Keycloak container, and writes the export to `./export` by default. Use `--runtime`, `--container`, and `--output` when auto-detection is not enough:
 
 ```bash
-bash docu/security/export_keycloak_realm.sh --runtime podman --container keycloak --output ./realm-export
+bash docu/security/keycloak/export_keycloak_realm.sh --runtime podman --container keycloak --output ./realm-export
 ```
 
 Manual fallback:

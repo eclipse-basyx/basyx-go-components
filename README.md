@@ -56,7 +56,7 @@ BaSyx Go Components is an open-source implementation of the Eclipse BaSyx framew
 
 ## 2. Architecture Overview
 
-The project is composed of DB-backed microservices for AAS and Submodel registries, AAS and Submodel repositories, AAS Environment, Discovery, Digital Twin Registry, AASX file server, Concept Description Repository, Company Lookup, and DPP API. The BaSyx Configuration Service initializes and migrates the PostgreSQL schema, and `historyevidenceverifier` supports operational history-evidence checks. Security is enforced via OIDC and ABAC middleware. See [docu/security/README.md](docu/security/README.md) for a detailed flow and architecture diagram.
+The project is composed of DB-backed microservices for AAS and Submodel registries, AAS and Submodel repositories, AAS Environment, Discovery, Digital Twin Registry, AASX file server, Concept Description Repository, Company Lookup, and DPP API. The BaSyx Configuration Service initializes and migrates the PostgreSQL schema, and `historyevidenceverifier` supports operational history-evidence checks. Security is enforced via OIDC and ABAC middleware. See [docu/developer/security_architecture.md](docu/developer/security_architecture.md) for a detailed flow and architecture diagram.
 
 ## 3. Setup & Installation
 
@@ -113,7 +113,7 @@ If a setup uses mutable tags and pulls images on every start or restart, include
 All commands support `logging.format` (`text` or `json`) and `logging.level`
 (`debug`, `info`, `warn`, or `error`), with `LOGGING_FORMAT` and
 `LOGGING_LEVEL` environment overrides. Diagnostic records are written to
-stderr. See the [logging guide](docu/user/logging.md) for the output contract
+stderr. See the [logging guide](docu/admin/logging.md) for the output contract
 and Docker, Kubernetes, systemd, and Loki collection guidance.
 
 ### OpenTelemetry Tracing
@@ -121,11 +121,11 @@ and Docker, Kubernetes, systemd, and Loki collection guidance.
 All HTTP services support optional environment-driven OpenTelemetry tracing,
 W3C context extraction, delegated-operation propagation, and structured-log
 correlation. Tracing is disabled by default. See the [telemetry
-guide](docu/user/telemetry.md) for configuration and the [observability
+guide](docu/admin/telemetry.md) for configuration and the [observability
 example](examples/BaSyxObservabilityExample/README.md) for a Collector, Tempo,
 Alloy, Loki, and Grafana setup.
 
-Configuration is managed via YAML files in `cmd/<service>/config.yaml` and environment variables. Key variables include database connection settings (see [docu/errors.md](docu/errors.md) for troubleshooting):
+Configuration is managed via YAML files in `cmd/<service>/config.yaml` and environment variables. Key variables include database connection settings (see [docu/admin/errors.md](docu/admin/errors.md) for troubleshooting):
 
 ```yaml
 logging:
@@ -298,8 +298,8 @@ Upload and startup preconfiguration use the AAS 3.2 parsing stack. For backward 
 - `internal/` - Core business logic, persistence, integration tests
 - `pkg/` - Generated Go server stubs and reusable service packages
 - `examples/` - Minimal working examples, Docker Compose setups
-- `docu/` - Documentation, error explanations, security notes
-- `docu/basyx-database-wiki/` - Database schema documentation, including `basyxconfigurationservice` schema-version and clean/dirty state behavior
+- `docu/` - Documentation organized by reader; start with the [documentation index](docu/README.md)
+- `docu/developer/database/` - Database schema documentation, including `basyxconfigurationservice` schema-version and clean/dirty state behavior
 
 See [structure.md](docu/developer/structure.md) and related files for details on each module.
 
@@ -338,7 +338,7 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - Example endpoint: `/submodels/{id}/submodel-elements/{idShort}/attachment`
 - AAS environment import endpoint: `/upload` (multipart/form-data with file part `file`)
 - Supported upload media types: `application/aasx+xml`, `application/aasx+json`, `application/asset-administration-shell+xml`, `application/asset-administration-shell+json`, `application/json`, `application/xml`, `text/xml`
-- Query fragment filters use existential parent-level evaluation by default. Set `"$match": true` explicitly when a request filter must be evaluated against the current fragment row. See the [query language guide](docu/query_language/README.md#explicit-row-local-fragment-matching).
+- Query fragment filters use existential parent-level evaluation by default. Set `"$match": true` explicitly when a request filter must be evaluated against the current fragment row. See the [query language guide](docu/developer/query_language/architecture.md#explicit-row-local-fragment-matching).
 - AAS v3.2 history and recent changes: [user guide](docu/user/aas_api_v3_2.md) and [runtime notes](docu/developer/aas_v3_2_runtime.md)
 - See [structure_cmd.md](docu/developer/structure_cmd.md) for details
 
@@ -379,13 +379,14 @@ must have permission to push the generated release commit to the default branch.
 
 - Security reporting policy: [Eclipse BaSyx SECURITY.md](https://github.com/eclipse-basyx/.github/blob/main/SECURITY.md)
 - Supply-chain trust model, signing, attestations, and SBOM verification: [docu/security/SUPPLY_CHAIN_SECURITY.md](docu/security/SUPPLY_CHAIN_SECURITY.md)
-- Runtime security architecture (OIDC + ABAC): [docu/security/README.md](docu/security/README.md)
+- Security guides for administrators and API users: [docu/security/README.md](docu/security/README.md)
+- Runtime security architecture (OIDC + ABAC): [docu/developer/security_architecture.md](docu/developer/security_architecture.md)
 
 Release and snapshot images are signed with Cosign keyless identity and include provenance and SBOM attestations. For full verification commands, see [docu/security/SUPPLY_CHAIN_SECURITY.md](docu/security/SUPPLY_CHAIN_SECURITY.md).
 
 ## 12. Troubleshooting & Error Reference
 
-- See [docu/errors.md](docu/errors.md) for common error scenarios and solutions
+- See [docu/admin/errors.md](docu/admin/errors.md) for common error scenarios and solutions
 - For security and authorization, see [docu/security/REGISTRY_SECURITY.md](docu/security/REGISTRY_SECURITY.md)
 
 ## 13. Glossary of Terms & Abbreviations
@@ -399,11 +400,11 @@ Release and snapshot images are signed with Cosign keyless identity and include 
 
 ---
 
-For further details, see the [docs folder](docu), the [BaSyx wiki](https://wiki.basyx.org), and links above. If you encounter issues, please open an issue on GitHub or consult the [error documentation](docu/errors.md).
+For further details, see the [docs folder](docu), the [BaSyx wiki](https://wiki.basyx.org), and links above. If you encounter issues, please open an issue on GitHub or consult the [error documentation](docu/admin/errors.md).
 
 ## Database Schema
 
-See [basyx-database-wiki](docu/basyx-database-wiki/) and [sql_examples](sql_examples/) for details on tables, relationships, and large object handling.
+See [docu/developer/database/](docu/developer/database/) and [sql_examples](sql_examples/) for details on tables, relationships, and large object handling.
 
 ## Frequently Asked Questions
 

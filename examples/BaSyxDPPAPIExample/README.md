@@ -243,7 +243,7 @@ curl -i \
 
 To use the other requests above, change `BASE_URL` to `http://localhost:8088` and add `-H "Authorization: Bearer $TOKEN"` to each request. Alternatively, set `baseUrl` and `bearerToken` in Postman. Obtain a new token when the current one expires.
 
-Try the same write request with a token for `usera`: it should be denied. This example grants permissions per route, so it does not demonstrate different permissions for individual passports or fields. You can inspect the [access rules](security_env/access-rules.json) and [trusted issuer configuration](security_env/trustlist.json), or read the [security guide](../../docu/security/README.md).
+Try the same write request with a token for `usera`: it should be denied. This example grants permissions per route, so it does not demonstrate different permissions for individual passports or fields. You can inspect the [access rules](security_env/access-rules.json) and [trusted issuer configuration](security_env/trustlist.json), or read the [security guide](../../docu/developer/security_architecture.md).
 
 ## Stop and clean up
 

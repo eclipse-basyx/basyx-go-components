@@ -309,7 +309,7 @@ AASX export preserves managed File and thumbnail values byte-for-byte, creates p
 | `history.evidence.signing.required` | Requires signed manifests for verifier/recovery operations and requires a private key for `-write`. |
 | `history.integrityAnchor.provider: none` | Default. Non-`none` providers such as immudb, Rekor, Trillian, or timestamping services are reserved for later work. |
 | `history.auditIdentityMode` | `none` stores no request identity metadata. `minimal` stores the canonical request and correlation IDs supplied by the shared HTTP middleware, authenticated OIDC subject/issuer/client id, ABAC allow metadata, operation, endpoint, and method. Valid client or ingress IDs are preserved; missing or invalid IDs receive generated defaults. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available. Request and correlation IDs are not authenticated identity data. |
-| `eventing.feed.enabled` | Opt-in CloudEvents REST Event Feed. Writes feed rows in the same PostgreSQL transaction as the model mutation. Default is `false`. See [event_feed.md](../user/event_feed.md). |
+| `eventing.feed.enabled` | Opt-in CloudEvents REST Event Feed. Writes feed rows in the same PostgreSQL transaction as the model mutation. Default is `false`. See [event_feed.md](../eventing/event_feed.md). |
 | Configured event sinks or enabled outbox processing | MQTT requires enabled eventing and the outbox; reject unknown sinks and inconsistent activation. |
 
 `AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Runtime middleware now populates `AuditContext` when configured; no external ledger anchor client is invoked by the append path yet.
@@ -382,7 +382,7 @@ failures schedule retries. Shutdown cancels workers before closing the database.
 `internal/common/mqtt` owns topic routing, credentials, TLS, and the Paho MQTT 5
 connection. It publishes one structured JSON CloudEvent per message, with Content
 Type `application/cloudevents+json`. Connection attempts run asynchronously so
-broker outages do not block API startup. See the [MQTT guide](../user/mqtt_eventing.md)
+broker outages do not block API startup. See the [MQTT guide](../eventing/mqtt_eventing.md)
 for configuration and delivery guarantees.
 
 The integration suites cover combined and individual transports, rollback,
@@ -393,7 +393,7 @@ transport tests must verify payload schemas and exact event IDs and timestamps.
 ### Event Feed Runtime
 
 The opt-in feed lives in `internal/common/eventfeed`. For deployment settings
-and the HTTP consumer contract, see the [Event Feed user guide](../user/event_feed.md).
+and the HTTP consumer contract, see the [Event Feed user guide](../eventing/event_feed.md).
 When extending persistence paths, preserve these invariants:
 
 - Capture mutations through `history.MutationSink` and insert feed rows in the
