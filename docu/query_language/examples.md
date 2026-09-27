@@ -2,7 +2,7 @@
 
 This guide shows concrete query and ABAC filter inputs together with the
 expected result. For the expression grammar and SQL translation details, see
-the [query language architecture guide](README.md).
+the [query language architecture guide](../developer/query_language/architecture.md).
 
 ## Supported query endpoints
 
@@ -741,4 +741,4 @@ before this usage can be described as standards-compliant.
   expressions are combined.
 
 For exact value types, casts, field identifier syntax, and fragment guards, see
-the [main query language guide](README.md).
+the [main query language guide](../developer/query_language/architecture.md).

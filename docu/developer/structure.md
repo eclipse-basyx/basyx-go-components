@@ -22,9 +22,9 @@ This document explains the structure and purpose of each major component in the 
   - Minimal working examples and sample setups, including Docker Compose files for quick local testing.
 
 - **docu/**
-  - Documentation, error explanations, and security notes.
+  - Documentation organized by reader. See [structure_docu.md](structure_docu.md).
 
-- **docu/basyx-database-wiki/**
+- **docu/developer/database/**
   - In-depth documentation of the database schema, relationships, and usage notes.
 
 - **sql_examples/**
@@ -61,7 +61,7 @@ This document explains the structure and purpose of each major component in the 
 - Used by services to expose REST APIs.
 
 ### Security
-- In `internal/common/security/`, selected service setup code, and `docu/security/`
+- In `internal/common/security/`, selected service setup code, `docu/security/`, and `docu/developer/security_architecture.md`
 - Implements authentication, authorization, and security best practices for API endpoints.
 
 ### Integration Tests
@@ -97,7 +97,7 @@ This document explains the structure and purpose of each major component in the 
 
 ## Further Reading
 - See [README.md](../../README.md) for onboarding and [godoc_tips.md](godoc_tips.md) for GoDoc usage.
-- Explore [docu/basyx-database-wiki/](../basyx-database-wiki/) for database details.
+- Explore [docu/developer/database/](database/) for database details.
 - Review OpenAPI specs in `cmd/*/openapi.yaml` for endpoint documentation.
 
 For questions, open an issue or contact the maintainers.

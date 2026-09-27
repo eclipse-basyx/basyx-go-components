@@ -62,7 +62,7 @@ activity list. To focus on your PCN changes, set Swagger's `filter` to:
 rsql:event.subject==urn:example:eventing:submodel:pcn
 ```
 
-The [Event Feed user guide](../../docu/user/event_feed.md) explains filtering,
+The [Event Feed user guide](../../docu/eventing/event_feed.md) explains filtering,
 polling for new events, presentation modes, and configuration for your own setup.
 
 ## Check or stop the playground

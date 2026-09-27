@@ -65,7 +65,7 @@ The subscriber receives a CloudEvent on
 `type` identifies the change, and `data` contains the affected model references.
 
 For authentication, TLS, topic names, and delivery behavior, see the
-[MQTT guide](../../docu/user/mqtt_eventing.md).
+[MQTT guide](../../docu/eventing/mqtt_eventing.md).
 
 ## Check and stop
 
