@@ -27,6 +27,8 @@
 package persistence
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"reflect"
 	"sort"
@@ -127,19 +129,51 @@ func wrapReconciliationDeleteRows(paths []string) []reconciliationDeleteJSONRow 
 	return result
 }
 
+func (s *SubmodelDatabase) buildPersistedSubmodelReconciliationPlanTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelDatabaseID int,
+	oldSubmodel types.ISubmodel,
+	newSubmodel types.ISubmodel,
+) (submodelReconciliationPlan, error) {
+	persistedPositions, err := submodelelements.LoadPersistedPositionsTx(ctx, tx, submodelDatabaseID, "")
+	if err != nil {
+		return submodelReconciliationPlan{}, err
+	}
+	return s.buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, persistedPositions)
+}
+
 func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 	oldSubmodel types.ISubmodel,
 	newSubmodel types.ISubmodel,
+	persistedPositions map[string]int,
 ) (submodelReconciliationPlan, error) {
 	metadata, err := buildSubmodelReconciliationMetadata(oldSubmodel, newSubmodel)
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	oldRows, err := submodelelements.BuildReconciliationElementRows(s.db, oldSubmodel.SubmodelElements())
+	plan, err := s.buildElementReconciliationPlan(oldSubmodel.SubmodelElements(), newSubmodel.SubmodelElements(), nil, persistedPositions)
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	newRows, err := submodelelements.BuildReconciliationElementRows(s.db, newSubmodel.SubmodelElements())
+	plan.Metadata = metadata
+	return plan, nil
+}
+
+// buildElementReconciliationPlan diffs two element trees placed below the
+// parent described by insertCtx. The plan leaves the Submodel metadata unchanged.
+func (s *SubmodelDatabase) buildElementReconciliationPlan(
+	oldElements []types.ISubmodelElement,
+	newElements []types.ISubmodelElement,
+	insertCtx *submodelelements.BatchInsertContext,
+	persistedPositions map[string]int,
+) (submodelReconciliationPlan, error) {
+	oldRows, err := submodelelements.BuildReconciliationElementRowsWithContext(s.db, oldElements, insertCtx)
+	if err != nil {
+		return submodelReconciliationPlan{}, err
+	}
+	submodelelements.AlignPersistedPositions(oldRows, persistedPositions)
+	newRows, err := submodelelements.BuildReconciliationElementRowsWithContext(s.db, newElements, insertCtx)
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
@@ -148,7 +182,6 @@ func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(
 		return submodelReconciliationPlan{}, err
 	}
 	return submodelReconciliationPlan{
-		Metadata:                metadata,
 		Updates:                 updates,
 		Inserts:                 inserts,
 		Deletes:                 deletes,

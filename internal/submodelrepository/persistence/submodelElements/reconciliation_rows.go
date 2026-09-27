@@ -122,8 +122,15 @@ type ReconciliationElementRow struct {
 // BuildReconciliationElementRows flattens an AAS element tree and converts it
 // into database-ready rows without executing SQL.
 func BuildReconciliationElementRows(db *sql.DB, elements []types.ISubmodelElement) ([]ReconciliationElementRow, error) {
-	ctx := normalizeBatchInsertContext(nil)
-	nodes, _, err := flattenSubmodelElementsForInsert(db, elements, ctx)
+	return BuildReconciliationElementRowsWithContext(db, elements, nil)
+}
+
+// BuildReconciliationElementRowsWithContext flattens elements that are placed
+// below the parent described by insertCtx. Only ParentPath, IsFromList,
+// StartPosition and StartDepth are used; database IDs are resolved by the
+// reconciliation statement.
+func BuildReconciliationElementRowsWithContext(db *sql.DB, elements []types.ISubmodelElement, insertCtx *BatchInsertContext) ([]ReconciliationElementRow, error) {
+	nodes, _, err := flattenSubmodelElementsForInsert(db, elements, normalizeBatchInsertContext(insertCtx))
 	if err != nil {
 		return nil, err
 	}
@@ -161,19 +168,10 @@ func buildReconciliationElementRow(node *flattenedInsertNode) (ReconciliationEle
 		return ReconciliationElementRow{}, err
 	}
 
-	parentPath := ""
-	if node.parentIndex >= 0 {
-		parentPath = nodePathFromIndex(node, node.parentIndex)
-	}
-	rootPath := node.idShortPath
-	if node.rootNodeIndex >= 0 {
-		rootPath = nodePathFromIndex(node, node.rootNodeIndex)
-	}
-
 	return ReconciliationElementRow{
 		Path:                    node.idShortPath,
-		ParentPath:              parentPath,
-		RootPath:                rootPath,
+		ParentPath:              parentPath(node.idShortPath),
+		RootPath:                rootPath(node.idShortPath),
 		Position:                node.position,
 		Depth:                   node.depth,
 		IDShort:                 node.idShort,
@@ -187,16 +185,6 @@ func buildReconciliationElementRow(node *flattenedInsertNode) (ReconciliationEle
 		LanguageValues:          languageValues,
 		ValueID:                 valueID,
 	}, nil
-}
-
-func nodePathFromIndex(node *flattenedInsertNode, index int) string {
-	// flattenSubmodelElementsForInsert stores nodes breadth-first. Parent and
-	// root indices therefore always point to nodes already materialized in the
-	// same backing slice. The paths are also derivable from the current path.
-	if index == node.parentIndex {
-		return parentPath(node.idShortPath)
-	}
-	return rootPath(node.idShortPath)
 }
 
 func parentPath(path string) string {

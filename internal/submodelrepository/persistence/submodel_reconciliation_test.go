@@ -49,7 +49,7 @@ func TestSubmodelReconciliationQueryHasConstantSingleStatementShape(t *testing.T
 	oldSubmodel := readReconciliationFixture(t, "../integration_tests/bodies/post/postSubmodel.json")
 	newSubmodel := readReconciliationFixture(t, "../integration_tests/bodies/put/putSubmodelUpdate.json")
 	sut := &SubmodelDatabase{}
-	plan, err := sut.buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel)
+	plan, err := sut.buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, nil)
 	require.NoError(t, err)
 	require.True(t, plan.hasLiveMutation())
 
@@ -132,7 +132,7 @@ func TestReconciliationPlanRejectsDuplicateElementPaths(t *testing.T) {
 			previous := readReconciliationJSON(t, testCase.previous)
 			target := readReconciliationJSON(t, testCase.target)
 
-			_, err := (&SubmodelDatabase{}).buildSubmodelReconciliationPlan(previous, target)
+			_, err := (&SubmodelDatabase{}).buildSubmodelReconciliationPlan(previous, target, nil)
 
 			require.Error(t, err)
 			require.Truef(t, common.IsErrConflict(err), "got %v", err)
@@ -348,7 +348,7 @@ func TestContextWithoutFragmentFiltersPreservesUpdateFormula(t *testing.T) {
 
 func buildReconciliationPlanForTest(t *testing.T, oldSubmodel types.ISubmodel, newSubmodel types.ISubmodel) submodelReconciliationPlan {
 	t.Helper()
-	plan, err := (&SubmodelDatabase{}).buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel)
+	plan, err := (&SubmodelDatabase{}).buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, nil)
 	require.NoError(t, err)
 	return plan
 }

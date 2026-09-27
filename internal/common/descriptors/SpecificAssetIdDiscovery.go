@@ -252,8 +252,16 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 			return err
 		}
 
-		if _, err := tx.ExecContext(ctx, `DELETE FROM specific_asset_id WHERE aasRef = $1`, aasRef); err != nil {
-			return err
+		deleteQuery, deleteArgs, err := goqu.Dialect(common.Dialect).
+			Delete(common.TblSpecificAssetID).
+			Where(goqu.C(common.ColAASRef).Eq(aasRef)).
+			Prepared(true).
+			ToSQL()
+		if err != nil {
+			return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-BUILDDELETE " + err.Error())
+		}
+		if _, err = tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
+			return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-EXECDELETE " + err.Error())
 		}
 		return common.InsertSpecificAssetIDs(
 			tx,

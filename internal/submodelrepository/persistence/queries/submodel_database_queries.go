@@ -42,24 +42,13 @@ import (
 
 // BuildInsertSubmodelSQL builds the insert statement for a submodel row.
 func BuildInsertSubmodelSQL(submodel types.ISubmodel) (string, []any, error) {
-	return BuildInsertSubmodelSQLWithAuthUUID(submodel, "")
-}
-
-// BuildInsertSubmodelSQLWithAuthUUID builds the Submodel insert statement. A
-// non-empty authUUID preserves the authorization identity of a replaced row;
-// otherwise the database assigns a new one.
-func BuildInsertSubmodelSQLWithAuthUUID(submodel types.ISubmodel, authUUID string) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
-	record := goqu.Record{
+	return dialect.Insert("submodel").Rows(goqu.Record{
 		"submodel_identifier": submodel.ID(),
 		"id_short":            submodel.IDShort(),
 		"category":            submodel.Category(),
 		"kind":                submodel.Kind(),
-	}
-	if authUUID != "" {
-		record["auth_uuid"] = goqu.L("?::uuid", authUUID)
-	}
-	return dialect.Insert("submodel").Rows(record).Returning(goqu.I("id")).ToSQL()
+	}).Returning(goqu.I("id")).ToSQL()
 }
 
 // BuildInsertSubmodelPayloadSQL builds the insert statement for submodel payload data.

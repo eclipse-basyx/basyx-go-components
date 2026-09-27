@@ -68,6 +68,7 @@ func NewPostgreSQLSubmodelElementListHandler(db *sql.DB) (*PostgreSQLSubmodelEle
 // Update modifies an existing SubmodelElementList element identified by its idShort or path.
 // This method delegates the update operation to the decorated CRUD handler which handles
 // the common submodel element update logic and then updates SubmodelElementList-specific fields.
+// Child elements are reconciled by the caller.
 //
 // Parameters:
 //   - submodelID: The ID of the parent submodel
@@ -90,13 +91,6 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 		return err
 	}
 	defer cu(&err)
-	// For PUT operations, delete all children first (complete replacement)
-	if isPut {
-		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
-		if err != nil {
-			return err
-		}
-	}
 
 	// Update base submodel element properties
 	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
@@ -111,11 +105,6 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
 	}
 	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, effectivePath)
-	if err != nil {
-		return err
-	}
-
-	rootSmeID, err := p.decorated.GetRootSmeIDByElementID(elementID)
 	if err != nil {
 		return err
 	}
@@ -140,27 +129,6 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 	_, err = localTx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
-	}
-
-	if isPut || smeList.Value() != nil {
-		if len(smeList.Value()) > 0 {
-			_, insertErr := InsertSubmodelElements(
-				p.db,
-				submodelID,
-				smeList.Value(),
-				localTx,
-				&BatchInsertContext{
-					ParentID:      elementID,
-					ParentPath:    effectivePath,
-					RootSmeID:     rootSmeID,
-					IsFromList:    true,
-					StartPosition: 0,
-				},
-			)
-			if insertErr != nil {
-				return common.NewInternalServerError("SMREPO-UPDSMELIST-INSCHILDREN " + insertErr.Error())
-			}
-		}
 	}
 
 	return common.CommitTransactionIfNeeded(tx, localTx)

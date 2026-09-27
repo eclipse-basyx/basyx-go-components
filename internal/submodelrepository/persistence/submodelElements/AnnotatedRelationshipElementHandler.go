@@ -108,11 +108,6 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		return err
 	}
 
-	rootSmeID, err := p.decorated.GetRootSmeIDByElementID(elementID)
-	if err != nil {
-		return err
-	}
-
 	firstRef, err := serializeReference(are.First(), jsoniter.ConfigCompatibleWithStandardLibrary)
 	if err != nil {
 		return err
@@ -139,45 +134,6 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 	_, err = localTx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
-	}
-
-	// Handle Annotations field based on isPut flag
-	// For PUT: always delete all children (annotations) and recreate from body
-	// For PATCH: only replace children when annotations are provided
-	if isPut || are.Annotations() != nil {
-		// PUT -> Remove all children and then recreate the ones from the body
-		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
-		if err != nil {
-			return err
-		}
-
-		if len(are.Annotations()) > 0 {
-			annotations := make([]types.ISubmodelElement, 0, len(are.Annotations()))
-			for _, annotation := range are.Annotations() {
-				annotationElement, ok := annotation.(types.ISubmodelElement)
-				if !ok {
-					return common.NewErrBadRequest("SMREPO-UPDARE-INVALIDANNOTATION Annotation is not a valid submodel element")
-				}
-				annotations = append(annotations, annotationElement)
-			}
-
-			_, insertErr := InsertSubmodelElements(
-				p.db,
-				submodelID,
-				annotations,
-				localTx,
-				&BatchInsertContext{
-					ParentID:      elementID,
-					ParentPath:    effectivePath,
-					RootSmeID:     rootSmeID,
-					IsFromList:    false,
-					StartPosition: 0,
-				},
-			)
-			if insertErr != nil {
-				return common.NewInternalServerError("SMREPO-UPDARE-INSANNOTATIONS " + insertErr.Error())
-			}
-		}
 	}
 
 	return common.CommitTransactionIfNeeded(tx, localTx)

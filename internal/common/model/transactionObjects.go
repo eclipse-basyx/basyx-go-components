@@ -610,15 +610,6 @@ type ManagedThumbnailMetadata struct {
 	Path                sql.NullString
 }
 
-// ManagedFileReferenceForReplacement carries a managed File association across a Submodel replacement transaction.
-type ManagedFileReferenceForReplacement struct {
-	IDShortPath  string
-	ManagedPath  string
-	ContentID    int64
-	PathToken    string
-	SafeFileName string
-}
-
 // MutationEvidenceState represents the committed database state of an independent evidence chain.
 type MutationEvidenceState struct {
 	LastSequence        int64

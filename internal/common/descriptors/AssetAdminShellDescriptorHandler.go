@@ -281,73 +281,6 @@ func insertAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.T
 	return createSubModelDescriptors(tx, sql.NullInt64{Int64: descriptorID, Valid: true}, aasd.SubmodelDescriptors)
 }
 
-// UpsertAdministrationShellDescriptorTx upserts an AssetAdministrationShellDescriptor
-// within the provided transaction. It first acquires an advisory lock scoped to
-// the AAS Id to prevent concurrent upserts for the same AAS. Then it attempts
-// to locate the internal descriptor id for the given AAS Id using a SELECT
-// ... FOR UPDATE to lock the row. If a descriptor is found, the function
-// replaces the descriptor details; otherwise it inserts a new descriptor and
-// related rows.
-//
-// The function returns a boolean indicating whether a new descriptor was
-// created (true) or an existing descriptor was replaced (false), and an error
-// when the operation fails. The caller is responsible for committing or
-// rolling back the supplied transaction `tx`.
-//
-// Parameters:
-//   - ctx: context for cancellation and query filtering.
-//   - tx: database transaction to use for the upsert (must be non-nil).
-//   - aasd: the AssetAdministrationShellDescriptor to insert or replace.
-//
-// Note: This function relies on advisory locks and FOR UPDATE row locking to
-// avoid race conditions; it must be invoked inside a transaction.
-func UpsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) (bool, error) {
-	if err := lockAASDescriptorUpsertTx(ctx, tx, aasd.Id); err != nil {
-		return false, err
-	}
-
-	descriptorID, found, err := selectAASDescriptorIDForUpdateTx(ctx, tx, aasd.Id)
-	if err != nil {
-		return false, err
-	}
-
-	if found {
-		if err = replaceAdministrationShellDescriptorDetailsTx(ctx, tx, descriptorID, aasd); err != nil {
-			return false, err
-		}
-		return false, nil
-	}
-
-	return true, InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
-}
-
-// GetAASDescriptorCreatedAtByIDTx returns and locks the persisted AAS descriptor
-// creation timestamp so replace operations can preserve it across delete/insert.
-func GetAASDescriptorCreatedAtByIDTx(ctx context.Context, tx *sql.Tx, aasID string) (time.Time, error) {
-	d := goqu.Dialect(common.Dialect)
-	aasTbl := goqu.T(common.TblAASDescriptor)
-
-	sqlStr, args, buildErr := d.
-		From(aasTbl).
-		Select(aasTbl.Col(common.ColCreatedAt)).
-		Where(aasTbl.Col(common.ColAASID).Eq(aasID)).
-		ForUpdate(goqu.Wait).
-		ToSQL()
-	if buildErr != nil {
-		return time.Time{}, buildErr
-	}
-
-	var createdAt time.Time
-	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&createdAt); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return time.Time{}, common.NewErrNotFound("AAS Descriptor not found")
-		}
-		return time.Time{}, err
-	}
-
-	return createdAt, nil
-}
-
 func lockAASDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, aasID string) error {
 	sqlStr, args, err := buildAASDescriptorUpsertLockSQL(aasID)
 	if err != nil {
@@ -393,16 +326,6 @@ func selectAASDescriptorIDForUpdateTx(ctx context.Context, tx *sql.Tx, aasID str
 	return descriptorID, true, nil
 }
 
-func replaceAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.Tx, descriptorID int64, aasd model.AssetAdministrationShellDescriptor) error {
-	if err := updateAASDescriptorRowTx(ctx, tx, descriptorID, aasd); err != nil {
-		return err
-	}
-	if err := deleteAdministrationShellDescriptorDetailsTx(ctx, tx, descriptorID); err != nil {
-		return err
-	}
-	return insertAdministrationShellDescriptorDetailsTx(ctx, tx, descriptorID, aasd, false)
-}
-
 func updateAASDescriptorRowTx(ctx context.Context, tx *sql.Tx, descriptorID int64, aasd model.AssetAdministrationShellDescriptor) error {
 	d := goqu.Dialect(common.Dialect)
 	record := buildAASDescriptorUpdateRecord(ctx, descriptorID, aasd)
@@ -416,50 +339,6 @@ func updateAASDescriptorRowTx(ctx context.Context, tx *sql.Tx, descriptorID int6
 		return buildErr
 	}
 
-	_, err := tx.ExecContext(ctx, sqlStr, args...)
-	return err
-}
-
-func deleteAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.Tx, descriptorID int64) error {
-	d := goqu.Dialect(common.Dialect)
-
-	childDescriptorIDs := d.
-		From(common.TblSubmodelDescriptor).
-		Select(common.ColDescriptorID).
-		Where(goqu.C(common.ColAASDescriptorID).Eq(descriptorID))
-	if err := deleteDescriptorRowsBySelectTx(ctx, tx, childDescriptorIDs); err != nil {
-		return err
-	}
-
-	for _, tableName := range []string{
-		common.TblAASDescriptorEndpoint,
-		common.TblSpecificAssetID,
-		common.TblDescriptorPayload,
-	} {
-		sqlStr, args, buildErr := d.
-			Delete(tableName).
-			Where(goqu.C(common.ColDescriptorID).Eq(descriptorID)).
-			ToSQL()
-		if buildErr != nil {
-			return buildErr
-		}
-		if _, err := tx.ExecContext(ctx, sqlStr, args...); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func deleteDescriptorRowsBySelectTx(ctx context.Context, tx *sql.Tx, descriptorIDs *goqu.SelectDataset) error {
-	d := goqu.Dialect(common.Dialect)
-	sqlStr, args, buildErr := d.
-		Delete(common.TblDescriptor).
-		Where(goqu.C(common.ColID).In(descriptorIDs)).
-		ToSQL()
-	if buildErr != nil {
-		return buildErr
-	}
 	_, err := tx.ExecContext(ctx, sqlStr, args...)
 	return err
 }
@@ -661,51 +540,6 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 		return common.NewInternalServerError("AASDESC-DELETE-BUILDPARENTSQL " + err.Error())
 	}
 	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
-}
-
-// ReplaceAdministrationShellDescriptor atomically replaces the descriptor with
-// the same AAS Id: if a descriptor exists it is deleted (base descriptor row),
-// then the provided descriptor is inserted. Related rows are recreated from the
-// input. The returned descriptor is the stored AssetAdministrationShellDescriptor
-// after replacement.
-func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd model.AssetAdministrationShellDescriptor) (model.AssetAdministrationShellDescriptor, error) {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return model.AssetAdministrationShellDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
-	}
-	defer func() {
-		if rec := recover(); rec != nil {
-			_ = tx.Rollback()
-		}
-	}()
-
-	// first check if user is allowed to replace
-	if _, err = GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
-	createdAt, err := GetAASDescriptorCreatedAtByIDTx(ctx, tx, aasd.Id)
-	if err != nil {
-		_ = tx.Rollback()
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
-	aasd.CreatedAt = &createdAt
-	// delete existing descriptor
-	if err = deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
-		_ = tx.Rollback()
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
-	// insert new descriptor
-	if err = InsertAdministrationShellDescriptorTx(WithAllowAASDescriptorCreatedAtOverride(ctx), tx, aasd); err != nil {
-		_ = tx.Rollback()
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
-	// check if user is allowed to write the new descriptor
-	result, err := GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
-	if err != nil {
-		_ = tx.Rollback()
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
-	return result, tx.Commit()
 }
 
 func buildListAASDescriptorPageQuery(

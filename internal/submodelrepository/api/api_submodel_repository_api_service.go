@@ -236,6 +236,39 @@ func mergeJSONObjects(base map[string]any, patch map[string]any) map[string]any 
 	return merged
 }
 
+// submodelElementChildFields maps container model types to the field that
+// carries their child elements.
+var submodelElementChildFields = map[string]string{
+	"SubmodelElementCollection":    "value",
+	"SubmodelElementList":          "value",
+	"Entity":                       "statements",
+	"AnnotatedRelationshipElement": "annotations",
+}
+
+// mergeSubmodelElementPatch merges patch into base and keeps the value only
+// when the patch sets it, so that unpatched values and children stay unchanged.
+func mergeSubmodelElementPatch(base map[string]any, patch map[string]any) map[string]any {
+	merged := mergeSubmodelElementMetadataPatch(base, patch)
+	if _, patched := patch["value"]; !patched {
+		delete(merged, "value")
+	}
+	return merged
+}
+
+// mergeSubmodelElementMetadataPatch merges patch into base and keeps child
+// elements only when the patch sets them, so that unpatched children are not
+// rewritten.
+func mergeSubmodelElementMetadataPatch(base map[string]any, patch map[string]any) map[string]any {
+	merged := mergeJSONObjects(base, patch)
+	modelType, _ := merged["modelType"].(string)
+	if field, isContainer := submodelElementChildFields[modelType]; isContainer {
+		if _, patched := patch[field]; !patched {
+			delete(merged, field)
+		}
+	}
+	return merged
+}
+
 func decodeSubmodelIdentifierOrAPIError(submodelIdentifier string, operation string) (string, gen.ImplResponse, bool) {
 	decodedSubmodelIdentifier, decodeErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeErr != nil {
@@ -2179,10 +2212,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 		return newAPIErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelElementData"), nil
 	}
 
-	mergedJSON := mergeJSONObjects(existingJSON, patchJSON)
-	if _, hasValuePatch := patchJSON["value"]; !hasValuePatch {
-		delete(mergedJSON, "value")
-	}
+	mergedJSON := mergeSubmodelElementPatch(existingJSON, patchJSON)
 
 	mergedElement, mergedErr := jsonization.SubmodelElementFromJsonable(mergedJSON)
 	if mergedErr != nil {
@@ -2277,7 +2307,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		}
 	}
 
-	mergedJSON := mergeJSONObjects(existingJSON, patchJSON)
+	mergedJSON := mergeSubmodelElementMetadataPatch(existingJSON, patchJSON)
 	mergedElement, mergedErr := jsonization.SubmodelElementFromJsonable(mergedJSON)
 	if mergedErr != nil {
 		return newAPIErrorResponse(mergedErr, http.StatusBadRequest, operation, "InvalidPatchedSubmodelElement"), nil

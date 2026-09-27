@@ -131,6 +131,29 @@ func TestElementGrantsArePathScoped(t *testing.T) {
 	expectStatus(t, http.StatusForbidden, call(t, "carol", http.MethodPatch, elements+"/a.b.c/$value", "edited", nil), "element grant does not reach siblings")
 }
 
+func TestGrantsSurviveSubmodelPatchAndElementReplacement(t *testing.T) {
+	identifier := createSubmodel(t, submodelURL, "alice", "reconciled",
+		collection("a", property("b", "before"), property("removed", "gone")),
+		property("x", "sibling"),
+	)
+	target := submodelURL + "/submodels/" + enc(identifier)
+	elements := target + "/submodel-elements"
+	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "carol"))
+	addGrants(t, "alice", elementAccess(submodelURL, identifier, "a.b"), userGrant(t, "viewer", "bob"))
+
+	patched := submodel(identifier, "patched", collection("a", property("b", "patched")), property("x", "sibling"))
+	expectStatus(t, http.StatusNoContent, call(t, "alice", http.MethodPatch, target, patched, nil), "owner patches the Submodel")
+	expectStatus(t, http.StatusOK, call(t, "carol", http.MethodGet, target, nil, nil), "Submodel grant survives the PATCH")
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, elements+"/a.b", nil, nil), "element grant survives the PATCH")
+
+	expectStatus(t, http.StatusNoContent, call(t, "alice", http.MethodPut, elements+"/a", collection("a", property("b", "replaced")), nil), "owner replaces the container")
+	expectStatus(t, http.StatusOK, call(t, "carol", http.MethodGet, target, nil, nil), "Submodel grant survives the element PUT")
+	replaced := call(t, "bob", http.MethodGet, elements+"/a.b", nil, nil)
+	expectStatus(t, http.StatusOK, replaced, "element grant survives the element PUT")
+	require.Equal(t, "replaced", replaced.json(t)["value"])
+	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, elements+"/x", nil, nil), "element grant still does not reach siblings")
+}
+
 func TestApprovedAASLinkCarriesAccessUntilReferenceRemoval(t *testing.T) {
 	bootstrapCreators(t)
 	submodelID := createSubmodel(t, environmentURL, "alice", "linked", property("p", "1"))

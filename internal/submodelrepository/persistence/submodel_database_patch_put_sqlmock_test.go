@@ -79,7 +79,7 @@ func TestPatchSubmodelNotFoundRollsBack(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
+func TestPatchSubmodelWithoutChangesKeepsSubmodelRows(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
@@ -94,17 +94,36 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
-	expectNoManagedFileReferences(mock)
-	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
-	expectPreservedSubmodelAuthUUID(mock)
-	mock.ExpectExec(`DELETE FROM .*submodel`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`INSERT INTO .*submodel.*auth_uuid.*` + preservedSubmodelAuthUUID + `.*RETURNING`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
-	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectBareSubmodelStateLoad(mock, "sm-1", "sm1")
+	expectPersistedPositionsLoad(mock)
 	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
+	mock.ExpectCommit()
+
+	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-1", submodel)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPatchSubmodelChangedSubmodelExecutesReconciliation(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-1")
+	idShort := "new"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	expectBareSubmodelStateLoad(mock, "sm-1", "old")
+	expectPersistedPositionsLoad(mock)
+	mock.ExpectQuery(`WITH reconciliation_plan`).
+		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 0, 0))
+	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "new")
 	mock.ExpectCommit()
 
 	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-1", submodel)
@@ -130,16 +149,8 @@ func TestPatchSubmodelInTransactionAppendsHistory(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
-	expectNoManagedFileReferences(mock)
-	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
-	expectPreservedSubmodelAuthUUID(mock)
-	mock.ExpectExec(`DELETE FROM .*submodel`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`INSERT INTO .*submodel.*auth_uuid.*` + preservedSubmodelAuthUUID + `.*RETURNING`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
-	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectBareSubmodelStateLoad(mock, "sm-1", "sm1")
+	expectPersistedPositionsLoad(mock)
 	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
 	mock.ExpectRollback()
 
@@ -253,6 +264,7 @@ func TestPutSubmodelNoOpUpdateAppendsHistoryWithoutLiveMutation(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	expectBareSubmodelStateLoad(mock, "sm-existing", "smexisting")
+	expectPersistedPositionsLoad(mock)
 	expectSubmodelHistoryAppend(mock)
 	mock.ExpectRollback()
 
@@ -281,6 +293,7 @@ func TestPutSubmodelChangedUpdateExecutesReconciliationAndHistory(t *testing.T) 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	expectBareSubmodelStateLoad(mock, "sm-existing", "old")
+	expectPersistedPositionsLoad(mock)
 	mock.ExpectQuery(`WITH reconciliation_plan`).
 		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 0, 0))
 	expectBareSubmodelStateLoad(mock, "sm-existing", "new")
@@ -326,6 +339,7 @@ func TestPutSubmodelPostUpdateFormulaDenialRollsBack(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	expectBareSubmodelStateLoad(mock, "sm-existing", idShort)
+	expectPersistedPositionsLoad(mock)
 	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
 		WillReturnRows(sqlmock.NewRows(submodelStateColumns()))
 	mock.ExpectRollback()
@@ -370,9 +384,9 @@ func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 }
 
-func expectNoManagedFileReferences(mock sqlmock.Sqlmock) {
-	mock.ExpectQuery(`SELECT .*fr.*binary_content_id.*FROM "submodel_element" AS "sme".*file_binary_reference`).
-		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "value", "binary_content_id", "path_token", "safe_file_name"}))
+func expectPersistedPositionsLoad(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT "idshort_path", "position" FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "position"}))
 }
 
 func expectMissingSubmodelHistory(mock sqlmock.Sqlmock) {
@@ -610,13 +624,4 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 	err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm-1", "oldIdShort", patchElement, false)
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-const preservedSubmodelAuthUUID = "4f9f2c1e-5b1a-4c7e-9d2a-6e8b0c3d4f50"
-
-// expectPreservedSubmodelAuthUUID expects the authorization identity read that
-// keeps ReBAC grants across a PATCH replacement.
-func expectPreservedSubmodelAuthUUID(mock sqlmock.Sqlmock) {
-	mock.ExpectQuery(`SELECT auth_uuid::text FROM "submodel"`).
-		WillReturnRows(sqlmock.NewRows([]string{"auth_uuid"}).AddRow(preservedSubmodelAuthUUID))
 }
