@@ -28,6 +28,7 @@ package common
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -47,8 +48,9 @@ func TestReBACManagementAPIIsDocumentedPerResourceFamily(t *testing.T) {
 			absent: []string{"/shells/{aasIdentifier}/$access", "/concept-descriptions/{cdIdentifier}/$access"},
 		},
 		"../../cmd/aasrepositoryservice/openapi.yaml": {
-			present: []string{"/shells/{aasIdentifier}/$access/grants", "/security/rebac/invitations/accept"},
-			absent:  []string{"/submodels/{submodelIdentifier}/$access/grants"},
+			present: []string{"/shells/{aasIdentifier}/$access/grants", "/security/rebac/invitations/accept", "/security/rebac/principal",
+				"/security/rebac/admin/audit", "/security/rebac/admin/audit/verify"},
+			absent: []string{"/submodels/{submodelIdentifier}/$access/grants"},
 		},
 		"../../cmd/aasenvironmentservice/openapi.yaml": {
 			present: []string{"/shell-descriptors/{aasIdentifier}/$access/grants", "/submodel-descriptors/{submodelIdentifier}/$access",
@@ -105,4 +107,17 @@ func assertReBACComponents(t *testing.T, spec string, injected []byte, parsed ma
 	if !strings.Contains(string(injected), "ReBACAccess:") {
 		t.Fatalf("%s: missing ReBAC schemas", spec)
 	}
+	schemas := components["schemas"].(map[string]any)
+	parameters := components["parameters"].(map[string]any)
+	for _, match := range reBACReference.FindAllStringSubmatch(string(injected), -1) {
+		section := schemas
+		if match[1] == "parameters" {
+			section = parameters
+		}
+		if _, ok := section[match[2]]; !ok {
+			t.Fatalf("%s: unresolved reference %s", spec, match[0])
+		}
+	}
 }
+
+var reBACReference = regexp.MustCompile(`#/components/(schemas|parameters)/(ReBAC\w+)`)

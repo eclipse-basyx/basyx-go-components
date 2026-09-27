@@ -131,7 +131,7 @@ const reBACAccessPathTemplate = `  {path}:
               schema:
                 $ref: '#/components/schemas/ReBACEffectiveRights'
         '404':
-          description: Missing resource or caller without any right
+          description: Missing resource or caller without a confirmed right (conditional ABAC rights do not confirm access)
   {path}/invitations:
     get:
       tags: [ReBAC Access Management]
@@ -244,8 +244,27 @@ const reBACGlobalPathsYAML = `  /security/rebac/invitations/accept:
       responses:
         '200':
           description: A direct grant for the caller was created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReBACAcceptedInvitation'
         '404':
           description: Unknown, expired, revoked, exhausted or foreign invitation
+  /security/rebac/principal:
+    get:
+      tags: [ReBAC Access Management]
+      summary: Gets the caller as ReBAC identifies them
+      description: The subject is the value of the configured subject claim (rebac.subjectClaim); share with this user ID.
+      operationId: GetReBACPrincipal
+      responses:
+        '200':
+          description: Issuer, subject, current groups and administrator status of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReBACPrincipal'
+        '404':
+          description: Anonymous caller
   /security/rebac/repositories/{repositoryKind}/$access:
     get:
       tags: [ReBAC Administration]
@@ -326,6 +345,116 @@ const reBACGlobalPathsYAML = `  /security/rebac/invitations/accept:
           description: Owners replaced
         '404':
           description: Caller is not a configured administrator
+  /security/rebac/admin/audit:
+    get:
+      tags: [ReBAC Administration]
+      summary: Pages through the audit trail of access changes
+      description: Newest events first; afterId pages forwards from the oldest events instead.
+      operationId: GetReBACAudit
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: beforeId
+          in: query
+          description: Continue with events older than this event id
+          schema:
+            type: integer
+            minimum: 0
+        - name: afterId
+          in: query
+          description: Page forwards from events newer than this event id; not combinable with beforeId
+          schema:
+            type: integer
+            minimum: 0
+        - name: objectType
+          in: query
+          description: Object type of the filter, together with objectId
+          schema:
+            type: string
+            enum: [aas, submodel, element, concept_description, aas_descriptor, submodel_descriptor, asset_links, aasx_package, repository]
+        - name: objectId
+          in: query
+          description: Identifier of the object; the Submodel identifier for elements, the repository family for repositories
+          schema:
+            type: string
+        - name: idShortPath
+          in: query
+          description: idShort path, only with objectType element
+          schema:
+            type: string
+        - name: object
+          in: query
+          description: Object key as returned in events, also for deleted resources
+          schema:
+            type: string
+        - name: actorIssuer
+          in: query
+          description: Issuer of the user who made the change, together with actorSubject
+          schema:
+            type: string
+        - name: actorSubject
+          in: query
+          description: User ID of the user who made the change
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One page of audit events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReBACAuditPage'
+        '400':
+          description: Invalid page or filter
+        '404':
+          description: Caller is not a configured administrator
+  /security/rebac/admin/audit/verify:
+    get:
+      tags: [ReBAC Administration]
+      summary: Verifies a range of the hash-chained audit trail
+      description: Continue with afterId=lastId and afterHash=headHash until complete is true.
+      operationId: GetReBACAuditVerification
+      parameters:
+        - name: limit
+          in: query
+          description: Events to verify in this range
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1000
+        - name: afterId
+          in: query
+          description: Checkpoint event id; verification starts after it
+          schema:
+            type: integer
+            minimum: 0
+        - name: afterHash
+          in: query
+          description: Hash of the checkpoint event, required with afterId
+          schema:
+            type: string
+        - name: expectedHead
+          in: query
+          description: Head hash retained outside the database, compared once the end of the trail is reached
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verification report of the range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReBACAuditVerification'
+        '400':
+          description: Invalid range or checkpoint
+        '404':
+          description: Caller is not a configured administrator
 `
 
 const reBACSchemasYAML = `    ReBACGrant:
@@ -396,9 +525,20 @@ const reBACSchemasYAML = `    ReBACGrant:
               approvedAt:
                 type: string
                 format: date-time
+    ReBACObject:
+      type: object
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+        idShortPath:
+          type: string
     ReBACEffectiveRights:
       type: object
       properties:
+        object:
+          $ref: '#/components/schemas/ReBACObject'
         rights:
           type: array
           items:
@@ -462,6 +602,88 @@ const reBACSchemasYAML = `    ReBACGrant:
           type: array
           items:
             $ref: '#/components/schemas/ReBACInvitation'
+    ReBACAcceptedInvitation:
+      type: object
+      properties:
+        object:
+          $ref: '#/components/schemas/ReBACObject'
+        relation:
+          type: string
+          enum: [viewer, editor, executor]
+    ReBACPrincipal:
+      type: object
+      properties:
+        issuer:
+          type: string
+        subject:
+          type: string
+          description: Value of the configured subject claim
+        groups:
+          type: array
+          items:
+            type: string
+        administrator:
+          type: boolean
+    ReBACAuditEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        occurredAt:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [grants_changed, invitation_created, invitation_revoked, invitation_redeemed, inheritance_changed, reconciled]
+        actor:
+          type: string
+        object:
+          type: string
+          description: Object key
+        details:
+          type: object
+        previousHash:
+          type: string
+        hash:
+          type: string
+        evidence:
+          type: object
+          description: WORM evidence receipt when history evidence is enabled
+        resource:
+          allOf:
+            - $ref: '#/components/schemas/ReBACObject'
+          description: Public identity of the object while it still exists
+    ReBACAuditPage:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReBACAuditEvent'
+        hasMore:
+          type: boolean
+    ReBACAuditVerification:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        complete:
+          type: boolean
+          description: The range reached the end of the trail
+        checked:
+          type: integer
+        lastId:
+          type: integer
+        headHash:
+          type: string
+        firstInvalidId:
+          type: integer
+        reason:
+          type: string
+        evidenceVerified:
+          type: integer
+        evidenceMissing:
+          type: integer
 `
 
 const reBACParametersYAML = `    ReBACAASIdentifier:
@@ -505,7 +727,7 @@ const reBACParametersYAML = `    ReBACAASIdentifier:
       name: If-Match
       in: header
       required: true
-      description: ETag of the access resource as returned by GET
+      description: ETag of the access resource as returned by GET; it is bound to its object. * matches any revision.
       schema:
         type: string
 `
