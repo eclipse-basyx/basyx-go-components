@@ -1,7 +1,0 @@
-kind: removed
-body: 'The Digital Twin Registry does not offer ReBAC: it authorizes with ABAC only, ignores `rebac.*` settings, and neither provides, documents nor announces the ReBAC management API or profile.'
-time: 2026-09-28T12:00:00Z
-custom:
-    Impact: Low
-    PullRequest: 718
-    SecurityImpact: 'ReBAC grants no longer give access to the Digital Twin Registry; ABAC alone decides there.'

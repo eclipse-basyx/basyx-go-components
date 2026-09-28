@@ -1,7 +1,0 @@
-kind: fixed
-body: Allow Submodel deletion and descriptor-changing Submodel updates (PUT, PATCH, PATCH $metadata) with field-based ABAC rules when Submodel Registry synchronization is enabled; these requests previously failed with HTTP 500.
-time: 2026-09-28T15:30:00+02:00
-custom:
-    Impact: Medium
-    PullRequest: 719
-    SecurityImpact: 'Submodel and AAS mutation authorization remains enforced by the repositories; internal descriptor synchronization no longer evaluates the caller''s repository-specific field filter against registry tables.'

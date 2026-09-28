@@ -1,7 +1,0 @@
-kind: changed
-body: 'Lists that only ReBAC grants make visible are read from the granted rows instead of testing every row of the table.'
-time: 2026-09-28T12:00:00Z
-custom:
-    Impact: Low
-    PullRequest: 718
-    SecurityImpact: 'None.'

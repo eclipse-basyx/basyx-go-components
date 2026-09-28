@@ -1,7 +1,0 @@
-kind: changed
-body: '`PATCH /submodels/{submodelIdentifier}` and `PUT` on a SubmodelElementCollection, SubmodelElementList, Entity or AnnotatedRelationshipElement now write only the differences to the stored state, like Submodel `PUT` already does. The Submodel and unchanged elements keep their database rows instead of being deleted and inserted again, which reduces write load for large Submodels. `PATCH` with `statements` or `annotations` also reconciles the child elements. Removing many elements in one write no longer takes time quadratic in their number, neither when planning nor in the database.'
-time: 2026-09-27T12:00:00Z
-custom:
-    Impact: Low
-    PullRequest: 716
-    SecurityImpact: 'The ReBAC authorization identity of a Submodel stays on its row instead of being copied during a replacement, so grants on the Submodel and on element paths are kept by construction. ABAC checks of the existing and the prospective state are unchanged.'

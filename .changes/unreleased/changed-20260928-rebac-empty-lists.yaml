@@ -1,7 +1,0 @@
-kind: changed
-body: 'Signed-in callers without ReBAC grants receive empty lists instead of `403` on the list routes ReBAC covers, so ABAC policies no longer need list rules for them. The ReBAC example and the administration guide drop their list rules, which compared identifiers with a placeholder value.'
-time: 2026-09-28T12:00:00Z
-custom:
-    Impact: High
-    PullRequest: 718
-    SecurityImpact: 'The removed placeholder rules exposed every resource created with the placeholder identifier to all signed-in users, including its content; policies that copied them should remove them. Anonymous callers and single resources keep the ABAC denial, and backends without formula support, such as the AASX file server, return no row to callers without grants.'

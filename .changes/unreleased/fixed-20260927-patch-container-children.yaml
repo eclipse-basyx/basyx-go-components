@@ -1,7 +1,0 @@
-kind: fixed
-body: '`PATCH` on a SubmodelElementCollection or SubmodelElementList with a `value` now replaces the child elements with the given ones: omitted children are deleted and `"value": []` removes all children. Before, the given children were inserted next to the existing ones, which failed with a conflict, and an empty array changed nothing. Clients that sent only new children or an empty array must now send the complete list. A `$metadata` `PATCH` on a container with children no longer fails, and a `PATCH` without `value`, `statements` or `annotations` leaves the child elements untouched.'
-time: 2026-09-27T12:00:00Z
-custom:
-    Impact: Low
-    PullRequest: 716
-    SecurityImpact: 'A `PATCH` without child elements no longer rewrites the children of an Entity or AnnotatedRelationshipElement from the caller''s filtered view, so children the caller cannot see are no longer removed.'

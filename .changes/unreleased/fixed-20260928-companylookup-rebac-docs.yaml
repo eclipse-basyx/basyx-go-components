@@ -1,7 +1,0 @@
-kind: fixed
-body: 'The OpenAPI specification of the Company Lookup service no longer documents ReBAC endpoints when `rebac.enabled` is set; the service does not offer ReBAC.'
-time: 2026-09-28T12:00:00Z
-custom:
-    Impact: Low
-    PullRequest: 718
-    SecurityImpact: 'None.'
