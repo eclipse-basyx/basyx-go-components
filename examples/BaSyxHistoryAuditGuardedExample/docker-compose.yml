@@ -121,21 +121,18 @@ services:
 
   keycloak:
     container_name: keycloak_history_audit
-    image: keycloak/keycloak:26.0.6
+    image: keycloak/keycloak:26.7.4
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
       KC_DB_USERNAME: admin
       KC_DB_PASSWORD: admin123
       KC_HOSTNAME: keycloak.localhost
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HTTP_ENABLED: "true"
-      KC_HTTPS_ENABLED: "false"
       KC_HEALTH_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
-      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
-      KC_IMPORT: /opt/keycloak/data/import/
       KC_HTTP_MANAGEMENT_ENABLED: "true"
     entrypoint:
       - /bin/sh
@@ -146,7 +143,7 @@ services:
           kc_pid=$$!
           trap 'kill "$$kc_pid" 2>/dev/null || true; wait "$$kc_pid" 2>/dev/null || true' TERM INT
           echo 'Waiting for Keycloak admin CLI...'
-          until /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user "$${KEYCLOAK_ADMIN}" --password "$${KEYCLOAK_ADMIN_PASSWORD}"; do
+          until /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user "$${KC_BOOTSTRAP_ADMIN_USERNAME}" --password "$${KC_BOOTSTRAP_ADMIN_PASSWORD}"; do
             if ! kill -0 "$$kc_pid" 2>/dev/null; then
               echo 'Keycloak stopped before the admin CLI became ready.' >&2
               wait "$$kc_pid" 2>/dev/null || true
@@ -175,8 +172,8 @@ services:
     container_name: keycloak_history_audit_healthcheck
     image: curlimages/curl:latest
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     entrypoint:
       - /bin/sh
       - -c
@@ -191,8 +188,8 @@ services:
             -H 'Content-Type: application/x-www-form-urlencoded' \
             -d 'client_id=admin-cli' \
             -d 'grant_type=password' \
-            -d "username=$${KEYCLOAK_ADMIN}" \
-            -d "password=$${KEYCLOAK_ADMIN_PASSWORD}")" \
+            -d "username=$${KC_BOOTSTRAP_ADMIN_USERNAME}" \
+            -d "password=$${KC_BOOTSTRAP_ADMIN_PASSWORD}")" \
             && token="$$(echo "$$token_response" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')" \
             && [ -n "$$token" ] \
             && realm_response="$$(curl -sf -H "Authorization: Bearer $$token" 'http://keycloak:8080/admin/realms/master')" \

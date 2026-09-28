@@ -70,21 +70,18 @@ services:
 
   keycloak:
     container_name: rebac-keycloak
-    image: keycloak/keycloak:26.0.6
+    image: keycloak/keycloak:26.7.4
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
       KC_DB_USERNAME: admin
       KC_DB_PASSWORD: admin123
       KC_HOSTNAME: keycloak.localhost
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HTTP_ENABLED: "true"
-      KC_HTTPS_ENABLED: "false"
       KC_HEALTH_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
-      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
-      KC_IMPORT: /opt/keycloak/data/import/
       KC_HTTP_MANAGEMENT_ENABLED: "true"
     command: ["start-dev", "--import-realm", "--health-enabled=true"]
     ports:

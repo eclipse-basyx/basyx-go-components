@@ -124,3 +124,22 @@ You now have your Keycloak realm configuration exported from the container and a
 - Check the JSON files into version control.
 - Use them for backups or migration to another Keycloak instance.
 - Inspect or modify the configuration as needed.
+
+---
+
+## Keep committed realm imports minimal
+
+The realm files under `examples/`, `sql_examples/` and the integration tests are not full exports. Keycloak creates everything that has a default when it imports a realm: built-in clients, client scopes, authentication flows, required actions, default roles and signing keys. A committed realm file therefore only contains what differs from those defaults:
+
+- realm settings that differ from the defaults, such as `sslRequired`
+- custom realm and client roles and groups
+- custom clients with their protocol mappers, secrets and authorization settings
+- users with a stable `id`, attributes, role and group mappings and a plain-text demo password
+- the declarative user profile component when custom user attributes such as `role` or `clear` are used
+
+Before committing a new export, reduce it to these sections and drop ids, timestamps, hashed credentials and key providers. Two Keycloak import rules matter here:
+
+- Do not add a partial `clientScopes` list. When the list is present, Keycloak skips creating the built-in client scopes such as `profile`, `email` and `roles`. Add claims through client protocol mappers instead.
+- Keep `frontchannelLogout` explicit on clients. The import default is `false`, while clients created in the admin console default to `true`.
+
+Minimal realm files also pick up the defaults of newer Keycloak versions instead of pinning the defaults of the version that produced the export.
