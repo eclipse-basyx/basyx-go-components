@@ -1,0 +1,7 @@
+kind: security
+body: 'The AASX file server lists no package to ReBAC callers without grants, and an AASX package `PUT` no longer replaces an existing package with only the right to create packages, or creates one with only the right to update packages.'
+time: 2026-09-28T12:00:00Z
+custom:
+    Impact: Low
+    PullRequest: 718
+    SecurityImpact: 'Callers could list all packages or write packages beyond the right the write actually needs.'
