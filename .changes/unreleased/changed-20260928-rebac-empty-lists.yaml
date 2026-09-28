@@ -4,4 +4,4 @@ time: 2026-09-28T12:00:00Z
 custom:
     Impact: High
     PullRequest: 718
-    SecurityImpact: 'The removed placeholder rules exposed every resource created with the placeholder identifier to all signed-in users, including its content; policies that copied them should remove them. Anonymous callers and single resources keep the ABAC denial.'
+    SecurityImpact: 'The removed placeholder rules exposed every resource created with the placeholder identifier to all signed-in users, including its content; policies that copied them should remove them. Anonymous callers and single resources keep the ABAC denial, and backends without formula support, such as the AASX file server, return no row to callers without grants.'

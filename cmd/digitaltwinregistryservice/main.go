@@ -56,6 +56,14 @@ import (
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
+// applyServiceDefaults enables discovery integration, which the Digital Twin
+// Registry always uses, and disables ReBAC, which it does not offer, so that
+// neither its routes nor its documentation depend on rebac.* settings.
+func applyServiceDefaults(cfg *common.Config) {
+	cfg.General.DiscoveryIntegration = true
+	cfg.ReBAC.Enabled = false
+}
+
 func runServer(ctx context.Context, configPath string) error {
 	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
@@ -84,8 +92,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
-	// Digital Twin Registry always enables discovery integration.
-	cfg.General.DiscoveryIntegration = true
+	applyServiceDefaults(cfg)
 
 	r := chi.NewRouter()
 
