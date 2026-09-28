@@ -31,6 +31,7 @@ custom:
     type: enum
     enumOptions:
       - High
+      - Medium
       - Low
   - key: PullRequest
     label: Pull request number
