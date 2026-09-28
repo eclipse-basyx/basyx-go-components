@@ -1,0 +1,7 @@
+kind: changed
+body: 'The secured examples and the integration test setups now use Keycloak 26.7.4 instead of 26.0.6. Their realm imports only contain the BaSyx-specific clients, roles, groups, users and user profile attributes, so Keycloak supplies its current built-in defaults. The Compose files use `KC_BOOTSTRAP_ADMIN_USERNAME` and `KC_BOOTSTRAP_ADMIN_PASSWORD` and no longer set removed hostname v1 options. Existing example Keycloak databases are migrated by Keycloak on startup; an already imported realm is not re-imported.'
+time: 2026-09-28T08:00:00Z
+custom:
+    Impact: Low
+    PullRequest: 717
+    SecurityImpact: 'Moves the example and test identity provider from Keycloak 26.0.6 to 26.7.4, which includes the upstream security fixes released in between. The committed realm files no longer contain realm signing and encryption private keys, so each fresh import generates its own keys instead of reusing keys published in the repository.'
