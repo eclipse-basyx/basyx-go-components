@@ -173,7 +173,9 @@ the Submodel.
 ## Lists, aggregates, packages and passports
 
 - **Lists** contain exactly the resources the caller may read through ABAC
-  or ReBAC. Paging works as usual.
+  or ReBAC. Paging works as usual. A signed-in caller without any readable
+  resource gets an empty list, even when the ABAC policy has no rule for the
+  list; anonymous callers get the ABAC decision.
 - **Query conditions** match the fields and elements of resources shared
   with the caller, like a direct read shows them. Conditions on other,
   related resources (for example `$sm` fields in a shell query) only see
@@ -311,4 +313,5 @@ An invalid result names `firstInvalidId` and a `reason`.
 | `503` | ReBAC is unavailable, or the evidence store rejected an access change. |
 
 Denied data requests keep the ABAC behavior (`403` or `404`), whether or not
-ReBAC was involved.
+ReBAC was involved. Lists are never denied to signed-in callers; they are
+empty instead.

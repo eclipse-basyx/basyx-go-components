@@ -61,7 +61,6 @@ abac:
 general:
   enableImplicitCasts: true
   enableDescriptorDebug: false
-  discoveryIntegration: false
   supportsSingularSupplementalSemanticId: false
   aasRegistryIntegration: false
   submodelRegistryIntegration: false

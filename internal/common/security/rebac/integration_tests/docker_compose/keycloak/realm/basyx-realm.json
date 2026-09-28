@@ -354,6 +354,24 @@
       "realmRoles": [
         "default-roles-basyx"
       ]
+    },
+    {
+      "id": "32178b12-e5f2-56c5-aad4-a29b5c6d7189",
+      "username": "frank",
+      "firstName": "Frank",
+      "lastName": "ReBAC",
+      "email": "frank@rebac.example",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-basyx"
+      ]
     }
   ]
 }

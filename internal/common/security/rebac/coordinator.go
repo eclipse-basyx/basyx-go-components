@@ -89,6 +89,12 @@ func (c *Coordinator) Covers(route auth.ReBACRoute) bool {
 	return covered
 }
 
+// IsListRoute reports covered routes that list top-level resources.
+func (c *Coordinator) IsListRoute(route auth.ReBACRoute) bool {
+	spec, covered := c.routes.lookup(route.Method, route.Pattern)
+	return covered && spec.target == targetList
+}
+
 // IsManagementRoute reports routes of the ReBAC management API.
 func (c *Coordinator) IsManagementRoute(route auth.ReBACRoute) bool {
 	_, managed := c.management[routeKey(route.Method, route.Pattern)]

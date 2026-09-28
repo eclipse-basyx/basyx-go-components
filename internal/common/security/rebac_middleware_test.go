@@ -38,12 +38,16 @@ import (
 	api "github.com/go-chi/chi/v5"
 )
 
-const testSubmodelRoute = "/submodels/{submodelIdentifier}"
+const (
+	testSubmodelRoute     = "/submodels/{submodelIdentifier}"
+	testSubmodelListRoute = "/submodels"
+)
 
 type fakeReBACResolver struct {
 	grants     *ReBACGrantSet
 	err        error
 	covered    bool
+	list       string
 	management string
 	calls      atomic.Int32
 	lastRoute  ReBACRoute
@@ -51,6 +55,10 @@ type fakeReBACResolver struct {
 }
 
 func (f *fakeReBACResolver) Covers(ReBACRoute) bool { return f.covered }
+
+func (f *fakeReBACResolver) IsListRoute(route ReBACRoute) bool {
+	return f.list != "" && route.Pattern == f.list
+}
 
 func (f *fakeReBACResolver) IsManagementRoute(route ReBACRoute) bool {
 	return f.management != "" && route.Pattern == f.management
@@ -88,6 +96,7 @@ func serveWithReBAC(t *testing.T, settings ABACSettings, method string, target s
 		w.WriteHeader(http.StatusOK)
 	}
 	router.Get(testSubmodelRoute, handler)
+	router.Get(testSubmodelListRoute, handler)
 	router.Get("/submodels/{submodelIdentifier}/$history", handler)
 	router.Get("/security/abac/policy-versions", handler)
 	router.Get("/security/rebac/status", handler)
@@ -224,6 +233,36 @@ func TestReBACGrantTurnsABACDenyIntoFailClosedAllow(t *testing.T) {
 	session := AuthorizationSessionFromContext(result.context)
 	if session == nil || session.outerAccess.decision != AccessViewRestricted {
 		t.Fatalf("authorized-query outer view must be restricted, not denied or unrestricted")
+	}
+}
+
+func TestReBACListWithoutGrantsIsEmptyInsteadOfDenied(t *testing.T) {
+	t.Parallel()
+
+	resolver := &fakeReBACResolver{covered: true, list: testSubmodelListRoute, grants: NewReBACGrantSet(grammar.RightsEnumREAD)}
+	result := serveWithReBAC(t, ABACSettings{ReBAC: resolver}, http.MethodGet, testSubmodelListRoute, true)
+	if !result.called {
+		t.Fatalf("list without grants must reach the handler, got %d", result.status)
+	}
+	queryFilter := GetQueryFilter(result.context)
+	if queryFilter == nil || !isFalseFormula(queryFilter.Formula) {
+		t.Fatalf("list without grants must select no row: %#v", queryFilter)
+	}
+	if ReBACGrantsFromContext(result.context) != nil {
+		t.Fatal("list without grants must not carry ReBAC grants")
+	}
+	decision, ok := AuthorizationDecisionFromContext(result.context)
+	if !ok || decision.MatchedRuleID != ReBACDecisionRuleID {
+		t.Fatalf("empty list decision must be recorded for audit: %#v", decision)
+	}
+
+	anonymous := serveWithReBAC(t, ABACSettings{ReBAC: resolver}, http.MethodGet, testSubmodelListRoute, false)
+	if anonymous.called || anonymous.status != http.StatusForbidden {
+		t.Fatalf("anonymous lists must keep the ABAC denial, got %d (called=%v)", anonymous.status, anonymous.called)
+	}
+	single := serveWithReBAC(t, ABACSettings{ReBAC: resolver}, http.MethodGet, "/submodels/c20", true)
+	if single.called || single.status != http.StatusForbidden {
+		t.Fatalf("single resources without grants must keep the ABAC denial, got %d (called=%v)", single.status, single.called)
 	}
 }
 

@@ -174,7 +174,7 @@ func serveAuthorizedRequest(
 	case reBACOutcomeUnavailable:
 		writeReBACUnavailable(w, r)
 		return
-	case reBACOutcomeGranted:
+	case reBACOutcomeGranted, reBACOutcomeEmptyList:
 		evaluation = reBACGrantedEvaluation(evaluation, route.Rights)
 	}
 

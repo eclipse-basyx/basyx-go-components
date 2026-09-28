@@ -94,44 +94,15 @@ example `engineering`, not `/engineering`) before people start sharing.
 
 ### 3. Allow what the policy must still allow
 
-ReBAC decides only for covered resource routes. Add these ABAC rules:
+ReBAC decides only for covered resource routes. Add this ABAC rule:
 
 - **`/description` for everyone.** Clients detect ReBAC through the profile
   `https://basyx.org/aas/API/3/2/RelationshipBasedAccessControl/1.0` in the
   service description.
-- **List routes for signed-in users.** For a list request, ReBAC applies
-  when the caller holds at least one relevant grant and then filters the
-  list in SQL. A caller without any grant falls back to the ABAC decision,
-  which is `403` without a matching rule. To return empty lists instead,
-  allow the list routes for signed-in users with a formula that matches no
-  resource, so only ReBAC contributes entries:
 
-```json
-{
-  "DEFATTRIBUTES": [
-    { "name": "authenticated", "attributes": [ { "CLAIM": "sub" } ] }
-  ],
-  "DEFOBJECTS": [
-    { "name": "shell_lists", "objects": [ { "ROUTE": "/shells" }, { "ROUTE": "/query/shells" } ] }
-  ],
-  "DEFACLS": [
-    { "name": "authenticated_read", "acl": { "USEATTRIBUTES": "authenticated", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } }
-  ],
-  "DEFFORMULAS": [
-    { "name": "no_shell_lists", "formula": { "$eq": [ { "$field": "$aas#id" }, { "$strVal": "urn:basyx:none" } ] } }
-  ],
-  "rules": [
-    { "USEACL": "authenticated_read", "USEOBJECTS": [ "shell_lists" ], "USEFORMULA": "no_shell_lists" }
-  ]
-}
-```
-
-Repeat the pattern for `/submodels` (`$sm#id`), `/concept-descriptions`
-(`$cd#id`), `/shell-descriptors` (`$aasdesc#id`), `/submodel-descriptors`
-(`$smdesc#id`) and `/lookup/shells` with `/lookup/shellsByAssetLink`
-(`$bd#globalAssetId`). A constant `false` formula does not work: the ABAC
-engine treats it as no match. The complete rules are in
-[examples/BaSyxReBACExample/security_env/access-rules.json](../../../examples/BaSyxReBACExample/security_env/access-rules.json).
+List routes need no ABAC rule. A signed-in caller that the policy does not
+allow to list gets exactly the resources shared with them, and an empty list
+without any share. Anonymous callers get the ABAC decision.
 
 The management API (`$access`, `/security/rebac/…`) needs no ABAC rule. It
 authorizes with ReBAC permissions and administrator status only.
@@ -329,9 +300,6 @@ store and retention.
 3. Access is per resource. A shared Submodel does not show its shell; a
    shared shell does not share its Submodels unless a Shell link exists.
 4. Descriptors created before ReBAC was enabled do not follow their source.
-
-**Lists return `403` for users without shares.** Add the list rules from
-[step 3](#3-allow-what-the-policy-must-still-allow).
 
 **Nobody can create resources.** Grant `creator` on the repository family
 ([step 5](#5-let-people-create-resources)).
