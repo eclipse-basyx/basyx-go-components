@@ -28,6 +28,7 @@ require "date"
 require "yaml"
 
 ALLOWED_KINDS = %w[added changed deprecated removed fixed security].freeze
+ALLOWED_IMPACTS = %w[High Medium Low].freeze
 EXPECTED_FIELDS = %w[kind body time custom].freeze
 EXPECTED_CUSTOM_FIELDS = %w[Impact PullRequest SecurityImpact].freeze
 
@@ -50,7 +51,7 @@ def valid_fragment?(file)
     [ALLOWED_KINDS.include?(fragment["kind"]), "kind must be one of #{ALLOWED_KINDS.join(', ')}"],
     [fragment["body"].is_a?(String) && !fragment["body"].strip.empty?, "body must not be blank"],
     [fragment["time"].is_a?(Time), "time must be an ISO-8601 timestamp"],
-    [%w[High Low].include?(custom["Impact"]), "Impact must be High or Low"],
+    [ALLOWED_IMPACTS.include?(custom["Impact"]), "Impact must be one of #{ALLOWED_IMPACTS.join(', ')}"],
     [custom["PullRequest"].is_a?(Integer) && custom["PullRequest"].positive?, "PullRequest must be a positive integer"],
     [custom["SecurityImpact"].is_a?(String) && !custom["SecurityImpact"].strip.empty?, "SecurityImpact must not be blank"]
   ]

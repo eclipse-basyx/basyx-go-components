@@ -29,6 +29,7 @@ import (
 	"context"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
 )
 
@@ -89,10 +90,18 @@ func ContextWithAASPreconfigurationAudit(ctx context.Context) context.Context {
 	})
 }
 
-func aasRegistryAddAuditMetadataIfNotAvailable(ctx context.Context, operation string) context.Context {
-	return registrysync.WithAASRegistryAudit(ctx, operation)
+func aasRegistrySyncContext(ctx context.Context, operation string) context.Context {
+	return registrysync.WithAASRegistryAudit(registrySyncReadContext(ctx), operation)
 }
 
-func submodelRegistryAddAuditMetadataIfNotAvailable(ctx context.Context, operation string) context.Context {
-	return registrysync.WithSubmodelRegistryAudit(ctx, operation)
+func submodelRegistrySyncContext(ctx context.Context, operation string) context.Context {
+	return registrysync.WithSubmodelRegistryAudit(registrySyncReadContext(ctx), operation)
+}
+
+// registrySyncReadContext removes the caller's ABAC query filter for descriptor
+// synchronization. The repository has already authorized the mutation of the
+// described resource, and the caller's $field formulas target repository columns
+// that cannot be evaluated against descriptor tables.
+func registrySyncReadContext(ctx context.Context) context.Context {
+	return auth.ContextWithoutQueryFilter(ctx)
 }
