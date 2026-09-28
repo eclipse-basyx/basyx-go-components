@@ -29,7 +29,6 @@ package digitaltwinregistry
 import (
 	"context"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -50,9 +49,9 @@ func NewDescriptionService() *DescriptionService {
 func (s *DescriptionService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
 	_ = ctx
 	return model.Response(200, model.ServiceDescription{
-		Profiles: common.ServiceProfiles(
+		Profiles: []string{
 			profileSSP001,
 			profileSSP003,
-		),
+		},
 	}), nil
 }

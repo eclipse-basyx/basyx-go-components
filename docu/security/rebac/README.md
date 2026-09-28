@@ -114,7 +114,7 @@ Therefore:
 | AAS Repository | Shells, asset information, thumbnails, Submodel references, Submodel superpaths, `/serialization` |
 | Submodel Repository | Submodels and all representations, SubmodelElements, attachments, operations (sync, async, status, results) |
 | Concept Description Repository | Concept Descriptions |
-| AAS Registry, Submodel Registry, Digital Twin Registry | Shell descriptors including embedded Submodel descriptors, standalone Submodel descriptors, bulk API |
+| AAS Registry, Submodel Registry | Shell descriptors including embedded Submodel descriptors, standalone Submodel descriptors, bulk API |
 | Discovery | Discovery entries (the asset links of one shell) and lookups |
 | AASX File Server | AASX packages, asynchronous uploads |
 | AAS Environment | All of the above except AASX packages, plus `/upload` and `/serialization` |
@@ -123,4 +123,5 @@ Therefore:
 The following stay **ABAC-only**; a ReBAC grant never gives access to them:
 history endpoints (`$history`), `$recent-changes`, event feeds, `$signed`
 representations, `/verify`, historical passports (`/v1/dppsByIdAndDate`),
-the ABAC policy management API and the Company Lookup service.
+the ABAC policy management API, the Company Lookup service and the Digital
+Twin Registry.
