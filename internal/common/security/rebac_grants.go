@@ -379,12 +379,17 @@ func queriedElementCondition(submodelColumn exp.IdentifierExpression, pathColumn
 // support to the resources that ReBAC grants the request for the active
 // right. It applies only when ABAC denied that right, so requests ABAC
 // allows keep their behavior; ok is false when no restriction applies.
-// authUUID names the column holding the rows' authorization UUID.
+// Without grants, for example on a list the caller may call but holds no
+// grant for, it selects no row. authUUID names the column holding the rows'
+// authorization UUID.
 func ReBACOnlyRowCondition(ctx context.Context, resource SemanticResourceKind, authUUID exp.IdentifierExpression) (exp.Expression, bool) {
-	grants := ReBACGrantsFromContext(ctx)
 	queryFilter := GetQueryFilter(ctx)
-	if grants.IsEmpty() || queryFilter == nil || !isFalseFormula(queryFilter.Formula) {
+	if queryFilter == nil || !isFalseFormula(queryFilter.Formula) {
 		return nil, false
+	}
+	grants := ReBACGrantsFromContext(ctx)
+	if grants.IsEmpty() {
+		return goqu.L("FALSE"), true
 	}
 	alternatives := []exp.Expression{}
 	for _, entry := range grants.entriesFor(resource, activeReBACRights(ctx, grants)) {
@@ -409,10 +414,13 @@ func ReBACOnlyRowCondition(ctx context.Context, resource SemanticResourceKind, a
 // inside their transaction that an upsert creates the resource.
 func ReBACOnlyCreateAllowed(ctx context.Context, resource SemanticResourceKind) (allowed bool, restricted bool) {
 	createCtx := SelectFormulaForRight(ctx, grammar.RightsEnumCREATE)
-	grants := ReBACGrantsFromContext(createCtx)
 	queryFilter := GetQueryFilter(createCtx)
-	if grants.IsEmpty() || queryFilter == nil || !isFalseFormula(queryFilter.Formula) {
+	if queryFilter == nil || !isFalseFormula(queryFilter.Formula) {
 		return false, false
+	}
+	grants := ReBACGrantsFromContext(createCtx)
+	if grants.IsEmpty() {
+		return false, true
 	}
 	for _, entry := range grants.entriesFor(resource, []grammar.RightsEnum{grammar.RightsEnumCREATE}) {
 		if entry.allOfKind {
@@ -427,10 +435,16 @@ func isFalseFormula(formula *grammar.LogicalExpression) bool {
 }
 
 // orReBACGrant widens a security condition by the ReBAC grant of the
-// collector's root. A nil condition means unrestricted and stays nil.
-func orReBACGrant(condition exp.Expression, grant exp.Expression, hasGrant bool) exp.Expression {
-	if condition == nil || !hasGrant {
+// collector's root. A nil condition means unrestricted and stays nil. A
+// condition that admits no row is replaced by the grant alone, so PostgreSQL
+// selects the granted rows instead of testing every row of the table.
+func orReBACGrant(condition exp.Expression, admitsNoRow bool, grant exp.Expression, hasGrant bool) exp.Expression {
+	switch {
+	case condition == nil || !hasGrant:
 		return condition
+	case admitsNoRow:
+		return grant
+	default:
+		return goqu.Or(condition, grant)
 	}
-	return goqu.Or(condition, grant)
 }

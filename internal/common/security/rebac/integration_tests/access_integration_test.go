@@ -83,8 +83,7 @@ func TestCreatorOwnsAndSharesWithOptimisticConcurrency(t *testing.T) {
 
 	setGrants(t, "alice", accessURL, grants)
 	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, target, nil, nil), "revocation takes effect immediately")
-	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, submodelURL+"/submodels", nil, nil),
-		"without any visible Submodel the list keeps today's ABAC denial")
+	require.NotContains(t, listSubmodelIDs(t, "bob", submodelURL), identifier, "revocation removes the Submodel from the list")
 }
 
 func TestGroupGrantsUseTokenMembershipAndIssuerIsolation(t *testing.T) {

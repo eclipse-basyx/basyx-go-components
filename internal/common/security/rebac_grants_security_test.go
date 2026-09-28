@@ -310,9 +310,9 @@ func TestReBACGrantNeverBypassesCallerConditions(t *testing.T) {
 	if !containsSQLArgument(args, "{"+grantedAASUUID+"}") || !containsSQLArgument(args, "caller-selected") {
 		t.Fatalf("expected ReBAC grant and caller condition:\n%s\n%v", sql, args)
 	}
-	orIndex := strings.Index(sql, " OR ")
+	grantIndex := strings.Index(sql, "rebac_granted_aas")
 	andIndex := strings.Index(sql, ")))) AND ")
-	if orIndex < 0 || andIndex < orIndex {
+	if grantIndex < 0 || andIndex < grantIndex || strings.Contains(sql, " OR ") {
 		t.Fatalf("caller condition must be ANDed outside the widened security condition:\n%s", sql)
 	}
 }
@@ -331,8 +331,41 @@ func TestDeniedOuterViewIsWidenedOnlyByTheGrant(t *testing.T) {
 		t.Fatalf("denied view without grant must stay FALSE:\n%s", withoutGrant)
 	}
 	withGrant, args := buildAuthorizedAASSelectionSQLWithArgs(WithReBACGrants(denied, grants), t)
-	if !strings.Contains(withGrant, "FALSE OR") || !containsSQLArgument(args, "{"+grantedAASUUID+"}") {
-		t.Fatalf("denied view must be widened by the ReBAC grant:\n%s", withGrant)
+	if strings.Contains(withGrant, "FALSE") || !containsSQLArgument(args, "{"+grantedAASUUID+"}") {
+		t.Fatalf("denied view must be replaced by the ReBAC grant alone:\n%s", withGrant)
+	}
+}
+
+func TestReBACOnlyBackendsSelectNothingWithoutGrants(t *testing.T) {
+	t.Parallel()
+
+	authUUID := goqu.I("aasx_package.auth_uuid")
+	condition, restricted := ReBACOnlyRowCondition(failClosedReadContext(t), SemanticResourceAASXPackage, authUUID)
+	if !restricted || renderExpression(t, condition) != `SELECT 1 FROM "t" WHERE FALSE` {
+		t.Fatalf("a fail-closed request without grants must select no row, got restricted=%v", restricted)
+	}
+	createCtx := WithQueryFilter(t.Context(), failClosedQueryFilter(grammar.RightsEnumCREATE))
+	if allowed, restricted := ReBACOnlyCreateAllowed(createCtx, SemanticResourceAASXPackage); allowed || !restricted {
+		t.Fatalf("a fail-closed request without grants must not create, got allowed=%v restricted=%v", allowed, restricted)
+	}
+	if _, restricted := ReBACOnlyRowCondition(t.Context(), SemanticResourceAASXPackage, authUUID); restricted {
+		t.Fatal("requests ABAC decides must stay unrestricted")
+	}
+}
+
+func TestFailClosedFormulaIsReplacedByTheGrantAlone(t *testing.T) {
+	t.Parallel()
+
+	grants := mustGrantSet(t, func(set *ReBACGrantSet) error {
+		return set.AllowResources(SemanticResourceAAS, []string{grantedAASUUID}, grammar.RightsEnumREAD)
+	}, grammar.RightsEnumREAD)
+	sql := formulaSQLForRoot(WithReBACGrants(failClosedReadContext(t), grants), t, grammar.CollectorRootAAS, "aas", "aas")
+	if strings.Contains(sql, "::boolean") || strings.Contains(sql, " OR ") || !strings.Contains(sql, grantedAASUUID) {
+		t.Fatalf("a FALSE formula must not be ORed with the grant, which would test every row:\n%s", sql)
+	}
+	withoutGrant := formulaSQLForRoot(failClosedReadContext(t), t, grammar.CollectorRootAAS, "aas", "aas")
+	if !strings.Contains(withoutGrant, "::boolean") || strings.Contains(withoutGrant, grantedAASUUID) {
+		t.Fatalf("a FALSE formula without grant must stay FALSE:\n%s", withoutGrant)
 	}
 }
 

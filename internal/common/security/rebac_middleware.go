@@ -69,10 +69,13 @@ type ReBACRequest struct {
 //
 // Implementations must be safe for concurrent use. Resolve returns the grants
 // for the concrete resources of the request or an empty set when ReBAC does not
-// allow; an error means ReBAC could not decide and results in 503.
+// allow; an error means ReBAC could not decide and results in 503. On list
+// routes, authenticated callers that neither ABAC nor ReBAC allow receive an
+// empty list instead of the ABAC denial.
 type ReBACResolver interface {
 	Covers(route ReBACRoute) bool
 	IsManagementRoute(route ReBACRoute) bool
+	IsListRoute(route ReBACRoute) bool
 	Resolve(ctx context.Context, request ReBACRequest) (*ReBACGrantSet, error)
 }
 
@@ -149,6 +152,7 @@ type reBACOutcome uint8
 const (
 	reBACOutcomeABACOnly reBACOutcome = iota
 	reBACOutcomeGranted
+	reBACOutcomeEmptyList
 	reBACOutcomeManagement
 	reBACOutcomeUnavailable
 )
@@ -190,9 +194,19 @@ func resolveReBAC(
 		return reBACOutcomeUnavailable, route, nil
 	}
 	if grants.IsEmpty() {
-		return reBACOutcomeABACOnly, route, nil
+		return withoutGrantsOutcome(settings.ReBAC, evaluation, route), route, nil
 	}
 	return reBACOutcomeGranted, route, grants
+}
+
+// withoutGrantsOutcome keeps the ABAC decision, except that list routes the
+// ABAC policy denies answer an empty list: it reveals nothing, and lists do
+// not depend on whether the caller holds a grant elsewhere.
+func withoutGrantsOutcome(resolver ReBACResolver, evaluation AuthorizationEvaluation, route ReBACRoute) reBACOutcome {
+	if !evaluation.Allowed && resolver.IsListRoute(route) {
+		return reBACOutcomeEmptyList
+	}
+	return reBACOutcomeABACOnly
 }
 
 // reBACGrantedEvaluation turns an ABAC deny into a fail-closed allow that

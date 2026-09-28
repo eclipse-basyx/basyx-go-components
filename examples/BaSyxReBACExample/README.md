@@ -184,9 +184,8 @@ errors and cannot tell which resources exist.
   ([security_env/access-rules.json](security_env/access-rules.json)) still
   applies. A user gets access if **either** the policy **or** a ReBAC
   relationship allows it. `admin` has full access through the policy alone.
-- The policy lets every signed-in user call the list endpoints, but its list
-  rules match no resource on their own. Lists therefore show exactly what
-  was shared with the user, and users like `eve` get empty lists instead of
+- The policy has no rules for lists. Lists show exactly what was shared
+  with the signed-in user, and users like `eve` get empty lists instead of
   errors.
 - A grant on a resource is not limited by ABAC filters of that resource.
   If the policy hides an element of a Submodel, a person with whom the

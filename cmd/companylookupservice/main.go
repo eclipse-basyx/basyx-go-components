@@ -46,6 +46,12 @@ import (
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
+// disableReBAC turns ReBAC off for the Company Lookup service, which does not
+// offer it, so that its documentation does not depend on rebac.* settings.
+func disableReBAC(cfg *common.Config) {
+	cfg.ReBAC.Enabled = false
+}
+
 func runServer(ctx context.Context, configPath string) error {
 	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
@@ -62,6 +68,8 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
+
+	disableReBAC(cfg)
 
 	// === Main Router ===
 	r := chi.NewRouter()

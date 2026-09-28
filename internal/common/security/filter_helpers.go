@@ -678,7 +678,7 @@ func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, col
 		if err != nil {
 			return nil, err
 		}
-		ds = ds.Where(orReBACGrant(wc, grant, hasGrant))
+		ds = ds.Where(orReBACGrant(wc, isFalseFormula(p.Formula), grant, hasGrant))
 	}
 	return ds, nil
 }
@@ -696,7 +696,7 @@ func addAuthorizedFormulaQuery(
 		return nil, err
 	}
 	if securityCondition != nil {
-		ds = ds.Where(orReBACGrant(securityCondition, grant, hasGrant))
+		ds = ds.Where(orReBACGrant(securityCondition, outerAdmitsNoRow(authorized.outer), grant, hasGrant))
 	}
 	caller := authorized.callerForBackend()
 	if caller.Condition != nil {
@@ -723,6 +723,12 @@ func authorizedSecurityCondition(
 	}
 	wc, _, err := outer.queryFilter.Formula.EvaluateToExpression(collector.WithoutFieldValueDecorator())
 	return wc, err
+}
+
+// outerAdmitsNoRow reports an outer view whose policy condition is FALSE.
+func outerAdmitsNoRow(outer SemanticAccessView) bool {
+	return outer.decision == AccessViewDenied ||
+		outer.queryFilter != nil && isFalseFormula(outer.queryFilter.Formula)
 }
 
 func conditionVisibleCollector(

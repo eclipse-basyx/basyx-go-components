@@ -22,36 +22,37 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
 
-package digitaltwinregistry
+package main
 
 import (
-	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/require"
 )
 
-const (
-	profileSSP001 = "https://basyx.org/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001"
-	profileSSP003 = "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003"
-)
+func TestSwaggerNeverDocumentsReBAC(t *testing.T) {
+	cfg := &common.Config{Swagger: common.SwaggerConfig{Enabled: true}}
+	cfg.ReBAC.Enabled = true
+	require.Contains(t, servedOpenAPISpec(t, cfg), "/security/rebac/", "rebac.enabled alone documents ReBAC")
 
-// DescriptionService provides the combined service description for the Digital Twin Registry.
-type DescriptionService struct{}
-
-// NewDescriptionService constructs the description service.
-func NewDescriptionService() *DescriptionService {
-	return &DescriptionService{}
+	disableReBAC(cfg)
+	spec := servedOpenAPISpec(t, cfg)
+	require.NotContains(t, spec, "/security/rebac/", "the service offers no ReBAC management API")
+	require.NotContains(t, spec, "/$access", "the service offers no $access sub-resources")
 }
 
-// GetDescription - Returns the self-describing information of the Digital Twin Registry.
-func (s *DescriptionService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
-	_ = ctx
-	return model.Response(200, model.ServiceDescription{
-		Profiles: []string{
-			profileSSP001,
-			profileSSP003,
-		},
-	}), nil
+func servedOpenAPISpec(t *testing.T, cfg *common.Config) string {
+	t.Helper()
+	router := chi.NewRouter()
+	require.NoError(t, common.AddSwaggerUIFromFS(router, openapiSpec, "openapi.yaml", "test", "/swagger", "/api-docs/openapi.yaml", cfg))
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
+	require.Equal(t, http.StatusOK, recorder.Code)
+	return recorder.Body.String()
 }
