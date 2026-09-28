@@ -405,57 +405,118 @@ func TestPostSubmodelWithFieldBasedCreateRuleAndRegistrySync(t *testing.T) {
 	require.NoError(t, err)
 
 	baseVersionID := activePolicyVersionID(t, adminToken)
-	uniqueID := time.Now().UnixNano()
-	testCases := []struct {
-		name       string
-		field      string
-		value      string
-		submodelID string
-	}{
-		{
-			name:       "submodel ID",
-			field:      "$sm#id",
-			submodelID: fmt.Sprintf("urn:test:sm:create-field-id:%d", uniqueID),
-		},
-		{
-			name:       "supplemental semantic ID key",
-			field:      "$sm#supplementalSemanticIds[].keys[].value",
-			value:      "https://example.com/vendor/A/",
-			submodelID: fmt.Sprintf("urn:test:sm:create-field-supplemental:%d", uniqueID),
-		},
-	}
-	for _, testCase := range testCases {
+	for _, testCase := range submodelFieldRuleTestCases("create", time.Now().UnixNano()) {
 		t.Run(testCase.name, func(t *testing.T) {
-			value := testCase.value
-			if value == "" {
-				value = testCase.submodelID
-			}
-			versionID := clonePolicyVersion(t, baseVersionID, adminToken)
-			createEditorSubmodelFieldCreateRule(t, versionID, testCase.field, value, adminToken)
-			validatePolicyVersion(t, versionID, adminToken)
-			activatePolicyVersion(t, versionID, adminToken)
+			activateEditorSubmodelFieldRule(t, baseVersionID, []string{"CREATE", "UPDATE"}, testCase, adminToken)
 
-			body := fmt.Sprintf(`{"id":%q,"idShort":"FieldCreate","modelType":"Submodel"}`, testCase.submodelID)
-			if testCase.value != "" {
-				body = fmt.Sprintf(`{"id":%q,"idShort":"FieldCreate","modelType":"Submodel","supplementalSemanticIds":[{"type":"ModelReference","keys":[{"type":"Submodel","value":%q}]}]}`, testCase.submodelID, value)
-			}
-			status, response := doAuthorizedRequest(t, http.MethodPost, testBaseURL+"/submodels", body, editorToken)
+			status, response := doAuthorizedRequest(t, http.MethodPost, testBaseURL+"/submodels", testCase.body("FieldCreate"), editorToken)
 			require.Equalf(t, http.StatusCreated, status, "POST /submodels failed: %s", response)
 
-			deniedID := testCase.submodelID + ":denied"
-			deniedBody := fmt.Sprintf(`{"id":%q,"idShort":"DeniedCreate","modelType":"Submodel"}`, deniedID)
-			if testCase.value != "" {
-				deniedBody = fmt.Sprintf(`{"id":%q,"idShort":"DeniedCreate","modelType":"Submodel","supplementalSemanticIds":[{"type":"ModelReference","keys":[{"type":"Submodel","value":%q}]}]}`, deniedID, value+":denied")
-			}
-			status, response = doAuthorizedRequest(t, http.MethodPost, testBaseURL+"/submodels", deniedBody, editorToken)
+			denied := testCase.nonMatching()
+			status, response = doAuthorizedRequest(t, http.MethodPost, testBaseURL+"/submodels", denied.body("DeniedCreate"), editorToken)
 			require.Equalf(t, http.StatusForbidden, status, "non-matching POST /submodels was not denied: %s", response)
 		})
 	}
 }
 
-func createEditorSubmodelFieldCreateRule(t *testing.T, versionID int64, field string, value string, bearerToken string) {
+func TestSubmodelMutationsWithFieldBasedRulesAndRegistrySync(t *testing.T) {
+	tokenProvider := testenv.NewPasswordGrantTokenProvider(testKeycloakTokenURL, "basyx-ui", 10*time.Second)
+	adminToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "admin", Password: "pwd"})
+	require.NoError(t, err)
+	editorToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "userx", Password: "pwd"})
+	require.NoError(t, err)
+
+	baseVersionID := activePolicyVersionID(t, adminToken)
+	for _, testCase := range submodelFieldRuleTestCases("mutate", time.Now().UnixNano()) {
+		t.Run(testCase.name, func(t *testing.T) {
+			denied := testCase.nonMatching()
+			assertStatus(t, http.MethodPost, testBaseURL+"/submodels", denied.body("DeniedMutation"), adminToken, http.StatusCreated)
+			activateEditorSubmodelFieldRule(t, baseVersionID, []string{"CREATE", "UPDATE", "DELETE"}, testCase, adminToken)
+
+			submodelURL := testCase.url()
+			assertStatus(t, http.MethodPost, testBaseURL+"/submodels", testCase.body("FieldMutation"), editorToken, http.StatusCreated)
+			assertStatus(t, http.MethodPut, submodelURL, testCase.body("FieldMutationPut"), editorToken, http.StatusNoContent)
+			assertStatus(t, http.MethodPatch, submodelURL, testCase.patchBody("FieldMutationPatch"), editorToken, http.StatusNoContent)
+			assertStatus(t, http.MethodPatch, submodelURL+"/$metadata", testCase.patchBody("FieldMutationMetadata"), editorToken, http.StatusNoContent)
+			assertStatus(t, http.MethodDelete, submodelURL, "", editorToken, http.StatusNoContent)
+			assertStatus(t, http.MethodGet, submodelURL, "", adminToken, http.StatusNotFound)
+			assertStatus(t, http.MethodPost, testBaseURL+"/submodels", testCase.body("FieldMutationRecreated"), editorToken, http.StatusCreated)
+
+			assertStatus(t, http.MethodPut, denied.url(), denied.body("DeniedMutationPut"), editorToken, http.StatusForbidden)
+			assertStatus(t, http.MethodDelete, denied.url(), "", editorToken, http.StatusForbidden)
+			assertStatus(t, http.MethodGet, denied.url(), "", adminToken, http.StatusOK)
+		})
+	}
+}
+
+type submodelFieldRuleTestCase struct {
+	name               string
+	field              string
+	submodelID         string
+	supplementalValue  string
+	usesSupplementalID bool
+}
+
+func submodelFieldRuleTestCases(scenario string, uniqueID int64) []submodelFieldRuleTestCase {
+	return []submodelFieldRuleTestCase{
+		{
+			name:       "submodel ID",
+			field:      "$sm#id",
+			submodelID: fmt.Sprintf("urn:test:sm:%s-field-id:%d", scenario, uniqueID),
+		},
+		{
+			name:               "supplemental semantic ID key",
+			field:              "$sm#supplementalSemanticIds[].keys[].value",
+			submodelID:         fmt.Sprintf("urn:test:sm:%s-field-supplemental:%d", scenario, uniqueID),
+			supplementalValue:  fmt.Sprintf("https://example.com/vendor/A/%s/%d", scenario, uniqueID),
+			usesSupplementalID: true,
+		},
+	}
+}
+
+func (c submodelFieldRuleTestCase) ruleValue() string {
+	if c.usesSupplementalID {
+		return c.supplementalValue
+	}
+	return c.submodelID
+}
+
+func (c submodelFieldRuleTestCase) nonMatching() submodelFieldRuleTestCase {
+	c.submodelID += ":denied"
+	if c.usesSupplementalID {
+		c.supplementalValue += ":denied"
+	}
+	return c
+}
+
+func (c submodelFieldRuleTestCase) url() string {
+	return testBaseURL + "/submodels/" + base64.RawURLEncoding.EncodeToString([]byte(c.submodelID))
+}
+
+func (c submodelFieldRuleTestCase) body(idShort string) string {
+	if !c.usesSupplementalID {
+		return fmt.Sprintf(`{"id":%q,"idShort":%q,"modelType":"Submodel"}`, c.submodelID, idShort)
+	}
+	return fmt.Sprintf(`{"id":%q,"idShort":%q,"modelType":"Submodel","supplementalSemanticIds":[{"type":"ModelReference","keys":[{"type":"Submodel","value":%q}]}]}`, c.submodelID, idShort, c.supplementalValue)
+}
+
+func (c submodelFieldRuleTestCase) patchBody(idShort string) string {
+	return fmt.Sprintf(`{"id":%q,"idShort":%q,"modelType":"Submodel"}`, c.submodelID, idShort)
+}
+
+func activateEditorSubmodelFieldRule(t *testing.T, baseVersionID int64, rights []string, testCase submodelFieldRuleTestCase, bearerToken string) {
 	t.Helper()
-	body := fmt.Sprintf(`{"rule":{"ACL":{"ATTRIBUTES":[{"CLAIM":"role"}],"RIGHTS":["CREATE","UPDATE"],"ACCESS":"ALLOW"},"OBJECTS":[{"ROUTE":"/submodels"}],"FORMULA":{"$and":[{"$eq":[{"$attribute":{"CLAIM":"role"}},{"$strVal":"editor"}]},{"$eq":[{"$field":%q},{"$strVal":%q}]}]}}}`, field, value)
+	versionID := clonePolicyVersion(t, baseVersionID, bearerToken)
+	createEditorSubmodelFieldRule(t, versionID, rights, testCase.field, testCase.ruleValue(), bearerToken)
+	validatePolicyVersion(t, versionID, bearerToken)
+	activatePolicyVersion(t, versionID, bearerToken)
+}
+
+func createEditorSubmodelFieldRule(t *testing.T, versionID int64, rights []string, field string, value string, bearerToken string) {
+	t.Helper()
+	encodedRights, err := json.Marshal(rights)
+	require.NoError(t, err)
+	body := fmt.Sprintf(`{"rule":{"ACL":{"ATTRIBUTES":[{"CLAIM":"role"}],"RIGHTS":%s,"ACCESS":"ALLOW"},"OBJECTS":[{"ROUTE":"/submodels"},{"ROUTE":"/submodels/*"}],"FORMULA":{"$and":[{"$eq":[{"$attribute":{"CLAIM":"role"}},{"$strVal":"editor"}]},{"$eq":[{"$field":%q},{"$strVal":%q}]}]}}}`, encodedRights, field, value)
 	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/rules", testBaseURL, versionID)
 	status, response := doAuthorizedRequest(t, http.MethodPost, endpoint, body, bearerToken)
 	require.Equalf(t, http.StatusOK, status, "create field-based policy rule failed: %s", response)

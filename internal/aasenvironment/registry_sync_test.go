@@ -38,6 +38,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	"github.com/stretchr/testify/require"
@@ -74,6 +75,15 @@ func TestNewRegistrySyncConfigRejectsUnsupportedScheme(t *testing.T) {
 	require.Contains(t, err.Error(), "http or https")
 }
 
+func TestRegistrySyncContextsDropCallerQueryFilter(t *testing.T) {
+	filteredCtx := auth.WithQueryFilter(context.TODO(), &auth.QueryFilter{})
+	require.NotNil(t, auth.GetQueryFilter(filteredCtx))
+
+	require.Nil(t, auth.GetQueryFilter(registrySyncReadContext(filteredCtx)))
+	require.Nil(t, auth.GetQueryFilter(aasRegistrySyncContext(filteredCtx, aasRegistrySyncUpsertOperation)))
+	require.Nil(t, auth.GetQueryFilter(submodelRegistrySyncContext(filteredCtx, submodelRegistrySyncDeleteOperation)))
+}
+
 func TestRegistrySyncContextOverridesHTTPAuditButKeepsPreconfigurationAudit(t *testing.T) {
 	httpAudit := history.AuditContext{
 		ActorSubject:        "user-1",
@@ -86,7 +96,7 @@ func TestRegistrySyncContextOverridesHTTPAuditButKeepsPreconfigurationAudit(t *t
 		Endpoint:            "/shells/{aasIdentifier}",
 		HTTPMethod:          http.MethodPut,
 	}
-	registryAudit := history.FromContext(aasRegistryAddAuditMetadataIfNotAvailable(
+	registryAudit := history.FromContext(aasRegistrySyncContext(
 		history.ContextWithAudit(context.TODO(), httpAudit),
 		aasRegistrySyncUpsertOperation,
 	))
@@ -104,7 +114,7 @@ func TestRegistrySyncContextOverridesHTTPAuditButKeepsPreconfigurationAudit(t *t
 	require.Equal(t, history.AuthorizationResultSystemInternal, preconfigurationAudit.AuthorizationResult)
 	require.Equal(t, history.AuditHTTPMethodSystem, preconfigurationAudit.HTTPMethod)
 
-	preconfigurationRegistryAudit := history.FromContext(aasRegistryAddAuditMetadataIfNotAvailable(
+	preconfigurationRegistryAudit := history.FromContext(aasRegistrySyncContext(
 		preconfigurationCtx,
 		aasRegistrySyncUpsertOperation,
 	))

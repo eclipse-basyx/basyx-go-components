@@ -37,7 +37,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 )
 
@@ -131,7 +130,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		}
 
 		if _, insertErr := s.persistence.SubmodelRegistry.InsertSubmodelDescriptorInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(auth.ContextWithoutQueryFilter(ctx), submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); insertErr != nil {
 			return insertErr
 		}
@@ -196,7 +195,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 			return nil
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -251,7 +250,7 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 			return deleteErr
 		}
 		if deleteDescriptorErr := s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
+			submodelRegistrySyncContext(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
 		); deleteDescriptorErr != nil {
 			return deleteDescriptorErr
 		}
@@ -348,7 +347,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 			return descriptorErr
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -439,7 +438,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 			return descriptorErr
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -539,7 +538,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 		operation = aasRegistrySyncDeleteEmbeddedOperation
 	}
 	for _, aasID := range referencingAASIDs {
-		aasDescriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, aasID)
+		aasDescriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(registrySyncReadContext(ctx), tx, aasID)
 		if getDescriptorErr != nil {
 			if common.IsErrNotFound(getDescriptorErr) {
 				continue
@@ -558,7 +557,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 		}
 
 		if upsertErr := s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
-			aasRegistryAddAuditMetadataIfNotAvailable(ctx, operation), tx, aasDescriptor,
+			aasRegistrySyncContext(ctx, operation), tx, aasDescriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
