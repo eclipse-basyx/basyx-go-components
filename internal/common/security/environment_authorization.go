@@ -43,62 +43,28 @@ type environmentAuthorization struct {
 	policyID    string
 }
 
-func environmentRights(method, requestPath, basePath string) []grammar.RightsEnum {
-	switch {
-	case method == http.MethodGet && requestPath == joinBasePath(basePath, "/serialization"):
-		return []grammar.RightsEnum{grammar.RightsEnumREAD}
-	case method == http.MethodPost && requestPath == joinBasePath(basePath, "/upload"):
-		return []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}
-	default:
-		return nil
-	}
-}
-
-func environmentResourceRoute(resource SemanticResourceKind) string {
-	switch resource {
-	case SemanticResourceAAS:
-		return "/shells"
-	case SemanticResourceSM:
-		return "/submodels"
-	case SemanticResourceCD:
-		return "/concept-descriptions"
-	default:
-		return ""
-	}
-}
-
-func matchEvaluationObjects(objects []grammar.ObjectItem, in EvalInput, basePath string) AccessWithLE {
-	if in.environmentResource == "" {
-		return matchRouteObjectsObjItem(objects, in.Path, basePath)
-	}
-	target := environmentResourceRoute(in.environmentResource)
-	if target == "" || len(environmentRights(in.Method, in.Path, basePath)) == 0 {
-		return AccessWithLE{}
-	}
-	eligible := make([]grammar.ObjectItem, 0, len(objects))
-	for _, object := range objects {
-		if object.Kind == grammar.Route || object.Kind == grammar.Identifiable {
-			eligible = append(eligible, object)
-		}
-	}
-	return matchRouteObjectsWithIdentifiablePath(eligible, in.Path, joinBasePath(basePath, target), basePath)
+func isEnvironmentRequest(method, requestPath, basePath string) bool {
+	return method == http.MethodGet && requestPath == joinBasePath(basePath, "/serialization") ||
+		method == http.MethodPost && requestPath == joinBasePath(basePath, "/upload")
 }
 
 func (s *AuthorizationSession) evaluateEnvironment(method, requestPath, routePath string) *environmentAuthorization {
-	rights := environmentRights(method, requestPath, s.model.basePath)
-	if len(rights) == 0 {
+	if !isEnvironmentRequest(method, requestPath, s.model.basePath) {
+		return nil
+	}
+	input := EvalInput{Method: method, Path: requestPath, RoutePath: routePath, Claims: s.claims, Globals: s.globals}
+	alternatives, mapped, routeFound := s.model.mapMethodAndPathToRights(input)
+	if !mapped || !routeFound {
 		return nil
 	}
 	result := &environmentAuthorization{
 		evaluations: make(map[SemanticResourceKind]AuthorizationEvaluation, 3),
-		rights:      rights,
+		rights:      collectRelevantRights(alternatives),
 		policyID:    s.policyID,
 	}
 	for _, resource := range []SemanticResourceKind{SemanticResourceAAS, SemanticResourceSM, SemanticResourceCD} {
-		result.evaluations[resource] = s.model.AuthorizeWithFilterWithOptions(EvalInput{
-			Method: method, Path: requestPath, RoutePath: routePath,
-			Claims: s.claims, Globals: s.globals, environmentResource: resource,
-		}, s.options)
+		input.objectContext = &objectMatchContext{identifiableResource: resource}
+		result.evaluations[resource] = s.model.AuthorizeWithFilterWithOptions(input, s.options)
 	}
 	return result
 }

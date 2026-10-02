@@ -35,7 +35,7 @@ type EvalInput struct {
 	Claims    Claims
 	Globals   GlobalAttributes
 
-	environmentResource SemanticResourceKind
+	objectContext *objectMatchContext
 }
 
 // Claims represents token claims extracted from a verified token.
