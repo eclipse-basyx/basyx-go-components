@@ -48,6 +48,7 @@ import (
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 type uploadAPIService struct {
@@ -255,57 +256,85 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 	if s.persistence.ConceptDescriptionRepository == nil || s.persistence.SubmodelRepository == nil || s.persistence.AASRepository == nil {
 		return common.NewErrBadRequest("AASENV-PROCESSENV-NILBACKEND one or more repository backends are not initialized")
 	}
+	if environment == nil {
+		return common.NewErrBadRequest("AASENV-PROCESSENV-NILENV environment is required")
+	}
+	if err := s.storeEnvironmentConceptDescriptions(ctx, environment.ConceptDescriptions()); err != nil {
+		return err
+	}
+	if err := s.storeEnvironmentSubmodels(ctx, environment.Submodels()); err != nil {
+		return err
+	}
+	return s.storeEnvironmentShells(ctx, environment.AssetAdministrationShells())
+}
 
-	for _, conceptDescription := range environment.ConceptDescriptions() {
-		if _, err := s.persistence.ConceptDescriptionRepository.PutConceptDescription(ctx, conceptDescription.ID(), conceptDescription); err != nil {
-			return fmt.Errorf("AASENV-PROCESSENV-PUTCD failed to store concept description '%s': %w", conceptDescription.ID(), err)
+func (s *uploadAPIService) storeEnvironmentConceptDescriptions(ctx context.Context, descriptions []aastypes.IConceptDescription) error {
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceCD)
+	if err != nil {
+		return err
+	}
+	for _, description := range descriptions {
+		if _, err := s.persistence.ConceptDescriptionRepository.PutConceptDescription(ctx, description.ID(), description); err != nil {
+			return fmt.Errorf("AASENV-PROCESSENV-PUTCD failed to store concept description %q: %w", description.ID(), err)
 		}
 	}
-
-	for _, submodel := range environment.Submodels() {
-		if s.submodelRepositoryService != nil {
-			encodedSubmodelID := common.EncodeString(submodel.ID())
-			putResp, putErr := s.submodelRepositoryService.PutSubmodelByID(ctx, encodedSubmodelID, submodel)
-			if putErr != nil {
-				return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store submodel '%s': %w", submodel.ID(), putErr)
-			}
-			if putResp.Code < http.StatusOK || putResp.Code >= http.StatusMultipleChoices {
-				if putResp.Code == http.StatusBadRequest {
-					detail := "invalid submodel data"
-					if messages, ok := putResp.Body.([]commonmodel.Message); ok && len(messages) > 0 {
-						detail = messages[0].Text
-					}
-					return common.NewErrBadRequest(fmt.Sprintf("AASENV-PROCESSENV-PUTSM submodel %q: %s", submodel.ID(), detail))
-				}
-				return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store submodel '%s': repository returned HTTP %d", submodel.ID(), putResp.Code)
-			}
-			continue
-		}
-
-		if _, err := s.persistence.SubmodelRepository.PutSubmodel(ctx, submodel.ID(), submodel); err != nil {
-			return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store submodel '%s': %w", submodel.ID(), err)
-		}
-	}
-
-	for _, aas := range environment.AssetAdministrationShells() {
-		if s.aasRepositoryService != nil {
-			encodedAASID := common.EncodeString(aas.ID())
-			putResp, putErr := s.aasRepositoryService.PutAssetAdministrationShellById(ctx, encodedAASID, aas)
-			if putErr != nil {
-				return fmt.Errorf("AASENV-PROCESSENV-PUTAAS failed to store AAS '%s': %w", aas.ID(), putErr)
-			}
-			if putResp.Code < http.StatusOK || putResp.Code >= http.StatusMultipleChoices {
-				return fmt.Errorf("AASENV-PROCESSENV-PUTAAS failed to store AAS '%s': repository returned HTTP %d", aas.ID(), putResp.Code)
-			}
-			continue
-		}
-
-		if _, err := s.persistence.AASRepository.PutAssetAdministrationShellByID(ctx, aas.ID(), aas); err != nil {
-			return fmt.Errorf("AASENV-PROCESSENV-PUTAAS failed to store AAS '%s': %w", aas.ID(), err)
-		}
-	}
-
 	return nil
+}
+
+func (s *uploadAPIService) storeEnvironmentSubmodels(ctx context.Context, submodels []aastypes.ISubmodel) error {
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceSM)
+	if err != nil {
+		return err
+	}
+	for _, submodel := range submodels {
+		if err := s.storeEnvironmentSubmodel(ctx, submodel); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *uploadAPIService) storeEnvironmentSubmodel(ctx context.Context, submodel aastypes.ISubmodel) error {
+	if s.submodelRepositoryService == nil {
+		_, err := s.persistence.SubmodelRepository.PutSubmodel(ctx, submodel.ID(), submodel)
+		if err != nil {
+			return fmt.Errorf("AASENV-PROCESSENV-PUTSM submodel %q: %w", submodel.ID(), err)
+		}
+		return nil
+	}
+	response, err := s.submodelRepositoryService.PutSubmodelByID(ctx, common.EncodeString(submodel.ID()), submodel)
+	if err != nil {
+		return fmt.Errorf("AASENV-PROCESSENV-PUTSM submodel %q: %w", submodel.ID(), err)
+	}
+	return checkUploadRepositoryResponse("PUTSM", submodel.ID(), response)
+}
+
+func (s *uploadAPIService) storeEnvironmentShells(ctx context.Context, shells []aastypes.IAssetAdministrationShell) error {
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceAAS)
+	if err != nil {
+		return err
+	}
+	for _, shell := range shells {
+		if err := s.storeEnvironmentShell(ctx, shell); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *uploadAPIService) storeEnvironmentShell(ctx context.Context, shell aastypes.IAssetAdministrationShell) error {
+	if s.aasRepositoryService == nil {
+		_, err := s.persistence.AASRepository.PutAssetAdministrationShellByID(ctx, shell.ID(), shell)
+		if err != nil {
+			return fmt.Errorf("AASENV-PROCESSENV-PUTAAS shell %q: %w", shell.ID(), err)
+		}
+		return nil
+	}
+	response, err := s.aasRepositoryService.PutAssetAdministrationShellById(ctx, common.EncodeString(shell.ID()), shell)
+	if err != nil {
+		return fmt.Errorf("AASENV-PROCESSENV-PUTAAS shell %q: %w", shell.ID(), err)
+	}
+	return checkUploadRepositoryResponse("PUTAAS", shell.ID(), response)
 }
 
 // ReadEnvironmentFromAASXSpec parses the single supported XML or JSON spec in
@@ -772,6 +801,10 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 	specPart *aasx.Part,
 	environment aastypes.IEnvironment,
 ) error {
+	ctx, bindErr := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceSM)
+	if bindErr != nil {
+		return bindErr
+	}
 	if s == nil || s.persistence == nil || s.persistence.SubmodelRepository == nil {
 		return common.NewErrBadRequest("AASENV-UPLDSUPPL-NILSMREPO submodel repository backend is required")
 	}
@@ -851,6 +884,10 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 }
 
 func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
+	ctx, bindErr := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceAAS)
+	if bindErr != nil {
+		return bindErr
+	}
 	if s == nil || s.persistence == nil || s.persistence.AASRepository == nil {
 		return common.NewErrBadRequest("AASENV-UPLDTHUMB-NILAASREPO AAS repository backend is required")
 	}
@@ -1183,6 +1220,32 @@ func normalizeUploadContentType(contentType string) string {
 	}
 
 	return normalized
+}
+
+func checkUploadRepositoryResponse(step, id string, response commonmodel.ImplResponse) error {
+	if response.Code >= http.StatusOK && response.Code < http.StatusMultipleChoices {
+		return nil
+	}
+	detail := fmt.Sprintf("AASENV-PROCESSENV-%s resource %q: repository returned HTTP %d", step, id, response.Code)
+	if messages, ok := response.Body.([]commonmodel.Message); ok && len(messages) > 0 {
+		detail += ": " + messages[0].Text
+	}
+	switch response.Code {
+	case http.StatusForbidden:
+		return common.NewErrDenied(detail)
+	case http.StatusBadRequest:
+		return common.NewErrBadRequest(detail)
+	case http.StatusNotFound:
+		return common.NewErrNotFound(detail)
+	case http.StatusConflict:
+		return common.NewErrConflict(detail)
+	case http.StatusMethodNotAllowed:
+		return common.NewErrMethodNotAllowed(detail)
+	case http.StatusRequestEntityTooLarge:
+		return common.NewErrPayloadTooLarge(detail)
+	default:
+		return common.NewInternalServerError(detail)
+	}
 }
 
 func uploadProcessingStatus(err error) int {

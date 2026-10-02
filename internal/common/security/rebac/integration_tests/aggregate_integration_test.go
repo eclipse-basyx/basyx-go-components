@@ -102,6 +102,31 @@ func TestSerializationContainsOnlyReadableResources(t *testing.T) {
 	require.Contains(t, string(readable.body), shared)
 	denied := serialize(hidden)
 	require.NotEqual(t, http.StatusOK, denied.status, "an unshared Submodel is never serialized")
+	all := call(t, "bob", http.MethodGet, environmentURL+"/serialization", nil, map[string]string{"Accept": "application/json"})
+	expectStatus(t, http.StatusOK, all, "serialize all readable resources")
+	require.Contains(t, string(all.body), shared)
+	require.NotContains(t, string(all.body), hidden)
+}
+
+func TestSerializationCombinesIdentifiableABACWithReBAC(t *testing.T) {
+	bootstrapCreators(t)
+	publicID := unique("serialization-public")
+	expectStatus(t, http.StatusCreated, call(t, "admin", http.MethodPost, environmentURL+"/submodels",
+		submodel(publicID, "public", property("open", "public-value"), property("secret", "abac-hidden-value")), nil), "create ABAC-readable Submodel")
+	sharedID := createSubmodel(t, environmentURL, "alice", "serialization-private", property("secret", "rebac-readable-value"))
+	hiddenID := createSubmodel(t, environmentURL, "alice", "serialization-hidden", property("secret", "unshared-value"))
+	addGrants(t, "alice", submodelAccess(environmentURL, sharedID), userGrant(t, "viewer", "userx"))
+	shellID := unique("serialization-shared-shell")
+	expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, environmentURL+"/shells", shell(shellID), nil), "create shell")
+	addGrants(t, "alice", environmentURL+"/shells/"+enc(shellID)+"/$access", userGrant(t, "viewer", "userx"))
+	result := call(t, "userx", http.MethodGet, environmentURL+"/serialization", nil, map[string]string{"Accept": "application/json"})
+	expectStatus(t, http.StatusOK, result, "combine ABAC and ReBAC resource grants")
+	for _, visible := range []string{publicID, sharedID, shellID, "rebac-readable-value"} {
+		require.Contains(t, string(result.body), visible)
+	}
+	for _, hidden := range []string{hiddenID, "unshared-value", "abac-hidden-value"} {
+		require.NotContains(t, string(result.body), hidden)
+	}
 }
 
 func TestUploadCreatesOwnedResources(t *testing.T) {

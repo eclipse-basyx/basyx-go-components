@@ -166,6 +166,7 @@ func serveAuthorizedRequest(
 		}, opts)
 	}
 
+	environment := session.evaluateEnvironment(r.Method, policyPath, routePath)
 	outcome, route, grants := resolveReBAC(r, settings, model, evaluation, routePath)
 	switch outcome {
 	case reBACOutcomeManagement:
@@ -178,6 +179,7 @@ func serveAuthorizedRequest(
 		evaluation = reBACGrantedEvaluation(evaluation, route.Rights)
 	}
 
+	evaluation = environment.admit(evaluation)
 	if !evaluation.Allowed {
 		writeABACDenied(w, r, settings, model, evaluation, policyPath, routePath)
 		return
@@ -193,6 +195,9 @@ func serveAuthorizedRequest(
 	}
 	session = session.withOuterAccess(accessViewFromEvaluation("", evaluation))
 	ctx = context.WithValue(ctx, authorizationSessionContextKey{}, session)
+	if environment != nil {
+		ctx = context.WithValue(ctx, environmentAuthorizationContextKey{}, environment)
+	}
 	if outcome == reBACOutcomeGranted {
 		ctx = context.WithValue(WithReBACGrants(ctx, grants), reBACRouteContextKey{}, route)
 	}

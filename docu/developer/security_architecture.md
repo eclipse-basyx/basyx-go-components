@@ -423,6 +423,71 @@ Object coverage follows these BaSyx rules:
 - A `FRAGMENT` object covers only its named element path and field fragment;
   it does not inherit the Referable subtree behavior.
 
+### Environment upload and serialization
+
+The AAS Environment's `POST /upload` and `GET /serialization` accept existing
+`IDENTIFIABLE` grants for `$aas`, `$sm`, and `$cd`. Concrete IDs and `"*"` use
+the same policy grammar as the repository endpoints. An additional `ROUTE`
+grant is not required. For example, this rule permits exporting one Submodel,
+including its elements, for the named authenticated subject:
+
+```json
+{
+  "ACL": {
+    "ATTRIBUTES": [{ "CLAIM": "sub" }],
+    "RIGHTS": ["READ"],
+    "ACCESS": "ALLOW"
+  },
+  "OBJECTS": [{ "IDENTIFIABLE": "$sm(\"urn:example:submodel:1\")" }],
+  "FORMULA": {
+    "$eq": [{ "$attribute": { "CLAIM": "sub" } }, { "$strVal": "reader-subject" }]
+  }
+}
+```
+
+`$sm("*")` covers only Submodels, never shells or ConceptDescriptions. A shell
+grant does not grant access to referenced Submodel contents. Standalone
+`REFERABLE`, `FRAGMENT`, and `DESCRIPTOR` grants do not grant environment
+import/export access. Existing `FILTER` and `FILTERLIST` conditions still
+filter contained elements and fields; no separate element grants are required
+for a permitted Submodel. Explicit matching `ROUTE` grants remain alternatives
+and can intentionally grant broader access.
+
+Serialization applies `READ` formulas and filters before encoding JSON, XML,
+or AASX. An omitted ID list means all visible objects of that type, across all
+pages. ConceptDescriptions are included by default, but only those the caller
+can read. An explicitly requested missing or invisible AAS or Submodel aborts
+the export with 404; it is not silently omitted. A caller with no matching
+entry permission receives 403. AASX binary parts are drawn from visible
+objects and visible file/thumbnail references and use the existing streaming
+authorization checks. Packaging must not restore missing or filtered references
+from stored binary metadata. The supported filter paths remain unchanged;
+this feature does not add thumbnail-specific filter syntax.
+
+Upload enforces `CREATE` or `UPDATE` according to actual object existence in
+each repository transaction. Existing and prospective states must satisfy the
+selected formula. Read filters do not turn an uploaded replacement into a
+partial update. Attachments and thumbnails also select their write right by
+the existence of their binary content and retain their transaction checks.
+Denied writes return 403, including denials returned by registry-sync wrappers.
+Import remains sequential: ConceptDescriptions, Submodels, shells, then AASX
+binary parts. Earlier permitted commits can survive a later denial; uploading
+an environment is not an atomic package transaction.
+
+The aggregate middleware evaluates the policy separately for each repository
+type, using one request's pinned policy, claims, and global attributes. Direct
+service/persistence calls do not run HTTP middleware again: the environment
+services bind the appropriate authorization context before calling them.
+Binding replaces the query filter, outer access view, and any stale authorized
+query together, preserving right-specific formulas and ReBAC grants. A type's
+entry permission is never reused as unrestricted permission for another type.
+ReBAC remains an alternative to ABAC for each resource, including when ABAC
+only allows a different type. Security-disabled requests and trusted startup
+preconfiguration imports retain their existing behavior. Registry descriptor
+synchronization remains an internal consequence of an authorized object write.
+
+The standalone Submodel Repository serialization endpoint remains unimplemented.
+
 Validation invariants enforced by the current implementation:
 - Rule-level one-of:
   - exactly one of `ACL` or `USEACL`

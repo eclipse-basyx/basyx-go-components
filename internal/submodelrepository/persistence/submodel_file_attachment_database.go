@@ -40,10 +40,17 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 // FileAttachmentExists reports whether a File submodel element currently has attachment data stored in file_data.file_oid.
 func (s *SubmodelDatabase) FileAttachmentExists(submodelID string, idShortPath string) (bool, error) {
+	return fileAttachmentExists(s.db, submodelID, idShortPath)
+}
+
+func fileAttachmentExists(queryer interface {
+	QueryRow(string, ...any) *sql.Row
+}, submodelID string, idShortPath string) (bool, error) {
 	query, args, err := submodelqueries.BuildFileAttachmentExistsSQL(submodelID, idShortPath)
 	if err != nil {
 		return false, common.NewInternalServerError("SMREPO-FILEATTEXISTS-BUILDSQL " + err.Error())
@@ -51,7 +58,7 @@ func (s *SubmodelDatabase) FileAttachmentExists(submodelID string, idShortPath s
 
 	var fileElementID sql.NullInt64
 	var fileOID sql.NullInt64
-	if scanErr := s.db.QueryRow(query, args...).Scan(&fileElementID, &fileOID); scanErr != nil {
+	if scanErr := queryer.QueryRow(query, args...).Scan(&fileElementID, &fileOID); scanErr != nil {
 		if errors.Is(scanErr, sql.ErrNoRows) {
 			return false, common.NewErrNotFound("SMREPO-FILEATTEXISTS-NOTFOUND Submodel element not found")
 		}
@@ -153,6 +160,10 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		ctx, err := attachmentPutContext(ctx, tx, submodelID, idShortPath)
+		if err != nil {
+			return err
+		}
 		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
@@ -356,6 +367,27 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 			currentPath:  idShortPath,
 		})
 	})
+}
+
+func attachmentPutContext(ctx context.Context, tx *sql.Tx, submodelID, idShortPath string) (context.Context, error) {
+	enforce, err := shouldEnforceFormula(ctx, "SMREPO-UPLOADFILEHIST-SHOULDENFORCE")
+	if err != nil || !enforce {
+		return ctx, err
+	}
+	if err = history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelID); err != nil {
+		return nil, err
+	}
+	if _, err = persistenceutils.GetSubmodelDatabaseIDForUpdateContext(ctx, tx, submodelID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("SMREPO-UPLOADFILEHIST-NOSUBMODEL Submodel not found")
+		}
+		return nil, common.NewInternalServerError("SMREPO-UPLOADFILEHIST-LOCK " + err.Error())
+	}
+	exists, err := fileAttachmentExists(tx, submodelID, idShortPath)
+	if err != nil {
+		return nil, err
+	}
+	return auth.SelectPutFormulaByExistence(ctx, exists), nil
 }
 
 func (s *SubmodelDatabase) ensureFileAttachmentMutationVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, errorPrefix string, prospective bool) error {
