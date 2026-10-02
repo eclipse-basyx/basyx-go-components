@@ -249,7 +249,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			continue
 		}
 		// Gate 3: objects
-		accessWithOptinalFilter := matchEvaluationObjects(objs, in, m.basePath)
+		accessWithOptinalFilter := matchObjects(objs, in.Path, m.basePath, in.objectContext)
 		if !accessWithOptinalFilter.access {
 			continue
 		}

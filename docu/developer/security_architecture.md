@@ -474,8 +474,15 @@ Import remains sequential: ConceptDescriptions, Submodels, shells, then AASX
 binary parts. Earlier permitted commits can survive a later denial; uploading
 an environment is not an atomic package transaction.
 
-The aggregate middleware evaluates the policy separately for each repository
-type, using one request's pinned policy, claims, and global attributes. Direct
+The environment adapter recognizes the two aggregate endpoints once and obtains
+their rights from the central method/route mapping. It evaluates the policy
+separately for each repository type, using one request's pinned policy, claims,
+and global attributes. The common object matcher receives an internal typed
+object context: `ROUTE` uses the actual request path, while `IDENTIFIABLE` uses
+the selected type's collection route. The matcher has no environment endpoint
+knowledge. An absent object context retains ordinary route matching; an invalid
+typed context denies every object, including wildcard routes. Typed contexts
+accept only `ROUTE` and `IDENTIFIABLE` objects. Direct
 service/persistence calls do not run HTTP middleware again: the environment
 services bind the appropriate authorization context before calling them.
 Binding replaces the query filter, outer access view, and any stale authorized

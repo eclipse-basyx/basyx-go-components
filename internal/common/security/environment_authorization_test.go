@@ -212,3 +212,32 @@ func TestEnvironmentBindingPreservesInternalAndDisabledContexts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, startup, unchanged)
 }
+
+func TestEnvironmentAdapterOnlyPreparesRegisteredAggregateRoutes(t *testing.T) {
+	router := chi.NewRouter()
+	router.Get("/serialization", func(http.ResponseWriter, *http.Request) {})
+	router.Post("/upload", func(http.ResponseWriter, *http.Request) {})
+	router.Get("/submodels", func(http.ResponseWriter, *http.Request) {})
+	model := &AccessModel{apiRouter: router, basePath: "/api"}
+	session := newAuthorizationSession(model, nil, nil, grammar.DefaultSimplifyOptions())
+	for _, request := range []struct{ method, path string }{
+		{http.MethodGet, "/serialization"}, {http.MethodPost, "/upload"},
+	} {
+		path := "/api" + request.path
+		aggregate := session.evaluateEnvironment(request.method, path, path)
+		require.NotNil(t, aggregate)
+		alternatives, mapped, found := model.mapMethodAndPathToRights(EvalInput{Method: request.method, Path: path})
+		require.True(t, mapped && found)
+		require.Equal(t, collectRelevantRights(alternatives), aggregate.rights)
+		require.Len(t, aggregate.evaluations, 3)
+	}
+	for _, request := range []struct{ method, path string }{
+		{http.MethodGet, "/api/upload"}, {http.MethodPost, "/api/serialization"},
+		{http.MethodGet, "/api/submodels"}, {http.MethodGet, "/api/serialization/"},
+		{http.MethodGet, "/serialization"},
+	} {
+		require.Nil(t, session.evaluateEnvironment(request.method, request.path, request.path), request)
+	}
+	model.apiRouter = chi.NewRouter()
+	require.Nil(t, session.evaluateEnvironment(http.MethodGet, "/api/serialization", "/api/serialization"))
+}
