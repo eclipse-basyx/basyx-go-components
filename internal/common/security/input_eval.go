@@ -34,6 +34,8 @@ type EvalInput struct {
 	RoutePath string
 	Claims    Claims
 	Globals   GlobalAttributes
+
+	environmentResource SemanticResourceKind
 }
 
 // Claims represents token claims extracted from a verified token.

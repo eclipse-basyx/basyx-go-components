@@ -553,6 +553,10 @@ type AccessWithLE struct {
 // matchRouteObjectsObjItem returns true if any ROUTE object matches the request
 // path. Supports exact match, prefix match using "/*", and global wildcards.
 func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string, basePath string) AccessWithLE {
+	return matchRouteObjectsWithIdentifiablePath(objs, reqPath, reqPath, basePath)
+}
+
+func matchRouteObjectsWithIdentifiablePath(objs []grammar.ObjectItem, reqPath, identifiablePath, basePath string) AccessWithLE {
 	var logicalExpressions []grammar.LogicalExpression
 	access := false
 	for _, oi := range objs {
@@ -571,7 +575,7 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string, basePat
 		case grammar.Identifiable:
 			identifiable := oi.Identifiable
 			if identifiable != nil {
-				if appendMatchedMappedRoutes(mapIdentifiableValueToRoute(*identifiable, basePath), reqPath, &access, &logicalExpressions) {
+				if appendMatchedMappedRoutes(mapIdentifiableValueToRoute(*identifiable, basePath), identifiablePath, &access, &logicalExpressions) {
 					return AccessWithLE{access: true}
 				}
 			}
