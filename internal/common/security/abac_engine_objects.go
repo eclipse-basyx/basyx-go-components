@@ -550,9 +550,47 @@ type AccessWithLE struct {
 	le     *grammar.LogicalExpression
 }
 
+type objectMatchContext struct {
+	identifiableResource SemanticResourceKind
+}
+
+func identifiableCollectionRoute(resource SemanticResourceKind) string {
+	switch resource {
+	case SemanticResourceAAS:
+		return "/shells"
+	case SemanticResourceSM:
+		return "/submodels"
+	case SemanticResourceCD:
+		return "/concept-descriptions"
+	default:
+		return ""
+	}
+}
+
+func matchObjects(objects []grammar.ObjectItem, requestPath, basePath string, scope *objectMatchContext) AccessWithLE {
+	if scope == nil {
+		return matchRouteObjectsObjItem(objects, requestPath, basePath)
+	}
+	target := identifiableCollectionRoute(scope.identifiableResource)
+	if target == "" {
+		return AccessWithLE{}
+	}
+	eligible := make([]grammar.ObjectItem, 0, len(objects))
+	for _, object := range objects {
+		if object.Kind == grammar.Route || object.Kind == grammar.Identifiable {
+			eligible = append(eligible, object)
+		}
+	}
+	return matchRouteObjectsWithIdentifiablePath(eligible, requestPath, joinBasePath(basePath, target), basePath)
+}
+
 // matchRouteObjectsObjItem returns true if any ROUTE object matches the request
 // path. Supports exact match, prefix match using "/*", and global wildcards.
 func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string, basePath string) AccessWithLE {
+	return matchRouteObjectsWithIdentifiablePath(objs, reqPath, reqPath, basePath)
+}
+
+func matchRouteObjectsWithIdentifiablePath(objs []grammar.ObjectItem, reqPath, identifiablePath, basePath string) AccessWithLE {
 	var logicalExpressions []grammar.LogicalExpression
 	access := false
 	for _, oi := range objs {
@@ -571,7 +609,7 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string, basePat
 		case grammar.Identifiable:
 			identifiable := oi.Identifiable
 			if identifiable != nil {
-				if appendMatchedMappedRoutes(mapIdentifiableValueToRoute(*identifiable, basePath), reqPath, &access, &logicalExpressions) {
+				if appendMatchedMappedRoutes(mapIdentifiableValueToRoute(*identifiable, basePath), identifiablePath, &access, &logicalExpressions) {
 					return AccessWithLE{access: true}
 				}
 			}

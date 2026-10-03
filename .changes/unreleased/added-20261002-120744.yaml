@@ -1,0 +1,7 @@
+kind: added
+body: Support type-scoped IDENTIFIABLE permissions for AAS Environment upload and serialization, including filtered JSON, XML and AASX exports and CREATE/UPDATE checks based on actual object existence.
+time: 2026-10-02T12:07:44.4602581+02:00
+custom:
+    Impact: Low
+    PullRequest: 723
+    SecurityImpact: AAS, Submodel and ConceptDescription grants remain isolated by type. Exports enforce existing formulas, field and element filters, and authorization for attachments and thumbnails; explicitly requested inaccessible objects fail without returning a partial selection. Imports preserve per-object checks, 403 responses and ABAC/ReBAC alternatives. Earlier authorized writes can remain committed if a later import step is denied.

@@ -52,6 +52,7 @@ import (
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const (
@@ -334,6 +335,10 @@ func (s *SerializationAPIService) loadEnvironment(ctx context.Context, aasIDs []
 // Pagination uses a fixed page size and continues until the backend cursor is
 // empty.
 func (s *SerializationAPIService) loadAssetAdministrationShells(ctx context.Context, ids []string) ([]aastypes.IAssetAdministrationShell, error) {
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceAAS)
+	if err != nil {
+		return nil, err
+	}
 	if len(ids) > 0 {
 		result := make([]aastypes.IAssetAdministrationShell, 0, len(ids))
 		for _, id := range ids {
@@ -370,6 +375,10 @@ func (s *SerializationAPIService) loadAssetAdministrationShells(ctx context.Cont
 // Both explicit and paginated loads populate deep submodel element trees to
 // ensure complete serialization content.
 func (s *SerializationAPIService) loadSubmodels(ctx context.Context, ids []string) ([]aastypes.ISubmodel, error) {
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceSM)
+	if err != nil {
+		return nil, err
+	}
 	if len(ids) > 0 {
 		result := make([]aastypes.ISubmodel, 0, len(ids))
 		for _, id := range ids {
@@ -427,6 +436,10 @@ func (s *SerializationAPIService) loadSubmodels(ctx context.Context, ids []strin
 func (s *SerializationAPIService) loadConceptDescriptions(ctx context.Context, includeConceptDescriptions bool) ([]aastypes.IConceptDescription, error) {
 	if !includeConceptDescriptions {
 		return nil, nil
+	}
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceCD)
+	if err != nil {
+		return nil, err
 	}
 
 	result := make([]aastypes.IConceptDescription, 0)
@@ -804,6 +817,10 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 ) ([]serializationSupplementaryPart, error) {
 	if !isAASXSerializationContentType(serializationContentType) {
 		return nil, nil
+	}
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceSM)
+	if err != nil {
+		return nil, err
 	}
 
 	if s == nil || s.persistence == nil || s.persistence.SubmodelRepository == nil {
@@ -1196,6 +1213,10 @@ func (s *SerializationAPIService) resolveSerializationThumbnailParts(
 	if !isAASXSerializationContentType(serializationContentType) {
 		return nil, nil
 	}
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceAAS)
+	if err != nil {
+		return nil, err
+	}
 
 	if s == nil || s.persistence == nil || s.persistence.AASRepository == nil {
 		return nil, common.NewInternalServerError("AASENV-SERIALIZETHUMB-NILAASREPO AAS repository backend is required")
@@ -1290,15 +1311,17 @@ func (s *SerializationAPIService) loadSerializationThumbnailMetadata(ctx context
 // resolveSerializationThumbnailAASIDs determines which AAS identifiers should
 // be used for thumbnail loading.
 //
-// Explicit request ids are decoded and deduplicated. When none are provided,
-// ids are derived from the serialized environment.
+// Only visible shells with a visible thumbnail reference can contribute parts.
 func resolveSerializationThumbnailAASIDs(requestedAASIDs []string, environment aastypes.IEnvironment) ([]string, error) {
+	requested := make(map[string]struct{}, len(requestedAASIDs))
 	if len(requestedAASIDs) > 0 {
 		decodedIDs, decodeErr := resolveRequestedThumbnailAASIDs(requestedAASIDs)
 		if decodeErr != nil {
 			return nil, decodeErr
 		}
-		return deduplicateTrimmedIdentifiers(decodedIDs), nil
+		for _, id := range decodedIDs {
+			requested[id] = struct{}{}
+		}
 	}
 
 	if environment == nil {
@@ -1307,7 +1330,13 @@ func resolveSerializationThumbnailAASIDs(requestedAASIDs []string, environment a
 
 	aasIDs := make([]string, 0, len(environment.AssetAdministrationShells()))
 	for _, aas := range environment.AssetAdministrationShells() {
-		if aas == nil {
+		if aas == nil || aas.AssetInformation() == nil || aas.AssetInformation().DefaultThumbnail() == nil {
+			continue
+		}
+		if strings.TrimSpace(aas.AssetInformation().DefaultThumbnail().Path()) == "" {
+			continue
+		}
+		if _, selected := requested[aas.ID()]; len(requested) > 0 && !selected {
 			continue
 		}
 		aasIDs = append(aasIDs, aas.ID())
@@ -1375,7 +1404,7 @@ func buildSerializationThumbnailPart(aasID, thumbnailFileName, thumbnailContentT
 // rewriteSerializationThumbnailReference updates the matching AAS
 // defaultThumbnail reference in the environment to the packaged thumbnail path.
 //
-// If no thumbnail exists on the asset information, a new resource is created.
+// Missing references must not be restored from binary metadata.
 func rewriteSerializationThumbnailReference(environment aastypes.IEnvironment, aasID, thumbnailPath, thumbnailContentType string) {
 	if environment == nil {
 		return
@@ -1392,12 +1421,10 @@ func rewriteSerializationThumbnailReference(environment aastypes.IEnvironment, a
 		}
 
 		defaultThumbnail := assetInformation.DefaultThumbnail()
-		if defaultThumbnail == nil {
-			defaultThumbnail = aastypes.NewResource(thumbnailPath)
-			assetInformation.SetDefaultThumbnail(defaultThumbnail)
-		} else {
-			defaultThumbnail.SetPath(thumbnailPath)
+		if defaultThumbnail == nil || strings.TrimSpace(defaultThumbnail.Path()) == "" {
+			return
 		}
+		defaultThumbnail.SetPath(thumbnailPath)
 
 		resolvedThumbnailContentType := strings.TrimSpace(thumbnailContentType)
 		if resolvedThumbnailContentType != "" {
