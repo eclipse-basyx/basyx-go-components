@@ -28,13 +28,18 @@ package digitaltwinregistry
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 const (
-	profileSSP001 = "https://basyx.org/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001"
-	profileSSP003 = "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003"
+	aasRegistrySSP001Profile      = "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001"
+	aasRegistrySSP003Profile      = "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003"
+	aasRegistrySSP004Profile      = "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-004"
+	discoverySSP001Profile        = "https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001"
+	basyxAASRegistrySSP001Profile = "https://basyx.org/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001"
+	basyxDiscoverySSP001Profile   = "https://basyx.org/aas/API/3/2/DiscoveryServiceSpecification/SSP-001"
 )
 
 // DescriptionService provides the combined service description for the Digital Twin Registry.
@@ -46,12 +51,15 @@ func NewDescriptionService() *DescriptionService {
 }
 
 // GetDescription - Returns the self-describing information of the Digital Twin Registry.
-func (s *DescriptionService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
-	_ = ctx
-	return model.Response(200, model.ServiceDescription{
+func (s *DescriptionService) GetDescription(_ context.Context) (model.ImplResponse, error) {
+	return model.Response(http.StatusOK, model.ServiceDescription{
 		Profiles: []string{
-			profileSSP001,
-			profileSSP003,
+			aasRegistrySSP001Profile,
+			aasRegistrySSP003Profile,
+			aasRegistrySSP004Profile,
+			discoverySSP001Profile,
+			basyxAASRegistrySSP001Profile,
+			basyxDiscoverySSP001Profile,
 		},
 	}), nil
 }
