@@ -51,7 +51,7 @@ func (c *SerializationAPIAPIController) Routes() Routes {
 	return Routes{
 		"GenerateSerializationByIds": Route{
 			strings.ToUpper("Get"),
-			"/api/v3/serialization",
+			"/serialization",
 			c.GenerateSerializationByIds,
 		},
 	}
