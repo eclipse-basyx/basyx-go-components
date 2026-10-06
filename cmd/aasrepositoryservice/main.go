@@ -191,6 +191,9 @@ func runServer(ctx context.Context, configPath string) error {
 	aasSvc.SetEventFeed(eventFeedModule)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
+	serializationSvc := api.NewSerializationAPIAPIService()
+	serializationCtrl := openapi.NewSerializationAPIAPIController(serializationSvc)
+
 	descSvc := openapi.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
@@ -216,6 +219,11 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 
 	for operation, rt := range aasCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	for operation, rt := range serializationCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}

@@ -14,6 +14,12 @@
 		"expectedStatus": 200
 	},
 	{
+		"context": "002.2 - GET /serialization - not implemented",
+		"method": "GET",
+		"endpoint": "{{BASYX_IT_API_URL}}/serialization",
+		"expectedStatus": 501
+	},
+	{
 		"context": "003.1 - GET /shells - collection",
 		"method": "GET",
 		"endpoint": "{{BASYX_IT_API_URL}}/shells",
