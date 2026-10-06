@@ -34,7 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDescriptionContainsSSP003Profile(t *testing.T) {
+func TestDescriptionContainsAllSupportedProfiles(t *testing.T) {
 	svc := NewDescriptionService()
 	resp, err := svc.GetDescription(context.Background())
 	require.NoError(t, err)
@@ -42,5 +42,12 @@ func TestDescriptionContainsSSP003Profile(t *testing.T) {
 
 	description, ok := resp.Body.(model.ServiceDescription)
 	require.True(t, ok)
-	require.Contains(t, description.Profiles, "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003")
+	require.ElementsMatch(t, []string{
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003",
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-004",
+		"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
+		"https://basyx.org/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+		"https://basyx.org/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
+	}, description.Profiles)
 }

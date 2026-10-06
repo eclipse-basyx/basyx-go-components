@@ -66,6 +66,17 @@ func TestBulkAASOperationsAndDescription(t *testing.T) {
 		deleteAllDTRShellDescriptors(t, headers)
 	})
 
+	t.Run("DescriptionProfilesMatchExpectedSet", func(t *testing.T) {
+		status, body, _ := doDTRRequest(t, dtrNoRedirectClient, http.MethodGet, BaseURL+"/description", nil, nil)
+		require.Equal(t, http.StatusOK, status)
+
+		var description struct {
+			Profiles []string `json:"profiles"`
+		}
+		require.NoError(t, json.Unmarshal(body, &description))
+		require.ElementsMatch(t, expectedDTRDescriptionProfiles(), description.Profiles)
+	})
+
 	t.Run("BulkCreateSuccessAndRetryAfter", func(t *testing.T) {
 		deleteAllDTRShellDescriptors(t, headers)
 
@@ -133,6 +144,17 @@ func TestBulkAASOperationsAndDescription(t *testing.T) {
 		matchingBody := lookupShellsByAssetLink(t, matching, adminBPNHeaders)
 		assertLookupResultIDs(t, matchingBody, "urn:example:dtr:lookup-constrained")
 	})
+}
+
+func expectedDTRDescriptionProfiles() []string {
+	return []string{
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003",
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-004",
+		"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
+		"https://basyx.org/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+		"https://basyx.org/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
+	}
 }
 
 func fetchDTRToken(t *testing.T, user, password string) string {
