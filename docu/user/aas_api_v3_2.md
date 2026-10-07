@@ -409,7 +409,7 @@ curl 'http://localhost:6004/submodels/$recent-changes?limit=50&updatedFrom=2026-
 
 Common query parameters:
 
-- `limit`: maximum number of changes to return. The default is `100`.
+- `limit`: maximum number of changes to return. The default is `server.pagination.defaultLimit` (`100`); values above `server.pagination.maxLimit` (`1000`) are rejected.
 - `cursor`: pagination cursor from the previous response.
 - `createdFrom`: lower bound for administrative creation timestamps.
 - `updatedFrom`: lower bound for administrative update timestamps.

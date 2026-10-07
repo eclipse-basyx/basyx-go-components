@@ -140,7 +140,7 @@ func listSubmodelDescriptorsFromPageQuery(
 	scope submodelDescriptorListScope,
 ) ([]model.SubmodelDescriptor, string, error) {
 	if limit <= 0 {
-		limit = 100
+		limit = common.DefaultPageLimit(ctx)
 	}
 	peekLimit := limit
 	if limit < 1<<31-1 {

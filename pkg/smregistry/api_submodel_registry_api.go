@@ -158,7 +158,7 @@ func (c *SubmodelRegistryAPIAPIController) QuerySubmodelDescriptors(w http.Respo
 		return
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -218,7 +218,7 @@ func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptors(w http.Resp
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptors", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)

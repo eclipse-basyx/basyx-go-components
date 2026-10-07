@@ -489,7 +489,7 @@ func TestAddSwaggerUIInjectsEventFeedOnlyWhenEnabled(t *testing.T) {
 	if strings.Contains(body, "default: 100") {
 		t.Fatal("OpenAPI limit must not hard-code default 100")
 	}
-	if !strings.Contains(body, "eventing.feed.maxPageSize") {
-		t.Fatal("expected omitted limit to document configured maxPageSize")
+	if !strings.Contains(body, "server.pagination.defaultLimit") || !strings.Contains(body, "server.pagination.maxLimit") {
+		t.Fatal("expected limit to document the configured pagination limits")
 	}
 }

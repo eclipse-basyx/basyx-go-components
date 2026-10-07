@@ -138,6 +138,104 @@ func TestViperAndStructSwaggerEnabledDefaultsMatch(t *testing.T) {
 	}
 }
 
+func unsetPaginationEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"SERVER_PAGINATION_DEFAULTLIMIT", "SERVER_PAGINATION_DEFAULT_LIMIT", "BASYX_SERVER_PAGINATION_DEFAULT_LIMIT",
+		"SERVER_PAGINATION_MAXLIMIT", "SERVER_PAGINATION_MAX_LIMIT", "BASYX_SERVER_PAGINATION_MAX_LIMIT",
+	} {
+		withUnsetEnv(t, key)
+	}
+	captureLogOutput(t)
+}
+
+func TestPaginationDefaults(t *testing.T) {
+	unsetPaginationEnv(t)
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Server.Pagination.DefaultLimit != 100 || cfg.Server.Pagination.MaxLimit != 1000 {
+		t.Fatalf("expected pagination 100/1000, got %+v", cfg.Server.Pagination)
+	}
+	if cfg.Server.Pagination.DefaultLimit != DefaultConfig.ServerPaginationDefaultLimit || cfg.Server.Pagination.MaxLimit != DefaultConfig.ServerPaginationMaxLimit {
+		t.Fatalf("viper defaults drifted from DefaultConfig: %+v", cfg.Server.Pagination)
+	}
+}
+
+func TestPaginationLoadsFromYAML(t *testing.T) {
+	unsetPaginationEnv(t)
+	path := writeTempConfig(t, "server:\n  pagination:\n    defaultLimit: 20\n    maxLimit: 200\n")
+
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Server.Pagination.DefaultLimit != 20 || cfg.Server.Pagination.MaxLimit != 200 {
+		t.Fatalf("expected pagination 20/200, got %+v", cfg.Server.Pagination)
+	}
+}
+
+func TestPaginationCanBeOverriddenByEnvironment(t *testing.T) {
+	for name, keys := range map[string][2]string{
+		"viper style":    {"SERVER_PAGINATION_DEFAULTLIMIT", "SERVER_PAGINATION_MAXLIMIT"},
+		"readable style": {"BASYX_SERVER_PAGINATION_DEFAULT_LIMIT", "BASYX_SERVER_PAGINATION_MAX_LIMIT"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			unsetPaginationEnv(t)
+			t.Setenv(keys[0], "7")
+			t.Setenv(keys[1], "70")
+
+			cfg, err := LoadConfig("")
+			if err != nil {
+				t.Fatalf("unexpected config load error: %v", err)
+			}
+			if cfg.Server.Pagination.DefaultLimit != 7 || cfg.Server.Pagination.MaxLimit != 70 {
+				t.Fatalf("expected pagination 7/70, got %+v", cfg.Server.Pagination)
+			}
+		})
+	}
+}
+
+func TestPaginationRejectsInvalidValues(t *testing.T) {
+	cases := map[string]struct {
+		defaultLimit string
+		maxLimit     string
+		code         string
+	}{
+		"zero default":        {"0", "1000", "CONFIG-SERVER-PAGINATION-DEFAULTLIMIT"},
+		"max below default":   {"100", "99", "CONFIG-SERVER-PAGINATION-MAXLIMIT"},
+		"max above int32 max": {"100", "2147483648", "CONFIG-SERVER-PAGINATION-MAXLIMITRANGE"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			unsetPaginationEnv(t)
+			t.Setenv("SERVER_PAGINATION_DEFAULTLIMIT", tc.defaultLimit)
+			t.Setenv("SERVER_PAGINATION_MAXLIMIT", tc.maxLimit)
+
+			_, err := LoadConfig("")
+			if err == nil || !strings.Contains(err.Error(), tc.code) {
+				t.Fatalf("expected %s error, got %v", tc.code, err)
+			}
+		})
+	}
+}
+
+func TestLegacyEventFeedMaxPageSizeIsIgnored(t *testing.T) {
+	unsetPaginationEnv(t)
+	path := writeTempConfig(t, "eventing:\n  feed:\n    enabled: true\n    maxPageSize: 5\n")
+	t.Setenv("BASYX_EVENTING_FEED_MAX_PAGE_SIZE", "5")
+
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if runtime := NewEventFeedConfig(cfg); runtime.MaxPageSize != 1000 || runtime.DefaultPageSize != 100 {
+		t.Fatalf("expected feed to use global pagination 100/1000, got %d/%d", runtime.DefaultPageSize, runtime.MaxPageSize)
+	}
+}
+
 func TestBulkBatchLimitDefaultIsOneThousand(t *testing.T) {
 	for _, key := range []string{"GENERAL_BULKBATCHLIMIT", "GENERAL_BULK_BATCH_LIMIT", "BASYX_GENERAL_BULK_BATCH_LIMIT"} {
 		withUnsetEnv(t, key)
@@ -1307,7 +1405,7 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 func TestValidateEventingConfigAcceptsEventFeed(t *testing.T) {
 	cfg := Config{
 		History:  HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"},
-		Eventing: EventingConfig{Enabled: false, Format: "cloudevents", Feed: EventFeedConfig{Enabled: true, MaxAgeDays: 30, MaxPageSize: 100}},
+		Eventing: EventingConfig{Enabled: false, Format: "cloudevents", Feed: EventFeedConfig{Enabled: true, MaxAgeDays: 30}},
 	}
 	if err := validateHistoryAndEventingConfig(&cfg); err != nil {
 		t.Fatalf("expected event feed configuration to be accepted, got %v", err)

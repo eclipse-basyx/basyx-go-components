@@ -262,7 +262,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	cursor string,
 ) ([]string, string, error) {
 	if limit <= 0 {
-		limit = 100
+		limit = common.DefaultPageLimit(ctx)
 	}
 
 	peekLimit := int(limit) + 1

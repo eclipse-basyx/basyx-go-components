@@ -52,9 +52,9 @@ func RegisterRoutes(r chi.Router, svc *Service) {
 func (s *Service) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	presentation := Presentation(strings.ToUpper(strings.TrimSpace(q.Get("presentation"))))
-	limit := s.cfg.MaxPageSize
+	limit := s.cfg.DefaultPageSize
 	if limit < 1 {
-		limit = 100
+		limit = DefaultConfig().DefaultPageSize
 	}
 	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
 		n, err := strconv.Atoi(raw)

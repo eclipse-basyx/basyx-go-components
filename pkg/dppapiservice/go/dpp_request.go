@@ -31,9 +31,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -103,16 +103,13 @@ func queryCompressedWriteRepresentation(req *http.Request, operation string) *Im
 }
 
 func queryReadDPPIDsLimit(req *http.Request) (int32, *ImplResponse) {
-	rawLimit := req.URL.Query().Get("limit")
-	if rawLimit == "" {
-		return defaultDPPPageLimit, nil
-	}
-	parsed, err := strconv.ParseInt(rawLimit, 10, 32)
-	if err != nil || parsed < 1 {
-		response := errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-READIDS-LIMIT invalid limit"))
+	query := req.URL.Query()
+	limit, err := common.ResolveAPILimit(req.Context(), query.Get("limit"), query.Has("limit"))
+	if err != nil {
+		response := errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-READIDS-LIMIT %w", err))
 		return 0, &response
 	}
-	return int32(parsed), nil
+	return limit, nil
 }
 
 func validateReadDPPIdsRequest(request ReadDppIdsByProductIdsRequest) error {

@@ -473,7 +473,7 @@ func ListCompanyDescriptors(
 	assetID string,
 ) ([]model.CompanyDescriptor, string, error) {
 	if limit <= 0 {
-		limit = 100
+		limit = common.DefaultPageLimit(ctx)
 	}
 	if cursor != "" {
 		cursorExists, cursorErr := ExistsCompanyDescriptorByID(ctx, db, cursor)

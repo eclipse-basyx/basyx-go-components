@@ -95,7 +95,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) QueryConceptDescriptions(
 		return
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "CDREPO", "QueryConceptDescriptions", "limit")
 		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
@@ -183,7 +183,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) GetAllConceptDescriptions
 		dataSpecificationRefParam = param
 	} else {
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "CDREPO", "GetAllConceptDescriptions", "limit")
 		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
@@ -246,7 +246,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) GetAllConceptDescriptions
 			return
 		}
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "CDREPO", "GetAllConceptDescriptionsRecentChanges", "limit")
 		_ = model.EncodeJSONResponse(result.Body, &result.Code, w)

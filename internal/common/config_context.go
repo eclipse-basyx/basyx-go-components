@@ -94,3 +94,30 @@ func DelegatedResponseMaxBytesFromContext(ctx context.Context) int64 {
 	}
 	return cfg.General.DelegatedResponseMaxBytes
 }
+
+// PaginationFromContext returns the configured page size limits.
+//
+// The function reads the request config from the context and falls back to the
+// default limits when no valid configuration is present.
+//
+// Parameters:
+//   - ctx: Request context that may contain a process config.
+//
+// Returns:
+//   - PaginationConfig: Default and maximum page size with positive values.
+func PaginationFromContext(ctx context.Context) PaginationConfig {
+	defaults := PaginationConfig{
+		DefaultLimit: DefaultConfig.ServerPaginationDefaultLimit,
+		MaxLimit:     DefaultConfig.ServerPaginationMaxLimit,
+	}
+	cfg, ok := ConfigFromContext(ctx)
+	if !ok || cfg == nil || validatePaginationConfig(cfg.Server.Pagination) != nil {
+		return defaults
+	}
+	return cfg.Server.Pagination
+}
+
+// DefaultPageLimit returns the configured page size used when a caller supplies no limit.
+func DefaultPageLimit(ctx context.Context) int32 {
+	return int32(PaginationFromContext(ctx).DefaultLimit)
+}

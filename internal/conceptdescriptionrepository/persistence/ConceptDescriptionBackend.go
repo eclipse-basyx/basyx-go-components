@@ -459,7 +459,8 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, idShort *string, limit uint, cursor *string, createdFrom time.Time, updatedFrom time.Time) ([]types.IConceptDescription, string, error) {
 	readDB := b.readDB(ctx)
 	if limit == 0 {
-		limit = 100
+		//nolint:gosec // the configured default limit is always positive
+		limit = uint(common.DefaultPageLimit(ctx))
 	}
 
 	peekLimit := limit + 1

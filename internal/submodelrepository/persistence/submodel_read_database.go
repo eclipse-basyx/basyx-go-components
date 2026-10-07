@@ -485,7 +485,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 	var limitFilter *int32
 
 	if limit == 0 {
-		limit = 100
+		limit = common.DefaultPageLimit(ctx)
 	}
 
 	if limit > 0 {

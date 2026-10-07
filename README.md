@@ -138,6 +138,9 @@ server:
     writeTimeoutSeconds: 300
     idleTimeoutSeconds: 60
     shutdownTimeoutSeconds: 10
+    pagination:
+        defaultLimit: 100
+        maxLimit: 1000
 
 postgres:
     # Either set dsn or the individual connection fields below. Do not mix them.
@@ -185,6 +188,8 @@ SERVER_READ_TIMEOUT_SECONDS=300
 SERVER_WRITE_TIMEOUT_SECONDS=300
 SERVER_IDLE_TIMEOUT_SECONDS=60
 SERVER_SHUTDOWN_TIMEOUT_SECONDS=10
+SERVER_PAGINATION_DEFAULT_LIMIT=100
+SERVER_PAGINATION_MAX_LIMIT=1000
 
 # Either set POSTGRES_DSN or the individual connection variables below. Do not mix them.
 # POSTGRES_DSN=postgres://user:password@db:5432/basyx?sslmode=require
@@ -233,6 +238,8 @@ POSTGRES_CONNMAXIDLETIMEMINUTES=0
 ```
 
 All HTTP timeout values are in seconds and must be greater than zero. The legacy Viper-derived names such as `SERVER_READTIMEOUTSECONDS` still work; readable aliases with underscores and `BASYX_` prefixes, such as `BASYX_SERVER_READ_TIMEOUT_SECONDS`, are also supported.
+
+`server.pagination.defaultLimit` is the page size used when a request omits `limit`, and `server.pagination.maxLimit` is the largest accepted `limit`. Both apply to every paginated endpoint of every service, including the Event Feed. A larger `limit` is rejected with HTTP 400 instead of being clamped. Both values must be greater than zero, and `maxLimit` must not be smaller than `defaultLimit`. The former `eventing.feed.maxPageSize` setting has been removed; the Event Feed uses these values.
 
 PostgreSQL pool limits apply to every service process or Kubernetes pod. Size the deployment so that the sum of `maxOpenConnections` across all replicas and database-backed services stays below PostgreSQL's usable connection budget, with capacity reserved for administration and migrations. The defaults are 50 open connections, 25 idle connections, and a five-minute connection lifetime. Zero uses the common default for these three values; when the default idle limit would exceed an explicitly smaller open limit, it is capped at the open limit. `connMaxIdleTimeMinutes: 0` disables idle-time recycling. An explicitly configured idle limit greater than the open limit is rejected during startup.
 

@@ -216,7 +216,8 @@ func SelectSubmodelIdentifierDataset(
 			Where(goqu.I("submodel.submodel_identifier").Gte(cursor))
 	}
 	if limit == 0 {
-		limit = 100
+		//nolint:gosec // the built-in default limit fits into int32
+		limit = int32(common.DefaultConfig.ServerPaginationDefaultLimit)
 	}
 	if limit > 0 {
 		//nolint:gosec // the positive int32 limit safely fits into uint64

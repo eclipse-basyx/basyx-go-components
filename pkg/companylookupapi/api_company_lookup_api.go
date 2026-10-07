@@ -93,26 +93,18 @@ func (c *CompanyLookupAPIAPIController) GetAllCompanyDescriptors(w http.Response
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
+	limitParam, err := common.ResolveAPILimit(r.Context(), query.Get("limit"), query.Has("limit"))
+	if err != nil {
+		slog.ErrorContext(r.Context(), "company descriptor limit parsing failed", "error.code", "COMPANYLOOKUPAPI-GETALLCOMPANYDESCRIPTORS-PARSELIMIT", "error", err, "limit", query.Get("limit"))
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"GetAllCompanyDescriptors",
+			"limit",
 		)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "company descriptor limit parsing failed", "error.code", "COMPANYLOOKUPAPI-GETALLCOMPANYDESCRIPTORS-PARSELIMIT", "error", err, "limit", query.Get("limit"))
-			result := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				componentName,
-				"GetAllCompanyDescriptors",
-				"limit",
-			)
-			_ = EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-		limitParam = param
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
 	}
 	var cursorParam string
 	if query.Has("cursor") {

@@ -472,7 +472,7 @@ func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID
 	}
 	if limit == nil {
 		limit = new(int)
-		*limit = 100
+		*limit = int(common.DefaultPageLimit(ctx))
 	}
 	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromDB(db, submodelID)
 	if submodelIDErr != nil {
@@ -498,7 +498,7 @@ func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodel
 	}
 	if limit == nil {
 		limit = new(int)
-		*limit = 100
+		*limit = int(common.DefaultPageLimit(ctx))
 	}
 	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if submodelIDErr != nil {
@@ -624,7 +624,7 @@ func GetSubmodelElementReferencesBySubmodelID(ctx context.Context, db DBQueryer,
 	}
 	if limit == nil {
 		limit = new(int)
-		*limit = 100
+		*limit = int(common.DefaultPageLimit(ctx))
 	}
 
 	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromQueryer(db, submodelID)

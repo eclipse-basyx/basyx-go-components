@@ -56,9 +56,8 @@ func NewEventFeedConfig(cfg *Config) eventfeed.Config {
 	runtime.HardDeleteGrace = time.Duration(feed.HardDeleteGraceDays) * 24 * time.Hour
 	runtime.CleanupInterval = eventFeedDuration(feed.CleanupIntervalHours, time.Hour, runtime.CleanupInterval)
 	runtime.PublishInterval = eventFeedDuration(feed.PublishIntervalMillis, time.Millisecond, runtime.PublishInterval)
-	if feed.MaxPageSize != 0 {
-		runtime.MaxPageSize = feed.MaxPageSize
-	}
+	runtime.DefaultPageSize = cfg.Server.Pagination.DefaultLimit
+	runtime.MaxPageSize = cfg.Server.Pagination.MaxLimit
 	runtime.SourceBaseURL = eventFeedSourceBaseURL(cfg)
 	runtime.SchemaBaseURL = normalizeEventURL(cfg.Eventing.SchemaBaseURL)
 	if runtime.SchemaBaseURL == "" {

@@ -11,6 +11,9 @@ server:
   writeTimeoutSeconds: 300
   idleTimeoutSeconds: 60
   shutdownTimeoutSeconds: 10
+  pagination:
+    defaultLimit: 100  # Page size when a request omits limit.
+    maxLimit: 1000  # Larger limits are rejected with 400.
 
 postgres:
   # Choose exactly one connection variant:

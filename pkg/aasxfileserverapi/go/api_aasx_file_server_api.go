@@ -129,23 +129,10 @@ func (c *AASXFileServerAPIAPIController) GetAllAASXPackageIds(w http.ResponseWri
 		aasIdParam = param
 	} else {
 	}
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-			WithMaximum[int32](500),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
-	} else {
-		var param int32 = 100
-		limitParam = param
+	limitParam, err := common.ResolveAPILimit(r.Context(), query.Get("limit"), query.Has("limit"))
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+		return
 	}
 	var cursorParam string
 	if query.Has("cursor") {
