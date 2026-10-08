@@ -33,7 +33,8 @@ results, and `dppsByIdAndDate` carry no entity tag.
 Every top-level resource has a server-managed revision. It changes in the
 same database transaction as any change of the resource or one of its parts.
 Revisions are unique and never reused, so a deleted and recreated resource
-never gets an entity tag it had before.
+never gets an entity tag it had before. The revision of a deleted resource
+is kept, so deletes without preconditions need no additional database work.
 
 The server issues two forms of strong entity tags:
 
@@ -156,9 +157,9 @@ allowed request headers.
 - Reading a resource reads its revision in the same database snapshot, which
   is one additional indexed lookup. JSON responses are buffered to compute
   the representation digest.
-- Every write updates the revisions of the changed resources with one
-  statement just before commit; the target of a conditional write needs
-  three. Concurrent writes to the same resource wait for each other only from
+- Every create or change updates the revisions of the changed resources
+  with one statement just before commit; the target of a conditional write
+  needs three. Deletes without preconditions need none. Concurrent writes to the same resource wait for each other only from
   that point to commit; with history enabled, they are serialized per
   resource already.
 - `304` responses save the transfer of the body; the server still reads the

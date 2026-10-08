@@ -40,7 +40,6 @@ const (
 	placeholderPattern = `INSERT INTO "resource_revision" .* ON CONFLICT DO NOTHING`
 	lockPattern        = `SELECT "revision" FROM "resource_revision" WHERE .* FOR UPDATE`
 	bumpPattern        = `UPDATE "resource_revision" SET "revision"=nextval\('basyx_resource_revision_seq'\) WHERE .* RETURNING "revision"`
-	deletePattern      = `DELETE FROM "resource_revision" WHERE`
 )
 
 var (
@@ -117,17 +116,42 @@ func TestConditionalWriteWithStaleTagFailsBeforeBumping(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestConditionalDeleteValidatesBeforeRemovingTheRevision(t *testing.T) {
+func TestConditionalDeleteValidatesAndKeepsTheRevisionAsTombstone(t *testing.T) {
 	tx, mock := newMockTx(t)
 	ctx, _ := requestContext(http.MethodDelete, &submodelA, http.Header{"If-Match": {ConcurrencyETag(submodelA, 7)}}, false)
 	require.NoError(t, Touch(ctx, tx, submodelA, OpDelete))
 
 	mock.ExpectExec(placeholderPattern).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(lockPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(7))
-	mock.ExpectExec(deletePattern).WillReturnResult(sqlmock.NewResult(0, 1))
 
 	_, err := FlushTx(tx)
 	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUnconditionalDeleteWritesNoRevision(t *testing.T) {
+	tx, mock := newMockTx(t)
+	require.NoError(t, Touch(context.Background(), tx, submodelA, OpDelete))
+
+	flushed, err := FlushTx(tx)
+	require.NoError(t, err)
+	require.NotNil(t, flushed)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCreateOnlyWriteSucceedsOverATombstone(t *testing.T) {
+	tx, mock := newMockTx(t)
+	ctx, state := requestContext(http.MethodPut, &submodelA, http.Header{"If-None-Match": {"*"}}, false)
+	require.NoError(t, Touch(ctx, tx, submodelA, OpCreate))
+
+	mock.ExpectExec(placeholderPattern).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(lockPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(3))
+	mock.ExpectQuery(bumpPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(8))
+
+	flushed, err := FlushTx(tx)
+	require.NoError(t, err)
+	flushed.Committed()
+	require.Equal(t, ConcurrencyETag(submodelA, 8), state.currentWriteETag())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -144,19 +168,6 @@ func TestReplaceKeepsThePreviousRevisionForEvaluation(t *testing.T) {
 
 	_, err := FlushTx(tx)
 	require.NoError(t, err)
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestCreateOnlyWriteFailsWhenARevisionAlreadyExists(t *testing.T) {
-	tx, mock := newMockTx(t)
-	ctx, _ := requestContext(http.MethodPut, &submodelA, http.Header{"If-None-Match": {"*"}}, false)
-	require.NoError(t, Touch(ctx, tx, submodelA, OpCreate))
-
-	mock.ExpectExec(placeholderPattern).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectQuery(lockPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(3))
-
-	_, err := FlushTx(tx)
-	require.True(t, IsPreconditionFailed(err))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

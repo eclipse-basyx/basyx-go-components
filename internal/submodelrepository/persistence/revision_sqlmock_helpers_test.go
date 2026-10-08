@@ -33,7 +33,3 @@ import (
 func expectSubmodelRevisionUpsert(mock sqlmock.Sqlmock, submodelID string) {
 	conditionaltest.ExpectRevisionUpsert(mock, "submodel", submodelID)
 }
-
-func expectSubmodelRevisionDelete(mock sqlmock.Sqlmock, submodelID string) {
-	conditionaltest.ExpectRevisionDelete(mock, "submodel", submodelID)
-}

@@ -44,7 +44,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/doug-martin/goqu/v9"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
@@ -250,6 +249,7 @@ func defaultCheckDBIsEmptyExcludedTables(extraTables []string) map[string]struct
 		"descriptor_history_payload",
 		"submodel_descriptor_history",
 		"submodel_descriptor_history_payload",
+		"resource_revision",
 	} {
 		excluded[table] = struct{}{}
 	}
@@ -861,7 +861,7 @@ func listNonEmptyTables(driver string, dsn string, schema string, excluded map[s
 			continue
 		}
 
-		count, countErr := countDomainRows(db, schema, table, excluded)
+		count, countErr := countRowsInTable(db, schema, table)
 		if countErr != nil {
 			return nil, countErr
 		}
@@ -875,36 +875,6 @@ func listNonEmptyTables(driver string, dsn string, schema string, excluded map[s
 	}
 
 	return nonEmpty, nil
-}
-
-// revisionKindTables maps resource revision kinds to the table that holds
-// the resource, so revisions of resources in excluded tables are excluded too.
-var revisionKindTables = map[string]string{
-	"discoveryEntry": "aas_identifier",
-}
-
-// countDomainRows counts the rows of a table that belong to the checked
-// domain state.
-func countDomainRows(db *sql.DB, schema string, table string, excluded map[string]struct{}) (int, error) {
-	if table != "resource_revision" {
-		return countRowsInTable(db, schema, table)
-	}
-	excludedKinds := []string{}
-	for kind, resourceTable := range revisionKindTables {
-		if _, skip := excluded[resourceTable]; skip {
-			excludedKinds = append(excludedKinds, kind)
-		}
-	}
-	query, args, err := goqu.Dialect("postgres").From(goqu.S(schema).Table(table)).Select(goqu.COUNT(goqu.Star())).
-		Where(goqu.C("kind").NotIn(append(excludedKinds, ""))).Prepared(true).ToSQL()
-	if err != nil {
-		return 0, fmt.Errorf("TESTENV-CHECKDB-BUILDREVISIONCOUNT: %w", err)
-	}
-	var count int
-	if err = db.QueryRow(query, args...).Scan(&count); err != nil {
-		return 0, fmt.Errorf("TESTENV-CHECKDB-COUNTREVISIONS: %w", err)
-	}
-	return count, nil
 }
 
 func countRowsInTable(db *sql.DB, schema string, table string) (int, error) {

@@ -253,16 +253,8 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 			return err
 		}
 
-		deleteQuery, deleteArgs, err := goqu.Dialect(common.Dialect).
-			Delete(common.TblSpecificAssetID).
-			Where(goqu.C(common.ColAASRef).Eq(aasRef)).
-			Prepared(true).
-			ToSQL()
-		if err != nil {
-			return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-BUILDDELETE " + err.Error())
-		}
-		if _, err = tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
-			return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-EXECDELETE " + err.Error())
+		if err = deleteAssetLinksTx(ctx, tx, aasID, aasRef); err != nil {
+			return err
 		}
 		return common.InsertSpecificAssetIDs(
 			tx,
@@ -292,12 +284,9 @@ func AddSpecificAssetIDsByAASIdentifier(
 			return err
 		}
 
-		descriptorID := sql.NullInt64{}
-		if !discoveryOnlySpecificAssetIDsFromContext(ctx) {
-			descriptorID, err = descriptorIDForAASIDTx(ctx, tx, aasID)
-			if err != nil {
-				return err
-			}
+		descriptorID, err := linkedDescriptorIDTx(ctx, tx, aasID)
+		if err != nil {
+			return err
 		}
 
 		positionStart, err := nextSpecificAssetIDPositionByAASRefTx(ctx, tx, aasRef)
@@ -314,6 +303,58 @@ func AddSpecificAssetIDsByAASIdentifier(
 			positionStart,
 		)
 	})
+}
+
+// deleteAssetLinksTx removes the asset links of a discovery entry. When some
+// of them also belong to the shell descriptor, the descriptor changes too.
+func deleteAssetLinksTx(ctx context.Context, tx *sql.Tx, aasID string, aasRef int64) error {
+	deleteQuery, deleteArgs, err := goqu.Dialect(common.Dialect).
+		Delete(common.TblSpecificAssetID).
+		Where(goqu.C(common.ColAASRef).Eq(aasRef)).
+		Returning(goqu.L("? IS NOT NULL", goqu.C(common.ColDescriptorID))).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-BUILDDELETE " + err.Error())
+	}
+	rows, err := tx.QueryContext(ctx, deleteQuery, deleteArgs...)
+	if err != nil {
+		return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-EXECDELETE " + err.Error())
+	}
+	ownedByDescriptor, err := anyTrue(rows)
+	if err != nil {
+		return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-READDELETE " + err.Error())
+	}
+	if !ownedByDescriptor {
+		return nil
+	}
+	return TouchAdministrationShellDescriptorTx(ctx, tx, aasID, conditional.OpUpdate)
+}
+
+func anyTrue(rows *sql.Rows) (bool, error) {
+	defer func() { _ = rows.Close() }()
+	found := false
+	for rows.Next() {
+		var value bool
+		if err := rows.Scan(&value); err != nil {
+			return false, err
+		}
+		found = found || value
+	}
+	return found, rows.Err()
+}
+
+// linkedDescriptorIDTx returns the shell descriptor that added asset links
+// are attached to. Adding links to it changes the descriptor too.
+func linkedDescriptorIDTx(ctx context.Context, tx *sql.Tx, aasID string) (sql.NullInt64, error) {
+	if discoveryOnlySpecificAssetIDsFromContext(ctx) {
+		return sql.NullInt64{}, nil
+	}
+	descriptorID, err := descriptorIDForAASIDTx(ctx, tx, aasID)
+	if err != nil || !descriptorID.Valid {
+		return descriptorID, err
+	}
+	return descriptorID, TouchAdministrationShellDescriptorTx(ctx, tx, aasID, conditional.OpUpdate)
 }
 
 func descriptorIDForAASIDTx(ctx context.Context, tx *sql.Tx, aasID string) (sql.NullInt64, error) {
@@ -362,9 +403,6 @@ func nextSpecificAssetIDPositionByAASRefTx(ctx context.Context, tx *sql.Tx, aasR
 func ensureDiscoveryEntryTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {
 	aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
 	if err != nil {
-		return 0, err
-	}
-	if err = TouchDescriptorOfDiscoveryEntryTx(ctx, tx, aasID); err != nil {
 		return 0, err
 	}
 	return aasRef, auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceBD, aasID)

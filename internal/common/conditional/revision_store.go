@@ -91,11 +91,6 @@ func bumpRevision(ctx context.Context, tx *sql.Tx, ref ResourceRef) (int64, erro
 	return scanRevision(ctx, tx, "COMMON-CONDREQ-BUMPREVISION", ds)
 }
 
-func deleteRevision(ctx context.Context, tx *sql.Tx, ref ResourceRef) error {
-	ds := dialect.Delete(revisionTable).Where(refCondition(ref)).Prepared(true)
-	return execDataset(ctx, tx, "COMMON-CONDREQ-DELETEREVISION", ds)
-}
-
 // upsertRevisions assigns new revisions to resources in the given order with
 // one statement and returns them.
 func upsertRevisions(ctx context.Context, tx *sql.Tx, refs []ResourceRef, into map[ResourceRef]int64) error {

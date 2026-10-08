@@ -182,8 +182,6 @@ func TestConditionalUpdateAfterConcurrentDeleteDoesNotRecreate(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, results[0].Status, string(results[0].Body))
 	require.Contains(t, []int{http.StatusNotFound, http.StatusPreconditionFailed}, results[1].Status, string(results[1].Body))
 	require.Equal(t, http.StatusNotFound, testenv.DoHTTP(t, http.MethodGet, submodel.endpoint, nil, nil).Status)
-	_, exists := testenv.ResourceRevision(t, submodel.db, submodelRevisionKind, submodel.id)
-	require.False(t, exists)
 }
 
 func TestConcurrentFirstConditionalWritesWithoutRevisionRow(t *testing.T) {

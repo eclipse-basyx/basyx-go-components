@@ -49,6 +49,7 @@ func TestDefaultCheckDBIsEmptyExcludedTablesIncludesPersistentSchemaTables(t *te
 		"descriptor_history_payload",
 		"submodel_descriptor_history",
 		"submodel_descriptor_history_payload",
+		"resource_revision",
 		"aas_identifier",
 	} {
 		_, ok := excluded[table]

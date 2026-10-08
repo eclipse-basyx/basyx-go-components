@@ -29,6 +29,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -167,16 +168,47 @@ func UpdateEmbeddedSubmodelDescriptorTx(
 	return changed, TouchAdministrationShellDescriptorTx(ctx, tx, aasID, UpdateOperation(changed))
 }
 
-// TouchDescriptorOfDiscoveryEntryTx records a change of the AAS descriptor
-// that shares its specific asset IDs with the asset links of aasID, so a
-// discovery write also changes the descriptor's entity tag.
-func TouchDescriptorOfDiscoveryEntryTx(ctx context.Context, tx *sql.Tx, aasID string) error {
-	descriptorID, err := descriptorIDForAASIDTx(ctx, tx, aasID)
+// DeleteDiscoveryEntryTx deletes the discovery entry of aasID with all its
+// asset links and reports whether it existed. When some links also belonged
+// to the shell descriptor, the descriptor change is recorded too. One
+// statement does both, so the delete needs no additional round trip.
+func DeleteDiscoveryEntryTx(ctx context.Context, tx *sql.Tx, aasID string) (bool, error) {
+	d := goqu.Dialect(common.Dialect)
+	identifier := goqu.T(common.TblAASIdentifier)
+	ownedLinks := d.From(common.TSpecificAssetID).Select(goqu.L("1")).Where(
+		common.TSpecificAssetID.Col(common.ColAASRef).Eq(identifier.Col(common.ColID)),
+		common.TSpecificAssetID.Col(common.ColDescriptorID).IsNotNull(),
+	)
+	query, args, err := d.Delete(identifier).
+		Where(identifier.Col("aasid").Eq(aasID)).
+		Returning(goqu.L("EXISTS ?", ownedLinks)).
+		Prepared(true).
+		ToSQL()
 	if err != nil {
-		return common.NewInternalServerError("DESC-TOUCHDISCOVERYDESCRIPTOR-LOOKUP " + err.Error())
+		return false, common.NewInternalServerError("DISC-DELETEENTRY-BUILDSQL " + err.Error())
 	}
-	if !descriptorID.Valid {
-		return nil
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return false, common.NewInternalServerError("DISC-DELETEENTRY-EXECSQL " + err.Error())
 	}
-	return TouchAdministrationShellDescriptorTx(ctx, tx, aasID, conditional.OpUpdate)
+	deleted, ownedByDescriptor, err := readDeletedEntry(rows)
+	if err != nil {
+		return false, common.NewInternalServerError("DISC-DELETEENTRY-READSQL " + err.Error())
+	}
+	if !deleted || !ownedByDescriptor {
+		return deleted, nil
+	}
+	return true, TouchAdministrationShellDescriptorTx(ctx, tx, aasID, conditional.OpUpdate)
+}
+
+func readDeletedEntry(rows *sql.Rows) (bool, bool, error) {
+	defer func() { _ = rows.Close() }()
+	deleted, owned := false, false
+	for rows.Next() {
+		deleted = true
+		if err := rows.Scan(&owned); err != nil {
+			return false, false, err
+		}
+	}
+	return deleted, owned, rows.Err()
 }

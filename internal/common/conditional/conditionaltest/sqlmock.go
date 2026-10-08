@@ -38,11 +38,3 @@ func ExpectRevisionUpsert(mock sqlmock.Sqlmock, kind string, identifier string) 
 		WithArgs(identifier, kind).
 		WillReturnRows(sqlmock.NewRows([]string{"kind", "identifier", "revision"}).AddRow(kind, identifier, 1))
 }
-
-// ExpectRevisionDelete expects the revision removal of a deleted resource
-// immediately before commit.
-func ExpectRevisionDelete(mock sqlmock.Sqlmock, kind string, identifier string) {
-	mock.ExpectExec(`DELETE FROM "resource_revision"`).
-		WithArgs(identifier, kind).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-}

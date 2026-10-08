@@ -69,6 +69,13 @@ func newTouchState(op Operation) *touchState {
 	return state
 }
 
+// needsRevision reports whether the resource needs a new revision. Deleted
+// resources keep their last revision as a tombstone: revisions are never
+// reused, so a recreated resource still gets a revision no client has seen.
+func (t *touchState) needsRevision() bool {
+	return t.existsAfter && t.changed
+}
+
 func (t *touchState) apply(op Operation) {
 	switch op {
 	case OpDelete:
@@ -271,41 +278,33 @@ func (p *pendingTx) lockedRefs(evaluate bool) map[ResourceRef]bool {
 }
 
 // writePlain walks all resources in sorted order. It locks the resources
-// whose previous revision is needed and writes the revisions of all others.
+// whose previous revision is needed and writes the new revisions of all
+// other changed resources.
 func (p *pendingTx) writePlain(tx *sql.Tx, locked map[ResourceRef]bool) (map[ResourceRef]int64, map[ResourceRef]int64, error) {
 	previous := map[ResourceRef]int64{}
 	revisions := map[ResourceRef]int64{}
 	var upserts []ResourceRef
 	for _, ref := range p.plan(locked) {
-		touch := p.touches[ref]
-		if !locked[ref] && touch.existsAfter && !touch.changed {
-			continue
-		}
-		if !locked[ref] && touch.existsAfter {
-			upserts = append(upserts, ref)
+		if !locked[ref] {
+			if p.touches[ref].needsRevision() {
+				upserts = append(upserts, ref)
+			}
 			continue
 		}
 		if err := upsertRevisions(p.ctx, tx, upserts, revisions); err != nil {
 			return nil, nil, err
 		}
 		upserts = nil
-		if err := p.writeOrLock(tx, ref, locked[ref], previous); err != nil {
+		revision, err := lockRevision(p.ctx, tx, ref)
+		if err != nil {
 			return nil, nil, err
 		}
+		previous[ref] = revision
 	}
 	if err := upsertRevisions(p.ctx, tx, upserts, revisions); err != nil {
 		return nil, nil, err
 	}
 	return previous, revisions, nil
-}
-
-func (p *pendingTx) writeOrLock(tx *sql.Tx, ref ResourceRef, lock bool, previous map[ResourceRef]int64) error {
-	if !lock {
-		return deleteRevision(p.ctx, tx, ref)
-	}
-	revision, err := lockRevision(p.ctx, tx, ref)
-	previous[ref] = revision
-	return err
 }
 
 func (p *pendingTx) plan(locked map[ResourceRef]bool) []ResourceRef {
@@ -325,13 +324,7 @@ func (p *pendingTx) plan(locked map[ResourceRef]bool) []ResourceRef {
 func (p *pendingTx) writeLocked(tx *sql.Tx, locked map[ResourceRef]bool, revisions map[ResourceRef]int64) error {
 	for _, ref := range sortedLocked(locked) {
 		touch, touched := p.touches[ref]
-		if !touched || (touch.existsAfter && !touch.changed) {
-			continue
-		}
-		if !touch.existsAfter {
-			if err := deleteRevision(p.ctx, tx, ref); err != nil {
-				return err
-			}
+		if !touched || !touch.needsRevision() {
 			continue
 		}
 		revision, err := bumpRevision(p.ctx, tx, ref)
@@ -358,7 +351,7 @@ func (p *pendingTx) evaluate(previous map[ResourceRef]int64) error {
 	}
 	ref := *p.state.target
 	revision := previous[ref]
-	target := newWriteTarget(p.touches[ref].existedBefore || revision > 0, concurrencyValidator(ref, revision), p.state.addressedExistence())
+	target := newWriteTarget(p.touches[ref].existedBefore, concurrencyValidator(ref, revision), p.state.addressedExistence())
 	return evaluateWrite(p.state.conds, target, p.state.requireIfMatch)
 }
 
