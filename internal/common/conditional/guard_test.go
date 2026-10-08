@@ -223,4 +223,12 @@ func TestOversizedJSONRepresentationsAreStreamedWithoutETag(t *testing.T) {
 	require.Equal(t, http.StatusPreconditionFailed, tagged.Code)
 	wildcard := serve(t, Options{}, http.MethodGet, submodelPattern, "/submodels/sm1", http.Header{"If-Match": {"*"}}, handler)
 	require.Equal(t, http.StatusOK, wildcard.Code)
+	require.Equal(t, 17<<20, wildcard.Body.Len())
+
+	notModified := serve(t, Options{}, http.MethodGet, submodelPattern, "/submodels/sm1", http.Header{"If-None-Match": {"*"}}, handler)
+	require.Equal(t, http.StatusNotModified, notModified.Code)
+	require.Zero(t, notModified.Body.Len())
+	otherTag := serve(t, Options{}, http.MethodGet, submodelPattern, "/submodels/sm1", http.Header{"If-None-Match": {`"5-00000000"`}}, handler)
+	require.Equal(t, http.StatusOK, otherTag.Code)
+	require.Equal(t, 17<<20, otherTag.Body.Len())
 }

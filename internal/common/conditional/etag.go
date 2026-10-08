@@ -198,6 +198,9 @@ func parseEntityTag(value string) (entityTag, string, bool) {
 
 // matchesStrong reports whether a strong tag designates the validator.
 func (c condition) matchesStrong(validator string) bool {
+	if validator == "" {
+		return false
+	}
 	for _, tag := range c.tags {
 		if !tag.weak && validatorPrefix(tag.opaque) == validator {
 			return true
@@ -209,6 +212,9 @@ func (c condition) matchesStrong(validator string) bool {
 // matchesWeak reports whether any tag designates the validator, ignoring
 // weakness.
 func (c condition) matchesWeak(validator string) bool {
+	if validator == "" {
+		return false
+	}
 	for _, tag := range c.tags {
 		if validatorPrefix(tag.opaque) == validator {
 			return true

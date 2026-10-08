@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"testing"
 	"time"
@@ -53,13 +54,34 @@ type HTTPResult struct {
 func DoHTTP(t *testing.T, method string, endpoint string, body []byte, headers map[string]string) HTTPResult {
 	t.Helper()
 	var reader io.Reader
+	contentType := ""
 	if body != nil {
 		reader = bytes.NewReader(body)
+		contentType = "application/json"
 	}
-	request, err := http.NewRequest(method, endpoint, reader)
+	return doRequest(t, method, endpoint, reader, contentType, headers)
+}
+
+// DoMultipartUpload sends content as the "file" part of a multipart PUT, as
+// used by attachment and thumbnail uploads.
+func DoMultipartUpload(t *testing.T, endpoint string, fileName string, content []byte, headers map[string]string) HTTPResult {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", fileName)
 	require.NoError(t, err)
-	if body != nil {
-		request.Header.Set("Content-Type", "application/json")
+	_, err = part.Write(content)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	return doRequest(t, http.MethodPut, endpoint, body, writer.FormDataContentType(), headers)
+}
+
+func doRequest(t *testing.T, method string, endpoint string, body io.Reader, contentType string, headers map[string]string) HTTPResult {
+	t.Helper()
+	request, err := http.NewRequest(method, endpoint, body)
+	require.NoError(t, err)
+	if contentType != "" {
+		request.Header.Set("Content-Type", contentType)
 	}
 	for key, value := range headers {
 		request.Header.Set(key, value)

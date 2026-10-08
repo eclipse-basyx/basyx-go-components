@@ -187,6 +187,22 @@ func SetAddressedExistence(ctx context.Context, ref ResourceRef, exists bool) {
 	state.addressedExists = &exists
 }
 
+// RecordAddressedExistence records the result of exists like
+// SetAddressedExistence. exists only runs when the request evaluates
+// preconditions of ref.
+func RecordAddressedExistence(ctx context.Context, ref ResourceRef, exists func() (bool, error)) error {
+	state := stateFromContext(ctx)
+	if !state.evaluatesWrites() || !state.isTarget(ref) {
+		return nil
+	}
+	existed, err := exists()
+	if err != nil {
+		return err
+	}
+	SetAddressedExistence(ctx, ref, existed)
+	return nil
+}
+
 func (s *State) addressedExistence() *bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

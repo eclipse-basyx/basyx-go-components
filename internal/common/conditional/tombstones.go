@@ -28,6 +28,7 @@ package conditional
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"log/slog"
 	"time"
@@ -87,44 +88,69 @@ func StartTombstoneCleanup(ctx context.Context, db *sql.DB) {
 	}()
 }
 
+var tombstoneKinds = []Kind{KindAAS, KindSubmodel, KindConceptDescription, KindAASDescriptor,
+	KindSubmodelDescriptor, KindDiscoveryEntry, KindAASXPackage, KindCompanyDescriptor}
+
 // RemoveTombstones removes the revisions of all deleted resources in batches.
+// It runs on one connection that holds the cleanup lock, so services sharing
+// a database never clean up at the same time.
 func RemoveTombstones(ctx context.Context, db *sql.DB) (int64, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("COMMON-CONDREQ-TOMBSTONES-CONN: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	acquired, err := cleanupLock(ctx, conn, "pg_try_advisory_lock")
+	if err != nil || !acquired {
+		return 0, err
+	}
+	defer releaseCleanupLock(ctx, conn)
 	var total int64
-	for _, kind := range []Kind{KindAAS, KindSubmodel, KindConceptDescription, KindAASDescriptor,
-		KindSubmodelDescriptor, KindDiscoveryEntry, KindAASXPackage, KindCompanyDescriptor} {
-		for {
-			removed, err := removeTombstoneBatch(ctx, db, kind)
-			total += removed
-			if err != nil {
-				return total, err
-			}
-			if removed < tombstoneBatchSize {
-				break
-			}
+	for _, kind := range tombstoneKinds {
+		removed, err := removeTombstonesOfKind(ctx, conn, kind)
+		total += removed
+		if err != nil {
+			return total, err
 		}
 	}
 	return total, nil
 }
 
-// removeTombstoneBatch first locks revisions whose resource does not exist,
-// skipping revisions a writer holds, and then deletes those whose resource
-// still does not exist in a new snapshot. A writer that recreates a resource
-// meanwhile waits for the lock and then writes a new revision.
-func removeTombstoneBatch(ctx context.Context, db *sql.DB, kind Kind) (int64, error) {
-	tx, err := db.BeginTx(ctx, nil)
+// removeTombstonesOfKind walks the revisions of a kind once. Finding the
+// revisions of deleted resources takes no locks; only removing a batch does,
+// so writers never wait for the scan.
+func removeTombstonesOfKind(ctx context.Context, conn *sql.Conn, kind Kind) (int64, error) {
+	var total int64
+	after := ""
+	for {
+		candidates, err := findTombstones(ctx, conn, kind, after)
+		if err != nil || len(candidates) == 0 {
+			return total, err
+		}
+		removed, err := removeTombstoneBatch(ctx, conn, kind, candidates)
+		total += removed
+		if err != nil || len(candidates) < tombstoneBatchSize {
+			return total, err
+		}
+		after = candidates[len(candidates)-1]
+	}
+}
+
+// removeTombstoneBatch first locks the candidates whose resource still does
+// not exist, skipping revisions a writer holds, and then deletes those whose
+// resource still does not exist in a new snapshot. A writer that recreates a
+// resource meanwhile waits for the lock and then writes a new revision.
+func removeTombstoneBatch(ctx context.Context, conn *sql.Conn, kind Kind, candidates []string) (int64, error) {
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("COMMON-CONDREQ-TOMBSTONES-BEGIN: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	acquired, err := tryCleanupLock(ctx, tx)
-	if err != nil || !acquired {
+	locked, err := lockTombstones(ctx, tx, kind, candidates)
+	if err != nil || len(locked) == 0 {
 		return 0, err
 	}
-	candidates, err := lockTombstones(ctx, tx, kind)
-	if err != nil || len(candidates) == 0 {
-		return 0, err
-	}
-	removed, err := deleteTombstones(ctx, tx, kind, candidates)
+	removed, err := deleteTombstones(ctx, tx, kind, locked)
 	if err != nil {
 		return 0, err
 	}
@@ -134,17 +160,26 @@ func removeTombstoneBatch(ctx context.Context, db *sql.DB, kind Kind) (int64, er
 	return removed, nil
 }
 
-func tryCleanupLock(ctx context.Context, tx *sql.Tx) (bool, error) {
-	query, args, err := dialect.Select(goqu.Func("pg_try_advisory_xact_lock", goqu.Func("hashtextextended", tombstoneCleanupLock, 0))).
+// releaseCleanupLock releases the session lock. If that fails, the
+// connection is discarded instead of returned to the pool with the lock.
+func releaseCleanupLock(ctx context.Context, conn *sql.Conn) {
+	released, err := cleanupLock(context.WithoutCancel(ctx), conn, "pg_advisory_unlock")
+	if err != nil || !released {
+		_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+	}
+}
+
+func cleanupLock(ctx context.Context, conn *sql.Conn, function string) (bool, error) {
+	query, args, err := dialect.Select(goqu.Func(function, goqu.Func("hashtextextended", tombstoneCleanupLock, 0))).
 		Prepared(true).ToSQL()
 	if err != nil {
 		return false, fmt.Errorf("COMMON-CONDREQ-TOMBSTONES-BUILDLOCK: %w", err)
 	}
-	var acquired bool
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&acquired); err != nil {
+	var result bool
+	if err = conn.QueryRowContext(ctx, query, args...).Scan(&result); err != nil {
 		return false, fmt.Errorf("COMMON-CONDREQ-TOMBSTONES-LOCK: %w", err)
 	}
-	return acquired, nil
+	return result, nil
 }
 
 func deletedResourceCondition(kind Kind) exp.Expression {
@@ -157,23 +192,35 @@ func deletedResourceCondition(kind Kind) exp.Expression {
 	return goqu.And(goqu.C(columnKind).Eq(string(kind)), goqu.L("NOT EXISTS ?", exists))
 }
 
-func lockTombstones(ctx context.Context, tx *sql.Tx, kind Kind) ([]string, error) {
-	query, args, err := dialect.From(revisionTable).Select(goqu.C(columnIdentifier)).
-		Where(deletedResourceCondition(kind)).Order(goqu.C(columnIdentifier).Asc()).Limit(tombstoneBatchSize).
-		ForUpdate(exp.SkipLocked, goqu.T(revisionTable)).Prepared(true).ToSQL()
+func findTombstones(ctx context.Context, q Queryer, kind Kind, after string) ([]string, error) {
+	ds := dialect.From(revisionTable).Select(goqu.C(columnIdentifier)).
+		Where(deletedResourceCondition(kind), goqu.C(columnIdentifier).Gt(after)).
+		Order(goqu.C(columnIdentifier).Asc()).Limit(tombstoneBatchSize)
+	return queryIdentifiers(ctx, q, "COMMON-CONDREQ-TOMBSTONES-FIND", ds)
+}
+
+func lockTombstones(ctx context.Context, tx *sql.Tx, kind Kind, candidates []string) ([]string, error) {
+	ds := dialect.From(revisionTable).Select(goqu.C(columnIdentifier)).
+		Where(deletedResourceCondition(kind), goqu.C(columnIdentifier).In(candidates)).
+		Order(goqu.C(columnIdentifier).Asc()).ForUpdate(exp.SkipLocked, goqu.T(revisionTable))
+	return queryIdentifiers(ctx, tx, "COMMON-CONDREQ-TOMBSTONES-LOCK", ds)
+}
+
+func queryIdentifiers(ctx context.Context, q Queryer, errorCode string, ds *goqu.SelectDataset) ([]string, error) {
+	query, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
-		return nil, fmt.Errorf("COMMON-CONDREQ-TOMBSTONES-BUILDSELECT: %w", err)
+		return nil, fmt.Errorf("%s-BUILDQ: %w", errorCode, err)
 	}
-	rows, err := tx.QueryContext(ctx, query, args...)
+	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("COMMON-CONDREQ-TOMBSTONES-SELECT: %w", err)
+		return nil, fmt.Errorf("%s-EXECQ: %w", errorCode, err)
 	}
 	defer func() { _ = rows.Close() }()
 	identifiers := []string{}
 	for rows.Next() {
 		var identifier string
 		if err = rows.Scan(&identifier); err != nil {
-			return nil, fmt.Errorf("COMMON-CONDREQ-TOMBSTONES-SCAN: %w", err)
+			return nil, fmt.Errorf("%s-SCAN: %w", errorCode, err)
 		}
 		identifiers = append(identifiers, identifier)
 	}

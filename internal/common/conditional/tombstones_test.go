@@ -35,45 +35,56 @@ import (
 )
 
 const (
-	cleanupLockPattern     = `SELECT pg_try_advisory_xact_lock\(hashtextextended\(\$1, \$2\)\)`
-	lockTombstonePattern   = `SELECT "identifier" FROM "resource_revision" WHERE \(\("kind" = \$1\) AND NOT EXISTS \(SELECT 1 FROM "submodel" AS "live" WHERE \("live"."submodel_identifier" = "resource_revision"."identifier"\)\)\) ORDER BY "identifier" ASC LIMIT \$2 FOR UPDATE OF "resource_revision" SKIP LOCKED`
-	deleteTombstonePattern = `DELETE FROM "resource_revision" WHERE \(\(\("kind" = \$1\) AND NOT EXISTS \(SELECT 1 FROM "submodel" AS "live" WHERE \("live"."submodel_identifier" = "resource_revision"."identifier"\)\)\) AND \("identifier" IN \(\$2, \$3\)\)\)`
+	cleanupLockPattern      = `SELECT pg_try_advisory_lock\(hashtextextended\(\$1, \$2\)\)`
+	cleanupUnlockPattern    = `SELECT pg_advisory_unlock\(hashtextextended\(\$1, \$2\)\)`
+	findTombstonePattern    = `SELECT "identifier" FROM "resource_revision" WHERE .* AND \("identifier" > \$\d\)\) ORDER BY "identifier" ASC LIMIT \$\d+$`
+	findSubmodelPattern     = `SELECT "identifier" FROM "resource_revision" WHERE \(\(\("kind" = \$1\) AND NOT EXISTS \(SELECT 1 FROM "submodel" AS "live" WHERE \("live"."submodel_identifier" = "resource_revision"."identifier"\)\)\) AND \("identifier" > \$2\)\) ORDER BY "identifier" ASC LIMIT \$3$`
+	lockCandidatesPattern   = `SELECT "identifier" FROM "resource_revision" WHERE .*"submodel" AS "live".* AND \("identifier" IN \(\$2, \$3\)\)\) ORDER BY "identifier" ASC FOR UPDATE OF "resource_revision" SKIP LOCKED`
+	deleteTombstonePattern  = `DELETE FROM "resource_revision" WHERE \(\(\("kind" = \$1\) AND NOT EXISTS \(SELECT 1 FROM "submodel" AS "live" WHERE \("live"."submodel_identifier" = "resource_revision"."identifier"\)\)\) AND \("identifier" IN \(\$2, \$3\)\)\)`
+	identifierColumn        = "identifier"
+	cleanupLockResultColumn = "locked"
 )
 
-func TestTombstoneBatchSkipsWhileAnotherInstanceCleansUp(t *testing.T) {
+func TestTombstoneCleanupSkipsWhileAnotherInstanceCleansUp(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	mock.ExpectBegin()
-	mock.ExpectQuery(cleanupLockPattern).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(false))
-	mock.ExpectRollback()
+	mock.ExpectQuery(cleanupLockPattern).WillReturnRows(sqlmock.NewRows([]string{cleanupLockResultColumn}).AddRow(false))
 
-	removed, err := removeTombstoneBatch(context.Background(), db, KindSubmodel)
+	removed, err := RemoveTombstones(context.Background(), db)
 	require.NoError(t, err)
 	require.Zero(t, removed)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestTombstoneBatchLocksThenDeletesRevisionsOfDeletedResources(t *testing.T) {
+func TestTombstoneCleanupFindsWithoutLocksAndLocksOnlyCandidates(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	mock.ExpectBegin()
-	mock.ExpectQuery(cleanupLockPattern).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(true))
-	mock.ExpectQuery(lockTombstonePattern).WithArgs(string(KindSubmodel), tombstoneBatchSize).
-		WillReturnRows(sqlmock.NewRows([]string{"identifier"}).AddRow("sm-1").AddRow("sm-2"))
-	mock.ExpectExec(deleteTombstonePattern).WithArgs(string(KindSubmodel), "sm-1", "sm-2").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
+	mock.ExpectQuery(cleanupLockPattern).WillReturnRows(sqlmock.NewRows([]string{cleanupLockResultColumn}).AddRow(true))
+	for _, kind := range tombstoneKinds {
+		if kind != KindSubmodel {
+			mock.ExpectQuery(findTombstonePattern).WillReturnRows(sqlmock.NewRows([]string{identifierColumn}))
+			continue
+		}
+		mock.ExpectQuery(findSubmodelPattern).WithArgs(string(KindSubmodel), "", tombstoneBatchSize).
+			WillReturnRows(sqlmock.NewRows([]string{identifierColumn}).AddRow("sm-1").AddRow("sm-2"))
+		mock.ExpectBegin()
+		mock.ExpectQuery(lockCandidatesPattern).WithArgs(string(KindSubmodel), "sm-1", "sm-2").
+			WillReturnRows(sqlmock.NewRows([]string{identifierColumn}).AddRow("sm-1").AddRow("sm-2"))
+		mock.ExpectExec(deleteTombstonePattern).WithArgs(string(KindSubmodel), "sm-1", "sm-2").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+	}
+	mock.ExpectQuery(cleanupUnlockPattern).WillReturnRows(sqlmock.NewRows([]string{cleanupLockResultColumn}).AddRow(true))
 
-	removed, err := removeTombstoneBatch(context.Background(), db, KindSubmodel)
+	removed, err := RemoveTombstones(context.Background(), db)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), removed, "a resource recreated after the lock keeps its revision")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestEveryRevisionKindHasALiveResourceTable(t *testing.T) {
-	for _, kind := range []Kind{KindAAS, KindSubmodel, KindConceptDescription, KindAASDescriptor,
-		KindSubmodelDescriptor, KindDiscoveryEntry, KindAASXPackage, KindCompanyDescriptor} {
+	for _, kind := range tombstoneKinds {
 		require.Contains(t, liveResources, kind)
 	}
 }

@@ -103,3 +103,21 @@ func TestConditionalNestedSubmodelDescriptorsShareTheShellDescriptorRevision(t *
 	require.Equal(t, http.StatusPreconditionFailed, testenv.DoHTTP(t, http.MethodDelete, nestedURL, nil, map[string]string{"If-Match": before}).Status)
 	require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodDelete, nestedURL, nil, map[string]string{"If-Match": nested.Header.Get("ETag")}).Status)
 }
+
+func TestWildcardsOfNestedSubmodelDescriptorPutsReferToTheDescriptor(t *testing.T) {
+	id := fmt.Sprintf("urn:etag:nested-put:%d", time.Now().UnixNano())
+	shellURL := aasRegistryBaseURL + "/shell-descriptors/" + common.EncodeString(id)
+	created := testenv.DoHTTP(t, http.MethodPost, aasRegistryBaseURL+"/shell-descriptors", conditionalShellDescriptor(t, id, "NestedPut"), nil)
+	require.Equal(t, http.StatusCreated, created.Status, string(created.Body))
+	t.Cleanup(func() { testenv.DoHTTP(t, http.MethodDelete, shellURL, nil, nil) })
+
+	submodelID := id + ":sm"
+	nestedURL := shellURL + "/submodel-descriptors/" + common.EncodeString(submodelID)
+	descriptor := conditionalSubmodelDescriptor(t, submodelID)
+	require.Equal(t, http.StatusPreconditionFailed, testenv.DoHTTP(t, http.MethodPut, nestedURL, descriptor, map[string]string{"If-Match": "*"}).Status,
+		"If-Match: * requires the submodel descriptor, not only its shell descriptor")
+	added := testenv.DoHTTP(t, http.MethodPut, nestedURL, descriptor, map[string]string{"If-None-Match": "*"})
+	require.Equal(t, http.StatusCreated, added.Status, string(added.Body))
+	require.Equal(t, http.StatusPreconditionFailed, testenv.DoHTTP(t, http.MethodPut, nestedURL, descriptor, map[string]string{"If-None-Match": "*"}).Status)
+	require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodPut, nestedURL, descriptor, map[string]string{"If-Match": "*"}).Status)
+}

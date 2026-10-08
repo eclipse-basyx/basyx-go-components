@@ -90,18 +90,14 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 }
 
 // streamOversizedRepresentation sends a representation that is too large to
-// buffer without an entity tag. A GET with If-Match listing entity tags then
-// fails, because the representation's entity tag cannot be determined.
+// buffer without an entity tag. Wildcard conditions are still evaluated,
+// because they only depend on the existence of the resource; a GET with
+// If-Match listing entity tags fails, because the representation's entity
+// tag cannot be determined.
 func (w *responseWriter) streamOversizedRepresentation() {
 	buffered := w.buffer.Bytes()
 	w.buffer = nil
-	if ifMatch := w.state.conds.ifMatch; ifMatch.present && !ifMatch.any {
-		w.replaceWithPreconditionError(errIfMatchFailed())
-		return
-	}
-	w.ResponseWriter.WriteHeader(http.StatusOK)
-	// #nosec G705 -- buffered is the handler's own response, written unchanged.
-	_, _ = w.ResponseWriter.Write(buffered)
+	w.respondToRead("", buffered)
 }
 
 func (w *responseWriter) WriteHeader(code int) {

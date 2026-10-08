@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -369,6 +370,24 @@ func TestWildcardsOfElementPutsReferToTheElement(t *testing.T) {
 	require.Equal(t, http.StatusCreated, created.Status, string(created.Body))
 	require.Equal(t, http.StatusPreconditionFailed, testenv.DoHTTP(t, http.MethodPut, elementURL, element, map[string]string{"If-None-Match": "*"}).Status)
 	require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodPut, elementURL, element, map[string]string{"If-Match": "*"}).Status)
+}
+
+func TestWildcardsOfAttachmentUploadsReferToTheAttachment(t *testing.T) {
+	submodel := newConditionalSubmodel(t, "attachment")
+	file := mustJSON(t, map[string]any{"modelType": "File", "idShort": "Document", "contentType": "image/gif"})
+	added := testenv.DoHTTP(t, http.MethodPost, submodel.endpoint+"/submodel-elements", file, nil)
+	require.Equal(t, http.StatusCreated, added.Status, string(added.Body))
+
+	image, err := os.ReadFile("testFiles/marcus.gif")
+	require.NoError(t, err)
+	attachmentURL := submodel.endpoint + "/submodel-elements/Document/attachment"
+	upload := func(headers map[string]string) int {
+		return testenv.DoMultipartUpload(t, attachmentURL, "marcus.gif", image, headers).Status
+	}
+	require.Equal(t, http.StatusPreconditionFailed, upload(map[string]string{"If-Match": "*"}), "If-Match: * requires the attachment, not only its Submodel")
+	require.Equal(t, http.StatusNoContent, upload(map[string]string{"If-None-Match": "*"}))
+	require.Equal(t, http.StatusPreconditionFailed, upload(map[string]string{"If-None-Match": "*"}))
+	require.Equal(t, http.StatusNoContent, upload(map[string]string{"If-Match": "*"}))
 }
 
 func TestTombstoneCleanupRemovesOnlyRevisionsOfDeletedResources(t *testing.T) {

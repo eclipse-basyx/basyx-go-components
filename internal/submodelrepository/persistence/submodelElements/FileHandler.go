@@ -44,6 +44,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
@@ -435,6 +436,11 @@ func (p PostgreSQLFileHandler) UploadManagedFileAttachmentReaderTx(
 	dialect := goqu.Dialect("postgres")
 	metadata, err := readFileElementUploadMetadata(tx, dialect, submodelID, idShortPath)
 	if err != nil {
+		return binarycontent.Reference{}, "", err
+	}
+	if err = conditional.RecordAddressedExistence(ctx, conditional.Ref(conditional.KindSubmodel, submodelID), func() (bool, error) {
+		return binarycontent.ContentExistsTx(ctx, tx, binarycontent.TableFileReference, "file_element_id", metadata.elementID)
+	}); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
 	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, declaredContentTypes, metadata)

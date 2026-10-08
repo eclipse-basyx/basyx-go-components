@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -93,4 +94,23 @@ func TestConditionalShellPartsShareTheShellRevision(t *testing.T) {
 	require.Equal(t, http.StatusCreated, added.Status, string(added.Body))
 	require.NotEmpty(t, added.Header.Get("ETag"))
 	require.NotEqual(t, current, testenv.DoHTTP(t, http.MethodGet, shellURL, nil, nil).Header.Get("ETag"))
+}
+
+func TestWildcardsOfThumbnailUploadsReferToTheThumbnail(t *testing.T) {
+	id := fmt.Sprintf("urn:etag:thumbnail:%d", time.Now().UnixNano())
+	shellURL := aasRepositoryBaseURL + "/shells/" + common.EncodeString(id)
+	created := testenv.DoHTTP(t, http.MethodPost, aasRepositoryBaseURL+"/shells", conditionalShell(t, id, "Thumbnail"), nil)
+	require.Equal(t, http.StatusCreated, created.Status, string(created.Body))
+	t.Cleanup(func() { testenv.DoHTTP(t, http.MethodDelete, shellURL, nil, nil) })
+
+	image, err := os.ReadFile("testFiles/marcus.gif")
+	require.NoError(t, err)
+	thumbnailURL := shellURL + "/asset-information/thumbnail"
+	upload := func(headers map[string]string) int {
+		return testenv.DoMultipartUpload(t, thumbnailURL, "marcus.gif", image, headers).Status
+	}
+	require.Equal(t, http.StatusPreconditionFailed, upload(map[string]string{"If-Match": "*"}), "If-Match: * requires the thumbnail, not only its shell")
+	require.Equal(t, http.StatusNoContent, upload(map[string]string{"If-None-Match": "*"}))
+	require.Equal(t, http.StatusPreconditionFailed, upload(map[string]string{"If-None-Match": "*"}))
+	require.Equal(t, http.StatusNoContent, upload(map[string]string{"If-Match": "*"}))
 }

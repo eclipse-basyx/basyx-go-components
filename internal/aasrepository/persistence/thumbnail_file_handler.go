@@ -461,6 +461,11 @@ func (h *PostgreSQLThumbnailFileHandler) uploadManagedThumbnailTx(ctx context.Co
 	if err != nil {
 		return binarycontent.Reference{}, "", err
 	}
+	if err = conditional.RecordAddressedExistence(ctx, conditional.Ref(conditional.KindAAS, aasIdentifier), func() (bool, error) {
+		return thumbnailExists(ctx, tx, metadata.AASDBID)
+	}); err != nil {
+		return binarycontent.Reference{}, "", err
+	}
 	detectedContentType, uploadContent, err := common.SniffContentTypeReader(file)
 	if err != nil {
 		return binarycontent.Reference{}, "", common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READCONTENTTYPE " + err.Error())
@@ -680,15 +685,11 @@ func (h *PostgreSQLThumbnailFileHandler) deleteManagedThumbnailTx(ctx context.Co
 	if err != nil {
 		return err
 	}
-	hasManagedReference, err := managedThumbnailReferenceExists(ctx, tx, metadata.AASDBID)
+	hasThumbnail, err := thumbnailExists(ctx, tx, metadata.AASDBID)
 	if err != nil {
 		return err
 	}
-	hasLegacyData, err := legacyThumbnailDataExists(ctx, tx, metadata.AASDBID)
-	if err != nil {
-		return err
-	}
-	if !hasManagedReference && !hasLegacyData {
+	if !hasThumbnail {
 		return common.NewErrNotFound("AASREPO-DELTHUMBNAIL-DATANOTFOUND Thumbnail data not found")
 	}
 	if err = binarycontent.DeleteReferenceTx(ctx, tx, binarycontent.TableThumbnailReference, "thumbnail_element_id", metadata.AASDBID); err != nil {
@@ -708,36 +709,6 @@ func (h *PostgreSQLThumbnailFileHandler) deleteManagedThumbnailTx(ctx context.Co
 	return touchAAS(ctx, tx, aasIdentifier, conditional.OpUpdate)
 }
 
-func managedThumbnailReferenceExists(ctx context.Context, tx *sql.Tx, aasDBID int64) (bool, error) {
-	query, args, err := goqu.From(binarycontent.TableThumbnailReference).Select(goqu.L("1")).
-		Where(goqu.C("thumbnail_element_id").Eq(aasDBID)).Limit(1).ToSQL()
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-THUMBNAIL-BUILDEXISTS " + err.Error())
-	}
-	var present int
-	err = tx.QueryRowContext(ctx, query, args...).Scan(&present)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-THUMBNAIL-EXISTS " + err.Error())
-	}
-	return true, nil
-}
-
-func legacyThumbnailDataExists(ctx context.Context, tx *sql.Tx, aasDBID int64) (bool, error) {
-	query, args, err := goqu.From("thumbnail_file_data").Select(goqu.L("1")).
-		Where(goqu.C("id").Eq(aasDBID), goqu.C("file_oid").IsNotNull()).Limit(1).ToSQL()
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-THUMBNAIL-BUILDLEGACYEXISTS " + err.Error())
-	}
-	var present int
-	err = tx.QueryRowContext(ctx, query, args...).Scan(&present)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-THUMBNAIL-LEGACYEXISTS " + err.Error())
-	}
-	return true, nil
+func thumbnailExists(ctx context.Context, tx *sql.Tx, aasDBID int64) (bool, error) {
+	return binarycontent.ContentExistsTx(ctx, tx, binarycontent.TableThumbnailReference, "thumbnail_element_id", aasDBID)
 }

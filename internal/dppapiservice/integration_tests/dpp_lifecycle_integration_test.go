@@ -303,6 +303,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	testDPPContentSpecificationSelection(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 	testSelectiveDPPUpdates(t, client, baseURL, aasBaseURL, databasePort, idSuffix, now)
 	testDPPUpdateAfterConcurrentDelete(t, baseURL, databasePort, idSuffix, now)
+	testDPPUpdateAfterMemberDelete(t, baseURL, databasePort, idSuffix, now)
 }
 
 func lifecycleDPPDocument(dppID string, productID string, now time.Time) map[string]any {

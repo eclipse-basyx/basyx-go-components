@@ -411,6 +411,33 @@ func DeleteReferenceTx(ctx context.Context, tx *sql.Tx, table string, ownerColum
 	return nil
 }
 
+// ContentExistsTx reports whether a logical owner has binary content, either
+// as a managed reference or as legacy large object data.
+func ContentExistsTx(ctx context.Context, tx *sql.Tx, table string, ownerColumn string, ownerID int64) (bool, error) {
+	if !validReferenceTable(table, ownerColumn) {
+		return false, common.NewInternalServerError("BINARYCONTENT-REFERENCE-TABLE unsupported binary reference table")
+	}
+	managed := goqu.From(table).Select(goqu.L("1")).Where(goqu.C(ownerColumn).Eq(ownerID))
+	legacy := goqu.From(legacyDataTable(table)).Select(goqu.L("1")).
+		Where(goqu.C("id").Eq(ownerID), goqu.C("file_oid").IsNotNull())
+	query, args, err := goqu.Dialect("postgres").Select(goqu.L("EXISTS ? OR EXISTS ?", managed, legacy)).ToSQL()
+	if err != nil {
+		return false, common.NewInternalServerError("BINARYCONTENT-CONTENTEXISTS-BUILDQUERY " + err.Error())
+	}
+	var exists bool
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&exists); err != nil {
+		return false, common.NewInternalServerError("BINARYCONTENT-CONTENTEXISTS-EXECQUERY " + err.Error())
+	}
+	return exists, nil
+}
+
+func legacyDataTable(table string) string {
+	if table == TableThumbnailReference {
+		return "thumbnail_file_data"
+	}
+	return "file_data"
+}
+
 // ReadAllTx reads canonical content for the existing byte-oriented repository contracts.
 func ReadAllTx(ctx context.Context, tx *sql.Tx, content Content) ([]byte, error) {
 	return ReadOIDTx(ctx, tx, content.OID)

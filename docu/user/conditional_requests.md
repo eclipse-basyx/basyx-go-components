@@ -54,6 +54,8 @@ The server issues two forms of strong entity tags:
 - A DPP is made of a shell and its Submodels. Its tag covers the shell, which
   changes when Submodel references change, and all referenced Submodels.
   Changes made through the AAS or Submodel Repository change the DPP's tag.
+  When a Submodel of a DPP is deleted, no earlier tag of the DPP matches
+  anymore.
 
 `PUT` responses carry no entity tag (RFC 9110, section 9.3.4), because the
 server normalizes the stored representation. Read the resource again, or use
@@ -71,7 +73,8 @@ tag.
 - Weak tags (`W/"…"`) never match.
 - `If-Match: *` only requires that the resource exists. It does not protect
   against concurrent changes. For a `PUT` of a part, such as a Submodel
-  element, it requires that part.
+  element, a submodel descriptor of a shell descriptor, an attachment or a
+  thumbnail, it requires that part.
 - If no tag matches, the service answers `412 Precondition Failed` with the
   usual error body and changes nothing. Not-found and authorization errors
   take precedence over `412`.
@@ -100,9 +103,10 @@ ETag: "8124-5c1e7a0d"
 
 `PUT` with `If-None-Match: *` only creates a resource. If the resource
 already exists, including when it is created concurrently, the service
-answers `412`. For a `PUT` of a part, such as a Submodel element, it
-creates the part if it does not exist yet. `If-None-Match` with tags fails when the current revision
-matches one of them.
+answers `412`. For a `PUT` of a part, such as a Submodel element, a
+submodel descriptor of a shell descriptor, an attachment or a thumbnail, it
+only creates the part. `If-None-Match` with tags fails when the current
+revision matches one of them.
 
 ## Reads with If-None-Match and If-Match
 
@@ -114,7 +118,8 @@ matches one of them.
   and `POST` identify a revision, not a representation, and do not match.
 - JSON representations larger than 16 MiB are sent without an entity tag.
   Use the tag of a smaller representation of the same resource, such as
-  `$metadata`, for writes.
+  `$metadata`, for writes. `If-Match: *` and `If-None-Match: *` are still
+  evaluated; `If-Match` with tags fails.
 - `HEAD` is not supported.
 
 ## Collections

@@ -229,8 +229,10 @@ func (p *pendingTx) flush(tx *sql.Tx) (*Flushed, error) {
 		return nil, err
 	}
 	if evaluate {
-		if err = p.evaluate(previous); err != nil {
-			p.state.setFailure(err)
+		if err = p.evaluate(tx, previous); err != nil {
+			if IsPreconditionError(err) {
+				p.state.setFailure(err)
+			}
 			return nil, err
 		}
 	}
@@ -345,15 +347,50 @@ func sortedLocked(locked map[ResourceRef]bool) []ResourceRef {
 	return sortedRefs(refs)
 }
 
-func (p *pendingTx) evaluate(previous map[ResourceRef]int64) error {
+func (p *pendingTx) evaluate(tx *sql.Tx, previous map[ResourceRef]int64) error {
 	if p.composite != nil {
-		target := newWriteTarget(p.composite.op != OpCreate, compositeValidator(p.composite.ref, p.composite.before, previous), nil)
-		return evaluateWrite(p.state.conds, target, p.state.requireIfMatch)
+		return p.evaluateComposite(tx, previous)
 	}
 	ref := *p.state.target
 	revision := previous[ref]
 	target := newWriteTarget(p.touches[ref].existedBefore, concurrencyValidator(ref, revision), p.state.addressedExistence())
 	return evaluateWrite(p.state.conds, target, p.state.requireIfMatch)
+}
+
+// evaluateComposite evaluates the preconditions against the members the
+// write was prepared for. Deleted members keep their last revision, so a
+// composite that lost a member since matches no entity tag.
+func (p *pendingTx) evaluateComposite(tx *sql.Tx, previous map[ResourceRef]int64) error {
+	existed := p.composite.op != OpCreate
+	validator := compositeValidator(p.composite.ref, p.composite.before, previous)
+	if existed {
+		complete, err := p.membersExisted(tx)
+		if err != nil {
+			return err
+		}
+		if !complete {
+			validator = ""
+		}
+	}
+	return evaluateWrite(p.state.conds, newWriteTarget(existed, validator, nil), p.state.requireIfMatch)
+}
+
+// membersExisted reports whether all members existed before the write. A
+// member the transaction created did not, even if it exists now.
+func (p *pendingTx) membersExisted(tx *sql.Tx) (bool, error) {
+	for _, member := range p.composite.before {
+		if touch, touched := p.touches[member]; touched {
+			if !touch.existedBefore {
+				return false, nil
+			}
+			continue
+		}
+		found, _, err := readLiveRevision(p.ctx, tx, member)
+		if err != nil || !found {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 // writeETag returns the entity tag of the request target after the write.

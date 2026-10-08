@@ -139,6 +139,46 @@ func testDPPUpdateAfterConcurrentDelete(t *testing.T, baseURL string, databasePo
 	assertAASIdentifierExists(t, databasePort, dppID, false)
 }
 
+// testDPPUpdateAfterMemberDelete deletes the metadata Submodel of a DPP
+// after a conditional update resolved the DPP's members. A deleted member
+// keeps its last revision, so the update must still fail instead of
+// recreating the deleted Submodel.
+func testDPPUpdateAfterMemberDelete(t *testing.T, baseURL string, databasePort int, idSuffix string, now time.Time) {
+	t.Helper()
+	dppID := "https://www.example.org/dpp/member-race/" + idSuffix
+	metadataID := dppID + "/submodels/DppMetadata"
+	created := testenv.DoHTTP(t, http.MethodPost, baseURL+"/v1/dpps", mustMarshal(t, lifecycleDPPDocument(dppID, "https://www.example.org/member-race/"+idSuffix, now)), nil)
+	require.Equal(t, http.StatusCreated, created.Status, string(created.Body))
+	db := openDPPIntegrationDatabase(t, databasePort)
+	defer func() { _ = db.Close() }()
+
+	dppURL := baseURL + "/v1/dpps/" + encodedPathParam(dppID)
+	etag := testenv.DoHTTP(t, http.MethodGet, dppURL, nil, nil).Header.Get("ETag")
+	require.Regexp(t, dppRepresentationETagPattern, etag)
+
+	barrier, err := db.BeginTx(context.TODO(), nil)
+	require.NoError(t, err)
+	lockShell, args, err := goqu.Dialect("postgres").From("aas").Select("id").Where(goqu.C("aas_id").Eq(dppID)).ForUpdate(exp.Wait).Prepared(true).ToSQL()
+	require.NoError(t, err)
+	var shellID int64
+	require.NoError(t, barrier.QueryRow(lockShell, args...).Scan(&shellID))
+
+	var wg sync.WaitGroup
+	var updated testenv.HTTPResult
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		updated = testenv.DoHTTP(t, http.MethodPatch, dppURL, mustMarshal(t, map[string]any{"facilityId": "facility-member-race"}), map[string]string{"If-Match": etag})
+	}()
+	testenv.WaitForLockWaiters(t, db, 1)
+	executeDataset(t, barrier, goqu.Dialect("postgres").Delete("submodel").Where(goqu.C("submodel_identifier").Eq(metadataID)))
+	require.NoError(t, barrier.Commit())
+	wg.Wait()
+
+	require.Equal(t, http.StatusPreconditionFailed, updated.Status, string(updated.Body))
+	assertSubmodelIdentifierExistsInDatabase(t, db, metadataID, false)
+}
+
 func executeDataset(t *testing.T, db interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }, dataset *goqu.DeleteDataset) {

@@ -39,6 +39,7 @@ const (
 	upsertPattern      = `INSERT INTO "resource_revision" .* ON CONFLICT \(kind, identifier\) DO UPDATE SET "revision"=nextval\('basyx_resource_revision_seq'\) RETURNING "kind", "identifier", "revision"`
 	placeholderPattern = `INSERT INTO "resource_revision" .* ON CONFLICT DO NOTHING`
 	lockPattern        = `SELECT "revision" FROM "resource_revision" WHERE .* FOR UPDATE`
+	liveCheckPattern   = `SELECT EXISTS \(SELECT 1 FROM .* AS "live" WHERE .*\), COALESCE`
 	bumpPattern        = `INSERT INTO "resource_revision" .* ON CONFLICT \(kind, identifier\) DO UPDATE SET "revision"=nextval\('basyx_resource_revision_seq'\) RETURNING "revision"`
 )
 
@@ -218,12 +219,54 @@ func TestCompositeTargetIsEvaluatedAgainstAllMembers(t *testing.T) {
 	mock.ExpectQuery(lockPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(2))
 	mock.ExpectExec(placeholderPattern).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(lockPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(5))
+	mock.ExpectQuery(liveCheckPattern).WillReturnRows(sqlmock.NewRows([]string{"exists", "revision"}).AddRow(true, 2))
 	mock.ExpectQuery(bumpPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(8))
 
 	flushed, err := FlushTx(tx)
 	require.NoError(t, err)
 	flushed.Committed()
 	require.Equal(t, quote(compositeValidator(dpp, members, map[ResourceRef]int64{shellA: 2, submodelA: 8})), state.currentWriteETag())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCompositeWithDeletedMemberMatchesNoTag(t *testing.T) {
+	tx, mock := newMockTx(t)
+	dpp := Ref(KindDPP, "dpp-1")
+	members := []ResourceRef{shellA, submodelA}
+	current := compositeValidator(dpp, members, map[ResourceRef]int64{shellA: 2, submodelA: 5})
+	ctx, state := requestContext(http.MethodPatch, &dpp, http.Header{"If-Match": {quote(current)}}, false)
+	TouchComposite(ctx, tx, dpp, members, members, OpUpdate)
+	require.NoError(t, Touch(ctx, tx, shellA, OpUpdate))
+
+	mock.ExpectExec(placeholderPattern).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(lockPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(2))
+	mock.ExpectExec(placeholderPattern).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(lockPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(5))
+	mock.ExpectQuery(liveCheckPattern).WillReturnRows(sqlmock.NewRows([]string{"exists", "revision"}).AddRow(false, 5))
+
+	_, err := FlushTx(tx)
+	require.True(t, IsPreconditionFailed(err))
+	require.True(t, IsPreconditionFailed(state.currentFailure()))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCompositeWithRecreatedMemberMatchesNoTag(t *testing.T) {
+	tx, mock := newMockTx(t)
+	dpp := Ref(KindDPP, "dpp-1")
+	members := []ResourceRef{shellA, submodelA}
+	current := compositeValidator(dpp, members, map[ResourceRef]int64{shellA: 2, submodelA: 5})
+	ctx, _ := requestContext(http.MethodPatch, &dpp, http.Header{"If-Match": {quote(current)}}, false)
+	TouchComposite(ctx, tx, dpp, members, members, OpUpdate)
+	require.NoError(t, Touch(ctx, tx, shellA, OpUpdate))
+	require.NoError(t, Touch(ctx, tx, submodelA, OpCreate))
+
+	mock.ExpectExec(placeholderPattern).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(lockPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(2))
+	mock.ExpectExec(placeholderPattern).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(lockPattern).WillReturnRows(sqlmock.NewRows([]string{"revision"}).AddRow(5))
+
+	_, err := FlushTx(tx)
+	require.True(t, IsPreconditionFailed(err))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -236,4 +279,23 @@ func TestDiscardDropsPendingChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, flushed)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAddressedExistenceIsOnlyProbedForConditionalWrites(t *testing.T) {
+	probed := false
+	probe := func() (bool, error) {
+		probed = true
+		return false, nil
+	}
+	unconditional, _ := requestContext(http.MethodPut, &shellA, http.Header{}, false)
+	require.NoError(t, RecordAddressedExistence(unconditional, shellA, probe))
+	require.False(t, probed)
+
+	conditional, state := requestContext(http.MethodPut, &shellA, http.Header{"If-None-Match": {"*"}}, false)
+	require.NoError(t, RecordAddressedExistence(conditional, submodelA, probe))
+	require.False(t, probed)
+	require.NoError(t, RecordAddressedExistence(conditional, shellA, probe))
+	require.True(t, probed)
+	require.NotNil(t, state.addressedExistence())
+	require.False(t, *state.addressedExistence())
 }
