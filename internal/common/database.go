@@ -39,6 +39,8 @@ import (
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 )
 
 const (
@@ -215,6 +217,7 @@ func OpenPostgresPoolsWithSchemaValidation(
 	if err != nil {
 		return nil, fmt.Errorf("COMMON-OPENPOSTGRESPOOLS-WRITER writer connection failed: %w", err)
 	}
+	conditional.StartTombstoneCleanup(ctx, writer)
 	return attachPostgresReader(ctx, cfg, serviceName, writer, openPostgresForRole)
 }
 

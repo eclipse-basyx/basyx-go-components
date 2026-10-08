@@ -39,7 +39,7 @@ const (
 	upsertPattern      = `INSERT INTO "resource_revision" .* ON CONFLICT \(kind, identifier\) DO UPDATE SET "revision"=nextval\('basyx_resource_revision_seq'\) RETURNING "kind", "identifier", "revision"`
 	placeholderPattern = `INSERT INTO "resource_revision" .* ON CONFLICT DO NOTHING`
 	lockPattern        = `SELECT "revision" FROM "resource_revision" WHERE .* FOR UPDATE`
-	bumpPattern        = `UPDATE "resource_revision" SET "revision"=nextval\('basyx_resource_revision_seq'\) WHERE .* RETURNING "revision"`
+	bumpPattern        = `INSERT INTO "resource_revision" .* ON CONFLICT \(kind, identifier\) DO UPDATE SET "revision"=nextval\('basyx_resource_revision_seq'\) RETURNING "revision"`
 )
 
 var (

@@ -84,10 +84,14 @@ func lockRevision(ctx context.Context, tx *sql.Tx, ref ResourceRef) (int64, erro
 	return scanRevision(ctx, tx, "COMMON-CONDREQ-LOCKREVISION-LOCK", ds)
 }
 
-// bumpRevision assigns a new revision to a locked resource.
+// bumpRevision assigns a new revision to a locked resource. It inserts the
+// revision when the tombstone cleanup removed it after a deleted resource was
+// locked for recreation.
 func bumpRevision(ctx context.Context, tx *sql.Tx, ref ResourceRef) (int64, error) {
-	ds := dialect.Update(revisionTable).Set(goqu.Record{columnRevision: nextRevision()}).
-		Where(refCondition(ref)).Returning(goqu.C(columnRevision)).Prepared(true)
+	ds := dialect.Insert(revisionTable).
+		Rows(goqu.Record{columnKind: string(ref.Kind), columnIdentifier: ref.Identifier, columnRevision: nextRevision()}).
+		OnConflict(goqu.DoUpdate(columnKind+", "+columnIdentifier, goqu.Record{columnRevision: nextRevision()})).
+		Returning(goqu.C(columnRevision)).Prepared(true)
 	return scanRevision(ctx, tx, "COMMON-CONDREQ-BUMPREVISION", ds)
 }
 

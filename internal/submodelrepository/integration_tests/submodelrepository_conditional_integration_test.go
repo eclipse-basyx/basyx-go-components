@@ -39,6 +39,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
 )
@@ -371,4 +372,22 @@ func TestWildcardsOfElementPutsReferToTheElement(t *testing.T) {
 	require.Equal(t, http.StatusCreated, created.Status, string(created.Body))
 	require.Equal(t, http.StatusPreconditionFailed, testenv.DoHTTP(t, http.MethodPut, elementURL, element, map[string]string{"If-None-Match": "*"}).Status)
 	require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodPut, elementURL, element, map[string]string{"If-Match": "*"}).Status)
+}
+
+func TestTombstoneCleanupRemovesOnlyRevisionsOfDeletedResources(t *testing.T) {
+	deleted := newConditionalSubmodel(t, "tombstone-deleted")
+	live := newConditionalSubmodel(t, "tombstone-live")
+	require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodDelete, deleted.endpoint, nil, nil).Status)
+	_, tombstone := testenv.ResourceRevision(t, deleted.db, submodelRevisionKind, deleted.id)
+	require.True(t, tombstone, "a delete keeps the revision as a tombstone")
+	liveRevision, _ := testenv.ResourceRevision(t, live.db, submodelRevisionKind, live.id)
+
+	_, err := conditional.RemoveTombstones(t.Context(), deleted.db)
+	require.NoError(t, err)
+
+	_, tombstone = testenv.ResourceRevision(t, deleted.db, submodelRevisionKind, deleted.id)
+	require.False(t, tombstone)
+	current, exists := testenv.ResourceRevision(t, live.db, submodelRevisionKind, live.id)
+	require.True(t, exists)
+	require.Equal(t, liveRevision, current)
 }

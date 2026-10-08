@@ -35,6 +35,8 @@ same database transaction as any change of the resource or one of its parts.
 Revisions are unique and never reused, so a deleted and recreated resource
 never gets an entity tag it had before. The revision of a deleted resource
 is kept, so deletes without preconditions need no additional database work.
+Every service removes the revisions of deleted resources once an hour; only
+one service of a database does so at a time.
 
 The server issues two forms of strong entity tags:
 
