@@ -217,6 +217,16 @@ func (c condition) matchesWeak(validator string) bool {
 	return false
 }
 
+// matchesRepresentationStrong compares complete tags strongly.
+func (c condition) matchesRepresentationStrong(opaque string) bool {
+	for _, tag := range c.tags {
+		if !tag.weak && tag.opaque == opaque {
+			return true
+		}
+	}
+	return false
+}
+
 // matchesRepresentation compares complete tags weakly.
 func (c condition) matchesRepresentation(opaque string) bool {
 	for _, tag := range c.tags {

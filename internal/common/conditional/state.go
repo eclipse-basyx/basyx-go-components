@@ -68,6 +68,8 @@ type State struct {
 	evaluated bool
 	writeETag string
 	failure   error
+
+	addressedExists *bool
 }
 
 func stateFromContext(ctx context.Context) *State {
@@ -169,4 +171,24 @@ func (s *State) observeComposite(validator string) {
 		s.inconsistent = true
 	}
 	s.compositeTag = validator
+}
+
+// SetAddressedExistence records whether the part of the request target that
+// the request URL addresses existed, such as a Submodel element of a
+// Submodel. If-Match: * and If-None-Match: * then refer to that part, while
+// entity tags are still compared with the target's revision.
+func SetAddressedExistence(ctx context.Context, ref ResourceRef, exists bool) {
+	state := stateFromContext(ctx)
+	if !state.isTarget(ref) {
+		return
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	state.addressedExists = &exists
+}
+
+func (s *State) addressedExistence() *bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.addressedExists
 }

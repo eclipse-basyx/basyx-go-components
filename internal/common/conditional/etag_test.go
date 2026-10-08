@@ -95,7 +95,7 @@ func TestCompositeValidatorChangesWithAnyMemberRevision(t *testing.T) {
 
 func TestEvaluateWriteFollowsRFC9110Order(t *testing.T) {
 	ref := Ref(KindSubmodel, "urn:a")
-	current := writeTarget{existed: true, validator: concurrencyValidator(ref, 4)}
+	current := newWriteTarget(true, concurrencyValidator(ref, 4), nil)
 	stale := quote(concurrencyValidator(ref, 3))
 	fresh := quote(current.validator)
 	conds := func(ifMatch, ifNoneMatch []string) conditions {
@@ -127,4 +127,25 @@ func TestEvaluateReadAnswersPreconditionFailedOrNotModified(t *testing.T) {
 	require.Equal(t, readPreconditionFailed, evaluateRead(conds(http.Header{"If-Match": {`"1-00000000"`}}), validator, representation))
 	require.Equal(t, readProceed, evaluateRead(conds(http.Header{"If-Match": {quote(representation)}}), validator, representation))
 	require.Equal(t, readPreconditionFailed, evaluateRead(conds(http.Header{"If-Match": {"*"}}), "", ""))
+	require.Equal(t, readPreconditionFailed, evaluateRead(conds(http.Header{"If-Match": {quote(validator)}}), validator, representation),
+		"a write validator does not designate the representation")
+	require.Equal(t, readPreconditionFailed, evaluateRead(conds(http.Header{"If-Match": {quote(validator + "-0000000000000000")}}), validator, representation),
+		"another representation of the same revision does not match")
+	require.Equal(t, readPreconditionFailed, evaluateRead(conds(http.Header{"If-Match": {"W/" + quote(representation)}}), validator, representation))
+}
+
+func TestWildcardsReferToTheAddressedPartOfTheTarget(t *testing.T) {
+	validator := concurrencyValidator(Ref(KindSubmodel, "urn:a"), 4)
+	missing, present := false, true
+	missingPart := newWriteTarget(true, validator, &missing)
+	existingPart := newWriteTarget(true, validator, &present)
+	conds := func(ifMatch, ifNoneMatch []string) conditions {
+		return conditions{ifMatch: parseCondition(ifMatch), ifNoneMatch: parseCondition(ifNoneMatch)}
+	}
+
+	require.NoError(t, evaluateWrite(conds(nil, []string{"*"}), missingPart, false), "create-only creates a missing part")
+	require.True(t, IsPreconditionFailed(evaluateWrite(conds(nil, []string{"*"}), existingPart, false)))
+	require.True(t, IsPreconditionFailed(evaluateWrite(conds([]string{"*"}, nil), missingPart, false)), "If-Match: * requires the part")
+	require.NoError(t, evaluateWrite(conds([]string{"*"}, nil), existingPart, false))
+	require.NoError(t, evaluateWrite(conds([]string{quote(validator)}, nil), missingPart, false), "tags are compared with the target revision")
 }

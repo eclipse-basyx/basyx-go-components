@@ -2360,6 +2360,13 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 	return s.appendRemovedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelIdentifier)
 }
 
+// LockAssetAdministrationShellForUpdateInTransaction locks an existing AAS
+// for a mutation in tx and fails with not found when it does not exist.
+func (s *AssetAdministrationShellDatabase) LockAssetAdministrationShellForUpdateInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+	_, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-LOCKAAS")
+	return err
+}
+
 func lockAssetAdministrationShellMutationTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, errorPrefix string) (int64, error) {
 	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
 		return 0, err

@@ -44,10 +44,24 @@ func (c conditions) present() bool {
 	return c.ifMatch.present || c.ifNoneMatch.present
 }
 
-// writeTarget is the state of a write target when its precondition is evaluated.
+// writeTarget is the state of a write target when its precondition is
+// evaluated. existed and validator describe the resource whose revision is
+// compared; addressedExisted tells whether the resource the request URL
+// addresses existed, which can be a missing part of an existing resource.
 type writeTarget struct {
-	existed   bool
-	validator string
+	existed          bool
+	addressedExisted bool
+	validator        string
+}
+
+// newWriteTarget describes a write target whose addressed resource is the
+// revisioned resource itself, unless addressed says otherwise.
+func newWriteTarget(existed bool, validator string, addressed *bool) writeTarget {
+	target := writeTarget{existed: existed, addressedExisted: existed, validator: validator}
+	if addressed != nil {
+		target.addressedExisted = *addressed
+	}
+	return target
 }
 
 // evaluateWrite evaluates the preconditions of a state-changing request in
@@ -66,17 +80,17 @@ func evaluateWrite(conds conditions, target writeTarget, requireIfMatch bool) er
 }
 
 func ifMatchHolds(ifMatch condition, target writeTarget) bool {
-	if !target.existed {
-		return false
+	if ifMatch.any && target.addressedExisted {
+		return true
 	}
-	return ifMatch.any || ifMatch.matchesStrong(target.validator)
+	return target.existed && ifMatch.matchesStrong(target.validator)
 }
 
 func ifNoneMatchMatches(ifNoneMatch condition, target writeTarget) bool {
-	if !target.existed {
-		return false
+	if ifNoneMatch.any {
+		return target.addressedExisted
 	}
-	return ifNoneMatch.any || ifNoneMatch.matchesWeak(target.validator)
+	return target.existed && ifNoneMatch.matchesWeak(target.validator)
 }
 
 // readOutcome is the result of evaluating the preconditions of a GET.
@@ -92,7 +106,7 @@ const (
 // concurrency validator and the complete representation tag. An empty
 // validator means the server could not determine a tag.
 func evaluateRead(conds conditions, validator string, representation string) readOutcome {
-	if conds.ifMatch.present && !ifMatchHoldsForRead(conds.ifMatch, validator) {
+	if conds.ifMatch.present && !ifMatchHoldsForRead(conds.ifMatch, validator, representation) {
 		return readPreconditionFailed
 	}
 	if !conds.ifNoneMatch.present {
@@ -104,6 +118,11 @@ func evaluateRead(conds conditions, validator string, representation string) rea
 	return readProceed
 }
 
-func ifMatchHoldsForRead(ifMatch condition, validator string) bool {
-	return validator != "" && (ifMatch.any || ifMatch.matchesStrong(validator))
+// ifMatchHoldsForRead compares If-Match of a GET strongly with the complete
+// entity tag of the selected representation (RFC 9110 section 13.1.1).
+func ifMatchHoldsForRead(ifMatch condition, validator string, representation string) bool {
+	if validator == "" {
+		return false
+	}
+	return ifMatch.any || (representation != "" && ifMatch.matchesRepresentationStrong(representation))
 }

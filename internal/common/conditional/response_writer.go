@@ -36,6 +36,11 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+// maxBufferedRepresentation bounds the memory used to compute the entity tag
+// of a JSON representation. Larger representations are streamed without an
+// entity tag.
+const maxBufferedRepresentation = 16 << 20
+
 // responseWriter adds entity tags to responses and answers conditional GETs.
 // It formats responses only; preconditions of writes are enforced before
 // commit.
@@ -75,9 +80,28 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 	if w.buffer != nil {
+		if w.buffer.Len()+len(p) > maxBufferedRepresentation {
+			w.streamOversizedRepresentation()
+			return w.Write(p)
+		}
 		return w.buffer.Write(p)
 	}
 	return w.ResponseWriter.Write(p)
+}
+
+// streamOversizedRepresentation sends a representation that is too large to
+// buffer without an entity tag. A GET with If-Match listing entity tags then
+// fails, because the representation's entity tag cannot be determined.
+func (w *responseWriter) streamOversizedRepresentation() {
+	buffered := w.buffer.Bytes()
+	w.buffer = nil
+	if ifMatch := w.state.conds.ifMatch; ifMatch.present && !ifMatch.any {
+		w.replaceWithPreconditionError(errIfMatchFailed())
+		return
+	}
+	w.ResponseWriter.WriteHeader(http.StatusOK)
+	// #nosec G705 -- buffered is the handler's own response, written unchanged.
+	_, _ = w.ResponseWriter.Write(buffered)
 }
 
 func (w *responseWriter) WriteHeader(code int) {
@@ -103,7 +127,7 @@ func (w *responseWriter) beginRead(code int) {
 		return
 	}
 	w.validator = w.state.readValidator()
-	if w.validator != "" && isJSON(w.Header().Get("Content-Type")) {
+	if w.validator != "" && isSerializedJSON(w.Header()) {
 		w.buffer = &bytes.Buffer{}
 		return
 	}
@@ -197,7 +221,13 @@ func unquote(tag string) string {
 	return strings.Trim(tag, `"`)
 }
 
-func isJSON(contentType string) bool {
-	mediaType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
-	return mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
+// isSerializedJSON reports whether a response is a JSON serialization that
+// is buffered to compute its entity tag. File downloads are streamed, even
+// when their media type is JSON based, such as application/aasx+json.
+func isSerializedJSON(header http.Header) bool {
+	if header.Get("Content-Disposition") != "" {
+		return false
+	}
+	mediaType := strings.ToLower(strings.TrimSpace(strings.Split(header.Get("Content-Type"), ";")[0]))
+	return mediaType == "application/json"
 }

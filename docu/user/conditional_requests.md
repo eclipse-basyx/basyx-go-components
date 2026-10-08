@@ -16,7 +16,7 @@ additional `ETag` header.
 | AAS Repository | shells; asset information, thumbnail and submodel references share the shell's revision; `/shells/{id}/submodels/{smId}/…` use the Submodel's revision |
 | Submodel Repository | Submodels; all elements, `$value`, `$metadata`, `$reference`, `$path`, element lists and attachments share the Submodel's revision |
 | Concept Description Repository | concept descriptions |
-| AAS Registry, Digital Twin Registry | shell descriptors; their submodel descriptors share the shell descriptor's revision |
+| AAS Registry, Digital Twin Registry | shell descriptors; their submodel descriptors share the shell descriptor's revision, and asset link changes through discovery change it too |
 | Submodel Registry | submodel descriptors |
 | Discovery, Digital Twin Registry | asset links of a shell (`/lookup/shells/{aasIdentifier}`) |
 | AASX File Server | packages (`/packages/{packageId}`) |
@@ -67,7 +67,8 @@ tag.
   and then patch one of its elements with the Submodel's tag.
 - Weak tags (`W/"…"`) never match.
 - `If-Match: *` only requires that the resource exists. It does not protect
-  against concurrent changes.
+  against concurrent changes. For a `PUT` of a part, such as a Submodel
+  element, it requires that part.
 - If no tag matches, the service answers `412 Precondition Failed` with the
   usual error body and changes nothing. Not-found and authorization errors
   take precedence over `412`.
@@ -96,7 +97,8 @@ ETag: "8124-5c1e7a0d"
 
 `PUT` with `If-None-Match: *` only creates a resource. If the resource
 already exists, including when it is created concurrently, the service
-answers `412`. `If-None-Match` with tags fails when the current revision
+answers `412`. For a `PUT` of a part, such as a Submodel element, it
+creates the part if it does not exist yet. `If-None-Match` with tags fails when the current revision
 matches one of them.
 
 ## Reads with If-None-Match and If-Match
@@ -104,7 +106,12 @@ matches one of them.
 - `GET` with `If-None-Match` answers `304 Not Modified` when the current
   representation has one of the listed tags. The request is authorized as
   usual before; a changed view is never answered with `304`.
-- `GET` with `If-Match` answers `412` when no tag matches.
+- `GET` with `If-Match` answers `412` unless one of the tags is the complete
+  entity tag of the current representation. The tags returned by `PATCH`
+  and `POST` identify a revision, not a representation, and do not match.
+- JSON representations larger than 16 MiB are sent without an entity tag.
+  Use the tag of a smaller representation of the same resource, such as
+  `$metadata`, for writes.
 - `HEAD` is not supported.
 
 ## Collections

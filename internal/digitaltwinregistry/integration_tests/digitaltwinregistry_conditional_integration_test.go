@@ -87,6 +87,8 @@ func TestConditionalDigitalTwinAssetLinksFollowTheDescriptor(t *testing.T) {
 	require.Equal(t, http.StatusCreated, created.Status, string(created.Body))
 	t.Cleanup(func() { testenv.DoHTTP(t, http.MethodDelete, descriptorURL, nil, headers) })
 
+	descriptorETag := testenv.DoHTTP(t, http.MethodGet, descriptorURL, nil, headers).Header.Get("ETag")
+	require.NotEmpty(t, descriptorETag)
 	links := testenv.DoHTTP(t, http.MethodGet, linksURL, nil, headers)
 	require.Equal(t, http.StatusOK, links.Status, string(links.Body))
 	etag := links.Header.Get("ETag")
@@ -99,4 +101,7 @@ func TestConditionalDigitalTwinAssetLinksFollowTheDescriptor(t *testing.T) {
 	updated := testenv.DoHTTP(t, http.MethodPost, linksURL, added, map[string]string{"Authorization": headers["Authorization"], "If-Match": etag})
 	require.Equal(t, http.StatusCreated, updated.Status, string(updated.Body))
 	require.NotEqual(t, etag, testenv.DoHTTP(t, http.MethodGet, linksURL, nil, headers).Header.Get("ETag"))
+
+	overwrite := testenv.DoHTTP(t, http.MethodPut, descriptorURL, body, map[string]string{"Authorization": headers["Authorization"], "If-Match": descriptorETag})
+	require.Equal(t, http.StatusPreconditionFailed, overwrite.Status, "asset links added through discovery change the descriptor")
 }

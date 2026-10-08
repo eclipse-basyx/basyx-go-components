@@ -177,6 +177,9 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 		if reBACErr := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceBD, aasID); reBACErr != nil {
 			return reBACErr
 		}
+		if touchErr := descriptors.TouchDescriptorOfDiscoveryEntryTx(ctx, tx, aasID); touchErr != nil {
+			return touchErr
+		}
 		result, execErr := tx.ExecContext(ctx, sqlStr, args...)
 		if execErr != nil {
 			return execErr

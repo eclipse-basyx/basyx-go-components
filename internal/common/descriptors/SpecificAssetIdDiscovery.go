@@ -364,6 +364,9 @@ func ensureDiscoveryEntryTx(ctx context.Context, tx *sql.Tx, aasID string) (int6
 	if err != nil {
 		return 0, err
 	}
+	if err = TouchDescriptorOfDiscoveryEntryTx(ctx, tx, aasID); err != nil {
+		return 0, err
+	}
 	return aasRef, auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceBD, aasID)
 }
 

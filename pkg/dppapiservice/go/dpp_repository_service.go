@@ -443,9 +443,28 @@ func (s *DPPRepositoryService) persistDPPUpdate(ctx context.Context, resolved re
 		after = update.aas
 	}
 	return s.aasRepo.ExecuteInTransaction("DPP-UPDDPP-STARTTX", "DPP-UPDDPP-COMMITTX", func(tx *sql.Tx) error {
-		conditional.TouchComposite(ctx, tx, dppRef(resolved.aas.ID()), dppMembers(resolved.aas), dppMembers(after), conditional.OpUpdate)
+		if err := s.lockDPPForUpdateInTransaction(ctx, tx, resolved.aas.ID(), dppMembers(resolved.aas), dppMembers(after)); err != nil {
+			return err
+		}
 		return s.persistDPPUpdateInTransaction(ctx, tx, resolved.aas.ID(), update)
 	})
+}
+
+// lockDPPForUpdateInTransaction locks the shell of a DPP resolved before the
+// transaction, so an update never recreates a DPP that was deleted in the
+// meantime, and records the composite write for its entity tag.
+func (s *DPPRepositoryService) lockDPPForUpdateInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	dppID string,
+	before []conditional.ResourceRef,
+	after []conditional.ResourceRef,
+) error {
+	if err := s.aasRepo.LockAssetAdministrationShellForUpdateInTransaction(ctx, tx, dppID); err != nil {
+		return fmt.Errorf("DPP-UPDDPP-LOCKAAS lock AAS %s: %w", dppID, err)
+	}
+	conditional.TouchComposite(ctx, tx, dppRef(dppID), before, after, conditional.OpUpdate)
+	return nil
 }
 
 func (s *DPPRepositoryService) persistDPPUpdateInTransaction(
@@ -985,7 +1004,9 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 	}
 	members := dppMembers(resolved.aas)
 	err = s.aasRepo.ExecuteInTransaction("DPP-UPDELEM-STARTTX", "DPP-UPDELEM-COMMITTX", func(tx *sql.Tx) error {
-		conditional.TouchComposite(ctx, tx, dppRef(dppID), members, members, conditional.OpUpdate)
+		if err := s.lockDPPForUpdateInTransaction(ctx, tx, dppID, members, members); err != nil {
+			return err
+		}
 		if _, err := s.submodelRepo.PutSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, element); err != nil {
 			return fmt.Errorf("DPP-UPDELEM-PUTELEMENT put element %s: %w", idShortPath, err)
 		}

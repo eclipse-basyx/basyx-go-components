@@ -166,3 +166,17 @@ func UpdateEmbeddedSubmodelDescriptorTx(
 	}
 	return changed, TouchAdministrationShellDescriptorTx(ctx, tx, aasID, UpdateOperation(changed))
 }
+
+// TouchDescriptorOfDiscoveryEntryTx records a change of the AAS descriptor
+// that shares its specific asset IDs with the asset links of aasID, so a
+// discovery write also changes the descriptor's entity tag.
+func TouchDescriptorOfDiscoveryEntryTx(ctx context.Context, tx *sql.Tx, aasID string) error {
+	descriptorID, err := descriptorIDForAASIDTx(ctx, tx, aasID)
+	if err != nil {
+		return common.NewInternalServerError("DESC-TOUCHDISCOVERYDESCRIPTOR-LOOKUP " + err.Error())
+	}
+	if !descriptorID.Valid {
+		return nil
+	}
+	return TouchAdministrationShellDescriptorTx(ctx, tx, aasID, conditional.OpUpdate)
+}

@@ -353,18 +353,12 @@ func sortedLocked(locked map[ResourceRef]bool) []ResourceRef {
 
 func (p *pendingTx) evaluate(previous map[ResourceRef]int64) error {
 	if p.composite != nil {
-		target := writeTarget{
-			existed:   p.composite.op != OpCreate,
-			validator: compositeValidator(p.composite.ref, p.composite.before, previous),
-		}
+		target := newWriteTarget(p.composite.op != OpCreate, compositeValidator(p.composite.ref, p.composite.before, previous), nil)
 		return evaluateWrite(p.state.conds, target, p.state.requireIfMatch)
 	}
 	ref := *p.state.target
 	revision := previous[ref]
-	target := writeTarget{
-		existed:   p.touches[ref].existedBefore || revision > 0,
-		validator: concurrencyValidator(ref, revision),
-	}
+	target := newWriteTarget(p.touches[ref].existedBefore || revision > 0, concurrencyValidator(ref, revision), p.state.addressedExistence())
 	return evaluateWrite(p.state.conds, target, p.state.requireIfMatch)
 }
 
@@ -488,7 +482,7 @@ func VerifyTarget(ctx context.Context, q Queryer) error {
 	if err != nil {
 		return err
 	}
-	target := writeTarget{existed: true, validator: concurrencyValidator(*state.target, revision)}
+	target := newWriteTarget(true, concurrencyValidator(*state.target, revision), nil)
 	if err = evaluateWrite(state.conds, target, false); err != nil {
 		state.setFailure(err)
 		return err
@@ -509,7 +503,7 @@ func PreCheck(ctx context.Context, q Queryer, ref ResourceRef) error {
 	if err != nil {
 		return err
 	}
-	target := writeTarget{existed: true, validator: concurrencyValidator(ref, revision)}
+	target := newWriteTarget(true, concurrencyValidator(ref, revision), state.addressedExistence())
 	if err = evaluateWrite(state.conds, target, state.requireIfMatch); err != nil {
 		state.setFailure(err)
 		return err

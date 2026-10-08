@@ -29,6 +29,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -187,4 +188,39 @@ func TestDPPIdentifiersArePathDecoded(t *testing.T) {
 	}
 	serve(t, Options{}, http.MethodGet, "/v1/dpps/{dppId}", "/v1/dpps/urn%3Adpp%2F1", nil, handler)
 	require.Equal(t, Ref(KindDPP, "urn:dpp/1"), target)
+}
+
+func TestJSONBasedFileDownloadsAreStreamed(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		stateFromContext(r.Context()).observe(5)
+		w.Header().Set("Content-Type", "application/aasx+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "zip")
+		flushed, ok := w.(*responseWriter)
+		require.True(t, ok)
+		require.Nil(t, flushed.buffer, "file downloads must not be buffered")
+	}
+	response := serve(t, Options{}, http.MethodGet, "/packages/{packageId}", "/packages/p1", nil, handler)
+	require.Equal(t, "zip", response.Body.String())
+	require.Regexp(t, `^"5-[0-9a-f]{8}-[0-9a-f]{16}"$`, response.Header().Get("ETag"))
+}
+
+func TestOversizedJSONRepresentationsAreStreamedWithoutETag(t *testing.T) {
+	chunk := strings.Repeat("x", 1<<20)
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		stateFromContext(r.Context()).observe(5)
+		w.Header().Set("Content-Type", "application/json")
+		for range 17 {
+			_, _ = io.WriteString(w, chunk)
+		}
+	}
+	response := serve(t, Options{}, http.MethodGet, submodelPattern, "/submodels/sm1", nil, handler)
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Empty(t, response.Header().Get("ETag"))
+	require.Equal(t, 17<<20, response.Body.Len())
+
+	tagged := serve(t, Options{}, http.MethodGet, submodelPattern, "/submodels/sm1", http.Header{"If-Match": {`"5-00000000"`}}, handler)
+	require.Equal(t, http.StatusPreconditionFailed, tagged.Code)
+	wildcard := serve(t, Options{}, http.MethodGet, submodelPattern, "/submodels/sm1", http.Header{"If-Match": {"*"}}, handler)
+	require.Equal(t, http.StatusOK, wildcard.Code)
 }

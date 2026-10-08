@@ -35,6 +35,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -508,6 +509,7 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 	if err != nil {
 		return false, err
 	}
+	conditional.SetAddressedExistence(ctx, conditional.Ref(conditional.KindSubmodel, submodelID), elementExists)
 	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return false, err

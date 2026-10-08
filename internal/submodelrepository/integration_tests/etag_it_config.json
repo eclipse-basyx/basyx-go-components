@@ -102,13 +102,22 @@
         }
     },
     {
-        "context": "ETag 10 - Write validator from PATCH is accepted by If-Match",
+        "context": "ETag 10 - GET If-Match compares the complete representation tag",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "headers": {
+            "If-Match": "{{$read2}}"
+        },
+        "expectedStatus": 200
+    },
+    {
+        "context": "ETag 10.1 - GET If-Match with a write validator does not designate the representation",
         "method": "GET",
         "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
         "headers": {
             "If-Match": "{{$patched}}"
         },
-        "expectedStatus": 200
+        "expectedStatus": 412
     },
     {
         "context": "ETag 11 - PUT with the previous ETag returns 412",

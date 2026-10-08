@@ -361,3 +361,16 @@ func TestConditionalWritesToNestedCollectionsUseTheSubmodelRevision(t *testing.T
 	require.Equal(t, http.StatusCreated, added.Status, string(added.Body))
 	require.NotEqual(t, concurrencyPrefix(latest), concurrencyPrefix(added.Header.Get("ETag")))
 }
+
+func TestWildcardsOfElementPutsReferToTheElement(t *testing.T) {
+	submodel := newConditionalSubmodel(t, "element-put")
+	elementURL := submodel.endpoint + "/submodel-elements/Added"
+	element := mustJSON(t, map[string]any{"modelType": "Property", "idShort": "Added", "valueType": "xs:string", "value": "x"})
+
+	require.Equal(t, http.StatusPreconditionFailed, testenv.DoHTTP(t, http.MethodPut, elementURL, element, map[string]string{"If-Match": "*"}).Status,
+		"If-Match: * requires the element, not only its Submodel")
+	created := testenv.DoHTTP(t, http.MethodPut, elementURL, element, map[string]string{"If-None-Match": "*"})
+	require.Equal(t, http.StatusCreated, created.Status, string(created.Body))
+	require.Equal(t, http.StatusPreconditionFailed, testenv.DoHTTP(t, http.MethodPut, elementURL, element, map[string]string{"If-None-Match": "*"}).Status)
+	require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodPut, elementURL, element, map[string]string{"If-Match": "*"}).Status)
+}

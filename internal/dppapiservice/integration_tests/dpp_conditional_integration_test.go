@@ -26,11 +26,17 @@
 package integration_tests
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
@@ -85,4 +91,60 @@ func mustMarshal(t *testing.T, value any) []byte {
 	body, err := json.Marshal(value)
 	require.NoError(t, err)
 	return body
+}
+
+// testDPPUpdateAfterConcurrentDelete forces a conditional element update to
+// run after a concurrent delete of the same DPP, whose revisions are still
+// 0 as for data that existed before revisions were introduced. The update
+// must not recreate parts of the deleted DPP.
+func testDPPUpdateAfterConcurrentDelete(t *testing.T, baseURL string, databasePort int, idSuffix string, now time.Time) {
+	t.Helper()
+	dppID := "https://www.example.org/dpp/race/" + idSuffix
+	created := testenv.DoHTTP(t, http.MethodPost, baseURL+"/v1/dpps", mustMarshal(t, lifecycleDPPDocument(dppID, "https://www.example.org/race/"+idSuffix, now)), nil)
+	require.Equal(t, http.StatusCreated, created.Status, string(created.Body))
+	db := openDPPIntegrationDatabase(t, databasePort)
+	defer func() { _ = db.Close() }()
+	executeDataset(t, db, goqu.Dialect("postgres").Delete("resource_revision").Where(goqu.Or(
+		goqu.C("identifier").Eq(dppID), goqu.C("identifier").Like(dppID+"/%"),
+	)))
+
+	dppURL := baseURL + "/v1/dpps/" + encodedPathParam(dppID)
+	etag := testenv.DoHTTP(t, http.MethodGet, dppURL, nil, nil).Header.Get("ETag")
+	require.True(t, strings.HasPrefix(etag, `"0-`), etag)
+	elementURL := dppURL + "/elements/" + encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "energyClass"))
+
+	barrier, err := db.BeginTx(context.TODO(), nil)
+	require.NoError(t, err)
+	lockShell, args, err := goqu.Dialect("postgres").From("aas").Select("id").Where(goqu.C("aas_id").Eq(dppID)).ForUpdate(exp.Wait).Prepared(true).ToSQL()
+	require.NoError(t, err)
+	var shellID int64
+	require.NoError(t, barrier.QueryRow(lockShell, args...).Scan(&shellID))
+
+	var wg sync.WaitGroup
+	var deleted, updated testenv.HTTPResult
+	wg.Add(2)
+	go func() { defer wg.Done(); deleted = testenv.DoHTTP(t, http.MethodDelete, dppURL, nil, nil) }()
+	testenv.WaitForLockWaiters(t, db, 1)
+	go func() {
+		defer wg.Done()
+		updated = testenv.DoHTTP(t, http.MethodPatch, elementURL, mustMarshal(t, "C"), map[string]string{"If-Match": etag})
+	}()
+	testenv.WaitForLockWaiters(t, db, 2)
+	require.NoError(t, barrier.Commit())
+	wg.Wait()
+
+	require.Equal(t, http.StatusNoContent, deleted.Status, string(deleted.Body))
+	require.Equal(t, http.StatusNotFound, updated.Status, string(updated.Body))
+	assertSubmodelIdentifierExistsInDatabase(t, db, dppID+"/submodels/DppMetadata", false)
+	assertAASIdentifierExists(t, databasePort, dppID, false)
+}
+
+func executeDataset(t *testing.T, db interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}, dataset *goqu.DeleteDataset) {
+	t.Helper()
+	query, args, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+	_, err = db.Exec(query, args...)
+	require.NoError(t, err)
 }
