@@ -44,6 +44,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -235,6 +236,15 @@ func (b *ConceptDescriptionBackend) createConceptDescriptionInTx(ctx context.Con
 		return common.NewInternalServerError("CDREPO-CRTCD-REBACOWNER " + err.Error())
 	}
 
+	return touchConceptDescription(ctx, tx, cd.ID(), conditional.OpCreate)
+}
+
+// touchConceptDescription records that tx changes the revision of a concept
+// description. The new revision is written when the transaction commits.
+func touchConceptDescription(ctx context.Context, tx *sql.Tx, id string, op conditional.Operation) error {
+	if err := conditional.Touch(ctx, tx, conditional.Ref(conditional.KindConceptDescription, id), op); err != nil {
+		return common.NewInternalServerError("CDREPO-TOUCHCD-REVISION " + err.Error())
+	}
 	return nil
 }
 
@@ -274,7 +284,7 @@ func (b *ConceptDescriptionBackend) updateConceptDescriptionInTx(
 		return common.NewInternalServerError("CDREPO-PUTCD-UPDATEMISSING existing concept description disappeared during update")
 	}
 
-	return nil
+	return touchConceptDescription(ctx, tx, id, conditional.OpUpdate)
 }
 
 func (b *ConceptDescriptionBackend) deleteConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
@@ -448,8 +458,8 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 		return err
 	}
 
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("CDREPO-CRTCD-COMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return common.CommitError("CDREPO-CRTCD-COMMIT", err)
 	}
 
 	return nil
@@ -590,6 +600,8 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 		return nil, common.NewInternalServerError("CDREPO-GCDBYID-BUILDMASKS " + selectErr.Error())
 	}
 
+	target := conditional.Ref(conditional.KindConceptDescription, id)
+	selectExpressions = append(selectExpressions, conditional.RevisionExpression(target))
 	dialect := goqu.Dialect("postgres")
 	query := dialect.From("concept_description").
 		Select(selectExpressions...).
@@ -616,7 +628,8 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 	var identifier string
 	var idShortValue sql.NullString
 	var data string
-	scanErr := b.readDB(ctx).QueryRowContext(ctx, sqlQuery, args...).Scan(&identifier, &idShortValue, &data)
+	var revision int64
+	scanErr := b.readDB(ctx).QueryRowContext(ctx, sqlQuery, args...).Scan(&identifier, &idShortValue, &data, &revision)
 	if scanErr != nil {
 		if errors.Is(scanErr, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound("Concept description with the given ID does not exist")
@@ -634,6 +647,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 	if err != nil {
 		return nil, common.NewInternalServerError("CDREPO-GCDBYID-FROMJSON " + err.Error())
 	}
+	conditional.ObserveRevision(ctx, target, revision)
 
 	return cd, nil
 }
@@ -714,8 +728,8 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		return false, err
 	}
 
-	if err = tx.Commit(); err != nil {
-		return false, common.NewInternalServerError("CDREPO-PUTCD-COMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return false, common.CommitError("CDREPO-PUTCD-COMMIT", err)
 	}
 
 	return isUpdate, nil
@@ -757,12 +771,15 @@ func (b *ConceptDescriptionBackend) DeleteConceptDescription(ctx context.Context
 	if !deleted {
 		return common.NewErrNotFound("CDREPO-DELCD-NOTFOUND Concept description with the given ID does not exist")
 	}
+	if err = touchConceptDescription(ctx, tx, id, conditional.OpDelete); err != nil {
+		return err
+	}
 	if err = history.AppendVersionTx(ctx, tx, history.TableConcept, id, history.ChangeDeleted, previousSnapshot, map[string]any{"id": id}, true); err != nil {
 		return err
 	}
 
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("CDREPO-DELCD-COMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return common.CommitError("CDREPO-DELCD-COMMIT", err)
 	}
 
 	return nil

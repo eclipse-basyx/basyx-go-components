@@ -41,6 +41,7 @@ import (
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/registrysync"
@@ -312,6 +313,7 @@ func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byt
 	aas := buildAAS(header, refs)
 
 	err = s.aasRepo.ExecuteInTransaction("DPP-CREATEDPP-STARTTX", "DPP-CREATEDPP-COMMITTX", func(tx *sql.Tx) error {
+		conditional.TouchComposite(ctx, tx, dppRef(aas.ID()), nil, dppMembers(aas), conditional.OpCreate)
 		if err := s.aasRepo.CreateAssetAdministrationShellInTransaction(ctx, tx, aas); err != nil {
 			return fmt.Errorf("DPP-CREATEDPP-CREATEAAS create AAS: %w", err)
 		}
@@ -353,7 +355,7 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	if err != nil {
 		return mapPersistenceError(err, http.StatusBadRequest), nil
 	}
-	err = s.persistDPPUpdate(ctx, resolved.aas.ID(), update)
+	err = s.persistDPPUpdate(ctx, resolved, update)
 	if err != nil {
 		return mapPersistenceError(err, http.StatusConflict), nil
 	}
@@ -435,10 +437,34 @@ func mergeDPPUpdateDocument(
 	return merged, header, err
 }
 
-func (s *DPPRepositoryService) persistDPPUpdate(ctx context.Context, aasID string, update preparedDPPUpdate) error {
+func (s *DPPRepositoryService) persistDPPUpdate(ctx context.Context, resolved resolvedDPP, update preparedDPPUpdate) error {
+	after := resolved.aas
+	if update.aas != nil {
+		after = update.aas
+	}
 	return s.aasRepo.ExecuteInTransaction("DPP-UPDDPP-STARTTX", "DPP-UPDDPP-COMMITTX", func(tx *sql.Tx) error {
-		return s.persistDPPUpdateInTransaction(ctx, tx, aasID, update)
+		if err := s.lockDPPForUpdateInTransaction(ctx, tx, resolved.aas.ID(), dppMembers(resolved.aas), dppMembers(after)); err != nil {
+			return err
+		}
+		return s.persistDPPUpdateInTransaction(ctx, tx, resolved.aas.ID(), update)
 	})
+}
+
+// lockDPPForUpdateInTransaction locks the shell of a DPP resolved before the
+// transaction, so an update never recreates a DPP that was deleted in the
+// meantime, and records the composite write for its entity tag.
+func (s *DPPRepositoryService) lockDPPForUpdateInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	dppID string,
+	before []conditional.ResourceRef,
+	after []conditional.ResourceRef,
+) error {
+	if err := s.aasRepo.LockAssetAdministrationShellForUpdateInTransaction(ctx, tx, dppID); err != nil {
+		return fmt.Errorf("DPP-UPDDPP-LOCKAAS lock AAS %s: %w", dppID, err)
+	}
+	conditional.TouchComposite(ctx, tx, dppRef(dppID), before, after, conditional.OpUpdate)
+	return nil
 }
 
 func (s *DPPRepositoryService) persistDPPUpdateInTransaction(
@@ -747,6 +773,7 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 		if resolveErr != nil {
 			return resolveErr
 		}
+		conditional.TouchComposite(ctx, tx, dppRef(dppID), dppMembers(resolved.aas), nil, conditional.OpDelete)
 		return s.deleteDPPResourcesInTransaction(ctx, tx, resolved)
 	})
 	if err != nil {
@@ -953,10 +980,11 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 	if err := rejectExpandedDataElementShape(elementIDPath, value); err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
-	submodelID, idShortPath, metadata, err := s.resolveElementPath(ctx, dppID, elementIDPath)
+	submodelID, idShortPath, resolved, err := s.resolveElementPath(ctx, dppID, elementIDPath)
 	if err != nil {
 		return mapPersistenceError(err, http.StatusBadRequest), nil
 	}
+	metadata := resolved.metadata
 	existing, err := s.submodelRepo.GetSubmodelElement(ctx, submodelID, idShortPath, true, "deep")
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
@@ -974,7 +1002,11 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 	if err != nil {
 		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
+	members := dppMembers(resolved.aas)
 	err = s.aasRepo.ExecuteInTransaction("DPP-UPDELEM-STARTTX", "DPP-UPDELEM-COMMITTX", func(tx *sql.Tx) error {
+		if err := s.lockDPPForUpdateInTransaction(ctx, tx, dppID, members, members); err != nil {
+			return err
+		}
 		if _, err := s.submodelRepo.PutSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, element); err != nil {
 			return fmt.Errorf("DPP-UPDELEM-PUTELEMENT put element %s: %w", idShortPath, err)
 		}
@@ -1281,7 +1313,53 @@ func (s *DPPRepositoryService) resolveSubmodelsForAAS(
 	dppID string,
 	at time.Time,
 ) (resolvedDPP, error) {
-	aas, err := s.resolveAASByID(ctx, aasID, at)
+	if !at.IsZero() {
+		return s.resolveSubmodelsWith(aasID, dppID, historicalDPPLoader(ctx, s, at))
+	}
+	var resolved resolvedDPP
+	err := s.aasRepo.ExecuteInReadTransaction(ctx, "DPP-RESOLVE-STARTTX", "DPP-RESOLVE-COMMITTX", func(tx *sql.Tx) error {
+		var resolveErr error
+		resolved, resolveErr = s.resolveSubmodelsWith(aasID, dppID, currentDPPLoader(ctx, s, tx))
+		if resolveErr != nil {
+			return resolveErr
+		}
+		return conditional.ObserveComposite(ctx, tx, dppRef(dppID), dppMembers(resolved.aas))
+	})
+	return resolved, err
+}
+
+// dppLoader loads the shell and the Submodels of a DPP.
+type dppLoader struct {
+	aas      func(aasID string) (types.IAssetAdministrationShell, error)
+	submodel func(submodelID string) (types.ISubmodel, error)
+}
+
+// currentDPPLoader reads the current DPP in one snapshot, so the DPP and
+// its entity tag are consistent.
+func currentDPPLoader(ctx context.Context, s *DPPRepositoryService, tx *sql.Tx) dppLoader {
+	return dppLoader{
+		aas: func(aasID string) (types.IAssetAdministrationShell, error) {
+			return s.aasRepo.GetAssetAdministrationShellByIDInTransaction(ctx, tx, aasID)
+		},
+		submodel: func(submodelID string) (types.ISubmodel, error) {
+			return s.submodelRepo.GetSubmodelByIDInTransaction(ctx, tx, submodelID, "deep", false, true)
+		},
+	}
+}
+
+func historicalDPPLoader(ctx context.Context, s *DPPRepositoryService, at time.Time) dppLoader {
+	return dppLoader{
+		aas: func(aasID string) (types.IAssetAdministrationShell, error) {
+			return s.resolveAASByID(ctx, aasID, at)
+		},
+		submodel: func(submodelID string) (types.ISubmodel, error) {
+			return s.submodelRepo.GetSubmodelByIDAndDate(ctx, submodelID, at)
+		},
+	}
+}
+
+func (s *DPPRepositoryService) resolveSubmodelsWith(aasID string, dppID string, load dppLoader) (resolvedDPP, error) {
+	aas, err := load.aas(aasID)
 	if err != nil {
 		return resolvedDPP{}, fmt.Errorf("DPP-RESOLVE-GETAAS get AAS %s: %w", aasID, err)
 	}
@@ -1295,7 +1373,7 @@ func (s *DPPRepositoryService) resolveSubmodelsForAAS(
 		if submodelID == "" {
 			continue
 		}
-		submodel, err := s.loadResolvedSubmodel(ctx, submodelID, at)
+		submodel, err := load.submodel(submodelID)
 		if err != nil {
 			return resolvedDPP{}, fmt.Errorf("DPP-RESOLVE-GETSUBMODEL get submodel %s: %w", submodelID, err)
 		}
@@ -1308,11 +1386,25 @@ func (s *DPPRepositoryService) resolveSubmodelsForAAS(
 	return resolvedDPP{metadata: metadata, submodels: submodels, aas: aas}, nil
 }
 
-func (s *DPPRepositoryService) loadResolvedSubmodel(ctx context.Context, submodelID string, at time.Time) (types.ISubmodel, error) {
-	if at.IsZero() {
-		return s.submodelRepo.GetSubmodelByID(ctx, submodelID, "deep", false, true)
+// dppRef identifies a DPP as a composite resource.
+func dppRef(dppID string) conditional.ResourceRef {
+	return conditional.Ref(conditional.KindDPP, dppID)
+}
+
+// dppMembers returns the resources whose revisions make up the revision of a
+// DPP: its shell, which changes with the Submodel references, and all
+// referenced Submodels.
+func dppMembers(aas types.IAssetAdministrationShell) []conditional.ResourceRef {
+	if aas == nil {
+		return nil
 	}
-	return s.submodelRepo.GetSubmodelByIDAndDate(ctx, submodelID, at)
+	members := []conditional.ResourceRef{conditional.Ref(conditional.KindAAS, aas.ID())}
+	for _, ref := range aas.Submodels() {
+		if submodelID := referenceLastValue(ref); submodelID != "" {
+			members = append(members, conditional.Ref(conditional.KindSubmodel, submodelID))
+		}
+	}
+	return members
 }
 
 func selectDPPMetadata(submodels []types.ISubmodel, dppID string) types.ISubmodel {
@@ -1511,16 +1603,16 @@ func (s *DPPRepositoryService) buildSubmodels(header dppHeader, sections map[str
 	return submodels, refs, nil
 }
 
-func (s *DPPRepositoryService) resolveElementPath(ctx context.Context, dppID string, elementIDPath string) (string, string, types.ISubmodel, error) {
+func (s *DPPRepositoryService) resolveElementPath(ctx context.Context, dppID string, elementIDPath string) (string, string, resolvedDPP, error) {
 	if err := validateDPPElementPath(elementIDPath); err != nil {
-		return "", "", nil, err
+		return "", "", resolvedDPP{}, err
 	}
 	resolved, err := s.resolveSubmodels(ctx, dppID, time.Time{})
 	if err != nil {
-		return "", "", nil, err
+		return "", "", resolvedDPP{}, err
 	}
 	submodelID, idShortPath, err := resolveDPPElementPathParts(resolved, elementIDPath)
-	return submodelID, idShortPath, resolved.metadata, err
+	return submodelID, idShortPath, resolved, err
 }
 
 func resolveDPPElementPath(resolved resolvedDPP, elementIDPath string) (string, string, error) {

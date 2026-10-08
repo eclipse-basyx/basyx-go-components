@@ -134,6 +134,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
+	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "AASRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
@@ -156,13 +157,13 @@ func runServer(ctx context.Context, configPath string) error {
 	// Register all registry routes (protected)
 	for operation, rt := range smCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	// Register all description routes (protected)
 	for operation, rt := range descCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 	versioningGuard.Cover(http.MethodPost, "/bulk/shell-descriptors")
 	versioningGuard.Cover(http.MethodPut, "/bulk/shell-descriptors")

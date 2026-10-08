@@ -35,6 +35,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 )
 
@@ -139,7 +140,20 @@ func (s *SubmodelDatabase) buildPersistedSubmodelReconciliationPlanTx(
 	if err != nil {
 		return submodelReconciliationPlan{}, err
 	}
-	return s.buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, persistedPositions)
+	plan, err := s.buildSubmodelReconciliationPlan(oldSubmodel, newSubmodel, persistedPositions)
+	if err != nil {
+		return submodelReconciliationPlan{}, err
+	}
+	return plan, touchSubmodel(ctx, tx, newSubmodel.ID(), reconciliationOperation(plan))
+}
+
+// reconciliationOperation returns the revision operation of a reconciled
+// write of an existing Submodel.
+func reconciliationOperation(plan submodelReconciliationPlan) conditional.Operation {
+	if plan.hasLiveMutation() {
+		return conditional.OpUpdate
+	}
+	return conditional.OpNoOp
 }
 
 func (s *SubmodelDatabase) buildSubmodelReconciliationPlan(

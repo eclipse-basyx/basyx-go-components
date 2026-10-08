@@ -38,6 +38,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -70,6 +71,9 @@ type JSONSuiteStep struct {
 	Action                    string            `json:"action,omitempty"`
 	Headers                   map[string]string `json:"headers,omitempty"`
 	Token                     *TokenCredentials `json:"token,omitempty"`
+	// CaptureResponseHeaders stores response headers in named variables,
+	// which later steps reference as {{$name}} in endpoints and headers.
+	CaptureResponseHeaders map[string]string `json:"captureResponseHeaders,omitempty"`
 }
 
 type JSONStepResult struct {
@@ -104,8 +108,9 @@ type JSONSuiteOptions struct {
 }
 
 type JSONSuiteRunner struct {
-	options JSONSuiteOptions
-	client  *http.Client
+	options  JSONSuiteOptions
+	client   *http.Client
+	captured map[string]string
 }
 
 type CheckDBIsEmptyOptions struct {
@@ -244,6 +249,7 @@ func defaultCheckDBIsEmptyExcludedTables(extraTables []string) map[string]struct
 		"descriptor_history_payload",
 		"submodel_descriptor_history",
 		"submodel_descriptor_history_payload",
+		"resource_revision",
 	} {
 		excluded[table] = struct{}{}
 	}
@@ -431,13 +437,14 @@ func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 	}
 
 	runner := &JSONSuiteRunner{
-		options: normalized,
-		client:  &http.Client{Timeout: normalized.RequestTimeout},
+		options:  normalized,
+		client:   &http.Client{Timeout: normalized.RequestTimeout},
+		captured: map[string]string{},
 	}
 
 	for idx, rawStep := range steps {
 		stepNumber := idx + 1
-		step := rawStep
+		step := runner.resolveCaptured(rawStep)
 		name := normalized.StepName(step, stepNumber)
 
 		t.Run(name, func(t *testing.T) {
@@ -456,6 +463,7 @@ func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 
 			response, runErr := runner.RunStep(step, stepNumber)
 			require.NoError(t, runErr, "Request failed")
+			runner.capture(step, response.Headers)
 
 			if len(step.ExpectedResponseHeaders) > 0 {
 				runner.compareResponseHeaders(t, step, stepNumber, response.Headers)
@@ -541,11 +549,60 @@ func (r *JSONSuiteRunner) compareResponseHeaders(t *testing.T, step JSONSuiteSte
 
 	for key, expectedValue := range step.ExpectedResponseHeaders {
 		actualValue := headers.Get(key)
-		if actualValue != expectedValue {
+		matches, err := headerValueMatches(expectedValue, actualValue)
+		require.NoErrorf(t, err, "Invalid expected header %s", key)
+		if !matches {
 			r.writeHeaderMismatchLog(stepNumber, key, expectedValue, actualValue)
 		}
 
-		require.Equalf(t, expectedValue, actualValue, "Response header mismatch for %s", key)
+		require.Truef(t, matches, "Response header mismatch for %s: expected %q, got %q", key, expectedValue, actualValue)
+	}
+}
+
+// headerValueMatches compares a response header with an expectation. The
+// prefix "re:" expects a regular expression match and "!" expects any other
+// value.
+func headerValueMatches(expected string, actual string) (bool, error) {
+	if pattern, ok := strings.CutPrefix(expected, "re:"); ok {
+		return regexp.MatchString(pattern, actual)
+	}
+	if unexpected, ok := strings.CutPrefix(expected, "!"); ok {
+		return actual != unexpected, nil
+	}
+	return actual == expected, nil
+}
+
+// resolveCaptured replaces {{$name}} references to captured response headers.
+func (r *JSONSuiteRunner) resolveCaptured(step JSONSuiteStep) JSONSuiteStep {
+	if len(r.captured) == 0 {
+		return step
+	}
+	resolve := func(value string) string {
+		for name, captured := range r.captured {
+			value = strings.ReplaceAll(value, "{{$"+name+"}}", captured)
+		}
+		return value
+	}
+	step.Endpoint = resolve(step.Endpoint)
+	step.Headers = resolveHeaderValues(step.Headers, resolve)
+	step.ExpectedResponseHeaders = resolveHeaderValues(step.ExpectedResponseHeaders, resolve)
+	return step
+}
+
+func resolveHeaderValues(headers map[string]string, resolve func(string) string) map[string]string {
+	if headers == nil {
+		return nil
+	}
+	resolved := make(map[string]string, len(headers))
+	for key, value := range headers {
+		resolved[key] = resolve(value)
+	}
+	return resolved
+}
+
+func (r *JSONSuiteRunner) capture(step JSONSuiteStep, headers http.Header) {
+	for header, name := range step.CaptureResponseHeaders {
+		r.captured[name] = headers.Get(header)
 	}
 }
 

@@ -45,6 +45,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeedsetup"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
@@ -248,6 +249,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 	apiRouter := chi.NewRouter()
+	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "AASEnvironmentService")
 
 	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice")
@@ -266,25 +268,25 @@ func runServer(ctx context.Context, configPath string) error {
 		common.AddVerificationEndpoint(apiRouter, cfg, environmentStager)
 	}
 
-	mountRoutes(versioningGuard, apiRouter, aasRegistryCtrl.Routes(), func(rt aasregistryopenapi.Route) (string, string, http.HandlerFunc) {
+	mountRoutes(versioningGuard, conditionalGuard, apiRouter, aasRegistryCtrl.Routes(), func(rt aasregistryopenapi.Route) (string, string, http.HandlerFunc) {
 		return rt.Method, rt.Pattern, rt.HandlerFunc
 	})
-	mountRoutes(versioningGuard, apiRouter, smRegistryCtrl.Routes(), func(rt smregistryopenapi.Route) (string, string, http.HandlerFunc) {
+	mountRoutes(versioningGuard, conditionalGuard, apiRouter, smRegistryCtrl.Routes(), func(rt smregistryopenapi.Route) (string, string, http.HandlerFunc) {
 		return rt.Method, rt.Pattern, rt.HandlerFunc
 	})
-	mountRoutes(versioningGuard, apiRouter, aasRepositoryCtrl.Routes(), func(rt aasrepositoryopenapi.Route) (string, string, http.HandlerFunc) {
+	mountRoutes(versioningGuard, conditionalGuard, apiRouter, aasRepositoryCtrl.Routes(), func(rt aasrepositoryopenapi.Route) (string, string, http.HandlerFunc) {
 		return rt.Method, rt.Pattern, rt.HandlerFunc
 	})
-	mountRoutes(versioningGuard, apiRouter, smRepositoryCtrl.Routes(), func(rt submodelrepositoryopenapi.Route) (string, string, http.HandlerFunc) {
+	mountRoutes(versioningGuard, conditionalGuard, apiRouter, smRepositoryCtrl.Routes(), func(rt submodelrepositoryopenapi.Route) (string, string, http.HandlerFunc) {
 		return rt.Method, rt.Pattern, rt.HandlerFunc
 	})
-	mountRoutes(versioningGuard, apiRouter, cdrCtrl.Routes(), func(rt commonmodel.Route) (string, string, http.HandlerFunc) {
+	mountRoutes(versioningGuard, conditionalGuard, apiRouter, cdrCtrl.Routes(), func(rt commonmodel.Route) (string, string, http.HandlerFunc) {
 		return rt.Method, rt.Pattern, rt.HandlerFunc
 	})
-	mountRoutes(versioningGuard, apiRouter, discoveryCtrl.Routes(), func(rt discoveryopenapi.Route) (string, string, http.HandlerFunc) {
+	mountRoutes(versioningGuard, conditionalGuard, apiRouter, discoveryCtrl.Routes(), func(rt discoveryopenapi.Route) (string, string, http.HandlerFunc) {
 		return rt.Method, rt.Pattern, rt.HandlerFunc
 	})
-	mountRoutes(versioningGuard, apiRouter, descriptionCtrl.Routes(), func(rt discoveryopenapi.Route) (string, string, http.HandlerFunc) {
+	mountRoutes(versioningGuard, conditionalGuard, apiRouter, descriptionCtrl.Routes(), func(rt discoveryopenapi.Route) (string, string, http.HandlerFunc) {
 		return rt.Method, rt.Pattern, rt.HandlerFunc
 	})
 	versioningGuard.Cover(http.MethodPost, "/bulk/shell-descriptors")
@@ -321,14 +323,14 @@ func runServer(ctx context.Context, configPath string) error {
 }
 
 // mountRoutes registers every route in routes on apiRouter, classifying each
-// with versioningGuard first. extract adapts the generated per-API Route
+// with versioningGuard first and adding conditional request handling. extract adapts the generated per-API Route
 // type (distinct per OpenAPI package, but structurally identical) to its
 // method/pattern/handler fields.
-func mountRoutes[T any](versioningGuard *history.MutationCoverageGuard, apiRouter chi.Router, routes map[string]T, extract func(T) (method, pattern string, handler http.HandlerFunc)) {
+func mountRoutes[T any](versioningGuard *history.MutationCoverageGuard, conditionalGuard *conditional.Guard, apiRouter chi.Router, routes map[string]T, extract func(T) (method, pattern string, handler http.HandlerFunc)) {
 	for operation, rt := range routes {
 		method, pattern, handler := extract(rt)
 		versioningGuard.ClassifyRoute(operation, method, pattern)
-		apiRouter.Method(method, pattern, handler)
+		apiRouter.Method(method, pattern, conditionalGuard.Wrap(pattern, handler))
 	}
 }
 

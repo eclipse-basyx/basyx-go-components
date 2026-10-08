@@ -35,6 +35,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -193,36 +194,70 @@ func UpdateAdministrationShellDescriptorTx(
 		return false, err
 	}
 	if !plan.changed() {
-		return false, nil
+		return false, TouchAdministrationShellDescriptorTx(ctx, tx, next.Id, conditional.OpNoOp)
 	}
-	if plan.root {
-		if err = updateAASDescriptorRowTx(ctx, tx, descriptorID, next); err != nil {
-			return false, common.NewInternalServerError("AASDESC-UPDATE-ROOT " + err.Error())
-		}
-	} else if err = touchDescriptorRowTx(ctx, tx, common.TblAASDescriptor, descriptorID); err != nil {
-		return false, common.NewInternalServerError("AASDESC-UPDATE-TOUCHROOT " + err.Error())
+	if err = TouchAdministrationShellDescriptorTx(ctx, tx, next.Id, conditional.OpUpdate); err != nil {
+		return false, err
+	}
+	if err = applyAdministrationShellDescriptorUpdatePlanTx(ctx, tx, descriptorID, previous, next, plan); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// applyAdministrationShellDescriptorUpdatePlanTx writes the parts of an AAS
+// descriptor that the update plan marks as changed.
+func applyAdministrationShellDescriptorUpdatePlanTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	descriptorID int64,
+	previous model.AssetAdministrationShellDescriptor,
+	next model.AssetAdministrationShellDescriptor,
+	plan administrationShellDescriptorUpdatePlan,
+) error {
+	if err := updateAdministrationShellDescriptorRootTx(ctx, tx, descriptorID, next, plan.root); err != nil {
+		return err
 	}
 	if plan.payload.changed() {
-		if err = updateAdministrationShellDescriptorPayloadTx(ctx, tx, descriptorID, next, plan.payload); err != nil {
-			return false, err
+		if err := updateAdministrationShellDescriptorPayloadTx(ctx, tx, descriptorID, next, plan.payload); err != nil {
+			return err
 		}
 	}
 	if plan.endpoints {
-		if err = replaceDescriptorEndpointsTx(ctx, tx, descriptorID, next.Endpoints); err != nil {
-			return false, err
+		if err := replaceDescriptorEndpointsTx(ctx, tx, descriptorID, next.Endpoints); err != nil {
+			return err
 		}
 	}
 	if plan.specificAssetIDs {
-		if err = replaceAdministrationShellDescriptorAssetIDsTx(ctx, tx, descriptorID, next); err != nil {
-			return false, err
+		if err := replaceAdministrationShellDescriptorAssetIDsTx(ctx, tx, descriptorID, next); err != nil {
+			return err
 		}
 	}
 	if plan.submodelDescriptors {
-		if err = reconcileEmbeddedSubmodelDescriptorsTx(ctx, tx, descriptorID, previous.SubmodelDescriptors, next.SubmodelDescriptors); err != nil {
-			return false, err
-		}
+		return reconcileEmbeddedSubmodelDescriptorsTx(ctx, tx, descriptorID, previous.SubmodelDescriptors, next.SubmodelDescriptors)
 	}
-	return true, nil
+	return nil
+}
+
+// updateAdministrationShellDescriptorRootTx rewrites the root row of a
+// changed AAS descriptor, or only marks it as updated.
+func updateAdministrationShellDescriptorRootTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	descriptorID int64,
+	next model.AssetAdministrationShellDescriptor,
+	rootChanged bool,
+) error {
+	if !rootChanged {
+		if err := touchDescriptorRowTx(ctx, tx, common.TblAASDescriptor, descriptorID); err != nil {
+			return common.NewInternalServerError("AASDESC-UPDATE-TOUCHROOT " + err.Error())
+		}
+		return nil
+	}
+	if err := updateAASDescriptorRowTx(ctx, tx, descriptorID, next); err != nil {
+		return common.NewInternalServerError("AASDESC-UPDATE-ROOT " + err.Error())
+	}
+	return nil
 }
 
 // UpdateSubmodelDescriptorTx applies full PUT semantics while preserving

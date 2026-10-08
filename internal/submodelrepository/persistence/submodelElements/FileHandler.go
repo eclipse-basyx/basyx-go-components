@@ -44,6 +44,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
@@ -352,7 +353,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReader(submodelID string, idS
 	if err := p.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, file, fileName); err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := common.CommitTransaction(tx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	committed = true
@@ -435,6 +436,11 @@ func (p PostgreSQLFileHandler) UploadManagedFileAttachmentReaderTx(
 	dialect := goqu.Dialect("postgres")
 	metadata, err := readFileElementUploadMetadata(tx, dialect, submodelID, idShortPath)
 	if err != nil {
+		return binarycontent.Reference{}, "", err
+	}
+	if err = conditional.RecordAddressedExistence(ctx, conditional.Ref(conditional.KindSubmodel, submodelID), func() (bool, error) {
+		return binarycontent.ContentExistsTx(ctx, tx, binarycontent.TableFileReference, "file_element_id", metadata.elementID)
+	}); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
 	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, declaredContentTypes, metadata)
@@ -741,8 +747,8 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 	if err != nil {
 		return nil, "", "", err
 	}
-	if err = tx.Commit(); err != nil {
-		return nil, "", "", common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-COMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return nil, "", "", common.CommitError("SMREPO-DOWNLOADATTACHMENT-COMMIT", err)
 	}
 	committed = true
 	return fileContent, metadata.contentType, resolveDownloadFileName(metadata.fileName, metadata.fileValue, idShortPath), nil
@@ -848,7 +854,7 @@ func readLegacyFileOIDWithoutContext(tx *sql.Tx, dialect goqu.DialectWrapper, el
 
 // DownloadManagedFileAttachment reads canonical content through its owning File SME.
 func (p PostgreSQLFileHandler) DownloadManagedFileAttachment(ctx context.Context, submodelID string, idShortPath string) ([]byte, string, string, error) {
-	tx, err := p.db.BeginTx(ctx, nil)
+	tx, err := common.BeginReadTransaction(ctx, p.db)
 	if err != nil {
 		return nil, "", "", common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-STARTTX " + err.Error())
 	}
@@ -869,8 +875,8 @@ func (p PostgreSQLFileHandler) DownloadManagedFileAttachment(ctx context.Context
 		if readErr != nil {
 			return nil, "", "", readErr
 		}
-		if err = tx.Commit(); err != nil {
-			return nil, "", "", common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-COMMIT " + err.Error())
+		if err = common.CommitTransaction(tx); err != nil {
+			return nil, "", "", common.CommitError("SMREPO-DOWNLOADATTACHMENT-COMMIT", err)
 		}
 		committed = true
 		return content, metadata.contentType, metadata.fileName, nil
@@ -882,8 +888,8 @@ func (p PostgreSQLFileHandler) DownloadManagedFileAttachment(ctx context.Context
 	if err != nil {
 		return nil, "", "", err
 	}
-	if err = tx.Commit(); err != nil {
-		return nil, "", "", common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-COMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return nil, "", "", common.CommitError("SMREPO-DOWNLOADATTACHMENT-COMMIT", err)
 	}
 	committed = true
 	return content, metadata.contentType, metadata.fileName, nil
@@ -921,8 +927,8 @@ func (p PostgreSQLFileHandler) StreamManagedFileAttachment(
 	if err = p.StreamManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath, consume); err != nil {
 		return err
 	}
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-COMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return common.CommitError("SMREPO-STREAMATTACHMENT-COMMIT", err)
 	}
 	committed = true
 	return nil
@@ -1101,7 +1107,7 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 	if err := p.DeleteFileAttachmentTx(tx, submodelID, idShortPath); err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := common.CommitTransaction(tx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	committed = true

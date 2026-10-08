@@ -45,6 +45,7 @@ import (
 
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -586,12 +587,15 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		), nil
 	}
 
-	if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(technicalCtx, decodedAAS, decodedSMD); chkErr != nil {
+	exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(technicalCtx, decodedAAS, decodedSMD)
+	if chkErr != nil {
 		slog.ErrorContext(ctx, "Error in PutSubmodelDescriptorByIdThroughSuperpath: existence check failed", "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-CHECKEXISTS", "error", chkErr, "component", componentName, "decoded_aas", decodedAAS)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Precheck",
 		), chkErr
-	} else if !exists {
+	}
+	conditional.SetAddressedExistence(ctx, conditional.Ref(conditional.KindAASDescriptor, decodedAAS), exists)
+	if !exists {
 		if shouldEnforceFormula {
 			ctx = auth.SelectPutFormulaByExistence(ctx, false)
 		}

@@ -132,6 +132,7 @@ func runServer(ctx context.Context, configPath string) error {
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	apiRouter := chi.NewRouter()
+	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "AASXFileServerService")
 
 	abacRepo, rebacRuntime, err := rebac.SetupSecurity(
@@ -152,16 +153,16 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 
 	for _, rt := range aasxCtrl.Routes() {
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 	for _, controller := range asyncControllers {
 		for _, rt := range controller.Routes() {
-			apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+			apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 		}
 	}
 
 	for _, rt := range descCtrl.Routes() {
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	r.Mount(base, apiRouter)

@@ -35,6 +35,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -232,7 +233,7 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 		return err
 	}
 	defer cleanup(&err)
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -263,7 +264,7 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 		return err
 	}
 
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, parentPath string, submodelElement types.ISubmodelElement) (string, error) {
@@ -426,7 +427,7 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 	}
 	defer cleanup(&err)
 
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -452,7 +453,7 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 		return err
 	}
 
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 // PutSubmodelElement creates or replaces a submodel element at the requested path in a single transaction.
@@ -474,7 +475,7 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 		return false, err
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err = common.CommitTransaction(tx); err != nil {
 		return false, err
 	}
 
@@ -508,7 +509,8 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 	if err != nil {
 		return false, err
 	}
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	conditional.SetAddressedExistence(ctx, conditional.Ref(conditional.KindSubmodel, submodelID), elementExists)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return false, err
 	}
@@ -701,7 +703,7 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPath(ctx context.Context, subm
 	if err != nil {
 		return err
 	}
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -722,7 +724,7 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPath(ctx context.Context, subm
 		return err
 	}
 
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 func (s *SubmodelDatabase) ensureSubmodelElementCanBeDeleted(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) error {
@@ -757,7 +759,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 			return err
 		}
 	}
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -780,7 +782,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		return err
 	}
 
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 func (s *SubmodelDatabase) ensureSubmodelElementCanBeUpdated(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string) (context.Context, error) {
@@ -832,7 +834,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, s
 			return err
 		}
 	}
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -851,7 +853,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, s
 	}); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 func (s *SubmodelDatabase) updateSubmodelElementValueOnly(tx *sql.Tx, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
@@ -889,7 +891,7 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 			return err
 		}
 	}
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -913,7 +915,7 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, mutations...); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateDoesNotExist(

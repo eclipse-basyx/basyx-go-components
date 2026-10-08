@@ -58,7 +58,7 @@ func WithTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) (err err
 		_ = tx.Rollback()
 		return err
 	}
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 // ExecuteCreateBatchTx executes a descriptor create batch in tx and records
@@ -78,5 +78,5 @@ func ExecuteCreateBatchTx(
 			return err
 		}
 	}
-	return nil
+	return touchCreatedResourcesTx(ctx, tx, resource, identifiers...)
 }

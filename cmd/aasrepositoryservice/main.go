@@ -200,6 +200,7 @@ func runServer(ctx context.Context, configPath string) error {
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	apiRouter := chi.NewRouter()
+	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "AASRepositoryService")
 
 	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "aasrepositoryservice")
@@ -220,17 +221,17 @@ func runServer(ctx context.Context, configPath string) error {
 
 	for operation, rt := range aasCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	for operation, rt := range serializationCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	for operation, rt := range descCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	eventFeedModule.RegisterRoutes(apiRouter)

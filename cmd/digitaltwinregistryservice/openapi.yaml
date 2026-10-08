@@ -56,6 +56,25 @@ servers:
 
 components:
   parameters:
+    ConditionalIfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags of the resource. The request fails with 412 when no tag
+        designates the current revision. `*` matches any existing resource.
+      schema:
+        type: string
+    ConditionalIfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags. GET answers 304 when the current representation has one of
+        them. `*` on PUT only creates the resource and fails with 412 when it
+        exists.
+      schema:
+        type: string
     aasIdentifier:
       name: aasIdentifier
       in: path
@@ -91,6 +110,23 @@ components:
         type: string
         format: date-time
 
+  headers:
+    ConditionalETag:
+      description: >-
+        Strong entity tag of the resource revision and, on reads, of the
+        returned representation.
+      schema:
+        type: string
+  responses:
+    ConditionalNotModified:
+      description: The current representation matches If-None-Match.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ConditionalETag'
+    ConditionalPreconditionFailed:
+      description: If-Match or If-None-Match does not hold. Nothing was changed.
+    ConditionalPreconditionRequired:
+      description: If-Match is required to change this resource.
 paths:
   /description:
     get:
@@ -335,11 +371,16 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/GetAssetAdministrationShellDescriptorById/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
       responses:
         '200':
           description: Requested Asset Administration Shell Descriptor
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -352,6 +393,10 @@ paths:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         '500':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     put:
@@ -368,6 +413,8 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/PutAssetAdministrationShellDescriptorById/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
       requestBody:
@@ -388,6 +435,10 @@ paths:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         '409':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/conflict'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     delete:
@@ -398,6 +449,7 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/DeleteAssetAdministrationShellDescriptorById/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
       responses:
@@ -409,6 +461,10 @@ paths:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
         '404':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
@@ -421,6 +477,8 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/GetAllSubmodelDescriptors/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit'
@@ -428,6 +486,9 @@ paths:
       responses:
         '200':
           description: Requested Submodel Descriptors
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -439,6 +500,10 @@ paths:
                         type: array
                         items:
                           $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor'
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     post:
@@ -449,6 +514,7 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/PostSubmodelDescriptor/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
       requestBody:
@@ -462,6 +528,8 @@ paths:
         '201':
           description: Submodel Descriptor created successfully
           headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
             Location:
               description: URL of the newly created resource
               schema:
@@ -470,6 +538,10 @@ paths:
             application/json:
               schema:
                 $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
@@ -482,16 +554,25 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/GetSubmodelDescriptorById/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
         - $ref: '#/components/parameters/submodelIdentifier'
       responses:
         '200':
           description: Requested Submodel Descriptor
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
                 $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor'
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     put:
@@ -505,6 +586,8 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/PutSubmodelDescriptorById/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
         - $ref: '#/components/parameters/submodelIdentifier'
@@ -518,6 +601,10 @@ paths:
       responses:
         '204':
           description: Submodel Descriptor updated successfully
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     delete:
@@ -528,12 +615,17 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/DeleteSubmodelDescriptorById/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
         - $ref: '#/components/parameters/submodelIdentifier'
       responses:
         '204':
           description: Submodel Descriptor deleted successfully
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
@@ -681,17 +773,26 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/GetAllAssetLinksById/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
       responses:
         '200':
           description: Requested Asset Links
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     post:
@@ -708,6 +809,7 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/PostAllAssetLinksById/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
       requestBody:
@@ -721,6 +823,9 @@ paths:
         required: true
       responses:
         '201':
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           description: Asset Links created successfully
           content:
             application/json:
@@ -730,6 +835,10 @@ paths:
                   $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
         '404':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     delete:
@@ -740,10 +849,15 @@ paths:
       x-semanticIds:
         - https://admin-shell.io/aas/API/DeleteAllAssetLinksById/3/2
       parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
       responses:
         '204':
           description: Asset Links deleted successfully
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'

@@ -360,7 +360,7 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 		if err != nil {
 			return err
 		}
-		changed, err := descriptors.UpdateSubmodelDescriptorTx(ctx, tx, descriptorID, previous, submodel, 0, false)
+		changed, err := descriptors.UpdateGlobalSubmodelDescriptorTx(ctx, tx, descriptorID, previous, submodel)
 		if err != nil {
 			return err
 		}
@@ -416,7 +416,7 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 		if getErr != nil {
 			return getErr
 		}
-		changed, updateErr := descriptors.UpdateSubmodelDescriptorTx(ctx, tx, descriptorID, previous, submodel, 0, false)
+		changed, updateErr := descriptors.UpdateGlobalSubmodelDescriptorTx(ctx, tx, descriptorID, previous, submodel)
 		if updateErr != nil {
 			return updateErr
 		}

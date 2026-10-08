@@ -35,6 +35,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
@@ -239,7 +240,9 @@ func ReadSpecificAssetIDsByAASRef(
 }
 
 // ReplaceSpecificAssetIDsByAASIdentifier upserts the AAS identifier and replaces
-// all linked SpecificAssetIDs.
+// all linked SpecificAssetIDs. When some of the replaced links also belong to
+// the shell descriptor, the descriptor changes too. All statements after the
+// upsert run in one round trip.
 func ReplaceSpecificAssetIDsByAASIdentifier(
 	ctx context.Context,
 	db *sql.DB,
@@ -251,30 +254,30 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 		if err != nil {
 			return err
 		}
-
-		deleteQuery, deleteArgs, err := goqu.Dialect(common.Dialect).
-			Delete(common.TblSpecificAssetID).
-			Where(goqu.C(common.ColAASRef).Eq(aasRef)).
-			Prepared(true).
-			ToSQL()
-		if err != nil {
+		d := goqu.Dialect(common.Dialect)
+		ownedLinks := d.From(common.TblSpecificAssetID).Select(goqu.L("1")).Where(
+			goqu.C(common.ColAASRef).Eq(aasRef), goqu.C(common.ColDescriptorID).IsNotNull(),
+		)
+		batch := &common.PostgreSQLBatch{}
+		if err = batch.AppendDataset(conditional.RevisionUpsertIfDataset(
+			conditional.Ref(conditional.KindAASDescriptor, aasID), goqu.L("EXISTS ?", ownedLinks),
+		)); err != nil {
+			return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-BUILDREVISION " + err.Error())
+		}
+		if err = batch.AppendDataset(d.Delete(common.TblSpecificAssetID).Where(goqu.C(common.ColAASRef).Eq(aasRef))); err != nil {
 			return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-BUILDDELETE " + err.Error())
 		}
-		if _, err = tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
-			return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-EXECDELETE " + err.Error())
+		if err = batch.AppendSpecificAssetIDs(nil, aasRef, specificAssetIDs); err != nil {
+			return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-BUILDINSERT " + err.Error())
 		}
-		return common.InsertSpecificAssetIDs(
-			tx,
-			sql.NullInt64{},
-			sql.NullInt64{},
-			sql.NullInt64{Int64: aasRef, Valid: true},
-			specificAssetIDs,
-		)
+		return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
 	})
 }
 
 // AddSpecificAssetIDsByAASIdentifier upserts aas_identifier and adds only
-// missing name/value specific asset ids for the linked aasRef.
+// missing name/value specific asset ids for the linked aasRef. Links are also
+// attached to an existing shell descriptor, which then changes too. All
+// statements after the upsert run in one round trip.
 func AddSpecificAssetIDsByAASIdentifier(
 	ctx context.Context,
 	db *sql.DB,
@@ -291,69 +294,34 @@ func AddSpecificAssetIDsByAASIdentifier(
 			return err
 		}
 
-		descriptorID := sql.NullInt64{}
-		if !discoveryOnlySpecificAssetIDsFromContext(ctx) {
-			descriptorID, err = descriptorIDForAASIDTx(ctx, tx, aasID)
-			if err != nil {
-				return err
-			}
-		}
-
-		positionStart, err := nextSpecificAssetIDPositionByAASRefTx(ctx, tx, aasRef)
+		batch := &common.PostgreSQLBatch{}
+		descriptorID, err := appendLinkedDescriptorRevision(ctx, batch, aasID)
 		if err != nil {
 			return err
 		}
-
-		return common.InsertSpecificAssetIDsWithPositionStart(
-			tx,
-			descriptorID,
-			sql.NullInt64{},
-			sql.NullInt64{Int64: aasRef, Valid: true},
-			specificAssetIDs,
-			positionStart,
-		)
+		if err = batch.AppendDiscoverySpecificAssetIDs(descriptorID, aasRef, specificAssetIDs); err != nil {
+			return common.NewInternalServerError("DISC-ADDSPECASSETIDS-BUILDINSERT " + err.Error())
+		}
+		return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
 	})
 }
 
-func descriptorIDForAASIDTx(ctx context.Context, tx *sql.Tx, aasID string) (sql.NullInt64, error) {
-	d := goqu.Dialect(common.Dialect)
-	ds := d.From(common.TAASDescriptor).
+// appendLinkedDescriptorRevision returns the expression that resolves the
+// shell descriptor added links are attached to and appends the revision
+// write of that descriptor. Discovery-only links belong to no descriptor.
+func appendLinkedDescriptorRevision(ctx context.Context, batch *common.PostgreSQLBatch, aasID string) (any, error) {
+	if discoveryOnlySpecificAssetIDsFromContext(ctx) {
+		return nil, nil
+	}
+	descriptor := goqu.Dialect(common.Dialect).From(common.TAASDescriptor).
 		Select(common.TAASDescriptor.Col(common.ColDescriptorID)).
-		Where(common.TAASDescriptor.Col(common.ColAASID).Eq(aasID)).
-		Limit(1)
-
-	sqlStr, args, err := ds.Prepared(true).ToSQL()
-	if err != nil {
-		return sql.NullInt64{}, err
+		Where(common.TAASDescriptor.Col(common.ColAASID).Eq(aasID))
+	if err := batch.AppendDataset(conditional.RevisionUpsertIfDataset(
+		conditional.Ref(conditional.KindAASDescriptor, aasID), goqu.L("EXISTS ?", descriptor),
+	)); err != nil {
+		return nil, common.NewInternalServerError("DISC-ADDSPECASSETIDS-BUILDREVISION " + err.Error())
 	}
-
-	var descriptorID int64
-	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descriptorID); err != nil {
-		if err == sql.ErrNoRows {
-			return sql.NullInt64{}, nil
-		}
-		return sql.NullInt64{}, err
-	}
-
-	return sql.NullInt64{Int64: descriptorID, Valid: true}, nil
-}
-
-func nextSpecificAssetIDPositionByAASRefTx(ctx context.Context, tx *sql.Tx, aasRef int64) (int, error) {
-	d := goqu.Dialect(common.Dialect)
-	ds := d.From(common.TSpecificAssetID).
-		Select(goqu.L("COALESCE(MAX(position), -1) + 1")).
-		Where(common.TSpecificAssetID.Col(common.ColAASRef).Eq(aasRef))
-
-	sqlStr, args, err := ds.Prepared(true).ToSQL()
-	if err != nil {
-		return 0, err
-	}
-
-	var positionStart int
-	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&positionStart); err != nil {
-		return 0, err
-	}
-	return positionStart, nil
+	return descriptor, nil
 }
 
 // ensureDiscoveryEntryTx upserts the discovery entry of aasID for a
@@ -391,13 +359,18 @@ func ensureAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string) (int64
 				goqu.Record{"aasid": goqu.I("excluded.aasid")},
 			),
 		).
-		Returning(tAASIdentifier.Col(common.ColID)).
+		Returning(tAASIdentifier.Col(common.ColID), goqu.L("(xmax = 0)")).
 		ToSQL()
 	if err != nil {
 		return 0, err
 	}
-	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&aasRef); err != nil {
+	var inserted bool
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&aasRef, &inserted); err != nil {
 		return 0, err
 	}
-	return aasRef, nil
+	op := conditional.OpUpdate
+	if inserted {
+		op = conditional.OpCreate
+	}
+	return aasRef, TouchDiscoveryEntryTx(ctx, tx, aasID, op)
 }

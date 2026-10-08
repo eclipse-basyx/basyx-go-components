@@ -1,0 +1,13 @@
+{
+  "modelType": "Submodel",
+  "id": "urn:etag:sm1",
+  "idShort": "ETagSubmodel",
+  "submodelElements": [
+    {
+      "modelType": "Property",
+      "idShort": "Prop",
+      "valueType": "xs:string",
+      "value": "replaced"
+    }
+  ]
+}

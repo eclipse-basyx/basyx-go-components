@@ -40,6 +40,7 @@ import (
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence/utils"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -99,9 +100,9 @@ func (h *PostgreSQLThumbnailFileHandler) DownloadThumbnailByAASID(aasIdentifier 
 	}
 
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-		err = tx.Commit()
+		err = common.CommitTransaction(tx)
 		if err != nil {
-			return nil, "", "", "", common.NewInternalServerError("AASREPO-GETTHUMBNAIL-COMMIT " + err.Error())
+			return nil, "", "", "", common.CommitError("AASREPO-GETTHUMBNAIL-COMMIT", err)
 		}
 		return nil, contentType.String, fileName.String, path, nil
 	}
@@ -150,9 +151,9 @@ func (h *PostgreSQLThumbnailFileHandler) DownloadThumbnailByAASID(aasIdentifier 
 		return nil, "", "", "", common.NewInternalServerError("AASREPO-GETTHUMBNAIL-CLOSELO " + closeErr.Error())
 	}
 
-	err = tx.Commit()
+	err = common.CommitTransaction(tx)
 	if err != nil {
-		return nil, "", "", "", common.NewInternalServerError("AASREPO-GETTHUMBNAIL-COMMIT " + err.Error())
+		return nil, "", "", "", common.CommitError("AASREPO-GETTHUMBNAIL-COMMIT", err)
 	}
 
 	return fileContent, contentType.String, fileName.String, path, nil
@@ -186,9 +187,9 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASIDReader(aasIdentif
 		return err
 	}
 
-	err = tx.Commit()
+	err = common.CommitTransaction(tx)
 	if err != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-COMMIT " + err.Error())
+		return common.CommitError("AASREPO-PUTTHUMBNAIL-COMMIT", err)
 	}
 
 	return nil
@@ -371,9 +372,9 @@ func (h *PostgreSQLThumbnailFileHandler) DeleteThumbnailByAASID(aasIdentifier st
 		return err
 	}
 
-	err = tx.Commit()
+	err = common.CommitTransaction(tx)
 	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-COMMIT " + err.Error())
+		return common.CommitError("AASREPO-DELTHUMBNAIL-COMMIT", err)
 	}
 
 	return nil
@@ -460,6 +461,11 @@ func (h *PostgreSQLThumbnailFileHandler) uploadManagedThumbnailTx(ctx context.Co
 	if err != nil {
 		return binarycontent.Reference{}, "", err
 	}
+	if err = conditional.RecordAddressedExistence(ctx, conditional.Ref(conditional.KindAAS, aasIdentifier), func() (bool, error) {
+		return thumbnailExists(ctx, tx, metadata.AASDBID)
+	}); err != nil {
+		return binarycontent.Reference{}, "", err
+	}
 	detectedContentType, uploadContent, err := common.SniffContentTypeReader(file)
 	if err != nil {
 		return binarycontent.Reference{}, "", common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READCONTENTTYPE " + err.Error())
@@ -487,7 +493,7 @@ func (h *PostgreSQLThumbnailFileHandler) uploadManagedThumbnailTx(ctx context.Co
 	if err = deleteLegacyThumbnailData(ctx, tx, metadata.AASDBID); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	return reference, resolvedContentType, nil
+	return reference, resolvedContentType, touchAAS(ctx, tx, aasIdentifier, conditional.OpUpdate)
 }
 
 func ensureManagedThumbnailElement(ctx context.Context, tx *sql.Tx, aasDBID int64) error {
@@ -503,7 +509,7 @@ func ensureManagedThumbnailElement(ctx context.Context, tx *sql.Tx, aasDBID int6
 }
 
 func (h *PostgreSQLThumbnailFileHandler) downloadManagedThumbnail(ctx context.Context, aasIdentifier string) ([]byte, string, string, string, error) {
-	tx, err := h.db.BeginTx(ctx, nil)
+	tx, err := common.BeginReadTransaction(ctx, h.db)
 	if err != nil {
 		return nil, "", "", "", common.NewInternalServerError("AASREPO-GETTHUMBNAIL-STARTTX " + err.Error())
 	}
@@ -519,8 +525,8 @@ func (h *PostgreSQLThumbnailFileHandler) downloadManagedThumbnail(ctx context.Co
 	}
 	thumbnailPath := metadata.Path.String
 	if strings.HasPrefix(thumbnailPath, "http://") || strings.HasPrefix(thumbnailPath, "https://") {
-		if err = tx.Commit(); err != nil {
-			return nil, "", "", "", common.NewInternalServerError("AASREPO-GETTHUMBNAIL-COMMIT " + err.Error())
+		if err = common.CommitTransaction(tx); err != nil {
+			return nil, "", "", "", common.CommitError("AASREPO-GETTHUMBNAIL-COMMIT", err)
 		}
 		committed = true
 		return nil, metadata.ExistingContentType.String, metadata.ExistingFileName.String, thumbnailPath, nil
@@ -535,8 +541,8 @@ func (h *PostgreSQLThumbnailFileHandler) downloadManagedThumbnail(ctx context.Co
 	if err != nil {
 		return nil, "", "", "", err
 	}
-	if err = tx.Commit(); err != nil {
-		return nil, "", "", "", common.NewInternalServerError("AASREPO-GETTHUMBNAIL-COMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return nil, "", "", "", common.CommitError("AASREPO-GETTHUMBNAIL-COMMIT", err)
 	}
 	committed = true
 	return content, metadata.ExistingContentType.String, metadata.ExistingFileName.String, thumbnailPath, nil
@@ -679,15 +685,11 @@ func (h *PostgreSQLThumbnailFileHandler) deleteManagedThumbnailTx(ctx context.Co
 	if err != nil {
 		return err
 	}
-	hasManagedReference, err := managedThumbnailReferenceExists(ctx, tx, metadata.AASDBID)
+	hasThumbnail, err := thumbnailExists(ctx, tx, metadata.AASDBID)
 	if err != nil {
 		return err
 	}
-	hasLegacyData, err := legacyThumbnailDataExists(ctx, tx, metadata.AASDBID)
-	if err != nil {
-		return err
-	}
-	if !hasManagedReference && !hasLegacyData {
+	if !hasThumbnail {
 		return common.NewErrNotFound("AASREPO-DELTHUMBNAIL-DATANOTFOUND Thumbnail data not found")
 	}
 	if err = binarycontent.DeleteReferenceTx(ctx, tx, binarycontent.TableThumbnailReference, "thumbnail_element_id", metadata.AASDBID); err != nil {
@@ -704,39 +706,9 @@ func (h *PostgreSQLThumbnailFileHandler) deleteManagedThumbnailTx(ctx context.Co
 	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-ELEMENT " + err.Error())
 	}
-	return nil
+	return touchAAS(ctx, tx, aasIdentifier, conditional.OpUpdate)
 }
 
-func managedThumbnailReferenceExists(ctx context.Context, tx *sql.Tx, aasDBID int64) (bool, error) {
-	query, args, err := goqu.From(binarycontent.TableThumbnailReference).Select(goqu.L("1")).
-		Where(goqu.C("thumbnail_element_id").Eq(aasDBID)).Limit(1).ToSQL()
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-THUMBNAIL-BUILDEXISTS " + err.Error())
-	}
-	var present int
-	err = tx.QueryRowContext(ctx, query, args...).Scan(&present)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-THUMBNAIL-EXISTS " + err.Error())
-	}
-	return true, nil
-}
-
-func legacyThumbnailDataExists(ctx context.Context, tx *sql.Tx, aasDBID int64) (bool, error) {
-	query, args, err := goqu.From("thumbnail_file_data").Select(goqu.L("1")).
-		Where(goqu.C("id").Eq(aasDBID), goqu.C("file_oid").IsNotNull()).Limit(1).ToSQL()
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-THUMBNAIL-BUILDLEGACYEXISTS " + err.Error())
-	}
-	var present int
-	err = tx.QueryRowContext(ctx, query, args...).Scan(&present)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-THUMBNAIL-LEGACYEXISTS " + err.Error())
-	}
-	return true, nil
+func thumbnailExists(ctx context.Context, tx *sql.Tx, aasDBID int64) (bool, error) {
+	return binarycontent.ContentExistsTx(ctx, tx, binarycontent.TableThumbnailReference, "thumbnail_element_id", aasDBID)
 }

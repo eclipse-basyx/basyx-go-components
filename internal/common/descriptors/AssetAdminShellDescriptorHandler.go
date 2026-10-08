@@ -86,14 +86,14 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	if CanSkipPostInsertReadback(ctx) {
-		return aasd, tx.Commit()
+		return aasd, common.CommitTransaction(tx)
 	}
 	result, err := GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
 	if err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	return result, tx.Commit()
+	return result, common.CommitTransaction(tx)
 }
 
 // CanSkipCreateReadback reports whether create readback can be skipped.
@@ -206,7 +206,10 @@ func insertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	if err := insertAdministrationShellDescriptorDetailsTx(ctx, tx, descriptorID, aasd, true); err != nil {
 		return err
 	}
-	return auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceAASDesc, aasd.Id)
+	if err := auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceAASDesc, aasd.Id); err != nil {
+		return err
+	}
+	return touchCreatedResourcesTx(ctx, tx, auth.SemanticResourceAASDesc, aasd.Id)
 }
 
 func insertAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.Tx, descriptorID int64, aasd model.AssetAdministrationShellDescriptor, insertAASDescriptor bool) error {
@@ -441,7 +444,7 @@ func DeleteAssetAdministrationShellDescriptorByID(ctx context.Context, db *sql.D
 		return err
 	}
 
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 // DeleteAssetAdministrationShellDescriptorByIDTx deletes a descriptor by AAS id
@@ -495,6 +498,9 @@ func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *s
 			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDPARENTSQL " + err.Error())
 		}
 	}
+	if err := recordAdministrationShellDescriptorsDeletedTx(ctx, tx, batch, aasIdentifiers...); err != nil {
+		return err
+	}
 	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
 }
 
@@ -526,7 +532,6 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 		}
 		return scanErr
 	}
-
 	childDescriptorIDs := d.
 		From(common.TblSubmodelDescriptor).
 		Select(common.ColDescriptorID).
@@ -538,6 +543,9 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 	}
 	if err := batch.AppendDataset(d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).Eq(descID))); err != nil {
 		return common.NewInternalServerError("AASDESC-DELETE-BUILDPARENTSQL " + err.Error())
+	}
+	if err := recordAdministrationShellDescriptorsDeletedTx(ctx, tx, batch, aasIdentifier); err != nil {
+		return err
 	}
 	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
 }

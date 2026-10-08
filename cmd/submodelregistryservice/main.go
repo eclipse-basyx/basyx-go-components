@@ -133,6 +133,7 @@ func runServer(ctx context.Context, configPath string) error {
 	// luk
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
+	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "SubmodelRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
@@ -155,13 +156,13 @@ func runServer(ctx context.Context, configPath string) error {
 	// Register all registry routes (protected)
 	for _, rt := range smCtrl.OrderedRoutes() {
 		versioningGuard.ClassifyRoute(rt.Name, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	// Register all description routes (protected)
 	for _, rt := range descCtrl.OrderedRoutes() {
 		versioningGuard.ClassifyRoute(rt.Name, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 	versioningGuard.Cover(http.MethodPost, "/bulk/submodel-descriptors")
 	versioningGuard.Cover(http.MethodPut, "/bulk/submodel-descriptors")

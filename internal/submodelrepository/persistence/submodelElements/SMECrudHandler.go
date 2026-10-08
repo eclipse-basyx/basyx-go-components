@@ -356,7 +356,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	// Commit transaction if we created it
 	if needsCommit {
-		err = localTx.Commit()
+		err = common.CommitTransaction(localTx)
 		if err != nil {
 			return err
 		}

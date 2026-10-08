@@ -114,6 +114,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
+	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "DiscoveryService")
 
 	// Apply OIDC + ABAC once for all discovery endpoints
@@ -129,12 +130,12 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Register all discovery routes (protected)
 	for _, rt := range smCtrl.Routes() {
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	// Register all description routes (protected)
 	for _, rt := range descCtrl.Routes() {
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	// Mount protected API under base path

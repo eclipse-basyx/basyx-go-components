@@ -192,7 +192,7 @@ func UpdateNestedElements(db *sql.DB, elems []SubmodelElementToProcess, idShortO
 	}
 
 	if tx == nil {
-		if err = localTx.Commit(); err != nil {
+		if err = common.CommitTransaction(localTx); err != nil {
 			return err
 		}
 	}
@@ -704,7 +704,7 @@ func insertSubmodelElements(requestCtx *context.Context, executeBatch func(*sql.
 
 	// Commit if we own the transaction
 	if ownTransaction {
-		if commitErr := localTx.Commit(); commitErr != nil {
+		if commitErr := common.CommitTransaction(localTx); commitErr != nil {
 			err = common.NewInternalServerError("SMREPO-INSSME-COMMITTX Failed to commit insert transaction: " + commitErr.Error())
 			return nil, err
 		}

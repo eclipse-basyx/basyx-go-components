@@ -1430,7 +1430,9 @@ func TestGetSubmodelReferenceReturnsModelReference(t *testing.T) {
 	}).
 		AddRow("sm-single", "idShort-single", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
+	mock.ExpectCommit()
 
 	reference, err := sut.GetSubmodelReference(contextWithABACDisabled(t), "sm-single")
 	require.NoError(t, err)
@@ -1478,7 +1480,9 @@ func TestGetSubmodelReferenceReturnsNotFoundWhenSubmodelMissing(t *testing.T) {
 		"semantic_id",
 	})
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
+	mock.ExpectCommit()
 
 	reference, err := sut.GetSubmodelReference(contextWithABACDisabled(t), "missing-sm")
 	require.Error(t, err)
