@@ -2690,7 +2690,11 @@ func (s *SubmodelRepositoryAPIAPIService) prepareOperationDelegation(
 	}
 
 	if verifyErr := s.submodelBackend.VerifyConditionalTarget(ctx); verifyErr != nil {
-		return preparedOperationDelegation{}, newAPIErrorResponse(verifyErr, http.StatusInternalServerError, operation, "Precondition"), false
+		status := http.StatusInternalServerError
+		if common.IsErrNotFound(verifyErr) {
+			status = http.StatusNotFound
+		}
+		return preparedOperationDelegation{}, newAPIErrorResponse(verifyErr, status, operation, "Precondition"), false
 	}
 
 	return preparedOperationDelegation{

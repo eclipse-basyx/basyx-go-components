@@ -27,6 +27,7 @@ package conditional
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -75,4 +76,33 @@ func TestEveryRevisionKindHasALiveResourceTable(t *testing.T) {
 		KindSubmodelDescriptor, KindDiscoveryEntry, KindAASXPackage, KindCompanyDescriptor} {
 		require.Contains(t, liveResources, kind)
 	}
+}
+
+const liveRevisionPattern = `SELECT EXISTS \(SELECT 1 FROM "submodel" AS "live" WHERE \("live"."submodel_identifier" = \$1\)\), COALESCE\(\(SELECT "revision" FROM "resource_revision" WHERE \(\("identifier" = \$2\) AND \("kind" = \$3\)\)\), \$4\)`
+
+func verifyContext(ifMatch string) context.Context {
+	state := &State{method: http.MethodPost, mode: ModeVerifyOnly, target: &submodelA, conds: parseConditions(http.Header{"If-Match": {ifMatch}})}
+	return context.WithValue(context.Background(), stateContextKey{}, state)
+}
+
+func TestVerifyTargetFailsForDeletedTargetsDespiteTheirKeptRevision(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectQuery(liveRevisionPattern).WillReturnRows(sqlmock.NewRows([]string{"exists", "revision"}).AddRow(false, 7))
+
+	require.ErrorIs(t, VerifyTarget(verifyContext("*"), db), ErrTargetNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVerifyTargetEvaluatesTheLiveRevision(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectQuery(liveRevisionPattern).WillReturnRows(sqlmock.NewRows([]string{"exists", "revision"}).AddRow(true, 7))
+	mock.ExpectQuery(liveRevisionPattern).WillReturnRows(sqlmock.NewRows([]string{"exists", "revision"}).AddRow(true, 7))
+
+	require.True(t, IsPreconditionFailed(VerifyTarget(verifyContext(ConcurrencyETag(submodelA, 6)), db)))
+	require.NoError(t, VerifyTarget(verifyContext(ConcurrencyETag(submodelA, 7)), db))
+	require.NoError(t, mock.ExpectationsWereMet())
 }

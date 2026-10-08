@@ -528,6 +528,8 @@ paths:
         '201':
           description: Submodel Descriptor created successfully
           headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
             Location:
               description: URL of the newly created resource
               schema:
@@ -821,6 +823,9 @@ paths:
         required: true
       responses:
         '201':
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           description: Asset Links created successfully
           content:
             application/json:

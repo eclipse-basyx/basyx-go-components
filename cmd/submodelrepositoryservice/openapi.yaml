@@ -388,6 +388,9 @@ paths:
         required: true
       responses:
         '204':
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           description: Submodel updated successfully
         '400':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
@@ -500,6 +503,9 @@ paths:
         required: true
       responses:
         '204':
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           description: Submodel updated successfully
         '400':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
@@ -587,6 +593,9 @@ paths:
         required: true
       responses:
         '204':
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           description: Submodel updated successfully
         '400':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
@@ -752,6 +761,8 @@ paths:
         '201':
           description: Submodel element created successfully
           headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
             Location:
               description: URL of the newly created resource
               schema:
@@ -1019,6 +1030,8 @@ paths:
         '201':
           description: Submodel element created successfully
           headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
             Location:
               description: URL of the newly created resource
               schema:
@@ -1130,6 +1143,9 @@ paths:
         required: true
       responses:
         '204':
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           description: SubmodelElement updated successfully
         '400':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
@@ -1234,6 +1250,9 @@ paths:
         - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           description: SubmodelElement updated successfully
         '400':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
@@ -1322,6 +1341,9 @@ paths:
         required: true
       responses:
         '204':
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           description: Submodel updated successfully
         '400':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'

@@ -192,3 +192,29 @@ func deleteTombstones(ctx context.Context, tx *sql.Tx, kind Kind, identifiers []
 	}
 	return result.RowsAffected()
 }
+
+// readLiveRevision reads in one statement whether a resource exists and its
+// revision, so a kept revision of a deleted resource is never taken for a
+// live one.
+func readLiveRevision(ctx context.Context, q Queryer, ref ResourceRef) (bool, int64, error) {
+	live, ok := liveResources[ref.Kind]
+	if !ok {
+		return false, 0, fmt.Errorf("COMMON-CONDREQ-READLIVEREVISION unknown resource kind %s", ref.Kind)
+	}
+	conditions := []exp.Expression{goqu.I("live." + live.column).Eq(ref.Identifier)}
+	if live.filter != nil {
+		conditions = append(conditions, live.filter)
+	}
+	exists := dialect.From(goqu.T(live.table).As("live")).Select(goqu.L("1")).Where(conditions...)
+	ds := dialect.Select(goqu.L("EXISTS ?", exists), RevisionExpression(ref)).Prepared(true)
+	query, args, err := ds.ToSQL()
+	if err != nil {
+		return false, 0, fmt.Errorf("COMMON-CONDREQ-READLIVEREVISION-BUILDQ: %w", err)
+	}
+	var found bool
+	var revision int64
+	if err = q.QueryRowContext(ctx, query, args...).Scan(&found, &revision); err != nil {
+		return false, 0, fmt.Errorf("COMMON-CONDREQ-READLIVEREVISION-EXECQ: %w", err)
+	}
+	return found, revision, nil
+}

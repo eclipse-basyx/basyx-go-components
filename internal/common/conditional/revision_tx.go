@@ -462,18 +462,26 @@ func ObserveComposite(ctx context.Context, q Queryer, ref ResourceRef, members [
 	return nil
 }
 
+// ErrTargetNotFound reports that the target of a verified action no longer
+// exists.
+var ErrTargetNotFound = errors.New("COMMON-CONDREQ-TARGETNOTFOUND the resource does not exist")
+
 // VerifyTarget evaluates If-Match and If-None-Match of an action that does
 // not change the target, such as an operation invocation, against the
-// committed revision. It guarantees the revision only at the time of the
-// call.
+// committed revision of the existing target. It guarantees the revision only
+// at the time of the call and fails with ErrTargetNotFound when the target
+// was deleted, because the revision of a deleted resource is kept.
 func VerifyTarget(ctx context.Context, q Queryer) error {
 	state := stateFromContext(ctx)
 	if state == nil || state.mode != ModeVerifyOnly || state.target == nil || !state.conds.present() {
 		return nil
 	}
-	revision, err := readRevision(ctx, q, *state.target)
+	exists, revision, err := readLiveRevision(ctx, q, *state.target)
 	if err != nil {
 		return err
+	}
+	if !exists {
+		return ErrTargetNotFound
 	}
 	target := newWriteTarget(true, concurrencyValidator(*state.target, revision), nil)
 	if err = evaluateWrite(state.conds, target, false); err != nil {
@@ -481,26 +489,6 @@ func VerifyTarget(ctx context.Context, q Queryer) error {
 		return err
 	}
 	state.recordCommit(true, "")
-	return nil
-}
-
-// PreCheck evaluates the target precondition of an existing resource without
-// a lock, so stale writes fail before doing work. The authoritative
-// evaluation happens at commit.
-func PreCheck(ctx context.Context, q Queryer, ref ResourceRef) error {
-	state := stateFromContext(ctx)
-	if !state.evaluatesWrites() || !state.isTarget(ref) {
-		return nil
-	}
-	revision, err := readRevision(ctx, q, ref)
-	if err != nil {
-		return err
-	}
-	target := newWriteTarget(true, concurrencyValidator(ref, revision), state.addressedExistence())
-	if err = evaluateWrite(state.conds, target, state.requireIfMatch); err != nil {
-		state.setFailure(err)
-		return err
-	}
 	return nil
 }
 

@@ -28,6 +28,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
@@ -55,11 +56,13 @@ func (s *SubmodelDatabase) beginSubmodelMutationTx(ctx context.Context, tx *sql.
 // VerifyConditionalTarget evaluates If-Match of an action on a Submodel that
 // does not change it, such as an operation invocation.
 func (s *SubmodelDatabase) VerifyConditionalTarget(ctx context.Context) error {
-	if err := conditional.VerifyTarget(ctx, s.db); err != nil {
-		if conditional.IsPreconditionError(err) {
-			return err
-		}
+	err := conditional.VerifyTarget(ctx, s.db)
+	switch {
+	case err == nil, conditional.IsPreconditionError(err):
+		return err
+	case errors.Is(err, conditional.ErrTargetNotFound):
+		return common.NewErrNotFound("SMREPO-VERIFYTARGET-NOTFOUND Submodel not found")
+	default:
 		return common.NewInternalServerError("SMREPO-VERIFYTARGET-REVISION " + err.Error())
 	}
-	return nil
 }

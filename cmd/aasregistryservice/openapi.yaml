@@ -274,6 +274,8 @@ paths:
         '201':
           description: Submodel Descriptor created successfully
           headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
             Location:
               description: URL of the newly created resource
               schema:
