@@ -44,6 +44,7 @@ import (
 	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/mqtt"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/spf13/viper"
@@ -698,8 +699,8 @@ func validatePaginationConfig(cfg PaginationConfig) error {
 	if cfg.MaxLimit < cfg.DefaultLimit {
 		return fmt.Errorf("CONFIG-SERVER-PAGINATION-MAXLIMIT server.pagination.maxLimit must be greater than or equal to server.pagination.defaultLimit")
 	}
-	if cfg.MaxLimit > math.MaxInt32 {
-		return fmt.Errorf("CONFIG-SERVER-PAGINATION-MAXLIMITRANGE server.pagination.maxLimit must not exceed %d", math.MaxInt32)
+	if cfg.MaxLimit > pagination.MaxSupportedLimit {
+		return fmt.Errorf("CONFIG-SERVER-PAGINATION-MAXLIMITRANGE server.pagination.maxLimit must not exceed %d", pagination.MaxSupportedLimit)
 	}
 	return nil
 }

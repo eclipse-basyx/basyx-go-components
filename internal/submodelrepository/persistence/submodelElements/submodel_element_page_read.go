@@ -33,6 +33,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -145,7 +146,7 @@ func GetAllSubmodelElementPathsPageTx(
 		path               string
 		id                 int64
 	}
-	pathRows := make([]pathRow, 0, limit+1)
+	pathRows := make([]pathRow, 0, pagination.BufferCapacity(limit+1))
 	for rows.Next() {
 		var item pathRow
 		if err := rows.Scan(&item.submodelIdentifier, &item.path, &item.id); err != nil {

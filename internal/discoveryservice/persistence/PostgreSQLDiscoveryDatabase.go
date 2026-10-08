@@ -45,6 +45,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -356,7 +357,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		}
 	}()
 
-	buf := make([]string, 0, peekLimit)
+	buf := make([]string, 0, pagination.BufferCapacity(peekLimit))
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {

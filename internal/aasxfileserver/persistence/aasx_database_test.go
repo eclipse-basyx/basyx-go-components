@@ -29,14 +29,17 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	"github.com/stretchr/testify/require"
 )
 
@@ -206,6 +209,40 @@ func TestDetectAASXEnvironmentContentType(t *testing.T) {
 			resolved, err := detectAASXEnvironmentContentType(tempFile, common.AASXLimitsFromConfig(nil))
 			require.NoError(t, err)
 			require.Equal(t, tt.expected, resolved)
+		})
+	}
+}
+
+type positiveInt64Argument struct{}
+
+func (positiveInt64Argument) Match(value driver.Value) bool {
+	number, ok := value.(int64)
+	return ok && number > 0
+}
+
+func TestListPackagesLargeLimitsKeepLookaheadPositive(t *testing.T) {
+	for name, limit := range map[string]int32{
+		"largest supported limit": pagination.MaxSupportedLimit,
+		"largest int32 limit":     math.MaxInt32,
+	} {
+		t.Run(name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			backend, err := NewAASXFileServerDatabaseFromPools(db, db)
+			require.NoError(t, err)
+
+			mock.ExpectBegin()
+			mock.ExpectQuery("SELECT").
+				WithArgs(positiveInt64Argument{}).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "package_id", "file_name", "content_type"}))
+			mock.ExpectCommit()
+
+			records, nextCursor, err := backend.ListPackages(t.Context(), limit, 0, "")
+			require.NoError(t, err)
+			require.Empty(t, records)
+			require.Zero(t, nextCursor)
+			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
 }

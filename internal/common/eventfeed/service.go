@@ -35,6 +35,7 @@ import (
 	"time"
 
 	cloudevents "github.com/eclipse-basyx/basyx-go-components/internal/common/events"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 )
 
 // Service implements the Event Feed API's read, write, and retention logic.
@@ -228,7 +229,7 @@ func (s *Service) findAuthorizedPage(ctx context.Context, domain domainQuery, pr
 }
 
 func (s *Service) collectAuthorizedEvents(ctx context.Context, domain domainQuery, presentation Presentation, limit int, authorizer RecordAuthorizer) ([]FeedEvent, bool, int64, error) {
-	out := make([]FeedEvent, 0, limit)
+	out := make([]FeedEvent, 0, pagination.BufferCapacity(limit))
 	lastScanned := int64(0)
 	for round := 0; round < authScanRounds; round++ {
 		page, err := s.repo.FindPage(ctx, domain, presentation)

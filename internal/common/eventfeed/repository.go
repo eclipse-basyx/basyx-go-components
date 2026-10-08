@@ -34,6 +34,8 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // registers the postgres dialect with goqu
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 )
 
 const (
@@ -159,7 +161,7 @@ func (r *Repository) FindPage(ctx context.Context, q domainQuery, presentation P
 		return nil, fmt.Errorf("EVENTFEED-FINDPAGE-QUERY: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	events := make([]FeedEvent, 0, q.Limit+1)
+	events := make([]FeedEvent, 0, pagination.BufferCapacity(q.Limit+1))
 	for rows.Next() {
 		event, err := scanPageEvent(rows, presentation)
 		if err != nil {

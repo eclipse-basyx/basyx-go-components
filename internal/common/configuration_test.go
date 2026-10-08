@@ -204,9 +204,10 @@ func TestPaginationRejectsInvalidValues(t *testing.T) {
 		maxLimit     string
 		code         string
 	}{
-		"zero default":        {"0", "1000", "CONFIG-SERVER-PAGINATION-DEFAULTLIMIT"},
-		"max below default":   {"100", "99", "CONFIG-SERVER-PAGINATION-MAXLIMIT"},
-		"max above int32 max": {"100", "2147483648", "CONFIG-SERVER-PAGINATION-MAXLIMITRANGE"},
+		"zero default":                           {"0", "1000", "CONFIG-SERVER-PAGINATION-DEFAULTLIMIT"},
+		"max below default":                      {"100", "99", "CONFIG-SERVER-PAGINATION-MAXLIMIT"},
+		"max above int32 max":                    {"100", "2147483648", "CONFIG-SERVER-PAGINATION-MAXLIMITRANGE"},
+		"max without room for the lookahead row": {"100", "2147483647", "CONFIG-SERVER-PAGINATION-MAXLIMITRANGE"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -219,6 +220,19 @@ func TestPaginationRejectsInvalidValues(t *testing.T) {
 				t.Fatalf("expected %s error, got %v", tc.code, err)
 			}
 		})
+	}
+}
+
+func TestPaginationAcceptsLargestSupportedMaxLimit(t *testing.T) {
+	unsetPaginationEnv(t)
+	t.Setenv("SERVER_PAGINATION_MAXLIMIT", "2147483646")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Server.Pagination.MaxLimit != 2147483646 {
+		t.Fatalf("expected maxLimit 2147483646, got %d", cfg.Server.Pagination.MaxLimit)
 	}
 }
 

@@ -42,6 +42,7 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -142,7 +143,7 @@ func (p *AASXFileServerDatabase) listPackagesInTransaction(ctx context.Context, 
 	}
 
 	// #nosec G115 -- limit is normalized to a positive int32 value above.
-	ds = ds.Limit(uint(limit + 1))
+	ds = ds.Limit(uint(limit) + 1)
 
 	sqlQuery, args, err := ds.Prepared(true).ToSQL()
 	if err != nil {
@@ -155,7 +156,7 @@ func (p *AASXFileServerDatabase) listPackagesInTransaction(ctx context.Context, 
 	}
 	defer func() { _ = rows.Close() }()
 
-	records := make([]PackageRecord, 0, limit+1)
+	records := make([]PackageRecord, 0, pagination.BufferCapacity(int(limit)+1))
 	for rows.Next() {
 		var row PackageRecord
 		if scanErr := rows.Scan(&row.DBID, &row.PackageID, &row.FileName, &row.ContentType); scanErr != nil {

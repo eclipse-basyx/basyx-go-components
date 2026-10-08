@@ -28,10 +28,13 @@ package common
 import (
 	"context"
 	"encoding/base64"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 )
 
 func TestDecodeAPIString(t *testing.T) {
@@ -69,6 +72,16 @@ func TestParseAPILimitAppliesConfiguredPolicy(t *testing.T) {
 		if value, err := ParseAPILimit(ctx, url.Values{"limit": {input}}); err != nil || value != want {
 			t.Fatalf("limit %q = %d, %v", input, value, err)
 		}
+	}
+}
+
+func TestParseAPILimitRejectsLimitsWithoutLookaheadRoom(t *testing.T) {
+	ctx := ContextWithConfig(context.Background(), &Config{Server: ServerConfig{Pagination: PaginationConfig{DefaultLimit: 100, MaxLimit: pagination.MaxSupportedLimit}}})
+	if value, err := ParseAPILimit(ctx, url.Values{"limit": {strconv.Itoa(pagination.MaxSupportedLimit)}}); err != nil || value != pagination.MaxSupportedLimit {
+		t.Fatalf("limit at the supported maximum = %d, %v", value, err)
+	}
+	if _, err := ParseAPILimit(ctx, url.Values{"limit": {strconv.Itoa(math.MaxInt32)}}); err == nil {
+		t.Fatal("accepted limit whose lookahead row overflows int32")
 	}
 }
 
