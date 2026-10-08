@@ -3,5 +3,5 @@ body: 'All services support HTTP conditional requests for single resources: `GET
 time: 2026-10-08T12:00:00.000000+02:00
 custom:
     Impact: High
-    PullRequest: 738
+    PullRequest: 742
     SecurityImpact: 'Preconditions are evaluated after the not-found and authorization checks, in the same transaction as the change, so a failed precondition never reveals hidden resources and two writers with the same entity tag never both succeed. `304` is only returned after the request was authorized, and representation tags differ between callers with different views, so a changed view is never answered with `304`. The revision part of an entity tag is the same for all callers and changes when parts change that a caller cannot see. Revisions come from one database-wide sequence and therefore reveal the approximate number of writes between two reads.'
