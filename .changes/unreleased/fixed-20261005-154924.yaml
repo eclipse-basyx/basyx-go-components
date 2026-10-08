@@ -1,7 +1,0 @@
-kind: fixed
-body: The Digital Twin Registry now reports all supported AAS Registry and Discovery service profiles through GET /description.
-time: 2026-10-05T15:49:24.4079486+02:00
-custom:
-    Impact: Low
-    PullRequest: 725
-    SecurityImpact: None.

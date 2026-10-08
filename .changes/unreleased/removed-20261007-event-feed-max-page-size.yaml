@@ -1,7 +1,0 @@
-kind: removed
-body: 'The setting `eventing.feed.maxPageSize` and its environment variable `BASYX_EVENTING_FEED_MAX_PAGE_SIZE` have been removed. The Event Feed now uses `server.pagination.defaultLimit` and `server.pagination.maxLimit`, so its default and maximum page sizes are `100` and `1000` unless those settings are changed. The removed key is ignored if it is still present in a configuration.'
-time: 2026-10-07T10:00:01Z
-custom:
-    Impact: High
-    PullRequest: 735
-    SecurityImpact: None.

@@ -1,7 +1,0 @@
-kind: changed
-body: 'All paginated endpoints now share one configurable page size policy. `server.pagination.defaultLimit` (default `100`, env `SERVER_PAGINATION_DEFAULT_LIMIT`) is applied when a request omits `limit`, and `server.pagination.maxLimit` (default `1000`, env `SERVER_PAGINATION_MAX_LIMIT`) is the largest accepted `limit`; a larger `limit` is rejected with HTTP 400 instead of being clamped. The policy covers the AAS, Submodel, SubmodelElement, Concept Description, registry, discovery, Company Lookup, AASX File Server, DPP product id search and Event Feed endpoints. The AAS Repository list endpoints no longer return unbounded pages when `limit` is omitted, and the AASX File Server maximum of `500` is replaced by the shared maximum.'
-time: 2026-10-07T10:00:00Z
-custom:
-    Impact: High
-    PullRequest: 735
-    SecurityImpact: 'Every paginated endpoint now applies a default page size and enforces a maximum, so a single request can no longer load an arbitrarily large result set into memory. This mitigates memory exhaustion and denial-of-service through oversized or omitted `limit` values.'

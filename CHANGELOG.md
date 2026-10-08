@@ -8,6 +8,32 @@ Each entry states whether users need to take action and records the security
 consequence separately. High-impact entries require an API, configuration,
 policy, or deployment update. Low-impact entries do not require migration.
 
+## v1.1.1 (2026-10-08)
+
+Changes since [v1.1.0](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.1.0...v1.1.1).
+
+### Changed
+
+* **High impact** — All paginated endpoints now share one configurable page size policy. `server.pagination.defaultLimit` (default `100`, env `SERVER_PAGINATION_DEFAULT_LIMIT`) is applied when a request omits `limit`, and `server.pagination.maxLimit` (default `1000`, env `SERVER_PAGINATION_MAX_LIMIT`) is the largest accepted `limit`; a larger `limit` is rejected with HTTP 400 instead of being clamped. The policy covers the AAS, Submodel, SubmodelElement, Concept Description, registry, discovery, Company Lookup, AASX File Server, DPP product id search and Event Feed endpoints. The AAS Repository list endpoints no longer return unbounded pages when `limit` is omitted, and the AASX File Server maximum of `500` is replaced by the shared maximum. ([#735](https://github.com/eclipse-basyx/basyx-go-components/pull/735))
+  * **Security:** Every paginated endpoint now applies a default page size and enforces a maximum, so a single request can no longer load an arbitrarily large result set into memory. This mitigates memory exhaustion and denial-of-service through oversized or omitted `limit` values.
+
+
+### Removed
+
+* **High impact** — The setting `eventing.feed.maxPageSize` and its environment variable `BASYX_EVENTING_FEED_MAX_PAGE_SIZE` have been removed. The Event Feed now uses `server.pagination.defaultLimit` and `server.pagination.maxLimit`, so its default and maximum page sizes are `100` and `1000` unless those settings are changed. The removed key is ignored if it is still present in a configuration. ([#735](https://github.com/eclipse-basyx/basyx-go-components/pull/735))
+  * **Security:** None.
+
+
+### Fixed
+
+* **Low impact** — The Digital Twin Registry now reports all supported AAS Registry and Discovery service profiles through GET /description. ([#725](https://github.com/eclipse-basyx/basyx-go-components/pull/725))
+  * **Security:** None.
+
+* **Low impact** — The Asset Administration Shell Repository now exposes GET /serialization and returns 501 Not Implemented until serialization is supported. ([#732](https://github.com/eclipse-basyx/basyx-go-components/pull/732))
+  * **Security:** None.
+
+* **Low impact** — `server.pagination.maxLimit` must now not exceed `2147483646`. A configured maximum of `2147483647` left no room for the extra row that page queries fetch to detect a following page, so a request with that `limit` overflowed the query limit and failed with HTTP 500 or a panic. Page buffers are also no longer sized from the requested `limit`, so a large `limit` does not reserve memory before any row is read. ([#736](https://github.com/eclipse-basyx/basyx-go-components/pull/736))
+  * **Security:** Prevents a configured maximum page size from causing integer overflow in page queries, and from reserving memory proportional to the requested limit before any rows exist.
 ## v1.1.0 (2026-09-28)
 
 Changes since [v1.0.12](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.0.12...v1.1.0).

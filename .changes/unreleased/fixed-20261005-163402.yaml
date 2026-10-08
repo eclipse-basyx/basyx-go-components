@@ -1,7 +1,0 @@
-kind: fixed
-body: The Asset Administration Shell Repository now exposes GET /serialization and returns 501 Not Implemented until serialization is supported.
-time: 2026-10-05T16:34:02.9419985+02:00
-custom:
-    Impact: Low
-    PullRequest: 732
-    SecurityImpact: None.
