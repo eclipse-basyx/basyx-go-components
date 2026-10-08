@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"errors"
 	"runtime"
+	"slices"
 	"sync"
 	"weak"
 
@@ -512,10 +513,10 @@ func ObserveRevision(ctx context.Context, ref ResourceRef, revision int64) {
 // RevisionUpsertDataset builds the statement that assigns new revisions to
 // created or changed resources, for writes that run as one statement batch
 // instead of a database/sql transaction. It returns kind, identifier and
-// revision of each resource.
+// revision of each resource; repeated resources are written once.
 func RevisionUpsertDataset(refs ...ResourceRef) *goqu.InsertDataset {
 	rows := make([]any, 0, len(refs))
-	for _, ref := range sortedRefs(refs) {
+	for _, ref := range slices.Compact(sortedRefs(refs)) {
 		rows = append(rows, goqu.Record{columnKind: string(ref.Kind), columnIdentifier: ref.Identifier, columnRevision: nextRevision()})
 	}
 	return dialect.Insert(revisionTable).Rows(rows...).
@@ -531,4 +532,21 @@ func RecordCreated(ctx context.Context, ref ResourceRef, revision int64) {
 		return
 	}
 	state.recordCommit(false, ConcurrencyETag(ref, revision))
+}
+
+// RevisionUpsertIfDataset builds the statement that assigns a new revision to
+// a resource when condition holds, for a write that runs inside a statement
+// batch together with the change of the resource.
+func RevisionUpsertIfDataset(ref ResourceRef, condition exp.Expression) *goqu.InsertDataset {
+	source := dialect.Select(goqu.V(string(ref.Kind)), goqu.V(ref.Identifier), nextRevision()).Where(condition)
+	return dialect.Insert(revisionTable).Cols(columnKind, columnIdentifier, columnRevision).FromQuery(source).
+		OnConflict(goqu.DoUpdate(columnKind+", "+columnIdentifier, goqu.Record{columnRevision: nextRevision()}))
+}
+
+// EvaluatesPreconditions reports whether writes of the request evaluate a
+// precondition. Revisions of such requests are written at commit, after the
+// target's revision was locked; other requests may write revisions of
+// resources that are not their target together with their own statements.
+func EvaluatesPreconditions(ctx context.Context) bool {
+	return stateFromContext(ctx).evaluatesWrites()
 }

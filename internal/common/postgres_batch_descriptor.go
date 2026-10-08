@@ -193,18 +193,46 @@ func (b *PostgreSQLBatch) AppendAssetInformationSpecificAssetIDs(
 	)
 }
 
+// AppendDiscoverySpecificAssetIDs appends asset links of a discovery entry
+// after its existing links. descriptorID may be an expression that resolves
+// the owning shell descriptor.
+func (b *PostgreSQLBatch) AppendDiscoverySpecificAssetIDs(
+	descriptorID any,
+	aasRef int64,
+	specificAssetIDs []types.ISpecificAssetID,
+) error {
+	nextPosition := goqu.Dialect(Dialect).From(TblSpecificAssetID).
+		Select(goqu.L("COALESCE(MAX(?), -1) + 1", goqu.C(ColPosition))).
+		Where(goqu.C(ColAASRef).Eq(aasRef))
+	return b.appendPositionedSpecificAssetIDs(descriptorID, sql.NullInt64{}, aasRef, specificAssetIDs, func(int) any {
+		return nextPosition
+	})
+}
+
 func (b *PostgreSQLBatch) appendSpecificAssetIDs(
 	descriptorID any,
 	assetInformationID any,
 	aasRef any,
 	specificAssetIDs []types.ISpecificAssetID,
 ) error {
+	return b.appendPositionedSpecificAssetIDs(descriptorID, assetInformationID, aasRef, specificAssetIDs, func(index int) any {
+		return index
+	})
+}
+
+func (b *PostgreSQLBatch) appendPositionedSpecificAssetIDs(
+	descriptorID any,
+	assetInformationID any,
+	aasRef any,
+	specificAssetIDs []types.ISpecificAssetID,
+	positionOf func(int) any,
+) error {
 	dialect := goqu.Dialect(Dialect)
-	for position, assetID := range specificAssetIDs {
+	for index, assetID := range specificAssetIDs {
 		if err := b.AppendDataset(dialect.Insert(TblSpecificAssetID).Rows(goqu.Record{
 			ColDescriptorID:       descriptorID,
 			ColAssetInformationID: assetInformationID,
-			ColPosition:           position,
+			ColPosition:           positionOf(index),
 			ColName:               assetID.Name(),
 			ColValue:              assetID.Value(),
 			ColAASRef:             aasRef,

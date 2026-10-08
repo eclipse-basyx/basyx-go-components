@@ -474,9 +474,6 @@ func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *s
 			return err
 		}
 	}
-	if err := TouchAdministrationShellDescriptorsDeletedTx(ctx, tx, aasIdentifiers...); err != nil {
-		return err
-	}
 	d := goqu.Dialect(common.Dialect)
 	batch := &common.PostgreSQLBatch{}
 	limit := common.BulkBatchLimitFromContext(ctx)
@@ -500,6 +497,9 @@ func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *s
 		); err != nil {
 			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDPARENTSQL " + err.Error())
 		}
+	}
+	if err := recordAdministrationShellDescriptorsDeletedTx(ctx, tx, batch, aasIdentifiers...); err != nil {
+		return err
 	}
 	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
 }
@@ -532,10 +532,6 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 		}
 		return scanErr
 	}
-	if err := TouchAdministrationShellDescriptorsDeletedTx(ctx, tx, aasIdentifier); err != nil {
-		return err
-	}
-
 	childDescriptorIDs := d.
 		From(common.TblSubmodelDescriptor).
 		Select(common.ColDescriptorID).
@@ -547,6 +543,9 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 	}
 	if err := batch.AppendDataset(d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).Eq(descID))); err != nil {
 		return common.NewInternalServerError("AASDESC-DELETE-BUILDPARENTSQL " + err.Error())
+	}
+	if err := recordAdministrationShellDescriptorsDeletedTx(ctx, tx, batch, aasIdentifier); err != nil {
+		return err
 	}
 	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
 }

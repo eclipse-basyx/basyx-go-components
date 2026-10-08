@@ -104,10 +104,15 @@ func revisionKindOf(resource auth.SemanticResourceKind) (conditional.Kind, bool)
 // touchIntegratedDiscoveryTx records a change of the discovery entries that
 // the discovery integration maintains for shell descriptors.
 func touchIntegratedDiscoveryTx(ctx context.Context, tx *sql.Tx, aasIDs ...string) error {
-	if cfg, ok := common.ConfigFromContext(ctx); !ok || !cfg.General.DiscoveryIntegration {
+	if !discoveryIntegrated(ctx) {
 		return nil
 	}
 	return touchRevisions(ctx, tx, conditional.KindDiscoveryEntry, conditional.OpUpdate, aasIDs...)
+}
+
+func discoveryIntegrated(ctx context.Context) bool {
+	cfg, ok := common.ConfigFromContext(ctx)
+	return ok && cfg.General.DiscoveryIntegration
 }
 
 // TouchDiscoveryEntryTx records a change of the asset links of an AAS.
@@ -115,13 +120,33 @@ func TouchDiscoveryEntryTx(ctx context.Context, tx *sql.Tx, aasID string, op con
 	return touchRevisions(ctx, tx, conditional.KindDiscoveryEntry, op, aasID)
 }
 
-// TouchAdministrationShellDescriptorsDeletedTx records deleted AAS
+// recordAdministrationShellDescriptorsDeletedTx records deleted AAS
 // descriptors. With discovery integration, their asset links change too.
-func TouchAdministrationShellDescriptorsDeletedTx(ctx context.Context, tx *sql.Tx, aasIDs ...string) error {
+// Without a precondition to evaluate, that revision write joins batch, which
+// must already contain the deletes.
+func recordAdministrationShellDescriptorsDeletedTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	batch *common.PostgreSQLBatch,
+	aasIDs ...string,
+) error {
 	if err := touchRevisions(ctx, tx, conditional.KindAASDescriptor, conditional.OpDelete, aasIDs...); err != nil {
 		return err
 	}
-	return touchIntegratedDiscoveryTx(ctx, tx, aasIDs...)
+	if !discoveryIntegrated(ctx) {
+		return nil
+	}
+	if conditional.EvaluatesPreconditions(ctx) {
+		return touchRevisions(ctx, tx, conditional.KindDiscoveryEntry, conditional.OpUpdate, aasIDs...)
+	}
+	refs := make([]conditional.ResourceRef, 0, len(aasIDs))
+	for _, aasID := range aasIDs {
+		refs = append(refs, conditional.Ref(conditional.KindDiscoveryEntry, aasID))
+	}
+	if err := batch.AppendDataset(conditional.RevisionUpsertDataset(refs...)); err != nil {
+		return common.NewInternalServerError("DESC-RECORDDELETED-BUILDREVISION " + err.Error())
+	}
+	return nil
 }
 
 // UpdateOperation returns the revision operation of an update that changed
