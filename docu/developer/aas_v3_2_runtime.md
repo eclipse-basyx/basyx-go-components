@@ -458,7 +458,7 @@ Generated component routes are classified centrally by operation name during ser
 
 ## Recent Changes
 
-Recent-change endpoints are data-bound current-state reads. They use the same live repository queries as the matching `GET all` endpoints, including administrative timestamp filters, and only project the result into the V3.2 recent-change response shape. The default page size is `100`.
+Recent-change endpoints are data-bound current-state reads. They use the same live repository queries as the matching `GET all` endpoints, including administrative timestamp filters, and only project the result into the V3.2 recent-change response shape. The default page size is the configured `server.pagination.defaultLimit` (`100`).
 
 ```mermaid
 flowchart LR

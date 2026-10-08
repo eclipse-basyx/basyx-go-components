@@ -266,7 +266,7 @@ func (s *Service) validateQuery(query FeedQuery) error {
 	}
 	if query.Limit > s.cfg.MaxPageSize {
 		return newQueryError("EVENTFEED-QUERY-LIMIT",
-			fmt.Sprintf("limit %d exceeds maxPageSize %d", query.Limit, s.cfg.MaxPageSize))
+			fmt.Sprintf("limit %d exceeds the maximum page size %d", query.Limit, s.cfg.MaxPageSize))
 	}
 	if query.LastEventID != "" && query.Since != nil {
 		return newQueryError("EVENTFEED-QUERY-MUTEX", "lastEventId and since are mutually exclusive")

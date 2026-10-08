@@ -26,8 +26,10 @@
 package common
 
 import (
+	"context"
 	"encoding/base64"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -53,20 +55,37 @@ func TestDecodeAPIString(t *testing.T) {
 	}
 }
 
-func TestAPIPaginationPresence(t *testing.T) {
-	if value, err := ParseAPILimit(url.Values{}); err != nil || value != 0 {
-		t.Fatal("omitted limit")
+func TestParseAPILimitAppliesConfiguredPolicy(t *testing.T) {
+	ctx := ContextWithConfig(context.Background(), &Config{Server: ServerConfig{Pagination: PaginationConfig{DefaultLimit: 25, MaxLimit: 50}}})
+	if value, err := ParseAPILimit(ctx, url.Values{}); err != nil || value != 25 {
+		t.Fatalf("omitted limit = %d, %v", value, err)
 	}
-	for _, input := range []string{"", "0", "-1", "abc", "1.5", "2147483648"} {
-		if _, err := ParseAPILimit(url.Values{"limit": {input}}); err == nil {
+	for _, input := range []string{"", "0", "-1", "abc", "1.5", "2147483648", "51"} {
+		if _, err := ParseAPILimit(ctx, url.Values{"limit": {input}}); err == nil {
 			t.Fatalf("accepted limit %q", input)
 		}
 	}
-	for _, input := range []string{"1", "100", "2147483647"} {
-		if _, err := ParseAPILimit(url.Values{"limit": {input}}); err != nil {
-			t.Fatal(err)
+	for input, want := range map[string]int32{"1": 1, "25": 25, "50": 50} {
+		if value, err := ParseAPILimit(ctx, url.Values{"limit": {input}}); err != nil || value != want {
+			t.Fatalf("limit %q = %d, %v", input, value, err)
 		}
 	}
+}
+
+func TestParseAPILimitFallsBackToBuiltInDefaults(t *testing.T) {
+	ctx := context.Background()
+	if value, err := ParseAPILimit(ctx, url.Values{}); err != nil || int(value) != DefaultConfig.ServerPaginationDefaultLimit {
+		t.Fatalf("omitted limit = %d, %v", value, err)
+	}
+	if _, err := ParseAPILimit(ctx, url.Values{"limit": {strconv.Itoa(DefaultConfig.ServerPaginationMaxLimit)}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseAPILimit(ctx, url.Values{"limit": {strconv.Itoa(DefaultConfig.ServerPaginationMaxLimit + 1)}}); err == nil {
+		t.Fatal("accepted limit above built-in maximum")
+	}
+}
+
+func TestAPIPaginationPresence(t *testing.T) {
 	if _, err := ParseAPICursor(url.Values{}); err != nil {
 		t.Fatal(err)
 	}

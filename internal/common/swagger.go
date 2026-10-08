@@ -323,7 +323,7 @@ const eventFeedPathsYAML = `  /events:
           schema:
             type: integer
             minimum: 1
-          description: Page size. When omitted, the configured eventing.feed.maxPageSize is used.
+          description: Page size. When omitted, the configured server.pagination.defaultLimit is used. Values above server.pagination.maxLimit are rejected.
       responses:
         '200':
           description: Event feed page

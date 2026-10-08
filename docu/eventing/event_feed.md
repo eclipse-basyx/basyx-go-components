@@ -119,14 +119,15 @@ are also hidden when ABAC is enabled.
 ## Configuration reference
 
 Defaults work for an initial deployment. Adjust retention to the time consumers
-may be offline, and page size to the volume they can process per request.
+may be offline. Page sizes follow the global `server.pagination.defaultLimit` (`100`)
+and `server.pagination.maxLimit` (`1000`) settings; a larger `limit` is rejected
+with HTTP 400.
 
 | Setting | Environment variable | Default and purpose |
 | --- | --- | --- |
 | `eventing.feed.enabled` | `BASYX_EVENTING_FEED_ENABLED` | `false`; enable the REST feed. |
 | `eventing.feed.maxAgeDays` | `BASYX_EVENTING_FEED_MAX_AGE_DAYS` | `30`; visible retention window, measured from mutation time. |
 | `eventing.feed.hardDeleteGraceDays` | `BASYX_EVENTING_FEED_HARD_DELETE_GRACE_DAYS` | `10`; additional days before physical deletion. `0` disables this delay. |
-| `eventing.feed.maxPageSize` | `BASYX_EVENTING_FEED_MAX_PAGE_SIZE` | `100`; default and maximum page size. |
 | `eventing.feed.sourceBaseUrl` | `BASYX_EVENTING_FEED_SOURCE_BASE_URL` | Public API base URL. Falls back to `general.externalUrl`, then the local server URL and context path. |
 | `eventing.feed.schemaBaseUrl` | `BASYX_EVENTING_FEED_SCHEMA_BASE_URL` | Optional schema mirror. Defaults to the source base URL followed by `/.well-known/event-feed/schemas`. |
 | `eventing.feed.cleanupIntervalHours` | `BASYX_EVENTING_FEED_CLEANUP_INTERVAL_HOURS` | `24`; physical cleanup interval. Cleanup also runs at startup. |

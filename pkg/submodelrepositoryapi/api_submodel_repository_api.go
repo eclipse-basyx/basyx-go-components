@@ -356,7 +356,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 		idShortParam = param
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodels", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -479,7 +479,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsMetadata(w http.Resp
 		idShortParam = param
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsMetadata", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -529,7 +529,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsValueOnly(w http.Res
 		idShortParam = param
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsValueOnly", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -597,7 +597,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsReference(w http.Res
 		idShortParam = param
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsReference", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -656,7 +656,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsPath(w http.Response
 		idShortParam = param
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsPath", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -786,7 +786,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsRecentChanges(w http
 			return
 		}
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsRecentChanges", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1155,7 +1155,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElements(w http.Respo
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElements", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1271,7 +1271,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsMetadataSubmo
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsMetadataSubmodelRepo", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1307,7 +1307,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsValueOnlySubm
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsValueOnlySubmodelRepo", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1361,7 +1361,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsReferenceSubm
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsReferenceSubmodelRepo", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1406,7 +1406,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsPathSubmodelR
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsPathSubmodelRepo", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -2299,7 +2299,7 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 		}
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QuerySubmodels", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)

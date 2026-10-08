@@ -54,3 +54,24 @@ func TestUploadMaxSizeBytesFromContext(t *testing.T) {
 		t.Fatalf("expected configured upload limit 4096, got %d", actual)
 	}
 }
+
+func TestPaginationFromContext(t *testing.T) {
+	expected := PaginationConfig{DefaultLimit: DefaultConfig.ServerPaginationDefaultLimit, MaxLimit: DefaultConfig.ServerPaginationMaxLimit}
+	if actual := PaginationFromContext(t.Context()); actual != expected {
+		t.Fatalf("expected default pagination %+v, got %+v", expected, actual)
+	}
+
+	invalid := &Config{Server: ServerConfig{Pagination: PaginationConfig{DefaultLimit: 10, MaxLimit: 5}}}
+	if actual := PaginationFromContext(ContextWithConfig(t.Context(), invalid)); actual != expected {
+		t.Fatalf("expected invalid pagination to fall back to %+v, got %+v", expected, actual)
+	}
+
+	cfg := &Config{Server: ServerConfig{Pagination: PaginationConfig{DefaultLimit: 5, MaxLimit: 20}}}
+	ctx := ContextWithConfig(t.Context(), cfg)
+	if actual := PaginationFromContext(ctx); actual != cfg.Server.Pagination {
+		t.Fatalf("expected configured pagination %+v, got %+v", cfg.Server.Pagination, actual)
+	}
+	if actual := DefaultPageLimit(ctx); actual != 5 {
+		t.Fatalf("expected default page limit 5, got %d", actual)
+	}
+}

@@ -66,6 +66,8 @@ var DefaultConfig = struct {
 	ServerWriteTimeoutSeconds            int
 	ServerIdleTimeoutSeconds             int
 	ServerShutdownTimeoutSeconds         int
+	ServerPaginationDefaultLimit         int
+	ServerPaginationMaxLimit             int
 	PgPort                               int
 	PgDBName                             string
 	PgSSLMode                            string
@@ -141,6 +143,8 @@ var DefaultConfig = struct {
 	ServerWriteTimeoutSeconds:            300,
 	ServerIdleTimeoutSeconds:             60,
 	ServerShutdownTimeoutSeconds:         10,
+	ServerPaginationDefaultLimit:         100,
+	ServerPaginationMaxLimit:             1000,
 	PgPort:                               5432,
 	PgDBName:                             "basyxTestDB",
 	PgSSLMode:                            "disable",
@@ -354,7 +358,6 @@ type EventFeedConfig struct {
 	Enabled               bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	MaxAgeDays            int    `mapstructure:"maxAgeDays" yaml:"maxAgeDays" json:"maxAgeDays"`
 	HardDeleteGraceDays   int    `mapstructure:"hardDeleteGraceDays" yaml:"hardDeleteGraceDays" json:"hardDeleteGraceDays"`
-	MaxPageSize           int    `mapstructure:"maxPageSize" yaml:"maxPageSize" json:"maxPageSize"`
 	SourceBaseURL         string `mapstructure:"sourceBaseUrl" yaml:"sourceBaseUrl" json:"sourceBaseUrl"`
 	SchemaBaseURL         string `mapstructure:"schemaBaseUrl" yaml:"schemaBaseUrl" json:"schemaBaseUrl"`
 	CleanupIntervalHours  int    `mapstructure:"cleanupIntervalHours" yaml:"cleanupIntervalHours" json:"cleanupIntervalHours"`
@@ -382,6 +385,14 @@ type ServerConfig struct {
 	WriteTimeoutSeconds           int    `mapstructure:"writeTimeoutSeconds" yaml:"writeTimeoutSeconds" json:"writeTimeoutSeconds"`                // Maximum time before timing out response writes
 	IdleTimeoutSeconds            int    `mapstructure:"idleTimeoutSeconds" yaml:"idleTimeoutSeconds" json:"idleTimeoutSeconds"`                   // Maximum idle keep-alive connection time
 	ShutdownTimeoutSeconds        int    `mapstructure:"shutdownTimeoutSeconds" yaml:"shutdownTimeoutSeconds" json:"shutdownTimeoutSeconds"`       // Maximum graceful shutdown wait time
+
+	Pagination PaginationConfig `mapstructure:"pagination" yaml:"pagination" json:"pagination"` // Page size limits shared by all paginated endpoints
+}
+
+// PaginationConfig contains the page size limits shared by all paginated endpoints.
+type PaginationConfig struct {
+	DefaultLimit int `mapstructure:"defaultLimit" yaml:"defaultLimit" json:"defaultLimit"` // Page size applied when a request omits limit
+	MaxLimit     int `mapstructure:"maxLimit" yaml:"maxLimit" json:"maxLimit"`             // Largest accepted limit; larger values are rejected
 }
 
 // PostgresConfig contains PostgreSQL database connection parameters.
@@ -621,6 +632,16 @@ func applyServerEnvOverrides(cfg *Config) {
 		"SERVER_SHUTDOWN_TIMEOUT_SECONDS",
 		"BASYX_SERVER_SHUTDOWN_TIMEOUT_SECONDS",
 	)
+	applyFirstIntEnv(func(value int) { cfg.Server.Pagination.DefaultLimit = value },
+		"SERVER_PAGINATION_DEFAULTLIMIT",
+		"SERVER_PAGINATION_DEFAULT_LIMIT",
+		"BASYX_SERVER_PAGINATION_DEFAULT_LIMIT",
+	)
+	applyFirstIntEnv(func(value int) { cfg.Server.Pagination.MaxLimit = value },
+		"SERVER_PAGINATION_MAXLIMIT",
+		"SERVER_PAGINATION_MAX_LIMIT",
+		"BASYX_SERVER_PAGINATION_MAX_LIMIT",
+	)
 }
 
 func validateGeneralConfig(cfg *Config) error {
@@ -666,6 +687,19 @@ func validateServerConfig(cfg ServerConfig) error {
 		if value <= 0 {
 			return fmt.Errorf("CONFIG-SERVER-TIMEOUT %s must be greater than 0", key)
 		}
+	}
+	return validatePaginationConfig(cfg.Pagination)
+}
+
+func validatePaginationConfig(cfg PaginationConfig) error {
+	if cfg.DefaultLimit < 1 {
+		return fmt.Errorf("CONFIG-SERVER-PAGINATION-DEFAULTLIMIT server.pagination.defaultLimit must be greater than 0")
+	}
+	if cfg.MaxLimit < cfg.DefaultLimit {
+		return fmt.Errorf("CONFIG-SERVER-PAGINATION-MAXLIMIT server.pagination.maxLimit must be greater than or equal to server.pagination.defaultLimit")
+	}
+	if cfg.MaxLimit > math.MaxInt32 {
+		return fmt.Errorf("CONFIG-SERVER-PAGINATION-MAXLIMITRANGE server.pagination.maxLimit must not exceed %d", math.MaxInt32)
 	}
 	return nil
 }
@@ -972,7 +1006,6 @@ func applyEventingEnvOverrides(cfg *Config) {
 	applyBoolEnv("BASYX_EVENTING_FEED_ENABLED", func(value bool) { cfg.Eventing.Feed.Enabled = value })
 	applyIntEnv("BASYX_EVENTING_FEED_MAX_AGE_DAYS", func(value int) { cfg.Eventing.Feed.MaxAgeDays = value })
 	applyIntEnv("BASYX_EVENTING_FEED_HARD_DELETE_GRACE_DAYS", func(value int) { cfg.Eventing.Feed.HardDeleteGraceDays = value })
-	applyIntEnv("BASYX_EVENTING_FEED_MAX_PAGE_SIZE", func(value int) { cfg.Eventing.Feed.MaxPageSize = value })
 	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_FEED_SOURCE_BASE_URL"); ok {
 		cfg.Eventing.Feed.SourceBaseURL = value
 	}
@@ -1101,9 +1134,6 @@ func validateEventingConfig(cfg EventingConfig) error {
 	}
 	if !cfg.Feed.Enabled {
 		return nil
-	}
-	if cfg.Feed.MaxPageSize < 0 {
-		return fmt.Errorf("CONFIG-EVENTING-FEED-MAXPAGESIZE eventing.feed.maxPageSize must not be negative")
 	}
 	if cfg.Feed.MaxAgeDays < 0 {
 		return fmt.Errorf("CONFIG-EVENTING-FEED-MAXAGE eventing.feed.maxAgeDays must not be negative")
@@ -1273,6 +1303,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.writeTimeoutSeconds", DefaultConfig.ServerWriteTimeoutSeconds)
 	v.SetDefault("server.idleTimeoutSeconds", DefaultConfig.ServerIdleTimeoutSeconds)
 	v.SetDefault("server.shutdownTimeoutSeconds", DefaultConfig.ServerShutdownTimeoutSeconds)
+	v.SetDefault("server.pagination.defaultLimit", DefaultConfig.ServerPaginationDefaultLimit)
+	v.SetDefault("server.pagination.maxLimit", DefaultConfig.ServerPaginationMaxLimit)
 
 	// PostgreSQL defaults
 	v.SetDefault("postgres.host", "db")
@@ -1362,7 +1394,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("eventing.feed.enabled", false)
 	v.SetDefault("eventing.feed.maxAgeDays", 30)
 	v.SetDefault("eventing.feed.hardDeleteGraceDays", 10)
-	v.SetDefault("eventing.feed.maxPageSize", 100)
 	v.SetDefault("eventing.feed.sourceBaseUrl", "")
 	v.SetDefault("eventing.feed.schemaBaseUrl", "")
 	v.SetDefault("eventing.feed.cleanupIntervalHours", 24)
@@ -1420,6 +1451,8 @@ func LogConfiguration(cfg *Config, configPath string) {
 			"context_path", cfg.Server.ContextPath,
 			"cache_enabled", cfg.Server.CacheEnabled,
 			"verification_mode", cfg.Server.StrictVerification,
+			"pagination_default_limit", cfg.Server.Pagination.DefaultLimit,
+			"pagination_max_limit", cfg.Server.Pagination.MaxLimit,
 		),
 		slog.Group(
 			"features",

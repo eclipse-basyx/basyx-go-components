@@ -108,7 +108,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetAdmi
 
 	assetIdsParam := query["assetIds"]
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellIdsByAssetLink", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -149,7 +149,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 		return
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)

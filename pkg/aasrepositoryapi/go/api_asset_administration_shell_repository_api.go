@@ -360,7 +360,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) QueryAssetAdministr
 		return
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "QueryAssetAdministrationShells", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -416,7 +416,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 	assetIdsParam := query["assetIds"]
 	idShortParam := query.Get("idShort")
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllAssetAdministrationShells", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -505,7 +505,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 	assetIdsParam := query["assetIds"]
 	idShortParam := query.Get("idShort")
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllAssetAdministrationShellsReference", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -753,7 +753,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelRefer
 	}
 
 	query := r.URL.Query()
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelReferencesAasRepository", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1233,7 +1233,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 		return
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsAasRepository", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1352,7 +1352,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 		return
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsMetadataAasRepository", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1402,7 +1402,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 		return
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsValueOnlyAasRepository", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1458,7 +1458,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 		return
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsReferenceAasRepository", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -1510,7 +1510,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 
 	query := r.URL.Query()
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllSubmodelElementsPathAasRepository", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -2567,7 +2567,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		}
 	}
 
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, "AASREPO", "GetAllAssetAdministrationShellsRecentChanges", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)

@@ -1307,7 +1307,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 
 	effectiveLimit := int(limit)
 	if effectiveLimit == 0 {
-		effectiveLimit = 100
+		effectiveLimit = int(common.DefaultPageLimit(ctx))
 	}
 
 	page, err := s.submodelBackend.GetAllSubmodelPathsPage(

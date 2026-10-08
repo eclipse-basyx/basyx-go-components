@@ -26,6 +26,7 @@
 package common
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -72,14 +73,36 @@ func DecodeAPICursor(encoded string) (string, error) {
 	return DecodeAPIString(encoded)
 }
 
-// ParseAPILimit preserves zero as the service's omitted-limit sentinel.
-func ParseAPILimit(query url.Values) (int32, error) {
-	if !query.Has("limit") {
-		return 0, nil
+// ParseAPILimit resolves the page size of a request.
+//
+// An omitted limit yields the configured default. Invalid limits and limits
+// above the configured maximum are rejected, so the result is always positive.
+func ParseAPILimit(ctx context.Context, query url.Values) (int32, error) {
+	return ResolveAPILimit(ctx, query.Get("limit"), query.Has("limit"))
+}
+
+// ResolveAPILimit applies the configured page size policy to a raw limit value.
+//
+// Parameters:
+//   - ctx: Request context carrying the process configuration.
+//   - raw: Raw limit parameter value.
+//   - present: Whether the request supplied the limit parameter.
+//
+// Returns:
+//   - int32: Positive page size no larger than the configured maximum.
+//   - error: Bad request error for malformed or oversized limits.
+func ResolveAPILimit(ctx context.Context, raw string, present bool) (int32, error) {
+	pagination := PaginationFromContext(ctx)
+	if !present {
+		//nolint:gosec // validated configuration keeps the default within int32
+		return int32(pagination.DefaultLimit), nil
 	}
-	n, err := strconv.ParseInt(query.Get("limit"), 10, 32)
+	n, err := strconv.ParseInt(raw, 10, 32)
 	if err != nil || n < 1 {
 		return 0, NewErrBadRequest("COMMON-APIPARAM-LIMIT limit must be a positive 32-bit integer")
+	}
+	if n > int64(pagination.MaxLimit) {
+		return 0, NewErrBadRequest(fmt.Sprintf("COMMON-APIPARAM-LIMIT limit must not exceed %d", pagination.MaxLimit))
 	}
 	return int32(n), nil
 }

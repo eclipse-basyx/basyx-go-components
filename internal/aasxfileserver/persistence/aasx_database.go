@@ -115,7 +115,7 @@ func (p *AASXFileServerDatabase) ListPackages(ctx context.Context, limit int32, 
 
 func (p *AASXFileServerDatabase) listPackagesInTransaction(ctx context.Context, tx *sql.Tx, limit int32, cursorID int64, aasID string) ([]PackageRecord, int64, error) {
 	if limit <= 0 {
-		limit = 100
+		limit = common.DefaultPageLimit(ctx)
 	}
 
 	dialect := goqu.Dialect("postgres")

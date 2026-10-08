@@ -253,6 +253,21 @@ func TestHTTPValidationErrors(t *testing.T) {
 	}
 }
 
+func TestHTTPRejectsLimitAboveMaxPageSize(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	cfg.MaxPageSize = 50
+	svc := NewService(NewRepository(nil, cfg.MaxAge), cfg)
+	r := chi.NewRouter()
+	RegisterRoutes(r, svc)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/events?limit=51", nil))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestSaveAndRetentionSQL(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -342,7 +357,7 @@ func TestRegisterRoutesDisabled(t *testing.T) {
 	}
 }
 
-func TestHTTPOmittedLimitUsesMaxPageSize(t *testing.T) {
+func TestHTTPOmittedLimitUsesDefaultPageSize(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("sqlmock: %v", err)
@@ -351,7 +366,7 @@ func TestHTTPOmittedLimitUsesMaxPageSize(t *testing.T) {
 
 	cfg := DefaultConfig()
 	cfg.Enabled = true
-	cfg.MaxPageSize = 50
+	cfg.DefaultPageSize = 50
 	repo := NewRepository(db, cfg.MaxAge)
 	fixedNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 	repo.now = func() time.Time { return fixedNow }

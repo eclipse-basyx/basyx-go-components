@@ -224,7 +224,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -495,7 +495,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllSubmodelDescrip
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
@@ -758,7 +758,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) QueryAssetAdministrat
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	limitParam, paginationErr := common.ParseAPILimit(query)
+	limitParam, paginationErr := common.ParseAPILimit(r.Context(), query)
 	if paginationErr != nil {
 		result := common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QueryAssetAdministrationShellDescriptors", "limit")
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)

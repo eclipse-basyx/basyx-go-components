@@ -56,7 +56,7 @@ func listAssetAdministrationShellDescriptorsBatched(
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 	db = withDescriptorDebugQueryer(ctx, db)
 	if limit <= 0 {
-		limit = 100
+		limit = common.DefaultPageLimit(ctx)
 	}
 	peekLimit := limit
 	if peekLimit < 1<<31-1 {

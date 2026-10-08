@@ -36,6 +36,7 @@ type Config struct {
 	Enabled         bool
 	SchemasEnabled  bool
 	MaxAge          time.Duration
+	DefaultPageSize int
 	MaxPageSize     int
 	SourceBaseURL   string
 	SchemaBaseURL   string
@@ -55,7 +56,8 @@ func DefaultConfig() Config {
 	return Config{
 		Enabled:         false,
 		MaxAge:          30 * 24 * time.Hour,
-		MaxPageSize:     100,
+		DefaultPageSize: 100,
+		MaxPageSize:     1000,
 		SourceBaseURL:   "http://localhost",
 		SchemaBaseURL:   "http://localhost" + SchemaPath,
 		HardDeleteGrace: 10 * 24 * time.Hour,
@@ -69,8 +71,11 @@ func (c Config) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	if c.MaxPageSize < 1 {
-		return fmt.Errorf("EVENTFEED-CFG-MAXPAGESIZE maxPageSize must be positive")
+	if c.DefaultPageSize < 1 {
+		return fmt.Errorf("EVENTFEED-CFG-DEFAULTPAGESIZE defaultPageSize must be positive")
+	}
+	if c.MaxPageSize < c.DefaultPageSize {
+		return fmt.Errorf("EVENTFEED-CFG-MAXPAGESIZE maxPageSize must not be smaller than defaultPageSize")
 	}
 	if c.MaxAge <= 0 {
 		return fmt.Errorf("EVENTFEED-CFG-MAXAGE maxAge must be positive")
