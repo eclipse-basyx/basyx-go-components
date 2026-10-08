@@ -175,7 +175,7 @@ components:
       name: limit
       in: query
       required: false
-      description: The maximum number of elements in the response array. When omitted, the configured server.pagination.defaultLimit applies (default 100). Values above server.pagination.maxLimit (default 1000) are rejected.
+      description: The maximum number of elements in the response array
       schema:
         type: integer
         minimum: 1
