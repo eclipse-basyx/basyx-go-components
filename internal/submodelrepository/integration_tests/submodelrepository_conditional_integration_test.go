@@ -171,17 +171,14 @@ func TestConditionalDeleteLosesAgainstConcurrentUpdate(t *testing.T) {
 	require.Equal(t, "changed", submodel.value())
 }
 
-func TestConditionalUpdateAfterConcurrentDeleteDoesNotRecreate(t *testing.T) {
-	submodel := newConditionalSubmodel(t, "race-delete-first")
+func TestConditionalUpdateAfterDeleteDoesNotRecreate(t *testing.T) {
+	submodel := newConditionalSubmodel(t, "delete-first")
 	etag := submodel.etag()
 
-	results := submodel.inOrder(
-		func() testenv.HTTPResult { return testenv.DoHTTP(t, http.MethodDelete, submodel.endpoint, nil, nil) },
-		func() testenv.HTTPResult { return submodel.patchValue("late", map[string]string{"If-Match": etag}) },
-	)
+	require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodDelete, submodel.endpoint, nil, nil).Status)
+	late := submodel.patchValue("late", map[string]string{"If-Match": etag})
 
-	require.Equal(t, http.StatusNoContent, results[0].Status, string(results[0].Body))
-	require.Contains(t, []int{http.StatusNotFound, http.StatusPreconditionFailed}, results[1].Status, string(results[1].Body))
+	require.Contains(t, []int{http.StatusNotFound, http.StatusPreconditionFailed}, late.Status, string(late.Body))
 	require.Equal(t, http.StatusNotFound, testenv.DoHTTP(t, http.MethodGet, submodel.endpoint, nil, nil).Status)
 }
 
