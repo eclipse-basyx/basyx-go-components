@@ -97,6 +97,7 @@ func TestPatchSubmodelWithoutChangesKeepsSubmodelRows(t *testing.T) {
 	expectBareSubmodelStateLoad(mock, "sm-1", "sm1")
 	expectPersistedPositionsLoad(mock)
 	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
+	expectSubmodelRevisionUpsert(mock, "sm-1")
 	mock.ExpectCommit()
 
 	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-1", submodel)
@@ -124,6 +125,7 @@ func TestPatchSubmodelChangedSubmodelExecutesReconciliation(t *testing.T) {
 	mock.ExpectQuery(`WITH reconciliation_plan`).
 		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 0, 0))
 	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "new")
+	expectSubmodelRevisionUpsert(mock, "sm-1")
 	mock.ExpectCommit()
 
 	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-1", submodel)
@@ -238,6 +240,7 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	expectCreatedPutSubmodelSnapshotLoad(mock, "sm-new", "smnew")
+	expectSubmodelRevisionUpsert(mock, "sm-new")
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-new", submodel)
@@ -298,6 +301,7 @@ func TestPutSubmodelChangedUpdateExecutesReconciliationAndHistory(t *testing.T) 
 		WillReturnRows(sqlmock.NewRows([]string{"updated_count", "inserted_count", "deleted_count"}).AddRow(0, 0, 0))
 	expectBareSubmodelStateLoad(mock, "sm-existing", "new")
 	expectSubmodelHistoryAppend(mock)
+	expectSubmodelRevisionUpsert(mock, "sm-existing")
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
@@ -619,6 +623,7 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	expectMutatedSubmodelHistoryFallback(mock)
 	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
+	expectSubmodelRevisionUpsert(mock, "sm-1")
 	mock.ExpectCommit()
 
 	err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm-1", "oldIdShort", patchElement, false)

@@ -224,6 +224,8 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPElementObjectType(t, fullVersionBody, lifecycleTechnicalDataSpec, "dimensions", "DataElementCollection")
 	assertDPPElementObjectType(t, fullVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "SingleValuedDataElement")
 
+	assertDPPConditionalRequests(t, baseURL, aasBaseURL, encodedDPPID, dimensionWidthPath, technicalDataSubmodelID)
+
 	elementIDPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "manufacturerName"))
 	elementBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+elementIDPath, nil, http.StatusOK)
 	assertScalarEquals(t, elementBody, "Acme Updated GmbH")

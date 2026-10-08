@@ -156,7 +156,7 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
-		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+		previousSnapshot, snapshotErr := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 		if snapshotErr != nil {
 			return snapshotErr
 		}
@@ -203,7 +203,7 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(
 		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
-		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+		previousSnapshot, snapshotErr := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 		if snapshotErr != nil {
 			return snapshotErr
 		}
@@ -289,7 +289,7 @@ func (s *SubmodelDatabase) StreamFileAttachmentWithContext(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	tx, err := readDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	tx, err := common.BeginReadTransaction(ctx, readDB)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-STARTTX " + err.Error())
 	}
@@ -305,8 +305,8 @@ func (s *SubmodelDatabase) StreamFileAttachmentWithContext(ctx context.Context, 
 	if err = fileHandler.StreamManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath, consume); err != nil {
 		return err
 	}
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-COMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return common.CommitError("SMREPO-STREAMATTACHMENT-COMMIT", err)
 	}
 	committed = true
 	return nil
@@ -344,7 +344,7 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-DELETEFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}
-		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+		previousSnapshot, snapshotErr := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 		if snapshotErr != nil {
 			return snapshotErr
 		}

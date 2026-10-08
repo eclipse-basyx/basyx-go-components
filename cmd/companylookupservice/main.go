@@ -116,6 +116,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
+	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "CompanyLookupService")
 	if cfg.Server.VerificationEndpointAvailable {
 		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
@@ -123,12 +124,12 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Register all company lookup routes
 	for _, rt := range companyLookupCtrl.Routes() {
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	// Register all description routes
 	for _, rt := range descCtrl.Routes() {
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 
 	// Mount protected API under base path

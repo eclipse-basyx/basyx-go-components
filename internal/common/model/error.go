@@ -78,8 +78,20 @@ func (e *RequiredError) Error() string {
 // ErrorResponse is the standardized BaSyx HTTP error payload.
 type ErrorResponse = Message
 
+// StatusError is an error that determines its own HTTP status, such as a
+// failed precondition. Its status takes precedence over the fallback status
+// passed to NewErrorResponse.
+type StatusError interface {
+	error
+	HTTPStatus() int
+}
+
 // NewErrorResponse creates a standardized error response.
 func NewErrorResponse(err error, status int, component, function, info string) ImplResponse {
+	var statusErr StatusError
+	if errors.As(err, &statusErr) {
+		status = statusErr.HTTPStatus()
+	}
 	code := strconv.Itoa(status)
 	statusText := strings.ReplaceAll(http.StatusText(status), " ", "")
 	correlationID := fmt.Sprintf("%s-%s-%s-%s-%s", component, code, function, statusText, info)

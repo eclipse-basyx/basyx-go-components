@@ -97,9 +97,15 @@ paths:
       operationId: GetAllAssetLinksById
       x-semanticIds:
         - https://admin-shell.io/aas/API/GetAllAssetLinksById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested specific Asset identifiers (including the global asset ID represented by a specific asset ID)
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -108,6 +114,10 @@ paths:
                   $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
         '404':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     post:
@@ -126,6 +136,8 @@ paths:
               items:
                 $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '201':
           description: Specific asset identifiers created successfully
@@ -141,6 +153,10 @@ paths:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         '409':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/conflict'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     delete:
@@ -150,11 +166,17 @@ paths:
       operationId: DeleteAllAssetLinksById
       x-semanticIds:
         - https://admin-shell.io/aas/API/DeleteAllAssetLinksById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Specific asset identifiers deleted successfully
         '404':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
   /description:
@@ -174,3 +196,42 @@ paths:
                 $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/ServiceDescription'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
+
+components:
+  parameters:
+    ConditionalIfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags of the resource. The request fails with 412 when no tag
+        designates the current revision. `*` matches any existing resource.
+      schema:
+        type: string
+    ConditionalIfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags. GET answers 304 when the current representation has one of
+        them. `*` on PUT only creates the resource and fails with 412 when it
+        exists.
+      schema:
+        type: string
+  headers:
+    ConditionalETag:
+      description: >-
+        Strong entity tag of the resource revision and, on reads, of the
+        returned representation.
+      schema:
+        type: string
+  responses:
+    ConditionalNotModified:
+      description: The current representation matches If-None-Match.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ConditionalETag'
+    ConditionalPreconditionFailed:
+      description: If-Match or If-None-Match does not hold. Nothing was changed.
+    ConditionalPreconditionRequired:
+      description: If-Match is required to change this resource.

@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	CURRENT_DATABASE_VERSION = "v1.2.2"
+	CURRENT_DATABASE_VERSION = "v1.2.3"
 	cleanSchemaState         = "clean"
 )
 
@@ -468,7 +468,7 @@ func startedTransaction(tx *sql.Tx, err error) (*sql.Tx, func(*error), error) {
 	}
 	cleanup := func(txErr *error) {
 		if txErr != nil {
-			_ = tx.Rollback()
+			_ = RollbackTransaction(tx)
 		}
 	}
 	return tx, cleanup, nil

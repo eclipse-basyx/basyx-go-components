@@ -29,6 +29,8 @@ package transaction
 import (
 	"database/sql"
 	"log/slog"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // TxScope provides a consistent pattern for managing database transactions.
@@ -77,7 +79,7 @@ func (s *TxScope) Tx() *sql.Tx {
 func (s *TxScope) Commit() error {
 	if s.owned && !s.committed {
 		s.committed = true
-		return s.tx.Commit()
+		return common.CommitTransaction(s.tx)
 	}
 	return nil
 }

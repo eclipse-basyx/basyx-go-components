@@ -28,18 +28,16 @@ package rebac
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 )
 
 const maxGrantsPerObject = 1000
@@ -119,8 +117,7 @@ type inheritanceDocument struct {
 // bound to the object, so the ETag of one resource never matches another
 // resource with the same revision number.
 func revisionETag(objectKey string, revision int64) string {
-	digest := sha256.Sum256([]byte(objectKey))
-	return `"` + strconv.FormatInt(revision, 10) + "-" + hex.EncodeToString(digest[:4]) + `"`
+	return conditional.FormatObjectETag(objectKey, revision)
 }
 
 // requireRevision validates If-Match against the locked object revision.

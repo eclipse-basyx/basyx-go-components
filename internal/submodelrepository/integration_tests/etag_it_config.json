@@ -1,0 +1,247 @@
+[
+    {
+        "context": "ETag 01 - POST /submodels returns the ETag of the created Submodel",
+        "method": "POST",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+        "data": "bodies/etag/submodel1.json",
+        "expectedStatus": 201,
+        "expectedResponseHeaders": {
+            "ETag": "re:^\"\\d+-[0-9a-f]{8}\"$"
+        },
+        "captureResponseHeaders": {
+            "ETag": "created"
+        }
+    },
+    {
+        "context": "ETag 02 - GET /submodels/{id} returns a representation ETag",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "expectedStatus": 200,
+        "expectedResponseHeaders": {
+            "ETag": "re:^\"\\d+-[0-9a-f]{8}-[0-9a-f]{16}\"$"
+        },
+        "captureResponseHeaders": {
+            "ETag": "read1"
+        }
+    },
+    {
+        "context": "ETag 03 - GET with matching If-None-Match returns 304",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "headers": {
+            "If-None-Match": "{{$read1}}"
+        },
+        "expectedStatus": 304,
+        "expectedResponseHeaders": {
+            "ETag": "{{$read1}}"
+        }
+    },
+    {
+        "context": "ETag 04 - GET $value has its own representation ETag",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x/$value",
+        "expectedStatus": 200,
+        "expectedResponseHeaders": {
+            "ETag": "!{{$read1}}"
+        }
+    },
+    {
+        "context": "ETag 05 - GET with stale If-Match returns 412",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "headers": {
+            "If-Match": "\"1-00000000\""
+        },
+        "expectedStatus": 412
+    },
+    {
+        "context": "ETag 06 - PATCH $value with stale If-Match returns 412",
+        "method": "PATCH",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x/submodel-elements/Prop/$value",
+        "data": "bodies/etag/value.json",
+        "headers": {
+            "If-Match": "\"1-00000000\""
+        },
+        "expectedStatus": 412
+    },
+    {
+        "context": "ETag 07 - Failed precondition left the Submodel unchanged",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "expectedStatus": 200,
+        "expectedResponseHeaders": {
+            "ETag": "{{$read1}}"
+        }
+    },
+    {
+        "context": "ETag 08 - PATCH $value with the read ETag succeeds and returns the new ETag",
+        "method": "PATCH",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x/submodel-elements/Prop/$value",
+        "data": "bodies/etag/value.json",
+        "headers": {
+            "If-Match": "{{$read1}}"
+        },
+        "expectedStatus": 204,
+        "expectedResponseHeaders": {
+            "ETag": "re:^\"\\d+-[0-9a-f]{8}\"$"
+        },
+        "captureResponseHeaders": {
+            "ETag": "patched"
+        }
+    },
+    {
+        "context": "ETag 09 - Element write changed the Submodel ETag",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "expectedStatus": 200,
+        "expectedResponseHeaders": {
+            "ETag": "!{{$read1}}"
+        },
+        "captureResponseHeaders": {
+            "ETag": "read2"
+        }
+    },
+    {
+        "context": "ETag 10 - Write validator from PATCH is accepted by If-Match",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "headers": {
+            "If-Match": "{{$patched}}"
+        },
+        "expectedStatus": 200
+    },
+    {
+        "context": "ETag 11 - PUT with the previous ETag returns 412",
+        "method": "PUT",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "data": "bodies/etag/submodel1-put.json",
+        "headers": {
+            "If-Match": "{{$read1}}"
+        },
+        "expectedStatus": 412
+    },
+    {
+        "context": "ETag 12 - Create-only PUT of an existing Submodel returns 412",
+        "method": "PUT",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "data": "bodies/etag/submodel1-put.json",
+        "headers": {
+            "If-None-Match": "*"
+        },
+        "expectedStatus": 412
+    },
+    {
+        "context": "ETag 13 - Weak If-Match never matches",
+        "method": "PUT",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "data": "bodies/etag/submodel1-put.json",
+        "headers": {
+            "If-Match": "W/{{$read2}}"
+        },
+        "expectedStatus": 412
+    },
+    {
+        "context": "ETag 14 - PUT with the current ETag succeeds without returning an ETag",
+        "method": "PUT",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "data": "bodies/etag/submodel1-put.json",
+        "headers": {
+            "If-Match": "{{$read2}}"
+        },
+        "expectedStatus": 204,
+        "expectedResponseHeaders": {
+            "ETag": ""
+        }
+    },
+    {
+        "context": "ETag 15 - Create-only PUT creates a missing Submodel",
+        "method": "PUT",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20y",
+        "data": "bodies/etag/submodel2.json",
+        "headers": {
+            "If-None-Match": "*"
+        },
+        "expectedStatus": 201
+    },
+    {
+        "context": "ETag 16 - If-Match on a missing Submodel returns 404 before evaluating",
+        "method": "PATCH",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6bWlzc2luZw/submodel-elements/Prop/$value",
+        "data": "bodies/etag/value.json",
+        "headers": {
+            "If-Match": "\"1-00000000\""
+        },
+        "expectedStatus": 404
+    },
+    {
+        "context": "ETag 17 - DELETE with stale If-Match returns 412",
+        "method": "DELETE",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20y",
+        "headers": {
+            "If-Match": "\"1-00000000\""
+        },
+        "expectedStatus": 412
+    },
+    {
+        "context": "ETag 18 - DELETE with If-Match * succeeds",
+        "method": "DELETE",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20y",
+        "headers": {
+            "If-Match": "*"
+        },
+        "expectedStatus": 204
+    },
+    {
+        "context": "ETag 19 - POST to a collection with a specific If-Match returns 412",
+        "method": "POST",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+        "data": "bodies/etag/submodel2.json",
+        "headers": {
+            "If-Match": "\"1-00000000\""
+        },
+        "expectedStatus": 412
+    },
+    {
+        "context": "ETag 20 - Read the current ETag before deleting",
+        "method": "GET",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "expectedStatus": 200,
+        "captureResponseHeaders": {
+            "ETag": "beforeDelete"
+        }
+    },
+    {
+        "context": "ETag 21 - DELETE with the current ETag succeeds",
+        "method": "DELETE",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "headers": {
+            "If-Match": "{{$beforeDelete}}"
+        },
+        "expectedStatus": 204
+    },
+    {
+        "context": "ETag 22 - Recreated Submodel gets a new ETag",
+        "method": "POST",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+        "data": "bodies/etag/submodel1.json",
+        "expectedStatus": 201,
+        "expectedResponseHeaders": {
+            "ETag": "!{{$created}}"
+        }
+    },
+    {
+        "context": "ETag 23 - Old ETag does not match the recreated Submodel",
+        "method": "DELETE",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "headers": {
+            "If-Match": "{{$created}}"
+        },
+        "expectedStatus": 412
+    },
+    {
+        "context": "ETag 24 - Cleanup",
+        "method": "DELETE",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV0YWc6c20x",
+        "expectedStatus": 204
+    }
+]

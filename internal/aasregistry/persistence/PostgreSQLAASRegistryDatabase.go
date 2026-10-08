@@ -39,6 +39,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -236,29 +237,20 @@ func (p *PostgreSQLAASRegistryDatabase) insertAdministrationShellDescriptorBatch
 	ctx context.Context,
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	batch, err := descriptors.BuildAdministrationShellDescriptorCreateBatch(ctx, aasd)
+	batch, err := buildAdministrationShellDescriptorInsertBatch(ctx, aasd)
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	createdAtQuery := goqu.
-		From(common.TblAASDescriptor).
-		Select(common.ColCreatedAt).
-		Where(goqu.C(common.ColAASID).Eq(aasd.Id))
-	if err = batch.AppendDataset(createdAtQuery); err != nil {
-		return model.AssetAdministrationShellDescriptor{}, common.NewInternalServerError("AASREG-PGBATCH-BUILDCREATEDAT " + err.Error())
-	}
 
 	statements := batch.Statements()
-	mutationCount := len(statements) - 1
+	mutationCount := len(statements) - 2
 	result := aasd
 	err = common.ExecutePostgreSQLBatchTransaction(ctx, p.writerDB, statements, func(batchResults pgx.BatchResults) error {
-		for statementIndex := 0; statementIndex < mutationCount; statementIndex++ {
-			if _, execErr := batchResults.Exec(); execErr != nil {
-				if mappedErr := mapInsertAASDescriptorError(execErr); mappedErr != execErr {
-					return mappedErr
-				}
-				return common.NewInternalServerError("AASREG-PGBATCH-EXEC " + execErr.Error())
-			}
+		if execErr := execInsertBatchMutations(batchResults, mutationCount); execErr != nil {
+			return execErr
+		}
+		if revisionErr := recordCreatedDescriptorRevision(ctx, batchResults, aasd.Id); revisionErr != nil {
+			return revisionErr
 		}
 		var createdAt time.Time
 		if scanErr := batchResults.QueryRow().Scan(&createdAt); scanErr != nil {
@@ -271,6 +263,62 @@ func (p *PostgreSQLAASRegistryDatabase) insertAdministrationShellDescriptorBatch
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	return result, nil
+}
+
+// buildAdministrationShellDescriptorInsertBatch builds the create statements
+// of a descriptor, followed by its revision write and its creation time read.
+func buildAdministrationShellDescriptorInsertBatch(ctx context.Context, aasd model.AssetAdministrationShellDescriptor) (*common.PostgreSQLBatch, error) {
+	batch, err := descriptors.BuildAdministrationShellDescriptorCreateBatch(ctx, aasd)
+	if err != nil {
+		return nil, err
+	}
+	if err = batch.AppendDataset(conditional.RevisionUpsertDataset(descriptors.CreatedAdministrationShellDescriptorRevisions(ctx, aasd.Id)...)); err != nil {
+		return nil, common.NewInternalServerError("AASREG-PGBATCH-BUILDREVISION " + err.Error())
+	}
+	createdAtQuery := goqu.
+		From(common.TblAASDescriptor).
+		Select(common.ColCreatedAt).
+		Where(goqu.C(common.ColAASID).Eq(aasd.Id))
+	if err = batch.AppendDataset(createdAtQuery); err != nil {
+		return nil, common.NewInternalServerError("AASREG-PGBATCH-BUILDCREATEDAT " + err.Error())
+	}
+	return batch, nil
+}
+
+func execInsertBatchMutations(batchResults pgx.BatchResults, mutationCount int) error {
+	for statementIndex := 0; statementIndex < mutationCount; statementIndex++ {
+		if _, execErr := batchResults.Exec(); execErr != nil {
+			if mappedErr := mapInsertAASDescriptorError(execErr); mappedErr != execErr {
+				return mappedErr
+			}
+			return common.NewInternalServerError("AASREG-PGBATCH-EXEC " + execErr.Error())
+		}
+	}
+	return nil
+}
+
+// recordCreatedDescriptorRevision reads the revisions assigned by the batch
+// and records the created descriptor's entity tag for the response.
+func recordCreatedDescriptorRevision(ctx context.Context, batchResults pgx.BatchResults, aasID string) error {
+	rows, err := batchResults.Query()
+	if err != nil {
+		return common.NewInternalServerError("AASREG-PGBATCH-REVISION " + err.Error())
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var kind, identifier string
+		var revision int64
+		if err = rows.Scan(&kind, &identifier, &revision); err != nil {
+			return common.NewInternalServerError("AASREG-PGBATCH-SCANREVISION " + err.Error())
+		}
+		if conditional.Kind(kind) == conditional.KindAASDescriptor && identifier == aasID {
+			conditional.RecordCreated(ctx, conditional.Ref(conditional.KindAASDescriptor, aasID), revision)
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return common.NewInternalServerError("AASREG-PGBATCH-REVISIONROWS " + err.Error())
+	}
+	return nil
 }
 
 // InsertAdministrationShellDescriptorInTransaction inserts the provided AAS
@@ -864,7 +912,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 		if err != nil {
 			return err
 		}
-		changed, err := descriptors.UpdateSubmodelDescriptorTx(ctx, tx, descriptorID, previous, submodel, position, false)
+		changed, err := descriptors.UpdateEmbeddedSubmodelDescriptorTx(ctx, tx, aasID, descriptorID, previous, submodel, position)
 		if err != nil {
 			return err
 		}

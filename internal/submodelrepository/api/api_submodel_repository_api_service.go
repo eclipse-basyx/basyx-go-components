@@ -2689,6 +2689,10 @@ func (s *SubmodelRepositoryAPIAPIService) prepareOperationDelegation(
 		return preparedOperationDelegation{}, newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), false
 	}
 
+	if verifyErr := s.submodelBackend.VerifyConditionalTarget(ctx); verifyErr != nil {
+		return preparedOperationDelegation{}, newAPIErrorResponse(verifyErr, http.StatusInternalServerError, operation, "Precondition"), false
+	}
+
 	return preparedOperationDelegation{
 		decodedSubmodelIdentifier: decodedSubmodelIdentifier,
 		element:                   element,

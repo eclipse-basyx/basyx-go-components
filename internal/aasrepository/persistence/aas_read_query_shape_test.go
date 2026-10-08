@@ -28,6 +28,7 @@ package persistence
 import (
 	"database/sql"
 	"fmt"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional/conditionaltest"
 	"strings"
 	"testing"
 	"time"
@@ -477,6 +478,7 @@ func TestCreateAASSubmodelReferenceUsesTargetedMutationWithoutHistory(t *testing
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`INSERT INTO "aas_submodel_reference_payload"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	conditionaltest.ExpectRevisionUpsert(mock, "aas", "urn:example:aas:existing")
 	mock.ExpectCommit()
 
 	err = repository.CreateSubmodelReferenceInAssetAdministrationShell(
@@ -508,6 +510,7 @@ func TestDeleteAASSubmodelReferenceUsesTargetedMutationWithoutHistory(t *testing
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(101)))
 	mock.ExpectExec(`DELETE FROM "aas_submodel_reference"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	conditionaltest.ExpectRevisionUpsert(mock, "aas", "urn:example:aas:existing")
 	mock.ExpectCommit()
 
 	err = repository.DeleteSubmodelReferenceInAssetAdministrationShell(

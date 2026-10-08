@@ -41,6 +41,9 @@ operations in the [administration guide](administration.md).
   current ETag; `*` matches any revision. Changes are authorized again
   while the object is locked, so a caller whose access was revoked in the
   meantime cannot complete them.
+  The access revision is independent of the resource's own entity tag
+  described in [Conditional requests](../../user/conditional_requests.md);
+  both use the same tag format.
 - **Management root.** Endpoints that do not belong to one resource live
   below `/security/rebac` of any ReBAC-enabled service; all services of one
   database share the same state.

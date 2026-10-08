@@ -33,6 +33,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 )
@@ -70,7 +71,7 @@ func InsertCompanyDescriptor(ctx context.Context, db *sql.DB, companyDescriptor 
 		_ = tx.Rollback()
 		return model.CompanyDescriptor{}, err
 	}
-	return result, tx.Commit()
+	return result, common.CommitTransaction(tx)
 }
 
 // InsertCompanyDescriptorTx performs the same insert as
@@ -80,7 +81,7 @@ func InsertCompanyDescriptor(ctx context.Context, db *sql.DB, companyDescriptor 
 // The function inserts the base descriptor row first and then creates related
 // entities (display name/description/admin info/endpoints). If any step fails,
 // the error is returned and the caller is responsible for rolling back the transaction.
-func InsertCompanyDescriptorTx(_ context.Context, tx *sql.Tx, comdesc model.CompanyDescriptor) error {
+func InsertCompanyDescriptorTx(ctx context.Context, tx *sql.Tx, comdesc model.CompanyDescriptor) error {
 	if err := model.AssertCompanyDescriptorConstraints(comdesc); err != nil {
 		return common.NewErrBadRequest(err.Error())
 	}
@@ -165,7 +166,7 @@ func InsertCompanyDescriptorTx(_ context.Context, tx *sql.Tx, comdesc model.Comp
 		return common.NewInternalServerError("Failed to create Company AssetID Regex Patterns - no changes applied - see console for details")
 	}
 
-	return nil
+	return touchRevisions(ctx, tx, conditional.KindCompanyDescriptor, conditional.OpCreate, comdesc.Domain)
 }
 
 func mapInsertCompanyDescriptorError(err error) error {
@@ -417,7 +418,7 @@ func DeleteCompanyDescriptorByIDTx(ctx context.Context, tx *sql.Tx, companyIdent
 	if _, execErr := tx.Exec(delStr, delArgs...); execErr != nil {
 		return execErr
 	}
-	return nil
+	return touchRevisions(ctx, tx, conditional.KindCompanyDescriptor, conditional.OpDelete, companyIdentifier)
 }
 
 // ReplaceCompanyDescriptor atomically replaces the descriptor with the same
@@ -451,7 +452,7 @@ func ReplaceCompanyDescriptor(ctx context.Context, db *sql.DB, companyDescriptor
 		_ = tx.Rollback()
 		return model.CompanyDescriptor{}, err
 	}
-	return result, tx.Commit()
+	return result, common.CommitTransaction(tx)
 }
 
 // ListCompanyDescriptors lists Company Descriptors with optional

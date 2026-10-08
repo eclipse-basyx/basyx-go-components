@@ -37,6 +37,25 @@ servers:
 - url: https://example.com/
 components:
   parameters:
+    ConditionalIfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags of the resource. The request fails with 412 when no tag
+        designates the current revision. `*` matches any existing resource.
+      schema:
+        type: string
+    ConditionalIfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags. GET answers 304 when the current representation has one of
+        them. `*` on PUT only creates the resource and fails with 412 when it
+        exists.
+      schema:
+        type: string
     Limit:
       name: limit
       in: query
@@ -1025,6 +1044,15 @@ components:
           type: string
           example: wJlCDLIl6KTWypN7T6vc6nWEmEYe99Hjf1XY1xmqV-M=#
   responses:
+    ConditionalNotModified:
+      description: The current representation matches If-None-Match.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ConditionalETag'
+    ConditionalPreconditionFailed:
+      description: If-Match or If-None-Match does not hold. Nothing was changed.
+    ConditionalPreconditionRequired:
+      description: If-Match is required to change this resource.
     bad-request:
       description: Bad Request, e.g. the request parameters of the format of the request
         body is wrong.
@@ -1065,6 +1093,13 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Result'
+  headers:
+    ConditionalETag:
+      description: >-
+        Strong entity tag of the resource revision and, on reads, of the
+        returned representation.
+      schema:
+        type: string
 paths:
   /serialization:
     get:
@@ -1355,6 +1390,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAssetAdministrationShellDescriptorById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - name: aasIdentifier
         in: path
         description: The Asset Administration Shell’s unique id (UTF8-BASE64-URL-encoded)
@@ -1366,6 +1403,9 @@ paths:
       responses:
         '200':
           description: Requested Asset Administration Shell Descriptor
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -1378,6 +1418,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -1388,6 +1432,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PutAssetAdministrationShellDescriptorById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - name: aasIdentifier
         in: path
         description: The Asset Administration Shell’s unique id (UTF8-BASE64-URL-encoded)
@@ -1423,6 +1469,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -1434,6 +1484,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteAssetAdministrationShellDescriptorById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: aasIdentifier
         in: path
         description: The Asset Administration Shell’s unique id (UTF8-BASE64-URL-encoded)
@@ -1451,6 +1502,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shell-descriptors/{aasIdentifier}/submodel-descriptors:
@@ -1464,11 +1519,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelDescriptors/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       responses:
         '200':
           description: Requested Submodel Descriptors
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -1481,6 +1541,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     post:
@@ -1497,6 +1561,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '201':
           description: Submodel Descriptor created successfully
@@ -1519,6 +1585,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/conflict
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}:
@@ -1532,9 +1602,15 @@ paths:
       operationId: GetSubmodelDescriptorByIdThroughSuperpath
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelDescriptorById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested Submodel Descriptor
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -1547,6 +1623,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -1563,6 +1643,9 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '201':
           description: Submodel Descriptor created successfully
@@ -1585,6 +1668,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -1594,6 +1681,8 @@ paths:
       operationId: DeleteSubmodelDescriptorByIdThroughSuperpath
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteSubmodelDescriptorById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Submodel Descriptor deleted successfully
@@ -1603,6 +1692,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /query/shell-descriptors:
@@ -1964,10 +2057,16 @@ paths:
       operationId: GetAllAssetLinksById
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllAssetLinksById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested specific Asset identifiers (including the global asset
             ID represented by a specific asset ID)
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -1976,6 +2075,10 @@ paths:
                   $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SpecificAssetId
         '404':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     post:
@@ -1995,6 +2098,8 @@ paths:
               items:
                 $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SpecificAssetId
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '201':
           description: Specific asset identifiers created successfully
@@ -2010,6 +2115,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '409':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/conflict
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -2020,11 +2129,17 @@ paths:
       operationId: DeleteAllAssetLinksById
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteAllAssetLinksById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Specific asset identifiers deleted successfully
         '404':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodel-descriptors:
@@ -2101,9 +2216,15 @@ paths:
       operationId: GetSubmodelDescriptorById
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelDescriptorById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested Submodel Descriptor
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -2116,6 +2237,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -2132,6 +2257,9 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '201':
           description: Submodel Descriptor created successfully
@@ -2152,6 +2280,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -2161,6 +2293,8 @@ paths:
       operationId: DeleteSubmodelDescriptorById
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteSubmodelDescriptorById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Submodel Descriptor deleted successfully
@@ -2172,6 +2306,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
   /shells:
     get:
       tags:
@@ -2319,9 +2457,15 @@ paths:
       operationId: GetAssetAdministrationShellById
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAssetAdministrationShellById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested Asset Administration Shell
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -2336,6 +2480,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -2352,6 +2500,9 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/AssetAdministrationShell
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '201':
           description: Asset Administration Shell created successfully
@@ -2374,6 +2525,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -2383,6 +2538,8 @@ paths:
       operationId: DeleteAssetAdministrationShellById
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteAssetAdministrationShellById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Asset Administration Shell deleted successfully
@@ -2398,6 +2555,10 @@ paths:
                 $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/Result
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           description: Default error handling for unmentioned status codes
           content:
@@ -2414,9 +2575,15 @@ paths:
       operationId: GetAssetAdministrationShellById-Reference_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAssetAdministrationShellById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested Asset Administration Shell
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -2431,6 +2598,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/asset-information:
@@ -2443,9 +2614,15 @@ paths:
       operationId: GetAssetInformation_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAssetInformation/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested Asset Information
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -2460,6 +2637,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -2476,6 +2657,9 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/AssetInformation
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '204':
           description: Asset Information updated successfully
@@ -2489,6 +2673,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/asset-information/thumbnail:
@@ -2500,9 +2688,15 @@ paths:
       operationId: GetThumbnail_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetThumbnail/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: The thumbnail of the Asset Information.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/octet-stream:
               schema:
@@ -2518,6 +2712,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -2542,6 +2740,9 @@ paths:
               file:
                 contentType: application/octet-stream
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '204':
           description: Thumbnail updated successfully
@@ -2555,6 +2756,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -2563,6 +2768,8 @@ paths:
       operationId: DeleteThumbnail_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteThumbnail/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '200':
           description: 'Thumbnail deletion successful.  Deprecated: Use response code
@@ -2579,6 +2786,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodel-refs:
@@ -2592,11 +2803,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelReferences/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       responses:
         '200':
           description: Requested submodel references
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -2611,6 +2827,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     post:
@@ -2627,6 +2847,8 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/Reference
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '201':
           description: Submodel reference created successfully
@@ -2651,6 +2873,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/conflict
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodel-refs/{submodelIdentifier}:
@@ -2665,6 +2891,8 @@ paths:
       operationId: DeleteSubmodelReference_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteSubmodelReference/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Submodel reference deleted successfully
@@ -2678,6 +2906,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}:
@@ -2692,11 +2924,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodel/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Extent
       responses:
         '200':
           description: Requested Submodel
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -2711,6 +2948,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -2727,6 +2968,9 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/Submodel
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '201':
           description: Submodel reference created successfully
@@ -2751,6 +2995,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -2761,6 +3009,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PatchSubmodel/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: level
         in: query
         description: Determines the structural depth of the respective resource content
@@ -2790,6 +3039,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -2799,6 +3052,8 @@ paths:
       operationId: DeleteSubmodelById_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteSubmodelById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Submodel deleted successfully
@@ -2812,6 +3067,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/$metadata:
@@ -2825,9 +3084,15 @@ paths:
       operationId: GetSubmodelById-Metadata_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodel/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested Submodel
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -2842,6 +3107,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -2858,6 +3127,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelMetadata
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Submodel updated successfully
@@ -2871,6 +3142,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/$value:
@@ -2885,11 +3160,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodel/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Extent
       responses:
         '200':
           description: Requested Submodel
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -2904,6 +3184,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -2914,6 +3198,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PatchSubmodel/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: level
         in: query
         description: Determines the structural depth of the respective resource content
@@ -2943,6 +3228,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/$reference:
@@ -2956,9 +3245,15 @@ paths:
       operationId: GetSubmodelById-Reference_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodel/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested Submodel as a Reference
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -2973,6 +3268,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/$path:
@@ -2987,10 +3286,15 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodel/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       responses:
         '200':
           description: Requested Submodel in Path notation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3007,6 +3311,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements:
@@ -3021,6 +3329,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
@@ -3028,6 +3338,9 @@ paths:
       responses:
         '200':
           description: List of found submodel elements
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3042,6 +3355,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     post:
@@ -3058,6 +3375,8 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SubmodelElement
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '201':
           description: Submodel element created successfully
@@ -3082,6 +3401,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/conflict
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/$metadata:
@@ -3096,11 +3419,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       responses:
         '200':
           description: List of found submodel elements
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3115,6 +3443,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/$value:
@@ -3130,12 +3462,17 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       responses:
         '200':
           description: List of found submodel elements in their ValueOnly representation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3150,6 +3487,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/$reference:
@@ -3164,6 +3505,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       - name: level
@@ -3179,6 +3522,9 @@ paths:
       responses:
         '200':
           description: List of References of the found submodel elements
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3193,6 +3539,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/$path:
@@ -3207,6 +3557,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
@@ -3214,6 +3566,9 @@ paths:
       responses:
         '200':
           description: List of found submodel elements in the Path notation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3228,6 +3583,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}:
@@ -3244,11 +3603,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Extent
       responses:
         '200':
           description: Requested submodel element
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3263,6 +3627,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     post:
@@ -3280,6 +3648,8 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SubmodelElement
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '201':
           description: Submodel element created successfully
@@ -3304,6 +3674,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/conflict
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -3321,6 +3695,9 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SubmodelElement
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '201':
           description: Submodel element created successfully
@@ -3345,6 +3722,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -3356,6 +3737,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PatchSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       requestBody:
         description: The updated value of the submodel element
@@ -3377,6 +3759,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -3387,6 +3773,8 @@ paths:
       operationId: DeleteSubmodelElementByPath_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteSubmodelElementByPath/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Submodel element deleted successfully
@@ -3400,6 +3788,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$metadata:
@@ -3415,9 +3807,15 @@ paths:
       operationId: GetSubmodelElementByPath-Metadata_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested submodel element
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3432,6 +3830,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -3449,6 +3851,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelElementMetadata
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Submodel element updated successfully
@@ -3462,6 +3866,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$value:
@@ -3478,11 +3886,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Extent
       responses:
         '200':
           description: Requested submodel element in its ValueOnly representation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3497,6 +3910,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -3508,6 +3925,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PatchSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       requestBody:
         description: The updated value of the submodel element
@@ -3529,6 +3947,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$reference:
@@ -3545,6 +3967,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - name: level
         in: query
         description: Determines the structural depth of the respective resource content
@@ -3558,6 +3982,9 @@ paths:
       responses:
         '200':
           description: Requested submodel element in its ValueOnly representation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3572,6 +3999,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$path:
@@ -3588,10 +4019,15 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       responses:
         '200':
           description: Requested submodel element in the Path notation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -3608,6 +4044,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment:
@@ -3623,10 +4063,15 @@ paths:
       operationId: GetFileByPath_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetFileByPath/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested file
           headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
             Content-Disposition:
               schema:
                 type: string
@@ -3648,6 +4093,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -3674,6 +4123,9 @@ paths:
               file:
                 contentType: application/octet-stream
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '204':
           description: Submodel element updated successfully
@@ -3687,6 +4139,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -3697,6 +4153,8 @@ paths:
       operationId: DeleteFileByPath_AasRepository
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteFileByPath/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '200':
           description: Submodel element updated successfully
@@ -3710,6 +4168,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke:
@@ -3731,6 +4193,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequest
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '200':
           description: Operation result object
@@ -3748,6 +4212,8 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke/$value:
@@ -3769,6 +4235,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequestValueOnly
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '200':
           description: Operation result object
@@ -3786,6 +4254,8 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke-async:
@@ -3807,6 +4277,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequestAsync
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '202':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/accepted
@@ -3820,6 +4292,8 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke-async/$value:
@@ -3841,6 +4315,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequestAsyncValueOnly
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '202':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/accepted
@@ -3854,6 +4330,8 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-status/{handleId}:
@@ -4281,11 +4759,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Extent
       responses:
         '200':
           description: Requested Submodel
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4300,6 +4783,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -4316,6 +4803,9 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/Submodel
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '201':
           description: Submodel created successfully
@@ -4338,6 +4828,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -4348,6 +4842,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PatchSubmodelById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: level
         in: query
         description: Determines the structural depth of the respective resource content
@@ -4377,6 +4872,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -4386,6 +4885,8 @@ paths:
       operationId: DeleteSubmodelById
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteSubmodelById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Submodel deleted successfully
@@ -4399,6 +4900,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/$metadata:
@@ -4411,9 +4916,15 @@ paths:
       operationId: GetSubmodelById-Metadata
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested Submodel in the metadata representation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4428,6 +4939,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -4438,6 +4953,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PatchSubmodelById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: level
         in: query
         description: Determines the structural depth of the respective resource content
@@ -4467,6 +4983,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/$value:
@@ -4480,11 +5000,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Extent
       responses:
         '200':
           description: Requested Submodel
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4499,6 +5024,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -4509,6 +5038,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PatchSubmodelById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: level
         in: query
         description: Determines the structural depth of the respective resource content
@@ -4538,6 +5068,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/$reference:
@@ -4550,9 +5084,15 @@ paths:
       operationId: GetSubmodelById-Reference
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelById/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested Submodel
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4567,6 +5107,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/$path:
@@ -4580,10 +5124,15 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       responses:
         '200':
           description: Requested Submodel
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4600,6 +5149,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements:
@@ -4613,6 +5166,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
@@ -4620,6 +5175,9 @@ paths:
       responses:
         '200':
           description: List of found submodel elements
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4634,6 +5192,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           description: Default error handling for unmentioned status codes
           content:
@@ -4654,6 +5216,8 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SubmodelElement
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '201':
           description: Submodel element created successfully
@@ -4678,6 +5242,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/conflict
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/$metadata:
@@ -4692,11 +5260,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       responses:
         '200':
           description: List of found submodel elements
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4711,6 +5284,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/$value:
@@ -4725,6 +5302,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
@@ -4732,6 +5311,9 @@ paths:
       responses:
         '200':
           description: List of found submodel elements
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4746,6 +5328,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/$reference:
@@ -4759,6 +5345,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       - name: level
@@ -4774,6 +5362,9 @@ paths:
       responses:
         '200':
           description: List of found submodel elements
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4788,6 +5379,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/$path:
@@ -4802,12 +5397,17 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetAllSubmodelElements/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       responses:
         '200':
           description: List of found submodel elements in the Path notation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4822,6 +5422,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}:
@@ -4837,11 +5441,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Extent
       responses:
         '200':
           description: Requested submodel element
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -4856,6 +5465,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     post:
@@ -4873,6 +5486,8 @@ paths:
             schema:
               $ref: ../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/SubmodelElement
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '201':
           description: Submodel element created successfully
@@ -4897,6 +5512,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/conflict
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -4908,6 +5527,8 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PutSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - name: level
         in: query
         description: Determines the structural depth of the respective resource content
@@ -4948,6 +5569,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -4958,6 +5583,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PatchSubmodelById/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: level
         in: query
         description: Determines the structural depth of the respective resource content
@@ -4987,6 +5613,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -4997,6 +5627,8 @@ paths:
       operationId: DeleteSubmodelElementByPath_SubmodelRepo
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteSubmodelElementByPath/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Submodel element deleted successfully
@@ -5010,6 +5642,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$metadata:
@@ -5024,9 +5660,15 @@ paths:
       operationId: GetSubmodelElementByPath-Metadata_SubmodelRepo
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Metadata attributes of the requested submodel element
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -5041,6 +5683,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -5057,6 +5703,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelElementMetadata
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: SubmodelElement updated successfully
@@ -5070,6 +5718,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$value:
@@ -5085,11 +5737,16 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Extent
       responses:
         '200':
           description: Requested submodel element
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -5104,6 +5761,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     patch:
@@ -5114,6 +5775,7 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/PatchSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: level
         in: query
         description: Determines the structural depth of the respective resource content
@@ -5143,6 +5805,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$reference:
@@ -5157,9 +5823,15 @@ paths:
       operationId: GetSubmodelElementByPath-Reference_SubmodelRepo
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested submodel element
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -5174,6 +5846,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$path:
@@ -5189,10 +5865,15 @@ paths:
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetSubmodelElementByPath/3/2
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - $ref: ../Part2-API-Schemas/openapi.yaml#/components/parameters/Level
       responses:
         '200':
           description: Submodel elements in path notation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -5209,6 +5890,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment:
@@ -5223,10 +5908,15 @@ paths:
       operationId: GetFileByPath_SubmodelRepo
       x-semanticIds:
       - https://admin-shell.io/aas/API/GetFileByPath/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested file
           headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
             Content-Disposition:
               schema:
                 type: string
@@ -5255,6 +5945,10 @@ paths:
                 $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/Result
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     put:
@@ -5281,6 +5975,9 @@ paths:
               file:
                 contentType: application/octet-stream
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '204':
           description: Submodel element updated successfully
@@ -5300,6 +5997,10 @@ paths:
                 $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/Result
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
     delete:
@@ -5310,6 +6011,8 @@ paths:
       operationId: DeleteFileByPath_SubmodelRepo
       x-semanticIds:
       - https://admin-shell.io/aas/API/DeleteFileByPath/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '200':
           description: Submodel element updated successfully
@@ -5323,6 +6026,10 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke:
@@ -5343,6 +6050,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequest
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '200':
           description: Operation result object
@@ -5367,6 +6076,8 @@ paths:
                 $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/Result
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke/$value:
@@ -5387,6 +6098,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequestValueOnly
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '200':
           description: Operation result object
@@ -5404,6 +6117,8 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke-async:
@@ -5424,6 +6139,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequestAsync
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '202':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/accepted
@@ -5444,6 +6161,8 @@ paths:
                 $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/Result
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke-async/$value:
@@ -5464,6 +6183,8 @@ paths:
             schema:
               $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequestAsyncValueOnly
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '202':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/accepted
@@ -5477,6 +6198,8 @@ paths:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/default
   /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-status/{handleId}:
@@ -5983,6 +6706,8 @@ paths:
       summary: Returns a specific Concept Description
       operationId: GetConceptDescriptionById
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - name: cdIdentifier
         in: path
         description: The Concept Description’s unique id (UTF8-BASE64-URL-encoded)
@@ -5994,6 +6719,9 @@ paths:
       responses:
         '200':
           description: Requested Concept Description
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -6006,6 +6734,10 @@ paths:
           $ref: '#/components/responses/not-found'
         '500':
           $ref: '#/components/responses/internal-server-error'
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: '#/components/responses/default'
       x-semanticIds:
@@ -6016,6 +6748,8 @@ paths:
       summary: Creates or updates an existing Concept Description
       operationId: PutConceptDescriptionById
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - name: cdIdentifier
         in: path
         description: The Concept Description’s unique id (UTF8-BASE64-URL-encoded)
@@ -6051,6 +6785,10 @@ paths:
           $ref: '#/components/responses/forbidden'
         '500':
           $ref: '#/components/responses/internal-server-error'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '#/components/responses/default'
       x-semanticIds:
@@ -6061,6 +6799,7 @@ paths:
       summary: Deletes a Concept Description
       operationId: DeleteConceptDescriptionById
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: cdIdentifier
         in: path
         description: The Concept Description’s unique id (UTF8-BASE64-URL-encoded)
@@ -6080,6 +6819,10 @@ paths:
           $ref: '#/components/responses/not-found'
         '500':
           $ref: '#/components/responses/internal-server-error'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '#/components/responses/default'
       x-semanticIds:

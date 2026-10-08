@@ -125,10 +125,15 @@ paths:
       operationId: GetAASXByPackageId
       x-semanticIds:
         - https://admin-shell.io/aas/API/GetAASXByPackageId/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Requested AASX package
           headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
             X-FileName:
               schema:
                 type: string
@@ -148,6 +153,10 @@ paths:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         '500':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     put:
@@ -177,6 +186,9 @@ paths:
               file:
                 contentType: application/asset-administration-shell-package
         required: true
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '201':
           description: AASX package stored successfully
@@ -199,6 +211,10 @@ paths:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
         '500':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     delete:
@@ -208,6 +224,8 @@ paths:
       operationId: DeleteAASXByPackageId
       x-semanticIds:
         - https://admin-shell.io/aas/API/DeleteAASXByPackageId/3/2
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Deleted successfully
@@ -221,6 +239,10 @@ paths:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         '500':
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
   /packages-async:
@@ -367,3 +389,42 @@ paths:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
         default:
           $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
+
+components:
+  parameters:
+    ConditionalIfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags of the resource. The request fails with 412 when no tag
+        designates the current revision. `*` matches any existing resource.
+      schema:
+        type: string
+    ConditionalIfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags. GET answers 304 when the current representation has one of
+        them. `*` on PUT only creates the resource and fails with 412 when it
+        exists.
+      schema:
+        type: string
+  headers:
+    ConditionalETag:
+      description: >-
+        Strong entity tag of the resource revision and, on reads, of the
+        returned representation.
+      schema:
+        type: string
+  responses:
+    ConditionalNotModified:
+      description: The current representation matches If-None-Match.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ConditionalETag'
+    ConditionalPreconditionFailed:
+      description: If-Match or If-None-Match does not hold. Nothing was changed.
+    ConditionalPreconditionRequired:
+      description: If-Match is required to change this resource.

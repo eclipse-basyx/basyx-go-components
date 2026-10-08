@@ -116,6 +116,7 @@ func newHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, 
 	})
 
 	apiRouter := chi.NewRouter()
+	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "DPPAPIService")
 	if err := setupSecurity(ctx, cfg, apiRouter, db); err != nil {
 		return nil, err
@@ -125,7 +126,7 @@ func newHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, 
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	for _, route := range dppRouter.OrderedRoutes() {
 		classifyDPPRoute(versioningGuard, route)
-		apiRouter.Method(route.Method, route.Pattern, route.HandlerFunc)
+		apiRouter.Method(route.Method, route.Pattern, conditionalGuard.Wrap(route.Pattern, route.HandlerFunc))
 	}
 
 	rootRouter.Mount(contextPath, apiRouter)

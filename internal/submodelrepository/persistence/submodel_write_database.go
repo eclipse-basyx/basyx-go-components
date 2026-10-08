@@ -34,6 +34,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -64,9 +65,9 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 		return err
 	}
 
-	err = tx.Commit()
+	err = common.CommitTransaction(tx)
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-COMMIT " + err.Error())
+		return common.CommitError("SMREPO-NEWSM-CREATE-COMMIT", err)
 	}
 
 	return nil
@@ -163,7 +164,7 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(ctx context.Context, tx *
 	if err := auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceSM, submodel.ID()); err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-REBACOWNER " + err.Error())
 	}
-	return nil
+	return touchSubmodel(ctx, tx, submodel.ID(), conditional.OpCreate)
 }
 
 // insertSubmodelInTransaction inserts the Submodel rows.
@@ -298,7 +299,7 @@ func (s *SubmodelDatabase) PatchSubmodel(ctx context.Context, submodelID string,
 		return common.NewInternalServerError("SMREPO-PATCHSM-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -311,9 +312,9 @@ func (s *SubmodelDatabase) PatchSubmodel(ctx context.Context, submodelID string,
 		return err
 	}
 
-	err = tx.Commit()
+	err = common.CommitTransaction(tx)
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-PATCHSM-COMMIT " + err.Error())
+		return common.CommitError("SMREPO-PATCHSM-COMMIT", err)
 	}
 
 	return nil
@@ -331,7 +332,7 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(ctx context.Context, submo
 	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSM-VERIFY"); err != nil {
 		return err
 	}
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -399,7 +400,7 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(ctx context.Context, submodelID
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -412,9 +413,9 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(ctx context.Context, submodelID
 		return err
 	}
 
-	err = tx.Commit()
+	err = common.CommitTransaction(tx)
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-PATCHSMMETA-COMMIT " + err.Error())
+		return common.CommitError("SMREPO-PATCHSMMETA-COMMIT", err)
 	}
 
 	return nil
@@ -432,7 +433,7 @@ func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(ctx context.Contex
 	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSMMETA-VERIFY"); err != nil {
 		return err
 	}
-	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
 		return err
 	}
@@ -497,9 +498,9 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 		return false, err
 	}
 
-	err = tx.Commit()
+	err = common.CommitTransaction(tx)
 	if err != nil {
-		return false, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
+		return false, common.CommitError("SMREPO-PUTSM-COMMIT", err)
 	}
 
 	return result.IsUpdate, nil
@@ -527,9 +528,9 @@ func (s *SubmodelDatabase) PutSubmodelWithResult(ctx context.Context, submodelID
 		return PutSubmodelResult{}, err
 	}
 
-	err = tx.Commit()
+	err = common.CommitTransaction(tx)
 	if err != nil {
-		return PutSubmodelResult{}, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
+		return PutSubmodelResult{}, common.CommitError("SMREPO-PUTSM-COMMIT", err)
 	}
 
 	return result, nil
@@ -795,9 +796,9 @@ func (s *SubmodelDatabase) DeleteSubmodel(ctx context.Context, submodelID string
 		return err
 	}
 
-	err = tx.Commit()
+	err = common.CommitTransaction(tx)
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-COMMIT " + err.Error())
+		return common.CommitError("SMREPO-DELSM-COMMIT", err)
 	}
 
 	return nil
@@ -862,6 +863,9 @@ func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *
 func deleteSubmodelWithReBACStateTx(ctx context.Context, tx *sql.Tx, submodelID string, submodelDatabaseID int64) error {
 	if err := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceSM, submodelID); err != nil {
 		return common.NewInternalServerError("SMREPO-DELSM-REBACSTATE " + err.Error())
+	}
+	if err := touchSubmodel(ctx, tx, submodelID, conditional.OpDelete); err != nil {
+		return err
 	}
 	return cleanupAndDeleteSubmodelByDatabaseID(ctx, tx, submodelDatabaseID)
 }

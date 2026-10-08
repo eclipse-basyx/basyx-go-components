@@ -42,6 +42,7 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
@@ -320,41 +321,77 @@ func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, new
 	if fileName == "" {
 		fileName = packageID + ".aasx"
 	}
+	stored := storedPackage{packageID: packageID, oid: newOID, fileName: fileName, contentType: contentType, aasIDs: aasIDs}
 	if exists {
-		query, args, buildErr := dialect.Update("aasx_package").Set(goqu.Record{
-			"file_oid": newOID, "file_name": fileName, "content_type": contentType,
-		}).Where(goqu.C("id").Eq(existingID)).ToSQL()
-		if buildErr != nil {
-			return nil, false, common.NewInternalServerError("AASXFS-PUTPACKAGE-BUILDUPDATE " + buildErr.Error())
-		}
-		if _, execErr := tx.ExecContext(ctx, query, args...); execErr != nil {
-			return nil, false, common.NewInternalServerError("AASXFS-PUTPACKAGE-UPDATE " + execErr.Error())
-		}
-		if err = replaceAASIDs(ctx, tx, existingID, aasIDs); err != nil {
-			return nil, false, err
-		}
-		if err = binarycontent.UnlinkOIDTx(ctx, tx, existingOID); err != nil {
-			return nil, false, err
-		}
-		return &PackageRecord{DBID: existingID, PackageID: packageID, FileName: fileName, ContentType: contentType, AASIDs: aasIDs}, true, nil
+		record, updateErr := updateStagedPackageTx(ctx, tx, existingID, existingOID, stored)
+		return record, true, updateErr
 	}
-	query, args, err := dialect.Insert("aasx_package").Rows(goqu.Record{
-		"package_id": packageID, "file_oid": newOID, "file_name": fileName, "content_type": contentType,
+	record, insertErr := insertStagedPackageTx(ctx, tx, stored)
+	return record, false, insertErr
+}
+
+// storedPackage is the package state a staged upload promotes.
+type storedPackage struct {
+	packageID   string
+	oid         int64
+	fileName    string
+	contentType string
+	aasIDs      []string
+}
+
+func (p storedPackage) record(dbID int64) *PackageRecord {
+	return &PackageRecord{DBID: dbID, PackageID: p.packageID, FileName: p.fileName, ContentType: p.contentType, AASIDs: p.aasIDs}
+}
+
+// updateStagedPackageTx swaps the content and metadata of an existing package
+// and unlinks its previous large object.
+func updateStagedPackageTx(ctx context.Context, tx *sql.Tx, existingID int64, existingOID int64, stored storedPackage) (*PackageRecord, error) {
+	query, args, err := goqu.Dialect("postgres").Update("aasx_package").Set(goqu.Record{
+		"file_oid": stored.oid, "file_name": stored.fileName, "content_type": stored.contentType,
+	}).Where(goqu.C("id").Eq(existingID)).ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("AASXFS-PUTPACKAGE-BUILDUPDATE " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return nil, common.NewInternalServerError("AASXFS-PUTPACKAGE-UPDATE " + err.Error())
+	}
+	if err = replaceAASIDs(ctx, tx, existingID, stored.aasIDs); err != nil {
+		return nil, err
+	}
+	if err = binarycontent.UnlinkOIDTx(ctx, tx, existingOID); err != nil {
+		return nil, err
+	}
+	return stored.record(existingID), touchPackage(ctx, tx, stored.packageID, conditional.OpUpdate)
+}
+
+// insertStagedPackageTx inserts a new package.
+func insertStagedPackageTx(ctx context.Context, tx *sql.Tx, stored storedPackage) (*PackageRecord, error) {
+	query, args, err := goqu.Dialect("postgres").Insert("aasx_package").Rows(goqu.Record{
+		"package_id": stored.packageID, "file_oid": stored.oid, "file_name": stored.fileName, "content_type": stored.contentType,
 	}).Returning("id").ToSQL()
 	if err != nil {
-		return nil, false, common.NewInternalServerError("AASXFS-PUTPACKAGE-BUILDINSERT " + err.Error())
+		return nil, common.NewInternalServerError("AASXFS-PUTPACKAGE-BUILDINSERT " + err.Error())
 	}
 	var newID int64
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(&newID); err != nil {
 		if isUniqueViolation(err) {
-			return nil, false, common.NewErrConflict("AASXFS-PUTPACKAGE-CONFLICT packageId already exists")
+			return nil, common.NewErrConflict("AASXFS-PUTPACKAGE-CONFLICT packageId already exists")
 		}
-		return nil, false, common.NewInternalServerError("AASXFS-PUTPACKAGE-INSERT " + err.Error())
+		return nil, common.NewInternalServerError("AASXFS-PUTPACKAGE-INSERT " + err.Error())
 	}
-	if err = insertPackageAASIDs(ctx, tx, packageID, newID, aasIDs); err != nil {
-		return nil, false, err
+	if err = insertPackageAASIDs(ctx, tx, stored.packageID, newID, stored.aasIDs); err != nil {
+		return nil, err
 	}
-	return &PackageRecord{DBID: newID, PackageID: packageID, FileName: fileName, ContentType: contentType, AASIDs: aasIDs}, false, nil
+	return stored.record(newID), touchPackage(ctx, tx, stored.packageID, conditional.OpCreate)
+}
+
+// touchPackage records that tx changes the revision of an AASX package. The
+// new revision is written when the transaction commits.
+func touchPackage(ctx context.Context, tx *sql.Tx, packageID string, op conditional.Operation) error {
+	if err := conditional.Touch(ctx, tx, conditional.Ref(conditional.KindAASXPackage, packageID), op); err != nil {
+		return common.NewInternalServerError("AASXFS-TOUCHPACKAGE-REVISION " + err.Error())
+	}
+	return nil
 }
 
 // GetPackageByID returns metadata and a streaming body for one package.
@@ -474,9 +511,12 @@ func (p *AASXFileServerDatabase) DeletePackageByID(ctx context.Context, packageI
 	if err = binarycontent.UnlinkOIDTx(ctx, tx, fileOID); err != nil {
 		return err
 	}
+	if err = touchPackage(ctx, tx, packageID, conditional.OpDelete); err != nil {
+		return err
+	}
 
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("AASXFS-DELETEPACKAGE-COMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return common.CommitError("AASXFS-DELETEPACKAGE-COMMIT", err)
 	}
 	committed = true
 	return nil

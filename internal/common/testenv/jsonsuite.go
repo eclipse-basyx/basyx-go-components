@@ -38,11 +38,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
@@ -70,6 +72,9 @@ type JSONSuiteStep struct {
 	Action                    string            `json:"action,omitempty"`
 	Headers                   map[string]string `json:"headers,omitempty"`
 	Token                     *TokenCredentials `json:"token,omitempty"`
+	// CaptureResponseHeaders stores response headers in named variables,
+	// which later steps reference as {{$name}} in endpoints and headers.
+	CaptureResponseHeaders map[string]string `json:"captureResponseHeaders,omitempty"`
 }
 
 type JSONStepResult struct {
@@ -104,8 +109,9 @@ type JSONSuiteOptions struct {
 }
 
 type JSONSuiteRunner struct {
-	options JSONSuiteOptions
-	client  *http.Client
+	options  JSONSuiteOptions
+	client   *http.Client
+	captured map[string]string
 }
 
 type CheckDBIsEmptyOptions struct {
@@ -431,13 +437,14 @@ func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 	}
 
 	runner := &JSONSuiteRunner{
-		options: normalized,
-		client:  &http.Client{Timeout: normalized.RequestTimeout},
+		options:  normalized,
+		client:   &http.Client{Timeout: normalized.RequestTimeout},
+		captured: map[string]string{},
 	}
 
 	for idx, rawStep := range steps {
 		stepNumber := idx + 1
-		step := rawStep
+		step := runner.resolveCaptured(rawStep)
 		name := normalized.StepName(step, stepNumber)
 
 		t.Run(name, func(t *testing.T) {
@@ -456,6 +463,7 @@ func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 
 			response, runErr := runner.RunStep(step, stepNumber)
 			require.NoError(t, runErr, "Request failed")
+			runner.capture(step, response.Headers)
 
 			if len(step.ExpectedResponseHeaders) > 0 {
 				runner.compareResponseHeaders(t, step, stepNumber, response.Headers)
@@ -541,11 +549,60 @@ func (r *JSONSuiteRunner) compareResponseHeaders(t *testing.T, step JSONSuiteSte
 
 	for key, expectedValue := range step.ExpectedResponseHeaders {
 		actualValue := headers.Get(key)
-		if actualValue != expectedValue {
+		matches, err := headerValueMatches(expectedValue, actualValue)
+		require.NoErrorf(t, err, "Invalid expected header %s", key)
+		if !matches {
 			r.writeHeaderMismatchLog(stepNumber, key, expectedValue, actualValue)
 		}
 
-		require.Equalf(t, expectedValue, actualValue, "Response header mismatch for %s", key)
+		require.Truef(t, matches, "Response header mismatch for %s: expected %q, got %q", key, expectedValue, actualValue)
+	}
+}
+
+// headerValueMatches compares a response header with an expectation. The
+// prefix "re:" expects a regular expression match and "!" expects any other
+// value.
+func headerValueMatches(expected string, actual string) (bool, error) {
+	if pattern, ok := strings.CutPrefix(expected, "re:"); ok {
+		return regexp.MatchString(pattern, actual)
+	}
+	if unexpected, ok := strings.CutPrefix(expected, "!"); ok {
+		return actual != unexpected, nil
+	}
+	return actual == expected, nil
+}
+
+// resolveCaptured replaces {{$name}} references to captured response headers.
+func (r *JSONSuiteRunner) resolveCaptured(step JSONSuiteStep) JSONSuiteStep {
+	if len(r.captured) == 0 {
+		return step
+	}
+	resolve := func(value string) string {
+		for name, captured := range r.captured {
+			value = strings.ReplaceAll(value, "{{$"+name+"}}", captured)
+		}
+		return value
+	}
+	step.Endpoint = resolve(step.Endpoint)
+	step.Headers = resolveHeaderValues(step.Headers, resolve)
+	step.ExpectedResponseHeaders = resolveHeaderValues(step.ExpectedResponseHeaders, resolve)
+	return step
+}
+
+func resolveHeaderValues(headers map[string]string, resolve func(string) string) map[string]string {
+	if headers == nil {
+		return nil
+	}
+	resolved := make(map[string]string, len(headers))
+	for key, value := range headers {
+		resolved[key] = resolve(value)
+	}
+	return resolved
+}
+
+func (r *JSONSuiteRunner) capture(step JSONSuiteStep, headers http.Header) {
+	for header, name := range step.CaptureResponseHeaders {
+		r.captured[name] = headers.Get(header)
 	}
 }
 
@@ -804,7 +861,7 @@ func listNonEmptyTables(driver string, dsn string, schema string, excluded map[s
 			continue
 		}
 
-		count, countErr := countRowsInTable(db, schema, table)
+		count, countErr := countDomainRows(db, schema, table, excluded)
 		if countErr != nil {
 			return nil, countErr
 		}
@@ -818,6 +875,36 @@ func listNonEmptyTables(driver string, dsn string, schema string, excluded map[s
 	}
 
 	return nonEmpty, nil
+}
+
+// revisionKindTables maps resource revision kinds to the table that holds
+// the resource, so revisions of resources in excluded tables are excluded too.
+var revisionKindTables = map[string]string{
+	"discoveryEntry": "aas_identifier",
+}
+
+// countDomainRows counts the rows of a table that belong to the checked
+// domain state.
+func countDomainRows(db *sql.DB, schema string, table string, excluded map[string]struct{}) (int, error) {
+	if table != "resource_revision" {
+		return countRowsInTable(db, schema, table)
+	}
+	excludedKinds := []string{}
+	for kind, resourceTable := range revisionKindTables {
+		if _, skip := excluded[resourceTable]; skip {
+			excludedKinds = append(excludedKinds, kind)
+		}
+	}
+	query, args, err := goqu.Dialect("postgres").From(goqu.S(schema).Table(table)).Select(goqu.COUNT(goqu.Star())).
+		Where(goqu.C("kind").NotIn(append(excludedKinds, ""))).Prepared(true).ToSQL()
+	if err != nil {
+		return 0, fmt.Errorf("TESTENV-CHECKDB-BUILDREVISIONCOUNT: %w", err)
+	}
+	var count int
+	if err = db.QueryRow(query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("TESTENV-CHECKDB-COUNTREVISIONS: %w", err)
+	}
+	return count, nil
 }
 
 func countRowsInTable(db *sql.DB, schema string, table string) (int, error) {

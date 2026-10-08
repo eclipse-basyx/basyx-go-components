@@ -79,9 +79,15 @@ paths:
       tags: [Company Lookup API]
       summary: Returns a specific Company Descriptor
       operationId: GetCompanyDescriptorById
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Company Descriptor
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -98,6 +104,10 @@ paths:
         'default':
           $ref: '#/components/responses/DefaultError'
 
+        '304':
+          $ref: '#/components/responses/ConditionalNotModified'
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
     put:
       tags: [Company Lookup API]
       summary: Updates an existing Company Descriptor
@@ -112,6 +122,9 @@ paths:
             examples:
                 companyDescriptor:
                   $ref: '#/components/examples/CompanyDescriptorSingle'
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
+        - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       responses:
         '200':
           description: Company Descriptor updated successfully
@@ -133,10 +146,16 @@ paths:
         'default':
           $ref: '#/components/responses/DefaultError'
 
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
     delete:
       tags: [Company Lookup API]
       summary: Deletes a Company Descriptor
       operationId: DeleteCompanyDescriptorById
+      parameters:
+        - $ref: '#/components/parameters/ConditionalIfMatch'
       responses:
         '204':
           description: Company Descriptor deleted successfully
@@ -149,6 +168,10 @@ paths:
         'default':
           $ref: '#/components/responses/DefaultError'
 
+        '412':
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        '428':
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
   /description:
     get:
       tags: [Description API]
@@ -171,6 +194,25 @@ paths:
 
 components:
   parameters:
+    ConditionalIfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags of the resource. The request fails with 412 when no tag
+        designates the current revision. `*` matches any existing resource.
+      schema:
+        type: string
+    ConditionalIfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags. GET answers 304 when the current representation has one of
+        them. `*` on PUT only creates the resource and fails with 412 when it
+        exists.
+      schema:
+        type: string
     Limit:
       name: limit
       in: query
@@ -213,6 +255,15 @@ components:
         type: string
 
   responses:
+    ConditionalNotModified:
+      description: The current representation matches If-None-Match.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ConditionalETag'
+    ConditionalPreconditionFailed:
+      description: If-Match or If-None-Match does not hold. Nothing was changed.
+    ConditionalPreconditionRequired:
+      description: If-Match is required to change this resource.
     BadRequest:
       description: Bad Request, e.g. the request parameters of the format of the request body is wrong.
       content:
@@ -502,3 +553,11 @@ components:
           messageType: "Error"
           text: "Invalid Company Descriptor"
           timestamp: "1970-01-01T00:00:00Z"
+
+  headers:
+    ConditionalETag:
+      description: >-
+        Strong entity tag of the resource revision and, on reads, of the
+        returned representation.
+      schema:
+        type: string

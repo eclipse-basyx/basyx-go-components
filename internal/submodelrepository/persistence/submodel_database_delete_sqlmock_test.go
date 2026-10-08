@@ -53,6 +53,7 @@ func TestDeleteSubmodelSuccessCleansLargeObjectsAndDeletesSubmodel(t *testing.T)
 	expectSubmodelHistoryAppend(mock)
 	mock.ExpectExec(`(?s)SELECT COUNT\(\*\).*file_oid.*FROM .*submodel_element.*file_data.*DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectSubmodelRevisionDelete(mock, "sm-1")
 	mock.ExpectCommit()
 
 	err = sut.DeleteSubmodel(contextWithABACDisabled(t), submodelID)
@@ -123,6 +124,7 @@ func TestDeleteSubmodelCommitFailsReturnsInternalError(t *testing.T) {
 	expectSubmodelHistoryAppend(mock)
 	mock.ExpectExec(`(?s)SELECT COUNT\(\*\).*file_oid.*FROM .*submodel_element.*file_data.*DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectSubmodelRevisionDelete(mock, "sm-commit-fail")
 	mock.ExpectCommit().WillReturnError(errors.New("commit failed"))
 
 	err = sut.DeleteSubmodel(contextWithABACDisabled(t), submodelID)

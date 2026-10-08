@@ -34,6 +34,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
@@ -127,7 +128,7 @@ func InsertSubmodelDescriptorForAAS(
 		_ = tx.Rollback()
 		return model.SubmodelDescriptor{}, err
 	}
-	return result, tx.Commit()
+	return result, common.CommitTransaction(tx)
 }
 
 // InsertSubmodelDescriptorForAASTx inserts a submodel descriptor for an AAS
@@ -173,6 +174,9 @@ func insertSubmodelDescriptorForAASTx(
 	err := createSubModelDescriptors(tx, sql.NullInt64{Int64: aasDescID, Valid: true}, []model.SubmodelDescriptor{submodel})
 
 	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	if err = TouchAdministrationShellDescriptorTx(ctx, tx, aasID, conditional.OpUpdate); err != nil {
 		return model.SubmodelDescriptor{}, err
 	}
 
@@ -254,7 +258,7 @@ func DeleteSubmodelDescriptorForAASByID(
 		_ = tx.Rollback()
 		return err
 	}
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 // DeleteSubmodelDescriptorForAASByIDTx deletes a submodel descriptor for an AAS
@@ -311,8 +315,10 @@ func deleteSubmodelDescriptorForAASByIDTx(
 	if delErr != nil {
 		return delErr
 	}
-	_, err := tx.Exec(delSQL, delArgs...)
-	return err
+	if _, err := tx.Exec(delSQL, delArgs...); err != nil {
+		return err
+	}
+	return TouchAdministrationShellDescriptorTx(ctx, tx, aasID, conditional.OpUpdate)
 }
 
 // ExistsSubmodelForAAS performs a lightweight existence check for a submodel
@@ -384,7 +390,7 @@ func InsertSubmodelDescriptor(
 		_ = tx.Rollback()
 		return model.SubmodelDescriptor{}, err
 	}
-	return result, tx.Commit()
+	return result, common.CommitTransaction(tx)
 }
 
 // InsertSubmodelDescriptorTx inserts a global submodel descriptor using the
@@ -463,7 +469,7 @@ func DeleteSubmodelDescriptorByID(
 		_ = tx.Rollback()
 		return err
 	}
-	return tx.Commit()
+	return common.CommitTransaction(tx)
 }
 
 // DeleteSubmodelDescriptorByIDTx deletes a global submodel descriptor by id
@@ -500,6 +506,9 @@ func DeleteSubmodelDescriptorsByIDsTx(
 		if err := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceSMDesc, submodelID); err != nil {
 			return err
 		}
+	}
+	if err := touchRevisions(ctx, tx, conditional.KindSubmodelDescriptor, conditional.OpDelete, submodelIDs...); err != nil {
+		return err
 	}
 	d := goqu.Dialect(common.Dialect)
 	batch := &common.PostgreSQLBatch{}
@@ -599,6 +608,9 @@ func insertSubmodelDescriptorTx(
 	if err = auth.RecordReBACResourceCreated(ctx, tx, auth.SemanticResourceSMDesc, submodel.Id); err != nil {
 		return model.SubmodelDescriptor{}, err
 	}
+	if err = touchCreatedResourcesTx(ctx, tx, auth.SemanticResourceSMDesc, submodel.Id); err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
 
 	return getSubmodelDescriptorByIDOrDenied(ctx, tx, submodel.Id)
 }
@@ -609,6 +621,9 @@ func deleteSubmodelDescriptorByIDTx(
 	submodelID string,
 ) error {
 	if err := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceSMDesc, submodelID); err != nil {
+		return err
+	}
+	if err := TouchSubmodelDescriptorTx(ctx, tx, submodelID, conditional.OpDelete); err != nil {
 		return err
 	}
 	d := goqu.Dialect(common.Dialect)

@@ -35,6 +35,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
@@ -391,13 +392,18 @@ func ensureAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string) (int64
 				goqu.Record{"aasid": goqu.I("excluded.aasid")},
 			),
 		).
-		Returning(tAASIdentifier.Col(common.ColID)).
+		Returning(tAASIdentifier.Col(common.ColID), goqu.L("(xmax = 0)")).
 		ToSQL()
 	if err != nil {
 		return 0, err
 	}
-	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&aasRef); err != nil {
+	var inserted bool
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&aasRef, &inserted); err != nil {
 		return 0, err
 	}
-	return aasRef, nil
+	op := conditional.OpUpdate
+	if inserted {
+		op = conditional.OpCreate
+	}
+	return aasRef, TouchDiscoveryEntryTx(ctx, tx, aasID, op)
 }

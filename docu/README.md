@@ -17,6 +17,7 @@ reader have their own folder with an index.
 | You want to | Read |
 | --- | --- |
 | Use the AAS API v3.2 features (history, recent changes, signed reads) | [AAS API v3.2 user guide](user/aas_api_v3_2.md) |
+| Detect concurrent changes with ETag, If-Match and If-None-Match | [Conditional requests](user/conditional_requests.md) |
 | Configure logging | [Logging](admin/logging.md) |
 | Export traces and metrics | [OpenTelemetry telemetry](admin/telemetry.md) |
 | Resolve a runtime error | [Errors and their meaning](admin/errors.md) |

@@ -110,3 +110,37 @@ func TestPrepareSecurityEnvCopiesAndRewritesIssuer(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `[{"issuer":"http://localhost:18080/realms/basyx"}]`, string(rewritten))
 }
+
+func TestHeaderValueMatchesSupportsExactNegatedAndRegexExpectations(t *testing.T) {
+	for _, tc := range []struct {
+		expected string
+		actual   string
+		matches  bool
+	}{
+		{expected: `"1-a"`, actual: `"1-a"`, matches: true},
+		{expected: `"1-a"`, actual: `"2-a"`, matches: false},
+		{expected: `!"1-a"`, actual: `"2-a"`, matches: true},
+		{expected: `!"1-a"`, actual: `"1-a"`, matches: false},
+		{expected: `re:^"\d+-[0-9a-f]{8}"$`, actual: `"12-0a1b2c3d"`, matches: true},
+		{expected: `re:^.+$`, actual: ``, matches: false},
+	} {
+		matches, err := headerValueMatches(tc.expected, tc.actual)
+		require.NoError(t, err)
+		require.Equalf(t, tc.matches, matches, "expected %q against %q", tc.expected, tc.actual)
+	}
+}
+
+func TestJSONSuiteRunnerResolvesCapturedResponseHeaders(t *testing.T) {
+	runner := &JSONSuiteRunner{captured: map[string]string{}}
+	runner.capture(JSONSuiteStep{CaptureResponseHeaders: map[string]string{"ETag": "etag1"}}, map[string][]string{"Etag": {`"3-ab"`}})
+
+	step := runner.resolveCaptured(JSONSuiteStep{
+		Endpoint:                "http://host/{{$etag1}}",
+		Headers:                 map[string]string{"If-Match": "{{$etag1}}"},
+		ExpectedResponseHeaders: map[string]string{"ETag": "!{{$etag1}}"},
+	})
+
+	require.Equal(t, `http://host/"3-ab"`, step.Endpoint)
+	require.Equal(t, `"3-ab"`, step.Headers["If-Match"])
+	require.Equal(t, `!"3-ab"`, step.ExpectedResponseHeaders["ETag"])
+}

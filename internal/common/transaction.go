@@ -28,17 +28,29 @@ package common
 import (
 	"context"
 	"database/sql"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 )
 
-// BeginReadTransaction starts a read-only transaction with a stable PostgreSQL snapshot.
+// BeginReadTransaction starts a read-only transaction with a stable PostgreSQL
+// snapshot. The revision of a conditional request's target is read as the
+// first statement, so its entity tag belongs to the same snapshot.
 func BeginReadTransaction(ctx context.Context, db *sql.DB) (*sql.Tx, error) {
 	if db == nil {
 		return nil, NewErrBadRequest("COMMON-BEGINREADTX-NILDB database handle must not be nil")
 	}
-	return db.BeginTx(ctx, &sql.TxOptions{
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
 		ReadOnly:  true,
 	})
+	if err != nil {
+		return nil, err
+	}
+	if err = conditional.ObserveReadTx(ctx, tx); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
 }
 
 // ExecuteInTransaction starts a transaction, executes fn, and commits on success.
@@ -64,12 +76,12 @@ func ExecuteInTransaction(db *sql.DB, startErrorCode string, commitErrorCode str
 		return err
 	}
 
-	err = tx.Commit()
+	err = CommitTransaction(tx)
 	if err != nil {
 		if commitErrorCode == "" {
-			return NewInternalServerError("COMMON-EXECINTX-COMMIT " + err.Error())
+			return CommitError("COMMON-EXECINTX-COMMIT", err)
 		}
-		return NewInternalServerError(commitErrorCode + " " + err.Error())
+		return CommitError(commitErrorCode, err)
 	}
 
 	return nil

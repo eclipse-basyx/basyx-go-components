@@ -69,6 +69,7 @@ var DefaultConfig = struct {
 	ServerShutdownTimeoutSeconds         int
 	ServerPaginationDefaultLimit         int
 	ServerPaginationMaxLimit             int
+	ServerConditionalRequireIfMatch      bool
 	PgPort                               int
 	PgDBName                             string
 	PgSSLMode                            string
@@ -146,6 +147,7 @@ var DefaultConfig = struct {
 	ServerShutdownTimeoutSeconds:         10,
 	ServerPaginationDefaultLimit:         100,
 	ServerPaginationMaxLimit:             1000,
+	ServerConditionalRequireIfMatch:      false,
 	PgPort:                               5432,
 	PgDBName:                             "basyxTestDB",
 	PgSSLMode:                            "disable",
@@ -387,7 +389,13 @@ type ServerConfig struct {
 	IdleTimeoutSeconds            int    `mapstructure:"idleTimeoutSeconds" yaml:"idleTimeoutSeconds" json:"idleTimeoutSeconds"`                   // Maximum idle keep-alive connection time
 	ShutdownTimeoutSeconds        int    `mapstructure:"shutdownTimeoutSeconds" yaml:"shutdownTimeoutSeconds" json:"shutdownTimeoutSeconds"`       // Maximum graceful shutdown wait time
 
-	Pagination PaginationConfig `mapstructure:"pagination" yaml:"pagination" json:"pagination"` // Page size limits shared by all paginated endpoints
+	Pagination          PaginationConfig          `mapstructure:"pagination" yaml:"pagination" json:"pagination"`                            // Page size limits shared by all paginated endpoints
+	ConditionalRequests ConditionalRequestsConfig `mapstructure:"conditionalRequests" yaml:"conditionalRequests" json:"conditionalRequests"` // HTTP conditional request (ETag, If-Match) settings
+}
+
+// ConditionalRequestsConfig contains the settings of HTTP conditional requests.
+type ConditionalRequestsConfig struct {
+	RequireIfMatch bool `mapstructure:"requireIfMatch" yaml:"requireIfMatch" json:"requireIfMatch"` // Answer 428 to writes of existing resources without If-Match
 }
 
 // PaginationConfig contains the page size limits shared by all paginated endpoints.
@@ -642,6 +650,11 @@ func applyServerEnvOverrides(cfg *Config) {
 		"SERVER_PAGINATION_MAXLIMIT",
 		"SERVER_PAGINATION_MAX_LIMIT",
 		"BASYX_SERVER_PAGINATION_MAX_LIMIT",
+	)
+	applyFirstBoolEnv(func(value bool) { cfg.Server.ConditionalRequests.RequireIfMatch = value },
+		"SERVER_CONDITIONALREQUESTS_REQUIREIFMATCH",
+		"SERVER_CONDITIONAL_REQUESTS_REQUIRE_IF_MATCH",
+		"BASYX_SERVER_CONDITIONAL_REQUESTS_REQUIRE_IF_MATCH",
 	)
 }
 
@@ -1306,6 +1319,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.shutdownTimeoutSeconds", DefaultConfig.ServerShutdownTimeoutSeconds)
 	v.SetDefault("server.pagination.defaultLimit", DefaultConfig.ServerPaginationDefaultLimit)
 	v.SetDefault("server.pagination.maxLimit", DefaultConfig.ServerPaginationMaxLimit)
+	v.SetDefault("server.conditionalRequests.requireIfMatch", DefaultConfig.ServerConditionalRequireIfMatch)
 
 	// PostgreSQL defaults
 	v.SetDefault("postgres.host", "db")
@@ -1454,6 +1468,7 @@ func LogConfiguration(cfg *Config, configPath string) {
 			"verification_mode", cfg.Server.StrictVerification,
 			"pagination_default_limit", cfg.Server.Pagination.DefaultLimit,
 			"pagination_max_limit", cfg.Server.Pagination.MaxLimit,
+			"conditional_requests_require_if_match", cfg.Server.ConditionalRequests.RequireIfMatch,
 		),
 		slog.Group(
 			"features",
@@ -1498,6 +1513,7 @@ func ConfigureLogging(cfg *Config, serviceName string, configPath string, output
 //   - Allowed origins (domains that can make requests)
 //   - Allowed methods (HTTP methods permitted)
 //   - Allowed headers (request headers permitted)
+//   - Conditional request headers (If-Match and If-None-Match), always allowed
 //   - Exposed response headers (request metadata, Location and ETag)
 //   - Credentials support (whether to include cookies/auth headers)
 //
@@ -1512,10 +1528,11 @@ func AddCors(r *chi.Mux, config *Config) {
 		commonlogging.CorrelationIDHeader,
 	}
 	exposedResponseHeaders := appendUniqueHeaders(requestMetadataHeaders, "Location", "ETag")
+	allowedRequestHeaders := appendUniqueHeaders(requestMetadataHeaders, "If-Match", "If-None-Match")
 	c := cors.New(cors.Options{
 		AllowedOrigins:   config.CorsConfig.AllowedOrigins,
 		AllowedMethods:   config.CorsConfig.AllowedMethods,
-		AllowedHeaders:   appendUniqueHeaders(config.CorsConfig.AllowedHeaders, requestMetadataHeaders...),
+		AllowedHeaders:   appendUniqueHeaders(config.CorsConfig.AllowedHeaders, allowedRequestHeaders...),
 		ExposedHeaders:   exposedResponseHeaders,
 		AllowCredentials: config.CorsConfig.AllowCredentials,
 	})

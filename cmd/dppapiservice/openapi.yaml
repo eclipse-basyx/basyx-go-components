@@ -23,6 +23,7 @@ paths:
         Deletes the DPP resource when deletion is legally permitted. Implementations must enforce archiving and deletion restrictions required by applicable regulation.
       operationId: deleteDPPById
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - description: Percent-encoded Digital Product Passport identifier.
         explode: false
         in: path
@@ -72,6 +73,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/Result"
           description: Internal server error.
+        "412":
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        "428":
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
       summary: Delete DPP by DPP ID
       tags:
       - DPP Life Cycle
@@ -80,6 +85,8 @@ paths:
         Retrieves a DigitalProductPassport document. Compressed responses use content section properties; full responses use the expanded read-only elements array.
       operationId: readDPPById
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - description: Percent-encoded Digital Product Passport identifier.
         explode: false
         in: path
@@ -141,6 +148,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/Result"
           description: Internal server error.
+        "304":
+          $ref: '#/components/responses/ConditionalNotModified'
+        "412":
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
       summary: Read DPP by DPP ID
       tags:
       - DPP Life Cycle
@@ -149,6 +160,7 @@ paths:
         Applies a compressed partial DPP document using JSON Merge Patch (RFC 7396), updates lastUpdate, and archives the change according to EN 18221. Full representation writes are not supported.
       operationId: updateDPPById
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - description: Percent-encoded Digital Product Passport identifier.
         explode: false
         in: path
@@ -217,6 +229,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/Result"
           description: Internal server error.
+        "412":
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        "428":
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
       summary: Update DPP by DPP ID
       tags:
       - DPP Life Cycle
@@ -501,6 +517,8 @@ paths:
         Retrieves one DPP data element. The elementIdPath is an RFC 9535 Normalized Path, the unique absolute path representation for one node, inside the compressed DPP document and must be percent-encoded once as one path segment. Query selectors that can address multiple nodes are not accepted.
       operationId: readDataElement
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - description: Percent-encoded Digital Product Passport identifier.
         explode: false
         in: path
@@ -574,6 +592,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/Result"
           description: Internal server error.
+        "304":
+          $ref: '#/components/responses/ConditionalNotModified'
+        "412":
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
       summary: Read single DPP data element
       tags:
       - DPP Fine Granular
@@ -582,6 +604,7 @@ paths:
         Updates one DPP data element using its compressed JSON value and updates lastUpdate. The elementIdPath is an RFC 9535 Normalized Path, the unique absolute path representation for one node, inside the compressed DPP document and must be percent-encoded once as one path segment. Query selectors that can address multiple nodes are not accepted. Full representation writes are not supported.
       operationId: updateDataElement
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - description: Percent-encoded Digital Product Passport identifier.
         explode: false
         in: path
@@ -660,11 +683,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/Result"
           description: Internal server error.
+        "412":
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        "428":
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
       summary: Update single DPP data element
       tags:
       - DPP Fine Granular
 components:
   parameters:
+    ConditionalIfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags of the resource. The request fails with 412 when no tag
+        designates the current revision. `*` matches any existing resource.
+      schema:
+        type: string
+    ConditionalIfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags. GET answers 304 when the current representation has one of
+        them. `*` on PUT only creates the resource and fails with 412 when it
+        exists.
+      schema:
+        type: string
     DppId:
       description: Percent-encoded Digital Product Passport identifier.
       explode: false
@@ -737,6 +783,15 @@ components:
         type: string
       style: form
   responses:
+    ConditionalNotModified:
+      description: The current representation matches If-None-Match.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ConditionalETag'
+    ConditionalPreconditionFailed:
+      description: If-Match or If-None-Match does not hold. Nothing was changed.
+    ConditionalPreconditionRequired:
+      description: If-Match is required to change this resource.
     BadRequest:
       content:
         application/json:
@@ -1234,3 +1289,11 @@ components:
       bearerFormat: JWT
       scheme: bearer
       type: http
+
+  headers:
+    ConditionalETag:
+      description: >-
+        Strong entity tag of the resource revision and, on reads, of the
+        returned representation.
+      schema:
+        type: string

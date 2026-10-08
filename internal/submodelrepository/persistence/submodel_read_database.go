@@ -262,7 +262,12 @@ func (s *SubmodelDatabase) GetSubmodelReference(ctx context.Context, submodelIde
 		return nil, common.NewErrBadRequest("SMREPO-GETSMREFONE-EMPTYIDENTIFIER submodel identifier is required")
 	}
 
-	submodels, _, err := s.GetSubmodels(ctx, 1, "", submodelIdentifier, "", time.Time{}, time.Time{})
+	var submodels []types.ISubmodel
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMREFONE-STARTTX", "SMREPO-GETSMREFONE-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		submodels, _, txErr = s.getSubmodelsWithOptionalFiltersWithQueryer(ctx, tx, 1, "", submodelIdentifier, "", "", time.Time{}, time.Time{}, nil)
+		return txErr
+	})
 	if err != nil {
 		return nil, err
 	}

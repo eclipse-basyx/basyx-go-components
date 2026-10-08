@@ -161,6 +161,7 @@ func runServer(ctx context.Context, configPath string) error {
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
+	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "DigitalTwinRegistryService")
 	var claimsMiddleware []func(http.Handler) http.Handler
 	if cfg.General.EnableCustomMiddlewareHeaderInjection {
@@ -184,22 +185,22 @@ func runServer(ctx context.Context, configPath string) error {
 	for operation, rt := range registryCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		if rt.Method == "GET" && rt.Pattern == "/shell-descriptors" {
-			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 			continue
 		}
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 	for operation, rt := range discoveryCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		if (rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink") || (rt.Method == "GET" && rt.Pattern == "/lookup/shells") {
-			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 			continue
 		}
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 	for operation, rt := range descriptionCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, conditionalGuard.Wrap(rt.Pattern, rt.HandlerFunc))
 	}
 	versioningGuard.Cover(http.MethodPost, "/bulk/shell-descriptors")
 	versioningGuard.Cover(http.MethodPut, "/bulk/shell-descriptors")

@@ -158,6 +158,8 @@ paths:
       summary: Returns a specific Concept Description
       operationId: GetConceptDescriptionById
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - name: cdIdentifier
         in: path
         description: The Concept Description’s unique id (UTF8-BASE64-URL-encoded)
@@ -169,6 +171,9 @@ paths:
       responses:
         "200":
           description: Requested Concept Description
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConditionalETag'
           content:
             application/json:
               schema:
@@ -181,6 +186,10 @@ paths:
           $ref: "#/components/responses/not-found"
         "500":
           $ref: "#/components/responses/internal-server-error"
+        "304":
+          $ref: '#/components/responses/ConditionalNotModified'
+        "412":
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
         default:
           $ref: "#/components/responses/default"
       x-semanticIds:
@@ -191,6 +200,8 @@ paths:
       summary: Creates or updates an existing Concept Description
       operationId: PutConceptDescriptionById
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
+      - $ref: '#/components/parameters/ConditionalIfNoneMatch'
       - name: cdIdentifier
         in: path
         description: The Concept Description’s unique id (UTF8-BASE64-URL-encoded)
@@ -226,6 +237,10 @@ paths:
           $ref: "#/components/responses/forbidden"
         "500":
           $ref: "#/components/responses/internal-server-error"
+        "412":
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        "428":
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: "#/components/responses/default"
       x-semanticIds:
@@ -236,6 +251,7 @@ paths:
       summary: Deletes a Concept Description
       operationId: DeleteConceptDescriptionById
       parameters:
+      - $ref: '#/components/parameters/ConditionalIfMatch'
       - name: cdIdentifier
         in: path
         description: The Concept Description’s unique id (UTF8-BASE64-URL-encoded)
@@ -255,6 +271,10 @@ paths:
           $ref: "#/components/responses/not-found"
         "500":
           $ref: "#/components/responses/internal-server-error"
+        "412":
+          $ref: '#/components/responses/ConditionalPreconditionFailed'
+        "428":
+          $ref: '#/components/responses/ConditionalPreconditionRequired'
         default:
           $ref: "#/components/responses/default"
       x-semanticIds:
@@ -1337,6 +1357,15 @@ components:
           type: string
           example: wJlCDLIl6KTWypN7T6vc6nWEmEYe99Hjf1XY1xmqV-M=#
   responses:
+    ConditionalNotModified:
+      description: The current representation matches If-None-Match.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ConditionalETag'
+    ConditionalPreconditionFailed:
+      description: If-Match or If-None-Match does not hold. Nothing was changed.
+    ConditionalPreconditionRequired:
+      description: If-Match is required to change this resource.
     bad-request:
       description: "Bad Request, e.g. the request parameters of the format of the request body is wrong."
       content:
@@ -1374,6 +1403,25 @@ components:
           schema:
             $ref: "#/components/schemas/Result"
   parameters:
+    ConditionalIfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags of the resource. The request fails with 412 when no tag
+        designates the current revision. `*` matches any existing resource.
+      schema:
+        type: string
+    ConditionalIfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        Entity tags. GET answers 304 when the current representation has one of
+        them. `*` on PUT only creates the resource and fails with 412 when it
+        exists.
+      schema:
+        type: string
     Limit:
       name: limit
       in: query
@@ -1387,5 +1435,13 @@ components:
       in: query
       description: A server-generated identifier retrieved from pagingMetadata that specifies from which position the result listing should continue
       required: false
+      schema:
+        type: string
+
+  headers:
+    ConditionalETag:
+      description: >-
+        Strong entity tag of the resource revision and, on reads, of the
+        returned representation.
       schema:
         type: string

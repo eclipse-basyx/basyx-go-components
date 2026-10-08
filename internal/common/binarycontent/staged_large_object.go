@@ -166,8 +166,8 @@ func (stage *StagedLargeObject) Promote(ctx context.Context, persist func(contex
 	if err := persist(ctx, stage.tx, stage.oid, stage.size); err != nil {
 		return err
 	}
-	if err := stage.tx.Commit(); err != nil {
-		return common.NewInternalServerError("BINARYCONTENT-PROMOTE-COMMIT " + err.Error())
+	if err := common.CommitTransaction(stage.tx); err != nil {
+		return common.CommitError("BINARYCONTENT-PROMOTE-COMMIT", err)
 	}
 	stage.closed = true
 	return nil

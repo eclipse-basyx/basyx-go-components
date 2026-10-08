@@ -176,8 +176,8 @@ func (upload *durableAsyncUpload) Promote(ctx context.Context, persist func(cont
 	if err = upload.manager.CompletePayloadTx(ctx, tx, upload.handleID, upload.successPayload); err != nil {
 		return err
 	}
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-PROMOTECOMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return common.CommitError("AASXFS-ASYNCSTAGE-PROMOTECOMMIT", err)
 	}
 	committed = true
 	upload.promoted = true
@@ -218,8 +218,8 @@ func (upload *durableAsyncUpload) Close() error {
 		_ = tx.Rollback()
 		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-CLOSEDELETE " + err.Error())
 	}
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-CLOSECOMMIT " + err.Error())
+	if err = common.CommitTransaction(tx); err != nil {
+		return common.CommitError("AASXFS-ASYNCSTAGE-CLOSECOMMIT", err)
 	}
 	upload.closed = true
 	return nil

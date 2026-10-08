@@ -42,6 +42,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -172,7 +173,6 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 		slog.ErrorContext(ctx, "delete query construction failed", "error.code", "DISCOVERY-DELETE-BUILDQUERY", "error", err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
-	var deleted int64
 	err = descriptors.WithTx(ctx, p.writerDB, func(tx *sql.Tx) error {
 		if reBACErr := auth.RecordReBACResourceDeleted(ctx, tx, auth.SemanticResourceBD, aasID); reBACErr != nil {
 			return reBACErr
@@ -181,17 +181,25 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 		if execErr != nil {
 			return execErr
 		}
-		deleted, _ = result.RowsAffected()
-		return nil
+		if deleted, _ := result.RowsAffected(); deleted == 0 {
+			return common.NewErrNotFound(fmt.Sprintf("AAS identifier %s not found. See console for information.", aasID))
+		}
+		return descriptors.TouchDiscoveryEntryTx(ctx, tx, aasID, conditional.OpDelete)
 	})
 	if err != nil {
-		slog.ErrorContext(ctx, "delete query failed", "error.code", "DISCOVERY-DELETE-EXECQUERY", "error", err)
-		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
-	}
-	if deleted == 0 {
-		return common.NewErrNotFound(fmt.Sprintf("AAS identifier %s not found. See console for information.", aasID))
+		return discoveryWriteError(ctx, err, "DISCOVERY-DELETE-EXECQUERY", "Failed to delete AAS identifier. See console for information.")
 	}
 	return nil
+}
+
+// discoveryWriteError keeps errors that determine the response status and
+// hides all other errors behind a generic message.
+func discoveryWriteError(ctx context.Context, err error, code string, message string) error {
+	if common.IsErrNotFound(err) || conditional.IsPreconditionError(err) {
+		return err
+	}
+	slog.ErrorContext(ctx, "discovery write failed", "error.code", code, "error", err)
+	return common.NewInternalServerError(message)
 }
 
 // CreateAllAssetLinks creates or updates an AAS identifier with its associated asset links.
@@ -215,7 +223,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
 func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
 	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.writerDB, aasID, specificAssetIDs); err != nil {
-		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
+		return discoveryWriteError(ctx, err, "DISCOVERY-CREATE-EXECQUERY", "Failed to store specific asset IDs. See console for information.")
 	}
 	return nil
 }
@@ -223,7 +231,7 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, a
 // AddAllAssetLinks appends missing asset links for an existing aas identifier.
 func (p *PostgreSQLDiscoveryDatabase) AddAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
 	if err := descriptors.AddSpecificAssetIDsByAASIdentifier(ctx, p.writerDB, aasID, specificAssetIDs); err != nil {
-		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
+		return discoveryWriteError(ctx, err, "DISCOVERY-ADD-EXECQUERY", "Failed to store specific asset IDs. See console for information.")
 	}
 	return nil
 }
