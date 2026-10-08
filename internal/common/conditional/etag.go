@@ -96,20 +96,14 @@ func objectValidator(objectKey string, revision int64) string {
 // compositeValidator binds a composite resource to the revisions of all its
 // members. The leading number is the highest member revision.
 func compositeValidator(ref ResourceRef, members []ResourceRef, revisions map[ResourceRef]int64) string {
-	var builder strings.Builder
-	builder.WriteString(ref.objectKey())
+	parts := []string{ref.objectKey()}
 	highest := int64(0)
 	for _, member := range sortedRefs(members) {
 		revision := revisions[member]
-		if revision > highest {
-			highest = revision
-		}
-		builder.WriteString("|")
-		builder.WriteString(member.objectKey())
-		builder.WriteString("=")
-		builder.WriteString(strconv.FormatInt(revision, 10))
+		highest = max(highest, revision)
+		parts = append(parts, member.objectKey()+"="+strconv.FormatInt(revision, 10))
 	}
-	return strconv.FormatInt(highest, 10) + "-" + digestHex(builder.String(), 8)
+	return strconv.FormatInt(highest, 10) + "-" + digestHex(strings.Join(parts, "|"), 8)
 }
 
 // representationTag extends a concurrency validator with a digest of the
