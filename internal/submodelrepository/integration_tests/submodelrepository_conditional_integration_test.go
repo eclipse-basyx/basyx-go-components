@@ -301,3 +301,63 @@ func concurrently(count int, request func(index int) int) []int {
 	wg.Wait()
 	return statuses
 }
+
+func nestedCollection(value string) map[string]any {
+	return map[string]any{
+		"modelType": "SubmodelElementCollection", "idShort": "Outer",
+		"value": []any{map[string]any{
+			"modelType": "SubmodelElementCollection", "idShort": "Inner",
+			"value": []any{map[string]any{"modelType": "Property", "idShort": "Prop", "valueType": "xs:string", "value": value}},
+		}},
+	}
+}
+
+func TestConditionalWritesToNestedCollectionsUseTheSubmodelRevision(t *testing.T) {
+	id := fmt.Sprintf("urn:etag:nested-collection:%d", time.Now().UnixNano())
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + common.EncodeString(id)
+	created := testenv.DoHTTP(t, http.MethodPost, submodelRepositoryBaseURL+"/submodels", mustJSON(t, map[string]any{
+		"modelType": "Submodel", "id": id, "idShort": "Nested", "submodelElements": []any{nestedCollection("initial")},
+	}), nil)
+	require.Equal(t, http.StatusCreated, created.Status, string(created.Body))
+	t.Cleanup(func() { testenv.DoHTTP(t, http.MethodDelete, endpoint, nil, nil) })
+	outerURL := endpoint + "/submodel-elements/Outer"
+	propValueURL := endpoint + "/submodel-elements/Outer.Inner.Prop/$value"
+	readProp := func() string {
+		response := testenv.DoHTTP(t, http.MethodGet, propValueURL, nil, nil)
+		require.Equal(t, http.StatusOK, response.Status, string(response.Body))
+		var value string
+		require.NoError(t, json.Unmarshal(response.Body, &value))
+		return value
+	}
+
+	submodelETag := testenv.DoHTTP(t, http.MethodGet, endpoint, nil, nil).Header.Get("ETag")
+	outer := testenv.DoHTTP(t, http.MethodGet, outerURL, nil, nil)
+	require.Equal(t, http.StatusOK, outer.Status)
+	require.Equal(t, concurrencyPrefix(submodelETag), concurrencyPrefix(outer.Header.Get("ETag")))
+
+	stale := testenv.DoHTTP(t, http.MethodPatch, outerURL, mustJSON(t, nestedCollection("stale")), map[string]string{"If-Match": `"1-00000000"`})
+	require.Equal(t, http.StatusPreconditionFailed, stale.Status, string(stale.Body))
+	require.Equal(t, "initial", readProp())
+
+	patched := testenv.DoHTTP(t, http.MethodPatch, outerURL, mustJSON(t, nestedCollection("collection")), map[string]string{"If-Match": submodelETag})
+	require.Equal(t, http.StatusNoContent, patched.Status, string(patched.Body))
+	require.Equal(t, "collection", readProp())
+
+	nestedValue := testenv.DoHTTP(t, http.MethodPatch, propValueURL, mustJSON(t, "nested"), map[string]string{"If-Match": submodelETag})
+	require.Equal(t, http.StatusPreconditionFailed, nestedValue.Status, "the collection update must change the Submodel revision")
+	require.Equal(t, "collection", readProp())
+
+	current := testenv.DoHTTP(t, http.MethodGet, outerURL, nil, nil).Header.Get("ETag")
+	nestedValue = testenv.DoHTTP(t, http.MethodPatch, propValueURL, mustJSON(t, "nested"), map[string]string{"If-Match": current})
+	require.Equal(t, http.StatusNoContent, nestedValue.Status, string(nestedValue.Body))
+	require.Equal(t, "nested", readProp())
+
+	child := mustJSON(t, map[string]any{"modelType": "Property", "idShort": "Child", "valueType": "xs:string", "value": "x"})
+	require.Equal(t, http.StatusPreconditionFailed,
+		testenv.DoHTTP(t, http.MethodPost, outerURL+".Inner", child, map[string]string{"If-Match": current}).Status,
+		"the nested value update must change the Submodel revision")
+	latest := testenv.DoHTTP(t, http.MethodGet, endpoint, nil, nil).Header.Get("ETag")
+	added := testenv.DoHTTP(t, http.MethodPost, outerURL+".Inner", child, map[string]string{"If-Match": latest})
+	require.Equal(t, http.StatusCreated, added.Status, string(added.Body))
+	require.NotEqual(t, concurrencyPrefix(latest), concurrencyPrefix(added.Header.Get("ETag")))
+}
