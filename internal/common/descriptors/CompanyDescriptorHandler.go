@@ -34,6 +34,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 )
 
 // InsertCompanyDescriptor creates a new CompanyDescriptor
@@ -565,7 +566,7 @@ func ListCompanyDescriptors(
 		_ = rows.Close()
 	}()
 
-	descRows := make([]model.CompanyDescriptorRow, 0, peekLimit)
+	descRows := make([]model.CompanyDescriptorRow, 0, pagination.BufferCapacity(peekLimit))
 	for rows.Next() {
 		var r model.CompanyDescriptorRow
 		if err := rows.Scan(

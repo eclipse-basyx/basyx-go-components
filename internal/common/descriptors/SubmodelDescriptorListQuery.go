@@ -34,6 +34,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -167,7 +168,7 @@ func listSubmodelDescriptorsFromPageQuery(
 	}
 	defer func() { _ = rows.Close() }()
 
-	pageRows := make([]submodelDescriptorListRow, 0, peekLimit)
+	pageRows := make([]submodelDescriptorListRow, 0, pagination.BufferCapacity(int(peekLimit)))
 	for rows.Next() {
 		var row submodelDescriptorListRow
 		var payload []byte

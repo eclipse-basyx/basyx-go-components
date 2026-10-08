@@ -53,6 +53,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -982,7 +983,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsInTransac
 		_ = rows.Close()
 	}()
 
-	aasIDs := make([]int64, 0, limit+1)
+	aasIDs := make([]int64, 0, pagination.BufferCapacity(int(limit)+1))
 	for rows.Next() {
 		var aasID int64
 		if scanErr := rows.Scan(&aasID); scanErr != nil {
@@ -1074,7 +1075,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 		_ = rows.Close()
 	}()
 
-	identifiers := make([]string, 0, limit+1)
+	identifiers := make([]string, 0, pagination.BufferCapacity(int(limit)+1))
 	for rows.Next() {
 		var identifier string
 		if err := rows.Scan(&identifier); err != nil {
@@ -1126,7 +1127,7 @@ func (s *AssetAdministrationShellDatabase) GetDPPIDsByAssetAndMetadataSemanticID
 		return nil, "", common.NewInternalServerError("AASREPO-GETDPPIDSBYASSETANDMETADATA-EXECSQL " + err.Error())
 	}
 	defer func() { _ = rows.Close() }()
-	identifiers := make([]string, 0, limit+1)
+	identifiers := make([]string, 0, pagination.BufferCapacity(int(limit)+1))
 	for rows.Next() {
 		var identifier string
 		if err = rows.Scan(&identifier); err != nil {
@@ -1182,7 +1183,7 @@ func (s *AssetAdministrationShellDatabase) GetDPPAssetIdentifiersByAssetAndMetad
 		return nil, common.NewInternalServerError("AASREPO-GETDPPASSETIDS-EXECSQL " + err.Error())
 	}
 	defer func() { _ = rows.Close() }()
-	identifiers := make([]DPPAssetIdentifiers, 0, limit+1)
+	identifiers := make([]DPPAssetIdentifiers, 0, pagination.BufferCapacity(int(limit)+1))
 	for rows.Next() {
 		var identifier DPPAssetIdentifiers
 		if err = rows.Scan(&identifier.AASID, &identifier.DPPID); err != nil {
@@ -2140,8 +2141,8 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 		_ = rows.Close()
 	}()
 
-	referenceIDs := make([]int64, 0, limit+1)
-	references := make([]types.IReference, 0, limit+1)
+	referenceIDs := make([]int64, 0, pagination.BufferCapacity(int(limit)+1))
+	references := make([]types.IReference, 0, pagination.BufferCapacity(int(limit)+1))
 	for rows.Next() {
 		var referenceID int64
 		var payload []byte

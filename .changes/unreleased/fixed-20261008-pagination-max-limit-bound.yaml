@@ -1,0 +1,7 @@
+kind: fixed
+body: '`server.pagination.maxLimit` must now not exceed `2147483646`. A configured maximum of `2147483647` left no room for the extra row that page queries fetch to detect a following page, so a request with that `limit` overflowed the query limit and failed with HTTP 500 or a panic. Page buffers are also no longer sized from the requested `limit`, so a large `limit` does not reserve memory before any row is read.'
+time: 2026-10-08T10:00:00Z
+custom:
+    Impact: Low
+    PullRequest: 736
+    SecurityImpact: 'Prevents a configured maximum page size from causing integer overflow in page queries, and from reserving memory proportional to the requested limit before any rows exist.'
