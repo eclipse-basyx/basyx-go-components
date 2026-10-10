@@ -350,6 +350,7 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - Use generated server stubs and reusable API packages in `pkg/`
 - Example endpoint: `/submodels/{id}/submodel-elements/{idShort}/attachment`
 - AAS environment import endpoint: `/upload` (multipart/form-data with file part `file`)
+- Environment upload and serialization support ABAC `IDENTIFIABLE` grants for AAS, Submodels, and ConceptDescriptions. Grants stay within their object type; exports include only visible objects and filtered elements. See [environment authorization](docu/developer/security_architecture.md#environment-upload-and-serialization) for selection, binary content, and partial-import behavior.
 - Supported upload media types: `application/aasx+xml`, `application/aasx+json`, `application/asset-administration-shell+xml`, `application/asset-administration-shell+json`, `application/json`, `application/xml`, `text/xml`
 - Query fragment filters use existential parent-level evaluation by default. Set `"$match": true` explicitly when a request filter must be evaluated against the current fragment row. See the [query language guide](docu/developer/query_language/architecture.md#explicit-row-local-fragment-matching).
 - AAS v3.2 history and recent changes: [user guide](docu/user/aas_api_v3_2.md) and [runtime notes](docu/developer/aas_v3_2_runtime.md)

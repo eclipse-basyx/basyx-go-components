@@ -8,6 +8,7 @@
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
       { "name": "submodel_read_routes", "objects": [
+        { "IDENTIFIABLE": "$sm(\"*\")" },
         { "ROUTE": "/submodels" },
         { "ROUTE": "/submodels/*" },
         { "ROUTE": "/query/submodels" }
