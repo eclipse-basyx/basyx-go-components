@@ -2705,6 +2705,17 @@ func (s *SubmodelRepositoryAPIAPIService) prepareOperationDelegation(
 	}, gen.ImplResponse{}, true
 }
 
+func isSuccessfulDelegatedStatus(statusCode int) bool {
+	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
+}
+
+// newDelegatedStatusErrorResponse reports an unsuccessful delegated operation
+// endpoint as 502 without exposing the endpoint's response body.
+func newDelegatedStatusErrorResponse(statusCode int, operation string) gen.ImplResponse {
+	err := fmt.Errorf("SMREPO-INVOKEOP-DELEGATEDSTATUS delegated operation endpoint returned HTTP %d", statusCode)
+	return newAPIErrorResponse(err, http.StatusBadGateway, operation, "DelegatedOperationStatus")
+}
+
 func invokePreparedOperation(
 	ctx context.Context,
 	prepared preparedOperationDelegation,
@@ -2717,8 +2728,9 @@ func invokePreparedOperation(
 		return newAPIErrorResponse(delegateErr, http.StatusBadGateway, operation, "DelegateOperationCall"), nil
 	}
 
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return gen.Response(statusCode, delegatedBody), nil
+	if !isSuccessfulDelegatedStatus(statusCode) {
+		slog.WarnContext(ctx, "delegated operation returned an unsuccessful status", "error.code", "SMREPO-INVOKEOP-STATUS", "http.response.status_code", statusCode)
+		return newDelegatedStatusErrorResponse(statusCode, operation), nil
 	}
 
 	resultPayload, resultErr := toDelegatedOperationResultPayloadFromBody(delegatedBody)
@@ -2869,9 +2881,9 @@ func (s *SubmodelRepositoryAPIAPIService) executePreparedOperationAsync(
 		return
 	}
 
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+	if !isSuccessfulDelegatedStatus(statusCode) {
 		slog.WarnContext(delegationCtx, "asynchronous delegated operation returned an unsuccessful status", "error.code", "SMREPO-INVOKEOPASY-STATUS", "async_job.handle_id", handleID, "http.response.status_code", statusCode)
-		s.failPreparedOperationAsync(delegationCtx, handleID, gen.Response(statusCode, delegatedBody), "SMREPO-INVOKEOPASY-PERSISTSTATUS")
+		s.failPreparedOperationAsync(delegationCtx, handleID, newDelegatedStatusErrorResponse(statusCode, operation), "SMREPO-INVOKEOPASY-PERSISTSTATUS")
 		return
 	}
 

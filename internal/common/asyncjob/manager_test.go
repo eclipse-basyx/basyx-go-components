@@ -371,3 +371,22 @@ func (s *flakyTransitionStore) Transition(
 	}
 	return false, errors.New("ASYNCJOB-TEST-TRANSITION transient store failure")
 }
+
+func TestDecodeRecordJSONWrapsLegacyErrorArrayInResult(t *testing.T) {
+	var record Record
+	require.NoError(t, decodeRecordJSON(&record, nil, nil, nil, []byte(`[{"code":"502","messageType":"Error"}]`)))
+
+	require.Equal(t, map[string]any{
+		"messages": []any{map[string]any{"code": "502", "messageType": "Error"}},
+	}, record.ErrorBody)
+}
+
+func TestDecodeRecordJSONKeepsResultErrorBody(t *testing.T) {
+	var record Record
+	require.NoError(t, decodeRecordJSON(&record, nil, nil, nil, []byte(`{"messages":[{"code":"502"}],"executionState":"Failed"}`)))
+
+	require.Equal(t, map[string]any{
+		"messages":       []any{map[string]any{"code": "502"}},
+		"executionState": "Failed",
+	}, record.ErrorBody)
+}
