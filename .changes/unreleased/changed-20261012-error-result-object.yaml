@@ -1,5 +1,5 @@
 kind: changed
-body: 'Error responses of all services now return the `Result` object defined by the AAS API, `{"messages":[{…}]}`, instead of a bare JSON array of messages. This makes BaSyx work with clients that parse errors as `Result`, such as the Tractus-X SDK. Clients that read the array must read `messages` instead. Failed asynchronous operation results that an earlier version stored are also returned in this form. The Company Lookup OpenAPI document now also defines `Result` as this object.'
+body: 'Error responses of all services now return the `Result` object defined by the AAS API, `{"messages":[{…}]}`, instead of a bare JSON array of messages. This makes BaSyx work with clients that parse errors as `Result`, such as the Tractus-X SDK. Clients that read the array must read `messages` instead. The Company Lookup OpenAPI document now also defines `Result` as this object.'
 time: 2026-10-12T20:30:00.000000+02:00
 custom:
     Impact: High

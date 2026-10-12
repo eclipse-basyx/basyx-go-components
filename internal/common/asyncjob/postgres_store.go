@@ -331,19 +331,8 @@ func decodeRecordJSON(record *Record, metadata, bulkResult, payload, errorBody [
 		if err := json.Unmarshal(errorBody, &record.ErrorBody); err != nil {
 			return fmt.Errorf("ASYNCJOB-PGGET-DECODEERROR %w", err)
 		}
-		record.ErrorBody = resultErrorBody(record.ErrorBody)
 	}
 	return nil
-}
-
-// resultErrorBody wraps an error body that earlier versions stored as a bare
-// message array in the AAS API Result object.
-func resultErrorBody(body any) any {
-	messages, ok := body.([]any)
-	if !ok {
-		return body
-	}
-	return map[string]any{"messages": messages}
 }
 
 func marshalOptional(value any, present bool) (any, error) {

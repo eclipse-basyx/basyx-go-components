@@ -361,11 +361,12 @@ func TestValueOnlyAsyncResultPreservesRunningFailureAndPathIsolation(t *testing.
 
 	failedHandle, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: "test", Metadata: metadata})
 	require.NoError(t, err)
-	require.NoError(t, sut.asyncJobManager.Fail(t.Context(), failedHandle, http.StatusBadGateway, map[string]any{"error": "delegate failed"}))
+	failure := newAPIErrorResponse(errors.New("delegate failed"), http.StatusBadGateway, "InvokeOperationAsync", "DelegateOperationCall")
+	require.NoError(t, sut.asyncJobManager.Fail(t.Context(), failedHandle, failure.Code, failure.Body))
 	failedResult, err := sut.GetOperationAsyncResultValueOnly(ctx, encodedSubmodelID, "Ops.Add", failedHandle)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadGateway, failedResult.Code)
-	require.Equal(t, map[string]any{"error": "delegate failed"}, failedResult.Body)
+	require.Equal(t, failure.Body, failedResult.Body)
 
 	clockNow := time.Now()
 	expiringManager, err := asyncjob.NewManagerWithClock("SMREPO-ASYNC-EXPIRED", time.Minute, func() time.Time { return clockNow })

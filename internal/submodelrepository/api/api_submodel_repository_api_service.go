@@ -2999,10 +2999,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Co
 	}
 
 	if record.ExecutionState == "Failed" {
-		if record.ErrorStatus <= 0 {
-			return newAPIErrorResponse(errors.New("SMREPO-GETOPASYRES-FAILED delegated operation failed"), http.StatusInternalServerError, operation, "DelegatedOperationFailed"), nil
-		}
-		return gen.Response(record.ErrorStatus, record.ErrorBody), nil
+		return storedOperationFailureResponse(record, operation), nil
 	}
 
 	return gen.Response(http.StatusOK, record.Payload), nil
