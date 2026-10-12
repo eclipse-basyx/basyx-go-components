@@ -39,6 +39,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 func TestAddHealthEndpoint_UsesJSONResponseFormat(t *testing.T) {
@@ -604,10 +606,11 @@ func TestAddVerificationEndpointPreservesStagingErrorStatus(t *testing.T) {
 func assertStandardErrorResponse(t *testing.T, responseBody []byte, expectedCode string) {
 	t.Helper()
 
-	var body []ErrorHandler
-	if err := json.Unmarshal(responseBody, &body); err != nil {
+	var result model.Result
+	if err := json.Unmarshal(responseBody, &result); err != nil {
 		t.Fatalf("failed to decode standardized error response: %v", err)
 	}
+	body := result.Messages
 	if len(body) != 1 {
 		t.Fatalf("expected one error entry, got %d", len(body))
 	}

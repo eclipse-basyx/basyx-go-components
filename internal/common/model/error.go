@@ -75,8 +75,10 @@ func (e *RequiredError) Error() string {
 	return fmt.Sprintf("required field '%s' is zero value.", e.Field)
 }
 
-// ErrorResponse is the standardized BaSyx HTTP error payload.
-type ErrorResponse = Message
+const (
+	errorMessageType       = "Error"
+	maxCorrelationIDLength = 128
+)
 
 // StatusError is an error that determines its own HTTP status, such as a
 // failed precondition. Its status takes precedence over the fallback status
@@ -86,23 +88,57 @@ type StatusError interface {
 	HTTPStatus() int
 }
 
-// NewErrorResponse creates a standardized error response.
+// NewErrorMessage creates an error Message with a UTC timestamp as required by
+// the AAS API Message schema.
+func NewErrorMessage(text, code, correlationID string) Message {
+	return Message{
+		MessageType:   errorMessageType,
+		Text:          text,
+		Code:          code,
+		CorrelationID: correlationID,
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// NewErrorCorrelationID creates the correlation ID
+// "<component>-<status>-<function>-<statusText>-<info>", limited to the
+// maximum length of the AAS API Message schema.
+func NewErrorCorrelationID(component string, status int, function, info string) string {
+	statusText := strings.ReplaceAll(http.StatusText(status), " ", "")
+	correlationID := fmt.Sprintf("%s-%d-%s-%s-%s", component, status, function, statusText, info)
+	return truncateRunes(correlationID, maxCorrelationIDLength)
+}
+
+func truncateRunes(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit])
+}
+
+// NewErrorResponse creates a standardized error response whose body is the
+// AAS API Result object.
 func NewErrorResponse(err error, status int, component, function, info string) ImplResponse {
 	var statusErr StatusError
 	if errors.As(err, &statusErr) {
 		status = statusErr.HTTPStatus()
 	}
-	code := strconv.Itoa(status)
-	statusText := strings.ReplaceAll(http.StatusText(status), " ", "")
-	correlationID := fmt.Sprintf("%s-%s-%s-%s-%s", component, code, function, statusText, info)
+	message := NewErrorMessage(err.Error(), strconv.Itoa(status), NewErrorCorrelationID(component, status, function, info))
+	return Response(status, Result{Messages: []Message{message}})
+}
 
-	return Response(status, []Message{{
-		MessageType:   "Error",
-		Text:          err.Error(),
-		Code:          code,
-		CorrelationID: correlationID,
-		Timestamp:     time.Now().Format(time.RFC3339),
-	}})
+// ErrorText returns the trimmed text of the first message of an error
+// response body, or an empty string when the body is not a Result with messages.
+func ErrorText(body any) string {
+	result, ok := body.(Result)
+	if !ok || len(result.Messages) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(result.Messages[0].Text)
 }
 
 // WriteErrorResponse writes a standardized error response.

@@ -103,7 +103,7 @@ func requireCompanyCreator(t *testing.T, schema *jsonschema.Schema, expected, re
 func requireCompanyError(t *testing.T, schema *jsonschema.Schema, response any, status int) {
 	t.Helper()
 	require.NoError(t, schema.Validate(response))
-	messages := response.([]any)
+	messages := response.(map[string]any)["messages"].([]any)
 	require.NotEmpty(t, messages)
 	for _, value := range messages {
 		message := value.(map[string]any)

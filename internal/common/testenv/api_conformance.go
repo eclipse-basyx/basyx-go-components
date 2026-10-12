@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // APIConformanceEndpoint identifies a paginated API boundary and its encoded filters.
@@ -107,11 +108,11 @@ func requireAPIParameterError(t *testing.T, baseURL string, headers http.Header,
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status=%d body=%s", response.StatusCode, body)
 	}
-	var errors []common.ErrorHandler
-	if err := json.Unmarshal(body, &errors); err != nil || len(errors) == 0 {
+	var result model.Result
+	if err := json.Unmarshal(body, &result); err != nil || len(result.Messages) == 0 {
 		t.Fatalf("missing structured errors: %s", body)
 	}
-	if errors[0].Code != "400" || errors[0].CorrelationID == "" {
+	if result.Messages[0].Code != "400" || result.Messages[0].CorrelationID == "" {
 		t.Fatalf("missing coded error: %s", body)
 	}
 }

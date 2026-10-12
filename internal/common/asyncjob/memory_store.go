@@ -27,8 +27,12 @@ package asyncjob
 
 import (
 	"context"
+	"net/http"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 type memoryStore struct {
@@ -173,10 +177,10 @@ func abandonedErrorBody() map[string]any {
 	return map[string]any{
 		"executionState": executionStateFailed,
 		"success":        false,
-		"messages": []map[string]any{{
-			"code":        "500",
-			"messageType": "Error",
-			"text":        "The worker processing the asynchronous request stopped before completion.",
-		}},
+		"messages": []model.Message{model.NewErrorMessage(
+			"The worker processing the asynchronous request stopped before completion.",
+			strconv.Itoa(http.StatusInternalServerError),
+			model.NewErrorCorrelationID("ASYNCJOB", http.StatusInternalServerError, "Worker", "Abandoned"),
+		)},
 	}
 }

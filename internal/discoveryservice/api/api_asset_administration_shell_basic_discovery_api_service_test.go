@@ -74,7 +74,7 @@ func TestPostAllAssetLinksByIDRejectsEmptySpecificAssetIDFields(t *testing.T) {
 			if response.Code != http.StatusBadRequest {
 				t.Fatalf("expected status %d, got %d", http.StatusBadRequest, response.Code)
 			}
-			errorBody := response.Body.([]common.ErrorHandler)
+			errorBody := response.Body.(model.Result).Messages
 			if len(errorBody) != 1 {
 				t.Fatalf("expected one error response, got %#v", response.Body)
 			}
@@ -100,7 +100,7 @@ func TestAddAllAssetLinksByIDRejectsEmptySpecificAssetIDFields(t *testing.T) {
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, response.Code)
 	}
-	errorBody := response.Body.([]common.ErrorHandler)
+	errorBody := response.Body.(model.Result).Messages
 	if len(errorBody) != 1 {
 		t.Fatalf("expected one error response, got %#v", response.Body)
 	}

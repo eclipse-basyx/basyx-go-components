@@ -124,10 +124,7 @@ func writeSerializationFileDownload(w http.ResponseWriter, status int, payload S
 }
 
 func writeSerializationError(w http.ResponseWriter, status int, err error, info string) {
-	resp := common.NewErrorResponse(err, status, "AASENV", "SerializationAPI", info)
-	if encodeErr := commonmodel.EncodeJSONResponse(resp.Body, &resp.Code, w); encodeErr != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	_ = common.WriteErrorResponse(w, err, status, "AASENV", "SerializationAPI", info)
 }
 
 func parseSerializationBoolQueryParam(value string) (bool, error) {

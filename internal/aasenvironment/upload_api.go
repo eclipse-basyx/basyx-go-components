@@ -108,10 +108,7 @@ func uploadErrorStatus(err error) int {
 }
 
 func writeUploadError(w http.ResponseWriter, status int, err error, info string) {
-	resp := common.NewErrorResponse(err, status, "AASENV", "UploadAPI", info)
-	if encErr := commonmodel.EncodeJSONResponse(resp.Body, &resp.Code, w); encErr != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	_ = common.WriteErrorResponse(w, err, status, "AASENV", "UploadAPI", info)
 }
 
 func sanitizeUploadFileName(fileName string) string {

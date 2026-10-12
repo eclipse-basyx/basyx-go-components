@@ -27,6 +27,7 @@ package aasenvironment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,7 +36,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -56,14 +56,7 @@ func (m *mockUploadService) HandleUpload(_ context.Context, fileName string, _ s
 		if errorText == "" {
 			errorText = fmt.Sprintf("upload failed for %s", fileName)
 		}
-		return commonmodel.ImplResponse{
-			Code: status,
-			Body: []common.ErrorHandler{{
-				MessageType: "Error",
-				Text:        errorText,
-				Code:        fmt.Sprintf("%d", status),
-			}},
-		}, nil
+		return commonmodel.NewErrorResponse(errors.New(errorText), status, "AASENV", "HandleUpload", "Mock"), nil
 	}
 	return commonmodel.ImplResponse{Code: status, Body: map[string]any{}}, nil
 }

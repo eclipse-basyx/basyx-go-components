@@ -207,12 +207,15 @@ func TestMutationCoverageGuardPreservesRouterMethodNotAllowedResponse(t *testing
 func assertMutationCoverageErrorResponse(t *testing.T, responseBody []byte) {
 	t.Helper()
 
-	var body []struct {
-		MessageType string `json:"messageType"`
-		Text        string `json:"text"`
-		Code        string `json:"code"`
+	var result struct {
+		Messages []struct {
+			MessageType string `json:"messageType"`
+			Text        string `json:"text"`
+			Code        string `json:"code"`
+		} `json:"messages"`
 	}
-	require.NoError(t, json.Unmarshal(responseBody, &body))
+	require.NoError(t, json.Unmarshal(responseBody, &result))
+	body := result.Messages
 	require.Len(t, body, 1)
 	require.Equal(t, "Error", body[0].MessageType)
 	require.Equal(t, "500", body[0].Code)

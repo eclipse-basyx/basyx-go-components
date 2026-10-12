@@ -33,7 +33,6 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -91,16 +90,8 @@ func registerRouterErrorComponent(r *chi.Mux, component string) {
 
 func writeRouterError(w http.ResponseWriter, component string, status int, message, errorType string) {
 	componentID := normalizeComponentID(component)
-	resp := NewErrorResponse(
-		errors.New(message),
-		status,
-		component,
-		"Router",
-		fmt.Sprintf("%s-ROUTER-%s", componentID, errorType),
-	)
-	if err := model.EncodeJSONResponse(resp.Body, &resp.Code, w); err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	info := fmt.Sprintf("%s-ROUTER-%s", componentID, errorType)
+	_ = WriteErrorResponse(w, errors.New(message), status, component, "Router", info)
 }
 
 func normalizeComponentID(component string) string {

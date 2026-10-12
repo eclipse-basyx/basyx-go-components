@@ -35,7 +35,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 const (
@@ -147,7 +147,7 @@ func importPreconfigurationFile(
 
 func buildPreconfigurationUploadFailureError(status int, fileName string, responseBody any) error {
 	sanitizedFileName := sanitizeLogValue(fileName)
-	errorDetail := sanitizeLogValue(extractPreconfigurationUploadErrorDetail(responseBody))
+	errorDetail := sanitizeLogValue(commonmodel.ErrorText(responseBody))
 	if errorDetail == "" {
 		return fmt.Errorf(
 			"AASENV-PRECONF-UPLOADFAILED upload handler returned status %d for file '%s'",
@@ -164,19 +164,6 @@ func buildPreconfigurationUploadFailureError(status int, fileName string, respon
 	)
 }
 
-func extractPreconfigurationUploadErrorDetail(responseBody any) string {
-	switch body := responseBody.(type) {
-	case []common.ErrorHandler:
-		if len(body) == 0 {
-			return ""
-		}
-		return strings.TrimSpace(body[0].Text)
-	case common.ErrorHandler:
-		return strings.TrimSpace(body.Text)
-	default:
-		return ""
-	}
-}
 func resolvePreconfigurationFiles(configuredSources []string) ([]string, int, int) {
 	resolvedSet := make(map[string]struct{})
 	skippedCount := 0

@@ -448,9 +448,12 @@ components:
       required: [type, value]
 
     Result:
-      type: array
-      items:
-        $ref: "#/components/schemas/Message"
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
     
     Message:
       type: object
@@ -466,7 +469,7 @@ components:
         messageType:
           enum:
             - Undefined
-            - info
+            - Info
             - Warning
             - Error
             - Exception

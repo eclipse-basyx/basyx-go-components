@@ -29,7 +29,6 @@ package asyncjob
 import (
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -83,7 +82,6 @@ func ToMessages(failures []ItemFailure) []model.Message {
 		return []model.Message{}
 	}
 
-	timestamp := time.Now().UTC().Format(time.RFC3339)
 	messages := make([]model.Message, 0, len(failures))
 	for _, failure := range failures {
 		statusCode := failure.StatusCode
@@ -96,13 +94,8 @@ func ToMessages(failures []ItemFailure) []model.Message {
 			text = fmt.Sprintf("item[%d] (%s): %s", failure.Index, failure.Identifier, failure.Message)
 		}
 
-		messages = append(messages, model.Message{
-			Code:          strconv.Itoa(statusCode),
-			CorrelationID: fmt.Sprintf("bulk-item-%d", failure.Index),
-			MessageType:   "Error",
-			Text:          text,
-			Timestamp:     timestamp,
-		})
+		correlationID := fmt.Sprintf("bulk-item-%d", failure.Index)
+		messages = append(messages, model.NewErrorMessage(text, strconv.Itoa(statusCode), correlationID))
 	}
 
 	return messages

@@ -34,6 +34,7 @@ import (
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	api "github.com/go-chi/chi/v5"
 )
@@ -640,10 +641,11 @@ func TestABACMiddleware_ModelProviderNilFailsClosed(t *testing.T) {
 		t.Fatalf("expected fail-closed status %d, got %d", http.StatusForbidden, rec.Code)
 	}
 
-	var body []common.ErrorHandler
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+	var result commonmodel.Result
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to decode standardized error response: %v", err)
 	}
+	body := result.Messages
 	if len(body) != 1 || body[0].MessageType != "Error" || body[0].Code != "403" {
 		t.Fatalf("expected standardized forbidden response, got %#v", body)
 	}
@@ -658,10 +660,11 @@ func (emptyModelProvider) ActiveAccessModel() *AccessModel {
 func assertRouterErrorBody(t *testing.T, responseBody []byte, expectedText string, expectedCorrelationID string) {
 	t.Helper()
 
-	var body []common.ErrorHandler
-	if err := json.Unmarshal(responseBody, &body); err != nil {
+	var result commonmodel.Result
+	if err := json.Unmarshal(responseBody, &result); err != nil {
 		t.Fatalf("failed to decode response body: %v", err)
 	}
+	body := result.Messages
 	if len(body) != 1 {
 		t.Fatalf("expected 1 error entry, got %d", len(body))
 	}

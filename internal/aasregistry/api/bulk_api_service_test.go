@@ -65,7 +65,7 @@ func TestBulkServiceResultLifecycle(t *testing.T) {
 
 	running := service.GetResult(context.Background(), handleID)
 	require.Equal(t, http.StatusBadRequest, running.Code)
-	runningMessages := running.Body.([]model.Message)
+	runningMessages := running.Body.(model.Result).Messages
 	require.Contains(t, runningMessages[0].CorrelationID, "-GetBulkAsyncResult-BadRequest-OperationStillRunning")
 
 	require.NoError(t, manager.Complete(t.Context(), handleID, asyncjob.BulkResult{
@@ -83,7 +83,7 @@ func TestBulkServiceResultLifecycle(t *testing.T) {
 
 	notFound := service.GetResult(context.Background(), handleID)
 	require.Equal(t, http.StatusNotFound, notFound.Code)
-	notFoundMessages := notFound.Body.([]model.Message)
+	notFoundMessages := notFound.Body.(model.Result).Messages
 	require.Contains(t, notFoundMessages[0].CorrelationID, "-GetBulkAsyncResult-NotFound-HandleNotFound")
 }
 
@@ -121,7 +121,7 @@ func TestBulkServiceUnknownHandleReturnsNotFound(t *testing.T) {
 
 	status := service.GetStatus(context.Background(), "AASR-BULK-TEST-unknown")
 	require.Equal(t, http.StatusNotFound, status.Code)
-	statusMessages := status.Body.([]model.Message)
+	statusMessages := status.Body.(model.Result).Messages
 	require.Contains(t, statusMessages[0].CorrelationID, "-GetAsyncBulkStatus-NotFound-HandleNotFound")
 	require.Equal(t, http.StatusNotFound, service.GetResult(context.Background(), "AASR-BULK-TEST-unknown").Code)
 }

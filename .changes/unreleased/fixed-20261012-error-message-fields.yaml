@@ -1,0 +1,7 @@
+kind: fixed
+body: 'Error message `timestamp` values are always in UTC, as the AAS API pattern requires; before, they used the server time zone. `correlationId` is limited to the 128 characters allowed by the schema, and DPP API errors now carry a non-empty `correlationId` as EN 18222 requires.'
+time: 2026-10-12T20:30:01.000000+02:00
+custom:
+    Impact: Low
+    PullRequest: 749
+    SecurityImpact: None.

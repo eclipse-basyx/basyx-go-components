@@ -29,6 +29,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -360,11 +361,12 @@ func TestValueOnlyAsyncResultPreservesRunningFailureAndPathIsolation(t *testing.
 
 	failedHandle, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: "test", Metadata: metadata})
 	require.NoError(t, err)
-	require.NoError(t, sut.asyncJobManager.Fail(t.Context(), failedHandle, http.StatusBadGateway, map[string]any{"error": "delegate failed"}))
+	failure := newAPIErrorResponse(errors.New("delegate failed"), http.StatusBadGateway, "InvokeOperationAsync", "DelegateOperationCall")
+	require.NoError(t, sut.asyncJobManager.Fail(t.Context(), failedHandle, failure.Code, failure.Body))
 	failedResult, err := sut.GetOperationAsyncResultValueOnly(ctx, encodedSubmodelID, "Ops.Add", failedHandle)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadGateway, failedResult.Code)
-	require.Equal(t, map[string]any{"error": "delegate failed"}, failedResult.Body)
+	require.Equal(t, failure.Body, failedResult.Body)
 
 	clockNow := time.Now()
 	expiringManager, err := asyncjob.NewManagerWithClock("SMREPO-ASYNC-EXPIRED", time.Minute, func() time.Time { return clockNow })
@@ -377,4 +379,59 @@ func TestValueOnlyAsyncResultPreservesRunningFailureAndPathIsolation(t *testing.
 	expiredResult, err := expiringService.GetOperationAsyncResultValueOnly(ctx, encodedSubmodelID, "Ops.Add", expiredHandle)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotFound, expiredResult.Code)
+}
+
+func TestDelegatedOperationErrorStatusReturnsBadGatewayResult(t *testing.T) {
+	delegationURL := startFailingDelegationServer(t, http.StatusBadRequest)
+
+	prepared := preparedOperationDelegation{delegationURL: delegationURL, timeout: time.Second}
+	response, err := invokePreparedOperation(contextWithABACDisabled(t), prepared, nil, "InvokeOperationSubmodelRepo")
+
+	require.NoError(t, err)
+	requireDelegatedStatusErrorResult(t, response, http.StatusBadRequest)
+}
+
+func TestAsyncDelegatedOperationErrorStatusReturnsBadGatewayResult(t *testing.T) {
+	delegationURL := startFailingDelegationServer(t, http.StatusInternalServerError)
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
+	decodedSubmodelID := "sm-delegated-status"
+	handleID, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{
+		JobKind: "test",
+		Metadata: map[string]string{
+			delegatedAsyncSubmodelIdentifierMetadataKey: decodedSubmodelID,
+			delegatedAsyncIDShortPathMetadataKey:        "Ops.Add",
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, sut.tryAcquireAsyncDelegationSlot())
+
+	ctx := contextWithABACDisabled(t)
+	sut.executePreparedOperationAsync(ctx, handleID, delegationURL, nil, time.Second, "InvokeOperationAsync")
+	response, err := sut.GetOperationAsyncResult(ctx, common.EncodeString(decodedSubmodelID), "Ops.Add", handleID)
+
+	require.NoError(t, err)
+	requireDelegatedStatusErrorResult(t, response, http.StatusInternalServerError)
+}
+
+func startFailingDelegationServer(t *testing.T, status int) string {
+	t.Helper()
+	delegationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`[{"remoteDetail":"must not be forwarded"}]`))
+	}))
+	t.Cleanup(delegationServer.Close)
+	t.Setenv(delegationTrustedHostsKey, mustParseDelegationTestURL(t, delegationServer.URL).Host)
+	return delegationServer.URL
+}
+
+func requireDelegatedStatusErrorResult(t *testing.T, response gen.ImplResponse, delegatedStatus int) {
+	t.Helper()
+	require.Equal(t, http.StatusBadGateway, response.Code)
+	result, ok := response.Body.(gen.Result)
+	require.True(t, ok, "expected Result body, got %T", response.Body)
+	require.Len(t, result.Messages, 1)
+	require.Equal(t, "502", result.Messages[0].Code)
+	require.Contains(t, result.Messages[0].Text, fmt.Sprintf("HTTP %d", delegatedStatus))
+	require.NotContains(t, result.Messages[0].Text, "remoteDetail")
 }
