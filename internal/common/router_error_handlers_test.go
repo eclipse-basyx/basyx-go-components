@@ -32,6 +32,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -50,10 +51,11 @@ func TestAddDefaultRouterErrorHandlers_NotFound(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
 	}
 
-	var body []ErrorHandler
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+	var result model.Result
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to decode response body: %v", err)
 	}
+	body := result.Messages
 	if len(body) != 1 {
 		t.Fatalf("expected 1 error entry, got %d", len(body))
 	}
@@ -80,10 +82,11 @@ func TestAddDefaultRouterErrorHandlers_MethodNotAllowed(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
 	}
 
-	var body []ErrorHandler
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+	var result model.Result
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to decode response body: %v", err)
 	}
+	body := result.Messages
 	if len(body) != 1 {
 		t.Fatalf("expected 1 error entry, got %d", len(body))
 	}
@@ -118,10 +121,11 @@ func TestConfigureAPIRouter_RejectsTrailingSlashCollectionRoute(t *testing.T) {
 		t.Fatal("collection handler must not be called for trailing-slash route")
 	}
 
-	var body []ErrorHandler
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+	var result model.Result
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to decode response body: %v", err)
 	}
+	body := result.Messages
 	if len(body) != 1 {
 		t.Fatalf("expected 1 error entry, got %d", len(body))
 	}
@@ -154,10 +158,11 @@ func TestConfigureAPIRouter_RejectsTrailingSlashBeforeMethodLookup(t *testing.T)
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
 	}
 
-	var body []ErrorHandler
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+	var result model.Result
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to decode response body: %v", err)
 	}
+	body := result.Messages
 	if len(body) != 1 {
 		t.Fatalf("expected 1 error entry, got %d", len(body))
 	}

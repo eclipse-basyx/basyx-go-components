@@ -69,8 +69,9 @@ func TestGetAllAssetAdministrationShellsRejectsInvalidCursorWithStandardErrorBod
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, response.Code)
 
-	handlers, ok := response.Body.([]common.ErrorHandler)
+	result, ok := response.Body.(model.Result)
 	require.True(t, ok)
+	handlers := result.Messages
 	require.Len(t, handlers, 1)
 	require.Equal(t, "Error", handlers[0].MessageType)
 	require.Equal(t, expectedDecodeErr.Error(), handlers[0].Text)
@@ -97,8 +98,9 @@ func TestQueryAssetAdministrationShellsRejectsHierarchyFieldsOutsideAASEnvironme
 
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, response.Code)
-	handlers, ok := response.Body.([]common.ErrorHandler)
+	result, ok := response.Body.(model.Result)
 	require.True(t, ok)
+	handlers := result.Messages
 	require.Len(t, handlers, 1)
 	require.Contains(t, handlers[0].Text, "only supported by the AAS Environment Service")
 

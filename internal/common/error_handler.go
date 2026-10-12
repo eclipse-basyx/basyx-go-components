@@ -80,40 +80,6 @@ func IsPostgresUniqueViolation(err error) bool {
 	return IsPostgresErrorCode(err, "23505")
 }
 
-// ErrorHandler represents a structured error response with metadata.
-// It provides standardized error information including message type,
-// error text, error code, correlation ID for tracking, and timestamp.
-//
-// The struct is JSON-serializable and follows BaSyx error response format
-// for consistent API error reporting across all services.
-type ErrorHandler = model.ErrorResponse
-
-// NewErrorHandler creates a new ErrorHandler instance with the provided parameters.
-//
-// Parameters:
-//   - messageType: The type of message (typically "Error" for error responses)
-//   - text: The error that occurred, will be converted to string using Error() method
-//   - code: HTTP status code as string (e.g., "404", "500")
-//   - correlationID: Unique identifier for tracking this error across systems
-//   - timestamp: RFC3339 formatted timestamp when the error occurred
-//
-// Returns:
-//   - *ErrorHandler: A pointer to the newly created ErrorHandler instance
-//
-// Example:
-//
-//	err := errors.New("resource not found")
-//	handler := NewErrorHandler("Error", err, "404", "req-123", "2023-11-03T10:00:00Z")
-func NewErrorHandler(messageType string, text error, code string, correlationID string, timestamp string) *ErrorHandler {
-	return &ErrorHandler{
-		MessageType:   messageType,
-		Text:          text.Error(),
-		Code:          code,
-		CorrelationID: correlationID,
-		Timestamp:     timestamp,
-	}
-}
-
 // NewErrNotFound creates a standardized "404 Not Found" error.
 //
 // Parameters:

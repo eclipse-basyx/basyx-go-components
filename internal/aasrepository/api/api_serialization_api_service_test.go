@@ -29,7 +29,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 	"github.com/stretchr/testify/require"
 )
@@ -54,8 +54,9 @@ func TestGenerateSerializationByIdsReturnsNotImplemented(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotImplemented, response.Code)
 
-	handlers, ok := response.Body.([]common.ErrorHandler)
+	result, ok := response.Body.(model.Result)
 	require.True(t, ok)
+	handlers := result.Messages
 	require.Len(t, handlers, 1)
 	require.Equal(t, "Error", handlers[0].MessageType)
 	require.Equal(t, errGenerateSerializationByIdsNotImplemented, handlers[0].Text)

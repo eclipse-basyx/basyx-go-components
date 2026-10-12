@@ -61,4 +61,8 @@ func TestMapPersistenceErrorPreservesWrappedDPPHTTPError(t *testing.T) {
 			"DPP-FILEURL-MISSINGEXTERNALURL",
 		)
 	}
+	wantCorrelationID := "DPP-500-Service-InternalServerError-DPP-FILEURL-MISSINGEXTERNALURL"
+	if result.Messages[0].CorrelationId != wantCorrelationID {
+		t.Fatalf("mapPersistenceError() correlationId = %q, want %q", result.Messages[0].CorrelationId, wantCorrelationID)
+	}
 }

@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,8 +64,9 @@ func TestGetAllConceptDescriptionsRejectsInvalidCursorWithStandardErrorBody(t *t
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, response.Code)
 
-	handlers, ok := response.Body.([]common.ErrorHandler)
+	result, ok := response.Body.(model.Result)
 	require.True(t, ok)
+	handlers := result.Messages
 	require.Len(t, handlers, 1)
 	require.Equal(t, "Error", handlers[0].MessageType)
 	require.Equal(t, expectedDecodeErr.Error(), handlers[0].Text)

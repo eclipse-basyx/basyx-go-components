@@ -38,7 +38,6 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
 // OIDC wraps a token verifier and related settings.
@@ -269,11 +268,8 @@ func respondOIDCError(w http.ResponseWriter) {
 }
 
 func respondOIDCStatus(w http.ResponseWriter, status int) {
-	resp := common.NewErrorResponse(errors.New("access denied"), status, "Middleware", "Rules", "Denied")
-	err := openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
-	if err != nil {
+	if err := common.WriteErrorResponse(w, errors.New("access denied"), status, "Middleware", "Rules", "Denied"); err != nil {
 		slog.Error("error response encoding failed", "error.code", "SECURITY-RESPONDOIDCSTATUS-EXECUTE", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
 

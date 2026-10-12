@@ -235,10 +235,13 @@ func TestHTTPValidationErrors(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rr.Code)
 	}
-	var body []map[string]any
-	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+	var result struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
 		t.Fatalf("decode error body: %v body=%s", err, rr.Body.String())
 	}
+	body := result.Messages
 	if len(body) != 1 {
 		t.Fatalf("expected one error message, got %d", len(body))
 	}

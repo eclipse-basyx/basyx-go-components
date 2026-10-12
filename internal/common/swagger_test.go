@@ -194,10 +194,11 @@ func TestAddSwaggerUIReturnsStandardizedErrorForUnknownSchemaVersions(t *testing
 			t.Fatalf("expected 404 for %s, got %d", schemaPath, recorder.Code)
 		}
 
-		var response []model.Message
-		if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		var result model.Result
+		if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
 			t.Fatalf("expected standard error response for %s: %v", schemaPath, err)
 		}
+		response := result.Messages
 		if len(response) != 1 || response[0].Code != "404" || response[0].MessageType != "Error" {
 			t.Fatalf("unexpected standard error response for %s: %+v", schemaPath, response)
 		}

@@ -31,6 +31,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 type dppHTTPError struct {
@@ -56,11 +58,13 @@ func (e *dppHTTPError) ErrorCode() string {
 }
 
 func errorResponse(status int, err error) ImplResponse {
-	return Response(errorStatus(err, status), Result{Messages: []Message{{
+	status = errorStatus(err, status)
+	code := errorCode(err)
+	return Response(status, Result{Messages: []Message{{
 		MessageType:   "Error",
 		Text:          err.Error(),
-		Code:          errorCode(err),
-		CorrelationId: "",
+		Code:          code,
+		CorrelationId: commonmodel.NewErrorCorrelationID("DPP", status, "Service", code),
 		Timestamp:     time.Now().UTC(),
 	}}})
 }

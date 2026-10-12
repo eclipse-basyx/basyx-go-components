@@ -272,8 +272,8 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 			if putResp.Code < http.StatusOK || putResp.Code >= http.StatusMultipleChoices {
 				if putResp.Code == http.StatusBadRequest {
 					detail := "invalid submodel data"
-					if messages, ok := putResp.Body.([]commonmodel.Message); ok && len(messages) > 0 {
-						detail = messages[0].Text
+					if text := commonmodel.ErrorText(putResp.Body); text != "" {
+						detail = text
 					}
 					return common.NewErrBadRequest(fmt.Sprintf("AASENV-PROCESSENV-PUTSM submodel %q: %s", submodel.ID(), detail))
 				}
