@@ -76,13 +76,14 @@ func TestValueOnlyNativeTypesPatchRejectsMismatchingPayloads(t *testing.T) {
 		body   string
 		status int
 	}{
-		{"numeric string for int", "Count", `"7"`, http.StatusBadRequest},
+		{"non-numeric string for int", "Count", `"seven"`, http.StatusBadRequest},
+		{"out of range string for int", "Count", `"2147483648"`, http.StatusBadRequest},
 		{"boolean for int", "Count", `true`, http.StatusBadRequest},
 		{"fraction for int", "Count", `1.5`, http.StatusBadRequest},
 		{"object for int", "Count", `{"value":7}`, http.StatusBadRequest},
 		{"number for string", "Serial", `42`, http.StatusBadRequest},
-		{"string for boolean", "Enabled", `"true"`, http.StatusBadRequest},
-		{"string range bound", "Limits", `{"min":"1"}`, http.StatusBadRequest},
+		{"word for boolean", "Enabled", `"yes"`, http.StatusBadRequest},
+		{"boolean range bound", "Limits", `{"min":true}`, http.StatusBadRequest},
 		{"unknown range member", "Limits", `{"step":1}`, http.StatusBadRequest},
 		{"multi language item with two languages", "Name", `[{"en":"a","de":"b"}]`, http.StatusBadRequest},
 		{"legacy multi language shape", "Name", `[{"language":"en","text":"a"}]`, http.StatusBadRequest},
@@ -110,8 +111,9 @@ func TestValueOnlyNativeTypesPatchAppliesTypedValues(t *testing.T) {
 		path string
 		body string
 	}{
-		{"Count", `7`},
-		{"Enabled", `false`},
+		{"Count", `"7"`},
+		{"Enabled", `"false"`},
+		{"Amount", `9.5`},
 		{"Infinite", `"-INF"`},
 		{"Ratio", `null`},
 		{"Limits", `{"max":20}`},
@@ -134,7 +136,7 @@ func TestValueOnlyNativeTypesPatchAppliesTypedValues(t *testing.T) {
 		"Unset": null,
 		"Infinite": "-INF",
 		"Big": 0,
-		"Amount": 1234567890.1234567890123456789,
+		"Amount": 9.5,
 		"Limits": {"min": 1, "max": 20},
 		"Data": {"Count": 9007199254740993, "Rows": [5, 2]},
 		"Name": [{"de": "Aktualisiert"}, {"en": "Updated"}],

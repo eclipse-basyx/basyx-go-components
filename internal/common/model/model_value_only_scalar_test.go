@@ -121,6 +121,11 @@ func TestValueOnlyScalarFromJSONAcceptsNativeTypes(t *testing.T) {
 		{"empty string", `""`, types.DataTypeDefXSDString, stringPointer("")},
 		{"dateTime", `"2000-01-01T14:23:00Z"`, types.DataTypeDefXSDDateTime, stringPointer("2000-01-01T14:23:00Z")},
 		{"null clears", `null`, types.DataTypeDefXSDInt, nil},
+		{"numeric string for int", `"7"`, types.DataTypeDefXSDInt, stringPointer("7")},
+		{"numeric string keeps unsigned long digits", `"18446744073709551615"`, types.DataTypeDefXSDUnsignedLong, stringPointer("18446744073709551615")},
+		{"lexical string for double", `"1.5E3"`, types.DataTypeDefXSDDouble, stringPointer("1.5E3")},
+		{"boolean string", `"true"`, types.DataTypeDefXSDBoolean, stringPointer("true")},
+		{"boolean digit string", `"1"`, types.DataTypeDefXSDBoolean, stringPointer("1")},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -141,16 +146,17 @@ func TestValueOnlyScalarFromJSONRejectsWrongKindsAndValues(t *testing.T) {
 		valueType types.DataTypeDefXSD
 		expected  error
 	}{
-		{"numeric string for int", `"7"`, types.DataTypeDefXSDInt, ErrValueOnlyScalarKind},
 		{"boolean for int", `true`, types.DataTypeDefXSDInt, ErrValueOnlyScalarKind},
 		{"object for int", `{"value":1}`, types.DataTypeDefXSDInt, ErrValueOnlyScalarKind},
 		{"array for string", `["a"]`, types.DataTypeDefXSDString, ErrValueOnlyScalarKind},
 		{"number for string", `42`, types.DataTypeDefXSDString, ErrValueOnlyScalarKind},
-		{"string for boolean", `"true"`, types.DataTypeDefXSDBoolean, ErrValueOnlyScalarKind},
 		{"number for boolean", `1`, types.DataTypeDefXSDBoolean, ErrValueOnlyScalarKind},
-		{"infinity for decimal", `"INF"`, types.DataTypeDefXSDDecimal, ErrValueOnlyScalarKind},
-		{"lowercase infinity for double", `"inf"`, types.DataTypeDefXSDDouble, ErrValueOnlyScalarKind},
-		{"number string for double", `"1.5"`, types.DataTypeDefXSDDouble, ErrValueOnlyScalarKind},
+		{"infinity for decimal", `"INF"`, types.DataTypeDefXSDDecimal, ErrValueOnlyScalarInconsistent},
+		{"lowercase infinity for double", `"inf"`, types.DataTypeDefXSDDouble, ErrValueOnlyScalarInconsistent},
+		{"non-numeric string for int", `"seven"`, types.DataTypeDefXSDInt, ErrValueOnlyScalarInconsistent},
+		{"out of range string for int", `"2147483648"`, types.DataTypeDefXSDInt, ErrValueOnlyScalarInconsistent},
+		{"fraction string for int", `"1.5"`, types.DataTypeDefXSDInt, ErrValueOnlyScalarInconsistent},
+		{"word for boolean", `"yes"`, types.DataTypeDefXSDBoolean, ErrValueOnlyScalarInconsistent},
 		{"fraction for int", `1.5`, types.DataTypeDefXSDInt, ErrValueOnlyScalarInconsistent},
 		{"int overflow", `2147483648`, types.DataTypeDefXSDInt, ErrValueOnlyScalarInconsistent},
 		{"negative unsigned", `-1`, types.DataTypeDefXSDUnsignedInt, ErrValueOnlyScalarInconsistent},

@@ -368,11 +368,12 @@ consistent with their `valueType` are serialized as their lexical string.
 stored model type and `valueType` decide how each JSON value is read, so no
 element type is inferred from the payload shape:
 
-- Numeric types require a JSON number and `xs:boolean` requires a JSON boolean.
-  All other types require a JSON string. `xs:double` and `xs:float` also accept
-  the strings `"INF"`, `"-INF"` and `"NaN"`, so a read value can be written back
-  unchanged. Any other JSON type, or a value outside the range of its
-  `valueType`, returns `400 Bad Request`.
+- Numeric types accept a JSON number and `xs:boolean` accepts a JSON boolean.
+  Both also accept their lexical form as a JSON string, for example `"42"` or
+  `"true"`, so clients that send strings keep working. All other types require
+  a JSON string. Every value is checked against its `valueType`: a value outside
+  its range, a string that is not a valid lexical value such as `"seven"` for
+  `xs:int`, or another JSON type returns `400 Bad Request`.
 - `null` clears a `Property` value or a `Range` bound.
 - Members that are omitted from an object stay unchanged. This applies to
   `Range` bounds, `File` and `Blob` fields, `RelationshipElement` and

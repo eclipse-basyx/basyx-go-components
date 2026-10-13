@@ -73,7 +73,10 @@ func TestDecodeValueOnlyProperty(t *testing.T) {
 	patch = decodeSingle(t, `null`, scalarNode("Temperature", types.ModelTypeProperty, types.DataTypeDefXSDInt))
 	require.Equal(t, PropertyValue{ValueType: types.DataTypeDefXSDInt}, patch)
 
-	_, err := DecodeValueOnly(json.RawMessage(`"42"`), scalarNode("Temperature", types.ModelTypeProperty, types.DataTypeDefXSDInt))
+	patch = decodeSingle(t, `"42"`, scalarNode("Temperature", types.ModelTypeProperty, types.DataTypeDefXSDInt))
+	require.Equal(t, PropertyValue{Value: stringPointer("42"), ValueType: types.DataTypeDefXSDInt}, patch)
+
+	_, err := DecodeValueOnly(json.RawMessage(`true`), scalarNode("Temperature", types.ModelTypeProperty, types.DataTypeDefXSDInt))
 	require.ErrorIs(t, err, ErrValueOnlyScalarKind)
 	require.ErrorContains(t, err, "Temperature: ")
 }
@@ -92,7 +95,7 @@ func TestDecodeValueOnlyRange(t *testing.T) {
 	patch = decodeSingle(t, `{"max":"INF"}`, node)
 	require.Equal(t, RangeValuePatch{ValueType: types.DataTypeDefXSDDouble, Max: ScalarPatch{Set: true, Value: stringPointer("INF")}}, patch)
 
-	for _, payload := range []string{`{"min":"1.5"}`, `{"min":1,"step":2}`, `[1,2]`, `null`} {
+	for _, payload := range []string{`{"min":"low"}`, `{"min":true}`, `{"min":1,"step":2}`, `[1,2]`, `null`} {
 		_, err := DecodeValueOnly(json.RawMessage(payload), node)
 		require.Error(t, err, payload)
 	}

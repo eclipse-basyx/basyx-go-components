@@ -102,8 +102,9 @@ func ValueOnlyScalarToJSONStrict(lexical *string, valueType types.DataTypeDefXSD
 }
 
 // ValueOnlyScalarFromJSON converts a JSON scalar decoded with UseNumber into the lexical form of the valueType.
-// JSON null yields nil. Numeric types require a JSON number, xs:boolean a JSON boolean and all other types a JSON
-// string; xs:double and xs:float additionally accept the strings INF, -INF and NaN.
+// JSON null yields nil. Numeric types accept a JSON number, xs:boolean a JSON boolean, and both also accept
+// their lexical form as a JSON string; all other types require a JSON string. Every value must be consistent
+// with the valueType.
 func ValueOnlyScalarFromJSON(value any, valueType types.DataTypeDefXSD) (*string, error) {
 	if value == nil {
 		return nil, nil
@@ -119,39 +120,27 @@ func ValueOnlyScalarFromJSON(value any, valueType types.DataTypeDefXSD) (*string
 }
 
 func valueOnlyLexical(value any, valueType types.DataTypeDefXSD) (string, error) {
+	if text, ok := value.(string); ok {
+		return text, nil
+	}
 	if IsNumericXSDType(valueType) {
 		return numericLexical(value, valueType)
 	}
-	if valueType == types.DataTypeDefXSDBoolean {
-		if boolean, ok := value.(bool); ok {
-			return strconv.FormatBool(boolean), nil
-		}
-		return "", scalarKindError(value, valueType)
-	}
-	if text, ok := value.(string); ok {
-		return text, nil
+	if boolean, ok := value.(bool); ok && valueType == types.DataTypeDefXSDBoolean {
+		return strconv.FormatBool(boolean), nil
 	}
 	return "", scalarKindError(value, valueType)
 }
 
 func numericLexical(value any, valueType types.DataTypeDefXSD) (string, error) {
-	floating := valueType == types.DataTypeDefXSDDouble || valueType == types.DataTypeDefXSDFloat
-	switch scalar := value.(type) {
-	case json.Number:
-		if floating {
-			return scalar.String(), nil
-		}
-		return decimalLexicalFromJSONNumber(scalar.String())
-	case string:
-		if floating && isNonFiniteLexical(scalar) {
-			return scalar, nil
-		}
+	number, ok := value.(json.Number)
+	if !ok {
+		return "", scalarKindError(value, valueType)
 	}
-	return "", scalarKindError(value, valueType)
-}
-
-func isNonFiniteLexical(lexical string) bool {
-	return lexical == "INF" || lexical == "-INF" || lexical == "NaN"
+	if valueType == types.DataTypeDefXSDDouble || valueType == types.DataTypeDefXSDFloat {
+		return number.String(), nil
+	}
+	return decimalLexicalFromJSONNumber(number.String())
 }
 
 func ensureConsistentLexical(lexical string, valueType types.DataTypeDefXSD) error {
@@ -173,9 +162,9 @@ func scalarKindError(value any, valueType types.DataTypeDefXSD) error {
 func expectedJSONKind(valueType types.DataTypeDefXSD) string {
 	switch {
 	case IsNumericXSDType(valueType):
-		return "number"
+		return "number or string"
 	case valueType == types.DataTypeDefXSDBoolean:
-		return "boolean"
+		return "boolean or string"
 	default:
 		return "string"
 	}
