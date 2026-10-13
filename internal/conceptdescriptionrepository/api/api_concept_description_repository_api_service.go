@@ -94,20 +94,12 @@ func NewConceptDescriptionRepositoryAPIAPIService(database *persistence.ConceptD
 // results are available. Invalid limits, invalid cursors, denied access, or
 // unsupported query expressions are returned as HTTP error responses.
 func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QueryConceptDescriptions", detail), nil
 	}
 
 	const operation = "QueryConceptDescriptions"
-
-	decodedCursor := cursor
-	if decodedCursor != "" {
-		var decodeErr error
-		decodedCursor, decodeErr = common.DecodeAPICursor(decodedCursor)
-		if decodeErr != nil {
-			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, operation, "BadCursor"), nil
-		}
-	}
 
 	if limit < 0 {
 		err := common.NewErrBadRequest("limit must be non-negative")
@@ -150,17 +142,9 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx
 
 // GetAllConceptDescriptions - Returns all Concept Descriptions
 func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ctx context.Context, idShort string, isCaseOf string, dataSpecificationRef string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", detail), nil
-	}
-
-	decodedCursor := cursor
-	if decodedCursor != "" {
-		var decodeErr error
-		decodedCursor, decodeErr = common.DecodeAPICursor(decodedCursor)
-		if decodeErr != nil {
-			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadCursor"), nil
-		}
 	}
 
 	if limit < 0 {
@@ -217,13 +201,9 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 
 // GetAllConceptDescriptionsRecentChanges returns changed Concept Descriptions.
 func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionsRecentChanges(ctx context.Context, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
-	decodedCursor := cursor
-	if decodedCursor != "" {
-		var decodeErr error
-		decodedCursor, decodeErr = common.DecodeAPICursor(decodedCursor)
-		if decodeErr != nil {
-			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadCursor"), nil
-		}
+	decodedCursor, decodeErr := common.DecodeAPICursor(cursor)
+	if decodeErr != nil {
+		return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadCursor"), nil
 	}
 
 	normalizedLimit, limitErr := common.NormalizeRecentChangesLimit(limit)

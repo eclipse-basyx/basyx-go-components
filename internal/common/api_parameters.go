@@ -202,13 +202,25 @@ func ValidateAPIEncodedQuery(query url.Values, name string, maxLength int) error
 	return err
 }
 
-// ValidateAPIPagination protects direct service calls, including wrapper early returns.
-func ValidateAPIPagination(limit int32, cursor string) (string, error) {
+// DecodeAPIPagination validates the paging parameters of a service call and
+// decodes the wire cursor into the continuation token of the persistence layer.
+//
+// Returns:
+//   - string: Decoded cursor, empty when the request starts at the first page.
+//   - string: Error detail for the error response when validation fails.
+//   - error: Bad request error for negative limits or malformed cursors.
+func DecodeAPIPagination(limit int32, cursor string) (string, string, error) {
 	if limit < 0 {
-		return "BadLimit", NewErrBadRequest("COMMON-APIPARAM-LIMIT limit must not be negative")
+		return "", "BadLimit", NewErrBadRequest("COMMON-APIPARAM-LIMIT limit must not be negative")
 	}
-	_, err := DecodeAPICursor(cursor)
-	return "BadCursor", err
+	decodedCursor, err := DecodeAPICursor(cursor)
+	return decodedCursor, "BadCursor", err
+}
+
+// ValidateAPIPagination protects wrappers that forward the wire cursor to another service.
+func ValidateAPIPagination(limit int32, cursor string) (string, error) {
+	_, detail, err := DecodeAPIPagination(limit, cursor)
+	return detail, err
 }
 
 // GlobalAssetIDAssetLinkName is the reserved name for global asset identifier lookup.

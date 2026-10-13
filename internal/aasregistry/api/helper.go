@@ -38,7 +38,7 @@ import (
 // decodePathParam decodes an URL path component and builds a consistent error response.
 func decodePathParam(ctx context.Context, raw, paramName, operation, errorDetail string) (string, *model.ImplResponse, error) {
 	decode := common.DecodeAPIIdentifier
-	if paramName == "cursor" || paramName == "assetType" {
+	if paramName == "assetType" {
 		decode = common.DecodeAPIString
 	}
 	decoded, err := decode(raw)
@@ -50,14 +50,6 @@ func decodePathParam(ctx context.Context, raw, paramName, operation, errorDetail
 		return "", &resp, nil
 	}
 	return decoded, nil, nil
-}
-
-// decodeCursor wraps cursor decoding with shared logging + error response.
-func decodeCursor(ctx context.Context, raw, operation string) (string, *model.ImplResponse, error) {
-	if raw == "" {
-		return "", nil, nil
-	}
-	return decodePathParam(ctx, raw, "cursor", operation, "BadCursor")
 }
 
 func decodeOptionalQueryParam(ctx context.Context, raw, paramName, operation, errorDetail string) (string, *model.ImplResponse, error) {

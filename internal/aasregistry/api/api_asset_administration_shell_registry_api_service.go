@@ -72,14 +72,11 @@ func NewAssetAdministrationShellRegistryAPIAPIService(databaseBackend persistenc
 
 // GetAllAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, assetKind model.AssetKind, assetType string, assetIds []string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	internalCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", detail), nil
 	}
 
-	internalCursor, resp, err := decodeCursor(ctx, cursor, "GetAllAssetAdministrationShellDescriptors")
-	if resp != nil || err != nil {
-		return *resp, err
-	}
 	decodedAssetType, resp, err := decodeOptionalQueryParam(ctx, assetType, "assetType", "GetAllAssetAdministrationShellDescriptors", "BadAssetType")
 	if resp != nil || err != nil {
 		return *resp, err
@@ -376,18 +373,13 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministratio
 
 // GetAllSubmodelDescriptorsThroughSuperpath - Returns all Submodel Descriptors
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptorsThroughSuperpath(ctx context.Context, aasIdentifier string, limit int32, cursor string) (model.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	internalCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", detail), nil
 	}
 
 	// Decode AAS identifier from path
 	decodedAAS, resp, err := decodePathParam(ctx, aasIdentifier, "aasIdentifier", "GetAllSubmodelDescriptorsThroughSuperpath", "BadRequest-Decode")
-	if resp != nil || err != nil {
-		return *resp, err
-	}
-
-	// Decode cursor if provided
-	internalCursor, resp, err := decodeCursor(ctx, cursor, "GetAllSubmodelDescriptorsThroughSuperpath")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -720,7 +712,8 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 // QueryAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors that confirm to the input query
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	internalCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QueryAssetAdministrationShellDescriptors", detail), nil
 	}
 
@@ -732,9 +725,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministration
 	}
 	ctx = queryCtx
 
-	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "", time.Time{}, time.Time{})
+	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, "", "", time.Time{}, time.Time{})
 	if err != nil {
-		slog.ErrorContext(ctx, "Error in QueryAssetAdministrationShellDescriptors: list failed", "error.code", "API-QUERYASSETADMINISTRATIONSHELLDESCRIPTORS-LIST", "error", err, "component", componentName, "limit", limit, "cursor", cursor)
+		slog.ErrorContext(ctx, "Error in QueryAssetAdministrationShellDescriptors: list failed", "error.code", "API-QUERYASSETADMINISTRATIONSHELLDESCRIPTORS-LIST", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(

@@ -122,16 +122,13 @@ func newAPIErrorResponse(err error, status int, operation string, info string) g
 // available. Invalid cursors or unsupported query expressions are returned as
 // HTTP error responses with a nil Go error.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrationShells(ctx context.Context, limit int32, cursor string, query grammar.Query) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QueryAssetAdministrationShells", detail), nil
 	}
 
 	const operation = "QueryAssetAdministrationShells"
 
-	decodedCursor, decodeErr := common.DecodeAPICursor(cursor)
-	if decodeErr != nil {
-		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
-	}
 	if hierarchyErr := s.validateAASHierarchyQuery(query); hierarchyErr != nil {
 		return newAPIErrorResponse(hierarchyErr, http.StatusBadRequest, operation, "BadRequest"), nil
 	}
@@ -195,16 +192,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) validateAASHierarchyQu
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShells", detail), nil
 	}
 
 	const operation = "GetAllAssetAdministrationShells"
-
-	decodedCursor, decodeErr := common.DecodeAPICursor(cursor)
-	if decodeErr != nil {
-		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
-	}
 
 	specificAssetIDs, decodeErr := common.DecodeAPISpecificAssetIDs(assetIds)
 	if decodeErr != nil {
@@ -274,16 +267,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 
 // GetAllAssetAdministrationShellsReference - Returns References to all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellsReference", detail), nil
 	}
 
 	const operation = "GetAllAssetAdministrationShellsReference"
-
-	decodedCursor, decodeErr := common.DecodeAPICursor(cursor)
-	if decodeErr != nil {
-		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
-	}
 
 	specificAssetIDs, decodeErr := common.DecodeAPISpecificAssetIDs(assetIds)
 	if decodeErr != nil {
@@ -710,7 +699,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 
 // GetAllSubmodelReferencesAasRepository - Returns all submodel references
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferencesAasRepository(ctx context.Context, aasIdentifier string, limit int32, cursor string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelReferencesAasRepository", detail), nil
 	}
 
@@ -719,11 +709,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 	decodedIdentifier, decodeErr := common.DecodeAPIIdentifier(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
-	}
-
-	decodedCursor, cursorDecodeErr := common.DecodeAPICursor(cursor)
-	if cursorDecodeErr != nil {
-		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
 	references, nextCursor, err := s.assetAdministrationShellBackend.GetAllSubmodelReferencesByAASID(ctx, decodedIdentifier, limit, decodedCursor)

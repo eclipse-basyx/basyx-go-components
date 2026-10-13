@@ -73,7 +73,8 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	internalCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", detail), nil
 	}
 
@@ -84,19 +85,6 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 			Result:         []string{},
 		}
 		return model.Response(http.StatusOK, empty), nil
-	}
-
-	// Decode the incoming cursor only if it’s non-empty; empty means "start from the beginning".
-	var internalCursor string
-	if cursor != "" {
-		dec, decErr := common.DecodeAPICursor(cursor)
-		if decErr != nil {
-			slog.ErrorContext(ctx, "Error SearchAllAssetAdministrationShellIdsByAssetLink: decode cursor limit links failed", "error.code", "API-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-DECODE", "error", decErr, "component", componentName, "cursor", cursor, "limit", limit, "asset_link_count", len(assetLink))
-			return common.NewErrorResponse(
-				decErr, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "BadCursor",
-			), nil
-		}
-		internalCursor = dec
 	}
 
 	lookupLinks := assetLink
