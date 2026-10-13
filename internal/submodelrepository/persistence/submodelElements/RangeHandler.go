@@ -140,7 +140,7 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnly
 	if err != nil {
 		return err
 	}
-	typedValue, err := MapRangeValueByType(patch.ValueType, lexicalOrEmpty(patch.Min.Value), lexicalOrEmpty(patch.Max.Value))
+	typedValue, err := MapRangeValueByType(patch.ValueType, patch.Min.Value, patch.Max.Value)
 	if err != nil {
 		return err
 	}
@@ -192,15 +192,7 @@ func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element ty
 		return nil, common.NewErrBadRequest("submodelElement is not of type Range")
 	}
 
-	minVal := ""
-	maxVal := ""
-	if rangeElem.Min() != nil {
-		minVal = *rangeElem.Min()
-	}
-	if rangeElem.Max() != nil {
-		maxVal = *rangeElem.Max()
-	}
-	typedValue, err := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+	typedValue, err := MapRangeValueByType(rangeElem.ValueType(), rangeElem.Min(), rangeElem.Max())
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +229,7 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) (goqu.Reco
 			// For PUT, both min and max must be provided
 			panic("Both 'Min' and 'Max' values must be provided for Range element in PUT operation")
 		}
-		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
+		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), rangeElem.Min(), rangeElem.Max())
 		if err != nil {
 			return nil, err
 		}
@@ -252,27 +244,19 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) (goqu.Reco
 		updateRecord["min_datetime"] = typedValue.MinDateTime
 		updateRecord["max_datetime"] = typedValue.MaxDateTime
 	} else { //nolint:all - elseif: can replace 'else {if cond {}}' with 'else if cond {}' -> this would make the code less readable and has differing semantics
-		// PATCH: Only update if minVal/max are provided
-		minVal := ""
-		if rangeElem.Min() != nil {
-			minVal = *rangeElem.Min()
-		}
-		maxVal := ""
-		if rangeElem.Max() != nil {
-			maxVal = *rangeElem.Max()
-		}
-		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+		// PATCH: Only update bounds that are provided with a storable value
+		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), rangeElem.Min(), rangeElem.Max())
 		if err != nil {
 			return nil, err
 		}
-		if minVal != "" {
+		if isStorableLexical(rangeElem.ValueType(), rangeElem.Min()) {
 			updateRecord["min_text"] = typedValue.MinText
 			updateRecord["min_num"] = typedValue.MinNumeric
 			updateRecord["min_time"] = typedValue.MinTime
 			updateRecord["min_date"] = typedValue.MinDate
 			updateRecord["min_datetime"] = typedValue.MinDateTime
 		}
-		if maxVal != "" {
+		if isStorableLexical(rangeElem.ValueType(), rangeElem.Max()) {
 			updateRecord["max_text"] = typedValue.MaxText
 			updateRecord["max_num"] = typedValue.MaxNumeric
 			updateRecord["max_time"] = typedValue.MaxTime

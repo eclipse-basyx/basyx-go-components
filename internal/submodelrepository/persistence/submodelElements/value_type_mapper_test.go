@@ -85,7 +85,7 @@ func TestMapRangeValueByTypeRejectsInvalidTemporalBounds(t *testing.T) {
 		{name: "invalid max", min: "2024-04-22T00:00:00Z", max: "23.04.2024"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if _, err := MapRangeValueByType(types.DataTypeDefXSDDateTime, testCase.min, testCase.max); err == nil {
+			if _, err := MapRangeValueByType(types.DataTypeDefXSDDateTime, &testCase.min, &testCase.max); err == nil {
 				t.Fatal("expected invalid range bound to be rejected")
 			}
 		})

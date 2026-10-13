@@ -135,10 +135,3 @@ func updateValueOnlyRelationship(tx *sql.Tx, table string, update gen.ValueOnlyU
 	}
 	return execValueOnlyUpdate(tx, table, record, update.ElementID, errorCode)
 }
-
-func lexicalOrEmpty(lexical *string) string {
-	if lexical == nil {
-		return ""
-	}
-	return *lexical
-}

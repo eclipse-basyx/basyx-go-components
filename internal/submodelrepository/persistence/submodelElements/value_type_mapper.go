@@ -63,11 +63,8 @@ type TypedValue struct {
 //   - error: A bad request when a boolean or temporal value is inconsistent with its XS datatype
 func MapValueByType(valueType types.DataTypeDefXSD, value *string) (TypedValue, error) {
 	tv := TypedValue{}
-	valid := value != nil && (*value != "" || IsTextType(valueType))
-	actualValue := ""
-	if value != nil {
-		actualValue = *value
-	}
+	valid := isStorableLexical(valueType, value)
+	actualValue := lexicalOrEmpty(value)
 	if valid {
 		if err := validateDatabaseTypedValue(valueType, actualValue); err != nil {
 			return tv, err
@@ -95,6 +92,19 @@ func MapValueByType(valueType types.DataTypeDefXSD, value *string) (TypedValue, 
 		tv.Text = sql.NullString{String: actualValue, Valid: valid}
 	}
 	return tv, nil
+}
+
+// isStorableLexical reports whether a lexical value is stored as a value instead of NULL.
+// The empty string is a valid lexical value only for text types.
+func isStorableLexical(valueType types.DataTypeDefXSD, lexical *string) bool {
+	return lexical != nil && (*lexical != "" || IsTextType(valueType))
+}
+
+func lexicalOrEmpty(lexical *string) string {
+	if lexical == nil {
+		return ""
+	}
+	return *lexical
 }
 
 // IsTextType checks if the given XS datatype is a text/string type.
@@ -172,16 +182,18 @@ type TypedRangeValue struct {
 //
 // Parameters:
 //   - valueType: The XS datatype string (e.g., "xs:string", "xs:int", "xs:time")
-//   - minValue: The minimum value to be stored
-//   - maxValue: The maximum value to be stored
+//   - minValue: The minimum value to be stored; nil, or empty for non-text types, is stored as NULL
+//   - maxValue: The maximum value to be stored; nil, or empty for non-text types, is stored as NULL
 //
 // Returns:
 //   - TypedRangeValue: A struct with the values placed in the appropriate fields based on type
 //   - error: A bad request when a temporal bound is inconsistent with its XS datatype
-func MapRangeValueByType(valueType types.DataTypeDefXSD, minValue string, maxValue string) (TypedRangeValue, error) {
+func MapRangeValueByType(valueType types.DataTypeDefXSD, minLexical *string, maxLexical *string) (TypedRangeValue, error) {
 	tv := TypedRangeValue{}
-	minValid := minValue != ""
-	maxValid := maxValue != ""
+	minValid := isStorableLexical(valueType, minLexical)
+	maxValid := isStorableLexical(valueType, maxLexical)
+	minValue := lexicalOrEmpty(minLexical)
+	maxValue := lexicalOrEmpty(maxLexical)
 	if minValid {
 		if err := validateDatabaseTypedValue(valueType, minValue); err != nil {
 			return tv, err

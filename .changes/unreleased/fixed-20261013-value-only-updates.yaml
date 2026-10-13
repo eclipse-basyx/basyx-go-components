@@ -1,5 +1,5 @@
 kind: fixed
-body: 'ValueOnly `PATCH` of an Entity no longer fails when it sets `entityType`, and an AnnotatedRelationshipElement update without `first` or `second` no longer stores `null`. Blob content written by a full `PUT`/`PATCH` or by `$value` is now stored in the same encoding as on create, so non-UTF-8 bytes are preserved and base64 payloads are no longer stored as text. The AAS repository `$value` `PATCH` no longer rounds large numbers, and ValueOnly output includes the complete `specificAssetIds` of an Entity.'
+body: 'ValueOnly `PATCH` of an Entity no longer fails when it sets `entityType`, and an AnnotatedRelationshipElement update without `first` or `second` no longer stores `null`. Blob content written by a full `PUT`/`PATCH` or by `$value` is now stored in the same encoding as on create, so non-UTF-8 bytes are preserved and base64 payloads are no longer stored as text. The AAS repository `$value` `PATCH` no longer rounds large numbers, ValueOnly output includes the complete `specificAssetIds` of an Entity, and an empty `min` or `max` of a Range with a text `valueType` such as `xs:string` is stored as an empty string instead of being cleared.'
 time: 2026-10-13T12:10:01.000000+02:00
 custom:
     Impact: Low

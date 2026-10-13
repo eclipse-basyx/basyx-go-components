@@ -174,3 +174,43 @@ func TestMapValueByTypeKeepsNonFiniteLexicalsAsText(t *testing.T) {
 func stringPointer(value string) *string {
 	return &value
 }
+
+func TestMapRangeValueByTypeKeepsEmptyTextBounds(t *testing.T) {
+	t.Parallel()
+
+	empty := ""
+	typedValue, err := MapRangeValueByType(types.DataTypeDefXSDString, &empty, nil)
+	require.NoError(t, err)
+	require.Equal(t, sql.NullString{Valid: true}, typedValue.MinText)
+	require.False(t, typedValue.MaxText.Valid)
+
+	typedValue, err = MapRangeValueByType(types.DataTypeDefXSDInt, &empty, nil)
+	require.NoError(t, err)
+	require.False(t, typedValue.MinText.Valid)
+	require.False(t, typedValue.MinNumeric.Valid)
+}
+
+func TestApplyValueOnlyUpdatesStoresEmptyTextRangeBound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "range_element" SET "min_date"=\$1,"min_datetime"=\$2,"min_num"=\$3,"min_text"=\$4,"min_time"=\$5 WHERE \("id" = \$6\)`).
+		WithArgs(nil, nil, nil, "", nil, int64(21)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = ApplyValueOnlyUpdates(tx, db, []gen.ValueOnlyUpdate{{
+		ElementID: 21,
+		ModelType: types.ModelTypeRange,
+		Value:     gen.RangeValuePatch{ValueType: types.DataTypeDefXSDString, Min: gen.ScalarPatch{Set: true, Value: stringPointer("")}},
+	}})
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
