@@ -400,6 +400,6 @@ func TestStandaloneSubmodelDescriptorListFiltersExactIdentifier(t *testing.T) {
 	require.NoError(t, err)
 	query, args, err := dataset.Prepared(true).ToSQL()
 	require.NoError(t, err)
-	require.Contains(t, query, `"submodel_descriptor_raw_page"."id" = $1`)
+	require.Contains(t, query, `"visible_submodel_descriptors"."id" = $1`)
 	require.Contains(t, args, "urn:example:submodel:target")
 }

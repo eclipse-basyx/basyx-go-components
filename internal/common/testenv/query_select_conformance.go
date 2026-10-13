@@ -51,6 +51,8 @@ type QuerySelectConformance struct {
 // RunQuerySelectConformance verifies that "$select": "id" returns the
 // identifiers of the matching objects on every page, that queries without
 // $select still return objects, and that other $select values are rejected.
+// Objects that do not match are interleaved by identifier, so every page must
+// be filled before the limit is applied.
 func RunQuerySelectConformance(t *testing.T, spec QuerySelectConformance) {
 	t.Helper()
 	runID := time.Now().UnixNano()
@@ -58,10 +60,8 @@ func RunQuerySelectConformance(t *testing.T, spec QuerySelectConformance) {
 	ids := make([]string, 0, querySelectConformanceObjects)
 	for index := 0; index < querySelectConformanceObjects; index++ {
 		id := fmt.Sprintf("urn:conformance:select:%d:%d", runID, index)
-		conformanceRequest(t, http.MethodPost, spec.BaseURL+spec.CollectionPath, spec.NewObject(id, idShort), http.StatusCreated)
-		t.Cleanup(func() {
-			conformanceRequest(t, http.MethodDelete, spec.BaseURL+spec.CollectionPath+"/"+common.EncodeString(id), nil, http.StatusNoContent)
-		})
+		createQuerySelectObject(t, spec, id, idShort)
+		createQuerySelectObject(t, spec, id+"-other", idShort+"Other")
 		ids = append(ids, id)
 	}
 	condition := map[string]any{"$eq": []any{
@@ -93,6 +93,14 @@ func RunQuerySelectConformance(t *testing.T, spec QuerySelectConformance) {
 	}
 }
 
+func createQuerySelectObject(t *testing.T, spec QuerySelectConformance, id string, idShort string) {
+	t.Helper()
+	conformanceRequest(t, http.MethodPost, spec.BaseURL+spec.CollectionPath, spec.NewObject(id, idShort), http.StatusCreated)
+	t.Cleanup(func() {
+		conformanceRequest(t, http.MethodDelete, spec.BaseURL+spec.CollectionPath+"/"+common.EncodeString(id), nil, http.StatusNoContent)
+	})
+}
+
 func collectQuerySelectPages(
 	t *testing.T,
 	spec QuerySelectConformance,
@@ -103,9 +111,13 @@ func collectQuerySelectPages(
 	t.Helper()
 	parameters := url.Values{"limit": {fmt.Sprint(limit)}}
 	collected := []string{}
-	for pageCount := 0; pageCount < 1000; pageCount++ {
+	for pageCount := 0; pageCount <= querySelectConformanceObjects; pageCount++ {
 		page := conformanceRequest(t, http.MethodPost, spec.BaseURL+spec.QueryPath+"?"+parameters.Encode(), query, http.StatusOK)
-		collected = append(collected, pageIDs(t, page)...)
+		ids := pageIDs(t, page)
+		if len(ids) == 0 {
+			t.Fatalf("page after cursor %q is empty", parameters.Get("cursor"))
+		}
+		collected = append(collected, ids...)
 		metadata, _ := page["paging_metadata"].(map[string]any)
 		cursor, _ := metadata["cursor"].(string)
 		if cursor == "" {

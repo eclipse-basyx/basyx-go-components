@@ -50,11 +50,6 @@ type submodelDescriptorListRow struct {
 	payload []byte
 }
 
-type submodelDescriptorIdentifierRow struct {
-	identifier string
-	visible    bool
-}
-
 func (scope submodelDescriptorListScope) fragment(suffix string) grammar.FragmentStringPattern {
 	separator := "#"
 	if scope.collectorRoot == grammar.CollectorRootAASDesc {
@@ -221,7 +216,7 @@ func ListSubmodelDescriptorIdentifiers(
 	if limit < 1<<31-1 {
 		peekLimit++
 	}
-	dataset, err := buildStandaloneSubmodelDescriptorIdentifierQuery(ctx, peekLimit, cursor, submodelDescriptorListScope{
+	dataset, err := buildStandaloneSubmodelDescriptorPage(ctx, goqu.Dialect(common.Dialect), peekLimit, cursor, time.Time{}, time.Time{}, submodelDescriptorListScope{
 		collectorRoot:  grammar.CollectorRootSMDesc,
 		fragmentPrefix: "$smdesc",
 	})
@@ -238,27 +233,20 @@ func ListSubmodelDescriptorIdentifiers(
 	}
 	defer func() { _ = rows.Close() }()
 
-	pageRows := make([]submodelDescriptorIdentifierRow, 0, pagination.BufferCapacity(int(peekLimit)))
+	identifiers := make([]string, 0, pagination.BufferCapacity(int(peekLimit)))
 	for rows.Next() {
-		var row submodelDescriptorIdentifierRow
-		if err := rows.Scan(&row.identifier, &row.visible); err != nil {
+		var descriptorID int64
+		var identifier string
+		if err := rows.Scan(&descriptorID, &identifier); err != nil {
 			return nil, "", common.NewInternalServerError("SMDESC-LISTIDS-SCANROW " + err.Error())
 		}
-		pageRows = append(pageRows, row)
+		identifiers = append(identifiers, identifier)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, "", common.NewInternalServerError("SMDESC-LISTIDS-ITERATEROWS " + err.Error())
 	}
 
-	pageRows, nextCursor := applyCursorLimit(pageRows, limit, func(row submodelDescriptorIdentifierRow) string {
-		return row.identifier
-	})
-	identifiers := make([]string, 0, len(pageRows))
-	for _, row := range pageRows {
-		if row.visible {
-			identifiers = append(identifiers, row.identifier)
-		}
-	}
+	identifiers, nextCursor := applyCursorLimit(identifiers, limit, func(identifier string) string { return identifier })
 	return identifiers, nextCursor, nil
 }
 
@@ -370,81 +358,6 @@ func buildAuthorizedSubmodelDescriptorListQuery(
 		), nil
 }
 
-const (
-	standaloneRawPageAlias    = "raw_submodel_descriptor_page"
-	standaloneAuthorizedAlias = "authorized_submodel_descriptors"
-)
-
-type standaloneSubmodelDescriptorPage struct {
-	rawPage       *goqu.SelectDataset
-	authorized    *goqu.SelectDataset
-	maskRuntime   *auth.SharedFragmentMaskRuntime
-	maskedColumns []auth.MaskedInnerColumnSpec
-}
-
-func buildStandaloneSubmodelDescriptorPage(
-	ctx context.Context,
-	dialect goqu.DialectWrapper,
-	peekLimit int32,
-	cursor string,
-	createdFrom time.Time,
-	updatedFrom time.Time,
-	scope submodelDescriptorListScope,
-) (standaloneSubmodelDescriptorPage, error) {
-	rawPage := buildStandaloneSubmodelDescriptorRawPage(
-		dialect,
-		peekLimit,
-		cursor,
-		createdFrom,
-		updatedFrom,
-		scope.identifiable,
-	)
-	authorized, maskRuntime, maskedColumns, err := buildAuthorizedSubmodelDescriptorRows(
-		ctx,
-		dialect,
-		time.Time{},
-		time.Time{},
-		scope,
-	)
-	if err != nil {
-		return standaloneSubmodelDescriptorPage{}, err
-	}
-	rawPageTable := goqu.T(standaloneRawPageAlias)
-	authorized = authorized.Where(
-		goqu.I(common.AliasSubmodelDescriptor + "." + common.ColDescriptorID).In(
-			dialect.From(rawPageTable).Select(rawPageTable.Col(common.ColDescriptorID)),
-		),
-	)
-	return standaloneSubmodelDescriptorPage{
-		rawPage:       rawPage,
-		authorized:    authorized,
-		maskRuntime:   maskRuntime,
-		maskedColumns: maskedColumns,
-	}, nil
-}
-
-// selectRows keeps every raw page row so the cursor advances over rows the
-// caller may not read; unauthorized rows have NULL authorized columns.
-func (page standaloneSubmodelDescriptorPage) selectRows(dialect goqu.DialectWrapper, selection ...interface{}) *goqu.SelectDataset {
-	rawPageTable := goqu.T(standaloneRawPageAlias)
-	authorizedTable := goqu.T(standaloneAuthorizedAlias)
-	return dialect.From(rawPageTable).
-		With(standaloneRawPageAlias, page.rawPage).
-		With(standaloneAuthorizedAlias, page.authorized).
-		LeftJoin(
-			authorizedTable,
-			goqu.On(
-				authorizedTable.Col(common.ColDescriptorID).
-					Eq(rawPageTable.Col(common.ColDescriptorID)),
-			),
-		).
-		Select(selection...).
-		Order(
-			rawPageTable.Col(common.ColAASID).Asc(),
-			rawPageTable.Col(common.ColDescriptorID).Asc(),
-		)
-}
-
 func buildStandaloneSubmodelDescriptorListQuery(
 	ctx context.Context,
 	peekLimit int32,
@@ -454,19 +367,40 @@ func buildStandaloneSubmodelDescriptorListQuery(
 	scope submodelDescriptorListScope,
 ) (*goqu.SelectDataset, error) {
 	dialect := goqu.Dialect(common.Dialect)
-	page, err := buildStandaloneSubmodelDescriptorPage(ctx, dialect, peekLimit, cursor, createdFrom, updatedFrom, scope)
+	rawPage, err := buildStandaloneSubmodelDescriptorPage(ctx, dialect, peekLimit, cursor, createdFrom, updatedFrom, scope)
 	if err != nil {
 		return nil, err
 	}
-	authorizedTable := goqu.T(standaloneAuthorizedAlias)
-	maskedExpressions, err := descriptorMaskedExpressions(page.maskRuntime, standaloneAuthorizedAlias, page.maskedColumns)
+	authorized, maskRuntime, maskedColumns, err := buildAuthorizedSubmodelDescriptorRows(
+		ctx,
+		dialect,
+		time.Time{},
+		time.Time{},
+		scope,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	const (
+		rawPageAlias    = "raw_submodel_descriptor_page"
+		authorizedAlias = "authorized_submodel_descriptors"
+	)
+	rawPageTable := goqu.T(rawPageAlias)
+	authorizedTable := goqu.T(authorizedAlias)
+	authorized = authorized.Where(
+		goqu.I(common.AliasSubmodelDescriptor + "." + common.ColDescriptorID).In(
+			dialect.From(rawPageTable).Select(rawPageTable.Col(common.ColDescriptorID)),
+		),
+	)
+	maskedExpressions, err := descriptorMaskedExpressions(maskRuntime, authorizedAlias, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
 	descriptorJSON, err := buildSubmodelDescriptorJSON(
 		ctx,
 		dialect,
-		standaloneAuthorizedAlias,
+		authorizedAlias,
 		authorizedTable,
 		maskedExpressions,
 		scope,
@@ -477,54 +411,51 @@ func buildStandaloneSubmodelDescriptorListQuery(
 	nullableDescriptorJSON := goqu.Case().
 		When(authorizedTable.Col(common.ColDescriptorID).IsNotNull(), descriptorJSON).
 		Else(nil)
-	return page.selectRows(
-		dialect,
-		goqu.T(standaloneRawPageAlias).Col(common.ColAASID),
-		nullableDescriptorJSON,
-	), nil
+	return dialect.From(rawPageTable).
+		With(rawPageAlias, rawPage).
+		With(authorizedAlias, authorized).
+		LeftJoin(
+			authorizedTable,
+			goqu.On(
+				authorizedTable.Col(common.ColDescriptorID).
+					Eq(rawPageTable.Col(common.ColDescriptorID)),
+			),
+		).
+		Select(
+			rawPageTable.Col(common.ColAASID),
+			nullableDescriptorJSON,
+		).
+		Order(
+			rawPageTable.Col(common.ColAASID).Asc(),
+			rawPageTable.Col(common.ColDescriptorID).Asc(),
+		), nil
 }
 
-func buildStandaloneSubmodelDescriptorIdentifierQuery(
+// buildStandaloneSubmodelDescriptorPage pages over the descriptors that pass
+// the ABAC formula and query condition from ctx, so a page is only short at the
+// end and the next cursor never names a descriptor the caller may not read.
+func buildStandaloneSubmodelDescriptorPage(
 	ctx context.Context,
-	peekLimit int32,
-	cursor string,
-	scope submodelDescriptorListScope,
-) (*goqu.SelectDataset, error) {
-	dialect := goqu.Dialect(common.Dialect)
-	page, err := buildStandaloneSubmodelDescriptorPage(ctx, dialect, peekLimit, cursor, time.Time{}, time.Time{}, scope)
-	if err != nil {
-		return nil, err
-	}
-	return page.selectRows(
-		dialect,
-		goqu.T(standaloneRawPageAlias).Col(common.ColAASID),
-		goqu.T(standaloneAuthorizedAlias).Col(common.ColDescriptorID).IsNotNull(),
-	), nil
-}
-
-func buildStandaloneSubmodelDescriptorRawPage(
 	dialect goqu.DialectWrapper,
 	peekLimit int32,
 	cursor string,
 	createdFrom time.Time,
 	updatedFrom time.Time,
-	identifiable string,
-) *goqu.SelectDataset {
-	pageSource := goqu.T(common.TblSubmodelDescriptor).As("submodel_descriptor_raw_page")
-	page := dialect.From(pageSource).
+	scope submodelDescriptorListScope,
+) (*goqu.SelectDataset, error) {
+	const visibleAlias = "visible_submodel_descriptors"
+	visibleRows, _, _, err := buildAuthorizedSubmodelDescriptorRows(ctx, dialect, createdFrom, updatedFrom, scope)
+	if err != nil {
+		return nil, err
+	}
+	pageSource := goqu.T(visibleAlias)
+	page := dialect.From(visibleRows.As(visibleAlias)).
 		Select(
 			pageSource.Col(common.ColDescriptorID),
 			pageSource.Col(common.ColAASID),
-		).
-		Where(pageSource.Col(common.ColAASDescriptorID).IsNull())
-	page = applySubmodelDescriptorTimeFilters(
-		page,
-		"submodel_descriptor_raw_page",
-		createdFrom,
-		updatedFrom,
-	)
-	if identifiable != "" {
-		page = page.Where(pageSource.Col(common.ColAASID).Eq(identifiable))
+		)
+	if scope.identifiable != "" {
+		page = page.Where(pageSource.Col(common.ColAASID).Eq(scope.identifiable))
 	}
 	if cursor != "" {
 		cursorSource := goqu.T(common.TblSubmodelDescriptor).As("submodel_descriptor_cursor")
@@ -544,7 +475,7 @@ func buildStandaloneSubmodelDescriptorRawPage(
 			pageSource.Col(common.ColAASID).Asc(),
 			pageSource.Col(common.ColDescriptorID).Asc(),
 		).
-		Limit(uint(peekLimit)) //nolint:gosec // peekLimit is normalized to a positive int32 value
+		Limit(uint(peekLimit)), nil //nolint:gosec // peekLimit is normalized to a positive int32 value
 }
 
 func buildAuthorizedSubmodelDescriptorRows(
