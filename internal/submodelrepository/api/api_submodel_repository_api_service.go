@@ -2960,6 +2960,17 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx c
 	return gen.Response(http.StatusOK, valueOnlyResult), nil
 }
 
+func (s *SubmodelRepositoryAPIAPIService) querySubmodelIdentifiers(ctx context.Context, limit int32, cursor string) (gen.ImplResponse, error) {
+	identifiers, nextCursor, err := s.submodelBackend.GetSubmodelIdentifiers(ctx, limit, cursor, "", "")
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return common.NewErrorResponse(err, http.StatusBadRequest, "SMREPO", "QuerySubmodels", "BadRequest"), nil
+		}
+		return common.NewErrorResponse(err, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "GetSubmodelIdentifiers"), err
+	}
+	return common.APIIdentifierQueryResponse(identifiers, nextCursor), nil
+}
+
 // QuerySubmodels returns all Submodels that match the input query.
 // It supports filtering based on the query language and provides pagination through cursor-based navigation.
 //
@@ -2988,6 +2999,9 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 		return common.NewErrorResponse(
 			queryContextErr, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "BuildAuthorizedQuery",
 		), queryContextErr
+	}
+	if query.SelectsIdentifiers() {
+		return s.querySubmodelIdentifiers(querySelectionCtx, limit, decodedCursor)
 	}
 
 	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithElementsByListFilters(

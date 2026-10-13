@@ -37,3 +37,22 @@ func TestAPIParameterConformance(t *testing.T) {
 		{Path: "/submodel-descriptors", Filters: []string{}, IdentifierPath: "/submodel-descriptors/"},
 	})
 }
+
+func TestQuerySelectConformance(t *testing.T) {
+	testenv.RunQuerySelectConformance(t, testenv.QuerySelectConformance{
+		BaseURL:        smRegistryBaseURL,
+		CollectionPath: "/submodel-descriptors",
+		QueryPath:      "/query/submodel-descriptors",
+		IDShortField:   "$smdesc#idShort",
+		NewObject: func(id string, idShort string) map[string]any {
+			return map[string]any{
+				"id":      id,
+				"idShort": idShort,
+				"endpoints": []any{map[string]any{
+					"interface":           "SUBMODEL-3.0",
+					"protocolInformation": map[string]any{"href": "https://example.org/submodels"},
+				}},
+			}
+		},
+	})
+}

@@ -495,3 +495,35 @@ func TestQueryWrapperUnmarshal_ValueToValueComparison(t *testing.T) {
 		})
 	}
 }
+
+func TestQueryUnmarshal_SelectIdentifiers(t *testing.T) {
+	var query Query
+	if err := json.Unmarshal([]byte(`{"$select":"id","$condition":{"$boolean":true}}`), &query); err != nil {
+		t.Fatalf("Failed to unmarshal query: %v", err)
+	}
+	if !query.SelectsIdentifiers() {
+		t.Fatal("Expected query to select identifiers")
+	}
+}
+
+func TestQueryUnmarshal_WithoutSelectReturnsObjects(t *testing.T) {
+	var query Query
+	if err := json.Unmarshal([]byte(`{"$condition":{"$boolean":true}}`), &query); err != nil {
+		t.Fatalf("Failed to unmarshal query: %v", err)
+	}
+	if query.SelectsIdentifiers() {
+		t.Fatal("Expected query without $select to return objects")
+	}
+}
+
+func TestQueryUnmarshal_RejectsInvalidSelect(t *testing.T) {
+	for _, selectJSON := range []string{`"idShort"`, `"ID"`, `""`, `["$aas#id"]`, `null`, `1`} {
+		t.Run(selectJSON, func(t *testing.T) {
+			var query Query
+			payload := `{"$select":` + selectJSON + `,"$condition":{"$boolean":true}}`
+			if err := json.Unmarshal([]byte(payload), &query); err == nil {
+				t.Fatalf("Expected $select %s to be rejected", selectJSON)
+			}
+		})
+	}
+}

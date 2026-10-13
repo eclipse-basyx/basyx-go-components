@@ -62,11 +62,9 @@ func TestFindModelFieldByRoot(t *testing.T) {
 			found:    true,
 		},
 		{
-			name:     "selected Submodel field matches",
-			payload:  `{"$condition":{"$boolean":true},"$select":["$sm#id"]}`,
-			roots:    []string{"$sm"},
-			expected: "$sm#id",
-			found:    true,
+			name:    "identifier selection does not match hierarchy roots",
+			payload: `{"$condition":{"$boolean":true},"$select":"id"}`,
+			roots:   []string{"$sm", "$sme"},
 		},
 	}
 

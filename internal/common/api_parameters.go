@@ -30,6 +30,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -122,6 +123,22 @@ func ParseAPICursor(query url.Values) (string, error) {
 // APIPagingMetadata encodes the backend continuation token exactly once.
 func APIPagingMetadata(nextCursor string) model.PagedResultPagingMetadata {
 	return model.PagedResultPagingMetadata{Cursor: EncodeString(nextCursor)}
+}
+
+// APIIdentifierQueryResult is the paged result of a query with "$select": "id".
+type APIIdentifierQueryResult struct {
+	PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
+	Result         []string                        `json:"result"`
+}
+
+// APIIdentifierQueryResponse builds the paged identifier result of a query with "$select": "id".
+func APIIdentifierQueryResponse(identifiers []string, nextCursor string) model.ImplResponse {
+	metadata := APIPagingMetadata(nextCursor)
+	metadata.ResultType = model.PagingResultTypeIdentifier
+	if identifiers == nil {
+		identifiers = []string{}
+	}
+	return model.Response(http.StatusOK, APIIdentifierQueryResult{PagingMetadata: metadata, Result: identifiers})
 }
 
 // DecodeAPIReference validates a JSON Reference filter and its encoded length.

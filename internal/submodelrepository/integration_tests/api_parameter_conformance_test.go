@@ -52,3 +52,15 @@ func TestAsyncValueOnlyTimeoutConformance(t *testing.T) {
 		"/submodels/dXJuOnRlc3Q/submodel-elements/operation",
 	})
 }
+
+func TestQuerySelectConformance(t *testing.T) {
+	testenv.RunQuerySelectConformance(t, testenv.QuerySelectConformance{
+		BaseURL:        submodelRepositoryBaseURL,
+		CollectionPath: "/submodels",
+		QueryPath:      "/query/submodels",
+		IDShortField:   "$sm#idShort",
+		NewObject: func(id string, idShort string) map[string]any {
+			return map[string]any{"modelType": "Submodel", "id": id, "idShort": idShort}
+		},
+	})
+}

@@ -823,6 +823,16 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	return result, nextCursor, err
 }
 
+// ListAssetAdministrationShellDescriptorIdentifiers lists the AAS identifiers
+// of the visible descriptors, returning a next-page cursor when present.
+func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptorIdentifiers(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+) ([]string, string, error) {
+	return descriptors.ListAssetAdministrationShellDescriptorIdentifiers(ctx, p.readDB(ctx), limit, cursor)
+}
+
 // ListSubmodelDescriptorsForAAS lists submodel descriptors for a given AAS ID
 // with optional pagination, returning a next-page cursor when present.
 func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(

@@ -116,16 +116,16 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx
 	if queryContextErr != nil {
 		return common.NewErrorResponse(queryContextErr, http.StatusInternalServerError, componentName, operation, "BuildAuthorizedQuery"), queryContextErr
 	}
+	if query.SelectsIdentifiers() {
+		identifiers, nextCursor, err := s.d.GetConceptDescriptionIdentifiers(queryCtx, uint(uintLimit64), &decodedCursor)
+		if err != nil {
+			return queryConceptDescriptionsErrorResponse(err)
+		}
+		return common.APIIdentifierQueryResponse(identifiers, nextCursor), nil
+	}
 	cds, nextCursor, err := s.d.GetConceptDescriptions(queryCtx, nil, uint(uintLimit64), &decodedCursor, time.Time{}, time.Time{})
 	if err != nil {
-		switch {
-		case common.IsErrBadRequest(err):
-			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, operation, "BadRequest"), nil
-		case common.IsErrDenied(err):
-			return common.NewErrorResponse(err, http.StatusForbidden, componentName, operation, "Denied"), nil
-		default:
-			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, operation, "Unhandled"), err
-		}
+		return queryConceptDescriptionsErrorResponse(err)
 	}
 
 	jsonable := make([]map[string]any, 0, len(cds))
@@ -138,6 +138,18 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx
 	}
 
 	return pagedResponse(jsonable, nextCursor), nil
+}
+
+func queryConceptDescriptionsErrorResponse(err error) (model.ImplResponse, error) {
+	const operation = "QueryConceptDescriptions"
+	switch {
+	case common.IsErrBadRequest(err):
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, operation, "BadRequest"), nil
+	case common.IsErrDenied(err):
+		return common.NewErrorResponse(err, http.StatusForbidden, componentName, operation, "Denied"), nil
+	default:
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, operation, "Unhandled"), err
+	}
 }
 
 // GetAllConceptDescriptions - Returns all Concept Descriptions

@@ -106,6 +106,18 @@ func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Co
 	return pagedResponse(jsonable, nextCursor), nil
 }
 
+func querySubmodelDescriptorsErrorResponse(ctx context.Context, err error, limit int32, internalCursor string) (model.ImplResponse, error) {
+	slog.ErrorContext(ctx, "submodel descriptor query failed", "error.code", "API-QUERYSUBMODELDESCRIPTORS-EXECUTE", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor)
+	if common.IsErrBadRequest(err) {
+		return common.NewErrorResponse(
+			err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "BadRequest",
+		), nil
+	}
+	return common.NewErrorResponse(
+		err, http.StatusInternalServerError, componentName, "QuerySubmodelDescriptors", "InternalServerError",
+	), err
+}
+
 // QuerySubmodelDescriptors returns all Submodel Descriptors that conform to the input query.
 func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 	ctx context.Context,
@@ -124,17 +136,16 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 			queryContextErr, http.StatusInternalServerError, componentName, "QuerySubmodelDescriptors", "BuildAuthorizedQuery",
 		), queryContextErr
 	}
+	if query.SelectsIdentifiers() {
+		identifiers, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptorIdentifiers(queryCtx, limit, internalCursor)
+		if err != nil {
+			return querySubmodelDescriptorsErrorResponse(ctx, err, limit, internalCursor)
+		}
+		return common.APIIdentifierQueryResponse(identifiers, nextCursor), nil
+	}
 	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(queryCtx, limit, internalCursor, time.Time{}, time.Time{})
 	if err != nil {
-		slog.ErrorContext(ctx, "submodel descriptor query failed", "error.code", "API-QUERYSUBMODELDESCRIPTORS-EXECUTE", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor)
-		if common.IsErrBadRequest(err) {
-			return common.NewErrorResponse(
-				err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "BadRequest",
-			), nil
-		}
-		return common.NewErrorResponse(
-			err, http.StatusInternalServerError, componentName, "QuerySubmodelDescriptors", "InternalServerError",
-		), err
+		return querySubmodelDescriptorsErrorResponse(ctx, err, limit, internalCursor)
 	}
 
 	jsonable := make([]map[string]any, 0, len(smds))

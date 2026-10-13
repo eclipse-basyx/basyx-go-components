@@ -41,3 +41,15 @@ func TestAPIParameterConformance(t *testing.T) {
 func TestAssetPairConformance(t *testing.T) {
 	testenv.RunAssetPairConformance(t, aasRegistryBaseURL, "/shell-descriptors", true)
 }
+
+func TestQuerySelectConformance(t *testing.T) {
+	testenv.RunQuerySelectConformance(t, testenv.QuerySelectConformance{
+		BaseURL:        aasRegistryBaseURL,
+		CollectionPath: "/shell-descriptors",
+		QueryPath:      "/query/shell-descriptors",
+		IDShortField:   "$aasdesc#idShort",
+		NewObject: func(id string, idShort string) map[string]any {
+			return map[string]any{"id": id, "idShort": idShort}
+		},
+	})
+}

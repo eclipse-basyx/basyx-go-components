@@ -41,6 +41,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
@@ -198,61 +199,73 @@ func (s *SubmodelDatabase) GetSubmodelsWithElementsByListFilters(
 
 // GetSubmodelReferences retrieves references and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, idShort string, semanticID string) ([]types.IReference, string, error) {
-	selectDS := submodelqueries.SelectSubmodelIdentifierDataset(idShort, limit, cursor)
-	selectDS = submodelqueries.ApplySubmodelSemanticIDFilter(selectDS, semanticID)
-	selectDS, referenceErr := auth.AddReferenceSelectorQuery(ctx, selectDS, auth.SemanticResourceSM)
-	if referenceErr != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-LIST-REFERENCE " + referenceErr.Error())
-	}
-
-	queryFilter := auth.GetQueryFilter(ctx)
-	if queryFilter != nil && queryFilter.Formula != nil {
-		collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
-		if err != nil {
-			return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-BADCOLLECTOR " + err.Error())
-		}
-		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
-		if err != nil {
-			return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-ABACFORMULA " + err.Error())
-		}
-	}
-
-	query, args, err := selectDS.Prepared(true).ToSQL()
+	identifiers, nextCursor, err := s.GetSubmodelIdentifiers(ctx, limit, cursor, idShort, semanticID)
 	if err != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-BUILDQ " + err.Error())
+		return nil, "", err
 	}
-	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-EXECQ " + err.Error())
-	}
-	defer func() { _ = rows.Close() }()
-
-	pageLimit := limit
-	if pageLimit == 0 {
-		pageLimit = 100
-	}
-	references := make([]types.IReference, 0)
-	nextCursor := ""
-	for rows.Next() {
-		var identifier string
-		if err := rows.Scan(&identifier); err != nil {
-			return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-SCANROW " + err.Error())
-		}
-		if pageLimit > 0 && len(references) == int(pageLimit) {
-			nextCursor = identifier
-			continue
-		}
+	references := make([]types.IReference, 0, len(identifiers))
+	for _, identifier := range identifiers {
 		reference, referenceErr := buildSubmodelModelReference(identifier)
 		if referenceErr != nil {
 			return nil, "", referenceErr
 		}
 		references = append(references, reference)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-GETSMREFS-ROWSERR " + err.Error())
+	return references, nextCursor, nil
+}
+
+// GetSubmodelIdentifiers retrieves Submodel identifiers and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelIdentifiers(ctx context.Context, limit int32, cursor string, idShort string, semanticID string) ([]string, string, error) {
+	if limit == 0 {
+		limit = common.DefaultPageLimit(ctx)
+	}
+	selectDS := submodelqueries.SelectSubmodelIdentifierDataset(idShort, limit, cursor)
+	selectDS = submodelqueries.ApplySubmodelSemanticIDFilter(selectDS, semanticID)
+	selectDS, referenceErr := auth.AddReferenceSelectorQuery(ctx, selectDS, auth.SemanticResourceSM)
+	if referenceErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMIDS-REFERENCE " + referenceErr.Error())
 	}
 
-	return references, nextCursor, nil
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter != nil && queryFilter.Formula != nil {
+		collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMIDS-BADCOLLECTOR " + err.Error())
+		}
+		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMIDS-ABACFORMULA " + err.Error())
+		}
+	}
+
+	query, args, err := selectDS.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMIDS-BUILDQ " + err.Error())
+	}
+	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMIDS-EXECQ " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	identifiers := make([]string, 0, pagination.BufferCapacity(int(limit)+1))
+	nextCursor := ""
+	for rows.Next() {
+		var identifier string
+		if err := rows.Scan(&identifier); err != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMIDS-SCANROW " + err.Error())
+		}
+		if limit > 0 && len(identifiers) == int(limit) {
+			nextCursor = identifier
+			continue
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMIDS-ROWSERR " + err.Error())
+	}
+
+	return identifiers, nextCursor, nil
 }
 
 // GetSubmodelReference retrieves the model reference for a single submodel

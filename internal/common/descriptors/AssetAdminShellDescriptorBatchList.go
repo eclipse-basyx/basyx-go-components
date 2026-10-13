@@ -134,14 +134,7 @@ func buildBatchedAASDescriptorPageQuery(
 	if err != nil {
 		return "", nil, err
 	}
-	if cursor != "" {
-		cursorAAS := goqu.T(common.TblAASDescriptor).As("cursor_aas")
-		cursorExists := dialect.From(cursorAAS).
-			Select(goqu.L("1")).
-			Where(cursorAAS.Col(common.ColAASID).Eq(cursor)).
-			Limit(1)
-		page = page.Where(goqu.L("EXISTS ?", cursorExists))
-	}
+	page = requireAASDescriptorCursorExists(page, cursor)
 
 	const pageAlias = "aas_descriptor_page"
 	pageTable := goqu.T(pageAlias)

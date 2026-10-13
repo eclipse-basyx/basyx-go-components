@@ -118,6 +118,15 @@ func (p *PostgreSQLSMDatabase) ListSubmodelDescriptors(
 	return result, nextCursor, err
 }
 
+// ListSubmodelDescriptorIdentifiers lists the identifiers of the visible global Submodel Descriptors.
+func (p *PostgreSQLSMDatabase) ListSubmodelDescriptorIdentifiers(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+) ([]string, string, error) {
+	return descriptors.ListSubmodelDescriptorIdentifiers(ctx, p.readDB(ctx), limit, cursor)
+}
+
 func appendSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.SubmodelDescriptor, previousSnapshot map[string]any, changeType string, deleted bool) error {
 	if history.ActiveConfig().EvidenceEnabled {
 		if deleted {

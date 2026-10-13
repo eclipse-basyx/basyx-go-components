@@ -137,6 +137,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 	if queryContextErr != nil {
 		return newAPIErrorResponse(queryContextErr, http.StatusInternalServerError, operation, "BuildAuthorizedQuery"), queryContextErr
 	}
+	if query.SelectsIdentifiers() {
+		return s.queryAssetAdministrationShellIdentifiers(queryCtx, limit, decodedCursor)
+	}
 	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(queryCtx, limit, decodedCursor, "", nil, time.Time{}, time.Time{})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
@@ -163,6 +166,18 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 		PagingMetadata: common.APIPagingMetadata(nextCursor),
 		Result:         jsonAASList,
 	}), nil
+}
+
+func (s *AssetAdministrationShellRepositoryAPIAPIService) queryAssetAdministrationShellIdentifiers(ctx context.Context, limit int32, cursor string) (gen.ImplResponse, error) {
+	const operation = "QueryAssetAdministrationShells"
+	identifiers, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellIdentifiers(ctx, limit, cursor, "", nil)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellIdentifiers"), err
+	}
+	return common.APIIdentifierQueryResponse(identifiers, nextCursor), nil
 }
 
 func (s *AssetAdministrationShellRepositoryAPIAPIService) queryContext(ctx context.Context, query grammar.Query) (context.Context, error) {

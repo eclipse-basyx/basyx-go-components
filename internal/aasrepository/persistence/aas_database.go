@@ -1557,57 +1557,70 @@ func cleanupAndDeleteAASByIdentifier(ctx context.Context, tx *sql.Tx, dialect *g
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]types.IReference, string, error) {
+	identifiers, nextCursor, err := s.GetAssetAdministrationShellIdentifiers(ctx, limit, cursor, idShort, specificAssetIDs)
+	if err != nil {
+		return nil, "", err
+	}
+	references := make([]types.IReference, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		key := types.NewKey(types.KeyTypesAssetAdministrationShell, identifier)
+		references = append(references, types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key}))
+	}
+	return references, nextCursor, nil
+}
+
+// GetAssetAdministrationShellIdentifiers returns paginated AAS identifiers while preserving ABAC filters from ctx.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIdentifiers(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]string, string, error) {
 	if limit < 0 {
-		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+		return nil, "", common.NewErrBadRequest("AASREPO-GETAASIDS-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
 	}
 	dialect := goqu.Dialect(common.Dialect)
 	queryDS, err := buildGetAssetAdministrationShellIdentifiersDataset(&dialect, limit, cursor, idShort, specificAssetIDs)
 	if err != nil {
-		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + err.Error())
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDS-BUILDSQL " + err.Error())
 	}
 	collector, err := buildAASCollector(ctx)
 	if err != nil {
 		return nil, "", err
 	}
-	shouldEnforce, err := shouldEnforceFormula(ctx, "AASREPO-GETAASLIST-SHOULDENFORCE")
+	shouldEnforce, err := shouldEnforceFormula(ctx, "AASREPO-GETAASIDS-SHOULDENFORCE")
 	if err != nil {
 		return nil, "", err
 	}
 	if shouldEnforce {
 		queryDS, err = auth.AddFormulaQueryFromContext(ctx, queryDS, collector)
 		if err != nil {
-			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-ABACFORMULA " + err.Error())
+			return nil, "", common.NewInternalServerError("AASREPO-GETAASIDS-ABACFORMULA " + err.Error())
 		}
 	}
 	query, args, err := queryDS.Prepared(true).ToSQL()
 	if err != nil {
-		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + err.Error())
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDS-BUILDSQL " + err.Error())
 	}
 	rows, err := s.readDB(ctx).QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-EXECSQL " + err.Error())
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDS-EXECSQL " + err.Error())
 	}
 	defer func() { _ = rows.Close() }()
 
-	references := make([]types.IReference, 0)
+	identifiers := make([]string, 0, pagination.BufferCapacity(int(limit)+1))
 	nextCursor := ""
 	for rows.Next() {
 		var aasID string
 		if err := rows.Scan(&aasID); err != nil {
-			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-SCANROW " + err.Error())
+			return nil, "", common.NewInternalServerError("AASREPO-GETAASIDS-SCANROW " + err.Error())
 		}
-		if limit > 0 && len(references) == int(limit) {
+		if limit > 0 && len(identifiers) == int(limit) {
 			nextCursor = aasID
 			continue
 		}
-		key := types.NewKey(types.KeyTypesAssetAdministrationShell, aasID)
-		references = append(references, types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key}))
+		identifiers = append(identifiers, aasID)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-ITERROWS " + err.Error())
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDS-ITERROWS " + err.Error())
 	}
 
-	return references, nextCursor, nil
+	return identifiers, nextCursor, nil
 }
 
 // GetAssetAdministrationShellReferenceByID returns the model reference for an AAS identifier while preserving ABAC filters from ctx.
