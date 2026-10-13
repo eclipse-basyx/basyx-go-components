@@ -169,59 +169,17 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly updates only the value of an existing ReferenceElement identified by its idShort or full path.
-// This method specifically updates the reference value (type and keys) without modifying other attributes.
-//
-// The method performs the following operations:
-//  1. Type assertion to ensure the valueOnly is a ReferenceElementValue
-//  2. Marshals the reference value to JSON for database storage
-//  3. Constructs and executes an update query to modify only the value field
-//
-// Parameters:
-//   - idShortOrPath: The idShort or full path of the ReferenceElement to update
-//   - valueOnly: The new ReferenceElementValue containing updated reference data
-//
-// Returns:
-//   - error: Any error encountered during type assertion, marshaling, or database operations
-func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	refElemVal, ok := valueOnly.(gen.ReferenceElementValue)
-	if !ok {
-		return common.NewErrBadRequest("valueOnly is not of type ReferenceElementValue")
-	}
-
-	// Marshal reference value to JSON using helper function
-	referenceJSONString, err := marshalReferenceValueToJSON(refElemVal)
+// UpdateValueOnly replaces the reference of a ReferenceElement; an empty ValueOnly reference clears it.
+func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	patch, err := valueOnlyPatchAs[gen.ReferenceElementValuePatch](update)
 	if err != nil {
 		return err
 	}
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return err
-	}
-
-	// Build and execute update query using GoQu
-	query, args, err := goqu.Update("reference_element").
-		Set(goqu.Record{
-			"value": referenceJSONString,
-		}).
-		Where(goqu.I("id").Eq(
-			goqu.From("submodel_element").
-				Select("id").
-				Where(goqu.Ex{
-					"submodel_id":  smDbID,
-					"idshort_path": idShortOrPath,
-				}),
-		)).
-		ToSQL()
+	value, err := valueOnlyReferenceColumn(patch.Value)
 	if err != nil {
 		return err
 	}
-
-	_, err = tx.Exec(query, args...)
-	return err
+	return execValueOnlyUpdate(tx, "reference_element", goqu.Record{"value": value}, update.ElementID, "SMREPO-UPDREFVALONLY")
 }
 
 // Delete removes a ReferenceElement identified by its idShort or full path from the database.
@@ -276,23 +234,4 @@ func (p PostgreSQLReferenceElementHandler) GetInsertQueryPart(_ *sql.Tx, id int,
 			"value": referenceJSONString,
 		},
 	}, nil
-}
-
-// marshalReferenceValueToJSON converts a ReferenceElementValue to a JSON string for database storage.
-// Returns a sql.NullString with Valid=true if the reference has keys, otherwise Valid=false.
-func marshalReferenceValueToJSON(refElemVal gen.ReferenceElementValue) (sql.NullString, error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	var referenceJSONString sql.NullString
-
-	if len(refElemVal.Keys) > 0 {
-		bytes, err := json.Marshal(refElemVal)
-		if err != nil {
-			return sql.NullString{}, err
-		}
-		referenceJSONString = sql.NullString{String: string(bytes), Valid: true}
-	} else {
-		referenceJSONString = sql.NullString{Valid: false}
-	}
-
-	return referenceJSONString, nil
 }

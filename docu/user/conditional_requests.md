@@ -93,7 +93,7 @@ PATCH /submodels/dXJuOmV4YW1wbGU/submodel-elements/Temperature/$value HTTP/1.1
 If-Match: "8123-5c1e7a0d-91d2c3a4b5c6d7e8"
 Content-Type: application/json
 
-"21.5"
+21.5
 
 HTTP/1.1 204 No Content
 ETag: "8124-5c1e7a0d"

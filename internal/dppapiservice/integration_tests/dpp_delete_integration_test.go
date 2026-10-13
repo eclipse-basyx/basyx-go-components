@@ -27,6 +27,7 @@
 package integration_tests
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -188,7 +189,7 @@ func assertDPPDeletionRegression(t *testing.T, fixture dppDeletionRegressionFixt
 
 	consumerBody := doJSON(t, fixture.client, http.MethodGet, fixture.baseURL+"/v1/dpps/"+encodedPathParam(fixture.consumerDPPID), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, consumerBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme Updated GmbH")
-	assertDPPSectionPathEquals(t, consumerBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4180.75")
+	assertDPPSectionPathEquals(t, consumerBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", json.Number("4180.75"))
 }
 
 func assertRetainedSubmodelAndDescriptor(t *testing.T, fixture dppDeletionRegressionFixture, submodelID string) {

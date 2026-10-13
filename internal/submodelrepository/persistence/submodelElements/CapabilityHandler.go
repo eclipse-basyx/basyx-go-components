@@ -34,7 +34,6 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // PostgreSQLCapabilityHandler provides PostgreSQL-based persistence operations for Capability submodel elements.
@@ -75,20 +74,6 @@ func NewPostgreSQLCapabilityHandler(db *sql.DB) (*PostgreSQLCapabilityHandler, e
 //   - error: Error if update fails
 func (p PostgreSQLCapabilityHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
-}
-
-// UpdateValueOnly updates only the value of an existing Capability submodel element identified by its idShort or path.
-// Capability has no value only representation, so this method currently performs no operation.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set
-//
-// Returns:
-//   - error: An error if the update operation fails
-func (p PostgreSQLCapabilityHandler) UpdateValueOnly(_ string, _ string, _ gen.SubmodelElementValue, _ *sql.Tx) error {
-	return nil
 }
 
 // Delete removes a Capability element identified by its idShort or path from the database.

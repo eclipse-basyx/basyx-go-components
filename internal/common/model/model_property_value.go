@@ -41,14 +41,15 @@ import (
 )
 
 // PropertyValue represents the Value-Only serialization of a Property.
-// According to spec: Property is serialized as ${Property/value} where value is a string.
+// The lexical value is serialized with the JSON type that the ValueOnly mapping assigns to its valueType.
 type PropertyValue struct {
-	Value string `json:"-"`
+	Value     *string
+	ValueType types.DataTypeDefXSD
 }
 
-// MarshalValueOnly serializes PropertyValue in Value-Only format (just the value string)
+// MarshalValueOnly serializes PropertyValue in Value-Only format
 func (p PropertyValue) MarshalValueOnly() ([]byte, error) {
-	return json.Marshal(p.Value)
+	return json.Marshal(ValueOnlyScalarToJSON(p.Value, p.ValueType))
 }
 
 // MarshalJSON implements custom JSON marshaling for PropertyValue
@@ -59,22 +60,4 @@ func (p PropertyValue) MarshalJSON() ([]byte, error) {
 // GetModelType returns the model type name for Property
 func (p PropertyValue) GetModelType() types.ModelType {
 	return types.ModelTypeProperty
-}
-
-// UnmarshalJSON implements custom JSON unmarshaling for PropertyValue
-func (p *PropertyValue) UnmarshalJSON(data []byte) error {
-	return json.Unmarshal(data, &p.Value)
-}
-
-// AssertPropertyValueRequired checks if the required fields are not zero-ed
-func AssertPropertyValueRequired(obj PropertyValue) error {
-	if obj.Value == "" {
-		return &RequiredError{Field: "value"}
-	}
-	return nil
-}
-
-// AssertPropertyValueConstraints checks if the values respects the defined constraints
-func AssertPropertyValueConstraints(_ PropertyValue) error {
-	return nil
 }

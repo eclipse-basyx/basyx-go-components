@@ -2,12 +2,11 @@
     "Updated List Item 1",
     [
         {
-            "language": "en-us",
-            "text": "Updated List MLP"
+            "en-us": "Updated List MLP"
         }
     ],
     {
-        "min": "15",
-        "max": "150"
+        "min": 15,
+        "max": 150
     }
 ]

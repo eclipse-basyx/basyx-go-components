@@ -29,6 +29,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"os"
 	"regexp"
@@ -39,7 +40,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
@@ -935,7 +935,7 @@ func TestUpdateSubmodelValueOnlyPropagatesElementError(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
-	valueOnly := gen.SubmodelValue{"x": nil}
+	valueOnly := map[string]json.RawMessage{"x": json.RawMessage(`1`)}
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
 	mock.ExpectRollback()
@@ -957,20 +957,16 @@ func TestUpdateSubmodelElementValueOnlyRollsBackWhenHistoryAppendFails(t *testin
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(101))
-	mock.ExpectQuery(`SELECT "model_type" FROM "submodel_element"`).
-		WillReturnRows(sqlmock.NewRows([]string{"model_type"}).AddRow(types.ModelTypeProperty))
-	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(101))
-	mock.ExpectQuery(`SELECT "id" FROM "submodel_element"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(202))
-	mock.ExpectQuery(`SELECT "value_type" FROM "property_element"`).
-		WillReturnRows(sqlmock.NewRows([]string{"value_type"}).AddRow(types.DataTypeDefXSDString))
+	mock.ExpectQuery(`WITH RECURSIVE value_only_schema`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "parent_sme_id", "id_short", "model_type", "idshort_path", "value_type"}).
+			AddRow(202, nil, "property", types.ModelTypeProperty, "property", types.DataTypeDefXSDString))
 	mock.ExpectExec(`UPDATE "property_element"`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "updated", sqlmock.AnyArg(), int64(202)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	expectSubmodelHistoryAppendWithReadFailure(mock, errors.New("history read failed"))
 	mock.ExpectRollback()
 
-	err = sut.UpdateSubmodelElementValueOnly(contextWithABACDisabled(t), "sm", "property", gen.PropertyValue{Value: "updated"})
+	err = sut.UpdateSubmodelElementValueOnly(contextWithABACDisabled(t), "sm", "property", json.RawMessage(`"updated"`))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "HISTORY-MUTATE-READLATESTID")
 	require.NoError(t, mock.ExpectationsWereMet())

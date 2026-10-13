@@ -150,8 +150,8 @@
                         }
                     ],
                     {
-                        "max": "100",
-                        "min": "0"
+                        "max": 100,
+                        "min": 0
                     }
                 ]
             }
@@ -167,7 +167,7 @@
             "ProductModelName": "Model X",
             "ProductSerialNumber": {
                 "NestedCollection1": {
-                    "DeepNestedProperty": "42"
+                    "DeepNestedProperty": 42
                 },
                 "NestedCollection2": {}
             }
@@ -221,8 +221,8 @@
         {},
         {
             "DemoRange": {
-                "max": "100.0",
-                "min": "0.0"
+                "max": 100.0,
+                "min": 0.0
             }
         },
         {

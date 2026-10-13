@@ -219,74 +219,17 @@ func buildUpdateBasicEventElementRecordObject(basicEvent *types.BasicEventElemen
 	return updateRecord, nil
 }
 
-// UpdateValueOnly updates only the value of an existing BasicEventElement submodel element identified by its idShort or path.
-// It updates the observed reference in the database.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type gen.BasicEventElementValue)
-//
-// Returns:
-//   - error: An error if the update operation fails or if the valueOnly type is incorrect
-func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	basicEventValue, ok := valueOnly.(gen.BasicEventElementValue)
-	if !ok {
-		return common.NewErrBadRequest("valueOnly is not of type BasicEventElementValue")
-	}
-
-	dialect := goqu.Dialect("postgres")
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return err
-	}
-
-	var newObservedJson sql.NullString
-	observedBytes, err := json.Marshal(basicEventValue.Observed)
-	if err != nil {
-		return common.NewErrBadRequest(fmt.Sprintf("failed to marshal observed value: %s", err))
-	}
-	newObservedJson = sql.NullString{String: string(observedBytes), Valid: true}
-
-	// Get the element ID from the database
-	var elementID int
-	query, args, err := dialect.From("submodel_element").
-		Select("id").
-		Where(
-			goqu.C("idshort_path").Eq(idShortOrPath),
-			goqu.C("submodel_id").Eq(smDbID),
-		).
-		ToSQL()
+// UpdateValueOnly stores the decoded ValueOnly observed reference of a BasicEventElement.
+func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	patch, err := valueOnlyPatchAs[gen.BasicEventElementValuePatch](update)
 	if err != nil {
 		return err
 	}
-
-	err = tx.QueryRow(query, args...).Scan(&elementID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("BasicEventElement not found")
-		}
+	record := goqu.Record{}
+	if err = addValueOnlyReferenceColumn(record, "observed", patch.Observed); err != nil {
 		return err
 	}
-
-	// Update the basic_event_element table with new observed reference
-	updateQuery, updateArgs, err := dialect.Update("basic_event_element").
-		Set(goqu.Record{"observed": newObservedJson}).
-		Where(goqu.C("id").Eq(elementID)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(updateQuery, updateArgs...)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return execValueOnlyUpdate(tx, "basic_event_element", record, update.ElementID, "SMREPO-UPDBEEVALONLY")
 }
 
 // Delete removes a BasicEventElement identified by its idShort or path from the database.

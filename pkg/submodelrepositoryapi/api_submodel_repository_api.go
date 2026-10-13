@@ -1069,10 +1069,13 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIDValueOnly(w http.R
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var bodyParam model.SubmodelValue
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&bodyParam); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	bodyParam, err := model.ParseSubmodelValueOnlyPayload(body)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -1851,13 +1854,12 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathValueOnly
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	// SubmodelElementValue is an interface, deserialize from JSON
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	submodelElementValueParam, err := model.UnmarshalSubmodelElementValue(body)
+	submodelElementValueParam, err := model.ParseValueOnlyPayload(body)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return

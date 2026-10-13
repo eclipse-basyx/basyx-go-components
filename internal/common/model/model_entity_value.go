@@ -62,37 +62,6 @@ func (e EntityValue) MarshalJSON() ([]byte, error) {
 	return e.MarshalValueOnly()
 }
 
-// UnmarshalJSON implements custom JSON unmarshaling for EntityValue
-func (e *EntityValue) UnmarshalJSON(data []byte) error {
-	// Create a temporary struct with the same fields but Statements as map[string]json.RawMessage
-	type Alias EntityValue
-	aux := &struct {
-		Statements map[string]json.RawMessage `json:"statements,omitempty"`
-		*Alias
-	}{
-		Alias: (*Alias)(e),
-	}
-
-	// Unmarshal into the temporary struct
-	if err := json.Unmarshal(data, aux); err != nil {
-		return err
-	}
-
-	// Now process the Statements field manually
-	if aux.Statements != nil {
-		e.Statements = make(map[string]SubmodelElementValue, len(aux.Statements))
-		for key, rawValue := range aux.Statements {
-			value, err := UnmarshalSubmodelElementValue(rawValue)
-			if err != nil {
-				return err
-			}
-			e.Statements[key] = value
-		}
-	}
-
-	return nil
-}
-
 // GetModelType returns the model type name for Entity
 func (e EntityValue) GetModelType() types.ModelType {
 	return types.ModelTypeEntity

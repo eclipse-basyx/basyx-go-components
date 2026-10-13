@@ -28,12 +28,14 @@ package submodelelements
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // TypedValue represents a value categorized by its XS datatype for database storage.
@@ -74,7 +76,7 @@ func MapValueByType(valueType types.DataTypeDefXSD, value *string) (TypedValue, 
 	switch {
 	case IsTextType(valueType):
 		tv.Text = sql.NullString{String: actualValue, Valid: valid}
-	case IsNumericType(valueType):
+	case gen.IsNumericXSDType(valueType):
 		if valid && !isValidNumeric(actualValue) {
 			tv.Text = sql.NullString{String: actualValue, Valid: valid}
 		} else {
@@ -111,28 +113,11 @@ func IsTextType(valueType types.DataTypeDefXSD) bool {
 	}
 }
 
-// IsNumericType checks if the given XS datatype is a numeric type.
-//
-// Parameters:
-//   - valueType: The XS datatype string to check
-//
-// Returns:
-//   - bool: true if the type is a numeric type, false otherwise
-func IsNumericType(valueType types.DataTypeDefXSD) bool {
-	switch valueType {
-	case types.DataTypeDefXSDInt, types.DataTypeDefXSDInteger, types.DataTypeDefXSDLong, types.DataTypeDefXSDShort, types.DataTypeDefXSDByte,
-		types.DataTypeDefXSDUnsignedInt, types.DataTypeDefXSDUnsignedLong, types.DataTypeDefXSDUnsignedShort, types.DataTypeDefXSDUnsignedByte,
-		types.DataTypeDefXSDPositiveInteger, types.DataTypeDefXSDNegativeInteger, types.DataTypeDefXSDNonNegativeInteger, types.DataTypeDefXSDNonPositiveInteger,
-		types.DataTypeDefXSDDecimal, types.DataTypeDefXSDDouble, types.DataTypeDefXSDFloat:
-		return true
-	default:
-		return false
-	}
-}
-
+// isValidNumeric reports whether a NUMERIC column stores the value without altering it.
+// INF, -INF and NaN are kept as text to preserve their XSD lexical form.
 func isValidNumeric(value string) bool {
-	_, err := strconv.ParseFloat(value, 64)
-	return err == nil
+	number, err := strconv.ParseFloat(value, 64)
+	return err == nil && !math.IsInf(number, 0) && !math.IsNaN(number)
 }
 
 func validateDatabaseTypedValue(valueType types.DataTypeDefXSD, value string) error {
@@ -212,7 +197,7 @@ func MapRangeValueByType(valueType types.DataTypeDefXSD, minValue string, maxVal
 	case IsTextType(valueType):
 		tv.MinText = sql.NullString{String: minValue, Valid: minValid}
 		tv.MaxText = sql.NullString{String: maxValue, Valid: maxValid}
-	case IsNumericType(valueType):
+	case gen.IsNumericXSDType(valueType):
 		minIsNumeric := !minValid || isValidNumeric(minValue)
 		maxIsNumeric := !maxValid || isValidNumeric(maxValue)
 		if minIsNumeric && maxIsNumeric {

@@ -28,159 +28,18 @@ package submodelelements
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
-
-// ValueOnlyElementsToProcess represents a SubmodelElementValue along with its ID short path.
-type ValueOnlyElementsToProcess struct {
-	Element     gen.SubmodelElementValue
-	IdShortPath string
-}
 
 // SubmodelElementToProcess represents a SubmodelElement along with its ID short path.
 type SubmodelElementToProcess struct {
 	Element     types.ISubmodelElement
 	IdShortPath string
-}
-
-// BuildElementsToProcessStackValueOnly builds a stack of SubmodelElementValues to process iteratively.
-//
-// This function constructs a stack of SubmodelElementValues starting from a given root element.
-// It processes the elements iteratively, handling collections, lists, and ambiguous types
-// (like MultiLanguageProperty or SubmodelElementList) by querying the database to determine
-// their actual types. The resulting stack contains all elements to be processed along with
-// their corresponding ID short paths.
-//
-// Parameters:
-//   - db: Database connection
-//   - submodelID: String identifier of the submodel
-//   - idShortOrPath: ID short or path of the root element
-//   - valueOnly: The root SubmodelElementValue to start processing from
-//
-// Returns:
-//   - []ValueOnlyElementsToProcess: Slice of elements to process with their ID short paths
-//   - error: An error if any database query fails or if type conversion fails
-func buildElementsToProcessStackValueOnly(db *sql.DB, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) ([]ValueOnlyElementsToProcess, error) {
-	stack := []ValueOnlyElementsToProcess{}
-	elementsToProcess := []ValueOnlyElementsToProcess{}
-	stack = append(stack, ValueOnlyElementsToProcess{
-		Element:     valueOnly,
-		IdShortPath: idShortOrPath,
-	})
-	// Build Iteratively
-	for len(stack) > 0 {
-		current := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-
-		switch elem := current.Element.(type) {
-		case gen.AmbiguousSubmodelElementValue:
-			// Check if it is a MLP or SME List in the database
-			sqlQuery, args, err := buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(current.IdShortPath, submodelID)
-			if err != nil {
-				return nil, common.NewInternalServerError("SMREPO-BUILDELPROC-BUILDCHECKQUERY " + err.Error())
-			}
-			row := db.QueryRow(sqlQuery, args...)
-			var modelType int64
-			if err := row.Scan(&modelType); err != nil {
-				return nil, common.NewErrNotFound(fmt.Sprintf("Submodel Element with ID Short Path %s and Submodel ID %s not found", current.IdShortPath, submodelID))
-			}
-			if modelType == int64(types.ModelTypeMultiLanguageProperty) {
-				mlpValue, err := elem.ConvertToMultiLanguagePropertyValue()
-				if err != nil {
-					return nil, err
-				}
-				el := ValueOnlyElementsToProcess{
-					Element:     mlpValue,
-					IdShortPath: current.IdShortPath,
-				}
-				elementsToProcess = append(elementsToProcess, el)
-			} else {
-				value, err := elem.ConvertToSubmodelElementListValue()
-				if err != nil {
-					return nil, err
-				}
-				for i, v := range value {
-					stack = append(stack, ValueOnlyElementsToProcess{
-						Element:     v,
-						IdShortPath: current.IdShortPath + "[" + strconv.Itoa(i) + "]",
-					})
-				}
-			}
-		case gen.SubmodelElementCollectionValue:
-			for idShort, v := range elem {
-				stack = append(stack, ValueOnlyElementsToProcess{
-					Element:     v,
-					IdShortPath: current.IdShortPath + "." + idShort,
-				})
-			}
-		case gen.SubmodelElementListValue:
-			for i, v := range elem {
-				el := ValueOnlyElementsToProcess{
-					Element:     v,
-					IdShortPath: current.IdShortPath + "[" + strconv.Itoa(i) + "]",
-				}
-				stack = append(stack, el)
-			}
-		case gen.AnnotatedRelationshipElementValue:
-			el := ValueOnlyElementsToProcess{
-				Element:     elem,
-				IdShortPath: current.IdShortPath,
-			}
-			elementsToProcess = append(elementsToProcess, el)
-			for idShort, annotation := range elem.Annotations {
-				stack = append(stack, ValueOnlyElementsToProcess{
-					Element:     annotation,
-					IdShortPath: current.IdShortPath + "." + idShort,
-				})
-			}
-		case gen.EntityValue:
-			el := ValueOnlyElementsToProcess{
-				Element:     elem,
-				IdShortPath: current.IdShortPath,
-			}
-			elementsToProcess = append(elementsToProcess, el)
-			for idShort, child := range elem.Statements {
-				stack = append(stack, ValueOnlyElementsToProcess{
-					Element:     child,
-					IdShortPath: current.IdShortPath + "." + idShort,
-				})
-			}
-		default:
-			// Process basic element
-			el := ValueOnlyElementsToProcess{
-				Element:     elem,
-				IdShortPath: current.IdShortPath,
-			}
-			elementsToProcess = append(elementsToProcess, el)
-		}
-	}
-	return elementsToProcess, nil
-}
-
-func buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(idShortOrPath string, submodelID string) (string, []interface{}, error) {
-	dialect := goqu.Dialect("postgres")
-
-	query, args, err := dialect.From(goqu.T("submodel_element").As("sme")).
-		Join(goqu.T("submodel").As("s"), goqu.On(goqu.Ex{"s.id": goqu.I("sme.submodel_id")})).
-		Select(goqu.I("sme.model_type")).
-		Where(goqu.Ex{
-			"sme.idshort_path":      idShortOrPath,
-			"s.submodel_identifier": submodelID,
-		}).
-		Limit(1).
-		ToSQL()
-	if err != nil {
-		return "", nil, err
-	}
-
-	return query, args, nil
 }
 
 // anyFieldsToUpdate checks if there are any fields to update in a goqu.Record

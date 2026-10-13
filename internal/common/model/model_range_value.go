@@ -40,16 +40,23 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
+// RangeValue represents the Value-Only serialization of a Range.
+// Both bounds are serialized with the JSON type that the ValueOnly mapping assigns to its valueType.
 type RangeValue struct {
-	Max *string `json:"max"`
-
-	Min *string `json:"min"`
+	Max       *string
+	Min       *string
+	ValueType types.DataTypeDefXSD
 }
 
 // MarshalValueOnly serializes RangeValue in Value-Only format
 func (r RangeValue) MarshalValueOnly() ([]byte, error) {
-	type Alias RangeValue
-	return json.Marshal((Alias)(r))
+	return json.Marshal(struct {
+		Max any `json:"max"`
+		Min any `json:"min"`
+	}{
+		Max: ValueOnlyScalarToJSON(r.Max, r.ValueType),
+		Min: ValueOnlyScalarToJSON(r.Min, r.ValueType),
+	})
 }
 
 // MarshalJSON implements custom JSON marshaling for RangeValue
@@ -60,24 +67,4 @@ func (r RangeValue) MarshalJSON() ([]byte, error) {
 // GetModelType returns the model type name for Range
 func (r RangeValue) GetModelType() types.ModelType {
 	return types.ModelTypeRange
-}
-
-// AssertRangeValueRequired checks if the required fields are not zero-ed
-func AssertRangeValueRequired(obj RangeValue) error {
-	elements := map[string]any{
-		"max": obj.Max,
-		"min": obj.Min,
-	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
-		}
-	}
-
-	return nil
-}
-
-// AssertRangeValueConstraints checks if the values respects the defined constraints
-func AssertRangeValueConstraints(obj RangeValue) error {
-	return nil
 }

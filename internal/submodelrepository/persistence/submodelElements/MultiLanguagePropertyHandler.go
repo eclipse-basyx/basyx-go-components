@@ -33,7 +33,6 @@ package submodelelements
 
 import (
 	"database/sql"
-	"fmt"
 	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -210,79 +209,42 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly updates only the value of an existing MultiLanguageProperty submodel element identified by its idShort or path.
-// It deletes existing language-text pairs and inserts the new set of values provided.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type gen.MultiLanguagePropertyValue)
-//
-// Returns:
-//   - error: An error if the update operation fails or if the valueOnly type is incorrect
-func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	mlp, ok := valueOnly.(gen.MultiLanguagePropertyValue)
-	if !ok {
-		ambiguous, isAmbiguous := valueOnly.(gen.AmbiguousSubmodelElementValue)
-		if !isAmbiguous {
-			return common.NewErrBadRequest("valueOnly is not of type MultiLanguagePropertyValue")
-		}
-		var err error
-		mlp, err = ambiguous.ConvertToMultiLanguagePropertyValue()
-		if err != nil {
-			return common.NewErrBadRequest("valueOnly contains non-MultiLanguagePropertyValue entries")
-		}
-	}
-
-	dialect := goqu.Dialect("postgres")
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+// UpdateValueOnly replaces the language strings of a MultiLanguageProperty with the decoded ValueOnly value.
+func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	patch, err := valueOnlyPatchAs[gen.MultiLanguagePropertyValue](update)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return fmt.Errorf("failed to resolve submodel database ID: %w", err)
+		return err
 	}
-
-	// Build subquery to get the submodel element ID
-	subquery := dialect.From("submodel_element").
-		Select("id").
-		Where(
-			goqu.C("submodel_id").Eq(smDbID),
-			goqu.C("idshort_path").Eq(idShortOrPath),
-		)
-
-	// Delete existing values
+	dialect := goqu.Dialect("postgres")
 	deleteQuery, deleteArgs, err := dialect.Delete("multilanguage_property_value").
-		Where(goqu.C("submodel_element_id").Eq(subquery)).
+		Where(goqu.C("submodel_element_id").Eq(update.ElementID)).
+		Prepared(true).
 		ToSQL()
 	if err != nil {
-		return fmt.Errorf("failed to build delete query: %w", err)
+		return common.NewInternalServerError("SMREPO-UPDMLPVALONLY-BUILDDELETE " + err.Error())
 	}
-
-	_, err = tx.Exec(deleteQuery, deleteArgs...)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing values: %w", err)
+	if _, err = tx.Exec(deleteQuery, deleteArgs...); err != nil {
+		return common.NewInternalServerError("SMREPO-UPDMLPVALONLY-EXECDELETE " + err.Error())
 	}
+	return insertValueOnlyLanguageStrings(tx, dialect, update.ElementID, patch)
+}
 
-	// Insert new values
-	for _, val := range mlp {
-		for lang, text := range val {
-			insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").
-				Rows(goqu.Record{
-					"submodel_element_id": subquery,
-					"language":            lang,
-					"text":                text,
-				}).
-				ToSQL()
-			if err != nil {
-				return fmt.Errorf("failed to build insert query: %w", err)
-			}
-
-			_, err = tx.Exec(insertQuery, insertArgs...)
-			if err != nil {
-				return fmt.Errorf("failed to insert value: %w", err)
-			}
+func insertValueOnlyLanguageStrings(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64, values gen.MultiLanguagePropertyValue) error {
+	rows := make([]any, 0, len(values))
+	for _, langString := range values {
+		for language, text := range langString {
+			rows = append(rows, goqu.Record{"submodel_element_id": elementID, "language": language, "text": text})
 		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").Rows(rows...).Prepared(true).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDMLPVALONLY-BUILDINSERT " + err.Error())
+	}
+	if _, err = tx.Exec(insertQuery, insertArgs...); err != nil {
+		return common.NewInternalServerError("SMREPO-UPDMLPVALONLY-EXECINSERT " + err.Error())
 	}
 	return nil
 }

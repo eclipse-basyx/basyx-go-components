@@ -38,7 +38,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -142,20 +141,6 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 	}
 
 	return common.CommitTransactionIfNeeded(tx, localTx)
-}
-
-// UpdateValueOnly updates only the value of an existing Operation submodel element identified by its idShort or path.
-// Operation has no Value Only representation, so this method currently performs no action and returns nil.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type types.ISubmodelElementValue)
-//
-// Returns:
-//   - error: An error if the update operation fails
-func (p PostgreSQLOperationHandler) UpdateValueOnly(_ string, _ string, _ gen.SubmodelElementValue, _ *sql.Tx) error {
-	return nil
 }
 
 // Delete removes an Operation submodel element from the database.
