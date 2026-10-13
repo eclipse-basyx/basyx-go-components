@@ -6,7 +6,7 @@ require (
 	github.com/Azure/go-amqp v1.7.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/FriedJannik/aas-go-sdk v1.3.2
-	github.com/aas-core-works/aas-package3-golang/v2 v2.0.0
+	github.com/aas-core-works/aas-package3-golang/v2 v2.1.0
 	github.com/aws/aws-sdk-go-v2 v1.47.1
 	github.com/aws/aws-sdk-go-v2/config v1.33.7
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.7
