@@ -45,6 +45,8 @@ through SubmodelElement, value, file, and AAS Environment upload endpoints.
 Writing an identical PUT snapshot does not produce an update event. Adding a
 new PCN record to a Submodel with semantic ID `0173-1#01-AHE582#003` produces both
 a PCN notification and a Submodel update.
+The PCN `record` is the record's Value-Only serialization without unset values:
+Properties without a value are omitted instead of being sent as `null`.
 
 ### Filter and choose a presentation
 

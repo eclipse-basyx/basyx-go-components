@@ -240,6 +240,34 @@ func schemaResourceURL(name string) string {
 // pcnRecordValueOnly produces the Value-Only record exactly the way the
 // mutation sink does: a full PCN Record submodel element converted through
 // PCNNewRecordValuesFromSubmodel.
+func TestPCNOmitsUnsetValuesToMatchAdvertisedSchema(t *testing.T) {
+	record := fullPCNRecordElement()
+	elements := record.Value()
+	for _, element := range elements {
+		if property, ok := element.(*types.Property); ok && *property.IDShort() == "ManufacturerChangeID" {
+			property.SetValue(nil)
+		}
+	}
+	partNumber := "12345"
+	setPartNumber := types.NewProperty(types.DataTypeDefXSDString)
+	setPartNumber.SetValue(&partNumber)
+	unsetPartNumber := types.NewProperty(types.DataTypeDefXSDString)
+	record.SetValue(append(elements, smeList("AffectedPartNumbers", setPartNumber, unsetPartNumber)))
+
+	values := events.PCNNewRecordValuesFromSubmodel(nil, pcnSubmodelWithListRecordElements(t, record))
+	require.Len(t, values, 1)
+	ev, err := NewBuilder(DefaultConfig()).PCN(testSubmodelID, []string{testAssetID}, values[0])
+	require.NoError(t, err)
+	loadAdvertisedSchemas(t).assertValid(t, ev.DataSchemaFull, ev.DataFull)
+
+	var data struct {
+		Record map[string]any `json:"record"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(ev.DataFull), &data))
+	require.NotContains(t, data.Record, "ManufacturerChangeID")
+	require.Equal(t, []any{"12345"}, data.Record["AffectedPartNumbers"])
+}
+
 func pcnRecordValueOnly(t *testing.T) any {
 	t.Helper()
 	sm := pcnSubmodelWithListRecordElements(t, fullPCNRecordElement())

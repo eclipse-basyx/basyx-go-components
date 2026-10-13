@@ -26,6 +26,7 @@
 package events
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -232,9 +233,13 @@ func (b *Builder) SubmodelDeleted(submodelID, semanticID string, globalAssetIDs 
 //   - error: Coded error if record cannot be serialized; otherwise nil.
 func (b *Builder) PCN(submodelID string, globalAssetIDs []string, record any) (FeedEvent, error) {
 	ids := normalizeGlobalAssetIDs(globalAssetIDs)
+	recordPayload, err := pcnRecordPayload(record)
+	if err != nil {
+		return FeedEvent{}, err
+	}
 	full := map[string]any{
 		"submodelId": submodelID,
-		"record":     record,
+		"record":     recordPayload,
 	}
 	compact := map[string]any{
 		"submodelId": submodelID,
@@ -250,6 +255,48 @@ func (b *Builder) PCN(submodelID string, globalAssetIDs []string, record any) (F
 		event.AuthorizationAASIDs = []string{}
 	}
 	return event, err
+}
+
+// pcnRecordPayload serializes a record in Value-Only form without its unset values.
+// Value-Only renders a Property without a value as null, while the PCN schema
+// models optional template elements as absent members of type string.
+func pcnRecordPayload(record any) (any, error) {
+	raw, err := json.Marshal(record)
+	if err != nil {
+		return nil, fmt.Errorf("EVENTS-PCN-MARSHALRECORD: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var payload any
+	if err = decoder.Decode(&payload); err != nil {
+		return nil, fmt.Errorf("EVENTS-PCN-DECODERECORD: %w", err)
+	}
+	return withoutUnsetValues(payload), nil
+}
+
+// withoutUnsetValues drops null object members and null list items recursively.
+func withoutUnsetValues(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, member := range typed {
+			if member == nil {
+				delete(typed, key)
+				continue
+			}
+			typed[key] = withoutUnsetValues(member)
+		}
+		return typed
+	case []any:
+		items := typed[:0]
+		for _, item := range typed {
+			if item != nil {
+				items = append(items, withoutUnsetValues(item))
+			}
+		}
+		return items
+	default:
+		return value
+	}
 }
 
 // IsPCNSemanticID identifies the IDTA Product Change Notifications semantic ID.
