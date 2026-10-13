@@ -670,12 +670,11 @@ func writeAASXPackageFromReader(
 	}
 
 	for _, supplementaryPart := range supplementaryParts {
-		writerURI := aasxWriterPartURI(supplementaryPart.URI)
 		var supplementary *aasx.Part
 		putSupplementaryPartErr := consumeSerializationPart(supplementaryPart.Content, supplementaryPart.Consume, func(reader io.Reader) error {
 			var putErr error
 			limited := budget.wrap(common.NewPayloadLimitReader(reader, limits.MaxPartExpandedSizeBytes, "supplementary"))
-			supplementary, putErr = pkg.PutPartFromStream(writerURI, supplementaryPart.ContentType, limited)
+			supplementary, putErr = pkg.PutPartFromStream(supplementaryPart.URI, supplementaryPart.ContentType, limited)
 			return putErr
 		})
 		if putSupplementaryPartErr != nil {
@@ -690,12 +689,11 @@ func writeAASXPackageFromReader(
 	}
 
 	for index, thumbnailPart := range thumbnailParts {
-		writerURI := aasxWriterPartURI(thumbnailPart.URI)
 		var thumb *aasx.Part
 		putThumbPartErr := consumeSerializationPart(thumbnailPart.Content, thumbnailPart.Consume, func(reader io.Reader) error {
 			var putErr error
 			limited := budget.wrap(common.NewPayloadLimitReader(reader, limits.MaxThumbnailSizeBytes, "thumbnail"))
-			thumb, putErr = pkg.PutPartFromStream(writerURI, thumbnailPart.ContentType, limited)
+			thumb, putErr = pkg.PutPartFromStream(thumbnailPart.URI, thumbnailPart.ContentType, limited)
 			return putErr
 		})
 		if putThumbPartErr != nil {
@@ -767,17 +765,6 @@ func aasxPackageWriteError(code string, err error) error {
 		return err
 	}
 	return common.NewInternalServerError(code + " " + err.Error())
-}
-
-func aasxWriterPartURI(uri *url.URL) *url.URL {
-	if uri == nil {
-		return nil
-	}
-	escapedPath := uri.EscapedPath()
-	if escapedPath == uri.Path {
-		return uri
-	}
-	return &url.URL{Path: escapedPath}
 }
 
 func consumeSerializationPart(content []byte, consume func(func(io.Reader) error) error, use func(io.Reader) error) error {
