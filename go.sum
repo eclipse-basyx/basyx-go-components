@@ -5,8 +5,8 @@ github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7Oputl
 github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
 github.com/FriedJannik/aas-go-sdk v1.3.2 h1:kb6TZc0ORINUoGPzmbCPagMRJZ/aMR747PIEe7VH+pA=
 github.com/FriedJannik/aas-go-sdk v1.3.2/go.mod h1:2Ui4RhCuJcLXyG26FhM7ti5WOALw9Iv3t7SnDu+tYu0=
-github.com/aas-core-works/aas-package3-golang/v2 v2.0.0 h1:zboYmOKbHKEi3hirPcKKGiOsMy5WA/NHcO5yLU/S+Xk=
-github.com/aas-core-works/aas-package3-golang/v2 v2.0.0/go.mod h1:NnyXDNwyPX2ORNR669+ck1XpbffcExNR146sycZtKBc=
+github.com/aas-core-works/aas-package3-golang/v2 v2.1.0 h1:8CV0956+cMXCSRv1qfgF8ZEuurziN1+Ozd/T4SaHUpI=
+github.com/aas-core-works/aas-package3-golang/v2 v2.1.0/go.mod h1:NnyXDNwyPX2ORNR669+ck1XpbffcExNR146sycZtKBc=
 github.com/aws/aws-sdk-go-v2 v1.47.1 h1:uOIZnp4PK3ZhKI0dNrJrhTEsLxbpXHTAJlwoS1pvAtw=
 github.com/aws/aws-sdk-go-v2 v1.47.1/go.mod h1:bttEH6JqnUL8LepvDVfdrds/fZ5bCIxzpe3abyUrhDU=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.20 h1:GPRlPwz40I2B2VrBEASOA3Bi77NyeqejNLkifosX0rs=
