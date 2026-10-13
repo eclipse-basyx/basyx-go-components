@@ -79,7 +79,7 @@ func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow
 		}
 
 		if !semanticIDCreated {
-			return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceID)
+			return fmt.Errorf("BUILDER-PARSEREFERREDREFERENCESFROMROWS-FINDROOT root reference with id %d not found", *ref.RootReference)
 		}
 		if ref.ReferenceID == nil || ref.ParentReference == nil {
 			slog.Warn("reference ID or parent reference is nil; skipping reference creation", "error.code", "BUILDER-PARSEREFERREDREFERENCESFROMROWS-SKIPNILREFERENCE")
