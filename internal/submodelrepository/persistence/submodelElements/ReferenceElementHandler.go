@@ -35,6 +35,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -170,7 +171,7 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 }
 
 // UpdateValueOnly replaces the reference of a ReferenceElement; an empty ValueOnly reference clears it.
-func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.ReferenceElementValuePatch](update)
 	if err != nil {
 		return err
@@ -179,7 +180,7 @@ func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(tx *sql.Tx, update ge
 	if err != nil {
 		return err
 	}
-	return execValueOnlyUpdate(tx, "reference_element", goqu.Record{"value": value}, update.ElementID, "SMREPO-UPDREFVALONLY")
+	return execValueOnlyUpdate(ctx, tx, "reference_element", goqu.Record{"value": value}, update.ElementID, "SMREPO-UPDREFVALONLY")
 }
 
 // Delete removes a ReferenceElement identified by its idShort or full path from the database.

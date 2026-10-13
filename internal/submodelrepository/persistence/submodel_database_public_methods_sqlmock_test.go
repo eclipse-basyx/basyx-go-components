@@ -919,7 +919,7 @@ func TestUpdateSubmodelElementValueOnlyModelTypeLookupFails(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
 	mock.ExpectRollback()
 
-	err = sut.UpdateSubmodelElementValueOnly(contextWithABACDisabled(t), "sm", "path", nil)
+	err = sut.UpdateSubmodelElementValueOnly(contextWithABACDisabled(t), "sm", "path", json.RawMessage(`1`))
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -957,9 +957,9 @@ func TestUpdateSubmodelElementValueOnlyRollsBackWhenHistoryAppendFails(t *testin
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(101))
-	mock.ExpectQuery(`WITH RECURSIVE value_only_schema`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "parent_sme_id", "id_short", "model_type", "idshort_path", "value_type"}).
-			AddRow(202, nil, "property", types.ModelTypeProperty, "property", types.DataTypeDefXSDString))
+	mock.ExpectQuery(`SELECT .* FROM "submodel_element" AS "sme" .*= ANY\(\$3::text\[\]\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "parent_sme_id", "id_short", "model_type", "idshort_path", "position", "value_type"}).
+			AddRow(202, nil, "property", types.ModelTypeProperty, "property", 0, types.DataTypeDefXSDString))
 	mock.ExpectExec(`UPDATE "property_element"`).
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "updated", sqlmock.AnyArg(), int64(202)).
 		WillReturnResult(sqlmock.NewResult(0, 1))

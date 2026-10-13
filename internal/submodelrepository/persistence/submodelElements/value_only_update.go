@@ -26,6 +26,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -41,18 +42,18 @@ import (
 // ValueOnlyUpdater applies a decoded ValueOnly value to a stored submodel element of one model type.
 // The update carries the element's database id, so implementations write by id without path lookups.
 type ValueOnlyUpdater interface {
-	UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error
+	UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error
 }
 
 // ApplyValueOnlyUpdates applies decoded ValueOnly updates in order within the given transaction.
-func ApplyValueOnlyUpdates(tx *sql.Tx, db *sql.DB, updates []gen.ValueOnlyUpdate) error {
+func ApplyValueOnlyUpdates(ctx context.Context, tx *sql.Tx, db *sql.DB, updates []gen.ValueOnlyUpdate) error {
 	updaters := make(map[types.ModelType]ValueOnlyUpdater)
 	for _, update := range updates {
 		updater, err := valueOnlyUpdaterFor(update.ModelType, db, updaters)
 		if err != nil {
 			return err
 		}
-		if err = updater.UpdateValueOnly(tx, update); err != nil {
+		if err = updater.UpdateValueOnly(ctx, tx, update); err != nil {
 			return err
 		}
 	}
@@ -85,7 +86,7 @@ func valueOnlyPatchAs[T gen.ValueOnlyPatch](update gen.ValueOnlyUpdate) (T, erro
 	return patch, nil
 }
 
-func execValueOnlyUpdate(tx *sql.Tx, table string, record goqu.Record, elementID int64, errorCode string) error {
+func execValueOnlyUpdate(ctx context.Context, tx *sql.Tx, table string, record goqu.Record, elementID int64, errorCode string) error {
 	if len(record) == 0 {
 		return nil
 	}
@@ -98,7 +99,7 @@ func execValueOnlyUpdate(tx *sql.Tx, table string, record goqu.Record, elementID
 	if err != nil {
 		return common.NewInternalServerError(errorCode + "-BUILDQ " + err.Error())
 	}
-	if _, err = tx.Exec(query, args...); err != nil {
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 		slog.Error("value-only update failed", "error.code", errorCode+"-EXECQ", "table", table, "error", err)
 		return common.NewInternalServerError(errorCode + "-EXECQ failed to update " + table)
 	}
@@ -121,7 +122,7 @@ func addValueOnlyReferenceColumn(record goqu.Record, column string, reference ty
 	return nil
 }
 
-func updateValueOnlyRelationship(tx *sql.Tx, table string, update gen.ValueOnlyUpdate, errorCode string) error {
+func updateValueOnlyRelationship(ctx context.Context, tx *sql.Tx, table string, update gen.ValueOnlyUpdate, errorCode string) error {
 	patch, err := valueOnlyPatchAs[gen.RelationshipValuePatch](update)
 	if err != nil {
 		return err
@@ -133,5 +134,5 @@ func updateValueOnlyRelationship(tx *sql.Tx, table string, update gen.ValueOnlyU
 	if err = addValueOnlyReferenceColumn(record, "second", patch.Second); err != nil {
 		return err
 	}
-	return execValueOnlyUpdate(tx, table, record, update.ElementID, errorCode)
+	return execValueOnlyUpdate(ctx, tx, table, record, update.ElementID, errorCode)
 }

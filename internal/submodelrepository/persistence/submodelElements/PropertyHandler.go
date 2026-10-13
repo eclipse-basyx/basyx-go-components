@@ -32,6 +32,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -175,7 +176,7 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 
 // UpdateValueOnly stores a decoded ValueOnly Property value in the typed column of its valueType.
 // A nil value clears the stored value.
-func (p PostgreSQLPropertyHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+func (p PostgreSQLPropertyHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.PropertyValue](update)
 	if err != nil {
 		return err
@@ -184,7 +185,7 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueO
 	if err != nil {
 		return err
 	}
-	return execValueOnlyUpdate(tx, "property_element", goqu.Record{
+	return execValueOnlyUpdate(ctx, tx, "property_element", goqu.Record{
 		"value_text":     typedValue.Text,
 		"value_num":      typedValue.Numeric,
 		"value_bool":     typedValue.Boolean,

@@ -205,7 +205,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 
 // UpdateValueOnly stores the decoded ValueOnly content type and path of a File.
 // Stored file content is released when the path changes; absent fields stay untouched.
-func (p PostgreSQLFileHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+func (p PostgreSQLFileHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.FileValuePatch](update)
 	if err != nil {
 		return err
@@ -215,15 +215,15 @@ func (p PostgreSQLFileHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyU
 		record["content_type"] = *patch.ContentType
 	}
 	if patch.Value != nil {
-		if err = releaseReplacedFileContent(tx, update.ElementID, *patch.Value); err != nil {
+		if err = releaseReplacedFileContent(ctx, tx, update.ElementID, *patch.Value); err != nil {
 			return err
 		}
 		record["value"] = *patch.Value
 	}
-	return execValueOnlyUpdate(tx, "file_element", record, update.ElementID, "SMREPO-UPDFILEVALONLY")
+	return execValueOnlyUpdate(ctx, tx, "file_element", record, update.ElementID, "SMREPO-UPDFILEVALONLY")
 }
 
-func releaseReplacedFileContent(tx *sql.Tx, elementID int64, newValue string) error {
+func releaseReplacedFileContent(ctx context.Context, tx *sql.Tx, elementID int64, newValue string) error {
 	dialect := goqu.Dialect("postgres")
 	query, args, err := dialect.From("file_element").
 		Select("value").
@@ -234,7 +234,7 @@ func releaseReplacedFileContent(tx *sql.Tx, elementID int64, newValue string) er
 		return common.NewInternalServerError("SMREPO-UPDFILEVALONLY-BUILDSELECT " + err.Error())
 	}
 	var currentValue sql.NullString
-	if err = tx.QueryRow(query, args...).Scan(&currentValue); err != nil {
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&currentValue); err != nil {
 		return common.NewInternalServerError("SMREPO-UPDFILEVALONLY-EXECSELECT " + err.Error())
 	}
 	if currentValue.String == newValue {

@@ -30,6 +30,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -141,8 +142,8 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 
 // UpdateValueOnly stores the decoded ValueOnly references of an AnnotatedRelationshipElement.
 // Absent references stay untouched; annotations are applied as separate updates.
-func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
-	return updateValueOnlyRelationship(tx, "annotated_relationship_element", update, "SMREPO-UPDARELVALONLY")
+func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	return updateValueOnlyRelationship(ctx, tx, "annotated_relationship_element", update, "SMREPO-UPDARELVALONLY")
 }
 
 // Delete removes an AnnotatedRelationshipElement identified by its idShort or path from the database.

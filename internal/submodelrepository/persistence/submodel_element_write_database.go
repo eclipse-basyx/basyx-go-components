@@ -842,7 +842,12 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, s
 		return err
 	}
 
-	if err = s.applyValueOnlyTx(tx, submodelID, []string{idShortOrPath}, false, func(roots map[string]*gen.ValueOnlySchemaNode) ([]gen.ValueOnlyUpdate, error) {
+	addressedPaths, err := gen.ValueOnlyAddressedPaths(idShortOrPath, valueOnly)
+	if err != nil {
+		return common.NewErrBadRequest("SMREPO-UPDSMEVALONLY-PATHS " + err.Error())
+	}
+	target := valueOnlyTarget{rootPaths: []string{idShortOrPath}, addressedPaths: addressedPaths}
+	if err = s.applyValueOnlyTx(ctx, tx, submodelID, target, func(roots map[string]*gen.ValueOnlySchemaNode) ([]gen.ValueOnlyUpdate, error) {
 		return gen.DecodeValueOnly(valueOnly, roots[idShortOrPath])
 	}); err != nil {
 		return err
@@ -884,7 +889,11 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 	}
 
 	idShorts := slices.Sorted(maps.Keys(valueOnly))
-	if err = s.applyValueOnlyTx(tx, submodelID, idShorts, true, func(roots map[string]*gen.ValueOnlySchemaNode) ([]gen.ValueOnlyUpdate, error) {
+	target, err := submodelValueOnlyTarget(idShorts, valueOnly)
+	if err != nil {
+		return err
+	}
+	if err = s.applyValueOnlyTx(ctx, tx, submodelID, target, func(roots map[string]*gen.ValueOnlySchemaNode) ([]gen.ValueOnlyUpdate, error) {
 		return gen.DecodeSubmodelValueOnly(valueOnly, roots)
 	}); err != nil {
 		return err
@@ -910,21 +919,45 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 
 type valueOnlyDecodeFunc func(roots map[string]*gen.ValueOnlySchemaNode) ([]gen.ValueOnlyUpdate, error)
 
+// valueOnlyTarget names the stored elements a ValueOnly update addresses.
+type valueOnlyTarget struct {
+	rootPaths      []string
+	addressedPaths []string
+	topLevel       bool
+}
+
+func submodelValueOnlyTarget(idShorts []string, valueOnly map[string]json.RawMessage) (valueOnlyTarget, error) {
+	target := valueOnlyTarget{rootPaths: idShorts, topLevel: true}
+	for _, idShort := range idShorts {
+		paths, err := gen.ValueOnlyAddressedPaths(idShort, valueOnly[idShort])
+		if err != nil {
+			return target, common.NewErrBadRequest("SMREPO-UPDSMVALONLY-PATHS " + err.Error())
+		}
+		target.addressedPaths = append(target.addressedPaths, paths...)
+	}
+	return target, nil
+}
+
 // applyValueOnlyTx loads the stored schema of the addressed elements once, decodes the complete payload
 // against it and applies the resulting updates. Nothing is written when any part of the payload is invalid.
-func (s *SubmodelDatabase) applyValueOnlyTx(tx *sql.Tx, submodelID string, paths []string, topLevel bool, decode valueOnlyDecodeFunc) error {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+func (s *SubmodelDatabase) applyValueOnlyTx(ctx context.Context, tx *sql.Tx, submodelID string, target valueOnlyTarget, decode valueOnlyDecodeFunc) error {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForNoKeyUpdateContext(ctx, tx, submodelID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return common.NewErrNotFound("SMREPO-UPDVALONLY-SMNOTFOUND Submodel with ID " + submodelID + " not found")
 	}
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-UPDVALONLY-GETSMDBID " + err.Error())
 	}
-	roots, err := submodelelements.LoadValueOnlySchemaTx(tx, int64(submodelDatabaseID), paths, topLevel)
+	roots, err := submodelelements.LoadValueOnlySchemaTx(ctx, tx, submodelelements.ValueOnlySchemaRequest{
+		SubmodelDatabaseID: int64(submodelDatabaseID),
+		RootPaths:          target.rootPaths,
+		AddressedPaths:     target.addressedPaths,
+		TopLevel:           target.topLevel,
+	})
 	if err != nil {
 		return err
 	}
-	for _, path := range paths {
+	for _, path := range target.rootPaths {
 		if _, ok := roots[path]; !ok {
 			return common.NewErrNotFound("SMREPO-UPDVALONLY-NOTFOUND Submodel-Element ID-Short: " + path)
 		}
@@ -933,7 +966,7 @@ func (s *SubmodelDatabase) applyValueOnlyTx(tx *sql.Tx, submodelID string, paths
 	if err != nil {
 		return mapValueOnlyDecodeError(err)
 	}
-	return submodelelements.ApplyValueOnlyUpdates(tx, s.db, updates)
+	return submodelelements.ApplyValueOnlyUpdates(ctx, tx, s.db, updates)
 }
 
 func mapValueOnlyDecodeError(err error) error {

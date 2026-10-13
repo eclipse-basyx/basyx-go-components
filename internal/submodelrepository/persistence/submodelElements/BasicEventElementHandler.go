@@ -30,6 +30,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -220,7 +221,7 @@ func buildUpdateBasicEventElementRecordObject(basicEvent *types.BasicEventElemen
 }
 
 // UpdateValueOnly stores the decoded ValueOnly observed reference of a BasicEventElement.
-func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.BasicEventElementValuePatch](update)
 	if err != nil {
 		return err
@@ -229,7 +230,7 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(tx *sql.Tx, update g
 	if err = addValueOnlyReferenceColumn(record, "observed", patch.Observed); err != nil {
 		return err
 	}
-	return execValueOnlyUpdate(tx, "basic_event_element", record, update.ElementID, "SMREPO-UPDBEEVALONLY")
+	return execValueOnlyUpdate(ctx, tx, "basic_event_element", record, update.ElementID, "SMREPO-UPDBEEVALONLY")
 }
 
 // Delete removes a BasicEventElement identified by its idShort or path from the database.

@@ -31,6 +31,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -148,8 +149,8 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 }
 
 // UpdateValueOnly stores the decoded ValueOnly references of a RelationshipElement; absent references stay untouched.
-func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
-	return updateValueOnlyRelationship(tx, "relationship_element", update, "SMREPO-UPDRELVALONLY")
+func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	return updateValueOnlyRelationship(ctx, tx, "relationship_element", update, "SMREPO-UPDRELVALONLY")
 }
 
 // Delete removes a RelationshipElement identified by its idShort or path.

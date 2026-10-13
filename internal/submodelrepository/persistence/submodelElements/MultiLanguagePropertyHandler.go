@@ -32,6 +32,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -210,7 +211,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 }
 
 // UpdateValueOnly replaces the language strings of a MultiLanguageProperty with the decoded ValueOnly value.
-func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.MultiLanguagePropertyValue](update)
 	if err != nil {
 		return err
@@ -223,13 +224,13 @@ func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(tx *sql.Tx, upda
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-UPDMLPVALONLY-BUILDDELETE " + err.Error())
 	}
-	if _, err = tx.Exec(deleteQuery, deleteArgs...); err != nil {
+	if _, err = tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
 		return common.NewInternalServerError("SMREPO-UPDMLPVALONLY-EXECDELETE " + err.Error())
 	}
-	return insertValueOnlyLanguageStrings(tx, dialect, update.ElementID, patch)
+	return insertValueOnlyLanguageStrings(ctx, tx, dialect, update.ElementID, patch)
 }
 
-func insertValueOnlyLanguageStrings(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64, values gen.MultiLanguagePropertyValue) error {
+func insertValueOnlyLanguageStrings(ctx context.Context, tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64, values gen.MultiLanguagePropertyValue) error {
 	rows := make([]any, 0, len(values))
 	for _, langString := range values {
 		for language, text := range langString {
@@ -243,7 +244,7 @@ func insertValueOnlyLanguageStrings(tx *sql.Tx, dialect goqu.DialectWrapper, ele
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-UPDMLPVALONLY-BUILDINSERT " + err.Error())
 	}
-	if _, err = tx.Exec(insertQuery, insertArgs...); err != nil {
+	if _, err = tx.ExecContext(ctx, insertQuery, insertArgs...); err != nil {
 		return common.NewInternalServerError("SMREPO-UPDMLPVALONLY-EXECINSERT " + err.Error())
 	}
 	return nil

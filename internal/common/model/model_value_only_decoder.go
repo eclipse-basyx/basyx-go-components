@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 
@@ -42,7 +43,7 @@ var ErrValueOnlyUnknownElement = errors.New("MODEL-VALONLY-DECODE-UNKNOWNELEMENT
 
 // ValueOnlySchemaNode describes a stored submodel element that a ValueOnly payload is decoded against.
 // Children holds the named children of collections, entity statements and relationship annotations;
-// Items holds the list elements in position order.
+// Items holds the list elements indexed by position; a nil entry is a position that is not stored.
 type ValueOnlySchemaNode struct {
 	ElementID   int64
 	IDShortPath string
@@ -91,15 +92,52 @@ func DecodeSubmodelValueOnly(fields map[string]json.RawMessage, roots map[string
 	return decoder.updates, nil
 }
 
+// ValueOnlyAddressedPaths returns the idShort paths below rootPath that a ValueOnly payload can address:
+// object members, members of "statements" and "annotations" objects, and list positions. The result is a
+// superset of the elements DecodeValueOnly visits, so only these elements need to be loaded from storage.
+func ValueOnlyAddressedPaths(rootPath string, raw json.RawMessage) ([]string, error) {
+	var payload any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("MODEL-VALONLY-PATHS-JSON %w", err)
+	}
+	paths := make(map[string]struct{})
+	collectValueOnlyAddressedPaths(rootPath, payload, paths)
+	return slices.Sorted(maps.Keys(paths)), nil
+}
+
+func collectValueOnlyAddressedPaths(path string, value any, paths map[string]struct{}) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, member := range typed {
+			childPath := joinValueOnlyPath(path, key)
+			paths[childPath] = struct{}{}
+			collectValueOnlyAddressedPaths(childPath, member, paths)
+			if nested, ok := member.(map[string]any); ok && (key == "statements" || key == "annotations") {
+				collectValueOnlyAddressedPaths(path, nested, paths)
+			}
+		}
+	case []any:
+		for index, item := range typed {
+			itemPath := path + "[" + strconv.Itoa(index) + "]"
+			paths[itemPath] = struct{}{}
+			collectValueOnlyAddressedPaths(itemPath, item, paths)
+		}
+	}
+}
+
+func joinValueOnlyPath(parentPath string, idShort string) string {
+	if parentPath == "" {
+		return idShort
+	}
+	return parentPath + "." + idShort
+}
+
 func (n *ValueOnlySchemaNode) wrap(err error) error {
 	return fmt.Errorf("%s: %w", n.IDShortPath, err)
 }
 
 func (n *ValueOnlySchemaNode) childPath(idShort string) string {
-	if n.IDShortPath == "" {
-		return idShort
-	}
-	return n.IDShortPath + "." + idShort
+	return joinValueOnlyPath(n.IDShortPath, idShort)
 }
 
 type valueOnlyDecoder struct {
@@ -157,10 +195,10 @@ func (d *valueOnlyDecoder) decodeListItems(raw json.RawMessage, node *ValueOnlyS
 	if err := json.Unmarshal(raw, &items); err != nil || items == nil {
 		return node.wrap(errors.New("MODEL-VALONLY-DECODE-ARRAY expected JSON array"))
 	}
-	if len(items) > len(node.Items) {
-		return fmt.Errorf("%w: %s[%d] does not exist", ErrValueOnlyUnknownElement, node.IDShortPath, len(node.Items))
-	}
 	for i, item := range items {
+		if i >= len(node.Items) || node.Items[i] == nil {
+			return fmt.Errorf("%w: %s[%d] does not exist", ErrValueOnlyUnknownElement, node.IDShortPath, i)
+		}
 		if err := d.decode(item, node.Items[i]); err != nil {
 			return err
 		}

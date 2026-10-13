@@ -264,3 +264,20 @@ func TestParseValueOnlyPayload(t *testing.T) {
 	_, err = ParseSubmodelValueOnlyPayload([]byte(`null`))
 	require.Error(t, err)
 }
+
+func TestValueOnlyAddressedPathsCoverDecodedElements(t *testing.T) {
+	t.Parallel()
+
+	paths, err := ValueOnlyAddressedPaths("Data", json.RawMessage(`{"Count":1,"Rows":[{"Name":"a"},2],"Asset":{"statements":{"Weight":1.5}}}`))
+	require.NoError(t, err)
+	require.Subset(t, paths, []string{"Data.Count", "Data.Rows", "Data.Rows[0]", "Data.Rows[0].Name", "Data.Rows[1]", "Data.Asset", "Data.Asset.Weight"})
+	require.NotContains(t, paths, "Data")
+
+	paths, err = ValueOnlyAddressedPaths("", json.RawMessage(`{"Count":1}`))
+	require.NoError(t, err)
+	require.Equal(t, []string{"Count"}, paths)
+
+	paths, err = ValueOnlyAddressedPaths("Count", json.RawMessage(`42`))
+	require.NoError(t, err)
+	require.Empty(t, paths)
+}

@@ -36,47 +36,59 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildValueOnlySchemaQueryLoadsSubtreeWithValueTypes(t *testing.T) {
+func TestBuildValueOnlySchemaQueryLoadsOnlyAddressedElements(t *testing.T) {
 	t.Parallel()
 
-	query, args, err := buildValueOnlySchemaQuery(7, []string{"A", "B"}, true)
+	query, args, err := buildValueOnlySchemaQuery(ValueOnlySchemaRequest{
+		SubmodelDatabaseID: 7,
+		RootPaths:          []string{"A", "B"},
+		AddressedPaths:     []string{"A.Count"},
+		TopLevel:           true,
+	})
 	require.NoError(t, err)
-	require.Contains(t, query, "WITH RECURSIVE value_only_schema")
-	require.Contains(t, query, `"root"."parent_sme_id" IS NULL`)
+	require.NotContains(t, query, "RECURSIVE")
+	require.Contains(t, query, `"sme"."parent_sme_id" IS NULL`)
+	require.Contains(t, query, `"sme"."idshort_path" = ANY($3::text[])`)
+	require.Contains(t, query, `"sme"."idshort_path" = ANY($4::text[])`)
 	require.Contains(t, query, `COALESCE("pe"."value_type", "re"."value_type"`)
-	require.Contains(t, args, "A")
-	require.Contains(t, args, "B")
+	require.Contains(t, args, `{"A","B"}`)
+	require.Contains(t, args, `{"A.Count"}`)
 
-	query, _, err = buildValueOnlySchemaQuery(7, []string{"A.B"}, false)
+	query, _, err = buildValueOnlySchemaQuery(ValueOnlySchemaRequest{SubmodelDatabaseID: 7, RootPaths: []string{"A.B"}})
 	require.NoError(t, err)
-	require.NotContains(t, query, `"root"."parent_sme_id" IS NULL`)
+	require.NotContains(t, query, `"sme"."parent_sme_id" IS NULL`)
 }
 
-func TestLinkValueOnlySchemaRowsBuildsTreeInPositionOrder(t *testing.T) {
+func TestLinkValueOnlySchemaRowsBuildsAddressedTree(t *testing.T) {
 	t.Parallel()
 
-	row := func(id int64, parentID int64, idShort string, modelType types.ModelType, path string) valueOnlySchemaRow {
+	row := func(id int64, parentID int64, idShort string, position int64, modelType types.ModelType, path string) valueOnlySchemaRow {
 		return valueOnlySchemaRow{
 			node:     &gen.ValueOnlySchemaNode{ElementID: id, IDShortPath: path, ModelType: modelType},
 			parentID: sql.NullInt64{Int64: parentID, Valid: parentID != 0},
 			idShort:  sql.NullString{String: idShort, Valid: idShort != ""},
+			position: sql.NullInt64{Int64: position, Valid: true},
 		}
 	}
 	roots := linkValueOnlySchemaRows([]valueOnlySchemaRow{
-		row(1, 0, "Data", types.ModelTypeSubmodelElementCollection, "Data"),
-		row(2, 1, "Rows", types.ModelTypeSubmodelElementList, "Data.Rows"),
-		row(3, 2, "", types.ModelTypeProperty, "Data.Rows[0]"),
-		row(4, 2, "", types.ModelTypeProperty, "Data.Rows[1]"),
-		row(5, 1, "Name", types.ModelTypeProperty, "Data.Name"),
-	})
+		row(1, 0, "Data", 0, types.ModelTypeSubmodelElementCollection, "Data"),
+		row(9, 0, "Other", 1, types.ModelTypeProperty, "Other"),
+		row(2, 1, "Rows", 0, types.ModelTypeSubmodelElementList, "Data.Rows"),
+		row(5, 1, "Name", 1, types.ModelTypeProperty, "Data.Name"),
+		row(4, 2, "", 2, types.ModelTypeProperty, "Data.Rows[2]"),
+		row(3, 2, "", 0, types.ModelTypeProperty, "Data.Rows[0]"),
+		row(8, 7, "Orphan", 0, types.ModelTypeProperty, "Data.Missing.Orphan"),
+	}, ValueOnlySchemaRequest{RootPaths: []string{"Data"}, TopLevel: true})
 
 	require.Len(t, roots, 1)
 	data := roots["Data"]
 	require.Equal(t, int64(5), data.Children["Name"].ElementID)
+	require.Len(t, data.Children, 2)
 	rows := data.Children["Rows"]
-	require.Len(t, rows.Items, 2)
+	require.Len(t, rows.Items, 3)
 	require.Equal(t, "Data.Rows[0]", rows.Items[0].IDShortPath)
-	require.Equal(t, "Data.Rows[1]", rows.Items[1].IDShortPath)
+	require.Nil(t, rows.Items[1])
+	require.Equal(t, "Data.Rows[2]", rows.Items[2].IDShortPath)
 }
 
 func TestApplyValueOnlyUpdatesWritesByElementID(t *testing.T) {
@@ -111,7 +123,7 @@ func TestApplyValueOnlyUpdatesWritesByElementID(t *testing.T) {
 	require.NoError(t, err)
 	blob := []byte{0x00, 0xff}
 	entityType := types.EntityTypeCoManagedEntity
-	err = ApplyValueOnlyUpdates(tx, db, []gen.ValueOnlyUpdate{
+	err = ApplyValueOnlyUpdates(t.Context(), tx, db, []gen.ValueOnlyUpdate{
 		{ElementID: 11, ModelType: types.ModelTypeProperty, Value: gen.PropertyValue{Value: stringPointer("42"), ValueType: types.DataTypeDefXSDInt}},
 		{ElementID: 12, ModelType: types.ModelTypeRange, Value: gen.RangeValuePatch{ValueType: types.DataTypeDefXSDDouble, Min: gen.ScalarPatch{Set: true, Value: stringPointer("INF")}}},
 		{ElementID: 13, ModelType: types.ModelTypeBlob, Value: gen.BlobValuePatch{Value: &blob}},
@@ -134,7 +146,7 @@ func TestApplyValueOnlyUpdatesSkipsEmptyPatches(t *testing.T) {
 	mock.ExpectCommit()
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = ApplyValueOnlyUpdates(tx, db, []gen.ValueOnlyUpdate{
+	err = ApplyValueOnlyUpdates(t.Context(), tx, db, []gen.ValueOnlyUpdate{
 		{ElementID: 1, ModelType: types.ModelTypeEntity, Value: gen.EntityValuePatch{}},
 		{ElementID: 2, ModelType: types.ModelTypeRelationshipElement, Value: gen.RelationshipValuePatch{ModelType: types.ModelTypeRelationshipElement}},
 	})
@@ -146,7 +158,7 @@ func TestApplyValueOnlyUpdatesSkipsEmptyPatches(t *testing.T) {
 func TestApplyValueOnlyUpdatesRejectsElementsWithoutValueOnlyRepresentation(t *testing.T) {
 	t.Parallel()
 
-	err := ApplyValueOnlyUpdates(nil, nil, []gen.ValueOnlyUpdate{{ModelType: types.ModelTypeOperation}})
+	err := ApplyValueOnlyUpdates(t.Context(), nil, nil, []gen.ValueOnlyUpdate{{ModelType: types.ModelTypeOperation}})
 	require.True(t, common.IsErrBadRequest(err))
 }
 
@@ -205,7 +217,7 @@ func TestApplyValueOnlyUpdatesStoresEmptyTextRangeBound(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = ApplyValueOnlyUpdates(tx, db, []gen.ValueOnlyUpdate{{
+	err = ApplyValueOnlyUpdates(t.Context(), tx, db, []gen.ValueOnlyUpdate{{
 		ElementID: 21,
 		ModelType: types.ModelTypeRange,
 		Value:     gen.RangeValuePatch{ValueType: types.DataTypeDefXSDString, Min: gen.ScalarPatch{Set: true, Value: stringPointer("")}},

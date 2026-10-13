@@ -26,6 +26,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -35,26 +36,34 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-const valueOnlySchemaCTE = "value_only_schema"
-
 type valueOnlySchemaRow struct {
 	node     *gen.ValueOnlySchemaNode
 	parentID sql.NullInt64
 	idShort  sql.NullString
+	position sql.NullInt64
 }
 
-// LoadValueOnlySchemaTx loads the stored schema of the submodel elements addressed by a ValueOnly update
-// with a single recursive query. With topLevel set, paths are top-level idShorts of the submodel.
-// The result maps every requested path that exists to the root node of its stored subtree.
-func LoadValueOnlySchemaTx(tx *sql.Tx, submodelDatabaseID int64, paths []string, topLevel bool) (map[string]*gen.ValueOnlySchemaNode, error) {
-	if len(paths) == 0 {
+// ValueOnlySchemaRequest names the stored elements a ValueOnly update needs: the addressed root elements
+// and the paths below them that the payload can address. With TopLevel set, roots are top-level idShorts.
+type ValueOnlySchemaRequest struct {
+	SubmodelDatabaseID int64
+	RootPaths          []string
+	AddressedPaths     []string
+	TopLevel           bool
+}
+
+// LoadValueOnlySchemaTx loads the stored schema of the elements a ValueOnly update addresses with one
+// indexed query. Elements of the stored subtree that the payload does not address are not loaded.
+// The result maps every requested root path that exists to its schema node.
+func LoadValueOnlySchemaTx(ctx context.Context, tx *sql.Tx, request ValueOnlySchemaRequest) (map[string]*gen.ValueOnlySchemaNode, error) {
+	if len(request.RootPaths) == 0 {
 		return map[string]*gen.ValueOnlySchemaNode{}, nil
 	}
-	query, args, err := buildValueOnlySchemaQuery(submodelDatabaseID, paths, topLevel)
+	query, args, err := buildValueOnlySchemaQuery(request)
 	if err != nil {
 		return nil, common.NewInternalServerError("SMREPO-LOADVALONLYSCHEMA-BUILDQ " + err.Error())
 	}
-	rows, err := tx.Query(query, args...)
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, common.NewInternalServerError("SMREPO-LOADVALONLYSCHEMA-EXECQ " + err.Error())
 	}
@@ -65,55 +74,39 @@ func LoadValueOnlySchemaTx(tx *sql.Tx, submodelDatabaseID int64, paths []string,
 	if err != nil {
 		return nil, err
 	}
-	return linkValueOnlySchemaRows(schemaRows), nil
+	return linkValueOnlySchemaRows(schemaRows, request), nil
 }
 
-func buildValueOnlySchemaQuery(submodelDatabaseID int64, paths []string, topLevel bool) (string, []any, error) {
-	dialect := goqu.Dialect("postgres")
-	seedConditions := []exp.Expression{
-		goqu.I("root.submodel_id").Eq(submodelDatabaseID),
-		goqu.I("root.idshort_path").In(paths),
+func buildValueOnlySchemaQuery(request ValueOnlySchemaRequest) (string, []any, error) {
+	rootCondition := []exp.Expression{common.PostgreSQLTextArrayContains(goqu.I("sme.idshort_path"), request.RootPaths)}
+	if request.TopLevel {
+		rootCondition = append(rootCondition, goqu.I("sme.parent_sme_id").IsNull())
 	}
-	if topLevel {
-		seedConditions = append(seedConditions, goqu.I("root.parent_sme_id").IsNull())
+	pathCondition := goqu.And(rootCondition...)
+	if len(request.AddressedPaths) > 0 {
+		pathCondition = goqu.Or(pathCondition, common.PostgreSQLTextArrayContains(goqu.I("sme.idshort_path"), request.AddressedPaths))
 	}
-	seed := dialect.From(goqu.T("submodel_element").As("root")).
-		Select(valueOnlySchemaColumns("root")...).
-		Where(seedConditions...)
-	step := dialect.From(goqu.T("submodel_element").As("child")).
-		InnerJoin(goqu.T(valueOnlySchemaCTE).As("parent"), goqu.On(goqu.I("child.parent_sme_id").Eq(goqu.I("parent.id")))).
-		Select(valueOnlySchemaColumns("child")...).
-		Where(goqu.I("child.submodel_id").Eq(submodelDatabaseID))
-	return dialect.From(goqu.T(valueOnlySchemaCTE).As("tree")).
-		WithRecursive(valueOnlySchemaCTE+"(id, parent_sme_id, id_short, position, model_type, idshort_path)", seed.UnionAll(step)).
-		LeftJoin(goqu.T("property_element").As("pe"), goqu.On(goqu.I("pe.id").Eq(goqu.I("tree.id")))).
-		LeftJoin(goqu.T("range_element").As("re"), goqu.On(goqu.I("re.id").Eq(goqu.I("tree.id")))).
+	return goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		LeftJoin(goqu.T("property_element").As("pe"), goqu.On(goqu.I("pe.id").Eq(goqu.I("sme.id")))).
+		LeftJoin(goqu.T("range_element").As("re"), goqu.On(goqu.I("re.id").Eq(goqu.I("sme.id")))).
 		Select(
-			goqu.I("tree.id"),
-			goqu.I("tree.parent_sme_id"),
-			goqu.I("tree.id_short"),
-			goqu.I("tree.model_type"),
-			goqu.I("tree.idshort_path"),
+			goqu.I("sme.id"),
+			goqu.I("sme.parent_sme_id"),
+			goqu.I("sme.id_short"),
+			goqu.I("sme.model_type"),
+			goqu.I("sme.idshort_path"),
+			goqu.I("sme.position"),
 			goqu.COALESCE(goqu.I("pe.value_type"), goqu.I("re.value_type"), 0).As("value_type"),
 		).
+		Where(goqu.I("sme.submodel_id").Eq(request.SubmodelDatabaseID), pathCondition).
 		Order(
-			goqu.I("tree.parent_sme_id").Asc().NullsFirst(),
-			goqu.I("tree.position").Asc().NullsLast(),
-			goqu.I("tree.id").Asc(),
+			goqu.I("sme.parent_sme_id").Asc().NullsFirst(),
+			goqu.I("sme.position").Asc().NullsLast(),
+			goqu.I("sme.id").Asc(),
 		).
 		Prepared(true).
 		ToSQL()
-}
-
-func valueOnlySchemaColumns(alias string) []any {
-	return []any{
-		goqu.I(alias + ".id"),
-		goqu.I(alias + ".parent_sme_id"),
-		goqu.I(alias + ".id_short"),
-		goqu.I(alias + ".position"),
-		goqu.I(alias + ".model_type"),
-		goqu.I(alias + ".idshort_path"),
-	}
 }
 
 func scanValueOnlySchemaRows(rows *sql.Rows) ([]valueOnlySchemaRow, error) {
@@ -122,7 +115,7 @@ func scanValueOnlySchemaRows(rows *sql.Rows) ([]valueOnlySchemaRow, error) {
 		var modelType, valueType int64
 		node := &gen.ValueOnlySchemaNode{}
 		row := valueOnlySchemaRow{node: node}
-		if err := rows.Scan(&node.ElementID, &row.parentID, &row.idShort, &modelType, &node.IDShortPath, &valueType); err != nil {
+		if err := rows.Scan(&node.ElementID, &row.parentID, &row.idShort, &modelType, &node.IDShortPath, &row.position, &valueType); err != nil {
 			return nil, common.NewInternalServerError("SMREPO-LOADVALONLYSCHEMA-SCAN " + err.Error())
 		}
 		node.ModelType = types.ModelType(modelType)
@@ -135,30 +128,57 @@ func scanValueOnlySchemaRows(rows *sql.Rows) ([]valueOnlySchemaRow, error) {
 	return result, nil
 }
 
-func linkValueOnlySchemaRows(rows []valueOnlySchemaRow) map[string]*gen.ValueOnlySchemaNode {
+// linkValueOnlySchemaRows builds the schema trees of the requested roots. Rows whose parent was not
+// loaded cannot be reached from a root and are ignored.
+func linkValueOnlySchemaRows(rows []valueOnlySchemaRow, request ValueOnlySchemaRequest) map[string]*gen.ValueOnlySchemaNode {
 	nodes := make(map[int64]*gen.ValueOnlySchemaNode, len(rows))
 	for _, row := range rows {
 		nodes[row.node.ElementID] = row.node
 	}
+	rootPaths := make(map[string]struct{}, len(request.RootPaths))
+	for _, path := range request.RootPaths {
+		rootPaths[path] = struct{}{}
+	}
 	roots := make(map[string]*gen.ValueOnlySchemaNode)
 	for _, row := range rows {
-		parent, hasParent := nodes[row.parentID.Int64]
-		if !row.parentID.Valid || !hasParent {
+		if isRequestedValueOnlyRoot(row, rootPaths, request.TopLevel) {
 			roots[row.node.IDShortPath] = row.node
 			continue
 		}
-		attachValueOnlySchemaChild(parent, row)
+		if parent, ok := nodes[row.parentID.Int64]; ok && row.parentID.Valid {
+			attachValueOnlySchemaChild(parent, row)
+		}
 	}
 	return roots
 }
 
+func isRequestedValueOnlyRoot(row valueOnlySchemaRow, rootPaths map[string]struct{}, topLevel bool) bool {
+	if topLevel && row.parentID.Valid {
+		return false
+	}
+	_, requested := rootPaths[row.node.IDShortPath]
+	return requested
+}
+
 func attachValueOnlySchemaChild(parent *gen.ValueOnlySchemaNode, row valueOnlySchemaRow) {
 	if parent.ModelType == types.ModelTypeSubmodelElementList {
-		parent.Items = append(parent.Items, row.node)
+		attachValueOnlyListItem(parent, row)
 		return
 	}
 	if parent.Children == nil {
 		parent.Children = make(map[string]*gen.ValueOnlySchemaNode)
 	}
 	parent.Children[row.idShort.String] = row.node
+}
+
+// attachValueOnlyListItem places a list item at its stored position, which is also the index in its idShort path.
+func attachValueOnlyListItem(parent *gen.ValueOnlySchemaNode, row valueOnlySchemaRow) {
+	if !row.position.Valid || row.position.Int64 < 0 {
+		return
+	}
+	position := int(row.position.Int64)
+	for len(parent.Items) <= position {
+		parent.Items = append(parent.Items, nil)
+	}
+	parent.Items[position] = row.node
 }

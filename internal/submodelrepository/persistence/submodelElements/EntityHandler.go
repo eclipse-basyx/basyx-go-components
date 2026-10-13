@@ -27,6 +27,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -137,7 +138,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 
 // UpdateValueOnly stores the decoded ValueOnly attributes of an Entity; absent attributes stay untouched.
 // Statements are applied as separate updates.
-func (p PostgreSQLEntityHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+func (p PostgreSQLEntityHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.EntityValuePatch](update)
 	if err != nil {
 		return err
@@ -156,7 +157,7 @@ func (p PostgreSQLEntityHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnl
 		}
 		record["specific_asset_ids"] = specificAssetIDs
 	}
-	return execValueOnlyUpdate(tx, "entity_element", record, update.ElementID, "SMREPO-UPDENTITYVALONLY")
+	return execValueOnlyUpdate(ctx, tx, "entity_element", record, update.ElementID, "SMREPO-UPDENTITYVALONLY")
 }
 
 // Delete removes an Entity submodel element from the database.

@@ -30,6 +30,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -139,7 +140,7 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 
 // UpdateValueOnly stores the decoded ValueOnly content type and content of a Blob.
 // Content is stored in the same encoding as on insert; absent fields stay untouched.
-func (p PostgreSQLBlobHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+func (p PostgreSQLBlobHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.BlobValuePatch](update)
 	if err != nil {
 		return err
@@ -154,7 +155,7 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyU
 		}
 		record["value"] = common.Encode(*patch.Value)
 	}
-	return execValueOnlyUpdate(tx, "blob_element", record, update.ElementID, "SMREPO-UPDBLOBVALONLY")
+	return execValueOnlyUpdate(ctx, tx, "blob_element", record, update.ElementID, "SMREPO-UPDBLOBVALONLY")
 }
 
 // Delete removes a Blob element identified by its idShort or path from the database.

@@ -31,6 +31,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -135,7 +136,7 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 
 // UpdateValueOnly stores the decoded ValueOnly bounds of a Range in the typed columns of its valueType.
 // Absent bounds stay untouched and nil bounds are cleared.
-func (p PostgreSQLRangeHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+func (p PostgreSQLRangeHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.RangeValuePatch](update)
 	if err != nil {
 		return err
@@ -159,7 +160,7 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(tx *sql.Tx, update gen.ValueOnly
 		record["max_date"] = typedValue.MaxDate
 		record["max_datetime"] = typedValue.MaxDateTime
 	}
-	return execValueOnlyUpdate(tx, "range_element", record, update.ElementID, "SMREPO-UPDRANGEVALONLY")
+	return execValueOnlyUpdate(ctx, tx, "range_element", record, update.ElementID, "SMREPO-UPDRANGEVALONLY")
 }
 
 // Delete removes a Range submodel element from the database.
