@@ -216,7 +216,7 @@ func ListSubmodelDescriptorIdentifiers(
 	if limit < 1<<31-1 {
 		peekLimit++
 	}
-	dataset, err := buildStandaloneSubmodelDescriptorPage(ctx, goqu.Dialect(common.Dialect), peekLimit, cursor, time.Time{}, time.Time{}, submodelDescriptorListScope{
+	dataset, err := buildStandaloneSubmodelDescriptorIdentifierQuery(ctx, peekLimit, cursor, submodelDescriptorListScope{
 		collectorRoot:  grammar.CollectorRootSMDesc,
 		fragmentPrefix: "$smdesc",
 	})
@@ -304,29 +304,13 @@ func buildAuthorizedSubmodelDescriptorListQuery(
 	)
 	authorizedTable := goqu.T(authorizedAlias)
 	page := dialect.From(authorizedTable).
-		Select(
-			authorizedTable.Col(common.ColDescriptorID),
-			authorizedTable.Col(common.ColAASDescriptorID),
-			authorizedTable.Col(common.ColAASID),
-			authorizedTable.Col(common.ColIDShort),
-			authorizedTable.Col(common.ColAdministrativeInfoPayload),
-			authorizedTable.Col(common.ColDisplayNamePayload),
-			authorizedTable.Col(common.ColDescriptionPayload),
-			authorizedTable.Col(common.ColExtensionsPayload),
-			authorizedTable.Col("semantic_reference_id"),
-			authorizedTable.Col(common.ColPosition),
-		).
+		Select(submodelDescriptorPageColumns(authorizedTable, maskRuntime, maskedColumns)...).
 		Order(
 			authorizedTable.Col(common.ColAASID).Asc(),
 			authorizedTable.Col(common.ColDescriptorID).Asc(),
 		)
 	//nolint:gosec // peekLimit is normalized to a positive int32 value
 	page = page.Limit(uint(peekLimit))
-	if maskRuntime != nil {
-		for _, column := range maskedColumns {
-			page = page.SelectAppend(authorizedTable.Col(column.FlagAlias))
-		}
-	}
 	if cursor != "" {
 		cursorExists := dialect.From(authorizedTable).
 			Select(goqu.L("1")).
@@ -367,95 +351,73 @@ func buildStandaloneSubmodelDescriptorListQuery(
 	scope submodelDescriptorListScope,
 ) (*goqu.SelectDataset, error) {
 	dialect := goqu.Dialect(common.Dialect)
-	rawPage, err := buildStandaloneSubmodelDescriptorPage(ctx, dialect, peekLimit, cursor, createdFrom, updatedFrom, scope)
+	visibleRows, maskRuntime, maskedColumns, err := buildAuthorizedSubmodelDescriptorRows(ctx, dialect, createdFrom, updatedFrom, scope)
 	if err != nil {
 		return nil, err
 	}
-	authorized, maskRuntime, maskedColumns, err := buildAuthorizedSubmodelDescriptorRows(
-		ctx,
+	page := buildStandaloneSubmodelDescriptorPage(
 		dialect,
-		time.Time{},
-		time.Time{},
-		scope,
+		visibleRows,
+		submodelDescriptorPageColumns(goqu.T(standaloneVisibleAlias), maskRuntime, maskedColumns),
+		peekLimit,
+		cursor,
+		scope.identifiable,
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	const (
-		rawPageAlias    = "raw_submodel_descriptor_page"
-		authorizedAlias = "authorized_submodel_descriptors"
-	)
-	rawPageTable := goqu.T(rawPageAlias)
-	authorizedTable := goqu.T(authorizedAlias)
-	authorized = authorized.Where(
-		goqu.I(common.AliasSubmodelDescriptor + "." + common.ColDescriptorID).In(
-			dialect.From(rawPageTable).Select(rawPageTable.Col(common.ColDescriptorID)),
-		),
-	)
-	maskedExpressions, err := descriptorMaskedExpressions(maskRuntime, authorizedAlias, maskedColumns)
+	const pageAlias = "submodel_descriptor_page"
+	pageTable := goqu.T(pageAlias)
+	maskedExpressions, err := descriptorMaskedExpressions(maskRuntime, pageAlias, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
-	descriptorJSON, err := buildSubmodelDescriptorJSON(
-		ctx,
-		dialect,
-		authorizedAlias,
-		authorizedTable,
-		maskedExpressions,
-		scope,
-	)
+	descriptorJSON, err := buildSubmodelDescriptorJSON(ctx, dialect, pageAlias, pageTable, maskedExpressions, scope)
 	if err != nil {
 		return nil, err
 	}
-	nullableDescriptorJSON := goqu.Case().
-		When(authorizedTable.Col(common.ColDescriptorID).IsNotNull(), descriptorJSON).
-		Else(nil)
-	return dialect.From(rawPageTable).
-		With(rawPageAlias, rawPage).
-		With(authorizedAlias, authorized).
-		LeftJoin(
-			authorizedTable,
-			goqu.On(
-				authorizedTable.Col(common.ColDescriptorID).
-					Eq(rawPageTable.Col(common.ColDescriptorID)),
-			),
-		).
+	return dialect.From(page.As(pageAlias)).
 		Select(
-			rawPageTable.Col(common.ColAASID),
-			nullableDescriptorJSON,
+			pageTable.Col(common.ColAASID),
+			descriptorJSON,
 		).
 		Order(
-			rawPageTable.Col(common.ColAASID).Asc(),
-			rawPageTable.Col(common.ColDescriptorID).Asc(),
+			pageTable.Col(common.ColAASID).Asc(),
+			pageTable.Col(common.ColDescriptorID).Asc(),
 		), nil
 }
 
-// buildStandaloneSubmodelDescriptorPage pages over the descriptors that pass
-// the ABAC formula and query condition from ctx, so a page is only short at the
-// end and the next cursor never names a descriptor the caller may not read.
-func buildStandaloneSubmodelDescriptorPage(
+func buildStandaloneSubmodelDescriptorIdentifierQuery(
 	ctx context.Context,
-	dialect goqu.DialectWrapper,
 	peekLimit int32,
 	cursor string,
-	createdFrom time.Time,
-	updatedFrom time.Time,
 	scope submodelDescriptorListScope,
 ) (*goqu.SelectDataset, error) {
-	const visibleAlias = "visible_submodel_descriptors"
-	visibleRows, _, _, err := buildAuthorizedSubmodelDescriptorRows(ctx, dialect, createdFrom, updatedFrom, scope)
+	dialect := goqu.Dialect(common.Dialect)
+	visibleRows, _, _, err := buildAuthorizedSubmodelDescriptorRows(ctx, dialect, time.Time{}, time.Time{}, scope)
 	if err != nil {
 		return nil, err
 	}
-	pageSource := goqu.T(visibleAlias)
-	page := dialect.From(visibleRows.As(visibleAlias)).
-		Select(
-			pageSource.Col(common.ColDescriptorID),
-			pageSource.Col(common.ColAASID),
-		)
-	if scope.identifiable != "" {
-		page = page.Where(pageSource.Col(common.ColAASID).Eq(scope.identifiable))
+	visible := goqu.T(standaloneVisibleAlias)
+	columns := []interface{}{visible.Col(common.ColDescriptorID), visible.Col(common.ColAASID)}
+	return buildStandaloneSubmodelDescriptorPage(dialect, visibleRows, columns, peekLimit, cursor, scope.identifiable), nil
+}
+
+const standaloneVisibleAlias = "visible_submodel_descriptors"
+
+// buildStandaloneSubmodelDescriptorPage pages over the descriptors that pass
+// the ABAC formula and query condition, so a page is only short at the end and
+// the next cursor is always a visible descriptor.
+func buildStandaloneSubmodelDescriptorPage(
+	dialect goqu.DialectWrapper,
+	visibleRows *goqu.SelectDataset,
+	columns []interface{},
+	peekLimit int32,
+	cursor string,
+	identifiable string,
+) *goqu.SelectDataset {
+	visible := goqu.T(standaloneVisibleAlias)
+	page := dialect.From(visibleRows.As(standaloneVisibleAlias)).Select(columns...)
+	if identifiable != "" {
+		page = page.Where(visible.Col(common.ColAASID).Eq(identifiable))
 	}
 	if cursor != "" {
 		cursorSource := goqu.T(common.TblSubmodelDescriptor).As("submodel_descriptor_cursor")
@@ -467,15 +429,40 @@ func buildStandaloneSubmodelDescriptorPage(
 			)
 		page = page.Where(
 			goqu.Func("EXISTS", cursorExists),
-			pageSource.Col(common.ColAASID).Gte(cursor),
+			visible.Col(common.ColAASID).Gte(cursor),
 		)
 	}
 	return page.
 		Order(
-			pageSource.Col(common.ColAASID).Asc(),
-			pageSource.Col(common.ColDescriptorID).Asc(),
+			visible.Col(common.ColAASID).Asc(),
+			visible.Col(common.ColDescriptorID).Asc(),
 		).
-		Limit(uint(peekLimit)), nil //nolint:gosec // peekLimit is normalized to a positive int32 value
+		Limit(uint(peekLimit)) //nolint:gosec // peekLimit is normalized to a positive int32 value
+}
+
+func submodelDescriptorPageColumns(
+	table exp.IdentifierExpression,
+	maskRuntime *auth.SharedFragmentMaskRuntime,
+	maskedColumns []auth.MaskedInnerColumnSpec,
+) []interface{} {
+	columns := []interface{}{
+		table.Col(common.ColDescriptorID),
+		table.Col(common.ColAASDescriptorID),
+		table.Col(common.ColAASID),
+		table.Col(common.ColIDShort),
+		table.Col(common.ColAdministrativeInfoPayload),
+		table.Col(common.ColDisplayNamePayload),
+		table.Col(common.ColDescriptionPayload),
+		table.Col(common.ColExtensionsPayload),
+		table.Col("semantic_reference_id"),
+		table.Col(common.ColPosition),
+	}
+	if maskRuntime != nil {
+		for _, column := range maskedColumns {
+			columns = append(columns, table.Col(column.FlagAlias))
+		}
+	}
+	return columns
 }
 
 func buildAuthorizedSubmodelDescriptorRows(

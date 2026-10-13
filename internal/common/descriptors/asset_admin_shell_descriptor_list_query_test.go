@@ -28,6 +28,7 @@ package descriptors
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -220,12 +221,10 @@ func TestSubmodelDescriptorListSQLShapeIsStableAcrossPageSizes(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, oneSQL, manySQL)
-	require.Contains(t, oneSQL, "raw_submodel_descriptor_page")
-	require.Contains(t, oneSQL, "authorized_submodel_descriptors")
-	require.Contains(t, oneSQL, `LEFT JOIN "authorized_submodel_descriptors"`)
-	require.Contains(t, oneSQL, `IN ((SELECT "raw_submodel_descriptor_page"."descriptor_id"`)
-	require.NotContains(t, oneSQL, `= (SELECT "raw_submodel_descriptor_page"."descriptor_id"`)
-	require.Contains(t, oneSQL, `ORDER BY "raw_submodel_descriptor_page"."id" ASC, "raw_submodel_descriptor_page"."descriptor_id" ASC`)
+	require.Contains(t, oneSQL, `AS "visible_submodel_descriptors"`)
+	require.Equal(t, 1, strings.Count(oneSQL, `"descriptor_payload" AS "submodel_descriptor_payload"`))
+	require.NotContains(t, oneSQL, "authorized_submodel_descriptors")
+	require.Contains(t, oneSQL, `ORDER BY "submodel_descriptor_page"."id" ASC, "submodel_descriptor_page"."descriptor_id" ASC`)
 }
 
 func TestSubmodelDescriptorListCursorExistenceUsesSQLLiteral(t *testing.T) {
@@ -400,6 +399,6 @@ func TestStandaloneSubmodelDescriptorListFiltersExactIdentifier(t *testing.T) {
 	require.NoError(t, err)
 	query, args, err := dataset.Prepared(true).ToSQL()
 	require.NoError(t, err)
-	require.Contains(t, query, `"visible_submodel_descriptors"."id" = $1`)
+	require.Contains(t, query, `WHERE ("visible_submodel_descriptors"."id" = $`)
 	require.Contains(t, args, "urn:example:submodel:target")
 }
