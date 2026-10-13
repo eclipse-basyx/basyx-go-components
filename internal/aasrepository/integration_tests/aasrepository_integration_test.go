@@ -268,6 +268,24 @@ func getJSONArrayResponse(endpoint string) ([]string, int, error) {
 	return payload, resp.StatusCode, nil
 }
 
+func rawJSONRequest(method string, endpoint string, body string) (int, []byte, error) {
+	req, err := http.NewRequest(method, endpoint, strings.NewReader(body))
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	responseBody, err := io.ReadAll(resp.Body)
+	return resp.StatusCode, responseBody, err
+}
+
 func putJSONResponse(endpoint string, body string) (map[string]any, int, http.Header, error) {
 	req, err := http.NewRequest(http.MethodPut, endpoint, strings.NewReader(body))
 	if err != nil {
@@ -1327,7 +1345,7 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 
 	submodelEndpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
 	body := fmt.Sprintf(
-		`{"id":"%s","idShort":"SuperpathSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"TopProperty","modelType":"Property","valueType":"xs:string","value":"hello"},{"idShort":"TopBlob","modelType":"Blob","contentType":"text/plain","value":"%s"},{"idShort":"MainCollection","modelType":"SubmodelElementCollection","value":[{"idShort":"NestedProperty","modelType":"Property","valueType":"xs:string","value":"nested"},{"idShort":"NestedBlob","modelType":"Blob","contentType":"application/octet-stream","value":"%s"}]}]}`,
+		`{"id":"%s","idShort":"SuperpathSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"TopProperty","modelType":"Property","valueType":"xs:string","value":"hello"},{"idShort":"TopCounter","modelType":"Property","valueType":"xs:unsignedLong","value":"0"},{"idShort":"TopBlob","modelType":"Blob","contentType":"text/plain","value":"%s"},{"idShort":"MainCollection","modelType":"SubmodelElementCollection","value":[{"idShort":"NestedProperty","modelType":"Property","valueType":"xs:string","value":"nested"},{"idShort":"NestedBlob","modelType":"Blob","contentType":"application/octet-stream","value":"%s"}]}]}`,
 		submodelID,
 		topBlobValue,
 		nestedBlobValue,
@@ -1383,6 +1401,21 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 		require.NoError(t, err, "GET value-only blob with extent request failed")
 		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET value-only blob with extent")
 		requireAASValueOnlyBlobValueState(t, payload, "text/plain", topBlobValue, true)
+	})
+
+	t.Run("PatchValueOnlyKeepsJSONNativeTypesAndPrecision", func(t *testing.T) {
+		statusCode, responseBody, err := rawJSONRequest(http.MethodPatch, submodelEndpoint+"/$value", `{"TopCounter":18446744073709551615}`)
+		require.NoError(t, err, "PATCH submodel value-only request failed")
+		require.Equal(t, http.StatusNoContent, statusCode, "Expected 204 No Content for PATCH submodel value-only: %s", responseBody)
+
+		statusCode, responseBody, err = rawJSONRequest(http.MethodGet, submodelEndpoint+"/submodel-elements/TopCounter/$value", "")
+		require.NoError(t, err, "GET value-only property request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET value-only property")
+		assert.Equal(t, "18446744073709551615", strings.TrimSpace(string(responseBody)))
+
+		statusCode, responseBody, err = rawJSONRequest(http.MethodPatch, submodelEndpoint+"/submodel-elements/TopProperty/$value", `42`)
+		require.NoError(t, err, "PATCH value-only property request failed")
+		assert.Equal(t, http.StatusBadRequest, statusCode, "Expected 400 Bad Request for a JSON number on xs:string: %s", responseBody)
 	})
 
 	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPath", func(t *testing.T) {

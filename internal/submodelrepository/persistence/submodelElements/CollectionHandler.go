@@ -35,7 +35,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // PostgreSQLSubmodelElementCollectionHandler provides PostgreSQL-based persistence operations
@@ -82,28 +81,6 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 		return common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
 	}
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
-}
-
-// UpdateValueOnly updates only the value of an existing SubmodelElementCollection submodel element identified by its idShort or path.
-// It processes the new value and updates nested elements accordingly.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type gen.SubmodelElementValue)
-//
-// Returns:
-//   - error: An error if the update operation fails
-func (p PostgreSQLSubmodelElementCollectionHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	elems, err := buildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
-	if err != nil {
-		return err
-	}
-	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID, tx)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // Delete removes a SubmodelElementCollection identified by its idShort or path from the database.

@@ -30,6 +30,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -102,7 +103,7 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 		slog.Error("submodel database ID lookup failed", "error.code", "SMREPO-SMEUPDATE-GETSMDBID", "error", err)
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
 	}
-	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
+	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -137,81 +138,24 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly updates only the value of an existing Blob submodel element identified by its idShort or path.
-// It updates the content type and binary value in the database.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type gen.BlobValue)
-//
-// Returns:
-//   - error: An error if the update operation fails or if the valueOnly type is incorrect
-func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	blobValueOnly, ok := valueOnly.(gen.BlobValue)
-	if !ok {
-		var fileValueOnly gen.FileValue
-		var isMistakenAsFileValue bool
-		if fileValueOnly, isMistakenAsFileValue = valueOnly.(gen.FileValue); !isMistakenAsFileValue {
-			return common.NewErrBadRequest("valueOnly is not of type BlobValue")
+// UpdateValueOnly stores the decoded ValueOnly content type and content of a Blob.
+// Content is stored in the same encoding as on insert; absent fields stay untouched.
+func (p PostgreSQLBlobHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	patch, err := valueOnlyPatchAs[gen.BlobValuePatch](update)
+	if err != nil {
+		return err
+	}
+	record := goqu.Record{}
+	if patch.ContentType != nil {
+		record["content_type"] = *patch.ContentType
+	}
+	if patch.Value != nil {
+		if len(*patch.Value) > smrepoconfig.MaxBlobSizeBytes {
+			return smrepoerrors.ErrBlobTooLarge
 		}
-
-		bytea := []byte(fileValueOnly.Value)
-
-		blobValueOnly = gen.BlobValue{
-			ContentType: fileValueOnly.ContentType,
-			Value:       bytea,
-		}
+		record["value"] = common.Encode(*patch.Value)
 	}
-
-	// Check if blob value is larger than 1GB
-	if len(blobValueOnly.Value) > 1<<30 {
-		return common.NewErrBadRequest("blob value exceeds maximum size of 1GB - for files larger than 1GB, you must use File submodel element instead - Postgres Limitation")
-	}
-
-	// Update only the blob-specific fields in the database
-	dialect := goqu.Dialect("postgres")
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return err
-	}
-
-	var elementID int
-	query, args, err := dialect.From("submodel_element").
-		InnerJoin(
-			goqu.T("blob_element"),
-			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("blob_element.id"))),
-		).
-		Select("submodel_element.id").
-		Where(
-			goqu.C("idshort_path").Eq(idShortOrPath),
-			goqu.C("submodel_id").Eq(smDbID),
-		).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	err = tx.QueryRow(query, args...).Scan(&elementID)
-	if err != nil {
-		return err
-	}
-
-	updateQuery, updateArgs, err := dialect.Update("blob_element").
-		Set(goqu.Record{"content_type": blobValueOnly.ContentType, "value": []byte(blobValueOnly.Value)}).
-		Where(goqu.C("id").Eq(elementID)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(updateQuery, updateArgs...)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return execValueOnlyUpdate(ctx, tx, "blob_element", record, update.ElementID, "SMREPO-UPDBLOBVALONLY")
 }
 
 // Delete removes a Blob element identified by its idShort or path from the database.
@@ -283,7 +227,7 @@ func buildUpdateBlobRecordObject(isPut bool, blob *types.Blob) goqu.Record {
 
 	value := blob.Value()
 	if isPut || len(value) > 0 {
-		updateRecord["value"] = value
+		updateRecord["value"] = common.Encode(value)
 	}
 	return updateRecord
 }

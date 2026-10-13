@@ -13,6 +13,7 @@ package openapi
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"time"
@@ -30,7 +31,6 @@ type (
 	SubmodelMetadata          = model.SubmodelMetadata
 	SubmodelElement           = types.ISubmodelElement
 	SubmodelElementMetadata   = model.SubmodelElementMetadata
-	SubmodelElementValue      = model.SubmodelElementValue
 	OperationRequest          = model.OperationRequest
 	OperationRequestValueOnly = model.OperationRequestValueOnly
 )
@@ -139,7 +139,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	GetSubmodelByIdMetadataAasRepository(context.Context, string, string) (model.ImplResponse, error)
 	PatchSubmodelByIdMetadataAasRepository(context.Context, string, string, SubmodelMetadata) (model.ImplResponse, error)
 	GetSubmodelByIdValueOnlyAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
-	PatchSubmodelByIdValueOnlyAasRepository(context.Context, string, string, map[string]any, string) (model.ImplResponse, error)
+	PatchSubmodelByIdValueOnlyAasRepository(context.Context, string, string, map[string]json.RawMessage, string) (model.ImplResponse, error)
 	GetSubmodelByIdReferenceAasRepository(context.Context, string, string) (model.ImplResponse, error)
 	GetSubmodelByIdPathAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElementsAasRepository(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
@@ -156,7 +156,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	GetSubmodelElementByPathMetadataAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
 	PatchSubmodelElementValueByPathMetadata(context.Context, string, string, string, SubmodelElementMetadata) (model.ImplResponse, error)
 	GetSubmodelElementByPathValueOnlyAasRepository(context.Context, string, string, string, string, string) (model.ImplResponse, error)
-	PatchSubmodelElementValueByPathValueOnly(context.Context, string, string, string, SubmodelElementValue, string) (model.ImplResponse, error)
+	PatchSubmodelElementValueByPathValueOnly(context.Context, string, string, string, json.RawMessage, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathReferenceAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathPathAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetFileByPathAasRepository(context.Context, string, string, string) (model.ImplResponse, error)

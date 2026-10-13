@@ -29,8 +29,11 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -818,7 +821,7 @@ func (s *SubmodelDatabase) ensureUpdatedSubmodelElementIsVisible(ctx context.Con
 
 // UpdateSubmodelElementValueOnly updates a submodel element using value-only representation
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) (err error) {
+func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, submodelID string, idShortOrPath string, valueOnly json.RawMessage) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -839,7 +842,14 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, s
 		return err
 	}
 
-	if err = s.updateSubmodelElementValueOnly(tx, submodelID, idShortOrPath, valueOnly); err != nil {
+	addressedPaths, err := gen.ValueOnlyAddressedPaths(idShortOrPath, valueOnly)
+	if err != nil {
+		return common.NewErrBadRequest("SMREPO-UPDSMEVALONLY-PATHS " + err.Error())
+	}
+	target := valueOnlyTarget{rootPaths: []string{idShortOrPath}, addressedPaths: addressedPaths}
+	if err = s.applyValueOnlyTx(ctx, tx, submodelID, target, func(roots map[string]*gen.ValueOnlySchemaNode) ([]gen.ValueOnlyUpdate, error) {
+		return gen.DecodeValueOnly(valueOnly, roots[idShortOrPath])
+	}); err != nil {
 		return err
 	}
 	if shouldEnforce {
@@ -856,27 +866,9 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, s
 	return common.CommitTransaction(tx)
 }
 
-func (s *SubmodelDatabase) updateSubmodelElementValueOnly(tx *sql.Tx, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	modelType, err := submodelelements.GetModelTypeByIdShortPathAndSubmodelIDTx(tx, submodelID, idShortOrPath)
-	if err != nil {
-		return err
-	}
-
-	if modelType == nil {
-		return common.NewErrNotFound("SMREPO-UPDSMEVALONLY-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
-	}
-
-	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, s.db)
-	if err != nil {
-		return err
-	}
-
-	return handler.UpdateValueOnly(submodelID, idShortOrPath, valueOnly, tx)
-}
-
 // UpdateSubmodelValueOnly updates all included top-level submodel elements using value-only representation
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodelID string, valueOnly gen.SubmodelValue) (err error) {
+func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodelID string, valueOnly map[string]json.RawMessage) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -896,11 +888,18 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 		return err
 	}
 
-	mutations := make([]submodelElementRootMutation, 0, len(valueOnly))
-	for idShort, elementValue := range valueOnly {
-		if err = s.updateSubmodelElementValueOnly(tx, submodelID, idShort, elementValue); err != nil {
-			return err
-		}
+	idShorts := slices.Sorted(maps.Keys(valueOnly))
+	target, err := submodelValueOnlyTarget(idShorts, valueOnly)
+	if err != nil {
+		return err
+	}
+	if err = s.applyValueOnlyTx(ctx, tx, submodelID, target, func(roots map[string]*gen.ValueOnlySchemaNode) ([]gen.ValueOnlyUpdate, error) {
+		return gen.DecodeSubmodelValueOnly(valueOnly, roots)
+	}); err != nil {
+		return err
+	}
+	mutations := make([]submodelElementRootMutation, 0, len(idShorts))
+	for _, idShort := range idShorts {
 		mutations = append(mutations, submodelElementRootMutation{
 			previousPath: idShort,
 			currentPath:  idShort,
@@ -916,6 +915,65 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 		return err
 	}
 	return common.CommitTransaction(tx)
+}
+
+type valueOnlyDecodeFunc func(roots map[string]*gen.ValueOnlySchemaNode) ([]gen.ValueOnlyUpdate, error)
+
+// valueOnlyTarget names the stored elements a ValueOnly update addresses.
+type valueOnlyTarget struct {
+	rootPaths      []string
+	addressedPaths []string
+	topLevel       bool
+}
+
+func submodelValueOnlyTarget(idShorts []string, valueOnly map[string]json.RawMessage) (valueOnlyTarget, error) {
+	target := valueOnlyTarget{rootPaths: idShorts, topLevel: true}
+	for _, idShort := range idShorts {
+		paths, err := gen.ValueOnlyAddressedPaths(idShort, valueOnly[idShort])
+		if err != nil {
+			return target, common.NewErrBadRequest("SMREPO-UPDSMVALONLY-PATHS " + err.Error())
+		}
+		target.addressedPaths = append(target.addressedPaths, paths...)
+	}
+	return target, nil
+}
+
+// applyValueOnlyTx loads the stored schema of the addressed elements once, decodes the complete payload
+// against it and applies the resulting updates. Nothing is written when any part of the payload is invalid.
+func (s *SubmodelDatabase) applyValueOnlyTx(ctx context.Context, tx *sql.Tx, submodelID string, target valueOnlyTarget, decode valueOnlyDecodeFunc) error {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForNoKeyUpdateContext(ctx, tx, submodelID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return common.NewErrNotFound("SMREPO-UPDVALONLY-SMNOTFOUND Submodel with ID " + submodelID + " not found")
+	}
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDVALONLY-GETSMDBID " + err.Error())
+	}
+	roots, err := submodelelements.LoadValueOnlySchemaTx(ctx, tx, submodelelements.ValueOnlySchemaRequest{
+		SubmodelDatabaseID: int64(submodelDatabaseID),
+		RootPaths:          target.rootPaths,
+		AddressedPaths:     target.addressedPaths,
+		TopLevel:           target.topLevel,
+	})
+	if err != nil {
+		return err
+	}
+	for _, path := range target.rootPaths {
+		if _, ok := roots[path]; !ok {
+			return common.NewErrNotFound("SMREPO-UPDVALONLY-NOTFOUND Submodel-Element ID-Short: " + path)
+		}
+	}
+	updates, err := decode(roots)
+	if err != nil {
+		return mapValueOnlyDecodeError(err)
+	}
+	return submodelelements.ApplyValueOnlyUpdates(ctx, tx, s.db, updates)
+}
+
+func mapValueOnlyDecodeError(err error) error {
+	if errors.Is(err, gen.ErrValueOnlyUnknownElement) {
+		return common.NewErrNotFound("SMREPO-UPDVALONLY-UNKNOWNELEMENT " + err.Error())
+	}
+	return common.NewErrBadRequest("SMREPO-UPDVALONLY-DECODE " + err.Error())
 }
 
 func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateDoesNotExist(

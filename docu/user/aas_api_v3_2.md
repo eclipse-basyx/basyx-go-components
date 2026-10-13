@@ -348,6 +348,49 @@ stored children: missing children are deleted, changed children are updated in
 place, and new children are inserted. A `PATCH` without these fields, including
 a `$metadata` `PATCH`, leaves the children untouched.
 
+## Value-Only Serialization
+
+`$value` endpoints use the JSON types of the IDTA-01001 ValueOnly mapping.
+`Property` values and `Range` bounds are serialized by their `valueType`:
+
+| `valueType` | JSON type |
+|---|---|
+| `xs:decimal`, `xs:integer`, `xs:double`, `xs:float`, `xs:byte`, `xs:short`, `xs:int`, `xs:long`, `xs:unsignedByte`, `xs:unsignedShort`, `xs:unsignedInt`, `xs:unsignedLong`, `xs:positiveInteger`, `xs:nonNegativeInteger`, `xs:negativeInteger`, `xs:nonPositiveInteger` | number |
+| `xs:boolean` | boolean |
+| all other types | string |
+
+Numbers keep all stored digits, including values beyond 2^53. A `Property`
+without a value is serialized as `null`. Values without a JSON number
+representation (`INF`, `-INF` and `NaN`) and stored values that are not
+consistent with their `valueType` are serialized as their lexical string.
+
+`PATCH` on `$value` interprets the payload against the stored elements. The
+stored model type and `valueType` decide how each JSON value is read, so no
+element type is inferred from the payload shape:
+
+- Numeric types accept a JSON number and `xs:boolean` accepts a JSON boolean.
+  Both also accept their lexical form as a JSON string, for example `"42"` or
+  `"true"`, so clients that send strings keep working. All other types require
+  a JSON string. Every value is checked against its `valueType`: a value outside
+  its range, a string that is not a valid lexical value such as `"seven"` for
+  `xs:int`, or another JSON type returns `400 Bad Request`.
+- `null` clears a `Property` value or a `Range` bound.
+- Members that are omitted from an object stay unchanged. This applies to
+  `Range` bounds, `File` and `Blob` fields, `RelationshipElement` and
+  `AnnotatedRelationshipElement` references, and `Entity` attributes. An empty
+  `ReferenceElement` value (`{}`) clears the reference.
+- `MultiLanguageProperty` values are arrays of single-language objects such as
+  `[{"en": "Name"}, {"de": "Bezeichnung"}]`.
+- `Blob` values are standard base64.
+- Unknown object members return `400 Bad Request`. Unknown `idShort`s, and
+  more list items than are stored, return `404 Not Found`.
+- References, specific asset IDs, language strings, content types and global
+  asset IDs follow the configured `strictVerification` mode, as full-model
+  writes do.
+
+The payload is validated completely before anything is written. An invalid
+payload leaves the stored submodel unchanged.
+
 ## Submodel Element History FAQ
 
 Submodel Elements do not have independent history streams. They are part of their owning Submodel. An SME write therefore appends an `Updated` event for the Submodel, even when the SME itself was newly created or deleted.
@@ -448,6 +491,8 @@ curl 'http://localhost:6004/submodels/{base64urlSubmodelIdentifier}/$signed'
 ```
 
 If signing is not configured, the endpoint returns an error instead of an unsigned payload. Signed reads use the same read authorization rules as the corresponding normal read endpoints.
+
+`GET /submodels/{submodelIdentifier}/$value/$signed` signs the ValueOnly payload described in [Value-Only Serialization](#value-only-serialization), so numeric and boolean values in the signed payload are JSON numbers and booleans.
 
 ## AssetKind Batch
 

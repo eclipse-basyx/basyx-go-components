@@ -140,15 +140,12 @@
             "SM_Updated List Item 1",
             [
                 {
-                    "language": "en-us2"
-                },
-                {
-                    "text": "Updated List MLP2"
+                    "en-us": "Updated List MLP2"
                 }
             ],
             {
-                "max": "151",
-                "min": "14"
+                "max": 151,
+                "min": 14
             }
         ]
     }

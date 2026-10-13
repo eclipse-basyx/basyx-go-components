@@ -12,6 +12,7 @@ package openapi
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"time"
@@ -126,7 +127,7 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetSubmodelByIDMetadata(context.Context, string) (model.ImplResponse, error)
 	PatchSubmodelByIDMetadata(context.Context, string, model.SubmodelMetadata) (model.ImplResponse, error)
 	GetSubmodelByIDValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
-	PatchSubmodelByIDValueOnly(context.Context, string, model.SubmodelValue, string) (model.ImplResponse, error)
+	PatchSubmodelByIDValueOnly(context.Context, string, map[string]json.RawMessage, string) (model.ImplResponse, error)
 	GetSubmodelByIDReference(context.Context, string) (model.ImplResponse, error)
 	GetSubmodelByIDPath(context.Context, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElements(context.Context, string, int32, string, string, string) (model.ImplResponse, error)
@@ -143,7 +144,7 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetSubmodelElementByPathMetadataSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
 	PatchSubmodelElementByPathMetadataSubmodelRepo(context.Context, string, string, model.SubmodelElementMetadata) (model.ImplResponse, error)
 	GetSubmodelElementByPathValueOnlySubmodelRepo(context.Context, string, string, string, string) (model.ImplResponse, error)
-	PatchSubmodelElementByPathValueOnlySubmodelRepo(context.Context, string, string, model.SubmodelElementValue, string) (model.ImplResponse, error)
+	PatchSubmodelElementByPathValueOnlySubmodelRepo(context.Context, string, string, json.RawMessage, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathReferenceSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathPathSubmodelRepo(context.Context, string, string, string) (model.ImplResponse, error)
 	GetFileByPathSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)

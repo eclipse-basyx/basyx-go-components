@@ -31,6 +31,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -133,111 +134,33 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly updates only the value-specific fields of an existing Range submodel element.
-// It updates the min and max values based on the value type of the Range element,
-// ensuring that only the relevant columns are modified while others are set to NULL.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The RangeValue containing the new min and max values
-//
-// Returns:
-//   - error: An error if the update operation fails or if the valueOnly is not of type RangeValue
-func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	rangeValue, ok := valueOnly.(gen.RangeValue)
-	if !ok {
-		return common.NewErrBadRequest("valueOnly is not of type Range")
-	}
-
-	dialect := goqu.Dialect("postgres")
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return err
-	}
-
-	// Get Value Type to determine which columns to update
-	selectQuery, selectArgs, err := dialect.From(goqu.T("submodel_element").As("sme")).
-		InnerJoin(
-			goqu.T("range_element").As("re"),
-			goqu.On(goqu.I("sme.id").Eq(goqu.I("re.id"))),
-		).
-		Select(goqu.I("re.value_type")).
-		Where(
-			goqu.I("sme.submodel_id").Eq(smDbID),
-			goqu.I("sme.idshort_path").Eq(idShortOrPath),
-		).
-		ToSQL()
+// UpdateValueOnly stores the decoded ValueOnly bounds of a Range in the typed columns of its valueType.
+// Absent bounds stay untouched and nil bounds are cleared.
+func (p PostgreSQLRangeHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	patch, err := valueOnlyPatchAs[gen.RangeValuePatch](update)
 	if err != nil {
 		return err
 	}
-
-	var valueType types.DataTypeDefXSD
-	err = tx.QueryRow(selectQuery, selectArgs...).Scan(&valueType)
+	typedValue, err := MapRangeValueByType(patch.ValueType, patch.Min.Value, patch.Max.Value)
 	if err != nil {
 		return err
 	}
-
-	// Build subquery to get the submodel element ID
-	var elementID int
-	idQuery, args, err := dialect.From("submodel_element").
-		Select("id").
-		Where(
-			goqu.C("submodel_id").Eq(smDbID),
-			goqu.C("idshort_path").Eq(idShortOrPath),
-		).ToSQL()
-	if err != nil {
-		return err
+	record := goqu.Record{}
+	if patch.Min.Set {
+		record["min_text"] = typedValue.MinText
+		record["min_num"] = typedValue.MinNumeric
+		record["min_time"] = typedValue.MinTime
+		record["min_date"] = typedValue.MinDate
+		record["min_datetime"] = typedValue.MinDateTime
 	}
-	err = tx.QueryRow(idQuery, args...).Scan(&elementID)
-	if err != nil {
-		return err
+	if patch.Max.Set {
+		record["max_text"] = typedValue.MaxText
+		record["max_num"] = typedValue.MaxNumeric
+		record["max_time"] = typedValue.MaxTime
+		record["max_date"] = typedValue.MaxDate
+		record["max_datetime"] = typedValue.MaxDateTime
 	}
-
-	minValue := ""
-	if rangeValue.Min != nil {
-		minValue = *rangeValue.Min
-	}
-	maxValue := ""
-	if rangeValue.Max != nil {
-		maxValue = *rangeValue.Max
-	}
-	typedValue, err := MapRangeValueByType(valueType, minValue, maxValue)
-	if err != nil {
-		return err
-	}
-
-	updateRecord := goqu.Record{
-		"min_text":     typedValue.MinText,
-		"max_text":     typedValue.MaxText,
-		"min_num":      typedValue.MinNumeric,
-		"max_num":      typedValue.MaxNumeric,
-		"min_time":     typedValue.MinTime,
-		"max_time":     typedValue.MaxTime,
-		"min_date":     typedValue.MinDate,
-		"max_date":     typedValue.MaxDate,
-		"min_datetime": typedValue.MinDateTime,
-		"max_datetime": typedValue.MaxDateTime,
-	}
-
-	// Build and execute update query
-	updateQuery, updateArgs, err := dialect.Update("range_element").
-		Set(updateRecord).
-		Where(goqu.C("id").Eq(elementID)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(updateQuery, updateArgs...)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return execValueOnlyUpdate(ctx, tx, "range_element", record, update.ElementID, "SMREPO-UPDRANGEVALONLY")
 }
 
 // Delete removes a Range submodel element from the database.
@@ -270,15 +193,7 @@ func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element ty
 		return nil, common.NewErrBadRequest("submodelElement is not of type Range")
 	}
 
-	minVal := ""
-	maxVal := ""
-	if rangeElem.Min() != nil {
-		minVal = *rangeElem.Min()
-	}
-	if rangeElem.Max() != nil {
-		maxVal = *rangeElem.Max()
-	}
-	typedValue, err := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+	typedValue, err := MapRangeValueByType(rangeElem.ValueType(), rangeElem.Min(), rangeElem.Max())
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +230,7 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) (goqu.Reco
 			// For PUT, both min and max must be provided
 			panic("Both 'Min' and 'Max' values must be provided for Range element in PUT operation")
 		}
-		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
+		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), rangeElem.Min(), rangeElem.Max())
 		if err != nil {
 			return nil, err
 		}
@@ -330,27 +245,19 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) (goqu.Reco
 		updateRecord["min_datetime"] = typedValue.MinDateTime
 		updateRecord["max_datetime"] = typedValue.MaxDateTime
 	} else { //nolint:all - elseif: can replace 'else {if cond {}}' with 'else if cond {}' -> this would make the code less readable and has differing semantics
-		// PATCH: Only update if minVal/max are provided
-		minVal := ""
-		if rangeElem.Min() != nil {
-			minVal = *rangeElem.Min()
-		}
-		maxVal := ""
-		if rangeElem.Max() != nil {
-			maxVal = *rangeElem.Max()
-		}
-		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+		// PATCH: Only update bounds that are provided with a storable value
+		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), rangeElem.Min(), rangeElem.Max())
 		if err != nil {
 			return nil, err
 		}
-		if minVal != "" {
+		if isStorableLexical(rangeElem.ValueType(), rangeElem.Min()) {
 			updateRecord["min_text"] = typedValue.MinText
 			updateRecord["min_num"] = typedValue.MinNumeric
 			updateRecord["min_time"] = typedValue.MinTime
 			updateRecord["min_date"] = typedValue.MinDate
 			updateRecord["min_datetime"] = typedValue.MinDateTime
 		}
-		if maxVal != "" {
+		if isStorableLexical(rangeElem.ValueType(), rangeElem.Max()) {
 			updateRecord["max_text"] = typedValue.MaxText
 			updateRecord["max_num"] = typedValue.MaxNumeric
 			updateRecord["max_time"] = typedValue.MaxTime

@@ -30,6 +30,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -139,92 +140,10 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly updates only the value of an existing AnnotatedRelationshipElement submodel element identified by its idShort or path.
-// It updates the 'first' and 'second' references based on the provided value.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type gen.AnnotatedRelationshipElementValue)
-//
-// Returns:
-//   - error: An error if the update operation fails
-func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	elems, err := buildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
-	if err != nil {
-		return err
-	}
-
-	// Update 'first' and 'second' references for AnnotatedRelationshipElement
-	if areValue, ok := valueOnly.(gen.AnnotatedRelationshipElementValue); ok {
-		dialect := goqu.Dialect("postgres")
-		smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return common.NewErrNotFound("submodel not found")
-			}
-			return err
-		}
-
-		// Get the element ID from the database using goqu
-		var elementID int
-		idQuery, args, err := dialect.From("submodel_element").
-			Select("id").
-			Where(goqu.Ex{
-				"idshort_path": idShortOrPath,
-				"submodel_id":  smDbID,
-			}).ToSQL()
-		if err != nil {
-			return err
-		}
-
-		err = tx.QueryRow(idQuery, args...).Scan(&elementID)
-		if err != nil {
-			return err
-		}
-
-		// Marshal the references to JSON
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		var firstRef, secondRef *string
-
-		firstRefJson, err := json.Marshal(areValue.First)
-		if err != nil {
-			return err
-		}
-		firstRefStr := string(firstRefJson)
-		firstRef = &firstRefStr
-
-		secondRefJson, err := json.Marshal(areValue.Second)
-		if err != nil {
-			return err
-		}
-		secondRefStr := string(secondRefJson)
-		secondRef = &secondRefStr
-
-		// Update the references in the database using goqu
-		updateQuery, updateArgs, err := dialect.Update("annotated_relationship_element").
-			Set(goqu.Record{
-				"first":  firstRef,
-				"second": secondRef,
-			}).
-			Where(goqu.C("id").Eq(elementID)).
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		_, err = tx.Exec(updateQuery, updateArgs...)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID, tx)
-	if err != nil {
-		return err
-	}
-
-	return nil
+// UpdateValueOnly stores the decoded ValueOnly references of an AnnotatedRelationshipElement.
+// Absent references stay untouched; annotations are applied as separate updates.
+func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	return updateValueOnlyRelationship(ctx, tx, "annotated_relationship_element", update, "SMREPO-UPDARELVALONLY")
 }
 
 // Delete removes an AnnotatedRelationshipElement identified by its idShort or path from the database.

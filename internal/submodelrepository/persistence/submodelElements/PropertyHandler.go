@@ -32,8 +32,8 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -174,91 +174,25 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly updates only the value of an existing Property submodel element identified by its idShort or path.
-// It categorizes the new value based on the property's value type and updates the corresponding database columns.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type gen.SubmodelElementValue)
-//
-// Returns:
-//   - error: An error if the update operation fails or if the valueOnly type is incorrect
-func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound(fmt.Sprintf("Submodel with ID %s not found", submodelID))
-		}
-		return err
-	}
-
-	var elementID int
-	goquQuery, args, err := goqu.From("submodel_element").
-		Select("id").
-		Where(goqu.Ex{
-			"submodel_id":  smDbID,
-			"idshort_path": idShortOrPath,
-		}).ToSQL()
+// UpdateValueOnly stores a decoded ValueOnly Property value in the typed column of its valueType.
+// A nil value clears the stored value.
+func (p PostgreSQLPropertyHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	patch, err := valueOnlyPatchAs[gen.PropertyValue](update)
 	if err != nil {
 		return err
 	}
-
-	row := tx.QueryRow(goquQuery, args...)
-	err = row.Scan(&elementID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound(fmt.Sprintf("Property element not found for the given idShortOrPath %s", idShortOrPath))
-		}
-		return err
-	}
-
-	goquQuery, args, err = goqu.From("property_element").Select("value_type").Where(goqu.C("id").Eq(elementID)).ToSQL()
+	typedValue, err := MapValueByType(patch.ValueType, patch.Value)
 	if err != nil {
 		return err
 	}
-	var valueType types.DataTypeDefXSD
-	row = tx.QueryRow(goquQuery, args...)
-	err = row.Scan(&valueType)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound(fmt.Sprintf("Property element not found for the given idShortOrPath %s", idShortOrPath))
-		}
-		return err
-	}
-	// Update based on valueType using centralized value type mapper
-	propertyValue, ok := valueOnly.(gen.PropertyValue)
-	if !ok {
-		return common.NewErrBadRequest("valueOnly is not of type PropertyValue")
-	}
-
-	typedValue, err := MapValueByType(valueType, &propertyValue.Value)
-	if err != nil {
-		return err
-	}
-
-	dialect := goqu.Dialect("postgres")
-	updateQuery, updateArgs, err := dialect.Update("property_element").
-		Set(goqu.Record{
-			"value_text":     typedValue.Text,
-			"value_num":      typedValue.Numeric,
-			"value_bool":     typedValue.Boolean,
-			"value_time":     typedValue.Time,
-			"value_date":     typedValue.Date,
-			"value_datetime": typedValue.DateTime,
-		}).
-		Where(goqu.C("id").Eq(elementID)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(updateQuery, updateArgs...)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return execValueOnlyUpdate(ctx, tx, "property_element", goqu.Record{
+		"value_text":     typedValue.Text,
+		"value_num":      typedValue.Numeric,
+		"value_bool":     typedValue.Boolean,
+		"value_time":     typedValue.Time,
+		"value_date":     typedValue.Date,
+		"value_datetime": typedValue.DateTime,
+	}, update.ElementID, "SMREPO-UPDPROPVALONLY")
 }
 
 // Delete removes a Property submodel element from the database.

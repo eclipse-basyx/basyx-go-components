@@ -1202,7 +1202,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdValueOn
 }
 
 // PatchSubmodelByIdValueOnlyAasRepository - Updates the values of the Submodel
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelByIdValueOnlyAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, body map[string]any, level string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelByIdValueOnlyAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, body map[string]json.RawMessage, level string) (gen.ImplResponse, error) {
 	const operation = "PatchSubmodelByIdValueOnlyAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
@@ -1217,17 +1217,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelByIdValue
 		return response, ensureErr
 	}
 
-	bodyJSON, marshalErr := json.Marshal(body)
-	if marshalErr != nil {
-		return newAPIErrorResponse(marshalErr, http.StatusBadRequest, operation, "InvalidSubmodelValue"), nil
-	}
-
-	submodelValue := make(gen.SubmodelValue)
-	if unmarshalErr := json.Unmarshal(bodyJSON, &submodelValue); unmarshalErr != nil {
-		return newAPIErrorResponse(unmarshalErr, http.StatusBadRequest, operation, "InvalidSubmodelValue"), nil
-	}
-
-	return s.submodelAPI.PatchSubmodelByIDValueOnly(ctx, submodelIdentifier, submodelValue, level)
+	return s.submodelAPI.PatchSubmodelByIDValueOnly(ctx, submodelIdentifier, body, level)
 }
 
 // GetSubmodelByIdReferenceAasRepository - Returns the Submodel as a Reference
@@ -1566,7 +1556,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelElementByPa
 }
 
 // PatchSubmodelElementValueByPathValueOnly - Updates the value of an existing submodel element value at a specified path within submodel elements hierarchy
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelElementValueByPathValueOnly(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, submodelElementValue gen.SubmodelElementValue, level string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelElementValueByPathValueOnly(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, submodelElementValue json.RawMessage, level string) (gen.ImplResponse, error) {
 	const operation = "PatchSubmodelElementValueByPathValueOnly"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {

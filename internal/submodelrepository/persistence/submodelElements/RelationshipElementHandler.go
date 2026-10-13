@@ -31,8 +31,8 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -148,81 +148,9 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly updates only the value fields of an existing RelationshipElement.
-//
-// This method allows for partial updates of a RelationshipElement, specifically targeting
-// the "first" and "second" references without modifying other base element properties.
-// It constructs an update record dynamically based on which fields are provided in
-// the valueOnly parameter.
-//
-// Parameters:
-//   - submodelID: ID of the parent submodel
-//   - idShortOrPath: idShort or hierarchical path to the element to update
-//   - valueOnly: The RelationshipElementValue containing fields to update
-//
-// Returns:
-//   - error: An error if the update operation fails
-func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	relElemVal, ok := valueOnly.(gen.RelationshipElementValue)
-	if !ok {
-		return common.NewErrBadRequest("valueOnly is not of type RelationshipElementValue")
-	}
-
-	dialect := goqu.Dialect("postgres")
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return err
-	}
-
-	// Build update record with only the fields that are set
-	updateRecord := goqu.Record{}
-
-	// check if first is set (it is map[string]interface{} so we check for nil)
-	if relElemVal.First != nil {
-		firstRefByte, err := json.Marshal(relElemVal.First)
-		if err != nil {
-			return err
-		}
-		updateRecord["first"] = string(firstRefByte)
-	}
-
-	if relElemVal.Second != nil {
-		secondRefByte, err := json.Marshal(relElemVal.Second)
-		if err != nil {
-			return err
-		}
-		updateRecord["second"] = string(secondRefByte)
-	}
-
-	// If nothing to update, return early
-	if len(updateRecord) == 0 {
-		return nil
-	}
-
-	query, args, err := dialect.Update("relationship_element").
-		Set(updateRecord).
-		Where(goqu.I("id").Eq(
-			dialect.From("submodel_element").
-				Select("id").
-				Where(goqu.Ex{
-					"submodel_id":  smDbID,
-					"idshort_path": idShortOrPath,
-				}),
-		)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(query, args...)
-	if err != nil {
-		return common.NewInternalServerError(fmt.Sprintf("failed to execute update for RelationshipElement: %s", err.Error()))
-	}
-	return nil
+// UpdateValueOnly stores the decoded ValueOnly references of a RelationshipElement; absent references stay untouched.
+func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	return updateValueOnlyRelationship(ctx, tx, "relationship_element", update, "SMREPO-UPDRELVALONLY")
 }
 
 // Delete removes a RelationshipElement identified by its idShort or path.

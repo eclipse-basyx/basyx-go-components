@@ -102,46 +102,6 @@ func GetSMEHandlerByModelType(modelType types.ModelType, db *sql.DB) (PostgreSQL
 	return GetHandlerFromRegistry(modelType, db)
 }
 
-// UpdateNestedElementsValueOnly updates nested submodel elements based on value-only patches.
-//
-// Parameters:
-//   - db: Database connection
-//   - elems: List of elements to process
-//   - idShortOrPath: idShort or hierarchical path of the root element
-//   - submodelID: ID of the parent submodel
-//
-// Returns:
-//   - error: Error if update fails
-func UpdateNestedElementsValueOnly(db *sql.DB, elems []ValueOnlyElementsToProcess, idShortOrPath string, submodelID string, tx *sql.Tx) error {
-	for _, elem := range elems {
-		if elem.IdShortPath == idShortOrPath {
-			continue // Skip the root element as it's already processed
-		}
-		modelType := elem.Element.GetModelType()
-		if modelType == types.ModelTypeFile {
-			// We have to check the database because File could be ambiguous between File and Blob
-			actual, err := GetModelTypeByIdShortPathAndSubmodelIDTx(tx, submodelID, elem.IdShortPath)
-			if err != nil {
-				return err
-			}
-			if actual == nil {
-				return common.NewErrNotFound("Submodel-Element ID-Short: " + elem.IdShortPath)
-			}
-
-			modelType = *actual
-		}
-		handler, err := GetSMEHandlerByModelType(modelType, db)
-		if err != nil {
-			return err
-		}
-		err = handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element, tx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // UpdateNestedElements updates nested submodel elements based on value-only patches.
 //
 // Parameters:

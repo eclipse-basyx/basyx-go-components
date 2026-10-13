@@ -246,7 +246,7 @@ func TestSubmodelRepositoryEventFeedCoversScopedAndFileMutations(t *testing.T) {
 		{"patch element", http.MethodPatch, "/submodel-elements/Added", map[string]any{"modelType": "Property", "valueType": "xs:string", "value": "three"}, http.StatusNoContent},
 		{"put element", http.MethodPut, "/submodel-elements/Added", map[string]any{"modelType": "Property", "idShort": "Added", "valueType": "xs:string", "value": "four"}, http.StatusNoContent},
 		{"delete element", http.MethodDelete, "/submodel-elements/Added", nil, http.StatusNoContent},
-		{"patch submodel value", http.MethodPatch, "/$value", map[string]any{"Counter": "2"}, http.StatusNoContent},
+		{"patch submodel value", http.MethodPatch, "/$value", map[string]any{"Counter": 2}, http.StatusNoContent},
 	}
 	for i, update := range updates {
 		t.Run(update.name, func(t *testing.T) {

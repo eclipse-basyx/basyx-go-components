@@ -131,7 +131,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertDPPSectionPathEquals(t, readBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
 	assertDPPSectionPathEquals(t, readBody, lifecycleTechnicalDataSpec, "manual.url", "https://example.test/manual.pdf")
 	assertDPPSectionPathEquals(t, readBody, lifecycleTechnicalDataSpec, "manual.resourceTitle", "User Manual")
-	assertDPPSectionPathEquals(t, readBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4180.75")
+	assertDPPSectionPathEquals(t, readBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", json.Number("4180.75"))
 
 	createdVersionDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	createdVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, createdVersionDate, "compressed"), nil, http.StatusOK)
@@ -188,7 +188,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 
 	dimensionWidthPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "dimensions", "widthMm"))
 	updatedDimensionWidth := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+dimensionWidthPath, 121, http.StatusOK)
-	assertScalarEquals(t, updatedDimensionWidth, "121")
+	assertScalarEquals(t, updatedDimensionWidth, json.Number("121"))
 	doJSONAny(
 		t, client, http.MethodGet,
 		aasBaseURL+"/submodel-descriptors/"+common.EncodeString(technicalDataSubmodelID), nil, http.StatusNotFound,
@@ -206,7 +206,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 		},
 	}, http.StatusOK)
 	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme Updated GmbH")
-	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "warrantyMonths", "36")
+	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "warrantyMonths", json.Number("36"))
 	assertSubmodelIdentifierExists(t, databasePort, importedMetadataID, true)
 	assertSubmodelIdentifierExists(t, databasePort, generatedMetadataID, false)
 	assertRegistrySynchronization(t, client, aasBaseURL, dppID, productID)
@@ -235,7 +235,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 
 	carbonPath := encodedPathParam(dppElementJSONPath(lifecycleCarbonFootprintSpec, "PcfCo2eq"))
 	updatedCarbonBody := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+carbonPath, 4200.5, http.StatusOK)
-	assertScalarEquals(t, updatedCarbonBody, "4200.5")
+	assertScalarEquals(t, updatedCarbonBody, json.Number("4200.5"))
 
 	energyClassPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "energyClass"))
 	updatedElementBody := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+energyClassPath, "B", http.StatusOK)
@@ -251,7 +251,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	readAfterElementUpdate := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleTechnicalDataSpec, "energyClass", "B")
 	assertDPPSectionArrayValue(t, readAfterElementUpdate, lifecycleTechnicalDataSpec, "serialNumbers", 0, "SN-UPDATED")
-	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4200.5")
+	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleCarbonFootprintSpec, "PcfCo2eq", json.Number("4200.5"))
 
 	carbonFootprintSubmodelID := submodelIDBySemanticID(t, databasePort, dppID, lifecycleCarbonFootprintSpec)
 	beforeCarbonRemovalDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
@@ -265,7 +265,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	preCarbonRemovalBody := doJSON(
 		t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforeCarbonRemovalDate, "compressed"), nil, http.StatusOK,
 	)
-	assertDPPSectionPathEquals(t, preCarbonRemovalBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4200.5")
+	assertDPPSectionPathEquals(t, preCarbonRemovalBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", json.Number("4200.5"))
 
 	beforeDeleteDate := latestDPPHistoryTimestamp(t, databasePort, dppID)
 	deletionFixture := prepareDPPDeletionRegression(
@@ -914,7 +914,7 @@ func assertJSONFieldMissing(t *testing.T, body map[string]any, field string) {
 	}
 }
 
-func assertDPPSectionPathEquals(t *testing.T, body map[string]any, sectionName string, path string, expected string) {
+func assertDPPSectionPathEquals(t *testing.T, body map[string]any, sectionName string, path string, expected any) {
 	t.Helper()
 	section, ok := body[sectionName].(map[string]any)
 	if !ok {
@@ -925,7 +925,7 @@ func assertDPPSectionPathEquals(t *testing.T, body map[string]any, sectionName s
 		t.Fatal(err)
 	}
 	if value != expected {
-		t.Fatalf("%s.%s = %#v, want %q", sectionName, path, value, expected)
+		t.Fatalf("%s.%s = %#v, want %#v", sectionName, path, value, expected)
 	}
 }
 
@@ -1049,7 +1049,7 @@ func assertDataElementObjectType(t *testing.T, body any, elementID string, expec
 	}
 }
 
-func assertScalarEquals(t *testing.T, body any, expected string) {
+func assertScalarEquals(t *testing.T, body any, expected any) {
 	t.Helper()
 	if body == expected {
 		return
@@ -1059,20 +1059,20 @@ func assertScalarEquals(t *testing.T, body any, expected string) {
 		value, ok := object["value"]
 		if ok {
 			if value != expected {
-				t.Fatalf("element value = %#v, want %q", value, expected)
+				t.Fatalf("element value = %#v, want %#v", value, expected)
 			}
 			return
 		}
 		if len(object) == 1 {
 			for _, onlyValue := range object {
 				if onlyValue != expected {
-					t.Fatalf("element response = %#v, want %q", onlyValue, expected)
+					t.Fatalf("element response = %#v, want %#v", onlyValue, expected)
 				}
 				return
 			}
 		}
 	}
-	t.Fatalf("element response = %#v, want scalar %q", body, expected)
+	t.Fatalf("element response = %#v, want scalar %#v", body, expected)
 }
 
 func assertStringSliceContains(t *testing.T, value any, expected string) {

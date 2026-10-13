@@ -57,7 +57,7 @@ func composeHeader(metadata types.ISubmodel) (dppDocument, error) {
 		return nil, fmt.Errorf("DPP-COMPOSE-METAMARSHAL marshal metadata value-only: %w", err)
 	}
 	var header dppDocument
-	if err := json.Unmarshal(raw, &header); err != nil {
+	if err := common.DecodeJSONPreservingNumbers(raw, &header); err != nil {
 		return nil, fmt.Errorf("DPP-COMPOSE-METAUNMARSHAL unmarshal metadata value-only: %w", err)
 	}
 	normalizeValueOnly(header)
@@ -78,7 +78,7 @@ func compressedContentWithContext(submodel types.ISubmodel, serializationContext
 		return nil, fmt.Errorf("DPP-CONTENT-MARSHAL marshal submodel value-only: %w", err)
 	}
 	var content any
-	if err := json.Unmarshal(raw, &content); err != nil {
+	if err := common.DecodeJSONPreservingNumbers(raw, &content); err != nil {
 		return nil, fmt.Errorf("DPP-CONTENT-UNMARSHAL unmarshal submodel value-only: %w", err)
 	}
 	if err := enrichCompressedValue(content, submodel.SubmodelElements(), "", serializationContext); err != nil {
@@ -97,7 +97,7 @@ func compressedElementValueWithContext(element types.ISubmodelElement, idShortPa
 		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED-MARSHAL marshal element value-only: %w", err)
 	}
 	var content any
-	if err := json.Unmarshal(raw, &content); err != nil {
+	if err := common.DecodeJSONPreservingNumbers(raw, &content); err != nil {
 		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED-UNMARSHAL unmarshal element value-only: %w", err)
 	}
 	if err := enrichCompressedElementValue(content, element, idShortPath, serializationContext); err != nil {

@@ -15,6 +15,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1602,7 +1603,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 // PatchSubmodelByIDValueOnly - Updates the values of an existing Submodel
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, body gen.SubmodelValue, level string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, body map[string]json.RawMessage, level string) (gen.ImplResponse, error) {
 	_ = level
 	const operation = "PatchSubmodelByIDValueOnly"
 
@@ -2376,7 +2377,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 // PatchSubmodelElementByPathValueOnlySubmodelRepo - Updates the value of an existing SubmodelElement
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElementValue gen.SubmodelElementValue, level string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElementValue json.RawMessage, level string) (gen.ImplResponse, error) {
 	_ = level
 	const operation = "PatchSubmodelElementByPathValueOnlySubmodelRepo"
 

@@ -27,6 +27,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
@@ -135,90 +136,28 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly updates only the value of an existing Entity submodel element identified by its idShort or path.
-// It updates the entity type, global asset ID, and specific asset IDs based on the provided value.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type gen.EntityValue)
-//
-// Returns:
-//   - error: An error if the update operation fails
-func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	entityValueOnly, ok := valueOnly.(gen.EntityValue)
-	if !ok {
-		return common.NewErrBadRequest("valueOnly is not of type EntityValue")
-	}
-	elems, err := buildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+// UpdateValueOnly stores the decoded ValueOnly attributes of an Entity; absent attributes stay untouched.
+// Statements are applied as separate updates.
+func (p PostgreSQLEntityHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	patch, err := valueOnlyPatchAs[gen.EntityValuePatch](update)
 	if err != nil {
 		return err
 	}
-	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID, tx)
-	if err != nil {
-		return err
+	record := goqu.Record{}
+	if patch.EntityType != nil {
+		record["entity_type"] = int(*patch.EntityType)
 	}
-
-	dialect := goqu.Dialect("postgres")
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return err
+	if patch.GlobalAssetID != nil {
+		record["global_asset_id"] = *patch.GlobalAssetID
 	}
-
-	var elementID int
-	query, args, err := dialect.From("submodel_element").
-		InnerJoin(
-			goqu.T("entity_element"),
-			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("entity_element.id"))),
-		).
-		Select("submodel_element.id").
-		Where(
-			goqu.C("idshort_path").Eq(idShortOrPath),
-			goqu.C("submodel_id").Eq(smDbID),
-		).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	err = tx.QueryRow(query, args...).Scan(&elementID)
-	if err != nil {
-		return err
-	}
-
-	var specificAssetIDs string
-	if entityValueOnly.SpecificAssetIds != nil {
-		json := jsoniter.ConfigCompatibleWithStandardLibrary
-		specificAssetIDsBytes, err := json.Marshal(entityValueOnly.SpecificAssetIds)
+	if patch.SpecificAssetIDs != nil {
+		specificAssetIDs, err := serializeIClassSliceToJSON(toIClassSlice(*patch.SpecificAssetIDs), "SMREPO-UPDENTITYVALONLY-SPECIFICASSETIDS")
 		if err != nil {
 			return err
 		}
-		specificAssetIDs = string(specificAssetIDsBytes)
-	} else {
-		specificAssetIDs = "[]"
+		record["specific_asset_ids"] = specificAssetIDs
 	}
-
-	updateQuery, args, err := dialect.Update("entity_element").
-		Set(
-			goqu.Record{
-				"entity_type":        entityValueOnly.EntityType,
-				"global_asset_id":    entityValueOnly.GlobalAssetID,
-				"specific_asset_ids": specificAssetIDs,
-			},
-		).
-		Where(goqu.C("id").Eq(elementID)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(updateQuery, args...)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return execValueOnlyUpdate(ctx, tx, "entity_element", record, update.ElementID, "SMREPO-UPDENTITYVALONLY")
 }
 
 // Delete removes an Entity submodel element from the database.

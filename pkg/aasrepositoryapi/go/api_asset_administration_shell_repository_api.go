@@ -1135,10 +1135,13 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdVa
 		return
 	}
 
-	var bodyParam map[string]any
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&bodyParam); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	bodyParam, err := model.ParseSubmodelValueOnlyPayload(body)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -2007,7 +2010,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElemen
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	submodelElementValueParam, err := model.UnmarshalSubmodelElementValue(bodyBytes)
+	submodelElementValueParam, err := model.ParseValueOnlyPayload(bodyBytes)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return

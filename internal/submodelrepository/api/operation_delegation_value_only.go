@@ -160,12 +160,7 @@ func applyValueOnlyToElementJSON(element map[string]any, value any) error {
 
 	switch modelType {
 	case "Property":
-		propertyValue, err := operationScalarInput(element, value)
-		if err != nil {
-			return err
-		}
-		element["value"] = propertyValue
-		return nil
+		return applyOperationScalarValue(element, "value", value)
 	case "MultiLanguageProperty":
 		return applyMultiLanguagePropertyValue(element, value)
 	case "Range":

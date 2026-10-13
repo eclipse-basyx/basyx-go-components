@@ -203,80 +203,47 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly updates only the value of an existing File submodel element identified by its idShort or path.
-// It processes the new value and updates nested elements accordingly.
-//
-// Parameters:
-//   - submodelID: The ID of the parent submodel
-//   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type gen.FileValue)
-//
-// Returns:
-//   - error: An error if the update operation fails
-func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
-	fileValueOnly, ok := valueOnly.(gen.FileValue)
-	if !ok {
-		return common.NewErrBadRequest("valueOnly is not of type FileValue")
-	}
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+// UpdateValueOnly stores the decoded ValueOnly content type and path of a File.
+// Stored file content is released when the path changes; absent fields stay untouched.
+func (p PostgreSQLFileHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
+	patch, err := valueOnlyPatchAs[gen.FileValuePatch](update)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return fmt.Errorf("failed to get submodel database ID: %w", err)
+		return err
 	}
+	record := goqu.Record{}
+	if patch.ContentType != nil {
+		record["content_type"] = *patch.ContentType
+	}
+	if patch.Value != nil {
+		if err = releaseReplacedFileContent(ctx, tx, update.ElementID, *patch.Value); err != nil {
+			return err
+		}
+		record["value"] = *patch.Value
+	}
+	return execValueOnlyUpdate(ctx, tx, "file_element", record, update.ElementID, "SMREPO-UPDFILEVALONLY")
+}
 
+func releaseReplacedFileContent(ctx context.Context, tx *sql.Tx, elementID int64, newValue string) error {
 	dialect := goqu.Dialect("postgres")
-
-	var elementID int
-	var currentValue sql.NullString
-	query, args, err := dialect.From("submodel_element").
-		InnerJoin(
-			goqu.T("file_element"),
-			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id"))),
-		).
-		Select("submodel_element.id", "file_element.value").
-		Where(
-			goqu.C("idshort_path").Eq(idShortOrPath),
-			goqu.C("submodel_id").Eq(submodelDatabaseID),
-		).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	err = tx.QueryRow(query, args...).Scan(&elementID, &currentValue)
-	if err != nil {
-		return err
-	}
-
-	if currentValue.String != fileValueOnly.Value {
-		if err = deleteLegacyFileData(tx, dialect, int64(elementID)); err != nil {
-			return err
-		}
-		if err = deleteManagedFileReference(tx, int64(elementID)); err != nil {
-			return err
-		}
-	}
-
-	// Build the update query
-	updateQuery, args, err := dialect.Update("file_element").
-		Set(goqu.Record{
-			"content_type": fileValueOnly.ContentType,
-			"value":        fileValueOnly.Value,
-		}).
+	query, args, err := dialect.From("file_element").
+		Select("value").
 		Where(goqu.C("id").Eq(elementID)).
+		Prepared(true).
 		ToSQL()
 	if err != nil {
-		return fmt.Errorf("failed to build update query: %w", err)
+		return common.NewInternalServerError("SMREPO-UPDFILEVALONLY-BUILDSELECT " + err.Error())
 	}
-
-	_, err = tx.Exec(updateQuery, args...)
-	if err != nil {
-		return common.NewInternalServerError(fmt.Sprintf("failed to execute update query: %s", err))
+	var currentValue sql.NullString
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&currentValue); err != nil {
+		return common.NewInternalServerError("SMREPO-UPDFILEVALONLY-EXECSELECT " + err.Error())
 	}
-
-	return nil
+	if currentValue.String == newValue {
+		return nil
+	}
+	if err = deleteLegacyFileData(tx, dialect, elementID); err != nil {
+		return err
+	}
+	return deleteManagedFileReference(tx, elementID)
 }
 
 // Delete removes a File submodel element from the database.

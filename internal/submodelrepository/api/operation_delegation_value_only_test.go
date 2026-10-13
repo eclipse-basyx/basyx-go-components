@@ -46,8 +46,8 @@ func TestOperationRequestFromValueOnlyUsesDeclarationsAndPreservesTemplates(t *t
 	operation.SetInoutputVariables([]types.IOperationVariable{inoutput})
 
 	request, err := operationRequestFromValueOnly(operation, gen.OperationRequestValueOnly{
-		InputArguments:        map[string]any{"second": "2", "first": "1"},
-		InoutputArguments:     map[string]any{"accumulator": "3"},
+		InputArguments:        map[string]any{"second": json.Number("2"), "first": json.Number("1")},
+		InoutputArguments:     map[string]any{"accumulator": json.Number("3")},
 		ClientTimeoutDuration: "PT5S",
 	})
 	require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestOperationRequestFromValueOnlyForwardsOnlySuppliedArguments(t *testing.T
 	})
 
 	request, err := operationRequestFromValueOnly(operation, gen.OperationRequestValueOnly{
-		InputArguments: map[string]any{"second": "2"},
+		InputArguments: map[string]any{"second": json.Number("2")},
 	})
 	require.NoError(t, err)
 	require.Equal(t, []string{"second"}, operationVariableNames(t, request.InputArguments))
@@ -315,6 +315,9 @@ func TestOperationValueOnlyRejectsInvalidScalarTypes(t *testing.T) {
 		{"number for string", `{"modelType":"Property","valueType":"xs:string"}`, `3`},
 		{"number for boolean", `{"modelType":"Property","valueType":"xs:boolean"}`, `1`},
 		{"invalid lexical integer", `{"modelType":"Property","valueType":"xs:int"}`, `"invalid"`},
+		{"infinity for decimal", `{"modelType":"Property","valueType":"xs:decimal"}`, `"INF"`},
+		{"out of range string for integer", `{"modelType":"Property","valueType":"xs:int"}`, `"2147483648"`},
+		{"word for boolean", `{"modelType":"Property","valueType":"xs:boolean"}`, `"yes"`},
 		{"unknown empty child", `{"modelType":"SubmodelElementCollection"}`, `{"unknown":3}`},
 		{"undeclared list item", `{"modelType":"SubmodelElementList","typeValueListElement":"Property"}`, `[3]`},
 	} {
@@ -324,6 +327,27 @@ func TestOperationValueOnlyRejectsInvalidScalarTypes(t *testing.T) {
 			_, err := operationVariablesFromValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, test.declaration)}, supplied.InputArguments, "inputArguments")
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "SMREPO-OPVALREQ-")
+		})
+	}
+}
+
+func TestOperationValueOnlyAcceptsLexicalStringsForNumericAndBooleanTypes(t *testing.T) {
+	for _, test := range []struct{ name, declaration, value, expected string }{
+		{"integer", `{"modelType":"Property","valueType":"xs:int"}`, `"3"`, `3`},
+		{"boolean", `{"modelType":"Property","valueType":"xs:boolean"}`, `"true"`, `true`},
+		{"double infinity", `{"modelType":"Property","valueType":"xs:double"}`, `"INF"`, `"INF"`},
+		{"range", `{"modelType":"Range","valueType":"xs:int"}`, `{"min":"1","max":10}`, `{"min":1,"max":10}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var supplied gen.OperationRequestValueOnly
+			require.NoError(t, json.Unmarshal([]byte(`{"inputArguments":{"arg":`+test.value+`}}`), &supplied))
+			arguments, err := operationVariablesFromValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, test.declaration)}, supplied.InputArguments, "inputArguments")
+			require.NoError(t, err)
+			result, err := operationResultToValueOnly(arguments)
+			require.NoError(t, err)
+			actual, err := json.Marshal(result["outputArguments"].(map[string]any)["arg"])
+			require.NoError(t, err)
+			require.JSONEq(t, test.expected, string(actual))
 		})
 	}
 }
@@ -356,11 +380,14 @@ func TestOperationValueOnlyEmptyNamedFields(t *testing.T) {
 }
 
 func TestOperationValueOnlyRejectsInvalidDelegatedScalar(t *testing.T) {
-	for _, declaration := range []string{
-		`{"modelType":"Property","valueType":"xs:int","value":"not-an-int"}`,
-		`{"modelType":"Property","valueType":"xs:double","value":"INF"}`,
-	} {
-		_, err := operationResultToValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, declaration)})
-		require.ErrorContains(t, err, "SMREPO-OPVALRES-")
-	}
+	_, err := operationResultToValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, `{"modelType":"Property","valueType":"xs:int","value":"not-an-int"}`)})
+	require.ErrorContains(t, err, "SMREPO-OPVALRES-")
+}
+
+func TestOperationValueOnlyRendersNonFiniteDelegatedDoubleAsString(t *testing.T) {
+	result, err := operationResultToValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, `{"modelType":"Property","valueType":"xs:double","value":"INF"}`)})
+	require.NoError(t, err)
+	actual, err := json.Marshal(result["outputArguments"].(map[string]any)["arg"])
+	require.NoError(t, err)
+	require.JSONEq(t, `"INF"`, string(actual))
 }
