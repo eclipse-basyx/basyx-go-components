@@ -73,38 +73,62 @@ func TestEnvironmentIdentifiableAuthorization(t *testing.T) {
 	t.Run("update formula checks both states and returns 403 through wrapper", func(t *testing.T) { checkEnvironmentUpdateStates(t, admin, editor, id) })
 	t.Run("allowed earlier objects survive a later denial", func(t *testing.T) { checkEnvironmentPartialImport(t, admin, editor, id) })
 	t.Run("AASX binaries follow visible owners and references", func(t *testing.T) { checkEnvironmentBinaryVisibility(t, admin, editor, id) })
-	t.Run("pagination retains every permitted submodel", func(t *testing.T) { checkEnvironmentPagination(t, admin, editor, id) })
+	t.Run("AASX attachment writes use binary existence", func(t *testing.T) { checkEnvironmentAttachmentWriteRights(t, admin, editor, id) })
+	t.Run("explicit selection retains every permitted submodel", func(t *testing.T) { checkEnvironmentSelection(t, admin, editor, id) })
 }
 
 func checkEnvironmentTypeGrants(t *testing.T, admin, editor, id string) {
 	t.Helper()
-	for scope, collection := range map[string]string{"aas": "assetAdministrationShells", "sm": "submodels", "cd": "conceptDescriptions"} {
+	for _, scope := range []string{"aas", "sm", "cd"} {
 		for _, identifier := range []string{id, "*"} {
 			t.Run(scope+"/"+identifier, func(t *testing.T) {
 				installEnvironmentRules(t, admin, environmentObjectRule(scope, identifier, "READ"))
-				status, body := environmentRequest(t, editor, "/serialization", "application/json")
-				require.Equal(t, http.StatusOK, status, string(body))
-				var result map[string][]map[string]any
-				require.NoError(t, json.Unmarshal(body, &result))
-				for _, key := range []string{"assetAdministrationShells", "submodels", "conceptDescriptions"} {
-					if key != collection {
-						require.Empty(t, result[key], "type grant leaked into %s", key)
-					}
-				}
-				if identifier != "*" {
-					require.Len(t, result[collection], 1)
-					require.Equal(t, id, result[collection][0]["id"])
-				}
+				checkEnvironmentTypeSelection(t, editor, id, scope, "aas", "aasIds", "assetAdministrationShells")
+				checkEnvironmentTypeSelection(t, editor, id, scope, "sm", "submodelIds", "submodels")
 			})
 		}
 	}
+	for _, identifier := range []string{id, "*"} {
+		installEnvironmentRules(t, admin, environmentObjectRule("sm", id, "READ"), environmentObjectRule("cd", identifier, "READ"))
+		query := url.Values{"submodelIds": {common.EncodeString(id)}, "includeConceptDescriptions": {"true"}}
+		status, body := environmentRequest(t, editor, "/serialization?"+query.Encode(), "application/json")
+		require.Equal(t, http.StatusOK, status, string(body))
+		var result map[string][]map[string]any
+		require.NoError(t, json.Unmarshal(body, &result))
+		require.Empty(t, result["assetAdministrationShells"])
+		require.Len(t, result["submodels"], 1)
+		require.Len(t, result["conceptDescriptions"], 1)
+		require.Equal(t, id, result["conceptDescriptions"][0]["id"])
+	}
+}
+
+func checkEnvironmentTypeSelection(t *testing.T, editor, id, grantedScope, requestedScope, parameter, collection string) {
+	t.Helper()
+	query := url.Values{parameter: {common.EncodeString(id)}}
+	status, body := environmentRequest(t, editor, "/serialization?"+query.Encode(), "application/json")
+	if grantedScope != requestedScope {
+		require.Equal(t, http.StatusNotFound, status, string(body))
+		return
+	}
+	require.Equal(t, http.StatusOK, status, string(body))
+	var result map[string][]map[string]any
+	require.NoError(t, json.Unmarshal(body, &result))
+	for _, key := range []string{"assetAdministrationShells", "submodels", "conceptDescriptions"} {
+		if key != collection {
+			require.Empty(t, result[key], "type grant leaked into %s", key)
+		}
+	}
+	require.Len(t, result[collection], 1)
+	require.Equal(t, id, result[collection][0]["id"])
 }
 
 func checkExplicitEnvironmentIdentifiers(t *testing.T, admin, editor, id string) {
 	t.Helper()
 	installEnvironmentRules(t, admin, environmentObjectRule("sm", id, "READ"))
+	status, _ := environmentRequest(t, editor, "/serialization", "application/json")
+	require.Equal(t, http.StatusBadRequest, status)
 	query := url.Values{"submodelIds": {common.EncodeString(id), common.EncodeString(id + ":other")}}
-	status, _ := environmentRequest(t, editor, "/serialization?"+query.Encode(), "application/json")
+	status, _ = environmentRequest(t, editor, "/serialization?"+query.Encode(), "application/json")
 	require.Equal(t, http.StatusNotFound, status)
 	query = url.Values{"aasIds": {common.EncodeString(id)}}
 	status, _ = environmentRequest(t, editor, "/serialization?"+query.Encode(), "application/json")
@@ -118,27 +142,27 @@ func checkEnvironmentFormulaAndFilters(t *testing.T, admin, editor, id string) {
 	rule["FILTERLIST"] = []any{map[string]any{"FRAGMENT": "$sme", "MATCH": true, "CONDITION": equalsQueryCondition("$sme#idShort", "Public")}}
 	installEnvironmentRules(t, admin, rule)
 	for _, accept := range []string{"application/json", "application/xml", "application/aasx+json", "application/aasx+xml"} {
-		for _, query := range []string{"", "?submodelIds=" + common.EncodeString(id)} {
-			status, body := environmentRequest(t, editor, "/serialization"+query, accept)
-			require.Equal(t, http.StatusOK, status, string(body))
-			content := string(body)
-			if strings.Contains(accept, "aasx") {
-				content = environmentPackageContents(t, body)
-			}
-			require.Contains(t, content, id)
-			require.Contains(t, content, "public-value")
-			require.NotContains(t, content, "secret-value")
-			require.NotContains(t, content, id+":other")
+		status, body := environmentRequest(t, editor, "/serialization?submodelIds="+common.EncodeString(id), accept)
+		require.Equal(t, http.StatusOK, status, string(body))
+		content := string(body)
+		if strings.Contains(accept, "aasx") {
+			content = environmentPackageContents(t, body)
 		}
+		require.Contains(t, content, id)
+		require.Contains(t, content, "public-value")
+		require.NotContains(t, content, "secret-value")
+		require.NotContains(t, content, id+":other")
 	}
 	second := environmentObjectRule("sm", id+":other", "READ")
 	installEnvironmentRules(t, admin, rule, second)
-	status, body := environmentRequest(t, editor, "/serialization", "application/json")
+	query := url.Values{"submodelIds": {common.EncodeString(id), common.EncodeString(id + ":other")}}
+	status, body := environmentRequest(t, editor, "/serialization?"+query.Encode(), "application/json")
 	require.Equal(t, http.StatusOK, status)
 	var result struct {
 		Submodels []map[string]any `json:"submodels"`
 	}
 	require.NoError(t, json.Unmarshal(body, &result))
+	require.Len(t, result.Submodels, 2)
 	for _, sm := range result.Submodels {
 		serialized, marshalErr := json.Marshal(sm)
 		require.NoError(t, marshalErr)
@@ -188,18 +212,21 @@ func environmentXML(t *testing.T, payload map[string]any) []byte {
 	return buffer.Bytes()
 }
 
-func checkEnvironmentPagination(t *testing.T, admin, editor, id string) {
+func checkEnvironmentSelection(t *testing.T, admin, editor, id string) {
 	t.Helper()
 	installEnvironmentRules(t, admin)
 	models := make([]any, 0, 105)
+	query := url.Values{}
 	for index := range 105 {
-		models = append(models, environmentFixture(fmt.Sprintf("%s:page:%03d", id, index), "Pagination")["submodels"].([]any)[0])
+		modelID := fmt.Sprintf("%s:selection:%03d", id, index)
+		models = append(models, environmentFixture(modelID, "Selection")["submodels"].([]any)[0])
+		query.Add("submodelIds", common.EncodeString(modelID))
 	}
 	requireEnvironmentUpload(t, admin, map[string]any{"submodels": models}, http.StatusOK)
 	rule := environmentObjectRule("sm", "*", "READ")
-	rule["FORMULA"] = equalsQueryCondition("$sm#idShort", "Pagination")
+	rule["FORMULA"] = equalsQueryCondition("$sm#idShort", "Selection")
 	installEnvironmentRules(t, admin, rule)
-	status, body := environmentRequest(t, editor, "/serialization", "application/json")
+	status, body := environmentRequest(t, editor, "/serialization?"+query.Encode(), "application/json")
 	require.Equal(t, http.StatusOK, status, string(body))
 	var result struct {
 		Submodels []struct {
@@ -213,7 +240,7 @@ func checkEnvironmentPagination(t *testing.T, admin, editor, id string) {
 	}
 	require.Len(t, actual, 105)
 	for index := range 105 {
-		require.Contains(t, actual, fmt.Sprintf("%s:page:%03d", id, index))
+		require.Contains(t, actual, fmt.Sprintf("%s:selection:%03d", id, index))
 	}
 }
 
@@ -262,7 +289,7 @@ func checkEnvironmentBinaryVisibility(t *testing.T, admin, editor, id string) {
 	smRule := environmentObjectRule("sm", binaryID, "READ")
 	smRule["FILTER"] = map[string]any{"FRAGMENT": "$sme", "MATCH": true, "CONDITION": equalsQueryCondition("$sme#idShort", "PublicFile")}
 	installEnvironmentRules(t, admin, smRule)
-	status, body = environmentRequest(t, editor, "/serialization", "application/aasx+json")
+	status, body = environmentRequest(t, editor, "/serialization?submodelIds="+common.EncodeString(binaryID), "application/aasx+json")
 	require.Equal(t, http.StatusOK, status, string(body))
 	content := environmentPackageContents(t, body)
 	require.Contains(t, content, "PUBLIC-BINARY")
@@ -272,19 +299,63 @@ func checkEnvironmentBinaryVisibility(t *testing.T, admin, editor, id string) {
 	require.NotContains(t, content, "defaultThumbnail")
 	smRule["FILTER"] = map[string]any{"FRAGMENT": "$sme.SecretFile#value", "CONDITION": map[string]bool{"$boolean": false}}
 	installEnvironmentRules(t, admin, smRule)
-	status, body = environmentRequest(t, editor, "/serialization", "application/aasx+json")
+	status, body = environmentRequest(t, editor, "/serialization?submodelIds="+common.EncodeString(binaryID), "application/aasx+json")
 	require.Equal(t, http.StatusOK, status, string(body))
 	content = environmentPackageContents(t, body)
 	require.Contains(t, content, "PUBLIC-BINARY")
 	require.NotContains(t, content, "SECRET-BINARY")
 	require.NotContains(t, content, "THUMBNAIL-BINARY")
 	installEnvironmentRules(t, admin, environmentObjectRule("aas", binaryID, "READ"))
-	status, body = environmentRequest(t, editor, "/serialization", "application/aasx+xml")
+	status, body = environmentRequest(t, editor, "/serialization?aasIds="+common.EncodeString(binaryID), "application/aasx+xml")
 	require.Equal(t, http.StatusOK, status, string(body))
 	content = environmentPackageContents(t, body)
 	require.Contains(t, content, "THUMBNAIL-BINARY")
 	require.NotContains(t, content, "PUBLIC-BINARY")
 	require.NotContains(t, content, "SECRET-BINARY")
+}
+
+func checkEnvironmentAttachmentWriteRights(t *testing.T, admin, editor, id string) {
+	t.Helper()
+	binaryID := id + ":attachment-rights"
+	environment := environmentFixture(binaryID, "AttachmentRights")
+	delete(environment, "assetAdministrationShells")
+	delete(environment, "conceptDescriptions")
+	submodel := environment["submodels"].([]any)[0].(map[string]any)
+	submodel["submodelElements"] = []any{map[string]any{
+		"modelType": "File", "idShort": "PublicFile", "contentType": "text/plain", "value": "/public.txt",
+	}}
+	requireEnvironmentUpload(t, admin, environment, http.StatusOK)
+	attachmentPath := "/submodels/" + common.EncodeString(binaryID) + "/submodel-elements/PublicFile/attachment"
+	status, body := environmentRequest(t, admin, attachmentPath, "text/plain")
+	require.Equal(t, http.StatusNotFound, status, string(body))
+	payload := buildEnvironmentPackage(t, environment)
+
+	installEnvironmentRules(t, admin, environmentObjectRule("sm", binaryID, "UPDATE"))
+	status, body = postEnvironmentFile(t, editor, "environment.aasx", payload)
+	require.Equal(t, http.StatusForbidden, status, string(body))
+	status, body = environmentRequest(t, admin, attachmentPath, "text/plain")
+	require.Equal(t, http.StatusNotFound, status, "denied attachment creation must not store bytes: %s", body)
+
+	installEnvironmentRules(t, admin, environmentObjectRule("sm", binaryID, "CREATE", "UPDATE"))
+	status, body = postEnvironmentFile(t, editor, "environment.aasx", payload)
+	require.Equal(t, http.StatusOK, status, string(body))
+	status, body = environmentRequest(t, admin, attachmentPath, "text/plain")
+	require.Equal(t, http.StatusOK, status, string(body))
+	require.Equal(t, "PUBLIC-BINARY", string(body))
+
+	status, body = environmentRequest(t, admin, "/submodels/"+common.EncodeString(binaryID), "application/json")
+	require.Equal(t, http.StatusOK, status, string(body))
+	var storedSubmodel map[string]any
+	require.NoError(t, json.Unmarshal(body, &storedSubmodel))
+	environment["submodels"] = []any{storedSubmodel}
+	storedFile := storedSubmodel["submodelElements"].([]any)[0].(map[string]any)
+	payload = buildEnvironmentPackageWithParts(t, environment, map[string]string{storedFile["value"].(string): "UPDATED-BINARY"})
+	installEnvironmentRules(t, admin, environmentObjectRule("sm", binaryID, "UPDATE"))
+	status, body = postEnvironmentFile(t, editor, "environment.aasx", payload)
+	require.Equal(t, http.StatusOK, status, string(body))
+	status, body = environmentRequest(t, admin, attachmentPath, "text/plain")
+	require.Equal(t, http.StatusOK, status, string(body))
+	require.Equal(t, "UPDATED-BINARY", string(body))
 }
 
 func environmentObjectRule(scope, id string, rights ...string) map[string]any {
@@ -327,7 +398,7 @@ func installEnvironmentRules(t *testing.T, admin string, rules ...map[string]any
 func environmentFixture(id, idShort string) map[string]any {
 	return map[string]any{
 		"assetAdministrationShells": []any{map[string]any{"modelType": "AssetAdministrationShell", "id": id, "idShort": idShort, "assetInformation": map[string]any{"assetKind": "Instance"}, "submodels": []any{map[string]any{"type": "ModelReference", "keys": []any{map[string]any{"type": "Submodel", "value": id}}}}}},
-		"submodels": []any{map[string]any{"modelType": "Submodel", "id": id, "idShort": idShort, "submodelElements": []any{
+		"submodels": []any{map[string]any{"modelType": "Submodel", "id": id, "idShort": idShort, "semanticId": map[string]any{"type": "ExternalReference", "keys": []any{map[string]any{"type": "GlobalReference", "value": id}}}, "submodelElements": []any{
 			map[string]any{"modelType": "Property", "idShort": "Public", "valueType": "xs:string", "value": "public-value"},
 			map[string]any{"modelType": "Property", "idShort": "Secret", "valueType": "xs:string", "value": "secret-value"},
 		}}},
@@ -380,6 +451,13 @@ func environmentHTTP(t *testing.T, req *http.Request) (int, []byte) {
 
 func buildEnvironmentPackage(t *testing.T, environment map[string]any) []byte {
 	t.Helper()
+	return buildEnvironmentPackageWithParts(t, environment, map[string]string{
+		"/public.txt": "PUBLIC-BINARY", "/secret.txt": "SECRET-BINARY", "/thumbnail.png": "THUMBNAIL-BINARY",
+	})
+}
+
+func buildEnvironmentPackageWithParts(t *testing.T, environment map[string]any, parts map[string]string) []byte {
+	t.Helper()
 	var output bytes.Buffer
 	pkg, err := aasx.NewPackaging().CreateWriter(&output)
 	require.NoError(t, err)
@@ -390,7 +468,7 @@ func buildEnvironmentPackage(t *testing.T, environment map[string]any) []byte {
 	spec, err := pkg.PutPartFromStream(specURI, "application/json", bytes.NewReader(payload))
 	require.NoError(t, err)
 	require.NoError(t, pkg.MakeSpec(spec))
-	for name, content := range map[string]string{"/public.txt": "PUBLIC-BINARY", "/secret.txt": "SECRET-BINARY", "/thumbnail.png": "THUMBNAIL-BINARY"} {
+	for name, content := range parts {
 		uri, parseErr := url.Parse(name)
 		require.NoError(t, parseErr)
 		part, partErr := pkg.PutPartFromStream(uri, "application/octet-stream", strings.NewReader(content))

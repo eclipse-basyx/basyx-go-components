@@ -102,10 +102,8 @@ func TestSerializationContainsOnlyReadableResources(t *testing.T) {
 	require.Contains(t, string(readable.body), shared)
 	denied := serialize(hidden)
 	require.NotEqual(t, http.StatusOK, denied.status, "an unshared Submodel is never serialized")
-	all := call(t, "bob", http.MethodGet, environmentURL+"/serialization", nil, map[string]string{"Accept": "application/json"})
-	expectStatus(t, http.StatusOK, all, "serialize all readable resources")
-	require.Contains(t, string(all.body), shared)
-	require.NotContains(t, string(all.body), hidden)
+	missingSelection := call(t, "bob", http.MethodGet, environmentURL+"/serialization", nil, map[string]string{"Accept": "application/json"})
+	expectStatus(t, http.StatusBadRequest, missingSelection, "require explicit serialization identifiers")
 }
 
 func TestSerializationCombinesIdentifiableABACWithReBAC(t *testing.T) {
@@ -119,7 +117,8 @@ func TestSerializationCombinesIdentifiableABACWithReBAC(t *testing.T) {
 	shellID := unique("serialization-shared-shell")
 	expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, environmentURL+"/shells", shell(shellID), nil), "create shell")
 	addGrants(t, "alice", environmentURL+"/shells/"+enc(shellID)+"/$access", userGrant(t, "viewer", "userx"))
-	result := call(t, "userx", http.MethodGet, environmentURL+"/serialization", nil, map[string]string{"Accept": "application/json"})
+	selection := "/serialization?aasIds=" + enc(shellID) + "&submodelIds=" + enc(publicID) + "&submodelIds=" + enc(sharedID)
+	result := call(t, "userx", http.MethodGet, environmentURL+selection, nil, map[string]string{"Accept": "application/json"})
 	expectStatus(t, http.StatusOK, result, "combine ABAC and ReBAC resource grants")
 	for _, visible := range []string{publicID, sharedID, shellID, "rebac-readable-value"} {
 		require.Contains(t, string(result.body), visible)
@@ -127,6 +126,8 @@ func TestSerializationCombinesIdentifiableABACWithReBAC(t *testing.T) {
 	for _, hidden := range []string{hiddenID, "unshared-value", "abac-hidden-value"} {
 		require.NotContains(t, string(result.body), hidden)
 	}
+	denied := call(t, "userx", http.MethodGet, environmentURL+selection+"&submodelIds="+enc(hiddenID), nil, map[string]string{"Accept": "application/json"})
+	expectStatus(t, http.StatusNotFound, denied, "reject an explicitly requested unreadable Submodel")
 }
 
 func TestUploadCreatesOwnedResources(t *testing.T) {

@@ -211,6 +211,10 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		ctx, err := attachmentPutContext(ctx, tx, submodelID, idShortPath)
+		if err != nil {
+			return err
+		}
 		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
 			return visibilityErr
 		}

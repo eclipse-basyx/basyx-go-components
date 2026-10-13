@@ -1227,8 +1227,8 @@ func checkUploadRepositoryResponse(step, id string, response commonmodel.ImplRes
 		return nil
 	}
 	detail := fmt.Sprintf("AASENV-PROCESSENV-%s resource %q: repository returned HTTP %d", step, id, response.Code)
-	if messages, ok := response.Body.([]commonmodel.Message); ok && len(messages) > 0 {
-		detail += ": " + messages[0].Text
+	if text := commonmodel.ErrorText(response.Body); text != "" {
+		detail += ": " + text
 	}
 	switch response.Code {
 	case http.StatusForbidden:

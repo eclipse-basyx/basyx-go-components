@@ -454,10 +454,12 @@ for a permitted Submodel. Explicit matching `ROUTE` grants remain alternatives
 and can intentionally grant broader access.
 
 Serialization applies `READ` formulas and filters before encoding JSON, XML,
-or AASX. An omitted ID list means all visible objects of that type, across all
-pages. ConceptDescriptions are included by default, but only those the caller
-can read. An explicitly requested missing or invisible AAS or Submodel aborts
-the export with 404; it is not silently omitted. A caller with no matching
+or AASX. Requests must explicitly select at least one AAS or Submodel ID;
+an omitted ID list selects no objects of that type. ConceptDescriptions are
+included by default, but only those referenced directly or indirectly by the
+selected Submodels that the caller can read. An explicitly requested missing
+or invisible AAS or Submodel aborts the export with 404; it is not silently
+omitted. A caller with no matching
 entry permission receives 403. AASX binary parts are drawn from visible
 objects and visible file/thumbnail references and use the existing streaming
 authorization checks. Packaging must not restore missing or filtered references
@@ -474,26 +476,9 @@ Import remains sequential: ConceptDescriptions, Submodels, shells, then AASX
 binary parts. Earlier permitted commits can survive a later denial; uploading
 an environment is not an atomic package transaction.
 
-The environment adapter recognizes the two aggregate endpoints once and obtains
-their rights from the central method/route mapping. It evaluates the policy
-separately for each repository type, using one request's pinned policy, claims,
-and global attributes. The common object matcher receives an internal typed
-object context: `ROUTE` uses the actual request path, while `IDENTIFIABLE` uses
-the selected type's collection route. The matcher has no environment endpoint
-knowledge. An absent object context retains ordinary route matching; an invalid
-typed context denies every object, including wildcard routes. Typed contexts
-accept only `ROUTE` and `IDENTIFIABLE` objects. Direct
-service/persistence calls do not run HTTP middleware again: the environment
-services bind the appropriate authorization context before calling them.
-Binding replaces the query filter, outer access view, and any stale authorized
-query together, preserving right-specific formulas and ReBAC grants. A type's
-entry permission is never reused as unrestricted permission for another type.
 ReBAC remains an alternative to ABAC for each resource, including when ABAC
 only allows a different type. Security-disabled requests and trusted startup
-preconfiguration imports retain their existing behavior. Registry descriptor
-synchronization remains an internal consequence of an authorized object write.
-
-The standalone Submodel Repository serialization endpoint remains unimplemented.
+preconfiguration imports retain their existing behavior.
 
 Validation invariants enforced by the current implementation:
 - Rule-level one-of:

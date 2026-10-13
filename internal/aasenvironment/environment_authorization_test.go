@@ -38,7 +38,7 @@ import (
 
 func TestUploadRepositoryStatusIsPreserved(t *testing.T) {
 	for _, status := range []int{200, 201, 204, 400, 403, 404, 405, 409, 413, 500} {
-		err := checkUploadRepositoryResponse("PUTSM", "id", model.Response(status, []model.Message{{Text: "detail"}}))
+		err := checkUploadRepositoryResponse("PUTSM", "id", model.Response(status, model.Result{Messages: []model.Message{{Text: "detail"}}}))
 		if status < 300 {
 			require.NoError(t, err)
 			continue
@@ -69,26 +69,22 @@ func TestUploadWrapperDenialRemainsForbidden(t *testing.T) {
 }
 
 func TestSerializationThumbnailsRequireVisibleShellAndReference(t *testing.T) {
-	environment := aastypes.NewEnvironment()
 	visible := aastypes.NewAssetAdministrationShell("visible", aastypes.NewAssetInformation(aastypes.AssetKindInstance))
 	visible.AssetInformation().SetDefaultThumbnail(aastypes.NewResource("/thumbnail.png"))
 	hiddenReference := aastypes.NewAssetAdministrationShell("hidden-reference", aastypes.NewAssetInformation(aastypes.AssetKindInstance))
 	emptyReference := aastypes.NewAssetAdministrationShell("empty-reference", aastypes.NewAssetInformation(aastypes.AssetKindInstance))
 	emptyReference.AssetInformation().SetDefaultThumbnail(aastypes.NewResource(""))
-	environment.SetAssetAdministrationShells([]aastypes.IAssetAdministrationShell{visible, hiddenReference, emptyReference})
-	for _, requested := range [][]string{nil, {common.EncodeString("visible"), common.EncodeString("absent"), common.EncodeString("hidden-reference")}} {
-		ids, err := resolveSerializationThumbnailAASIDs(requested, environment)
-		require.NoError(t, err)
-		require.Equal(t, []string{"visible"}, ids)
-	}
-	ids, err := resolveSerializationThumbnailAASIDs([]string{common.EncodeString("absent")}, environment)
-	require.NoError(t, err)
-	require.Empty(t, ids)
-	rewriteSerializationThumbnailReference(environment, "hidden-reference", "/leaked.png", "image/png")
+	parts := &serializationPackageParts{}
+	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
+	require.NoError(t, parts.addThumbnail(ctx, nil))
+	require.NoError(t, parts.addThumbnail(ctx, hiddenReference))
+	require.NoError(t, parts.addThumbnail(ctx, emptyReference))
+	require.Empty(t, parts.thumbnails)
+	rewriteSerializationThumbnailReference(hiddenReference, "/leaked.png", "image/png")
 	require.Nil(t, hiddenReference.AssetInformation().DefaultThumbnail())
-	rewriteSerializationThumbnailReference(environment, "empty-reference", "/leaked.png", "image/png")
+	rewriteSerializationThumbnailReference(emptyReference, "/leaked.png", "image/png")
 	require.Empty(t, emptyReference.AssetInformation().DefaultThumbnail().Path())
-	rewriteSerializationThumbnailReference(environment, "visible", "/export.png", "image/png")
+	rewriteSerializationThumbnailReference(visible, "/export.png", "image/png")
 	require.Equal(t, "image/png", *visible.AssetInformation().DefaultThumbnail().ContentType())
 	require.Equal(t, "/export.png", visible.AssetInformation().DefaultThumbnail().Path())
 }
