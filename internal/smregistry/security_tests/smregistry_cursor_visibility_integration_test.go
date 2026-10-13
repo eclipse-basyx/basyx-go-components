@@ -48,8 +48,8 @@ type cursorVisibilityPage struct {
 	} `json:"result"`
 }
 
-// TestSubmodelDescriptorListCursorSkipsHiddenDescriptors checks that the next
-// cursor of an anonymous list never names a descriptor the caller may not read.
+// TestSubmodelDescriptorListCursorSkipsHiddenDescriptors checks that paging
+// continues with the next visible descriptor.
 func TestSubmodelDescriptorListCursorSkipsHiddenDescriptors(t *testing.T) {
 	provider := testenv.NewPasswordGrantTokenProvider(securityKeycloakTokenURL, "basyx-ui", 10*time.Second)
 	token, err := provider.GetAccessToken(&testenv.TokenCredentials{User: "admin", Password: "pwd"})

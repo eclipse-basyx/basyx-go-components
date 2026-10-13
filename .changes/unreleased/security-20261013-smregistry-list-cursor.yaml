@@ -1,7 +1,0 @@
-kind: security
-body: '`GET /submodel-descriptors` and `POST /query/submodel-descriptors` of the Submodel Registry apply the access rules and the query condition before the page limit. Before, a page was taken from all Submodel Descriptors first and filtered afterwards, so pages could be short or empty although more results followed, and the number of requests depended on the total number of descriptors.'
-time: 2026-10-13T18:30:00.000000+02:00
-custom:
-    Impact: Low
-    PullRequest: 762
-    SecurityImpact: 'The `paging_metadata.cursor` of these endpoints no longer contains the identifier of a Submodel Descriptor the caller may not read. Before, paging with a small `limit` disclosed the identifiers of all standalone Submodel Descriptors, including those hidden by the access rules.'

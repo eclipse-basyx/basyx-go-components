@@ -1,0 +1,7 @@
+kind: fixed
+body: '`GET /submodel-descriptors` and `POST /query/submodel-descriptors` of the Submodel Registry apply the access rules and the query condition before the page limit. Before, pages could be short or empty although more results followed.'
+time: 2026-10-13T18:30:00.000000+02:00
+custom:
+    Impact: Low
+    PullRequest: 762
+    SecurityImpact: 'The paging cursor is always taken from a Submodel Descriptor that is visible to the caller.'
