@@ -117,6 +117,21 @@ func TestAPIPaginationPresence(t *testing.T) {
 	}
 }
 
+func TestDecodeAPIPaginationReturnsBackendCursor(t *testing.T) {
+	if got, _, err := DecodeAPIPagination(1, ""); err != nil || got != "" {
+		t.Fatalf("first page cursor = %q, err = %v", got, err)
+	}
+	if got, _, err := DecodeAPIPagination(1, EncodeString("urn:next")); err != nil || got != "urn:next" {
+		t.Fatalf("decoded cursor = %q, err = %v", got, err)
+	}
+	if _, detail, err := DecodeAPIPagination(-1, ""); err == nil || detail != "BadLimit" {
+		t.Fatalf("negative limit detail = %q, err = %v", detail, err)
+	}
+	if _, detail, err := DecodeAPIPagination(1, "not base64!"); err == nil || detail != "BadCursor" {
+		t.Fatalf("malformed cursor detail = %q, err = %v", detail, err)
+	}
+}
+
 func TestAPIReferenceFilters(t *testing.T) {
 	valid := `{ "keys": [{"value":"urn:semantic", "type":"GlobalReference"}],
  "type": "ExternalReference" }`

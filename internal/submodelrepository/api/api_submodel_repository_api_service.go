@@ -651,20 +651,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodels", detail), nil
 	}
 
 	const operation = "GetAllSubmodels"
-
-	decodedCursor := ""
-	if cursor != "" {
-		decodedCursorBytes, decodeErr := common.DecodeAPICursor(cursor)
-		if decodeErr != nil {
-			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
-		}
-		decodedCursor = string(decodedCursorBytes)
-	}
 
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
@@ -1068,20 +1060,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 	idShort string,
 	limit int32,
 	cursor string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsMetadata", detail), nil
 	}
 
 	const operation = "GetAllSubmodelsMetadata"
-
-	decodedCursor := ""
-	if cursor != "" {
-		decodedCursorBytes, decodeErr := common.DecodeAPICursor(cursor)
-		if decodeErr != nil {
-			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
-		}
-		decodedCursor = string(decodedCursorBytes)
-	}
 
 	var decodedSemanticID types.IReference
 	if semanticID != "" {
@@ -1127,20 +1111,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsValueOnly", detail), nil
 	}
 
 	const operation = "GetAllSubmodelsValueOnly"
-
-	decodedCursor := ""
-	if cursor != "" {
-		decodedCursorBytes, decodeErr := common.DecodeAPICursor(cursor)
-		if decodeErr != nil {
-			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
-		}
-		decodedCursor = string(decodedCursorBytes)
-	}
 
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
@@ -1205,20 +1181,17 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsReference", detail), nil
 	}
 
 	_ = level
 	const operation = "GetAllSubmodelsReference"
 
-	decodedCursor, decodeErr := common.DecodeAPICursor(cursor)
-	if decodeErr != nil {
-		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
-	}
-
 	var decodedSemanticID types.IReference
 	if semanticID != "" {
+		var decodeErr error
 		decodedSemanticID, decodeErr = common.DecodeAPIReference(semanticID, 3072)
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
@@ -1265,7 +1238,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 	cursor string,
 	level string,
 ) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelsPath", detail), nil
 	}
 
@@ -1273,15 +1247,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 	if limit < 0 {
 		limitErr := common.NewErrBadRequest("SMREPO-GETALLSMPATH-BADLIMIT limit must be >= 0")
 		return newAPIErrorResponse(limitErr, http.StatusBadRequest, operation, "BadRequest"), nil
-	}
-
-	decodedCursor := ""
-	if cursor != "" {
-		decodedCursorBytes, decodeErr := common.DecodeAPICursor(cursor)
-		if decodeErr != nil {
-			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
-		}
-		decodedCursor = string(decodedCursorBytes)
 	}
 
 	if !isLevelValid(level) {
@@ -1700,7 +1665,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDPath(ctx context.Contex
 //   - gen.ImplResponse: Response containing submodel elements
 //   - error: Error if the operation fails
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElements", detail), nil
 	}
 
@@ -1709,15 +1675,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 	decodedSubmodelIdentifier, decodeErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
-	}
-
-	decodedCursor := ""
-	if cursor != "" {
-		decodedCursorBytes, err := common.DecodeAPICursor(cursor)
-		if err != nil {
-			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadCursor"), nil
-		}
-		decodedCursor = string(decodedCursorBytes)
 	}
 
 	var limitPtr *int
@@ -1809,7 +1766,8 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx co
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsMetadataSubmodelRepo", detail), nil
 	}
 
@@ -1819,11 +1777,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 	decodedSubmodelIdentifier, decodeErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
-	}
-
-	decodedCursor, cursorDecodeErr := common.DecodeAPICursor(cursor)
-	if cursorDecodeErr != nil {
-		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
 	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false, "")
@@ -1858,7 +1811,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsValueOnlySubmodelRepo", detail), nil
 	}
 
@@ -1874,15 +1828,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 	normalizedExtent, extentErr := normalizeExtent(extent)
 	if extentErr != nil {
 		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
-	}
-
-	decodedCursor := ""
-	if cursor != "" {
-		decodedCursorBytes, err := common.DecodeAPICursor(cursor)
-		if err != nil {
-			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadCursor"), nil
-		}
-		decodedCursor = string(decodedCursorBytes)
 	}
 
 	var limitPtr *int
@@ -1934,7 +1879,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsReferenceSubmodelRepo", detail), nil
 	}
 
@@ -1944,11 +1890,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 	decodedSubmodelIdentifier, decodeErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
-	}
-
-	decodedCursor, cursorDecodeErr := common.DecodeAPICursor(cursor)
-	if cursorDecodeErr != nil {
-		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
 	references, nextCursor, err := s.submodelBackend.GetSubmodelElementReferences(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor)
@@ -1983,7 +1924,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllSubmodelElementsPathSubmodelRepo", detail), nil
 	}
 
@@ -1992,11 +1934,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 	decodedSubmodelIdentifier, decodeErr := common.DecodeAPIIdentifier(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
-	}
-
-	decodedCursor, cursorDecodeErr := common.DecodeAPICursor(cursor)
-	if cursorDecodeErr != nil {
-		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
 	if !isLevelValid(level) {
@@ -3041,13 +2978,9 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 	cursor string,
 	query grammar.Query,
 ) (gen.ImplResponse, error) {
-	if detail, paginationErr := common.ValidateAPIPagination(limit, cursor); paginationErr != nil {
+	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
+	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "QuerySubmodels", detail), nil
-	}
-
-	decodedCursor, cursorErr := common.DecodeAPICursor(cursor)
-	if cursorErr != nil {
-		return newAPIErrorResponse(cursorErr, http.StatusBadRequest, "QuerySubmodels", "BadCursor"), nil
 	}
 
 	querySelectionCtx, queryContextErr := auth.WithAuthorizedQuery(ctx, auth.SemanticResourceSM, query)
