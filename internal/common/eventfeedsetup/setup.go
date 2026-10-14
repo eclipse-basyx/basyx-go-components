@@ -59,6 +59,13 @@ func Bind(module *eventfeed.Module) {
 	module.SetOnStop(history.ClearMutationSink)
 }
 
+// announce adds the Event Feed profile to the service self-description when the feed is enabled.
+func announce(feed *eventfeed.Module) {
+	if feed != nil && feed.Enabled() {
+		common.AddServiceProfile(common.EventFeedServiceProfile)
+	}
+}
+
 type publisher interface {
 	eventoutbox.Publisher
 	Stop(context.Context) error
@@ -74,6 +81,7 @@ type transport struct {
 // Call before startup imports. The feed module (even when disabled) owns shutdown.
 // Invalid local settings fail startup; broker outages leave deliveries pending.
 func Start(ctx context.Context, db *sql.DB, cfg *common.Config, feed *eventfeed.Module) error {
+	announce(feed)
 	if !cfg.Eventing.TransportsEnabled() {
 		Bind(feed)
 		return nil

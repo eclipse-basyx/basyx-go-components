@@ -35,10 +35,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
 )
+
+func TestEventFeedEnvironmentDescriptionAnnouncesEventFeed(t *testing.T) {
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, aasEnvEventFeedBaseURL+"/description", nil)
+	require.NoError(t, err)
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	require.NoError(t, err)
+	defer func() { _ = response.Body.Close() }()
+	require.Equal(t, http.StatusOK, response.StatusCode)
+	var description struct {
+		Profiles []string `json:"profiles"`
+	}
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&description))
+	require.Contains(t, description.Profiles, common.EventFeedServiceProfile)
+	require.Contains(t, description.Profiles, common.SubmodelRepositoryHistoryServiceProfile)
+}
 
 func TestEnvironmentUploadProducesAASAssetSubmodelAndPCNEvents(t *testing.T) {
 	received := testenv.SubscribeMQTT(t, mqttBrokerURL, "basyx/#")

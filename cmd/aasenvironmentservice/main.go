@@ -98,6 +98,7 @@ func runServer(ctx context.Context, configPath string) error {
 		Immutability:         cfg.History.Immutability,
 		AuditIdentityMode:    cfg.History.AuditIdentityMode,
 	})
+	history.AddServiceProfiles(common.AASRepositoryHistoryServiceProfile, common.SubmodelRepositoryHistoryServiceProfile)
 	if err = history.ConfigureEvidence(ctx, cfg.History.Evidence); err != nil {
 		return err
 	}

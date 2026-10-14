@@ -159,6 +159,21 @@ func ActiveConfig() Config {
 	return activeConfig
 }
 
+// AddServiceProfiles announces the history profiles of a service in its
+// self-description when history versions are recorded (mode `api` or `audit`).
+// Call it during startup after Configure.
+//
+// Parameters:
+//   - profiles: History profiles of the service, e.g. common.SubmodelRepositoryHistoryServiceProfile.
+func AddServiceProfiles(profiles ...string) {
+	if ActiveConfig().Mode == ModeOff {
+		return
+	}
+	for _, profile := range profiles {
+		common.AddServiceProfile(profile)
+	}
+}
+
 // MutationRecordingEnabled reports whether acknowledged model changes must
 // still go through AppendVersionTx. History rows, WORM evidence, and the Event
 // Feed mutation sink all depend on that path.
