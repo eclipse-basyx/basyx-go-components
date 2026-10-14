@@ -33,6 +33,9 @@ These endpoints are relative to your service's API base path:
 | `GET /.well-known/event-feed/schemas/{schema}` | Retrieve the versioned JSON Schema linked by an event's `dataschema`. |
 
 The feed and discovery routes are absent when the feed is disabled.
+When the feed is enabled, `GET /description` lists the profile
+`https://basyx.org/aas/API/3/2/EventFeed/1.0`, so clients can detect the feed
+without calling its routes.
 
 The feed spans all entities you are authorized to read. Each event's `subject`
 identifies the affected entity, `type` identifies the change, and `time` gives

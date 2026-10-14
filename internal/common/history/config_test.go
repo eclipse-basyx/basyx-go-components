@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -89,4 +90,26 @@ func TestMutationRecordingEnabledForEventFeedSink(t *testing.T) {
 	ClearMutationSink()
 	require.False(t, MutationRecordingEnabled())
 	require.False(t, LiveSnapshotRequired())
+}
+
+func TestAddServiceProfilesAnnouncesOnlyRecordedHistory(t *testing.T) {
+	previousConfig := ActiveConfig()
+	t.Cleanup(func() {
+		Configure(previousConfig)
+	})
+	const offProfile = "https://example.org/history/off"
+	const apiProfile = "https://example.org/history/api"
+	const auditProfile = "https://example.org/history/audit"
+
+	Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	AddServiceProfiles(offProfile)
+	Configure(Config{Mode: ModeAPI, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	AddServiceProfiles(apiProfile)
+	Configure(Config{Mode: ModeAudit, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	AddServiceProfiles(auditProfile)
+
+	profiles := common.ServiceProfiles()
+	require.NotContains(t, profiles, offProfile)
+	require.Contains(t, profiles, apiProfile)
+	require.Contains(t, profiles, auditProfile)
 }

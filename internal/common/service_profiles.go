@@ -32,6 +32,16 @@ import "sync"
 // control management API (`$access` sub-resources) in service descriptions.
 const ReBACServiceProfile = "https://basyx.org/aas/API/3/2/RelationshipBasedAccessControl/1.0"
 
+// AASRepositoryHistoryServiceProfile announces GetAssetAdministrationShellVersionByIdAndDate (`/shells/{id}/$history`).
+const AASRepositoryHistoryServiceProfile = "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-006"
+
+// SubmodelRepositoryHistoryServiceProfile announces GetSubmodelVersionByIdAndDate (`/submodels/{id}/$history`).
+const SubmodelRepositoryHistoryServiceProfile = "https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-007"
+
+// EventFeedServiceProfile announces the experimental Event Feed (`/events` and
+// `/.well-known/event-feed.json`).
+const EventFeedServiceProfile = "https://basyx.org/aas/API/3/2/EventFeed/1.0"
+
 var (
 	serviceProfilesMu  sync.RWMutex
 	additionalProfiles []string

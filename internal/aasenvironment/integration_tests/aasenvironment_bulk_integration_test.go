@@ -40,6 +40,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -152,6 +153,8 @@ func expectedAASEnvironmentDescriptionProfiles() []string {
 		"https://basyx.org/aas/API/3/2/ConceptDescriptionRepositoryService/1.0",
 		"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
 		"https://basyx.org/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
+		common.AASRepositoryHistoryServiceProfile,
+		common.SubmodelRepositoryHistoryServiceProfile,
 	}
 }
 

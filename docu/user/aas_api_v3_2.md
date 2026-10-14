@@ -43,6 +43,8 @@ Known v3.2 OpenAPI gaps in standalone services:
 
 History behavior is controlled through lightweight, vendor-neutral configuration. Versioning is opt-in: `history.mode` defaults to `off`.
 
+When `history.mode` is `api` or `audit`, `GET /description` lists the history profiles of the service, so clients can detect that `$history` returns versions: `https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-006` (AAS Repository and AAS Environment) and `https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-007` (Submodel Repository and AAS Environment). With `off`, the profiles are absent.
+
 Environment variables:
 
 - `BASYX_HISTORY_MODE`: `off`, `api`, or `audit`. Default is `off`.
