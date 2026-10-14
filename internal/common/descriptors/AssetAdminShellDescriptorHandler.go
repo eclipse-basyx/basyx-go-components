@@ -54,6 +54,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -670,6 +671,72 @@ func ListAssetAdministrationShellDescriptors(
 		createdFrom,
 		updatedFrom,
 	)
+}
+
+// ListAssetAdministrationShellDescriptorIdentifiers lists the AAS identifiers
+// of the descriptors visible under the ABAC formula from ctx. It uses the same
+// order and cursor semantics as ListAssetAdministrationShellDescriptors without
+// assembling the descriptors.
+func ListAssetAdministrationShellDescriptorIdentifiers(
+	ctx context.Context,
+	db DBQueryer,
+	limit int32,
+	cursor string,
+) ([]string, string, error) {
+	db = withDescriptorDebugQueryer(ctx, db)
+	if limit <= 0 {
+		limit = common.DefaultPageLimit(ctx)
+	}
+	peekLimit := limit
+	if peekLimit < 1<<31-1 {
+		peekLimit++
+	}
+	collector, err := newAASDescriptorJSONCollector(common.TblAASDescriptor, common.ColDescriptorID, common.TblAASDescriptor)
+	if err != nil {
+		return nil, "", err
+	}
+	page, err := buildListAASDescriptorPageQuery(ctx, peekLimit, cursor, "", "", "", time.Time{}, time.Time{}, collector)
+	if err != nil {
+		return nil, "", err
+	}
+	page = requireAASDescriptorCursorExists(page, cursor)
+	sqlStr, args, err := page.Prepared(true).ToSQL()
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREG-LISTAASIDS-BUILDQUERY " + err.Error())
+	}
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREG-LISTAASIDS-QUERYDB " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	identifiers := make([]string, 0, pagination.BufferCapacity(int(peekLimit)))
+	for rows.Next() {
+		var descriptorID int64
+		var identifier string
+		if scanErr := rows.Scan(&descriptorID, &identifier); scanErr != nil {
+			return nil, "", common.NewInternalServerError("AASREG-LISTAASIDS-SCANROW " + scanErr.Error())
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", common.NewInternalServerError("AASREG-LISTAASIDS-ITERATEROWS " + err.Error())
+	}
+
+	identifiers, nextCursor := applyCursorLimit(identifiers, limit, func(identifier string) string { return identifier })
+	return identifiers, nextCursor, nil
+}
+
+func requireAASDescriptorCursorExists(page *goqu.SelectDataset, cursor string) *goqu.SelectDataset {
+	if cursor == "" {
+		return page
+	}
+	cursorAAS := goqu.T(common.TblAASDescriptor).As("cursor_aas")
+	cursorExists := goqu.Dialect(common.Dialect).From(cursorAAS).
+		Select(goqu.L("1")).
+		Where(cursorAAS.Col(common.ColAASID).Eq(cursor)).
+		Limit(1)
+	return page.Where(goqu.L("EXISTS ?", cursorExists))
 }
 
 // ExistsAASByID performs a lightweight existence check for an AAS by its Id

@@ -51,3 +51,20 @@ func TestAsyncValueOnlyTimeoutConformance(t *testing.T) {
 		"/shells/dXJuOnRlc3Q/submodels/dXJuOnRlc3Q/submodel-elements/operation",
 	})
 }
+
+func TestQuerySelectConformance(t *testing.T) {
+	testenv.RunQuerySelectConformance(t, testenv.QuerySelectConformance{
+		BaseURL:        aasRepositoryBaseURL,
+		CollectionPath: "/shells",
+		QueryPath:      "/query/shells",
+		IDShortField:   "$aas#idShort",
+		NewObject: func(id string, idShort string) map[string]any {
+			return map[string]any{
+				"modelType":        "AssetAdministrationShell",
+				"id":               id,
+				"idShort":          idShort,
+				"assetInformation": map[string]any{"assetKind": "Instance", "globalAssetId": id + ":asset"},
+			}
+		},
+	})
+}

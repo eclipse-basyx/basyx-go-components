@@ -725,19 +725,17 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministration
 	}
 	ctx = queryCtx
 
+	if query.SelectsIdentifiers() {
+		identifiers, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptorIdentifiers(ctx, limit, internalCursor)
+		if err != nil {
+			return queryAssetAdministrationShellDescriptorsErrorResponse(ctx, err, limit, internalCursor)
+		}
+		return common.APIIdentifierQueryResponse(identifiers, nextCursor), nil
+	}
+
 	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, "", "", time.Time{}, time.Time{})
 	if err != nil {
-		slog.ErrorContext(ctx, "Error in QueryAssetAdministrationShellDescriptors: list failed", "error.code", "API-QUERYASSETADMINISTRATIONSHELLDESCRIPTORS-LIST", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor)
-		switch {
-		case common.IsErrBadRequest(err):
-			return common.NewErrorResponse(
-				err, http.StatusBadRequest, componentName, "QueryAssetAdministrationShellDescriptors", "BadRequest",
-			), nil
-		default:
-			return common.NewErrorResponse(
-				err, http.StatusInternalServerError, componentName, "QueryAssetAdministrationShellDescriptors", "InternalServerError",
-			), err
-		}
+		return queryAssetAdministrationShellDescriptorsErrorResponse(ctx, err, limit, internalCursor)
 	}
 
 	jsonable := make([]map[string]any, 0, len(aasds))
@@ -754,4 +752,16 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministration
 
 	return pagedResponse(jsonable, nextCursor), nil
 
+}
+
+func queryAssetAdministrationShellDescriptorsErrorResponse(ctx context.Context, err error, limit int32, internalCursor string) (model.ImplResponse, error) {
+	slog.ErrorContext(ctx, "Error in QueryAssetAdministrationShellDescriptors: list failed", "error.code", "API-QUERYASSETADMINISTRATIONSHELLDESCRIPTORS-LIST", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor)
+	if common.IsErrBadRequest(err) {
+		return common.NewErrorResponse(
+			err, http.StatusBadRequest, componentName, "QueryAssetAdministrationShellDescriptors", "BadRequest",
+		), nil
+	}
+	return common.NewErrorResponse(
+		err, http.StatusInternalServerError, componentName, "QueryAssetAdministrationShellDescriptors", "InternalServerError",
+	), err
 }

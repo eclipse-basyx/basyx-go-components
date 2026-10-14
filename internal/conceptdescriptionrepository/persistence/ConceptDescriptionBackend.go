@@ -48,6 +48,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -487,58 +488,9 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 		return nil, "", common.NewInternalServerError("CDREPO-GCDS-BUILDMASKS " + selectErr.Error())
 	}
 
-	dialect := goqu.Dialect("postgres")
-	query := dialect.From("concept_description").
-		Select(selectExpressions...).
-		Order(goqu.I("id").Asc()).
-		Limit(peekLimit)
-
-	if idShort != nil && strings.TrimSpace(*idShort) != "" {
-		query = query.Where(goqu.Ex{"id_short": strings.TrimSpace(*idShort)})
-	}
-
-	switch {
-	case !createdFrom.IsZero() && !updatedFrom.IsZero():
-		query = query.Where(goqu.Or(
-			goqu.C("administration_created_at").Gte(createdFrom.UTC()),
-			goqu.C("administration_updated_at").Gte(updatedFrom.UTC()),
-		))
-	case !createdFrom.IsZero():
-		query = query.Where(goqu.C("administration_created_at").Gte(createdFrom.UTC()))
-	case !updatedFrom.IsZero():
-		query = query.Where(goqu.C("administration_updated_at").Gte(updatedFrom.UTC()))
-	}
-
-	if cursor != nil && strings.TrimSpace(*cursor) != "" {
-		trimmedCursor := strings.TrimSpace(*cursor)
-		cursorExists := dialect.
-			From(goqu.T("concept_description").As("cursor_cd")).
-			Select(goqu.L("1")).
-			Where(goqu.I("cursor_cd.id").Eq(trimmedCursor))
-		query = query.
-			Where(goqu.Func("EXISTS", cursorExists)).
-			Where(goqu.C("id").Gte(trimmedCursor))
-	}
-
-	query, referenceErr := auth.AddReferenceSelectorQuery(ctx, query, auth.SemanticResourceCD)
-	if referenceErr != nil {
-		return nil, "", common.NewInternalServerError("CDREPO-LIST-REFERENCE " + referenceErr.Error())
-	}
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return nil, "", common.NewInternalServerError("CDREPO-GCDS-SHOULDENFORCE " + enforceErr.Error())
-	}
-	if shouldEnforceFormula {
-		var addFormulaErr error
-		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
-		if addFormulaErr != nil {
-			return nil, "", common.NewInternalServerError("CDREPO-GCDS-ABACFORMULA " + addFormulaErr.Error())
-		}
-	}
-
-	sqlQuery, args, err := query.Prepared(true).ToSQL()
+	sqlQuery, args, err := buildConceptDescriptionPageQuery(ctx, collector, selectExpressions, idShort, peekLimit, cursor, createdFrom, updatedFrom)
 	if err != nil {
-		return nil, "", fmt.Errorf("CDREPO-GCDS-BUILDSQL failed to build SQL query: %w", err)
+		return nil, "", err
 	}
 
 	rows, err := readDB.QueryContext(ctx, sqlQuery, args...)
@@ -586,6 +538,121 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 	}
 
 	return conceptDescriptions, nextCursor, nil
+}
+
+// GetConceptDescriptionIdentifiers retrieves a paginated list of concept description identifiers with the ABAC filters from ctx.
+func (b *ConceptDescriptionBackend) GetConceptDescriptionIdentifiers(ctx context.Context, limit uint, cursor *string) ([]string, string, error) {
+	if limit == 0 {
+		//nolint:gosec // the configured default limit is always positive
+		limit = uint(common.DefaultPageLimit(ctx))
+	}
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootCD)
+	if collectorErr != nil {
+		return nil, "", common.NewInternalServerError("CDREPO-GCDIDS-BADCOLLECTOR " + collectorErr.Error())
+	}
+	selectExpressions := []interface{}{goqu.I("concept_description.id")}
+	sqlQuery, args, err := buildConceptDescriptionPageQuery(ctx, collector, selectExpressions, nil, limit+1, cursor, time.Time{}, time.Time{})
+	if err != nil {
+		return nil, "", err
+	}
+
+	rows, err := b.readDB(ctx).QueryContext(ctx, sqlQuery, args...)
+	if err != nil {
+		return nil, "", fmt.Errorf("CDREPO-GCDIDS-EXECQUERY failed to execute SQL query: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			slog.Error("database row cleanup failed", "error.code", "CDREPO-GCDIDS-CLOSEROWS", "error", closeErr)
+		}
+	}()
+
+	identifiers := make([]string, 0, pagination.BufferCapacity(int(limit)+1)) //nolint:gosec // limit is bounded by the API page limit
+	nextCursor := ""
+	for rows.Next() {
+		var identifier string
+		if scanErr := rows.Scan(&identifier); scanErr != nil {
+			return nil, "", fmt.Errorf("CDREPO-GCDIDS-SCANROW failed to scan row: %w", scanErr)
+		}
+		if uint(len(identifiers)) == limit {
+			nextCursor = identifier
+			break
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, "", fmt.Errorf("CDREPO-GCDIDS-ROWSERR error iterating over rows: %w", err)
+	}
+	return identifiers, nextCursor, nil
+}
+
+func buildConceptDescriptionPageQuery(
+	ctx context.Context,
+	collector *grammar.ResolvedFieldPathCollector,
+	selectExpressions []interface{},
+	idShort *string,
+	peekLimit uint,
+	cursor *string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+) (string, []interface{}, error) {
+	dialect := goqu.Dialect("postgres")
+	query := dialect.From("concept_description").
+		Select(selectExpressions...).
+		Order(goqu.I("id").Asc()).
+		Limit(peekLimit)
+
+	if idShort != nil && strings.TrimSpace(*idShort) != "" {
+		query = query.Where(goqu.Ex{"id_short": strings.TrimSpace(*idShort)})
+	}
+	query = applyConceptDescriptionTimeFilter(query, createdFrom, updatedFrom)
+
+	if cursor != nil && strings.TrimSpace(*cursor) != "" {
+		trimmedCursor := strings.TrimSpace(*cursor)
+		cursorExists := dialect.
+			From(goqu.T("concept_description").As("cursor_cd")).
+			Select(goqu.L("1")).
+			Where(goqu.I("cursor_cd.id").Eq(trimmedCursor))
+		query = query.
+			Where(goqu.Func("EXISTS", cursorExists)).
+			Where(goqu.C("id").Gte(trimmedCursor))
+	}
+
+	query, referenceErr := auth.AddReferenceSelectorQuery(ctx, query, auth.SemanticResourceCD)
+	if referenceErr != nil {
+		return "", nil, common.NewInternalServerError("CDREPO-LIST-REFERENCE " + referenceErr.Error())
+	}
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return "", nil, common.NewInternalServerError("CDREPO-GCDS-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		var addFormulaErr error
+		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		if addFormulaErr != nil {
+			return "", nil, common.NewInternalServerError("CDREPO-GCDS-ABACFORMULA " + addFormulaErr.Error())
+		}
+	}
+
+	sqlQuery, args, err := query.Prepared(true).ToSQL()
+	if err != nil {
+		return "", nil, fmt.Errorf("CDREPO-GCDS-BUILDSQL failed to build SQL query: %w", err)
+	}
+	return sqlQuery, args, nil
+}
+
+func applyConceptDescriptionTimeFilter(query *goqu.SelectDataset, createdFrom time.Time, updatedFrom time.Time) *goqu.SelectDataset {
+	switch {
+	case !createdFrom.IsZero() && !updatedFrom.IsZero():
+		return query.Where(goqu.Or(
+			goqu.C("administration_created_at").Gte(createdFrom.UTC()),
+			goqu.C("administration_updated_at").Gte(updatedFrom.UTC()),
+		))
+	case !createdFrom.IsZero():
+		return query.Where(goqu.C("administration_created_at").Gte(createdFrom.UTC()))
+	case !updatedFrom.IsZero():
+		return query.Where(goqu.C("administration_updated_at").Gte(updatedFrom.UTC()))
+	}
+	return query
 }
 
 // GetConceptDescriptionByID retrieves a concept description by its identifier.

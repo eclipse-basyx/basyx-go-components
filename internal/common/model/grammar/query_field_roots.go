@@ -52,11 +52,6 @@ func FindModelFieldByRoot(query Query, roots ...string) (ModelStringPattern, boo
 		rootSet[root] = struct{}{}
 	}
 
-	for _, field := range query.Select {
-		if modelFieldHasRoot(field, rootSet) {
-			return field, true
-		}
-	}
 	if query.Condition != nil {
 		if field, found := findLogicalExpressionField(*query.Condition, rootSet); found {
 			return field, true

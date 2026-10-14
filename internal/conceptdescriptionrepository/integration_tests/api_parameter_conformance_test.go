@@ -42,3 +42,15 @@ func TestAPIParameterConformance(t *testing.T) {
 func TestExactConceptDescriptionReferenceConformance(t *testing.T) {
 	testenv.RunConceptDescriptionReferenceConformance(t, conceptDescriptionRepositoryBaseURL)
 }
+
+func TestQuerySelectConformance(t *testing.T) {
+	testenv.RunQuerySelectConformance(t, testenv.QuerySelectConformance{
+		BaseURL:        conceptDescriptionRepositoryBaseURL,
+		CollectionPath: "/concept-descriptions",
+		QueryPath:      "/query/concept-descriptions",
+		IDShortField:   "$cd#idShort",
+		NewObject: func(id string, idShort string) map[string]any {
+			return map[string]any{"modelType": "ConceptDescription", "id": id, "idShort": idShort}
+		},
+	})
+}

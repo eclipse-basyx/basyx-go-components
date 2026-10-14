@@ -819,7 +819,10 @@ func WithAuthorizedStringSelectors(
 func combineCallerQueries(first grammar.Query, second grammar.Query) grammar.Query {
 	combined := grammar.Query{
 		FilterConditions: append(append([]grammar.SubFilter(nil), first.FilterConditions...), second.FilterConditions...),
-		Select:           append(append([]grammar.ModelStringPattern(nil), first.Select...), second.Select...),
+		Select:           first.Select,
+	}
+	if second.Select != "" {
+		combined.Select = second.Select
 	}
 	switch {
 	case first.Condition != nil && second.Condition != nil:
@@ -919,10 +922,7 @@ func buildAuthorizedProjectionFilter(outer *QueryFilter, query grammar.Query) (*
 }
 
 func cloneQuery(query grammar.Query) (grammar.Query, error) {
-	clone := grammar.Query{
-		Select: make([]grammar.ModelStringPattern, len(query.Select)),
-	}
-	copy(clone.Select, query.Select)
+	clone := grammar.Query{Select: query.Select}
 	if query.Condition != nil {
 		condition := cloneLogicalExpression(*query.Condition)
 		clone.Condition = &condition

@@ -30,6 +30,7 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -71,7 +72,29 @@ type Query struct {
 
 	FilterConditions []SubFilter `json:"$filters,omitempty" yaml:"$filters,omitempty" mapstructure:"$filters,omitempty"`
 
-	Select []ModelStringPattern `json:"$select,omitempty" yaml:"$select,omitempty" mapstructure:"$select,omitempty"`
+	Select SelectStatement `json:"$select,omitempty" yaml:"$select,omitempty" mapstructure:"$select,omitempty"`
+}
+
+// SelectStatement is the optional $select statement of the AAS Query Language.
+type SelectStatement string
+
+// SelectIdentifiers is the only $select statement defined by the AAS Query
+// Language. It returns the identifiers of the matching objects.
+const SelectIdentifiers SelectStatement = "id"
+
+// UnmarshalJSON accepts only the string "id" as defined by the Query schema.
+func (j *SelectStatement) UnmarshalJSON(value []byte) error {
+	var raw string
+	if err := json.Unmarshal(value, &raw); err != nil || SelectStatement(raw) != SelectIdentifiers {
+		return fmt.Errorf("Query: $select must be the string %q", SelectIdentifiers)
+	}
+	*j = SelectIdentifiers
+	return nil
+}
+
+// SelectsIdentifiers reports whether the query requests identifiers instead of objects.
+func (j Query) SelectsIdentifiers() bool {
+	return j.Select == SelectIdentifiers
 }
 
 // UnmarshalJSON bounds query complexity before recursively decoding its expressions.
