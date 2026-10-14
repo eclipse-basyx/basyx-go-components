@@ -1,0 +1,7 @@
+kind: added
+body: 'Services announce history and the Event Feed in `GET /description`. With `history.mode` `api` or `audit`, the AAS Repository lists `https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-006`, the Submodel Repository lists `https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-007`, and the AAS Environment lists both. With the Event Feed enabled, the services hosting it list `https://basyx.org/aas/API/3/2/EventFeed/1.0`.'
+time: 2026-10-14T14:00:00.000000+02:00
+custom:
+    Impact: Low
+    PullRequest: 764
+    SecurityImpact: 'None.'
