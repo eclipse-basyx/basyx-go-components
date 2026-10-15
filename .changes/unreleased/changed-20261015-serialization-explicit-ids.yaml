@@ -1,0 +1,7 @@
+kind: changed
+body: 'AAS Environment `GET /serialization` serializes only explicitly requested identifiables. A request without any `aasIds` or `submodelIds` is rejected with `400` instead of exporting every stored AAS and Submodel, and `aasIds` alone no longer adds all stored Submodels. `includeConceptDescriptions` adds only the Concept Descriptions referenced through `semanticId` or `supplementalSemanticIds` in the serialized Submodels, as IDTA-01002 specifies, instead of all stored Concept Descriptions. Clients that exported the whole repository without ids must list the AAS and Submodel ids.'
+time: 2026-10-15T09:31:00.000000+02:00
+custom:
+    Impact: High
+    PullRequest: 767
+    SecurityImpact: 'A single request can no longer export the complete repository. Referenced Concept Descriptions that the caller may not read are omitted.'
