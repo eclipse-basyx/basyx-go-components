@@ -27,6 +27,7 @@ package aasenvironment
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -116,14 +117,89 @@ func TestConceptDescriptionReferencesCollectSemanticIDsOfSubmodel(t *testing.T) 
 	references := newConceptDescriptionReferences()
 	references.collect(submodel)
 
-	require.Equal(t, []string{"urn:cd:submodel", "urn:cd:supplemental", "urn:cd:property", "urn:cd:qualifier"}, references.identifiers())
+	require.Equal(t, []string{"urn:cd:submodel", "urn:cd:supplemental", "urn:cd:property", "urn:cd:qualifier"}, references.ids)
 }
 
 func TestConceptDescriptionReferencesNilCollectorIgnoresSubmodels(t *testing.T) {
 	var references *conceptDescriptionReferences
-	references.collect(aastypes.NewSubmodel("urn:sm:ignored"))
 
-	require.Empty(t, references.identifiers())
+	require.NotPanics(t, func() { references.collect(aastypes.NewSubmodel("urn:sm:ignored")) })
+}
+
+func TestConceptDescriptionReferencesCollectInheritedListElementSemantics(t *testing.T) {
+	child := aastypes.NewProperty(aastypes.DataTypeDefXSDString)
+	list := aastypes.NewSubmodelElementList(aastypes.AASSubmodelElementsProperty)
+	list.SetIDShort(stringPointer("list"))
+	list.SetSemanticIDListElement(externalReference("urn:cd:list-element"))
+	list.SetValue([]aastypes.ISubmodelElement{child})
+	submodel := aastypes.NewSubmodel("urn:sm:list")
+	submodel.SetSubmodelElements([]aastypes.ISubmodelElement{list})
+
+	references := newConceptDescriptionReferences()
+	references.collect(submodel)
+
+	require.Equal(t, []string{"urn:cd:list-element"}, references.ids)
+}
+
+func TestConceptDescriptionReferencesCollectValueIDs(t *testing.T) {
+	property := aastypes.NewProperty(aastypes.DataTypeDefXSDString)
+	property.SetIDShort(stringPointer("property"))
+	property.SetValueID(externalReference("urn:cd:value"))
+	submodel := aastypes.NewSubmodel("urn:sm:value")
+	submodel.SetSubmodelElements([]aastypes.ISubmodelElement{property})
+
+	references := newConceptDescriptionReferences()
+	references.collect(submodel)
+
+	require.Equal(t, []string{"urn:cd:value"}, references.ids)
+}
+
+func TestStreamConceptDescriptionsIncludesIndirectlyReferencedConceptDescriptions(t *testing.T) {
+	repository := map[string]aastypes.IConceptDescription{
+		"urn:cd:a": conceptDescriptionWithValueList("urn:cd:a", "urn:cd:b", "urn:cd:missing", "urn:cd:denied"),
+		"urn:cd:b": conceptDescriptionWithValueList("urn:cd:b", "urn:cd:a", "urn:cd:c"),
+		"urn:cd:c": aastypes.NewConceptDescription("urn:cd:c"),
+	}
+	lookups := map[string]int{}
+	lookup := func(_ context.Context, id string) (aastypes.IConceptDescription, error) {
+		lookups[id]++
+		if id == "urn:cd:denied" {
+			return nil, common.NewErrDenied("AASENV-TEST-DENIED denied")
+		}
+		conceptDescription, found := repository[id]
+		if !found {
+			return nil, common.NewErrNotFound("AASENV-TEST-NOTFOUND " + id)
+		}
+		return conceptDescription, nil
+	}
+	references := newConceptDescriptionReferences()
+	references.collectReference(externalReference("urn:cd:a"))
+	writer := &recordingEnvironmentWriter{}
+
+	require.NoError(t, streamConceptDescriptions(t.Context(), lookup, references, writer))
+
+	require.Equal(t, []string{"urn:cd:a", "urn:cd:b", "urn:cd:c"}, writer.ids)
+	for id, count := range lookups {
+		require.Equalf(t, 1, count, "concept description %s looked up more than once", id)
+	}
+}
+
+func TestStreamConceptDescriptionsPropagatesLookupErrors(t *testing.T) {
+	failure := common.NewInternalServerError("AASENV-TEST-LOOKUP failed")
+	lookup := func(context.Context, string) (aastypes.IConceptDescription, error) { return nil, failure }
+	references := newConceptDescriptionReferences()
+	references.collectReference(externalReference("urn:cd:a"))
+
+	err := streamConceptDescriptions(t.Context(), lookup, references, &recordingEnvironmentWriter{})
+
+	require.Equal(t, failure, err)
+}
+
+func TestStreamConceptDescriptionsWithoutCollectorWritesNothing(t *testing.T) {
+	writer := &recordingEnvironmentWriter{}
+
+	require.NoError(t, streamConceptDescriptions(t.Context(), nil, nil, writer))
+	require.Empty(t, writer.ids)
 }
 
 func TestNewSerializationRequestRequiresExplicitIdentifiers(t *testing.T) {
@@ -271,4 +347,35 @@ func TestEnvironmentStreamWritersWriteInChunks(t *testing.T) {
 			require.LessOrEqual(t, counter.writes, 20)
 		})
 	}
+}
+
+type recordingEnvironmentWriter struct {
+	ids []string
+}
+
+func (writer *recordingEnvironmentWriter) writeIdentifiable(_ string, instance aastypes.IClass) error {
+	writer.ids = append(writer.ids, instance.(aastypes.IIdentifiable).ID())
+	return nil
+}
+
+func (writer *recordingEnvironmentWriter) close() error {
+	return nil
+}
+
+func conceptDescriptionWithValueList(id string, valueIDs ...string) aastypes.IConceptDescription {
+	pairs := make([]aastypes.IValueReferencePair, 0, len(valueIDs))
+	for _, valueID := range valueIDs {
+		pair := aastypes.NewValueReferencePair(valueID)
+		pair.SetValueID(externalReference(valueID))
+		pairs = append(pairs, pair)
+	}
+	content := aastypes.NewDataSpecificationIEC61360([]aastypes.ILangStringPreferredNameTypeIEC61360{
+		aastypes.NewLangStringPreferredNameTypeIEC61360("en", id),
+	})
+	content.SetValueList(aastypes.NewValueList(pairs))
+	conceptDescription := aastypes.NewConceptDescription(id)
+	conceptDescription.SetEmbeddedDataSpecifications([]aastypes.IEmbeddedDataSpecification{
+		aastypes.NewEmbeddedDataSpecification(externalReference("https://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/3/1"), content),
+	})
+	return conceptDescription
 }

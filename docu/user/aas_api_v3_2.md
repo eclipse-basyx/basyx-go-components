@@ -204,7 +204,7 @@ The expected pair of terminal evidence sequence and event hash is a trust anchor
 
 - `aasIds` selects Asset Administration Shells and `submodelIds` selects Submodels. Requesting an AAS does not add its Submodels; list them in `submodelIds`.
 - At least one `aasIds` or `submodelIds` value is required. A request without identifiers is rejected with `400`.
-- `includeConceptDescriptions` (default `true`) adds the Concept Descriptions that the serialized Submodels and their elements reference through `semanticId` or `supplementalSemanticIds`. Referenced Concept Descriptions that do not exist or that the caller may not read are omitted.
+- `includeConceptDescriptions` (default `true`) adds the Concept Descriptions that the serialized Submodels reference directly or indirectly. Every reference in a serialized Submodel or in an included Concept Description counts when its first key is a `ConceptDescription` or `GlobalReference` key, for example `semanticId`, `supplementalSemanticIds`, the `semanticIdListElement` inherited by list children, `valueId`, `isCaseOf`, and IEC 61360 `unitId` and `valueList` entries. Referenced Concept Descriptions that do not exist or that the caller may not read are omitted.
 
 The response is generated one identifiable at a time into bounded staging storage before it is sent. Memory use therefore depends on the largest single identifiable, not on the number of requested identifiables or the database size. The staged JSON, XML, or AASX specification part is limited by `general.aasxMaxPartExpandedSizeBytes`, and AASX packages are additionally limited by the other AASX limits; larger serializations are rejected with `413`.
 

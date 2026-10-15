@@ -67,6 +67,7 @@ const (
 const (
 	serializationReferencedConceptDescriptionID   = "0173-1#02-ABG854#003"
 	serializationUnreferencedConceptDescriptionID = "0173-1#02-ABG776#003"
+	serializationValueConceptDescriptionID        = "0173-1#07-ABU223#003"
 	serializationFixtureAASID                     = "urn:fraunhofer:iese:dte:aas:drivemotor-dm3000:001"
 	serializationFixtureSubmodelID                = "urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001"
 )
@@ -524,7 +525,7 @@ func TestSerializationContainsOnlyExplicitlyRequestedIdentifiables(t *testing.T)
 			accept:                 "application/xml",
 			submodelIDs:            []string{serializationFixtureSubmodelID},
 			expectedSubmodelIDs:    []string{serializationFixtureSubmodelID},
-			expectedConceptDescIDs: []string{serializationReferencedConceptDescriptionID},
+			expectedConceptDescIDs: []string{serializationReferencedConceptDescriptionID, serializationValueConceptDescriptionID},
 		},
 	}
 
@@ -538,6 +539,7 @@ func TestSerializationContainsOnlyExplicitlyRequestedIdentifiables(t *testing.T)
 			postJSONFixture(t, serializationBaseURL+"/submodels", "testdata/registry_sync_post_submodel.json", http.StatusCreated)
 			postJSONFixture(t, serializationBaseURL+"/concept-descriptions", "testdata/serialization_concept_description.json", http.StatusCreated)
 			postJSONFixture(t, serializationBaseURL+"/concept-descriptions", "testdata/serialization_referenced_concept_description.json", http.StatusCreated)
+			postJSONFixture(t, serializationBaseURL+"/concept-descriptions", "testdata/serialization_value_concept_description.json", http.StatusCreated)
 
 			payload := downloadAASXSerializationFilteredEnvironment(t, testCase.accept, testCase.aasIDs, testCase.submodelIDs, true)
 			environment := environmentFromSerializationPayload(t, payload, testCase.accept)

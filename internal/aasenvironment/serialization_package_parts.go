@@ -139,9 +139,9 @@ func rewriteSerializationThumbnailReference(aas aastypes.IAssetAdministrationShe
 	}
 }
 
-// conceptDescriptionReferences collects the identifiers of concept
-// descriptions referenced by semantic IDs in serialized submodels, preserving
-// first-seen order. A nil value disables collection.
+// conceptDescriptionReferences collects, in first-seen order, the identifiers
+// of concept descriptions referenced by serialized submodels or by included
+// concept descriptions. A nil value disables collection.
 type conceptDescriptionReferences struct {
 	ids  []string
 	seen map[string]struct{}
@@ -151,34 +151,27 @@ func newConceptDescriptionReferences() *conceptDescriptionReferences {
 	return &conceptDescriptionReferences{seen: make(map[string]struct{})}
 }
 
-func (references *conceptDescriptionReferences) collect(submodel aastypes.ISubmodel) {
-	if references == nil || submodel == nil {
+// collect records every reference below the instance. This covers semantic
+// IDs, list element semantics inherited by list children (AASd-107/AASd-115),
+// value IDs, isCaseOf, and IEC 61360 units and value lists.
+func (references *conceptDescriptionReferences) collect(instance aastypes.IClass) {
+	if references == nil || instance == nil {
 		return
 	}
-	references.collectSemantics(submodel)
-	submodel.Descend(func(instance aastypes.IClass) bool {
-		references.collectSemantics(instance)
+	instance.Descend(func(descendant aastypes.IClass) bool {
+		if reference, ok := descendant.(aastypes.IReference); ok {
+			references.collectReference(reference)
+		}
 		return false
 	})
 }
 
-func (references *conceptDescriptionReferences) collectSemantics(instance aastypes.IClass) {
-	hasSemantics, ok := instance.(aastypes.IHasSemantics)
-	if !ok {
-		return
-	}
-	references.collectReference(hasSemantics.SemanticID())
-	for _, supplementalSemanticID := range hasSemantics.SupplementalSemanticIDs() {
-		references.collectReference(supplementalSemanticID)
-	}
-}
-
-// collectReference records the identifier a semantic reference points to. The
-// first key of a model reference names the concept description, while the first
-// key of an external reference holds the global identifier that concept
+// collectReference records the identifier a reference points to. The first
+// key of a model reference names the concept description, while the first key
+// of an external reference holds the global identifier that concept
 // descriptions conventionally reuse as their id.
 func (references *conceptDescriptionReferences) collectReference(reference aastypes.IReference) {
-	if reference == nil || len(reference.Keys()) == 0 || reference.Keys()[0] == nil {
+	if len(reference.Keys()) == 0 || reference.Keys()[0] == nil {
 		return
 	}
 	key := reference.Keys()[0]
@@ -191,11 +184,4 @@ func (references *conceptDescriptionReferences) collectReference(reference aasty
 	}
 	references.seen[id] = struct{}{}
 	references.ids = append(references.ids, id)
-}
-
-func (references *conceptDescriptionReferences) identifiers() []string {
-	if references == nil {
-		return nil
-	}
-	return references.ids
 }

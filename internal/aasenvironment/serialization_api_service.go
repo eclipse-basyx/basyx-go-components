@@ -44,6 +44,7 @@ import (
 	"strings"
 
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
+	aastypes "github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -329,11 +330,11 @@ func (s *SerializationAPIService) streamEnvironment(ctx context.Context, request
 	if err := s.streamAssetAdministrationShells(ctx, request.aasIDs, packageParts, writer); err != nil {
 		return err
 	}
-	referencedConceptDescriptionIDs, submodelsErr := s.streamSubmodels(ctx, request, packageParts, writer)
+	references, submodelsErr := s.streamSubmodels(ctx, request, packageParts, writer)
 	if submodelsErr != nil {
 		return submodelsErr
 	}
-	if err := s.streamConceptDescriptions(ctx, referencedConceptDescriptionIDs, writer); err != nil {
+	if err := streamConceptDescriptions(ctx, s.persistence.ConceptDescriptionRepository.GetConceptDescriptionByID, references, writer); err != nil {
 		return err
 	}
 	return writer.close()
@@ -355,7 +356,7 @@ func (s *SerializationAPIService) streamAssetAdministrationShells(ctx context.Co
 	return nil
 }
 
-func (s *SerializationAPIService) streamSubmodels(ctx context.Context, request serializationRequest, packageParts *serializationPackageParts, writer environmentStreamWriter) ([]string, error) {
+func (s *SerializationAPIService) streamSubmodels(ctx context.Context, request serializationRequest, packageParts *serializationPackageParts, writer environmentStreamWriter) (*conceptDescriptionReferences, error) {
 	var references *conceptDescriptionReferences
 	if request.includeConceptDescriptions {
 		references = newConceptDescriptionReferences()
@@ -373,21 +374,31 @@ func (s *SerializationAPIService) streamSubmodels(ctx context.Context, request s
 			return nil, err
 		}
 	}
-	return references.identifiers(), nil
+	return references, nil
 }
 
-// streamConceptDescriptions writes the referenced concept descriptions known
-// to the repository. References to unknown or inaccessible concept
+type conceptDescriptionLookup func(context.Context, string) (aastypes.IConceptDescription, error)
+
+// streamConceptDescriptions writes the concept descriptions known to the
+// repository that the serialized submodels reference directly or through
+// other included concept descriptions, for example IEC 61360 value lists.
+//
+// The collected identifiers form a deduplicated work queue, so dependency
+// cycles terminate. References to unknown or inaccessible concept
 // descriptions are skipped because they are not part of the serialization.
-func (s *SerializationAPIService) streamConceptDescriptions(ctx context.Context, ids []string, writer environmentStreamWriter) error {
-	for _, id := range ids {
-		conceptDescription, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptionByID(ctx, id)
+func streamConceptDescriptions(ctx context.Context, lookup conceptDescriptionLookup, references *conceptDescriptionReferences, writer environmentStreamWriter) error {
+	if references == nil {
+		return nil
+	}
+	for index := 0; index < len(references.ids); index++ {
+		conceptDescription, getErr := lookup(ctx, references.ids[index])
 		if common.IsErrNotFound(getErr) || common.IsErrDenied(getErr) {
 			continue
 		}
 		if getErr != nil {
 			return getErr
 		}
+		references.collect(conceptDescription)
 		if err := writer.writeIdentifiable(environmentSectionConceptDescriptions, conceptDescription); err != nil {
 			return err
 		}
