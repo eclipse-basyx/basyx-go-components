@@ -72,7 +72,10 @@ func (s *SerializationAPIService) newSerializationPackageParts(format serializat
 // addThumbnail packages the default thumbnail of the AAS and rewrites its
 // defaultThumbnail reference to the deterministic packaged target path.
 func (parts *serializationPackageParts) addThumbnail(ctx context.Context, aas aastypes.IAssetAdministrationShell) error {
-	if parts == nil || aas == nil {
+	if parts == nil || aas == nil || aas.AssetInformation() == nil || aas.AssetInformation().DefaultThumbnail() == nil {
+		return nil
+	}
+	if strings.TrimSpace(aas.AssetInformation().DefaultThumbnail().Path()) == "" {
 		return nil
 	}
 	thumbnailPart, resolvedURI, resolveErr := parts.service.resolveSerializationThumbnailPart(ctx, aas.ID())
@@ -117,8 +120,7 @@ func (parts *serializationPackageParts) addSupplementaries(ctx context.Context, 
 }
 
 // rewriteSerializationThumbnailReference points the AAS defaultThumbnail to the
-// packaged thumbnail path. If the asset information has no thumbnail yet, a
-// new resource is created.
+// packaged thumbnail path. Missing or filtered references remain unchanged.
 func rewriteSerializationThumbnailReference(aas aastypes.IAssetAdministrationShell, thumbnailPath, thumbnailContentType string) {
 	assetInformation := aas.AssetInformation()
 	if assetInformation == nil {
@@ -126,12 +128,10 @@ func rewriteSerializationThumbnailReference(aas aastypes.IAssetAdministrationShe
 	}
 
 	defaultThumbnail := assetInformation.DefaultThumbnail()
-	if defaultThumbnail == nil {
-		defaultThumbnail = aastypes.NewResource(thumbnailPath)
-		assetInformation.SetDefaultThumbnail(defaultThumbnail)
-	} else {
-		defaultThumbnail.SetPath(thumbnailPath)
+	if defaultThumbnail == nil || strings.TrimSpace(defaultThumbnail.Path()) == "" {
+		return
 	}
+	defaultThumbnail.SetPath(thumbnailPath)
 
 	resolvedThumbnailContentType := strings.TrimSpace(thumbnailContentType)
 	if resolvedThumbnailContentType != "" {

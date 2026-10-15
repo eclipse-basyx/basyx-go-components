@@ -47,6 +47,7 @@ import (
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const (
@@ -341,6 +342,10 @@ func (s *SerializationAPIService) streamEnvironment(ctx context.Context, request
 }
 
 func (s *SerializationAPIService) streamAssetAdministrationShells(ctx context.Context, ids []string, packageParts *serializationPackageParts, writer environmentStreamWriter) error {
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceAAS)
+	if err != nil {
+		return err
+	}
 	for _, id := range ids {
 		aas, getErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, id)
 		if getErr != nil {
@@ -357,6 +362,10 @@ func (s *SerializationAPIService) streamAssetAdministrationShells(ctx context.Co
 }
 
 func (s *SerializationAPIService) streamSubmodels(ctx context.Context, request serializationRequest, packageParts *serializationPackageParts, writer environmentStreamWriter) (*conceptDescriptionReferences, error) {
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceSM)
+	if err != nil {
+		return nil, err
+	}
 	var references *conceptDescriptionReferences
 	if request.includeConceptDescriptions {
 		references = newConceptDescriptionReferences()
@@ -391,6 +400,10 @@ type conceptDescriptionLookup func(context.Context, string) (aastypes.IConceptDe
 func streamConceptDescriptions(ctx context.Context, lookup conceptDescriptionLookup, references *conceptDescriptionReferences, writer environmentStreamWriter) error {
 	if references == nil {
 		return nil
+	}
+	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceCD)
+	if err != nil {
+		return err
 	}
 	for index := 0; index < len(references.ids); index++ {
 		conceptDescription, getErr := lookup(ctx, references.ids[index])
