@@ -43,8 +43,8 @@ import (
 	"sort"
 	"strings"
 
-	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	aastypes "github.com/FriedJannik/aas-go-sdk/types"
+	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
