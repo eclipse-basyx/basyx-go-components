@@ -29,8 +29,6 @@ package aasenvironment
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -44,11 +42,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	aastypes "github.com/FriedJannik/aas-go-sdk/types"
-	aasxmlization "github.com/FriedJannik/aas-go-sdk/xmlization"
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -69,8 +64,6 @@ const (
 	serializationAASXJSONSpecURI        = "/aasx/json/content.json"
 	serializationAASXSupplementaryRoot  = "/aasx/files"
 	serializationAASXThumbnailRootPath  = "/"
-
-	defaultListPageSize int32 = 100
 )
 
 type serializationSupplementaryPart struct {
@@ -92,12 +85,10 @@ type serializationThumbnailPart struct {
 
 // SerializationFileDownload defines a binary serialization response.
 //
-// Content is used by the bounded JSON and XML response paths. AASX responses
-// use WriteTo so the generated package can be streamed directly to the HTTP
-// response. Close releases resources retained by WriteTo and is called by the
-// HTTP adapter after streaming, including when streaming fails.
+// WriteTo streams the staged serialization directly to the HTTP response.
+// Close releases resources retained by WriteTo and is called by the HTTP
+// adapter after streaming, including when streaming fails.
 type SerializationFileDownload struct {
-	Content     []byte
 	WriteTo     func(io.Writer) error
 	Close       func() error
 	ContentType string
@@ -126,143 +117,297 @@ func NewSerializationAPIService(persistence *Persistence, stager common.UploadSt
 	return &SerializationAPIService{persistence: persistence, stager: stager}
 }
 
-// GenerateSerializationByIds builds an environment from the requested AAS and
-// submodel identifiers and returns it as a downloadable file.
+// GenerateSerializationByIds streams the explicitly requested AAS and
+// submodels into a downloadable environment serialization.
 //
 // GenerateSerializationByIds negotiates the response media type from the
-// request context, resolves thumbnail and supplementary package parts for AASX
-// serializations, and maps domain errors to API responses with operation
-// metadata.
+// request context and serializes one identifiable at a time into bounded
+// staging storage, so memory use does not grow with the size of the request or
+// the database. Only explicitly requested identifiables are serialized; when
+// concept descriptions are included, only those referenced by the serialized
+// submodels are added. AASX serializations additionally package the thumbnails
+// and supplementary files of the serialized identifiables.
 //
 // Parameters:
 //   - ctx: Request context containing authorization, Accept header, and limits.
-//   - aasIds: Base64URL-encoded AAS identifiers; empty selects all AASs.
-//   - submodelIds: Base64URL-encoded submodel identifiers; empty selects all submodels.
-//   - includeConceptDescriptions: Whether concept descriptions are included.
+//   - aasIds: Base64URL-encoded AAS identifiers to serialize.
+//   - submodelIds: Base64URL-encoded submodel identifiers to serialize.
+//   - includeConceptDescriptions: Whether referenced concept descriptions are included.
 //
 // Returns:
-//   - model.ImplResponse: Download response or a mapped API error response.
+//   - model.ImplResponse: Download response or a mapped API error response;
+//     400 when neither aasIds nor submodelIds is given and 413 when the
+//     serialization exceeds the configured size limits.
 //   - error: Reserved for transport-independent failures not represented in the response.
 func (s *SerializationAPIService) GenerateSerializationByIds(ctx context.Context, aasIds []string, submodelIds []string, includeConceptDescriptions bool) (model.ImplResponse, error) {
 	const operation = "GenerateSerializationByIds"
 
-	environment, loadErr := s.loadEnvironment(ctx, aasIds, submodelIds, includeConceptDescriptions)
-	if loadErr != nil {
-		return errorResponseForOperation(loadErr, operation, "LoadEnvironment"), nil
+	request, requestErr := newSerializationRequest(aasIds, submodelIds, includeConceptDescriptions)
+	if requestErr != nil {
+		return errorResponseForOperation(requestErr, operation, "ValidateRequest"), nil
 	}
 
-	serializationContentType, negotiateErr := negotiateSerializationContentType(common.AcceptHeaderFromContext(ctx))
+	contentType, negotiateErr := negotiateSerializationContentType(common.AcceptHeaderFromContext(ctx))
 	if negotiateErr != nil {
 		return errorResponseForOperation(negotiateErr, operation, "NegotiateContentType"), nil
 	}
-
-	thumbnailParts, thumbnailErr := s.resolveSerializationThumbnailParts(ctx, aasIds, environment, serializationContentType)
-	if thumbnailErr != nil {
-		return errorResponseForOperation(thumbnailErr, operation, "ResolveThumbnail"), nil
+	format, formatErr := resolveSerializationFormat(contentType)
+	if formatErr != nil {
+		return errorResponseForOperation(formatErr, operation, "ResolveFormat"), nil
 	}
 
-	supplementaryParts, supplementaryErr := s.resolveSerializationSupplementaryParts(ctx, environment, serializationContentType)
-	if supplementaryErr != nil {
-		return errorResponseForOperation(supplementaryErr, operation, "ResolveSupplementaries"), nil
+	staged, packageParts, stageErr := s.stageEnvironment(ctx, request, format)
+	if stageErr != nil {
+		return errorResponseForOperation(stageErr, operation, "StageEnvironment"), nil
 	}
 
-	if isAASXSerializationContentType(serializationContentType) {
-		specContent, specContentType, specURI, prepareErr := s.stageAASXSpecification(ctx, environment, serializationContentType)
-		if prepareErr != nil {
-			return errorResponseForOperation(prepareErr, operation, "PrepareAASXSpecification"), nil
-		}
-		specificationSize, sizeErr := stagedUploadSize(specContent)
-		if sizeErr != nil {
-			_ = specContent.Close()
-			return errorResponseForOperation(sizeErr, operation, "ReadStagedSpecificationSize"), nil
-		}
-		limits := common.AASXLimitsFromContext(ctx)
-		if limitErr := validateAASXSerializationSizeLimits(limits, specificationSize, thumbnailParts, supplementaryParts); limitErr != nil {
-			_ = specContent.Close()
-			return errorResponseForOperation(limitErr, operation, "ValidateAASXLimits"), nil
-		}
+	if !format.aasx {
 		return model.Response(http.StatusOK, SerializationFileDownload{
-			WriteTo: func(destination io.Writer) error {
-				if _, err := specContent.Seek(0, io.SeekStart); err != nil {
-					return common.NewInternalServerError("AASENV-SERIALIZEAASX-SEEKSTAGEDSPEC " + err.Error())
-				}
-				return writeAASXPackageFromReader(destination, specContent, specContentType, specURI, thumbnailParts, supplementaryParts, limits)
-			},
-			Close:       specContent.Close,
-			ContentType: serializationContentType,
-			Filename:    "environment.aasx",
+			WriteTo:     func(destination io.Writer) error { return copyStagedUpload(destination, staged) },
+			Close:       staged.Close,
+			ContentType: contentType,
+			Filename:    format.fileName,
 		}), nil
 	}
 
-	content, fileName, serializeErr := serializeEnvironment(environment, serializationContentType, nil, nil)
-	if serializeErr != nil {
-		return errorResponseForOperation(serializeErr, operation, "SerializeEnvironment"), nil
+	download, packageErr := newAASXSerializationDownload(ctx, staged, packageParts, format, contentType)
+	if packageErr != nil {
+		_ = staged.Close()
+		return errorResponseForOperation(packageErr, operation, "ValidateAASXLimits"), nil
 	}
-
-	return model.Response(http.StatusOK, SerializationFileDownload{
-		Content:     content,
-		ContentType: serializationContentType,
-		Filename:    fileName,
-	}), nil
+	return model.Response(http.StatusOK, download), nil
 }
 
-func (s *SerializationAPIService) stageAASXSpecification(ctx context.Context, environment aastypes.IEnvironment, requestedContentType string) (common.StagedUpload, string, string, error) {
-	if s == nil || s.persistence == nil || s.stager == nil {
-		return nil, "", "", common.NewInternalServerError("AASENV-STAGEAASXSPEC-NILSTAGER upload stager is required")
+func newAASXSerializationDownload(ctx context.Context, specification common.StagedUpload, packageParts *serializationPackageParts, format serializationFormat, contentType string) (SerializationFileDownload, error) {
+	specificationSize, sizeErr := stagedUploadSize(specification)
+	if sizeErr != nil {
+		return SerializationFileDownload{}, sizeErr
 	}
-	contentType := ""
-	uri := ""
-	encode := func(io.Writer) error { return nil }
-	switch requestedContentType {
+	limits := common.AASXLimitsFromContext(ctx)
+	if limitErr := validateAASXSerializationSizeLimits(limits, specificationSize, packageParts.thumbnails, packageParts.supplementaries); limitErr != nil {
+		return SerializationFileDownload{}, limitErr
+	}
+	return SerializationFileDownload{
+		WriteTo: func(destination io.Writer) error {
+			if _, err := specification.Seek(0, io.SeekStart); err != nil {
+				return common.NewInternalServerError("AASENV-SERIALIZEAASX-SEEKSTAGEDSPEC " + err.Error())
+			}
+			return writeAASXPackageFromReader(destination, specification, format.specContentType, format.specURI, packageParts.thumbnails, packageParts.supplementaries, limits)
+		},
+		Close:       specification.Close,
+		ContentType: contentType,
+		Filename:    format.fileName,
+	}, nil
+}
+
+func copyStagedUpload(destination io.Writer, staged common.StagedUpload) error {
+	if _, err := staged.Seek(0, io.SeekStart); err != nil {
+		return common.NewInternalServerError("AASENV-SERIALIZE-SEEKSTAGED " + err.Error())
+	}
+	if _, err := io.Copy(destination, staged); err != nil {
+		return common.NewInternalServerError("AASENV-SERIALIZE-COPYSTAGED " + err.Error())
+	}
+	return nil
+}
+
+type serializationRequest struct {
+	aasIDs                     []string
+	submodelIDs                []string
+	includeConceptDescriptions bool
+}
+
+func newSerializationRequest(aasIDs []string, submodelIDs []string, includeConceptDescriptions bool) (serializationRequest, error) {
+	decodedAASIDs, decodeAASIDsErr := decodeIdentifiers(aasIDs, "AASENV-SERIALIZEREQ-DECODEAASID")
+	if decodeAASIDsErr != nil {
+		return serializationRequest{}, decodeAASIDsErr
+	}
+	decodedSubmodelIDs, decodeSubmodelIDsErr := decodeIdentifiers(submodelIDs, "AASENV-SERIALIZEREQ-DECODESUBMODELID")
+	if decodeSubmodelIDsErr != nil {
+		return serializationRequest{}, decodeSubmodelIDsErr
+	}
+	if len(decodedAASIDs) == 0 && len(decodedSubmodelIDs) == 0 {
+		return serializationRequest{}, common.NewErrBadRequest("AASENV-SERIALIZEREQ-NOIDS at least one aasIds or submodelIds value is required")
+	}
+	return serializationRequest{
+		aasIDs:                     deduplicateIdentifiers(decodedAASIDs),
+		submodelIDs:                deduplicateIdentifiers(decodedSubmodelIDs),
+		includeConceptDescriptions: includeConceptDescriptions,
+	}, nil
+}
+
+func deduplicateIdentifiers(ids []string) []string {
+	result := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result
+}
+
+type serializationFormat struct {
+	specContentType string
+	specURI         string
+	fileName        string
+	aasx            bool
+}
+
+func resolveSerializationFormat(contentType string) (serializationFormat, error) {
+	switch contentType {
+	case serializationContentTypeJSON:
+		return serializationFormat{specContentType: serializationContentTypeJSON, fileName: "environment.json"}, nil
+	case serializationContentTypeXML:
+		return serializationFormat{specContentType: serializationContentTypeXML, fileName: "environment.xml"}, nil
 	case serializationContentTypeAASXXML, serializationContentTypeAASXXMLAlt, serializationContentTypeAASXXMLPkg:
-		contentType = "application/xml"
-		uri = serializationAASXXMLSpecURI
-		encode = func(destination io.Writer) error {
-			encoder := xml.NewEncoder(destination)
-			encoder.Indent("", "\t")
-			if err := aasxmlization.Marshal(encoder, environment, true); err != nil {
-				return err
-			}
-			return encoder.Flush()
-		}
+		return serializationFormat{specContentType: serializationContentTypeXML, specURI: serializationAASXXMLSpecURI, fileName: "environment.aasx", aasx: true}, nil
 	case serializationContentTypeAASXJSON, serializationContentTypeAASXJSONAlt, serializationContentTypeAASXJSONPkg:
-		contentType = "application/json"
-		uri = serializationAASXJSONSpecURI
-		encode = func(destination io.Writer) error {
-			jsonable, err := jsonization.ToJsonable(environment)
-			if err != nil {
-				return err
-			}
-			return json.NewEncoder(destination).Encode(jsonable)
-		}
-	default:
-		return nil, "", "", common.NewErrBadRequest("AASENV-STAGEAASXSPEC-UNSUPPORTED unsupported AASX serialization content type")
+		return serializationFormat{specContentType: serializationContentTypeJSON, specURI: serializationAASXJSONSpecURI, fileName: "environment.aasx", aasx: true}, nil
+	}
+	return serializationFormat{}, common.NewErrBadRequest("AASENV-RESOLVEFORMAT-UNSUPPORTED unsupported serialization content type")
+}
+
+// stageEnvironment streams the requested environment into bounded staging
+// storage and returns the staged serialization together with the AASX package
+// parts discovered while streaming.
+//
+// The environment is produced in a separate goroutine that writes into a pipe
+// consumed by the stager, so at most one identifiable is held in memory and the
+// staged size is limited by the configured maximum part size.
+func (s *SerializationAPIService) stageEnvironment(ctx context.Context, request serializationRequest, format serializationFormat) (common.StagedUpload, *serializationPackageParts, error) {
+	if s == nil || s.persistence == nil || s.stager == nil {
+		return nil, nil, common.NewInternalServerError("AASENV-STAGEENV-NILSERVICE persistence and upload stager are required")
+	}
+	maximum, limitErr := aasxStagingLimit(ctx)
+	if limitErr != nil {
+		return nil, nil, limitErr
+	}
+	packageParts, partsErr := s.newSerializationPackageParts(format)
+	if partsErr != nil {
+		return nil, nil, partsErr
 	}
 
 	reader, writer := io.Pipe()
-	encodeResult := make(chan error, 1)
+	streamResult := make(chan error, 1)
 	go func() {
-		err := encode(writer)
+		err := s.streamEnvironment(ctx, request, format.specContentType, packageParts, writer)
 		_ = writer.CloseWithError(err)
-		encodeResult <- err
+		streamResult <- err
 	}()
-	maximum, limitErr := aasxStagingLimit(ctx)
-	if limitErr != nil {
-		_ = reader.CloseWithError(limitErr)
-		<-encodeResult
-		return nil, "", "", limitErr
-	}
 	staged, stageErr := s.stager(ctx, reader, maximum)
 	_ = reader.Close()
-	encodeErr := <-encodeResult
+	streamErr := <-streamResult
+
+	if err := resolveEnvironmentStagingError(stageErr, streamErr); err != nil {
+		if staged != nil {
+			_ = staged.Close()
+		}
+		return nil, nil, err
+	}
+	return staged, packageParts, nil
+}
+
+// resolveEnvironmentStagingError prefers the producer error, which carries the
+// API status of the failed lookup, unless the stager rejected the payload size
+// or the producer only failed because the stager stopped reading.
+func resolveEnvironmentStagingError(stageErr error, streamErr error) error {
+	if streamErr != nil && !errors.Is(streamErr, io.ErrClosedPipe) && !common.IsErrPayloadTooLarge(stageErr) {
+		return streamErr
+	}
 	if stageErr != nil {
-		return nil, "", "", stageErr
+		return stageErr
 	}
-	if encodeErr != nil {
-		_ = staged.Close()
-		return nil, "", "", common.NewInternalServerError("AASENV-STAGEAASXSPEC-ENCODE " + encodeErr.Error())
+	return streamErr
+}
+
+func (s *SerializationAPIService) streamEnvironment(ctx context.Context, request serializationRequest, specContentType string, packageParts *serializationPackageParts, destination io.Writer) error {
+	writer, writerErr := newEnvironmentStreamWriter(specContentType, destination)
+	if writerErr != nil {
+		return writerErr
 	}
-	return staged, contentType, uri, nil
+	if err := s.streamAssetAdministrationShells(ctx, request.aasIDs, packageParts, writer); err != nil {
+		return err
+	}
+	references, submodelsErr := s.streamSubmodels(ctx, request, packageParts, writer)
+	if submodelsErr != nil {
+		return submodelsErr
+	}
+	if err := streamConceptDescriptions(ctx, s.persistence.ConceptDescriptionRepository.GetConceptDescriptionByID, references, writer); err != nil {
+		return err
+	}
+	return writer.close()
+}
+
+func (s *SerializationAPIService) streamAssetAdministrationShells(ctx context.Context, ids []string, packageParts *serializationPackageParts, writer environmentStreamWriter) error {
+	for _, id := range ids {
+		aas, getErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, id)
+		if getErr != nil {
+			return getErr
+		}
+		if err := packageParts.addThumbnail(ctx, aas); err != nil {
+			return err
+		}
+		if err := writer.writeIdentifiable(environmentSectionAssetAdministrationShells, aas); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *SerializationAPIService) streamSubmodels(ctx context.Context, request serializationRequest, packageParts *serializationPackageParts, writer environmentStreamWriter) (*conceptDescriptionReferences, error) {
+	var references *conceptDescriptionReferences
+	if request.includeConceptDescriptions {
+		references = newConceptDescriptionReferences()
+	}
+	for _, id := range request.submodelIDs {
+		submodel, getErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, id, "deep", false, true)
+		if getErr != nil {
+			return nil, getErr
+		}
+		if err := packageParts.addSupplementaries(ctx, submodel); err != nil {
+			return nil, err
+		}
+		if err := references.collect(submodel); err != nil {
+			return nil, err
+		}
+		if err := writer.writeIdentifiable(environmentSectionSubmodels, submodel); err != nil {
+			return nil, err
+		}
+	}
+	return references, nil
+}
+
+type conceptDescriptionLookup func(context.Context, string) (aastypes.IConceptDescription, error)
+
+// streamConceptDescriptions writes the concept descriptions known to the
+// repository that the serialized submodels reference directly or through
+// other included concept descriptions, for example IEC 61360 value lists.
+//
+// The collected identifiers form a deduplicated work queue, so dependency
+// cycles terminate. References to unknown or inaccessible concept
+// descriptions are skipped because they are not part of the serialization.
+func streamConceptDescriptions(ctx context.Context, lookup conceptDescriptionLookup, references *conceptDescriptionReferences, writer environmentStreamWriter) error {
+	if references == nil {
+		return nil
+	}
+	for index := 0; index < len(references.ids); index++ {
+		conceptDescription, getErr := lookup(ctx, references.ids[index])
+		if common.IsErrNotFound(getErr) || common.IsErrDenied(getErr) {
+			continue
+		}
+		if getErr != nil {
+			return getErr
+		}
+		if err := references.collect(conceptDescription); err != nil {
+			return err
+		}
+		if err := writer.writeIdentifiable(environmentSectionConceptDescriptions, conceptDescription); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func stagedUploadSize(upload common.StagedUpload) (uint64, error) {
@@ -282,245 +427,6 @@ func aasxStagingLimit(ctx context.Context) (int64, error) {
 		return 0, common.NewInternalServerError("AASENV-STAGELIMIT-OVERFLOW configured AASX part limit exceeds supported staging size")
 	}
 	return int64(maximum), nil
-}
-
-// loadEnvironment resolves all requested model fragments and assembles a
-// single in-memory AAS environment.
-//
-// It decodes externally encoded identifiers, loads AAS, submodels, and
-// optionally concept descriptions, and returns an environment object suitable
-// for downstream serialization.
-func (s *SerializationAPIService) loadEnvironment(ctx context.Context, aasIDs []string, submodelIDs []string, includeConceptDescriptions bool) (aastypes.IEnvironment, error) {
-	if s == nil || s.persistence == nil {
-		return nil, common.NewInternalServerError("AASENV-LOADENV-NILSERVICE service must not be nil")
-	}
-
-	decodedAASIDs, decodeAASIDsErr := decodeIdentifiers(aasIDs, "AASENV-LOADENV-DECODEAASID")
-	if decodeAASIDsErr != nil {
-		return nil, decodeAASIDsErr
-	}
-
-	decodedSubmodelIDs, decodeSubmodelIDsErr := decodeIdentifiers(submodelIDs, "AASENV-LOADENV-DECODESUBMODELID")
-	if decodeSubmodelIDsErr != nil {
-		return nil, decodeSubmodelIDsErr
-	}
-
-	assetAdministrationShells, loadAasErr := s.loadAssetAdministrationShells(ctx, decodedAASIDs)
-	if loadAasErr != nil {
-		return nil, loadAasErr
-	}
-
-	submodels, loadSubmodelsErr := s.loadSubmodels(ctx, decodedSubmodelIDs)
-	if loadSubmodelsErr != nil {
-		return nil, loadSubmodelsErr
-	}
-
-	conceptDescriptions, loadCDsErr := s.loadConceptDescriptions(ctx, includeConceptDescriptions)
-	if loadCDsErr != nil {
-		return nil, loadCDsErr
-	}
-
-	environment := aastypes.NewEnvironment()
-	environment.SetAssetAdministrationShells(assetAdministrationShells)
-	environment.SetSubmodels(submodels)
-	environment.SetConceptDescriptions(conceptDescriptions)
-
-	return environment, nil
-}
-
-// loadAssetAdministrationShells returns AAS entries by explicit identifiers or,
-// when no identifiers are supplied, by traversing all pages from the repository.
-//
-// Pagination uses a fixed page size and continues until the backend cursor is
-// empty.
-func (s *SerializationAPIService) loadAssetAdministrationShells(ctx context.Context, ids []string) ([]aastypes.IAssetAdministrationShell, error) {
-	if len(ids) > 0 {
-		result := make([]aastypes.IAssetAdministrationShell, 0, len(ids))
-		for _, id := range ids {
-			aas, getErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, id)
-			if getErr != nil {
-				return nil, getErr
-			}
-			result = append(result, aas)
-		}
-		return result, nil
-	}
-
-	result := make([]aastypes.IAssetAdministrationShell, 0)
-	cursor := ""
-	for {
-		aasPage, nextCursor, getErr := s.persistence.AASRepository.GetAssetAdministrationShells(ctx, defaultListPageSize, cursor, "", nil, time.Time{}, time.Time{})
-		if getErr != nil {
-			return nil, getErr
-		}
-
-		result = append(result, aasPage...)
-		if nextCursor == "" {
-			break
-		}
-		cursor = nextCursor
-	}
-
-	return result, nil
-}
-
-// loadSubmodels returns submodels by explicit identifiers or fetches all
-// submodels via cursor-based pagination when no identifiers are provided.
-//
-// Both explicit and paginated loads populate deep submodel element trees to
-// ensure complete serialization content.
-func (s *SerializationAPIService) loadSubmodels(ctx context.Context, ids []string) ([]aastypes.ISubmodel, error) {
-	if len(ids) > 0 {
-		result := make([]aastypes.ISubmodel, 0, len(ids))
-		for _, id := range ids {
-			submodel, getErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, id, "deep", false, true)
-			if getErr != nil {
-				return nil, getErr
-			}
-			result = append(result, submodel)
-		}
-		return result, nil
-	}
-
-	result := make([]aastypes.ISubmodel, 0)
-	cursor := ""
-	for {
-		submodelPage, nextCursor, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, defaultListPageSize, cursor, "", "", time.Time{}, time.Time{})
-		if getErr != nil {
-			return nil, getErr
-		}
-
-		for _, submodel := range submodelPage {
-			if submodel == nil {
-				return nil, common.NewInternalServerError("AASENV-LOADSUBMODELS-NILSUBMODEL loaded submodel must not be nil")
-			}
-
-			submodelID := strings.TrimSpace(submodel.ID())
-			if submodelID == "" {
-				return nil, common.NewInternalServerError("AASENV-LOADSUBMODELS-EMPTYSMID loaded submodel id must not be empty")
-			}
-
-			unlimited := -1
-			submodelElements, _, getElementsErr := s.persistence.SubmodelRepository.GetSubmodelElements(ctx, submodelID, &unlimited, "", true, "deep")
-			if getElementsErr != nil {
-				return nil, getElementsErr
-			}
-
-			submodel.SetSubmodelElements(submodelElements)
-		}
-
-		result = append(result, submodelPage...)
-		if nextCursor == "" {
-			break
-		}
-		cursor = nextCursor
-	}
-
-	return result, nil
-}
-
-// loadConceptDescriptions fetches concept descriptions only when requested.
-//
-// The function returns nil without querying repositories when
-// includeConceptDescriptions is false, and otherwise pages through all concept
-// descriptions.
-func (s *SerializationAPIService) loadConceptDescriptions(ctx context.Context, includeConceptDescriptions bool) ([]aastypes.IConceptDescription, error) {
-	if !includeConceptDescriptions {
-		return nil, nil
-	}
-
-	result := make([]aastypes.IConceptDescription, 0)
-	cursor := ""
-	for {
-		conceptDescriptionPage, nextCursor, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(ctx, nil, uint(defaultListPageSize), &cursor, time.Time{}, time.Time{})
-		if getErr != nil {
-			return nil, getErr
-		}
-
-		result = append(result, conceptDescriptionPage...)
-		if nextCursor == "" {
-			break
-		}
-		cursor = nextCursor
-	}
-
-	return result, nil
-}
-
-// serializeEnvironment transforms the in-memory environment to the negotiated
-// output format and returns payload bytes with a suggested filename.
-//
-// JSON and XML are emitted directly. AASX variants are delegated to AASX
-// packaging helpers that can embed thumbnails and supplementary parts.
-func serializeEnvironment(
-	environment aastypes.IEnvironment,
-	serializationContentType string,
-	thumbnailParts []serializationThumbnailPart,
-	supplementaryParts []serializationSupplementaryPart,
-) ([]byte, string, error) {
-	switch serializationContentType {
-	case serializationContentTypeJSON:
-		jsonableEnvironment, toJSONErr := jsonization.ToJsonable(environment)
-		if toJSONErr != nil {
-			return nil, "", common.NewInternalServerError("AASENV-SERIALIZE-TOJSONABLE " + toJSONErr.Error())
-		}
-
-		payload, marshalErr := json.Marshal(jsonableEnvironment)
-		if marshalErr != nil {
-			return nil, "", common.NewInternalServerError("AASENV-SERIALIZE-MARSHALJSON " + marshalErr.Error())
-		}
-
-		return payload, "environment.json", nil
-
-	case serializationContentTypeXML:
-		buffer := bytes.NewBuffer(nil)
-		xmlEncoder := xml.NewEncoder(buffer)
-		xmlEncoder.Indent("", "\t")
-		if marshalErr := aasxmlization.Marshal(xmlEncoder, environment, true); marshalErr != nil {
-			return nil, "", common.NewInternalServerError("AASENV-SERIALIZE-MARSHALXML " + marshalErr.Error())
-		}
-		if flushErr := xmlEncoder.Flush(); flushErr != nil {
-			return nil, "", common.NewInternalServerError("AASENV-SERIALIZE-FLUSHXML " + flushErr.Error())
-		}
-
-		return buffer.Bytes(), "environment.xml", nil
-
-	case serializationContentTypeAASXXML,
-		serializationContentTypeAASXXMLAlt,
-		serializationContentTypeAASXXMLPkg,
-		serializationContentTypeAASXJSON,
-		serializationContentTypeAASXJSONAlt,
-		serializationContentTypeAASXJSONPkg:
-		payload, aasxErr := serializeEnvironmentToAASX(environment, serializationContentType, thumbnailParts, supplementaryParts)
-		if aasxErr != nil {
-			return nil, "", aasxErr
-		}
-
-		return payload, "environment.aasx", nil
-	}
-
-	return nil, "", common.NewErrBadRequest("AASENV-SERIALIZE-UNSUPPORTEDCT unsupported serialization content type")
-}
-
-// serializeEnvironmentToAASX dispatches AASX serialization by requested media
-// type.
-//
-// XML-based and JSON-based AASX media types are serialized through dedicated
-// package writers. Any other media type is returned as an internal error.
-func serializeEnvironmentToAASX(
-	environment aastypes.IEnvironment,
-	requestedContentType string,
-	thumbnailParts []serializationThumbnailPart,
-	supplementaryParts []serializationSupplementaryPart,
-) ([]byte, error) {
-	switch requestedContentType {
-	case serializationContentTypeAASXXML, serializationContentTypeAASXXMLAlt, serializationContentTypeAASXXMLPkg:
-		return serializeEnvironmentToAASXXML(environment, thumbnailParts, supplementaryParts)
-	case serializationContentTypeAASXJSON, serializationContentTypeAASXJSONAlt, serializationContentTypeAASXJSONPkg:
-		return serializeEnvironmentToAASXJSON(environment, thumbnailParts, supplementaryParts)
-	}
-
-	return nil, common.NewInternalServerError("AASENV-SERIALIZEAASX-UNSUPPORTEDCT unsupported AASX serialization content type")
 }
 
 func validateAASXSerializationSizeLimits(
@@ -571,70 +477,6 @@ func serializationPartSize(sizeBytes int64, content []byte) uint64 {
 		return uint64(sizeBytes)
 	}
 	return uint64(len(content))
-}
-
-// serializeEnvironmentToAASXXML creates an AASX package with an XML spec part,
-// plus optional supplementary and thumbnail parts.
-//
-// The package is assembled in a temporary file, flushed, and then returned as
-// raw bytes. All packaging and IO failures are wrapped with component-specific
-// error codes.
-func serializeEnvironmentToAASXXML(
-	environment aastypes.IEnvironment,
-	thumbnailParts []serializationThumbnailPart,
-	supplementaryParts []serializationSupplementaryPart,
-) ([]byte, error) {
-	specContent, envToXMLErr := environmentToXMLBytes(environment)
-	if envToXMLErr != nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZEAASX-TRANSFORMENV " + envToXMLErr.Error())
-	}
-
-	return serializeEnvironmentToAASXPackage(specContent, "application/xml", serializationAASXXMLSpecURI, thumbnailParts, supplementaryParts)
-}
-
-// serializeEnvironmentToAASXJSON creates an AASX package with a JSON spec
-// part, plus optional supplementary and thumbnail parts.
-func serializeEnvironmentToAASXJSON(
-	environment aastypes.IEnvironment,
-	thumbnailParts []serializationThumbnailPart,
-	supplementaryParts []serializationSupplementaryPart,
-) ([]byte, error) {
-	specContent, envToJSONErr := environmentToJSONBytes(environment)
-	if envToJSONErr != nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZEAASX-TRANSFORMENV " + envToJSONErr.Error())
-	}
-
-	return serializeEnvironmentToAASXPackage(specContent, "application/json", serializationAASXJSONSpecURI, thumbnailParts, supplementaryParts)
-}
-
-// serializeEnvironmentToAASXPackage assembles an AASX package from a prepared
-// spec payload and optional supplementary and thumbnail parts.
-func serializeEnvironmentToAASXPackage(
-	specContent []byte,
-	specContentType string,
-	specURIPath string,
-	thumbnailParts []serializationThumbnailPart,
-	supplementaryParts []serializationSupplementaryPart,
-) ([]byte, error) {
-	packageStream := bytes.NewBuffer(nil)
-	if err := writeAASXPackage(packageStream, specContent, specContentType, specURIPath, thumbnailParts, supplementaryParts); err != nil {
-		return nil, err
-	}
-	return packageStream.Bytes(), nil
-}
-
-func writeAASXPackage(
-	destination io.Writer,
-	specContent []byte,
-	specContentType string,
-	specURIPath string,
-	thumbnailParts []serializationThumbnailPart,
-	supplementaryParts []serializationSupplementaryPart,
-) error {
-	return writeAASXPackageFromReader(
-		destination, bytes.NewReader(specContent), specContentType, specURIPath,
-		thumbnailParts, supplementaryParts, common.AASXLimitsFromConfig(nil),
-	)
 }
 
 func writeAASXPackageFromReader(
@@ -777,63 +619,6 @@ func consumeSerializationPart(content []byte, consume func(func(io.Reader) error
 	return use(bytes.NewReader(content))
 }
 
-// resolveSerializationSupplementaryParts collects supplementary payload parts
-// for AASX serialization requests.
-//
-// It resolves internal file references from AAS file elements, downloads
-// attachments from the submodel repository, rewrites file element values to
-// packaged targets, and skips unresolved, external, empty, missing, or
-// duplicate entries.
-func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
-	ctx context.Context,
-	environment aastypes.IEnvironment,
-	serializationContentType string,
-) ([]serializationSupplementaryPart, error) {
-	if !isAASXSerializationContentType(serializationContentType) {
-		return nil, nil
-	}
-
-	if s == nil || s.persistence == nil || s.persistence.SubmodelRepository == nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZESUPPL-NILSMREPO submodel repository backend is required")
-	}
-	if environment == nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZESUPPL-NILENV environment must not be nil")
-	}
-
-	specURIPath, resolveSpecURIErr := resolveAASXSpecURIByContentType(serializationContentType)
-	if resolveSpecURIErr != nil {
-		return nil, resolveSpecURIErr
-	}
-
-	specURI, parseSpecURIErr := url.Parse(specURIPath)
-	if parseSpecURIErr != nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZESUPPL-PARSESPECURI " + parseSpecURIErr.Error())
-	}
-
-	fileLocations := CollectAASXFileElementLocations(environment)
-	supplementaryParts := make([]serializationSupplementaryPart, 0, len(fileLocations))
-	seenSupplementaries := make(map[string]struct{}, len(fileLocations))
-
-	for _, fileLocation := range fileLocations {
-		part, resolvedReference, resolveErr := s.resolveSerializationSupplementaryPart(ctx, specURI, fileLocation)
-		if resolveErr != nil {
-			return nil, resolveErr
-		}
-		if part == nil {
-			continue
-		}
-		if _, seen := seenSupplementaries[resolvedReference]; seen {
-			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-			slog.WarnContext(ctx, "duplicate supplementary URI skipped", "error.code", "AASENV-SERIALIZESUPPL-SKIPDUPLICATE", "supplementary_uri", sanitizeLogValue(resolvedReference), "submodel.id", sanitizeLogValue(fileLocation.SubmodelID), "id_short_path", sanitizeLogValue(fileLocation.IDShortPath))
-			continue
-		}
-		seenSupplementaries[resolvedReference] = struct{}{}
-		supplementaryParts = append(supplementaryParts, *part)
-	}
-
-	return supplementaryParts, nil
-}
-
 type serializationAttachmentMetadata struct {
 	contentType string
 	fileName    string
@@ -861,7 +646,7 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryPart(
 	if location.FileElement != nil {
 		location.FileElement.SetValue(&resolvedReference)
 	}
-	part, err := s.buildStreamingSupplementaryPart(ctx, resolvedReference, contentType, metadata.size, location)
+	part, err := s.buildStreamingSupplementaryPart(ctx, resolvedReference, contentType, metadata.size, location.SubmodelID, location.IDShortPath)
 	return part, resolvedReference, err
 }
 
@@ -948,7 +733,9 @@ func finalizeSupplementaryReference(resolved string, managed bool, metadata seri
 	return resolved, contentType, true
 }
 
-func (s *SerializationAPIService) buildStreamingSupplementaryPart(ctx context.Context, resolvedReference, contentType string, size int64, location AASXFileElementLocation) (*serializationSupplementaryPart, error) {
+// buildStreamingSupplementaryPart captures only the attachment lookup keys, so
+// collected parts do not retain the File models of serialized submodels.
+func (s *SerializationAPIService) buildStreamingSupplementaryPart(ctx context.Context, resolvedReference, contentType string, size int64, submodelID, idShortPath string) (*serializationSupplementaryPart, error) {
 	uri, err := url.Parse(resolvedReference)
 	if err != nil {
 		return nil, common.NewInternalServerError("AASENV-SERIALIZESUPPL-PARSEURI " + err.Error())
@@ -957,24 +744,11 @@ func (s *SerializationAPIService) buildStreamingSupplementaryPart(ctx context.Co
 	return &serializationSupplementaryPart{
 		URI: uri, ContentType: contentType, SizeBytes: size,
 		Consume: func(use func(io.Reader) error) error {
-			return s.persistence.SubmodelRepository.StreamFileAttachmentWithContext(ctx, location.SubmodelID, location.IDShortPath, func(_ string, _ string, _ int64, reader io.Reader) error {
+			return s.persistence.SubmodelRepository.StreamFileAttachmentWithContext(ctx, submodelID, idShortPath, func(_ string, _ string, _ int64, reader io.Reader) error {
 				return use(common.NewPayloadLimitReader(reader, maximum, "supplementary"))
 			})
 		},
 	}, nil
-}
-
-// resolveAASXSpecURIByContentType selects the canonical AASX spec part path
-// for the negotiated serialization content type.
-func resolveAASXSpecURIByContentType(contentType string) (string, error) {
-	switch contentType {
-	case serializationContentTypeAASXXML, serializationContentTypeAASXXMLAlt, serializationContentTypeAASXXMLPkg:
-		return serializationAASXXMLSpecURI, nil
-	case serializationContentTypeAASXJSON, serializationContentTypeAASXJSONAlt, serializationContentTypeAASXJSONPkg:
-		return serializationAASXJSONSpecURI, nil
-	default:
-		return "", common.NewInternalServerError("AASENV-RESOLVEAASXSPECURI-UNSUPPORTEDCT unsupported AASX serialization content type")
-	}
 }
 
 // sanitizeLogValue neutralizes control characters in untrusted log fields to
@@ -1167,60 +941,6 @@ func decodeIdentifiers(ids []string, codePrefix string) ([]string, error) {
 	return result, nil
 }
 
-// resolveSerializationThumbnailParts determines and loads thumbnails for AASX
-// serialization outputs.
-//
-// For non-AASX media types it intentionally returns no thumbnail parts and no
-// error. For AASX requests it resolves all non-empty thumbnails for requested
-// or serialized AAS entries, rewrites each AAS defaultThumbnail reference to a
-// deterministic packaged target path, and returns all package parts.
-func (s *SerializationAPIService) resolveSerializationThumbnailParts(
-	ctx context.Context,
-	requestedAASIDs []string,
-	environment aastypes.IEnvironment,
-	serializationContentType string,
-) ([]serializationThumbnailPart, error) {
-	if !isAASXSerializationContentType(serializationContentType) {
-		return nil, nil
-	}
-
-	if s == nil || s.persistence == nil || s.persistence.AASRepository == nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZETHUMB-NILAASREPO AAS repository backend is required")
-	}
-
-	resolvedAASIDs, resolveErr := resolveSerializationThumbnailAASIDs(requestedAASIDs, environment)
-	if resolveErr != nil {
-		return nil, resolveErr
-	}
-	if len(resolvedAASIDs) == 0 {
-		return nil, nil
-	}
-
-	thumbnailParts := make([]serializationThumbnailPart, 0, len(resolvedAASIDs))
-	seenThumbnailURIs := make(map[string]struct{}, len(resolvedAASIDs))
-
-	for _, aasID := range resolvedAASIDs {
-		thumbnailPart, resolvedThumbnailURI, resolveErr := s.resolveSerializationThumbnailPart(ctx, aasID)
-		if resolveErr != nil {
-			return nil, resolveErr
-		}
-		if thumbnailPart == nil {
-			continue
-		}
-		if _, seen := seenThumbnailURIs[resolvedThumbnailURI]; seen {
-			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-			slog.WarnContext(ctx, "duplicate thumbnail URI skipped", "error.code", "AASENV-SERIALIZETHUMB-SKIPDUPLICATE", "thumbnail_uri", sanitizeLogValue(resolvedThumbnailURI), "aas.id", sanitizeLogValue(aasID))
-			continue
-		}
-		seenThumbnailURIs[resolvedThumbnailURI] = struct{}{}
-
-		rewriteSerializationThumbnailReference(environment, aasID, resolvedThumbnailURI, thumbnailPart.ContentType)
-		thumbnailParts = append(thumbnailParts, *thumbnailPart)
-	}
-
-	return thumbnailParts, nil
-}
-
 type serializationThumbnailMetadata struct {
 	serializationAttachmentMetadata
 	path string
@@ -1274,63 +994,6 @@ func (s *SerializationAPIService) loadSerializationThumbnailMetadata(ctx context
 	return metadata, metadata.size > 0, nil
 }
 
-// resolveSerializationThumbnailAASIDs determines which AAS identifiers should
-// be used for thumbnail loading.
-//
-// Explicit request ids are decoded and deduplicated. When none are provided,
-// ids are derived from the serialized environment.
-func resolveSerializationThumbnailAASIDs(requestedAASIDs []string, environment aastypes.IEnvironment) ([]string, error) {
-	if len(requestedAASIDs) > 0 {
-		decodedIDs, decodeErr := resolveRequestedThumbnailAASIDs(requestedAASIDs)
-		if decodeErr != nil {
-			return nil, decodeErr
-		}
-		return deduplicateTrimmedIdentifiers(decodedIDs), nil
-	}
-
-	if environment == nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZETHUMB-NILENV environment must not be nil")
-	}
-
-	aasIDs := make([]string, 0, len(environment.AssetAdministrationShells()))
-	for _, aas := range environment.AssetAdministrationShells() {
-		if aas == nil {
-			continue
-		}
-		aasIDs = append(aasIDs, aas.ID())
-	}
-
-	return deduplicateTrimmedIdentifiers(aasIDs), nil
-}
-
-// deduplicateTrimmedIdentifiers removes empty and duplicate identifiers while
-// preserving first-seen order.
-func deduplicateTrimmedIdentifiers(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-
-	result := make([]string, 0, len(values))
-	seenValues := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		trimmedValue := strings.TrimSpace(value)
-		if trimmedValue == "" {
-			continue
-		}
-		if _, exists := seenValues[trimmedValue]; exists {
-			continue
-		}
-		seenValues[trimmedValue] = struct{}{}
-		result = append(result, trimmedValue)
-	}
-
-	if len(result) == 0 {
-		return nil
-	}
-
-	return result
-}
-
 // buildSerializationThumbnailPart creates one thumbnail package part with a
 // normalized URI and resolved content type.
 func buildSerializationThumbnailPart(aasID, thumbnailFileName, thumbnailContentType, thumbnailPath string, thumbnailContent []byte) (serializationThumbnailPart, error) {
@@ -1357,43 +1020,6 @@ func buildSerializationThumbnailPart(aasID, thumbnailFileName, thumbnailContentT
 		ContentType: resolvedThumbnailContentType,
 		Content:     thumbnailContent,
 	}, nil
-}
-
-// rewriteSerializationThumbnailReference updates the matching AAS
-// defaultThumbnail reference in the environment to the packaged thumbnail path.
-//
-// If no thumbnail exists on the asset information, a new resource is created.
-func rewriteSerializationThumbnailReference(environment aastypes.IEnvironment, aasID, thumbnailPath, thumbnailContentType string) {
-	if environment == nil {
-		return
-	}
-
-	for _, aas := range environment.AssetAdministrationShells() {
-		if aas == nil || strings.TrimSpace(aas.ID()) != strings.TrimSpace(aasID) {
-			continue
-		}
-
-		assetInformation := aas.AssetInformation()
-		if assetInformation == nil {
-			return
-		}
-
-		defaultThumbnail := assetInformation.DefaultThumbnail()
-		if defaultThumbnail == nil {
-			defaultThumbnail = aastypes.NewResource(thumbnailPath)
-			assetInformation.SetDefaultThumbnail(defaultThumbnail)
-		} else {
-			defaultThumbnail.SetPath(thumbnailPath)
-		}
-
-		resolvedThumbnailContentType := strings.TrimSpace(thumbnailContentType)
-		if resolvedThumbnailContentType != "" {
-			contentTypeValue := resolvedThumbnailContentType
-			defaultThumbnail.SetContentType(&contentTypeValue)
-		}
-
-		return
-	}
 }
 
 // thumbnailExportFileName creates the final exported thumbnail filename with a
@@ -1443,33 +1069,6 @@ func normalizeAASXPartFileName(fileName string) string {
 	}
 
 	return normalizedFileName
-}
-
-// resolveRequestedThumbnailAASIDs decodes explicit request identifiers for
-// thumbnail lookup.
-func resolveRequestedThumbnailAASIDs(requestedAASIDs []string) ([]string, error) {
-	decodedIDs, decodeErr := decodeIdentifiers(requestedAASIDs, "AASENV-SERIALIZETHUMB-DECODEAASID")
-	if decodeErr != nil {
-		return nil, decodeErr
-	}
-
-	return decodedIDs, nil
-}
-
-// isAASXSerializationContentType reports whether the media type represents one
-// of the supported AASX serialization variants.
-func isAASXSerializationContentType(contentType string) bool {
-	switch contentType {
-	case serializationContentTypeAASXXML,
-		serializationContentTypeAASXXMLAlt,
-		serializationContentTypeAASXJSON,
-		serializationContentTypeAASXJSONAlt,
-		serializationContentTypeAASXXMLPkg,
-		serializationContentTypeAASXJSONPkg:
-		return true
-	default:
-		return false
-	}
 }
 
 // parseMediaType normalizes and validates a single media type token.
@@ -1556,38 +1155,4 @@ func errorResponseForOperation(err error, operation string, info string) model.I
 	default:
 		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, operation, info)
 	}
-}
-
-// environmentToJSONBytes serializes an environment to JSON bytes using the AAS
-// jsonization model and encoding/json.
-func environmentToJSONBytes(env aastypes.IEnvironment) ([]byte, error) {
-	jsonableEnv, err := jsonization.ToJsonable(env)
-	if err != nil {
-		return nil, err
-	}
-
-	payload, err := json.Marshal(jsonableEnv)
-	if err != nil {
-		return nil, err
-	}
-
-	return payload, nil
-}
-
-// environmentToXMLBytes serializes an environment to XML bytes using the AAS
-// XML marshaller and pretty indentation.
-func environmentToXMLBytes(env aastypes.IEnvironment) ([]byte, error) {
-	buffer := bytes.NewBuffer(nil)
-	xmlEncoder := xml.NewEncoder(buffer)
-	xmlEncoder.Indent("", "\t")
-
-	if err := aasxmlization.Marshal(xmlEncoder, env, true); err != nil {
-		return nil, err
-	}
-
-	if err := xmlEncoder.Flush(); err != nil {
-		return nil, err
-	}
-
-	return buffer.Bytes(), nil
 }

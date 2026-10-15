@@ -37,7 +37,7 @@ Known v3.2 OpenAPI gaps in standalone services:
 - Standalone AAS Repository `/serialization` is present in generated code but is not wired by the service entrypoint.
 - Standalone Concept Description Repository `/serialization` is present in the OpenAPI file but is not currently exposed by a generated controller/service.
 - Standalone Submodel Repository `/serialization` is routed but returns `501 Not Implemented`.
-- AAS Environment `/serialization` and `/upload` are implemented and should be used when full environment import/export is needed.
+- AAS Environment `/serialization` and `/upload` are implemented and should be used for environment import/export; see [Environment Serialization](#environment-serialization).
 
 ## History Configuration
 
@@ -197,6 +197,16 @@ go run ./cmd/historyevidenceverifier \
 Add `-recover` to include the reconstructed terminal snapshot in the report. The terminal event hash, change type, deletion state, operation time, and audit context make deleted-state recovery explicit. Verification fails if the requested terminal sequence, its event hash, or live WORM retention check does not match the independently retained expectation.
 
 The expected pair of terminal evidence sequence and event hash is a trust anchor. Export it after a successful verification and retain it outside the BaSyx PostgreSQL database, for example in a protected monitoring, SIEM, or evidence-preservation system. Later checks must use the previously retained value before advancing that value to a newer successfully verified head. Reading the expected hash from the database being verified cannot detect a database attacker who removed the same tail from both catalog tables. The first retained value is a trust-on-first-use baseline and must be established through an operator-controlled process.
+
+## Environment Serialization
+
+`GET /serialization` on the AAS Environment serializes only the identifiables that the request names explicitly:
+
+- `aasIds` selects Asset Administration Shells and `submodelIds` selects Submodels. Requesting an AAS does not add its Submodels; list them in `submodelIds`.
+- At least one `aasIds` or `submodelIds` value is required. A request without identifiers is rejected with `400`.
+- `includeConceptDescriptions` (default `true`) adds the Concept Descriptions that the serialized Submodels reference directly or indirectly. Every reference in a serialized Submodel or in an included Concept Description counts when its first key is a `ConceptDescription` or `GlobalReference` key, for example `semanticId`, `supplementalSemanticIds`, the `semanticIdListElement` inherited by list children, `valueId`, `isCaseOf`, and IEC 61360 `unitId` and `valueList` entries. Referenced Concept Descriptions that do not exist or that the caller may not read are omitted.
+
+The response is generated one identifiable at a time into bounded staging storage before it is sent. Memory use therefore depends on the largest single identifiable, not on the number of requested identifiables or the database size. The staged JSON, XML, or AASX specification part is limited by `general.aasxMaxPartExpandedSizeBytes`, and AASX packages are additionally limited by the other AASX limits; larger serializations are rejected with `413`. The identifiers of referenced Concept Descriptions are tracked for deduplication until the serialization ends and are limited to an estimated 16 MiB per request, which allows well over 100,000 distinct references; requests that reference more are also rejected with `413`.
 
 ## Internal Attachments And Thumbnails
 

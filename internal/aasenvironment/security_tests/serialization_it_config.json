@@ -3,14 +3,21 @@
 		"context": "GET serialization - viewer-only user allowed",
 		"token": { "user": "usera", "password": "pwd" },
 		"method": "GET",
-		"endpoint": "{{BASYX_IT_API_URL}}/serialization",
+		"endpoint": "{{BASYX_IT_API_URL}}/serialization?aasIds=dXJuOmZyYXVuaG9mZXI6aWVzZTpkdGU6YWFzOmRyaXZlbW90b3ItZG0zMDAwOjAwMQ",
 		"expectedStatus": 200
+	},
+	{
+		"context": "GET serialization - viewer-only user without identifiers rejected",
+		"token": { "user": "usera", "password": "pwd" },
+		"method": "GET",
+		"endpoint": "{{BASYX_IT_API_URL}}/serialization",
+		"expectedStatus": 400
 	},
 	{
 		"context": "GET serialization - editor-only user denied",
 		"token": { "user": "userx", "password": "pwd" },
 		"method": "GET",
-		"endpoint": "{{BASYX_IT_API_URL}}/serialization",
+		"endpoint": "{{BASYX_IT_API_URL}}/serialization?aasIds=dXJuOmZyYXVuaG9mZXI6aWVzZTpkdGU6YWFzOmRyaXZlbW90b3ItZG0zMDAwOjAwMQ",
 		"expectedStatus": 403
 	}
 ]
