@@ -197,3 +197,18 @@ func TestWriteAASXPackageEnforcesActualCumulativeExpandedSize(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, common.IsErrPayloadTooLarge(err), "unexpected error: %v", err)
 }
+
+func serializeEnvironmentToAASXPackage(
+	specContent []byte,
+	specContentType string,
+	specURIPath string,
+	thumbnailParts []serializationThumbnailPart,
+	supplementaryParts []serializationSupplementaryPart,
+) ([]byte, error) {
+	packageStream := bytes.NewBuffer(nil)
+	err := writeAASXPackageFromReader(
+		packageStream, bytes.NewReader(specContent), specContentType, specURIPath,
+		thumbnailParts, supplementaryParts, common.AASXLimitsFromConfig(nil),
+	)
+	return packageStream.Bytes(), err
+}

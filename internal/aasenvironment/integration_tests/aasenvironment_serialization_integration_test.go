@@ -64,6 +64,13 @@ const (
 	serializationThreeAasJsonDownloadFromXmlUploadPath = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_xml_aasx_upload.json"
 )
 
+const (
+	serializationReferencedConceptDescriptionID   = "0173-1#02-ABG854#003"
+	serializationUnreferencedConceptDescriptionID = "0173-1#02-ABG776#003"
+	serializationFixtureAASID                     = "urn:fraunhofer:iese:dte:aas:drivemotor-dm3000:001"
+	serializationFixtureSubmodelID                = "urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001"
+)
+
 var serializationBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
 var serializationIntegrationDSN = testenv.PostgresKeywordDSNFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 
@@ -92,7 +99,7 @@ func TestSerializationDownloadAasXmlAfterThreeAasUpload(t *testing.T) {
 			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
 			uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
 
-			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept, true)
+			payload := downloadSerializationOfStoredIdentifiables(t, testCase.accept, true)
 			require.NotEmpty(t, payload)
 			writeSerializationOutput(t, testCase.outputPath, payload)
 
@@ -126,7 +133,7 @@ func TestSerializationDownloadAasxJsonAfterThreeAASUpload(t *testing.T) {
 			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
 			uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
 
-			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept, true)
+			payload := downloadSerializationOfStoredIdentifiables(t, testCase.accept, true)
 			require.NotEmpty(t, payload)
 			writeSerializationOutput(t, testCase.outputPath, payload)
 
@@ -153,7 +160,7 @@ func TestSerializationDownloadXmlAfterThreeAasUpload(t *testing.T) {
 			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
 			uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
 
-			payload := downloadAASXSerializationFullEnvironment(t, "application/xml", true)
+			payload := downloadSerializationOfStoredIdentifiables(t, "application/xml", true)
 			require.NotEmpty(t, payload)
 			writeSerializationOutput(t, testCase.outputPath, payload)
 
@@ -180,7 +187,7 @@ func TestSerializationDownloadJsonAfterThreeAasUpload(t *testing.T) {
 			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
 			uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
 
-			payload := downloadAASXSerializationFullEnvironment(t, "application/json", true)
+			payload := downloadSerializationOfStoredIdentifiables(t, "application/json", true)
 			require.NotEmpty(t, payload)
 			writeSerializationOutput(t, testCase.outputPath, payload)
 
@@ -232,7 +239,7 @@ func TestSerializationDownloadAASXXMLAfterThreeAASUploadRequestedAcceptFormat(t 
 			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
 			uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
 
-			downloadPayload := downloadAASXSerializationFullEnvironment(t, testCase.accept, true)
+			downloadPayload := downloadSerializationOfStoredIdentifiables(t, testCase.accept, true)
 			require.NotEmpty(t, downloadPayload)
 
 			switch testCase.expectedFormat {
@@ -287,8 +294,9 @@ func TestSerializationDownloadAASXWithoutUploadContainsSameIds(t *testing.T) {
 			postJSONFixture(t, serializationBaseURL+"/shells", "testdata/serialization_asset_administration_shell.json", http.StatusCreated)
 			postJSONFixture(t, serializationBaseURL+"/submodels", "testdata/serialization_submodel.json", http.StatusCreated)
 			postJSONFixture(t, serializationBaseURL+"/concept-descriptions", "testdata/serialization_concept_description.json", http.StatusCreated)
+			postJSONFixture(t, serializationBaseURL+"/concept-descriptions", "testdata/serialization_referenced_concept_description.json", http.StatusCreated)
 
-			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept, true)
+			payload := downloadSerializationOfStoredIdentifiables(t, testCase.accept, true)
 			require.NotEmpty(t, payload)
 
 			specParts, closePackage := readAASXSpecPartsFromPayload(t, payload)
@@ -302,8 +310,9 @@ func TestSerializationDownloadAASXWithoutUploadContainsSameIds(t *testing.T) {
 				environment,
 				[]string{"urn:fraunhofer:iese:dte:aas:drivemotor-dm3000:001"},
 				[]string{"urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001"},
-				[]string{"0173-1#02-ABG776#003"},
+				[]string{serializationReferencedConceptDescriptionID},
 			))
+			require.NotContains(t, environmentConceptDescriptionIDs(environment), serializationUnreferencedConceptDescriptionID)
 		})
 	}
 }
@@ -378,8 +387,9 @@ func TestSerializationDownloadPlainWithoutUploadContainsSameIds(t *testing.T) {
 			postJSONFixture(t, serializationBaseURL+"/shells", "testdata/serialization_asset_administration_shell.json", http.StatusCreated)
 			postJSONFixture(t, serializationBaseURL+"/submodels", "testdata/serialization_submodel.json", http.StatusCreated)
 			postJSONFixture(t, serializationBaseURL+"/concept-descriptions", "testdata/serialization_concept_description.json", http.StatusCreated)
+			postJSONFixture(t, serializationBaseURL+"/concept-descriptions", "testdata/serialization_referenced_concept_description.json", http.StatusCreated)
 
-			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept, true)
+			payload := downloadSerializationOfStoredIdentifiables(t, testCase.accept, true)
 			require.NotEmpty(t, payload)
 
 			environment, transformToEnvErr := environmentFromPlainSerializationPayload(payload, testCase.accept)
@@ -389,8 +399,9 @@ func TestSerializationDownloadPlainWithoutUploadContainsSameIds(t *testing.T) {
 				environment,
 				[]string{"urn:fraunhofer:iese:dte:aas:drivemotor-dm3000:001"},
 				[]string{"urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001"},
-				[]string{"0173-1#02-ABG776#003"},
+				[]string{serializationReferencedConceptDescriptionID},
 			))
+			require.NotContains(t, environmentConceptDescriptionIDs(environment), serializationUnreferencedConceptDescriptionID)
 		})
 	}
 }
@@ -401,7 +412,7 @@ func TestSerializationDownloadAASXAfterUploadContainsSameFiles(t *testing.T) {
 	uploadPath := "testdata/IESEDriveMotorDM3000.aasx"
 	uploadFixture(t, uploadPath, "application/aasx+xml")
 
-	downloadPayload := downloadAASXSerializationFullEnvironment(t, "application/aasx+xml", true)
+	downloadPayload := downloadSerializationOfStoredIdentifiables(t, "application/aasx+xml", true)
 	require.NotEmpty(t, downloadPayload)
 
 	uploadedFingerprints, uploadedErr := aasxSupplementaryFingerprintsFromFile(uploadPath)
@@ -459,22 +470,99 @@ func TestSerializationDownloadReturnsStatusOK(t *testing.T) {
 	postJSONFixture(t, serializationBaseURL+"/shells", "testdata/serialization_asset_administration_shell.json", http.StatusCreated)
 	postJSONFixture(t, serializationBaseURL+"/submodels", "testdata/serialization_submodel.json", http.StatusCreated)
 
-	query := url.Values{}
-	query.Set("includeConceptDescriptions", strconv.FormatBool(false))
-
-	req, err := http.NewRequest(http.MethodGet, serializationBaseURL+"/serialization?"+query.Encode(), nil)
-	require.NoError(t, err)
-	req.Header.Set("Accept", "application/json")
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp := doHTTPIntegrationRequest(t, client, req)
-	defer func() { _ = resp.Body.Close() }()
-
-	body, readErr := io.ReadAll(resp.Body)
-	require.NoError(t, readErr)
+	body := downloadAASXSerializationFilteredEnvironment(
+		t, "application/json", []string{serializationFixtureAASID}, []string{serializationFixtureSubmodelID}, false,
+	)
 	require.NotEmpty(t, body, "successful serialization should return a non-empty payload")
+}
 
-	require.Equal(t, http.StatusOK, resp.StatusCode, "successful serialization should return HTTP 200")
+func TestSerializationWithoutIdentifiersReturnsBadRequest(t *testing.T) {
+	resetDatabaseForUploadIT(t, serializationIntegrationDSN)
+
+	postJSONFixture(t, serializationBaseURL+"/shells", "testdata/serialization_asset_administration_shell.json", http.StatusCreated)
+	postJSONFixture(t, serializationBaseURL+"/submodels", "testdata/serialization_submodel.json", http.StatusCreated)
+
+	for _, accept := range []string{"application/json", "application/xml", "application/aasx+xml"} {
+		t.Run(accept, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, serializationBaseURL+"/serialization?includeConceptDescriptions=true", nil)
+			require.NoError(t, err)
+			req.Header.Set("Accept", accept)
+
+			client := &http.Client{Timeout: 60 * time.Second}
+			resp := doHTTPIntegrationRequest(t, client, req)
+			defer func() { _ = resp.Body.Close() }()
+
+			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		})
+	}
+}
+
+func TestSerializationContainsOnlyExplicitlyRequestedIdentifiables(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		accept                 string
+		aasIDs                 []string
+		submodelIDs            []string
+		expectedAASIDs         []string
+		expectedSubmodelIDs    []string
+		expectedConceptDescIDs []string
+	}{
+		{
+			name:           "AASOnlyJSON",
+			accept:         "application/json",
+			aasIDs:         []string{serializationFixtureAASID},
+			expectedAASIDs: []string{serializationFixtureAASID},
+		},
+		{
+			name:           "AASOnlyAASX",
+			accept:         "application/aasx+xml",
+			aasIDs:         []string{serializationFixtureAASID},
+			expectedAASIDs: []string{serializationFixtureAASID},
+		},
+		{
+			name:                   "SubmodelOnlyXML",
+			accept:                 "application/xml",
+			submodelIDs:            []string{serializationFixtureSubmodelID},
+			expectedSubmodelIDs:    []string{serializationFixtureSubmodelID},
+			expectedConceptDescIDs: []string{serializationReferencedConceptDescriptionID},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
+
+			postJSONFixture(t, serializationBaseURL+"/shells", "testdata/serialization_asset_administration_shell.json", http.StatusCreated)
+			postJSONFixture(t, serializationBaseURL+"/shells", "testdata/registry_sync_post_shell.json", http.StatusCreated)
+			postJSONFixture(t, serializationBaseURL+"/submodels", "testdata/serialization_submodel.json", http.StatusCreated)
+			postJSONFixture(t, serializationBaseURL+"/submodels", "testdata/registry_sync_post_submodel.json", http.StatusCreated)
+			postJSONFixture(t, serializationBaseURL+"/concept-descriptions", "testdata/serialization_concept_description.json", http.StatusCreated)
+			postJSONFixture(t, serializationBaseURL+"/concept-descriptions", "testdata/serialization_referenced_concept_description.json", http.StatusCreated)
+
+			payload := downloadAASXSerializationFilteredEnvironment(t, testCase.accept, testCase.aasIDs, testCase.submodelIDs, true)
+			environment := environmentFromSerializationPayload(t, payload, testCase.accept)
+
+			require.ElementsMatch(t, testCase.expectedAASIDs, environmentAASIDs(environment))
+			require.ElementsMatch(t, testCase.expectedSubmodelIDs, environmentSubmodelIDs(environment))
+			require.ElementsMatch(t, testCase.expectedConceptDescIDs, environmentConceptDescriptionIDs(environment))
+		})
+	}
+}
+
+func environmentFromSerializationPayload(t *testing.T, payload []byte, accept string) aastypes.IEnvironment {
+	t.Helper()
+
+	if accept == "application/json" || accept == "application/xml" {
+		environment, err := environmentFromPlainSerializationPayload(payload, accept)
+		require.NoError(t, err)
+		return environment
+	}
+
+	specParts, closePackage := readAASXSpecPartsFromPayload(t, payload)
+	t.Cleanup(closePackage)
+	environment, err := environmentFromAASXSpecParts(specParts)
+	require.NoError(t, err)
+	return environment
 }
 
 func requireEnvironmentContainsAllIDs(environment aastypes.IEnvironment, aasIDs []string, submodelIDs []string, conceptDescriptionIDs []string) error {
@@ -1041,25 +1129,41 @@ func uploadFixture(t *testing.T, fixturePath string, partContentType string) {
 	require.Equalf(t, http.StatusOK, resp.StatusCode, "upload failed: %s", string(body))
 }
 
-func downloadAASXSerializationFullEnvironment(t *testing.T, acceptHeader string, includeConceptDescriptions bool) []byte {
+func downloadSerializationOfStoredIdentifiables(t *testing.T, acceptHeader string, includeConceptDescriptions bool) []byte {
 	t.Helper()
 
-	query := url.Values{}
-	query.Set("includeConceptDescriptions", strconv.FormatBool(includeConceptDescriptions))
+	return downloadAASXSerializationFilteredEnvironment(
+		t,
+		acceptHeader,
+		storedIdentifiers(t, "/shells"),
+		storedIdentifiers(t, "/submodels"),
+		includeConceptDescriptions,
+	)
+}
 
-	req, err := http.NewRequest(http.MethodGet, serializationBaseURL+"/serialization?"+query.Encode(), nil)
+func storedIdentifiers(t *testing.T, collectionPath string) []string {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodGet, serializationBaseURL+collectionPath+"?limit=1000", nil)
 	require.NoError(t, err)
-	req.Header.Set("Accept", acceptHeader)
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp := doHTTPIntegrationRequest(t, client, req)
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Equalf(t, http.StatusOK, resp.StatusCode, "serialization full environment request failed for Accept %q: %s", acceptHeader, string(body))
+	var page struct {
+		Result []struct {
+			ID string `json:"id"`
+		} `json:"result"`
+	}
+	require.Equal(t, http.StatusOK, resp.StatusCode, "listing %s failed", collectionPath)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&page))
 
-	return body
+	ids := make([]string, 0, len(page.Result))
+	for _, item := range page.Result {
+		ids = append(ids, item.ID)
+	}
+	return ids
 }
 
 func downloadAASXSerializationFilteredEnvironment(t *testing.T, acceptHeader string, aasIDs []string, submodelIDs []string, includeConceptDescriptions bool) []byte {

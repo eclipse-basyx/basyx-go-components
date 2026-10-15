@@ -73,12 +73,21 @@ func CollectAASXFileElementLocations(environment aastypes.IEnvironment) []AASXFi
 
 	locations := make([]AASXFileElementLocation, 0)
 	for _, submodel := range environment.Submodels() {
-		if submodel == nil {
-			continue
-		}
-		walkAASXFileElements(submodel.ID(), submodel.SubmodelElements(), "", false, &locations)
+		locations = append(locations, CollectSubmodelAASXFileElementLocations(submodel)...)
 	}
 
+	return locations
+}
+
+// CollectSubmodelAASXFileElementLocations returns all File element locations
+// together with mutable File element handles from one submodel.
+func CollectSubmodelAASXFileElementLocations(submodel aastypes.ISubmodel) []AASXFileElementLocation {
+	if submodel == nil {
+		return nil
+	}
+
+	locations := make([]AASXFileElementLocation, 0)
+	walkAASXFileElements(submodel.ID(), submodel.SubmodelElements(), "", false, &locations)
 	return locations
 }
 

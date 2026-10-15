@@ -113,14 +113,13 @@ func writeSerializationFileDownload(w http.ResponseWriter, status int, payload S
 		status = http.StatusOK
 	}
 	w.WriteHeader(status)
-	if payload.WriteTo != nil {
-		if err := payload.WriteTo(w); err != nil {
-			slog.Error("response stream failed", "error.code", "AASENV-SERIALIZATIONAPI-STREAM", "error", err)
-		}
+	if payload.WriteTo == nil {
+		slog.Error("response stream missing", "error.code", "AASENV-SERIALIZATIONAPI-NILWRITER")
 		return
 	}
-	// #nosec G705 -- writing binary attachment payload with Content-Disposition attachment and nosniff header
-	_, _ = w.Write(payload.Content)
+	if err := payload.WriteTo(w); err != nil {
+		slog.Error("response stream failed", "error.code", "AASENV-SERIALIZATIONAPI-STREAM", "error", err)
+	}
 }
 
 func writeSerializationError(w http.ResponseWriter, status int, err error, info string) {
