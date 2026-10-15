@@ -139,49 +139,72 @@ func rewriteSerializationThumbnailReference(aas aastypes.IAssetAdministrationShe
 	}
 }
 
+const (
+	conceptDescriptionReferenceBudgetBytes   = 16 << 20
+	conceptDescriptionReferenceOverheadBytes = 64
+)
+
 // conceptDescriptionReferences collects, in first-seen order, the identifiers
 // of concept descriptions referenced by serialized submodels or by included
 // concept descriptions. A nil value disables collection.
+//
+// The identifiers must be kept until the end of the serialization to
+// deduplicate them, so their estimated memory is limited by a fixed budget.
 type conceptDescriptionReferences struct {
-	ids  []string
-	seen map[string]struct{}
+	ids            []string
+	seen           map[string]struct{}
+	remainingBytes int
 }
 
 func newConceptDescriptionReferences() *conceptDescriptionReferences {
-	return &conceptDescriptionReferences{seen: make(map[string]struct{})}
+	return &conceptDescriptionReferences{
+		seen:           make(map[string]struct{}),
+		remainingBytes: conceptDescriptionReferenceBudgetBytes,
+	}
 }
 
 // collect records every reference below the instance. This covers semantic
 // IDs, list element semantics inherited by list children (AASd-107/AASd-115),
-// value IDs, isCaseOf, and IEC 61360 units and value lists.
-func (references *conceptDescriptionReferences) collect(instance aastypes.IClass) {
+// value IDs, isCaseOf, and IEC 61360 units and value lists. It returns a
+// payload-too-large error once the reference budget is exhausted.
+func (references *conceptDescriptionReferences) collect(instance aastypes.IClass) error {
 	if references == nil || instance == nil {
-		return
+		return nil
 	}
+	var budgetErr error
 	instance.Descend(func(descendant aastypes.IClass) bool {
-		if reference, ok := descendant.(aastypes.IReference); ok {
-			references.collectReference(reference)
+		reference, ok := descendant.(aastypes.IReference)
+		if !ok {
+			return false
 		}
-		return false
+		budgetErr = references.collectReference(reference)
+		return budgetErr != nil
 	})
+	return budgetErr
 }
 
 // collectReference records the identifier a reference points to. The first
 // key of a model reference names the concept description, while the first key
 // of an external reference holds the global identifier that concept
 // descriptions conventionally reuse as their id.
-func (references *conceptDescriptionReferences) collectReference(reference aastypes.IReference) {
+func (references *conceptDescriptionReferences) collectReference(reference aastypes.IReference) error {
 	if len(reference.Keys()) == 0 || reference.Keys()[0] == nil {
-		return
+		return nil
 	}
 	key := reference.Keys()[0]
 	if key.Type() != aastypes.KeyTypesConceptDescription && key.Type() != aastypes.KeyTypesGlobalReference {
-		return
+		return nil
 	}
 	id := key.Value()
 	if _, seen := references.seen[id]; seen {
-		return
+		return nil
 	}
+	cost := len(id) + conceptDescriptionReferenceOverheadBytes
+	if cost > references.remainingBytes {
+		return common.NewErrPayloadTooLarge("AASENV-CDREFERENCES-BUDGET referenced concept descriptions exceed the per-serialization tracking budget")
+	}
+	references.remainingBytes -= cost
 	references.seen[id] = struct{}{}
 	references.ids = append(references.ids, id)
+	return nil
 }

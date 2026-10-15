@@ -1,5 +1,5 @@
 kind: fixed
-body: 'AAS Environment `GET /serialization` no longer builds the whole environment in memory. It serializes one AAS, Submodel or Concept Description at a time into bounded staging storage and streams the result, so memory use depends on the largest single identifiable instead of the request or database size. Before, one request could get the service OOM-killed. A JSON, XML or AASX specification larger than `general.aasxMaxPartExpandedSizeBytes` is rejected with `413`.'
+body: 'AAS Environment `GET /serialization` no longer builds the whole environment in memory. It serializes one AAS, Submodel or Concept Description at a time into bounded staging storage and streams the result, so memory use depends on the largest single identifiable instead of the request or database size. Before, one request could get the service OOM-killed. A JSON, XML or AASX specification larger than `general.aasxMaxPartExpandedSizeBytes`, or a serialization whose referenced Concept Description identifiers exceed an estimated 16 MiB, is rejected with `413`.'
 time: 2026-10-15T09:30:00.000000+02:00
 custom:
     Impact: Low

@@ -115,7 +115,7 @@ func TestConceptDescriptionReferencesCollectSemanticIDsOfSubmodel(t *testing.T) 
 	submodel.SetSubmodelElements([]aastypes.ISubmodelElement{collection})
 
 	references := newConceptDescriptionReferences()
-	references.collect(submodel)
+	require.NoError(t, references.collect(submodel))
 
 	require.Equal(t, []string{"urn:cd:submodel", "urn:cd:supplemental", "urn:cd:property", "urn:cd:qualifier"}, references.ids)
 }
@@ -123,7 +123,7 @@ func TestConceptDescriptionReferencesCollectSemanticIDsOfSubmodel(t *testing.T) 
 func TestConceptDescriptionReferencesNilCollectorIgnoresSubmodels(t *testing.T) {
 	var references *conceptDescriptionReferences
 
-	require.NotPanics(t, func() { references.collect(aastypes.NewSubmodel("urn:sm:ignored")) })
+	require.NoError(t, references.collect(aastypes.NewSubmodel("urn:sm:ignored")))
 }
 
 func TestConceptDescriptionReferencesCollectInheritedListElementSemantics(t *testing.T) {
@@ -136,7 +136,7 @@ func TestConceptDescriptionReferencesCollectInheritedListElementSemantics(t *tes
 	submodel.SetSubmodelElements([]aastypes.ISubmodelElement{list})
 
 	references := newConceptDescriptionReferences()
-	references.collect(submodel)
+	require.NoError(t, references.collect(submodel))
 
 	require.Equal(t, []string{"urn:cd:list-element"}, references.ids)
 }
@@ -149,9 +149,31 @@ func TestConceptDescriptionReferencesCollectValueIDs(t *testing.T) {
 	submodel.SetSubmodelElements([]aastypes.ISubmodelElement{property})
 
 	references := newConceptDescriptionReferences()
-	references.collect(submodel)
+	require.NoError(t, references.collect(submodel))
 
 	require.Equal(t, []string{"urn:cd:value"}, references.ids)
+}
+
+func TestConceptDescriptionReferencesRejectReferencesBeyondBudget(t *testing.T) {
+	submodel := aastypes.NewSubmodel("urn:sm:budget")
+	submodel.SetSemanticID(externalReference("urn:cd:first"))
+	submodel.SetSupplementalSemanticIDs([]aastypes.IReference{externalReference("urn:cd:second")})
+	references := newConceptDescriptionReferences()
+	references.remainingBytes = len("urn:cd:first") + conceptDescriptionReferenceOverheadBytes
+
+	err := references.collect(submodel)
+
+	require.True(t, common.IsErrPayloadTooLarge(err), "unexpected error: %v", err)
+	require.Equal(t, []string{"urn:cd:first"}, references.ids)
+}
+
+func TestConceptDescriptionReferencesChargeBudgetOncePerIdentifier(t *testing.T) {
+	references := newConceptDescriptionReferences()
+	references.remainingBytes = len("urn:cd:first") + conceptDescriptionReferenceOverheadBytes
+
+	require.NoError(t, references.collectReference(externalReference("urn:cd:first")))
+	require.NoError(t, references.collectReference(externalReference("urn:cd:first")))
+	require.Zero(t, references.remainingBytes)
 }
 
 func TestStreamConceptDescriptionsIncludesIndirectlyReferencedConceptDescriptions(t *testing.T) {
@@ -173,7 +195,7 @@ func TestStreamConceptDescriptionsIncludesIndirectlyReferencedConceptDescription
 		return conceptDescription, nil
 	}
 	references := newConceptDescriptionReferences()
-	references.collectReference(externalReference("urn:cd:a"))
+	require.NoError(t, references.collectReference(externalReference("urn:cd:a")))
 	writer := &recordingEnvironmentWriter{}
 
 	require.NoError(t, streamConceptDescriptions(t.Context(), lookup, references, writer))
@@ -188,7 +210,7 @@ func TestStreamConceptDescriptionsPropagatesLookupErrors(t *testing.T) {
 	failure := common.NewInternalServerError("AASENV-TEST-LOOKUP failed")
 	lookup := func(context.Context, string) (aastypes.IConceptDescription, error) { return nil, failure }
 	references := newConceptDescriptionReferences()
-	references.collectReference(externalReference("urn:cd:a"))
+	require.NoError(t, references.collectReference(externalReference("urn:cd:a")))
 
 	err := streamConceptDescriptions(t.Context(), lookup, references, &recordingEnvironmentWriter{})
 

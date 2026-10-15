@@ -369,7 +369,9 @@ func (s *SerializationAPIService) streamSubmodels(ctx context.Context, request s
 		if err := packageParts.addSupplementaries(ctx, submodel); err != nil {
 			return nil, err
 		}
-		references.collect(submodel)
+		if err := references.collect(submodel); err != nil {
+			return nil, err
+		}
 		if err := writer.writeIdentifiable(environmentSectionSubmodels, submodel); err != nil {
 			return nil, err
 		}
@@ -398,7 +400,9 @@ func streamConceptDescriptions(ctx context.Context, lookup conceptDescriptionLoo
 		if getErr != nil {
 			return getErr
 		}
-		references.collect(conceptDescription)
+		if err := references.collect(conceptDescription); err != nil {
+			return err
+		}
 		if err := writer.writeIdentifiable(environmentSectionConceptDescriptions, conceptDescription); err != nil {
 			return err
 		}
@@ -642,7 +646,7 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryPart(
 	if location.FileElement != nil {
 		location.FileElement.SetValue(&resolvedReference)
 	}
-	part, err := s.buildStreamingSupplementaryPart(ctx, resolvedReference, contentType, metadata.size, location)
+	part, err := s.buildStreamingSupplementaryPart(ctx, resolvedReference, contentType, metadata.size, location.SubmodelID, location.IDShortPath)
 	return part, resolvedReference, err
 }
 
@@ -729,7 +733,9 @@ func finalizeSupplementaryReference(resolved string, managed bool, metadata seri
 	return resolved, contentType, true
 }
 
-func (s *SerializationAPIService) buildStreamingSupplementaryPart(ctx context.Context, resolvedReference, contentType string, size int64, location AASXFileElementLocation) (*serializationSupplementaryPart, error) {
+// buildStreamingSupplementaryPart captures only the attachment lookup keys, so
+// collected parts do not retain the File models of serialized submodels.
+func (s *SerializationAPIService) buildStreamingSupplementaryPart(ctx context.Context, resolvedReference, contentType string, size int64, submodelID, idShortPath string) (*serializationSupplementaryPart, error) {
 	uri, err := url.Parse(resolvedReference)
 	if err != nil {
 		return nil, common.NewInternalServerError("AASENV-SERIALIZESUPPL-PARSEURI " + err.Error())
@@ -738,7 +744,7 @@ func (s *SerializationAPIService) buildStreamingSupplementaryPart(ctx context.Co
 	return &serializationSupplementaryPart{
 		URI: uri, ContentType: contentType, SizeBytes: size,
 		Consume: func(use func(io.Reader) error) error {
-			return s.persistence.SubmodelRepository.StreamFileAttachmentWithContext(ctx, location.SubmodelID, location.IDShortPath, func(_ string, _ string, _ int64, reader io.Reader) error {
+			return s.persistence.SubmodelRepository.StreamFileAttachmentWithContext(ctx, submodelID, idShortPath, func(_ string, _ string, _ int64, reader io.Reader) error {
 				return use(common.NewPayloadLimitReader(reader, maximum, "supplementary"))
 			})
 		},
