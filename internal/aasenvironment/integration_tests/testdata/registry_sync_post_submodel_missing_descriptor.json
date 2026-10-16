@@ -1,0 +1,7 @@
+{
+  "idShort": "registrySyncMissingDescriptorSubmodel",
+  "id": "urn:example:sm:registry-sync-missing-descriptor",
+  "kind": "Instance",
+  "submodelElements": [],
+  "modelType": "Submodel"
+}

@@ -218,8 +218,11 @@ func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx cont
 		if deleteErr := s.persistence.AASRepository.DeleteAssetAdministrationShellByIDInTransaction(ctx, tx, decodedIdentifier); deleteErr != nil {
 			return deleteErr
 		}
-		return s.persistence.AASRegistry.DeleteAssetAdministrationShellDescriptorByIDInTransaction(
-			aasRegistrySyncContext(ctx, aasRegistrySyncDeleteOperation), tx, decodedIdentifier,
+		return ignoreMissingDescriptorOnDelete(
+			s.persistence.AASRegistry.DeleteAssetAdministrationShellDescriptorByIDInTransaction(
+				aasRegistrySyncContext(ctx, aasRegistrySyncDeleteOperation), tx, decodedIdentifier,
+			),
+			"AASENV-DELAAS-DESCRIPTORMISSING", decodedIdentifier,
 		)
 	})
 	if err != nil {
@@ -568,9 +571,12 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 		}
 
 		if s.syncConfig.SubmodelRegistryIntegration {
-			if deleteDescriptorErr := s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
-				submodelRegistrySyncContext(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
-			); deleteDescriptorErr != nil && !common.IsErrNotFound(deleteDescriptorErr) {
+			if deleteDescriptorErr := ignoreMissingDescriptorOnDelete(
+				s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
+					submodelRegistrySyncContext(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
+				),
+				"AASENV-DELSMSUPERPATH-DESCRIPTORMISSING", decodedSubmodelIdentifier,
+			); deleteDescriptorErr != nil {
 				return deleteDescriptorErr
 			}
 		}
