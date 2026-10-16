@@ -1,7 +1,0 @@
-kind: changed
-body: 'When the endpoint of a delegated Operation answers with an error status, synchronous and asynchronous invocations, including their `$value` variants, now return `502 Bad Gateway` with a `Result` that names the endpoint''s status code. Before, they forwarded the endpoint''s status code and response body unchanged. Failed asynchronous results stored by an earlier version are returned as `502 Bad Gateway` with a generic `Result`, unless the Submodel Repository created the stored error itself; then it is returned as a `Result` with UTC timestamps.'
-time: 2026-10-12T21:15:00.000000+02:00
-custom:
-    Impact: Low
-    PullRequest: 749
-    SecurityImpact: 'The response body of the delegated Operation endpoint is no longer passed to clients, so internal details of that endpoint, such as error messages or stack traces, are no longer exposed through the Submodel Repository, including for results stored before the update or by instances of an earlier version that share the database.'

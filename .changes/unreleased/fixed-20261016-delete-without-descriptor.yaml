@@ -1,7 +1,0 @@
-kind: fixed
-body: 'With AAS or Submodel registry integration enabled, `DELETE /shells/{aasIdentifier}` and `DELETE /submodels/{submodelIdentifier}` now remove the AAS or Submodel when its registry descriptor is already missing. The missing descriptor counts as already removed and is logged as a warning. Before, the deletion failed with a misleading `404` "AAS Descriptor not found" or "Submodel Descriptor not found", and the AAS or Submodel stayed in the repository until a descriptor was registered again.'
-time: 2026-10-16T10:00:00.000000+02:00
-custom:
-    Impact: Low
-    PullRequest: 769
-    SecurityImpact: None.

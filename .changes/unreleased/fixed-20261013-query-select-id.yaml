@@ -1,7 +1,0 @@
-kind: fixed
-body: 'All query endpoints (`/query/shells`, `/query/submodels`, `/query/concept-descriptions`, `/query/shell-descriptors` and `/query/submodel-descriptors`, also in the AAS Environment) accept `"$select": "id"` of the AAS Query Language. They return only the identifiers of the matching objects as `result` and set `paging_metadata.resultType` to `Identifier`. Before, `"$select": "id"` was rejected with `400`. Other `$select` values, including the arrays that were accepted and ignored before, are rejected with `400`. The served OpenAPI documents allow identifier results for `/query/shell-descriptors` as for the other query endpoints; the IDTA schema lacks them (admin-shell-io/aas-specs-api#693).'
-time: 2026-10-13T18:00:00.000000+02:00
-custom:
-    Impact: Low
-    PullRequest: 762
-    SecurityImpact: 'Identifier results are read with the same access rules as object results, so only identifiers of objects the caller may read are returned.'

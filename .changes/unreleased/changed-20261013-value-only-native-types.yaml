@@ -1,7 +1,0 @@
-kind: changed
-body: 'ValueOnly (`$value`) serialization uses the JSON types of the IDTA-01001 mapping: numeric `valueType`s are JSON numbers, `xs:boolean` is a JSON boolean and all other types stay strings, for Property values and Range bounds. Numbers keep all stored digits. A Property without a value is `null`; `INF`, `-INF`, `NaN` and stored values that do not match their `valueType` are returned as strings. This also changes `$value/$signed` payloads, DPP compressed content and PCN event payloads; PCN records omit Properties without a value so that they keep matching `pcnNotificationEvent.v1.schema.json`. `PATCH` on `$value` now interprets the payload against the stored elements instead of guessing element types from its shape: numeric types accept JSON numbers and `xs:boolean` accepts JSON booleans, both also accept their lexical form as a string such as `"42"`, and other types require strings. Values that are not valid for their `valueType`, other JSON types and unknown members return `400`, `null` clears a Property value or Range bound, and omitted members stay unchanged. The whole payload is validated before anything is written. Operation invocations with ValueOnly arguments apply the same scalar rules.'
-time: 2026-10-13T12:10:00.000000+02:00
-custom:
-    Impact: High
-    PullRequest: 751
-    SecurityImpact: None.

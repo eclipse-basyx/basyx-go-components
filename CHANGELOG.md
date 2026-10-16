@@ -8,6 +8,59 @@ Each entry states whether users need to take action and records the security
 consequence separately. High-impact entries require an API, configuration,
 policy, or deployment update. Low-impact entries do not require migration.
 
+## v1.1.2 (2026-10-16)
+
+Changes since [v1.1.1](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.1.1...v1.1.2).
+
+### Added
+
+* **Low impact** — Support type-scoped IDENTIFIABLE permissions for AAS Environment upload and serialization, including filtered JSON, XML and AASX exports and CREATE/UPDATE checks based on actual object and binary content existence. ([#723](https://github.com/eclipse-basyx/basyx-go-components/pull/723))
+  * **Security:** AAS, Submodel and ConceptDescription grants remain isolated by type. Exports enforce existing formulas, field and element filters, and authorization for attachments and thumbnails; explicitly requested inaccessible objects fail without returning a partial selection. Imports preserve per-object checks, 403 responses and ABAC/ReBAC alternatives. Creating attachment or thumbnail content requires CREATE permission even when its owner exists; replacing stored content requires UPDATE. Earlier authorized writes can remain committed if a later import step is denied.
+
+* **High impact** — All services support HTTP conditional requests for single resources: `GET` returns an `ETag`, `PUT`, `PATCH`, `POST` below a resource and `DELETE` accept `If-Match` and answer `412 Precondition Failed` without changing anything when it does not match, `PUT` accepts `If-None-Match: *` for create-only writes, and `GET` answers `If-None-Match` with `304 Not Modified`. Nested parts share the revision of their top-level resource, a DPP covers its shell and all its Submodels, and the AAS Environment returns the same revisions as the standalone services. The new setting `server.conditionalRequests.requireIfMatch` (default `false`) answers writes of existing resources without `If-Match` with `428 Precondition Required`. CORS always allows `If-Match` and `If-None-Match`. Revisions are stored by database schema `v1.2.3`; all services sharing a database must be stopped before the update and started in the new version, because older services do not update revisions. ([#742](https://github.com/eclipse-basyx/basyx-go-components/pull/742))
+  * **Security:** Preconditions are evaluated after the not-found and authorization checks, in the same transaction as the change, so a failed precondition never reveals hidden resources and two writers with the same entity tag never both succeed. `304` is only returned after the request was authorized, and representation tags differ between callers with different views, so a changed view is never answered with `304`. The revision part of an entity tag is the same for all callers and changes when parts change that a caller cannot see. Revisions come from one database-wide sequence and therefore reveal the approximate number of writes between two reads.
+
+* **Low impact** — Services announce history and the Event Feed in `GET /description`. With `history.mode` `api` or `audit`, the AAS Repository lists `https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-006`, the Submodel Repository lists `https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-007`, and the AAS Environment lists both. With the Event Feed enabled, the services hosting it list `https://basyx.org/aas/API/3/2/EventFeed/1.0`. ([#764](https://github.com/eclipse-basyx/basyx-go-components/pull/764))
+  * **Security:** None.
+
+
+### Changed
+
+* **High impact** — Error responses of all services now return the `Result` object defined by the AAS API, `{"messages":[{…}]}`, instead of a bare JSON array of messages. This makes BaSyx work with clients that parse errors as `Result`, such as the Tractus-X SDK. Clients that read the array must read `messages` instead. The Company Lookup OpenAPI document now also defines `Result` as this object. ([#749](https://github.com/eclipse-basyx/basyx-go-components/pull/749))
+  * **Security:** None.
+
+* **Low impact** — When the endpoint of a delegated Operation answers with an error status, synchronous and asynchronous invocations, including their `$value` variants, now return `502 Bad Gateway` with a `Result` that names the endpoint's status code. Before, they forwarded the endpoint's status code and response body unchanged. Failed asynchronous results stored by an earlier version are returned as `502 Bad Gateway` with a generic `Result`, unless the Submodel Repository created the stored error itself; then it is returned as a `Result` with UTC timestamps. ([#749](https://github.com/eclipse-basyx/basyx-go-components/pull/749))
+  * **Security:** The response body of the delegated Operation endpoint is no longer passed to clients, so internal details of that endpoint, such as error messages or stack traces, are no longer exposed through the Submodel Repository, including for results stored before the update or by instances of an earlier version that share the database.
+
+* **High impact** — ValueOnly (`$value`) serialization uses the JSON types of the IDTA-01001 mapping: numeric `valueType`s are JSON numbers, `xs:boolean` is a JSON boolean and all other types stay strings, for Property values and Range bounds. Numbers keep all stored digits. A Property without a value is `null`; `INF`, `-INF`, `NaN` and stored values that do not match their `valueType` are returned as strings. This also changes `$value/$signed` payloads, DPP compressed content and PCN event payloads; PCN records omit Properties without a value so that they keep matching `pcnNotificationEvent.v1.schema.json`. `PATCH` on `$value` now interprets the payload against the stored elements instead of guessing element types from its shape: numeric types accept JSON numbers and `xs:boolean` accepts JSON booleans, both also accept their lexical form as a string such as `"42"`, and other types require strings. Values that are not valid for their `valueType`, other JSON types and unknown members return `400`, `null` clears a Property value or Range bound, and omitted members stay unchanged. The whole payload is validated before anything is written. Operation invocations with ValueOnly arguments apply the same scalar rules. ([#751](https://github.com/eclipse-basyx/basyx-go-components/pull/751))
+  * **Security:** None.
+
+* **High impact** — AAS Environment `GET /serialization` serializes only explicitly requested identifiables. A request without any `aasIds` or `submodelIds` is rejected with `400` instead of exporting every stored AAS and Submodel, and `aasIds` alone no longer adds all stored Submodels. `includeConceptDescriptions` adds only the Concept Descriptions that the serialized Submodels reference directly or indirectly, as IDTA-01002 specifies, instead of all stored Concept Descriptions. This includes semantic IDs, the `semanticIdListElement` inherited by list children, value IDs, and Concept Descriptions referenced by included ones, such as IEC 61360 value list entries. Clients that exported the whole repository without ids must list the AAS and Submodel ids. ([#767](https://github.com/eclipse-basyx/basyx-go-components/pull/767))
+  * **Security:** A single request can no longer export the complete repository. Referenced Concept Descriptions that the caller may not read are omitted.
+
+
+### Fixed
+
+* **Low impact** — Error message `timestamp` values are always in UTC, as the AAS API pattern requires; before, they used the server time zone. `correlationId` is limited to the 128 characters allowed by the schema, and DPP API errors now carry a non-empty `correlationId` as EN 18222 requires. ([#749](https://github.com/eclipse-basyx/basyx-go-components/pull/749))
+  * **Security:** None.
+
+* **Low impact** — `POST /query/shell-descriptors` of the AAS Registry and the AAS Environment returns the following pages for a `cursor`; before, every page after the first was empty. ([#761](https://github.com/eclipse-basyx/basyx-go-components/pull/761))
+  * **Security:** None.
+
+* **Low impact** — ValueOnly `PATCH` of an Entity no longer fails when it sets `entityType`, and an AnnotatedRelationshipElement update without `first` or `second` no longer stores `null`. Blob content written by a full `PUT`/`PATCH` or by `$value` is now stored in the same encoding as on create, so non-UTF-8 bytes are preserved and base64 payloads are no longer stored as text. The AAS repository `$value` `PATCH` no longer rounds large numbers, ValueOnly output includes the complete `specificAssetIds` of an Entity, and an empty `min` or `max` of a Range with a text `valueType` such as `xs:string` is stored as an empty string instead of being cleared. ([#751](https://github.com/eclipse-basyx/basyx-go-components/pull/751))
+  * **Security:** None.
+
+* **Low impact** — All query endpoints (`/query/shells`, `/query/submodels`, `/query/concept-descriptions`, `/query/shell-descriptors` and `/query/submodel-descriptors`, also in the AAS Environment) accept `"$select": "id"` of the AAS Query Language. They return only the identifiers of the matching objects as `result` and set `paging_metadata.resultType` to `Identifier`. Before, `"$select": "id"` was rejected with `400`. Other `$select` values, including the arrays that were accepted and ignored before, are rejected with `400`. The served OpenAPI documents allow identifier results for `/query/shell-descriptors` as for the other query endpoints; the IDTA schema lacks them (admin-shell-io/aas-specs-api#693). ([#762](https://github.com/eclipse-basyx/basyx-go-components/pull/762))
+  * **Security:** Identifier results are read with the same access rules as object results, so only identifiers of objects the caller may read are returned.
+
+* **Low impact** — `GET /submodel-descriptors` and `POST /query/submodel-descriptors` of the Submodel Registry apply the access rules and the query condition before the page limit. Before, pages could be short or empty although more results followed. ([#762](https://github.com/eclipse-basyx/basyx-go-components/pull/762))
+  * **Security:** The paging cursor is always taken from a Submodel Descriptor that is visible to the caller.
+
+* **Low impact** — AAS Environment `GET /serialization` no longer builds the whole environment in memory. It serializes one AAS, Submodel or Concept Description at a time into bounded staging storage and streams the result, so memory use depends on the largest single identifiable instead of the request or database size. Before, one request could get the service OOM-killed. A JSON, XML or AASX specification larger than `general.aasxMaxPartExpandedSizeBytes`, or a serialization whose referenced Concept Description identifiers exceed an estimated 16 MiB, is rejected with `413`. ([#767](https://github.com/eclipse-basyx/basyx-go-components/pull/767))
+  * **Security:** Fixes a denial of service: a single `GET /serialization` request permitted by the route's access rules could exhaust the service memory and get it killed, and concurrent requests made this worse. Memory use is now bounded and oversized serializations are rejected with `413`.
+
+* **Low impact** — With AAS or Submodel registry integration enabled, `DELETE /shells/{aasIdentifier}` and `DELETE /submodels/{submodelIdentifier}` now remove the AAS or Submodel when its registry descriptor is already missing. The missing descriptor counts as already removed and is logged as a warning. Before, the deletion failed with a misleading `404` "AAS Descriptor not found" or "Submodel Descriptor not found", and the AAS or Submodel stayed in the repository until a descriptor was registered again. ([#769](https://github.com/eclipse-basyx/basyx-go-components/pull/769))
+  * **Security:** None.
 ## v1.1.1 (2026-10-08)
 
 Changes since [v1.1.0](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.1.0...v1.1.1).
