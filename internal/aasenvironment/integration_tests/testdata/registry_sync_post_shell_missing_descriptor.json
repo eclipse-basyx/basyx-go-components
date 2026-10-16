@@ -1,0 +1,9 @@
+{
+  "idShort": "registrySyncMissingDescriptorShell",
+  "id": "urn:example:aas:registry-sync-missing-descriptor",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "urn:example:asset:registry-sync-missing-descriptor"
+  },
+  "modelType": "AssetAdministrationShell"
+}

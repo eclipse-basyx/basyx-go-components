@@ -26,6 +26,7 @@
 package aasenvironment
 
 import (
+	"log/slog"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -71,6 +72,16 @@ func NewRegistrySyncConfig(
 
 func registrySyncDescriptorsEqual(previous any, submitted any) (bool, error) {
 	return registrysync.DescriptorsEqual(previous, submitted)
+}
+
+// ignoreMissingDescriptorOnDelete treats a descriptor that is already absent as removed,
+// so registry drift does not block the deletion of an existing repository resource.
+func ignoreMissingDescriptorOnDelete(err error, errorCode string, identifier string) error {
+	if !common.IsErrNotFound(err) {
+		return err
+	}
+	slog.Warn("registry descriptor already missing during deletion", "error.code", errorCode, "id", identifier)
+	return nil
 }
 
 func assetKindPointer(assetKind types.AssetKind) *types.AssetKind {

@@ -249,8 +249,11 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 		if deleteErr := s.persistence.SubmodelRepository.DeleteSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier); deleteErr != nil {
 			return deleteErr
 		}
-		if deleteDescriptorErr := s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
-			submodelRegistrySyncContext(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
+		if deleteDescriptorErr := ignoreMissingDescriptorOnDelete(
+			s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
+				submodelRegistrySyncContext(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
+			),
+			"AASENV-DELSM-DESCRIPTORMISSING", decodedSubmodelIdentifier,
 		); deleteDescriptorErr != nil {
 			return deleteDescriptorErr
 		}

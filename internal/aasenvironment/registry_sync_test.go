@@ -356,6 +356,17 @@ func TestBuildEmbeddedSubmodelDescriptorsSkipsNilReferencesAndKeys(t *testing.T)
 	)
 }
 
+func TestIgnoreMissingDescriptorOnDelete(t *testing.T) {
+	require.NoError(t, ignoreMissingDescriptorOnDelete(nil, "TEST-CODE", "urn:example:aas:1"))
+	require.NoError(t, ignoreMissingDescriptorOnDelete(common.NewErrNotFound("AAS Descriptor not found"), "TEST-CODE", "urn:example:aas:1"))
+
+	deniedErr := common.NewErrDenied("denied")
+	require.Same(t, deniedErr, ignoreMissingDescriptorOnDelete(deniedErr, "TEST-CODE", "urn:example:aas:1"))
+
+	internalErr := common.NewInternalServerError("boom")
+	require.Same(t, internalErr, ignoreMissingDescriptorOnDelete(internalErr, "TEST-CODE", "urn:example:aas:1"))
+}
+
 func TestValidateStandaloneAASRepositoryRegistrySyncConfig(t *testing.T) {
 	err := ValidateStandaloneAASRepositoryRegistrySyncConfig(nil)
 	require.Error(t, err)

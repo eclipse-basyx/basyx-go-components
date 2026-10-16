@@ -254,5 +254,55 @@
     "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtdXBsb2Fk",
     "shouldMatch": "expected/registry_sync_uploaded_descriptor.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "033 - Create AAS for deletion without descriptor",
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
+    "data": "testdata/registry_sync_post_shell_missing_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "034 - Delete descriptor of AAS before deleting the AAS",
+    "method": "DELETE",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtbWlzc2luZy1kZXNjcmlwdG9y",
+    "expectedStatus": 204
+  },
+  {
+    "context": "035 - Delete AAS whose descriptor is already missing",
+    "method": "DELETE",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtbWlzc2luZy1kZXNjcmlwdG9y",
+    "expectedStatus": 204
+  },
+  {
+    "context": "036 - Verify AAS without descriptor was deleted",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtbWlzc2luZy1kZXNjcmlwdG9y",
+    "expectedStatus": 404
+  },
+  {
+    "context": "037 - Create submodel for deletion without descriptor",
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+    "data": "testdata/registry_sync_post_submodel_missing_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "038 - Delete descriptor of submodel before deleting the submodel",
+    "method": "DELETE",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1taXNzaW5nLWRlc2NyaXB0b3I",
+    "expectedStatus": 204
+  },
+  {
+    "context": "039 - Delete submodel whose descriptor is already missing",
+    "method": "DELETE",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1taXNzaW5nLWRlc2NyaXB0b3I",
+    "expectedStatus": 204
+  },
+  {
+    "context": "040 - Verify submodel without descriptor was deleted",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1taXNzaW5nLWRlc2NyaXB0b3I",
+    "expectedStatus": 404
   }
 ]
