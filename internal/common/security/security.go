@@ -201,6 +201,9 @@ func abacDeniedAsNotFoundPrefixes(contextPath string) []string {
 }
 
 func setupOIDC(ctx context.Context, cfg *common.Config) (*OIDC, error) {
+	return newOIDCFromConfig(ctx, cfg, false)
+}
+func newOIDCFromConfig(ctx context.Context, cfg *common.Config, requireAudience bool) (*OIDC, error) {
 	trustlistData, err := os.ReadFile(cfg.OIDC.TrustlistPath)
 	if err != nil {
 		return nil, fmt.Errorf("read OIDC trustlist: %w", err)
@@ -213,6 +216,9 @@ func setupOIDC(ctx context.Context, cfg *common.Config) (*OIDC, error) {
 
 	oidcProviders := make([]OIDCProviderSettings, 0, len(trustlist))
 	for _, p := range trustlist {
+		if requireAudience && strings.TrimSpace(p.Audience) == "" {
+			return nil, fmt.Errorf("MCP-AUTH-AUDIENCE: every trusted issuer requires an audience")
+		}
 		oidcProviders = append(oidcProviders, OIDCProviderSettings{
 			Issuer:        p.Issuer,
 			Audience:      p.Audience,
@@ -255,4 +261,9 @@ func toClaimMappingSettings(configs []common.OIDCClaimMappingConfig) []OIDCClaim
 		})
 	}
 	return settings
+}
+
+// NewOIDCForConfig reuses the REST trustlist and claim normalization at another transport boundary.
+func NewOIDCForConfig(ctx context.Context, cfg *common.Config) (*OIDC, error) {
+	return newOIDCFromConfig(ctx, cfg, true)
 }

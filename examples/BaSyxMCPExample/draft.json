@@ -1,0 +1,129 @@
+{
+  "shell": {
+    "modelType": "AssetAdministrationShell",
+    "id": "urn:example:aas:created-motor",
+    "idShort": "CreatedMotor",
+    "assetInformation": {
+      "assetKind": "Instance",
+      "globalAssetId": "M-NEW"
+    }
+  },
+  "submodels": [
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:sm:created-motor",
+      "idShort": "TechnicalData",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "urn:example:template:technical-data"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "idShort": "RatedPower",
+          "valueType": "xs:double",
+          "value": "12",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:example:rated-power"
+              }
+            ]
+          },
+          "embeddedDataSpecifications": [
+            {
+              "dataSpecification": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/3/0"
+                  }
+                ]
+              },
+              "dataSpecificationContent": {
+                "modelType": "DataSpecificationIec61360",
+                "preferredName": [
+                  {
+                    "language": "en",
+                    "text": "RatedPower"
+                  }
+                ],
+                "definition": [
+                  {
+                    "language": "en",
+                    "text": "Sandbox measured quantity"
+                  }
+                ],
+                "dataType": "REAL_MEASURE",
+                "unit": "kW"
+              }
+            }
+          ]
+        },
+        {
+          "modelType": "Property",
+          "idShort": "Temperature",
+          "valueType": "xs:double",
+          "value": "48",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:example:temperature"
+              }
+            ]
+          },
+          "embeddedDataSpecifications": [
+            {
+              "dataSpecification": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/3/0"
+                  }
+                ]
+              },
+              "dataSpecificationContent": {
+                "modelType": "DataSpecificationIec61360",
+                "preferredName": [
+                  {
+                    "language": "en",
+                    "text": "Temperature"
+                  }
+                ],
+                "definition": [
+                  {
+                    "language": "en",
+                    "text": "Sandbox measured quantity"
+                  }
+                ],
+                "dataType": "REAL_MEASURE",
+                "unit": "degC"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "templates": {
+    "urn:example:sm:created-motor": "demo-technical-data"
+  },
+  "sources": [
+    {
+      "document": "motor-datasheet.pdf",
+      "page": 1,
+      "location": "rated power and operating temperature"
+    }
+  ]
+}
