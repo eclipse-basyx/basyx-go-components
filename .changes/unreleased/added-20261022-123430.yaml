@@ -1,0 +1,7 @@
+kind: added
+body: Add an optional integrated MCP endpoint with caller-authorized discovery, reads, AASQL, curated aggregates, embedded documentation and template-validated AAS creation through human-approved durable changesets and conditional rollback. Includes a secured sandbox and database schema v1.2.4.
+time: 2026-10-22T12:34:30Z
+custom:
+  Impact: Medium
+  PullRequest: 774
+  SecurityImpact: The new endpoint is disabled by default, reuses caller OIDC and REST authorization, bounds resource usage and requires separate human approval for writes. Single-use confirmations bind the owner and immutable proposal; transactional revision receipts support conditional compensation without an elevated service identity.
