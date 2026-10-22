@@ -1,7 +1,7 @@
 {
 	"name": "Eclipse BaSyx Go SDK",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/go:1-1.23-bookworm",
+	"image": "mcr.microsoft.com/devcontainers/go:2-1.27-bookworm",
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
 		"ghcr.io/devcontainers/features/node:1": {
