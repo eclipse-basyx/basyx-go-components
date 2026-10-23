@@ -1,0 +1,47 @@
+{
+  "server": {
+    "port": 5004,
+    "strictVerification": "strict"
+  },
+  "postgres": {
+    "host": "postgres",
+    "port": 5432,
+    "user": "admin",
+    "password": "sandbox",
+    "dbname": "mcp"
+  },
+  "abac": {
+    "enabled": true,
+    "modelPath": "/security/access-rules.json",
+    "policyFileImport": "always"
+  },
+  "oidc": {
+    "trustlistPath": "/security/trustlist.json"
+  },
+  "general": {
+    "aasPreconfigPaths": [
+      "/seed"
+    ],
+    "externalUrl": "http://localhost:18584",
+    "aasRegistryIntegration": true,
+    "submodelRegistryIntegration": true
+  },
+  "history": {
+    "mode": "api",
+    "auditIdentityMode": "minimal"
+  },
+  "mcp": {
+    "enabled": true,
+    "writeMode": "confirm",
+    "publicUrl": "http://localhost:18584/mcp",
+    "confirmationClientId": "basyx-mcp",
+    "authorizationServers": [
+      "http://keycloak.localhost:18580/realms/basyx-mcp"
+    ],
+    "templateDirectory": "/templates",
+    "allowedTemplates": [
+      "demo-nameplate",
+      "demo-technical-data"
+    ]
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "ALL"
+          ],
+          "ATTRIBUTES": [
+            {
+              "CLAIM": "role"
+            }
+          ]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ],
+        "FORMULA": {
+          "$eq": [
+            {
+              "$attribute": {
+                "CLAIM": "role"
+              }
+            },
+            {
+              "$strVal": "admin"
+            }
+          ]
+        }
+      },
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ATTRIBUTES": [
+            {
+              "CLAIM": "role"
+            }
+          ]
+        },
+        "OBJECTS": [
+          {
+            "IDENTIFIABLE": "$aas(\"urn:example:aas:motor-public\")"
+          },
+          {
+            "IDENTIFIABLE": "$sm(\"urn:example:sm:technical-public\")"
+          },
+          {
+            "IDENTIFIABLE": "$sm(\"urn:example:sm:nameplate-public\")"
+          }
+        ],
+        "FORMULA": {
+          "$eq": [
+            {
+              "$attribute": {
+                "CLAIM": "role"
+              }
+            },
+            {
+              "$strVal": "viewer"
+            }
+          ]
+        }
+      },
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ATTRIBUTES": [
+            {
+              "CLAIM": "role"
+            }
+          ]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/submodels"
+          },
+          {
+            "ROUTE": "/submodels/*"
+          },
+          {
+            "ROUTE": "/query/submodels"
+          }
+        ],
+        "FORMULA": {
+          "$and": [
+            {
+              "$eq": [
+                {
+                  "$attribute": {
+                    "CLAIM": "role"
+                  }
+                },
+                {
+                  "$strVal": "filtered"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$field": "$sm#idShort"
+                },
+                {
+                  "$strVal": "TechnicalData"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

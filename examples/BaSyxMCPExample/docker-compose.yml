@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: sandbox
+      POSTGRES_DB: mcp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d mcp"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  configuration:
+    build:
+      context: ../..
+      dockerfile: cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: sandbox
+      POSTGRES_DBNAME: mcp
+    depends_on:
+      postgres:
+        condition: service_healthy
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_HOSTNAME: http://keycloak.localhost:18580
+      KC_HOSTNAME_STRICT: "false"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: sandbox-admin
+    ports:
+      - "127.0.0.1:18580:8080"
+    volumes:
+      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    healthcheck:
+      test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 20s
+  aas-environment:
+    build:
+      context: ../..
+      dockerfile: cmd/aasenvironmentservice/Dockerfile
+    command: ["/app/aasenvironmentservice", "-config", "/config/mcp.yaml"]
+    ports:
+      - "127.0.0.1:18584:5004"
+    volumes:
+      - ./config.yaml:/config/mcp.yaml:ro
+      - ./security:/security:ro
+      - ./templates:/templates:ro
+      - ./seed:/seed:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+    depends_on:
+      configuration:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    restart: on-failure

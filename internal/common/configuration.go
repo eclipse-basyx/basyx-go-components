@@ -280,6 +280,7 @@ func PrintSplash(output io.Writer) error {
 // It combines server settings, database configuration, CORS policy,
 // OIDC authentication, and ABAC authorization settings.
 type Config struct {
+	MCP        MCPConfig            `mapstructure:"mcp" yaml:"mcp"`
 	Logging    commonlogging.Config `mapstructure:"logging" yaml:"logging"`   // Process logging configuration
 	Server     ServerConfig         `mapstructure:"server" yaml:"server"`     // HTTP server configuration
 	Postgres   PostgresConfig       `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
@@ -525,6 +526,7 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// Set default values
 	setDefaults(v)
+	setMCPDefaults(v)
 	if err := bindPostgresReaderEnvironment(v); err != nil {
 		return nil, err
 	}
@@ -588,6 +590,9 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 	if err = validateHistoryAndEventingConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err = applyMCPConfig(cfg); err != nil {
 		return nil, err
 	}
 	return cfg, nil

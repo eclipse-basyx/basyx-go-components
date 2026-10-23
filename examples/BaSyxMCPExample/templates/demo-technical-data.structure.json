@@ -1,0 +1,35 @@
+{
+  "schema_slug": "demo-technical-data",
+  "schema_version": "2.0.0",
+  "root": {
+    "id_short": "TechnicalData",
+    "model_type": "Submodel",
+    "semantic_id": "urn:example:template:technical-data",
+    "children": [
+      {
+        "id_short": "RatedPower",
+        "model_type": "Property",
+        "value_type": "xs:double",
+        "semantic_id": "urn:example:rated-power",
+        "cardinality": {
+          "raw": "One",
+          "min_occurs": 1,
+          "max_occurs": 1
+        },
+        "children": []
+      },
+      {
+        "id_short": "Temperature",
+        "model_type": "Property",
+        "value_type": "xs:double",
+        "semantic_id": "urn:example:temperature",
+        "cardinality": {
+          "raw": "One",
+          "min_occurs": 1,
+          "max_occurs": 1
+        },
+        "children": []
+      }
+    ]
+  }
+}

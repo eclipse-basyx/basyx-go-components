@@ -35,6 +35,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"sync/atomic"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
@@ -51,6 +52,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
@@ -58,6 +60,7 @@ import (
 	cdrdb "github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
 	discoveryapi "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	discoverydb "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
+	basyxmcp "github.com/eclipse-basyx/basyx-go-components/internal/mcp"
 	smregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/api"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
@@ -301,6 +304,19 @@ func runServer(ctx context.Context, configPath string) error {
 
 	eventFeedModule.RegisterRoutes(apiRouter)
 
+	if cfg.MCP.Enabled {
+		specification, readErr := openapiSpec.ReadFile("openapi.yaml")
+		if readErr != nil {
+			return fmt.Errorf("AASENV-MCP-OPENAPI: %w", readErr)
+		}
+		module, moduleErr := basyxmcp.New(ctx, cfg, r, pools.Writer, pools.Reader, specification, auth.ABACSettings{Enabled: cfg.ABAC.Enabled, ModelProvider: abacRepo, EnableImplicitCasts: cfg.General.EnableImplicitCasts, ReBAC: rebacRuntime.Extensions().ReBAC})
+		if moduleErr != nil {
+			return fmt.Errorf("AASENV-MCP-INIT: %w", moduleErr)
+		}
+		path := strings.TrimRight(base, "/") + cfg.MCP.Path
+		r.Handle(path, module.Handler())
+		r.Handle(path+"/*", module.Handler())
+	}
 	r.Mount(base, apiRouter)
 
 	// Register /upload endpoint

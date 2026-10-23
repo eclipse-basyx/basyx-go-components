@@ -1,0 +1,350 @@
+{
+  "assetAdministrationShells": [
+    {
+      "modelType": "AssetAdministrationShell",
+      "id": "urn:example:aas:motor-public",
+      "idShort": "M4711",
+      "displayName": [
+        {
+          "language": "en",
+          "text": "Motor M-4711"
+        }
+      ],
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "M-4711"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:sm:technical-public"
+            }
+          ]
+        },
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:sm:nameplate-public"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "modelType": "AssetAdministrationShell",
+      "id": "urn:example:aas:motor-private",
+      "idShort": "M4712",
+      "displayName": [
+        {
+          "language": "en",
+          "text": "Motor M-4712"
+        }
+      ],
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "M-4712"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:sm:technical-private"
+            }
+          ]
+        },
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:sm:nameplate-private"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:sm:technical-public",
+      "idShort": "TechnicalData",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "urn:example:template:technical-data"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "idShort": "RatedPower",
+          "valueType": "xs:double",
+          "value": "12",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:example:rated-power"
+              }
+            ]
+          },
+          "embeddedDataSpecifications": [
+            {
+              "dataSpecification": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/3/0"
+                  }
+                ]
+              },
+              "dataSpecificationContent": {
+                "modelType": "DataSpecificationIec61360",
+                "preferredName": [
+                  {
+                    "language": "en",
+                    "text": "RatedPower"
+                  }
+                ],
+                "definition": [
+                  {
+                    "language": "en",
+                    "text": "Sandbox measured quantity"
+                  }
+                ],
+                "dataType": "REAL_MEASURE",
+                "unit": "kW"
+              }
+            }
+          ]
+        },
+        {
+          "modelType": "Property",
+          "idShort": "Temperature",
+          "valueType": "xs:double",
+          "value": "48",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:example:temperature"
+              }
+            ]
+          },
+          "embeddedDataSpecifications": [
+            {
+              "dataSpecification": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/3/0"
+                  }
+                ]
+              },
+              "dataSpecificationContent": {
+                "modelType": "DataSpecificationIec61360",
+                "preferredName": [
+                  {
+                    "language": "en",
+                    "text": "Temperature"
+                  }
+                ],
+                "definition": [
+                  {
+                    "language": "en",
+                    "text": "Sandbox measured quantity"
+                  }
+                ],
+                "dataType": "REAL_MEASURE",
+                "unit": "degC"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:sm:nameplate-public",
+      "idShort": "Nameplate",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "urn:example:template:nameplate"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "idShort": "ProductName",
+          "valueType": "xs:string",
+          "value": "Motor M-4711",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:example:product-name"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:sm:technical-private",
+      "idShort": "TechnicalData",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "urn:example:template:technical-data"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "idShort": "RatedPower",
+          "valueType": "xs:double",
+          "value": "24",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:example:rated-power"
+              }
+            ]
+          },
+          "embeddedDataSpecifications": [
+            {
+              "dataSpecification": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/3/0"
+                  }
+                ]
+              },
+              "dataSpecificationContent": {
+                "modelType": "DataSpecificationIec61360",
+                "preferredName": [
+                  {
+                    "language": "en",
+                    "text": "RatedPower"
+                  }
+                ],
+                "definition": [
+                  {
+                    "language": "en",
+                    "text": "Sandbox measured quantity"
+                  }
+                ],
+                "dataType": "REAL_MEASURE",
+                "unit": "kW"
+              }
+            }
+          ]
+        },
+        {
+          "modelType": "Property",
+          "idShort": "Temperature",
+          "valueType": "xs:double",
+          "value": "72",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:example:temperature"
+              }
+            ]
+          },
+          "embeddedDataSpecifications": [
+            {
+              "dataSpecification": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/3/0"
+                  }
+                ]
+              },
+              "dataSpecificationContent": {
+                "modelType": "DataSpecificationIec61360",
+                "preferredName": [
+                  {
+                    "language": "en",
+                    "text": "Temperature"
+                  }
+                ],
+                "definition": [
+                  {
+                    "language": "en",
+                    "text": "Sandbox measured quantity"
+                  }
+                ],
+                "dataType": "REAL_MEASURE",
+                "unit": "degC"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "modelType": "Submodel",
+      "id": "urn:example:sm:nameplate-private",
+      "idShort": "Nameplate",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "urn:example:template:nameplate"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "idShort": "ProductName",
+          "valueType": "xs:string",
+          "value": "Motor M-4712",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:example:product-name"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
