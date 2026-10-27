@@ -1,0 +1,13 @@
+kind: fixed
+body: >-
+  Apply the configured semantic verification mode to Concept Description creation
+  and replacement in the standalone repository and AAS Environment, including
+  imports. Previously, semantically invalid Concept Descriptions could be stored
+  even with strict verification enabled. Strict mode now returns HTTP 400 without
+  changing the rejected object, permissive mode logs warnings and accepts the
+  object, and off mode skips semantic verification.
+time: 2026-10-23T16:20:00+02:00
+custom:
+  Impact: Medium
+  PullRequest: "778"
+  SecurityImpact: None.

@@ -174,7 +174,7 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	submodelRepositoryPersistence.SetJWSCertificateChain(signingOptions.CertificateChain)
-	cdrPersistence, err := cdrdb.NewConceptDescriptionBackendFromPools(pools.Writer, pools.Reader)
+	cdrPersistence, err := cdrdb.NewConceptDescriptionBackendFromPools(pools.Writer, pools.Reader, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
