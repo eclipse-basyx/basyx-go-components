@@ -51,7 +51,7 @@ func TestConceptDescriptionRepositoryReadPoolSelection(t *testing.T) {
 	defer func() { _ = reader.Close() }()
 	writerMock.ExpectPing()
 
-	backend, err := NewConceptDescriptionBackendFromPools(writer, reader)
+	backend, err := NewConceptDescriptionBackendFromPools(writer, reader, "strict")
 	require.NoError(t, err)
 	require.Same(t, reader, backend.readDB(t.Context()))
 	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
@@ -77,7 +77,7 @@ func TestGetConceptDescriptionsValidatesCursorInPageQuery(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	backend, err := NewConceptDescriptionBackendFromDB(db)
+	backend, err := NewConceptDescriptionBackendFromDB(db, "strict")
 	require.NoError(t, err)
 
 	mock.ExpectQuery("cursor query").

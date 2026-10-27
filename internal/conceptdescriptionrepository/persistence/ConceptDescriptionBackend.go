@@ -41,12 +41,14 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/pagination"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -55,8 +57,9 @@ import (
 // ConceptDescriptionBackend is the struct that implements the persistence layer for the Concept Description Repository API service.
 // It contains a reference to the database connection pool and provides methods for storing and retrieving concept descriptions.
 type ConceptDescriptionBackend struct {
-	db       *sql.DB
-	readerDB *sql.DB
+	db               *sql.DB
+	readerDB         *sql.DB
+	verificationMode model.VerificationMode
 }
 
 // NewConceptDescriptionBackend creates a new instance of ConceptDescriptionBackend with the given database connection parameters.
@@ -67,11 +70,12 @@ type ConceptDescriptionBackend struct {
 // - maxOpenConnections: The maximum number of open connections to the database.
 // - maxIdleConnections: The maximum number of idle connections in the connection pool.
 // - connMaxLifetimeMinutes: The maximum lifetime of a connection in minutes.
+// - strictVerification: The semantic verification mode: off, permissive, or strict.
 //
 // Returns:
 // - A pointer to a ConceptDescriptionBackend instance if the connection is successful.
 // - An error if the connection fails or if there is an issue with the database configuration.
-func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleConnections int, connMaxLifetimeMinutes int) (*ConceptDescriptionBackend, error) {
+func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleConnections int, connMaxLifetimeMinutes int, strictVerification string) (*ConceptDescriptionBackend, error) {
 	db, err := common.NewDatabaseConnectionWithConfig(dsn, common.PostgresConfig{
 		MaxOpenConnections:     int(maxOpenConnections),
 		MaxIdleConnections:     maxIdleConnections,
@@ -81,25 +85,29 @@ func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleC
 		return nil, err
 	}
 
-	return NewConceptDescriptionBackendFromDB(db)
+	return NewConceptDescriptionBackendFromDB(db, strictVerification)
 }
 
 // NewConceptDescriptionBackendFromDB creates a new backend instance from an existing DB pool.
-func NewConceptDescriptionBackendFromDB(db *sql.DB) (*ConceptDescriptionBackend, error) {
+func NewConceptDescriptionBackendFromDB(db *sql.DB, strictVerification string) (*ConceptDescriptionBackend, error) {
 	if db == nil {
 		return nil, common.NewErrBadRequest("CDREPO-NEWFROMDB-NILDB database handle must not be nil")
 	}
-	return NewConceptDescriptionBackendFromPools(db, db)
+	return NewConceptDescriptionBackendFromPools(db, db, strictVerification)
 }
 
 // NewConceptDescriptionBackendFromPools creates a backend from caller-owned
 // writer and reader pools.
-func NewConceptDescriptionBackendFromPools(writer *sql.DB, reader *sql.DB) (*ConceptDescriptionBackend, error) {
+func NewConceptDescriptionBackendFromPools(writer *sql.DB, reader *sql.DB, strictVerification string) (*ConceptDescriptionBackend, error) {
 	if writer == nil {
 		return nil, common.NewErrBadRequest("CDREPO-NEWFROMPOOLS-NILWRITER writer database handle must not be nil")
 	}
 	if reader == nil {
 		return nil, common.NewErrBadRequest("CDREPO-NEWFROMPOOLS-NILREADER reader database handle must not be nil")
+	}
+	verificationMode, err := model.ParseVerificationMode(strictVerification)
+	if err != nil {
+		return nil, common.NewErrBadRequest("CDREPO-NEWFROMPOOLS-INVALIDMODE " + err.Error())
 	}
 
 	healthy, err := testDBConnection(writer)
@@ -108,7 +116,20 @@ func NewConceptDescriptionBackendFromPools(writer *sql.DB, reader *sql.DB) (*Con
 		return nil, err
 	}
 
-	return &ConceptDescriptionBackend{db: writer, readerDB: reader}, nil
+	return &ConceptDescriptionBackend{db: writer, readerDB: reader, verificationMode: verificationMode}, nil
+}
+
+func (b *ConceptDescriptionBackend) verifyConceptDescription(cd types.IConceptDescription, errorPrefix string) error {
+	return model.ValidateWithMode(
+		b.verificationMode,
+		errorPrefix,
+		func(collector func(*verification.VerificationError) bool) {
+			verification.VerifyConceptDescription(cd, collector)
+		},
+		func(message string) error {
+			return common.NewErrBadRequest(errorPrefix + " " + message)
+		},
+	)
 }
 
 func (b *ConceptDescriptionBackend) readDB(ctx context.Context) *sql.DB {
@@ -421,6 +442,9 @@ func (b *ConceptDescriptionBackend) ensureVisibleConceptDescriptionCreateDoesNot
 
 // CreateConceptDescription inserts a new concept description into the database.
 func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context, cd types.IConceptDescription) (err error) {
+	if err = b.verifyConceptDescription(cd, "CDREPO-CRTCD-VERIFY"); err != nil {
+		return err
+	}
 	tx, cleanup, err := common.StartTransaction(b.db)
 	if err != nil {
 		return common.NewInternalServerError("CDREPO-CRTCD-STARTTX " + err.Error())
@@ -723,6 +747,9 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, id string, cd types.IConceptDescription) (bool, error) {
 	if id != cd.ID() {
 		return false, common.NewErrBadRequest("CDREPO-PUTCD-IDMISMATCH Concept Description ID in path and body do not match")
+	}
+	if err := b.verifyConceptDescription(cd, "CDREPO-PUTCD-VERIFY"); err != nil {
+		return false, err
 	}
 
 	tx, cleanup, err := common.StartTransaction(b.db)

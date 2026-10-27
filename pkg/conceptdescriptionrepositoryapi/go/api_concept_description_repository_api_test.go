@@ -26,9 +26,27 @@
 package openapi
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/stretchr/testify/require"
 )
+
+func TestConceptDescriptionPutMissingIdentifierRemainsUnprocessableInEveryVerificationMode(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []model.VerificationMode{model.VerificationModeOff, model.VerificationModePermissive, model.VerificationModeStrict} {
+		t.Run(string(mode), func(t *testing.T) {
+			controller := NewConceptDescriptionRepositoryAPIAPIController(nil, "", string(mode))
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/concept-descriptions/", nil)
+			response := httptest.NewRecorder()
+			controller.PutConceptDescriptionById(response, request)
+			require.Equal(t, http.StatusUnprocessableEntity, response.Code, "response=%s", response.Body.String())
+		})
+	}
+}
 
 func TestParseTime_EmptyAndWhitespaceReturnZeroTime(t *testing.T) {
 	t.Parallel()
