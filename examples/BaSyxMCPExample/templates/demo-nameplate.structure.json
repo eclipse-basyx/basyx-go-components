@@ -1,0 +1,23 @@
+{
+  "schema_slug": "demo-nameplate",
+  "schema_version": "2.0.0",
+  "root": {
+    "id_short": "Nameplate",
+    "model_type": "Submodel",
+    "semantic_id": "urn:example:template:nameplate",
+    "children": [
+      {
+        "id_short": "ProductName",
+        "model_type": "Property",
+        "value_type": "xs:string",
+        "semantic_id": "urn:example:product-name",
+        "cardinality": {
+          "raw": "One",
+          "min_occurs": 1,
+          "max_occurs": 1
+        },
+        "children": []
+      }
+    ]
+  }
+}

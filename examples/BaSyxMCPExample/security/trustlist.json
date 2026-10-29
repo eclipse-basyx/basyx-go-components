@@ -1,0 +1,9 @@
+[
+  {
+    "issuer": "http://keycloak.localhost:18580/realms/basyx-mcp",
+    "audience": "basyx-mcp",
+    "scopes": [
+      "openid"
+    ]
+  }
+]
