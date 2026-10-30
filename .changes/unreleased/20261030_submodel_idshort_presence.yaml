@@ -1,0 +1,13 @@
+kind: fixed
+body: >-
+  Preserve an omitted Submodel idShort through persistence, individual and metadata
+  reads, and metadata updates in the Submodel Repository, AAS Environment, and
+  nested AAS Repository endpoints, as well as JSON, XML, and AASX exports from AAS
+  Environment. Full Submodel replacement now distinguishes an absent idShort from
+  an explicitly supplied empty string, while retaining the configured verification
+  policy and PATCH omission semantics.
+time: 2026-10-30T10:00:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 796
+  SecurityImpact: None.
