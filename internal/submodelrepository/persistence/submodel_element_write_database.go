@@ -464,9 +464,6 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 	if err != nil {
 		return err
 	}
-	if err = s.verifyEnclosingListTx(ctx, tx, submodelID, insertedPath, "SMREPO-ADDSMEBYPATH-VERIFYLIST"); err != nil {
-		return err
-	}
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-ADDSMEBYPATH-SHOULDENFORCE")
 	if enforceErr != nil {
 		return enforceErr
@@ -475,6 +472,9 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 		if err = s.ensureCreatedSubmodelElementIsVisible(ctx, tx, submodelID, insertedPath); err != nil {
 			return err
 		}
+	}
+	if err = s.verifyEnclosingListTx(ctx, tx, submodelID, insertedPath, "SMREPO-ADDSMEBYPATH-VERIFYLIST"); err != nil {
+		return err
 	}
 
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
@@ -550,11 +550,8 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 	if err != nil {
 		return false, err
 	}
-
-	if shouldEnforce {
-		if err = s.ensurePutSubmodelElementIsVisible(ctx, tx, submodelID, idShortPath); err != nil {
-			return false, err
-		}
+	if err = s.ensurePutResultIsVisibleAndValidTx(ctx, tx, submodelID, idShortPath, shouldEnforce); err != nil {
+		return false, err
 	}
 
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, historyMutation); err != nil {
@@ -572,21 +569,23 @@ func (s *SubmodelDatabase) writeSubmodelElementForPut(
 	submodelElement types.ISubmodelElement,
 	elementExists bool,
 ) (submodelElementRootMutation, error) {
-	if err := s.lockListsForSubmodelElementWriteTx(ctx, tx, submodelID, idShortPath, submodelElement); err != nil {
+	if err := s.lockSubmodelForListVerificationTx(ctx, tx, submodelID, idShortPath, submodelElement); err != nil {
 		return submodelElementRootMutation{}, err
 	}
 	writeForPut := s.createSubmodelElementForPut
 	if elementExists {
 		writeForPut = s.replaceSubmodelElementForPut
 	}
-	historyMutation, err := writeForPut(ctx, tx, submodelID, idShortPath, submodelElement)
-	if err != nil {
-		return submodelElementRootMutation{}, err
+	return writeForPut(ctx, tx, submodelID, idShortPath, submodelElement)
+}
+
+func (s *SubmodelDatabase) ensurePutResultIsVisibleAndValidTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, shouldEnforce bool) error {
+	if shouldEnforce {
+		if err := s.ensurePutSubmodelElementIsVisible(ctx, tx, submodelID, idShortPath); err != nil {
+			return err
+		}
 	}
-	if err = s.verifyEnclosingListTx(ctx, tx, submodelID, idShortPath, "SMREPO-PUTSME-VERIFYLIST"); err != nil {
-		return submodelElementRootMutation{}, err
-	}
-	return historyMutation, nil
+	return s.verifyEnclosingListTx(ctx, tx, submodelID, idShortPath, "SMREPO-PUTSME-VERIFYLIST")
 }
 
 func shouldCheckInsertedElementVisibility(shouldEnforce bool, insertedPath string) bool {
@@ -815,7 +814,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		return err
 	}
 
-	if err = s.lockListsForSubmodelElementWriteTx(ctx, tx, submodelID, idShortOrPath, submodelElement); err != nil {
+	if err = s.lockSubmodelForListVerificationTx(ctx, tx, submodelID, idShortOrPath, submodelElement); err != nil {
 		return err
 	}
 	err = s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortOrPath, submodelElement, isPut)
@@ -823,15 +822,15 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		return err
 	}
 
-	updatedPath := submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut)
-	if err = s.verifyUpdatedSubmodelElementTx(ctx, tx, submodelID, updatedPath, submodelElement); err != nil {
-		return err
-	}
-
 	if shouldEnforce {
 		if err = s.ensureUpdatedSubmodelElementIsVisible(ctx, tx, submodelID, idShortOrPath); err != nil {
 			return err
 		}
+	}
+
+	updatedPath := submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut)
+	if err = s.verifyUpdatedSubmodelElementTx(ctx, tx, submodelID, updatedPath, submodelElement); err != nil {
+		return err
 	}
 
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
@@ -860,21 +859,24 @@ func (s *SubmodelDatabase) verifyEnclosingListTx(ctx context.Context, tx *sql.Tx
 // verifyWrittenSubmodelElementTx verifies the persisted element at path and, for a
 // list member, the attributes of the enclosing list against that member only, so
 // the cost does not grow with the list. Only a list is read with its members,
-// because its constraints span them.
+// because its constraints span them. It runs after the write was authorized and
+// reads the complete persisted state, not the caller's filtered view, so a caller
+// with a restricted view gets no constraint details that could reveal hidden data.
 func (s *SubmodelDatabase) verifyWrittenSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, withChildren bool, errorPrefix string) error {
 	if !s.verificationEnabled() {
 		return nil
 	}
 
-	persistedElement, err := readPersistedSubmodelElementTx(ctx, tx, submodelID, path, withChildren)
+	stateCtx := auth.ContextWithoutQueryFilter(ctx)
+	persistedElement, err := readPersistedSubmodelElementTx(stateCtx, tx, submodelID, path, withChildren)
 	if err != nil {
 		return err
 	}
-	verificationRoot, err := attachToEnclosingListTx(ctx, tx, submodelID, path, persistedElement)
+	verificationRoot, err := attachToEnclosingListTx(stateCtx, tx, submodelID, path, persistedElement)
 	if err != nil {
 		return err
 	}
-	return s.verifySubmodelElement(verificationRoot, errorPrefix)
+	return s.verifySubmodelElement(verificationRoot, errorPrefix, auth.GetQueryFilter(ctx) == nil)
 }
 
 func readPersistedSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, withChildren bool) (types.ISubmodelElement, error) {
@@ -902,37 +904,20 @@ func attachToEnclosingListTx(ctx context.Context, tx *sql.Tx, submodelID string,
 	return enclosingList, nil
 }
 
-// lockListsForSubmodelElementWriteTx serializes writes whose verification relates
-// them through a SubmodelElementList. A write of a list member takes a shared lock
-// on the enclosing list and a write of a list an exclusive lock on it, ancestors
-// first, so a list and its members are never verified against stale state.
-func (s *SubmodelDatabase) lockListsForSubmodelElementWriteTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, submodelElement types.ISubmodelElement) error {
+// lockSubmodelForListVerificationTx serializes writes whose verification relates a
+// SubmodelElementList and its members, so neither is verified against the other's
+// stale state. It takes the Submodel lock that child reconciliation takes, before
+// any element row is locked, to keep the submodel-before-element lock order of
+// all element writes.
+func (s *SubmodelDatabase) lockSubmodelForListVerificationTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, submodelElement types.ISubmodelElement) error {
 	if !s.verificationEnabled() {
 		return nil
 	}
-	if listPath, isListMember := submodelelements.EnclosingListPath(path); isListMember {
-		if err := lockSubmodelElementTx(ctx, tx, submodelID, listPath, false); err != nil {
-			return err
-		}
-	}
-	if isSubmodelElementList(submodelElement) {
-		return lockSubmodelElementTx(ctx, tx, submodelID, path, true)
-	}
-	return nil
-}
-
-func lockSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, exclusive bool) error {
-	query, args, err := submodelqueries.BuildSubmodelElementLockSQL(submodelID, path, exclusive)
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-LOCKSME-BUILDQ " + err.Error())
-	}
-
-	var lockedID int64
-	err = tx.QueryRowContext(ctx, query, args...).Scan(&lockedID)
-	if err == nil || errors.Is(err, sql.ErrNoRows) {
+	if _, isListMember := submodelelements.EnclosingListPath(path); !isListMember && !isSubmodelElementList(submodelElement) {
 		return nil
 	}
-	return common.NewInternalServerError("SMREPO-LOCKSME-EXECQ " + err.Error())
+	_, err := lockSubmodelForChildReconciliationTx(ctx, tx, submodelID)
+	return err
 }
 
 func isSubmodelElementList(submodelElement types.ISubmodelElement) bool {

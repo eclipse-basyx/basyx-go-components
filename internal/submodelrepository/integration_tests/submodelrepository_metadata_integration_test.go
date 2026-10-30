@@ -471,3 +471,43 @@ func TestConcurrentListAndMemberWritesKeepListsValid(t *testing.T) {
 		require.True(t, listHasSemanticID || memberHasSemanticID, "list %d lost both writes: %#v", index, list)
 	}
 }
+
+func TestConcurrentListChildWritesDoNotDeadlock(t *testing.T) {
+	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryStrictBaseURL, "sme-list-lock-order", concurrentListTestSubmodelPayload)
+	listChildrenPatch := map[string]any{
+		"modelType":            "SubmodelElementList",
+		"typeValueListElement": "Property",
+		"valueTypeListElement": "xs:int",
+		"value":                []any{metadataTestProperty("", "xs:int", "5")},
+	}
+
+	type writeResult struct {
+		request string
+		status  int
+		body    string
+		err     error
+	}
+	results := make(chan writeResult, concurrentListCount*4)
+	send := func(method string, endpoint string, payload map[string]any) {
+		status, body, err := requestJSON(method, endpoint, payload)
+		results <- writeResult{request: method + " " + endpoint, status: status, body: string(body), err: err}
+	}
+
+	var writes sync.WaitGroup
+	for index := range concurrentListCount {
+		listURL := fmt.Sprintf("%s/List%d", elementsURL, index)
+		writes.Go(func() { send(http.MethodPatch, listURL, listChildrenPatch) })
+		writes.Go(func() { send(http.MethodPost, listURL, metadataTestProperty("", "xs:int", "7")) })
+		writes.Go(func() { send(http.MethodPut, listURL+"[0]", metadataTestProperty("", "xs:int", "9")) })
+		writes.Go(func() {
+			send(http.MethodPatch, listURL+"[0]/$metadata", map[string]any{"modelType": "Property", "description": []map[string]any{{"language": "en", "text": "member"}}})
+		})
+	}
+	writes.Wait()
+	close(results)
+
+	for result := range results {
+		require.NoError(t, result.err, result.request)
+		require.Less(t, result.status, http.StatusInternalServerError, "%s returned %d: %s", result.request, result.status, result.body)
+	}
+}

@@ -57,6 +57,14 @@
         }
       },
       {
+        "name": "list_member_editor",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": [ "READ", "UPDATE" ],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
         "name": "formula_reader",
         "acl": {
           "USEATTRIBUTES": "role_attr",
@@ -108,6 +116,34 @@
         }
       },
       {
+        "name": "is_hidden_list_member_editor",
+        "formula": {
+          "$and": [
+            {
+              "$eq": [
+                { "$attribute": { "CLAIM": "role" } },
+                { "$strVal": "editor" }
+              ]
+            },
+            {
+              "$eq": [
+                { "$field": "$sm#id" },
+                { "$strVal": "urn:example:submodel:hidden-list-member" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "is_visible_list_element",
+        "formula": {
+          "$eq": [
+            { "$field": "$sme#semanticId.keys[].value" },
+            { "$strVal": "urn:example:semantic:visible-list" }
+          ]
+        }
+      },
+      {
         "name": "is_manufacturer_product_root",
         "formula": {
           "$eq": [
@@ -137,6 +173,16 @@
         "USEACL": "formula_reader",
         "USEOBJECTS": [ "nameplate_routes" ],
         "USEFORMULA": "editor_with_formula_witness"
+      },
+      {
+        "USEACL": "list_member_editor",
+        "USEOBJECTS": [ "all_routes" ],
+        "USEFORMULA": "is_hidden_list_member_editor",
+        "FILTER": {
+          "FRAGMENT": "$sme",
+          "MATCH": true,
+          "USEFORMULA": "is_visible_list_element"
+        }
       },
       {
         "USEACL": "admin_all",
