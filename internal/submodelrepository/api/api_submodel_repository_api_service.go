@@ -2164,7 +2164,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		patchJSON = rawPatchJSON
 	}
 
-	if validationErr := s.validateSubmodelElementMetadataPatch(existingJSON, patchJSON); validationErr != nil {
+	if validationErr := validateSubmodelElementMetadataModelType(existingJSON, patchJSON); validationErr != nil {
 		return newAPIErrorResponse(validationErr, http.StatusBadRequest, operation, "InvalidSubmodelElementMetadata"), nil
 	}
 
@@ -2177,7 +2177,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		applyNullMetadataClearsToSubmodelElement(mergedElement, rawPatchJSON)
 	}
 
-	if err := s.submodelBackend.UpdateSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, mergedElement, false); err != nil {
+	if err := s.submodelBackend.PatchSubmodelElementMetadata(ctx, decodedSubmodelIdentifier, idShortPath, mergedElement); err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
@@ -2193,23 +2193,12 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 	return gen.Response(http.StatusNoContent, nil), nil
 }
 
-// validateSubmodelElementMetadataPatch verifies the patched element together
-// with its children, so that changed type attributes stay consistent with the
-// unchanged values.
-func (s *SubmodelRepositoryAPIAPIService) validateSubmodelElementMetadataPatch(existingJSON map[string]any, patchJSON map[string]any) error {
+func validateSubmodelElementMetadataModelType(existingJSON map[string]any, patchJSON map[string]any) error {
 	existingModelType, _ := existingJSON["modelType"].(string)
 	if patchModelType, ok := patchJSON["modelType"].(string); ok && patchModelType != existingModelType {
 		return errors.New("SMREPO-PATCHSMEMETA-MODELTYPEMISMATCH metadata modelType must match existing submodel element modelType")
 	}
-	if !s.submodelBackend.VerificationEnabled() {
-		return nil
-	}
-
-	patchedElement, err := jsonization.SubmodelElementFromJsonable(mergeJSONObjects(existingJSON, patchJSON))
-	if err != nil {
-		return fmt.Errorf("SMREPO-PATCHSMEMETA-PARSEPATCHED %w", err)
-	}
-	return s.submodelBackend.VerifySubmodelElement(patchedElement, "SMREPO-PATCHSMEMETA-VERIFY")
+	return nil
 }
 
 // GetSubmodelElementByPathValueOnlySubmodelRepo - Returns a specific submodel element from the Submodel at a specified path in the ValueOnly representation

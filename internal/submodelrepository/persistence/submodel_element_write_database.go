@@ -745,7 +745,20 @@ func (s *SubmodelDatabase) ensureSubmodelElementCanBeDeleted(ctx context.Context
 }
 
 // UpdateSubmodelElement updates a submodel element and checks ABAC access on old and new state when ABAC is enabled.
-func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (err error) {
+func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
+	return s.updateSubmodelElement(ctx, submodelID, idShortOrPath, submodelElement, isPut, nil)
+}
+
+// PatchSubmodelElementMetadata applies a metadata PATCH to a submodel element and
+// verifies the persisted element, or the enclosing list of a list member, before
+// the transaction commits.
+func (s *SubmodelDatabase) PatchSubmodelElementMetadata(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement) error {
+	return s.updateSubmodelElement(ctx, submodelID, idShortOrPath, submodelElement, false, s.verifyUpdatedSubmodelElementTx)
+}
+
+type updatedSubmodelElementVerifier func(ctx context.Context, tx *sql.Tx, submodelID string, updatedPath string, submodelElement types.ISubmodelElement) error
+
+func (s *SubmodelDatabase) updateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool, verifyUpdated updatedSubmodelElementVerifier) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -772,6 +785,13 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		return err
 	}
 
+	updatedPath := submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut)
+	if verifyUpdated != nil {
+		if err = verifyUpdated(ctx, tx, submodelID, updatedPath, submodelElement); err != nil {
+			return err
+		}
+	}
+
 	if shouldEnforce {
 		if err = s.ensureUpdatedSubmodelElementIsVisible(ctx, tx, submodelID, idShortOrPath); err != nil {
 			return err
@@ -780,12 +800,38 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 		previousPath: idShortOrPath,
-		currentPath:  submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut),
+		currentPath:  updatedPath,
 	}); err != nil {
 		return err
 	}
 
 	return common.CommitTransaction(tx)
+}
+
+func (s *SubmodelDatabase) verifyUpdatedSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, updatedPath string, submodelElement types.ISubmodelElement) error {
+	if !s.verificationEnabled() {
+		return nil
+	}
+
+	verificationPath, level := verificationScope(updatedPath, submodelElement)
+	persistedElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, verificationPath, false, level)
+	if err != nil {
+		return err
+	}
+	return s.verifySubmodelElement(persistedElement, "SMREPO-PATCHSMEMETA-VERIFY")
+}
+
+// verificationScope selects the element whose constraints a change at path can
+// violate. Only list constraints span children, so other elements are read
+// without them.
+func verificationScope(path string, submodelElement types.ISubmodelElement) (string, string) {
+	if listPath, isListMember := submodelelements.EnclosingListPath(path); isListMember {
+		return listPath, ""
+	}
+	if submodelElement.ModelType() == types.ModelTypeSubmodelElementList {
+		return path, ""
+	}
+	return path, "core"
 }
 
 func (s *SubmodelDatabase) ensureSubmodelElementCanBeUpdated(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string) (context.Context, error) {

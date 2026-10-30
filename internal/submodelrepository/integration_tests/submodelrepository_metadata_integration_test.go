@@ -81,6 +81,30 @@ func metadataTestProperty(idShort string, valueType string, value string) map[st
 	return property
 }
 
+func metadataTestReadingsList() map[string]any {
+	return map[string]any{
+		"idShort":              "Readings",
+		"modelType":            "SubmodelElementList",
+		"orderRelevant":        true,
+		"typeValueListElement": "Property",
+		"valueTypeListElement": "xs:int",
+		"value":                []any{metadataTestProperty("", "xs:int", "1"), metadataTestProperty("", "xs:int", "2")},
+	}
+}
+
+func metadataStrictTestSubmodelPayload(submodelID string) map[string]any {
+	return map[string]any{
+		"id":        submodelID,
+		"idShort":   "MetadataStrictVerification",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+		"submodelElements": []any{
+			metadataTestProperty("Temperature", "xs:int", "20"),
+			metadataTestReadingsList(),
+		},
+	}
+}
+
 func metadataTestSubmodelPayload(submodelID string) map[string]any {
 	temperatureReference := metadataTestModelReference(submodelID, "Temperature")
 	temperature := metadataTestProperty("Temperature", "xs:int", "20")
@@ -145,24 +169,17 @@ func metadataTestSubmodelPayload(submodelID string) map[string]any {
 				"modelType": "SubmodelElementCollection",
 				"value":     []any{metadataTestProperty("Color", "xs:string", "red")},
 			},
-			map[string]any{
-				"idShort":              "Readings",
-				"modelType":            "SubmodelElementList",
-				"orderRelevant":        true,
-				"typeValueListElement": "Property",
-				"valueTypeListElement": "xs:int",
-				"value":                []any{metadataTestProperty("", "xs:int", "1"), metadataTestProperty("", "xs:int", "2")},
-			},
+			metadataTestReadingsList(),
 		},
 	}
 }
 
-func createMetadataTestSubmodel(t *testing.T, baseURL string, prefix string) (string, string) {
+func createMetadataTestSubmodel(t *testing.T, baseURL string, prefix string, payload func(submodelID string) map[string]any) (string, string) {
 	t.Helper()
 	submodelID := fmt.Sprintf("urn:basyx:integration:%s-%d", prefix, time.Now().UnixNano())
 	encodedSubmodelID := common.EncodeString(submodelID)
 
-	statusCode, body, err := requestJSON(http.MethodPost, baseURL+"/submodels", metadataTestSubmodelPayload(submodelID))
+	statusCode, body, err := requestJSON(http.MethodPost, baseURL+"/submodels", payload(submodelID))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
 
@@ -205,7 +222,7 @@ func patchMetadata(t *testing.T, endpoint string, payload map[string]any, expect
 }
 
 func TestSubmodelElementMetadataContainsOnlyMetadataFields(t *testing.T) {
-	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryBaseURL, "sme-metadata-fields")
+	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryBaseURL, "sme-metadata-fields", metadataTestSubmodelPayload)
 
 	t.Run("by path", func(t *testing.T) {
 		for idShort, expectedFields := range expectedSubmodelElementMetadataFields {
@@ -235,7 +252,7 @@ func TestSubmodelElementMetadataContainsOnlyMetadataFields(t *testing.T) {
 }
 
 func TestPatchSubmodelElementMetadataTypeSpecificFields(t *testing.T) {
-	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryBaseURL, "sme-metadata-patch")
+	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryBaseURL, "sme-metadata-patch", metadataTestSubmodelPayload)
 	temperatureURL := elementsURL + "/Temperature"
 	readingsURL := elementsURL + "/Readings"
 	eventURL := elementsURL + "/Event"
@@ -316,5 +333,40 @@ func TestPatchSubmodelElementMetadataTypeSpecificFields(t *testing.T) {
 		patchMetadata(t, eventURL, map[string]any{"modelType": "BasicEventElement", "messageTopic": nil}, http.StatusBadRequest)
 
 		require.Equal(t, "motor/alerts", getJSONMap(t, eventURL+"/$metadata")["messageTopic"])
+	})
+}
+
+func TestPatchSubmodelElementMetadataStrictVerification(t *testing.T) {
+	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryStrictBaseURL, "sme-metadata-strict", metadataStrictTestSubmodelPayload)
+	temperatureURL := elementsURL + "/Temperature"
+	readingsURL := elementsURL + "/Readings"
+	firstReadingURL := readingsURL + "[0]"
+
+	t.Run("accepts a valueType consistent with the stored value", func(t *testing.T) {
+		patchMetadata(t, temperatureURL, map[string]any{"modelType": "Property", "valueType": "xs:long"}, http.StatusNoContent)
+
+		require.Equal(t, "xs:long", getJSONMap(t, temperatureURL+"/$metadata")["valueType"])
+	})
+
+	t.Run("rejects a valueType inconsistent with the stored value", func(t *testing.T) {
+		patchMetadata(t, temperatureURL, map[string]any{"modelType": "Property", "valueType": "xs:boolean"}, http.StatusBadRequest)
+
+		element := getJSONMap(t, temperatureURL)
+		require.Equal(t, "xs:long", element["valueType"])
+		require.Equal(t, "20", element["value"])
+	})
+
+	t.Run("rejects a list member valueType that conflicts with the enclosing list", func(t *testing.T) {
+		patchMetadata(t, firstReadingURL, map[string]any{"modelType": "Property", "valueType": "xs:long"}, http.StatusBadRequest)
+
+		element := getJSONMap(t, firstReadingURL)
+		require.Equal(t, "xs:int", element["valueType"])
+		require.Equal(t, "1", element["value"])
+	})
+
+	t.Run("rejects a list value type that conflicts with the list members", func(t *testing.T) {
+		patchMetadata(t, readingsURL, map[string]any{"modelType": "SubmodelElementList", "valueTypeListElement": "xs:string"}, http.StatusBadRequest)
+
+		require.Equal(t, "xs:int", getJSONMap(t, readingsURL+"/$metadata")["valueTypeListElement"])
 	})
 }

@@ -276,14 +276,11 @@ func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix 
 	})
 }
 
-// VerificationEnabled reports whether the configured verification mode verifies objects at all.
-func (s *SubmodelDatabase) VerificationEnabled() bool {
+func (s *SubmodelDatabase) verificationEnabled() bool {
 	return gen.NormalizeVerificationMode(s.verificationMode) != gen.VerificationModeOff
 }
 
-// VerifySubmodelElement verifies the submodel element including its children
-// according to the configured verification mode.
-func (s *SubmodelDatabase) VerifySubmodelElement(submodelElement types.ISubmodelElement, errorPrefix string) error {
+func (s *SubmodelDatabase) verifySubmodelElement(submodelElement types.ISubmodelElement, errorPrefix string) error {
 	return s.verifyWithMode(errorPrefix, func(collector func(*verification.VerificationError) bool) {
 		verification.Verify(submodelElement, collector)
 	})

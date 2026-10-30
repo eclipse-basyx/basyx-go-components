@@ -28,9 +28,7 @@ package api
 import (
 	"testing"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,17 +49,6 @@ func metadataTestListJSON(valueTypeListElement string) map[string]any {
 		"valueTypeListElement": valueTypeListElement,
 		"value":                []any{metadataTestPropertyJSON("", "xs:int", "1")},
 	}
-}
-
-func newMetadataTestService(t *testing.T, verificationMode string) *SubmodelRepositoryAPIAPIService {
-	t.Helper()
-	db, _, err := sqlmock.New()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-
-	backend, err := persistencepostgresql.NewSubmodelDatabaseFromDB(db, nil, verificationMode)
-	require.NoError(t, err)
-	return &SubmodelRepositoryAPIAPIService{submodelBackend: *backend}
 }
 
 func TestToSubmodelElementMetadataKeepsOnlyMetadataFields(t *testing.T) {
@@ -132,61 +119,13 @@ func TestToSubmodelElementMetadataKeepsOnlyMetadataFields(t *testing.T) {
 	}
 }
 
-func TestValidateSubmodelElementMetadataPatchInStrictMode(t *testing.T) {
+func TestValidateSubmodelElementMetadataModelType(t *testing.T) {
 	t.Parallel()
-	service := newMetadataTestService(t, "strict")
+	existing := metadataTestPropertyJSON("Temperature", "xs:int", "20")
 
-	testCases := []struct {
-		name          string
-		existing      map[string]any
-		patch         map[string]any
-		expectedError string
-	}{
-		{
-			name:     "consistent valueType",
-			existing: metadataTestPropertyJSON("Temperature", "xs:int", "20"),
-			patch:    map[string]any{"modelType": "Property", "valueType": "xs:long"},
-		},
-		{
-			name:          "valueType inconsistent with stored value",
-			existing:      metadataTestPropertyJSON("Status", "xs:string", "running"),
-			patch:         map[string]any{"modelType": "Property", "valueType": "xs:int"},
-			expectedError: "SMREPO-PATCHSMEMETA-VERIFY",
-		},
-		{
-			name:          "list value type conflicting with children",
-			existing:      metadataTestListJSON("xs:int"),
-			patch:         map[string]any{"modelType": "SubmodelElementList", "valueTypeListElement": "xs:string"},
-			expectedError: "SMREPO-PATCHSMEMETA-VERIFY",
-		},
-		{
-			name:          "modelType mismatch",
-			existing:      metadataTestPropertyJSON("Temperature", "xs:int", "20"),
-			patch:         map[string]any{"modelType": "Range"},
-			expectedError: "SMREPO-PATCHSMEMETA-MODELTYPEMISMATCH",
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-			err := service.validateSubmodelElementMetadataPatch(testCase.existing, testCase.patch)
-			if testCase.expectedError == "" {
-				require.NoError(t, err)
-				return
-			}
-			require.ErrorContains(t, err, testCase.expectedError)
-		})
-	}
-}
-
-func TestValidateSubmodelElementMetadataPatchHonorsDisabledVerification(t *testing.T) {
-	t.Parallel()
-	service := newMetadataTestService(t, "off")
-
-	err := service.validateSubmodelElementMetadataPatch(
-		metadataTestPropertyJSON("Status", "xs:string", "running"),
-		map[string]any{"modelType": "Property", "valueType": "xs:int"},
+	require.NoError(t, validateSubmodelElementMetadataModelType(existing, map[string]any{"modelType": "Property", "valueType": "xs:long"}))
+	require.ErrorContains(t,
+		validateSubmodelElementMetadataModelType(existing, map[string]any{"modelType": "Range"}),
+		"SMREPO-PATCHSMEMETA-MODELTYPEMISMATCH",
 	)
-	require.NoError(t, err)
 }

@@ -76,6 +76,7 @@ const actionAssertSignedSubmodel = "ASSERT_SIGNED_SUBMODEL"
 var submodelRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
 var submodelRepositoryEventFeedBaseURL = testenv.LocalURLFromEnv("BASYX_IT_EVENT_FEED_API_PORT", 6024)
 var submodelRepositoryReplicaBaseURL = testenv.LocalURLFromEnv("BASYX_IT_REPLICA_API_PORT", 6014)
+var submodelRepositoryStrictBaseURL = testenv.LocalURLFromEnv("BASYX_IT_STRICT_API_PORT", 6015)
 var submodelRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6007)
 var submodelRepositoryAASBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
 var submodelRepositoryAASExternalURL = testenv.LocalURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
@@ -2602,6 +2603,7 @@ func TestMain(m *testing.M) {
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
 		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 		{Name: "replica-api", EnvVar: "BASYX_IT_REPLICA_API_PORT"},
+		{Name: "strict-api", EnvVar: "BASYX_IT_STRICT_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "aas-api", EnvVar: "BASYX_IT_AAS_API_PORT"},
 		{Name: "sync-api", EnvVar: "BASYX_IT_SYNC_API_PORT"},
@@ -2615,6 +2617,7 @@ func TestMain(m *testing.M) {
 	submodelRepositoryBaseURL = runtime.LocalURL("api")
 	submodelRepositoryEventFeedBaseURL = runtime.LocalURL("event-feed-api")
 	submodelRepositoryReplicaBaseURL = runtime.LocalURL("replica-api")
+	submodelRepositoryStrictBaseURL = runtime.LocalURL("strict-api")
 	submodelRepositoryAASBaseURL = runtime.LocalhostURL("aas-api")
 	submodelRepositoryAASExternalURL = runtime.LocalURL("aas-api")
 	submodelRepositorySyncBaseURL = runtime.LocalhostURL("sync-api")

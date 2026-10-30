@@ -187,6 +187,15 @@ func buildReconciliationElementRow(node *flattenedInsertNode) (ReconciliationEle
 	}, nil
 }
 
+// EnclosingListPath returns the path of the SubmodelElementList that directly
+// contains the element at path, which list members address by index.
+func EnclosingListPath(path string) (string, bool) {
+	if !strings.HasSuffix(path, "]") {
+		return "", false
+	}
+	return parentPath(path), true
+}
+
 func parentPath(path string) string {
 	for index := len(path) - 1; index >= 0; index-- {
 		switch path[index] {

@@ -6,9 +6,12 @@ body: >-
   `typeValueListElement`, and `valueTypeListElement` of SubmodelElementList, and
   `direction`, `state`, `messageTopic`, `messageBroker`, `lastUpdate`,
   `minInterval`, and `maxInterval` of BasicEventElement. Fields outside the metadata
-  representation are still rejected, and the patched element is verified together
-  with its unchanged value and children according to the configured verification
-  mode.
+  representation are still rejected. Before the update commits, the persisted
+  element is verified with its unchanged value according to the configured
+  verification mode, together with its members for a SubmodelElementList and with
+  the enclosing list for a list member, so strict mode rejects changes such as a
+  `valueType` that no longer matches the stored value or the list's
+  `valueTypeListElement`.
 time: 2026-10-30T12:00:01+01:00
 custom:
   Impact: Medium
