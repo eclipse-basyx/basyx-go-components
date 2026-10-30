@@ -504,11 +504,21 @@ func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	return getSubmodelElementsByDatabaseID(ctx, db, int64(submodelDatabaseID), limit, cursor, level, includeBlobValue)
+	return getSubmodelElementsByDatabaseID(ctx, db, int64(submodelDatabaseID), limit, cursor, smeRowScopeForLevel(level), includeBlobValue)
 }
 
 // GetSubmodelElementsBySubmodelIDTx loads top-level submodel elements from an existing transaction.
 func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodelID string, limit *int, cursor string, includeBlobValue bool, level string) ([]types.ISubmodelElement, string, error) {
+	return getSubmodelElementsBySubmodelIDTx(ctx, tx, submodelID, limit, cursor, smeRowScopeForLevel(level), includeBlobValue)
+}
+
+// GetSubmodelElementsWithoutChildrenBySubmodelIDTx loads a page of top-level
+// submodel elements without any child elements from an existing transaction.
+func GetSubmodelElementsWithoutChildrenBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodelID string, limit *int, cursor string, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
+	return getSubmodelElementsBySubmodelIDTx(ctx, tx, submodelID, limit, cursor, smeRowScopeSelf, includeBlobValue)
+}
+
+func getSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodelID string, limit *int, cursor string, scope smeRowScope, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
 	if tx == nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-NILTX transaction must not be nil")
 	}
@@ -530,7 +540,7 @@ func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodel
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	return getSubmodelElementsByDatabaseID(ctx, tx, int64(submodelDatabaseID), limit, cursor, level, includeBlobValue)
+	return getSubmodelElementsByDatabaseID(ctx, tx, int64(submodelDatabaseID), limit, cursor, scope, includeBlobValue)
 }
 
 // GetSubmodelElementsByDatabaseIDTxInPersistenceOrder loads a complete Submodel
@@ -595,7 +605,7 @@ func getRootElementIDsInPersistenceOrder(ctx context.Context, db DBQueryer, subm
 	return rootIDs, nil
 }
 
-func getSubmodelElementsByDatabaseID(ctx context.Context, db DBQueryer, submodelDatabaseID int64, limit *int, cursor string, level string, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
+func getSubmodelElementsByDatabaseID(ctx context.Context, db DBQueryer, submodelDatabaseID int64, limit *int, cursor string, scope smeRowScope, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
 	rootElements, nextCursor, rootPathErr := getRootElementPage(ctx, db, submodelDatabaseID, limit, cursor)
 	if rootPathErr != nil {
 		return nil, "", rootPathErr
@@ -609,9 +619,9 @@ func getSubmodelElementsByDatabaseID(ctx context.Context, db DBQueryer, submodel
 		rootIDs = append(rootIDs, rootElement.id)
 	}
 
-	includeChildren := level != "core"
-	isGetSubmodelElements := true
-	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(ctx, db, submodelDatabaseID, rootIDs, includeChildren, isGetSubmodelElements, includeBlobValue)
+	includeChildren := scope == smeRowScopeSubtree
+	includeDirectChildren := scope == smeRowScopeDirectChildren
+	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(ctx, db, submodelDatabaseID, rootIDs, includeChildren, includeDirectChildren, includeBlobValue)
 	if readRowsErr != nil {
 		return nil, "", readRowsErr
 	}

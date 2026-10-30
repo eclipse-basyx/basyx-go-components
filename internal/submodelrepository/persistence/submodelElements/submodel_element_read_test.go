@@ -177,6 +177,21 @@ func TestSubmodelElementSelfPathReadExcludesChildren(t *testing.T) {
 	require.Contains(t, coreQuery, "sme_parent")
 }
 
+func TestSubmodelElementRootPageReadWithoutChildrenExcludesDirectChildren(t *testing.T) {
+	t.Parallel()
+
+	readRootPage := func(includeDirectChildren bool) string {
+		return captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
+			rows, err := readSubmodelElementRowsByRootIDs(contextWithABACDisabled(t), db, 42, []int64{11}, false, includeDirectChildren, false)
+			require.Empty(t, rows)
+			return err
+		})
+	}
+
+	require.NotContains(t, readRootPage(false), `"sme"."parent_sme_id" = ANY`)
+	require.Contains(t, readRootPage(true), `"sme"."parent_sme_id" = ANY`)
+}
+
 func captureSubmodelElementPathListQuery(t *testing.T, idShortPath string) string {
 	t.Helper()
 

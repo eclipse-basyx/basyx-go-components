@@ -53,10 +53,6 @@ type SubmodelRepositoryAPIAPIService struct {
 
 const componentName = "SMREPO"
 
-// metadataReadLevel loads submodel elements without their children, which the
-// metadata representation leaves out.
-const metadataReadLevel = "core"
-
 const (
 	invocationDelegationQualifierType = "invocationDelegation"
 	defaultDelegationTimeout          = 30 * time.Second
@@ -1705,7 +1701,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false, metadataReadLevel)
+	elements, nextCursor, err := s.submodelBackend.GetSubmodelElementsWithoutChildren(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -2112,7 +2108,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathMetadataSubmod
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	element, err := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, false, metadataReadLevel)
+	element, err := s.submodelBackend.GetSubmodelElementWithoutChildren(ctx, decodedSubmodelIdentifier, idShortPath)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil

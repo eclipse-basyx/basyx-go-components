@@ -156,6 +156,31 @@ func (s *SubmodelDatabase) GetSubmodelElement(ctx context.Context, submodelID st
 	return result, err
 }
 
+// GetSubmodelElementWithoutChildren retrieves only the submodel element at path,
+// without its child elements, and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelElementWithoutChildren(ctx context.Context, submodelID string, idShortOrPath string) (types.ISubmodelElement, error) {
+	var result types.ISubmodelElement
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMENOCHILDREN-STARTTX", "SMREPO-GETSMENOCHILDREN-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = submodelelements.GetSubmodelElementWithoutChildrenByPathTx(ctx, tx, submodelID, idShortOrPath, false)
+		return txErr
+	})
+	return result, err
+}
+
+// GetSubmodelElementsWithoutChildren retrieves a page of top-level submodel
+// elements without their child elements and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelElementsWithoutChildren(ctx context.Context, submodelID string, limit *int, cursor string) ([]types.ISubmodelElement, string, error) {
+	var result []types.ISubmodelElement
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMESNOCHILDREN-STARTTX", "SMREPO-GETSMESNOCHILDREN-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, nextCursor, txErr = submodelelements.GetSubmodelElementsWithoutChildrenBySubmodelIDTx(ctx, tx, submodelID, limit, cursor, false)
+		return txErr
+	})
+	return result, nextCursor, err
+}
+
 // GetSubmodelElements retrieves submodel elements and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelElements(ctx context.Context, submodelID string, limit *int, cursor string, includeBlobValue bool, level string) ([]types.ISubmodelElement, string, error) {
 	if submodelID == "" || (limit != nil && *limit < -1) {
