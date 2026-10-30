@@ -23,19 +23,23 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package persistence
+package queries
 
 import (
 	"testing"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/stretchr/testify/require"
 )
 
-func TestVerificationLevel(t *testing.T) {
+func TestBuildSubmodelElementLockSQL(t *testing.T) {
 	t.Parallel()
 
-	require.Equal(t, "", verificationLevel(types.NewSubmodelElementList(types.AASSubmodelElementsProperty)))
-	require.Equal(t, "core", verificationLevel(types.NewSubmodelElementCollection()))
-	require.Equal(t, "core", verificationLevel(types.NewProperty(types.DataTypeDefXSDString)))
+	sharedQuery, sharedArgs, err := BuildSubmodelElementLockSQL("urn:example:submodel", "Readings", false)
+	require.NoError(t, err)
+	exclusiveQuery, _, err := BuildSubmodelElementLockSQL("urn:example:submodel", "Readings", true)
+	require.NoError(t, err)
+
+	require.Contains(t, sharedQuery, `FOR SHARE OF "sme"`)
+	require.Contains(t, exclusiveQuery, `FOR UPDATE OF "sme"`)
+	require.Equal(t, []any{"urn:example:submodel", "Readings"}, sharedArgs)
 }

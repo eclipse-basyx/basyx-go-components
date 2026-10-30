@@ -360,6 +360,27 @@ func BuildSubmodelElementParentForInsertSQL(submodelID string, parentPath string
 		ToSQL()
 }
 
+// BuildSubmodelElementLockSQL builds a row lock on the submodel element at path.
+// Exclusive locks serialize writes of a SubmodelElementList itself; shared locks
+// let members of the same list be written concurrently while excluding them.
+func BuildSubmodelElementLockSQL(submodelID string, idShortPath string, exclusive bool) (string, []any, error) {
+	dialect := goqu.Dialect(common.Dialect)
+	query := dialect.
+		From(goqu.T("submodel_element").As("sme")).
+		Join(goqu.T("submodel").As("sm"), goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
+		Select(goqu.I("sme.id")).
+		Where(
+			goqu.I("sm.submodel_identifier").Eq(submodelID),
+			goqu.I("sme.idshort_path").Eq(idShortPath),
+		)
+	if exclusive {
+		query = query.ForUpdate(goqu.Wait, goqu.T("sme"))
+	} else {
+		query = query.ForShare(goqu.Wait, goqu.T("sme"))
+	}
+	return query.Prepared(true).ToSQL()
+}
+
 // BuildSubmodelElementChildInsertStateSQL builds the state lookup used after
 // the parent row has been locked in the current transaction.
 func BuildSubmodelElementChildInsertStateSQL(submodelDatabaseID int, parentElementID int, idShort string) (string, []any, error) {

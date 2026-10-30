@@ -7,7 +7,9 @@ body: >-
   that violate the list's `typeValueListElement`, `valueTypeListElement`, or
   `semanticIdListElement` (AASd-107, AASd-108, AASd-109) with HTTP 400 instead of
   storing an invalid list. Each member write checks only the written member against
-  the list attributes, so its cost does not grow with the list size. `PATCH` of any
+  the list's own attributes, so its cost does not grow with the list size, and
+  writes of a list and of its members lock the list row so concurrent writes cannot
+  combine into an invalid list. `PATCH` of any
   submodel element now also verifies the merged result with its unchanged value,
   not only the request payload.
 time: 2026-10-30T12:00:02+01:00

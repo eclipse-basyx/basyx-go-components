@@ -547,6 +547,9 @@ func (s *SubmodelDatabase) writeSubmodelElementForPut(
 	submodelElement types.ISubmodelElement,
 	elementExists bool,
 ) (submodelElementRootMutation, error) {
+	if err := s.lockListsForSubmodelElementWriteTx(ctx, tx, submodelID, idShortPath, submodelElement); err != nil {
+		return submodelElementRootMutation{}, err
+	}
 	writeForPut := s.createSubmodelElementForPut
 	if elementExists {
 		writeForPut = s.replaceSubmodelElementForPut
@@ -787,6 +790,9 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		return err
 	}
 
+	if err = s.lockListsForSubmodelElementWriteTx(ctx, tx, submodelID, idShortOrPath, submodelElement); err != nil {
+		return err
+	}
 	err = s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortOrPath, submodelElement, isPut)
 	if err != nil {
 		return err
@@ -814,7 +820,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 }
 
 func (s *SubmodelDatabase) verifyUpdatedSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, updatedPath string, submodelElement types.ISubmodelElement) error {
-	return s.verifyWrittenSubmodelElementTx(ctx, tx, submodelID, updatedPath, verificationLevel(submodelElement), "SMREPO-UPDSME-VERIFY")
+	return s.verifyWrittenSubmodelElementTx(ctx, tx, submodelID, updatedPath, isSubmodelElementList(submodelElement), "SMREPO-UPDSME-VERIFY")
 }
 
 // verifyEnclosingListTx verifies a written list member against its enclosing list,
@@ -823,18 +829,19 @@ func (s *SubmodelDatabase) verifyEnclosingListTx(ctx context.Context, tx *sql.Tx
 	if _, isListMember := submodelelements.EnclosingListPath(path); !isListMember {
 		return nil
 	}
-	return s.verifyWrittenSubmodelElementTx(ctx, tx, submodelID, path, "core", errorPrefix)
+	return s.verifyWrittenSubmodelElementTx(ctx, tx, submodelID, path, false, errorPrefix)
 }
 
 // verifyWrittenSubmodelElementTx verifies the persisted element at path and, for a
 // list member, the attributes of the enclosing list against that member only, so
-// the cost does not grow with the list.
-func (s *SubmodelDatabase) verifyWrittenSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, level string, errorPrefix string) error {
+// the cost does not grow with the list. Only a list is read with its members,
+// because its constraints span them.
+func (s *SubmodelDatabase) verifyWrittenSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, withChildren bool, errorPrefix string) error {
 	if !s.verificationEnabled() {
 		return nil
 	}
 
-	persistedElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, path, false, level)
+	persistedElement, err := readPersistedSubmodelElementTx(ctx, tx, submodelID, path, withChildren)
 	if err != nil {
 		return err
 	}
@@ -845,13 +852,20 @@ func (s *SubmodelDatabase) verifyWrittenSubmodelElementTx(ctx context.Context, t
 	return s.verifySubmodelElement(verificationRoot, errorPrefix)
 }
 
+func readPersistedSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, withChildren bool) (types.ISubmodelElement, error) {
+	if withChildren {
+		return submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, path, false, "")
+	}
+	return submodelelements.GetSubmodelElementWithoutChildrenByPathTx(ctx, tx, submodelID, path, false)
+}
+
 func attachToEnclosingListTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, member types.ISubmodelElement) (types.ISubmodelElement, error) {
 	listPath, isListMember := submodelelements.EnclosingListPath(path)
 	if !isListMember {
 		return member, nil
 	}
 
-	enclosingElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, listPath, false, "core")
+	enclosingElement, err := submodelelements.GetSubmodelElementWithoutChildrenByPathTx(ctx, tx, submodelID, listPath, false)
 	if err != nil {
 		return nil, err
 	}
@@ -863,13 +877,41 @@ func attachToEnclosingListTx(ctx context.Context, tx *sql.Tx, submodelID string,
 	return enclosingList, nil
 }
 
-// verificationLevel reads lists with their members because list constraints span
-// them; other elements are verified without children.
-func verificationLevel(submodelElement types.ISubmodelElement) string {
-	if submodelElement.ModelType() == types.ModelTypeSubmodelElementList {
-		return ""
+// lockListsForSubmodelElementWriteTx serializes writes whose verification relates
+// them through a SubmodelElementList. A write of a list member takes a shared lock
+// on the enclosing list and a write of a list an exclusive lock on it, ancestors
+// first, so a list and its members are never verified against stale state.
+func (s *SubmodelDatabase) lockListsForSubmodelElementWriteTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, submodelElement types.ISubmodelElement) error {
+	if !s.verificationEnabled() {
+		return nil
 	}
-	return "core"
+	if listPath, isListMember := submodelelements.EnclosingListPath(path); isListMember {
+		if err := lockSubmodelElementTx(ctx, tx, submodelID, listPath, false); err != nil {
+			return err
+		}
+	}
+	if isSubmodelElementList(submodelElement) {
+		return lockSubmodelElementTx(ctx, tx, submodelID, path, true)
+	}
+	return nil
+}
+
+func lockSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, exclusive bool) error {
+	query, args, err := submodelqueries.BuildSubmodelElementLockSQL(submodelID, path, exclusive)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-LOCKSME-BUILDQ " + err.Error())
+	}
+
+	var lockedID int64
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&lockedID)
+	if err == nil || errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	return common.NewInternalServerError("SMREPO-LOCKSME-EXECQ " + err.Error())
+}
+
+func isSubmodelElementList(submodelElement types.ISubmodelElement) bool {
+	return submodelElement != nil && submodelElement.ModelType() == types.ModelTypeSubmodelElementList
 }
 
 func (s *SubmodelDatabase) ensureSubmodelElementCanBeUpdated(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string) (context.Context, error) {

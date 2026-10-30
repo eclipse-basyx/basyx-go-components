@@ -152,10 +152,29 @@ func captureSubmodelElementPathReadQuery(t *testing.T, idShortPath string) strin
 	t.Helper()
 
 	return captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
-		rows, err := readSubmodelElementRowsByPath(contextWithABACDisabled(t), db, 42, idShortPath, true, true)
+		rows, err := readSubmodelElementRowsByPath(contextWithABACDisabled(t), db, 42, idShortPath, smeRowScopeSubtree, true)
 		require.Empty(t, rows)
 		return err
 	})
+}
+
+func TestSubmodelElementSelfPathReadExcludesChildren(t *testing.T) {
+	t.Parallel()
+
+	selfQuery := captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
+		rows, err := readSubmodelElementRowsByPath(contextWithABACDisabled(t), db, 42, "Readings", smeRowScopeSelf, false)
+		require.Empty(t, rows)
+		return err
+	})
+	coreQuery := captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
+		rows, err := readSubmodelElementRowsByPath(contextWithABACDisabled(t), db, 42, "Readings", smeRowScopeDirectChildren, false)
+		require.Empty(t, rows)
+		return err
+	})
+
+	require.NotContains(t, selfQuery, "sme_parent")
+	require.NotContains(t, selfQuery, "LIKE")
+	require.Contains(t, coreQuery, "sme_parent")
 }
 
 func captureSubmodelElementPathListQuery(t *testing.T, idShortPath string) string {

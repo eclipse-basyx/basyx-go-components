@@ -30,6 +30,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -419,4 +420,54 @@ func TestSubmodelElementWritesStrictVerification(t *testing.T) {
 		requireListMemberCount(t, readingsURL, 3)
 		require.Equal(t, "10", getJSONMap(t, firstReadingURL)["value"])
 	})
+}
+
+const concurrentListCount = 20
+
+func concurrentListTestSubmodelPayload(submodelID string) map[string]any {
+	lists := make([]any, 0, concurrentListCount)
+	for index := range concurrentListCount {
+		lists = append(lists, map[string]any{
+			"idShort":              fmt.Sprintf("List%d", index),
+			"modelType":            "SubmodelElementList",
+			"typeValueListElement": "Property",
+			"valueTypeListElement": "xs:int",
+			"value":                []any{metadataTestProperty("", "xs:int", "1")},
+		})
+	}
+	return map[string]any{
+		"id":               submodelID,
+		"idShort":          "ConcurrentListWrites",
+		"kind":             "Instance",
+		"modelType":        "Submodel",
+		"submodelElements": lists,
+	}
+}
+
+func TestConcurrentListAndMemberWritesKeepListsValid(t *testing.T) {
+	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryStrictBaseURL, "sme-list-concurrency", concurrentListTestSubmodelPayload)
+	listPatch := map[string]any{"modelType": "SubmodelElementList", "semanticIdListElement": metadataTestExternalReference("urn:example:semantic:list")}
+	memberPatch := map[string]any{"modelType": "Property", "semanticId": metadataTestExternalReference("urn:example:semantic:member")}
+
+	var writes sync.WaitGroup
+	for index := range concurrentListCount {
+		listURL := fmt.Sprintf("%s/List%d", elementsURL, index)
+		writes.Go(func() { _, _, _ = requestJSON(http.MethodPatch, listURL+"/$metadata", listPatch) })
+		writes.Go(func() { _, _, _ = requestJSON(http.MethodPatch, listURL+"[0]/$metadata", memberPatch) })
+	}
+	writes.Wait()
+
+	for index := range concurrentListCount {
+		list := getJSONMap(t, fmt.Sprintf("%s/List%d", elementsURL, index))
+		members, ok := list["value"].([]any)
+		require.True(t, ok, "list value must be an array: %#v", list)
+		require.Len(t, members, 1)
+		member, ok := members[0].(map[string]any)
+		require.True(t, ok, "list member must be an object")
+
+		_, listHasSemanticID := list["semanticIdListElement"]
+		_, memberHasSemanticID := member["semanticId"]
+		require.False(t, listHasSemanticID && memberHasSemanticID, "list %d violates AASd-107: %#v", index, list)
+		require.True(t, listHasSemanticID || memberHasSemanticID, "list %d lost both writes: %#v", index, list)
+	}
 }
