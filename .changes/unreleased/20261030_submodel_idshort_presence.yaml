@@ -9,5 +9,5 @@ body: >-
 time: 2026-10-30T10:00:00+01:00
 custom:
   Impact: Low
-  PullRequest: 796
+  PullRequest: 800
   SecurityImpact: None.
