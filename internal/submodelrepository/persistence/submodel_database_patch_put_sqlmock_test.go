@@ -550,6 +550,25 @@ func expectSubmodelDatabaseIDLoad(mock sqlmock.Sqlmock) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
 }
 
+// expectPersistedSubmodelElementLoad expects the read of a single persisted
+// element without children, as used to verify a write before commit.
+func expectPersistedSubmodelElementLoad(mock sqlmock.Sqlmock, databaseID int64, idShortPath string, modelType types.ModelType) {
+	mock.ExpectQuery(`SELECT .*FROM .*"submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"c_id", "c_parent_sme_id", "c_root_sme_id", "c_id_short", "c_idshort_path", "c_category", "c_model_type", "c_position",
+			"raw_embedded_data_specification_payload", "raw_supplemental_semantic_ids_payload", "raw_extensions_payload",
+			"raw_displayname_payload", "raw_description_payload", "raw_value_payload", "raw_semantic_id_referred_payload",
+			"raw_supplemental_semantic_ids_referred_payload", "raw_qualifiers_payload", "raw_semantic_payload",
+			"semantic_visible", "value_visible",
+		}).AddRow(
+			databaseID, nil, nil, idShortPath, idShortPath, nil, int64(modelType), 0,
+			[]byte("[]"), []byte("[]"), []byte("[]"), []byte("[]"), []byte("[]"), nil, []byte("[]"),
+			[]byte("[]"), []byte("[]"), nil, true, true,
+		))
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element_semantic_id_reference"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "type"}))
+}
+
 func expectEmptyRootSubmodelElementsLoad(mock sqlmock.Sqlmock) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel_element"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "idshort_path"}))
@@ -621,6 +640,8 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`INSERT INTO .*submodel_element_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectSubmodelDatabaseIDLoad(mock)
+	expectPersistedSubmodelElementLoad(mock, 200, "oldIdShort", types.ModelTypeCapability)
 	expectMutatedSubmodelHistoryFallback(mock)
 	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
 	expectSubmodelRevisionUpsert(mock, "sm-1")

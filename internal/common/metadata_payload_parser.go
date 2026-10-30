@@ -192,32 +192,35 @@ func parseReferences(raw any, field string) ([]types.IReference, error) {
 	return values, nil
 }
 
-func parseModelType(raw any, field string) (types.ModelType, error) {
+func parseBoolField(raw any, field string) (bool, error) {
+	value, ok := raw.(bool)
+	if !ok {
+		return false, fmt.Errorf("%s must be a boolean", field)
+	}
+	return value, nil
+}
+
+func parseEnumField[T any](raw any, field string, fromString func(string) (T, bool)) (T, error) {
+	var zero T
 	literal, err := parseStringField(raw, field)
 	if err != nil {
-		return 0, err
+		return zero, err
 	}
 
-	value, ok := stringification.ModelTypeFromString(literal)
+	value, ok := fromString(literal)
 	if !ok {
-		return 0, fmt.Errorf("%s has unsupported value '%s'", field, literal)
+		return zero, fmt.Errorf("%s has unsupported value '%s'", field, literal)
 	}
 
 	return value, nil
 }
 
+func parseModelType(raw any, field string) (types.ModelType, error) {
+	return parseEnumField(raw, field, stringification.ModelTypeFromString)
+}
+
 func parseModellingKind(raw any, field string) (types.ModellingKind, error) {
-	literal, err := parseStringField(raw, field)
-	if err != nil {
-		return 0, err
-	}
-
-	value, ok := stringification.ModellingKindFromString(literal)
-	if !ok {
-		return 0, fmt.Errorf("%s has unsupported value '%s'", field, literal)
-	}
-
-	return value, nil
+	return parseEnumField(raw, field, stringification.ModellingKindFromString)
 }
 
 func parseMetadataPayload(raw any) (map[string]any, error) {
@@ -334,54 +337,19 @@ func ParseSubmodelMetadataPayload(raw any) (model.SubmodelMetadata, error) {
 }
 
 // ParseSubmodelElementMetadataPayload parses metadata PATCH payloads into SubmodelElementMetadata.
+// Type-specific metadata fields of the payload's modelType are validated but
+// remain only in the raw payload.
 func ParseSubmodelElementMetadataPayload(raw any) (model.SubmodelElementMetadata, error) {
 	payload, err := parseMetadataPayload(raw)
 	if err != nil {
 		return model.SubmodelElementMetadata{}, fmt.Errorf("SMREPO-PARSESMEMETA-INVALIDPAYLOAD %w", err)
 	}
 
+	modelType, _ := payload["modelType"].(string)
 	metadata := model.SubmodelElementMetadata{}
 	for field, value := range payload {
-		if value == nil {
-			switch field {
-			case "extensions", "category", "idShort", "displayName", "description", "embeddedDataSpecifications", "semanticId", "supplementalSemanticIds", "qualifiers", "kind":
-				continue
-			case "modelType":
-				return model.SubmodelElementMetadata{}, fmt.Errorf("SMREPO-PARSESMEMETA-INVALIDFIELD invalid metadata field '%s': %s must not be null", field, field)
-			default:
-				return model.SubmodelElementMetadata{}, fmt.Errorf("SMREPO-PARSESMEMETA-UNKNOWNFIELD unknown metadata field '%s'", field)
-			}
-		}
-
-		switch field {
-		case "extensions":
-			metadata.Extensions, err = parseExtensions(value, field)
-		case "category":
-			metadata.Category, err = parseStringField(value, field)
-		case "idShort":
-			metadata.IdShort, err = parseStringField(value, field)
-		case "displayName":
-			metadata.DisplayName, err = parseLangStringNameTypes(value, field)
-		case "description":
-			metadata.Description, err = parseLangStringTextTypes(value, field)
-		case "modelType":
-			metadata.ModelType, err = parseModelType(value, field)
-		case "embeddedDataSpecifications":
-			metadata.EmbeddedDataSpecifications, err = parseEmbeddedDataSpecifications(value, field)
-		case "semanticId":
-			metadata.SemanticID, err = parseReference(value, field)
-		case "supplementalSemanticIds":
-			metadata.SupplementalSemanticIds, err = parseReferences(value, field)
-		case "qualifiers":
-			metadata.Qualifiers, err = parseQualifiers(value, field)
-		case "kind":
-			metadata.Kind, err = parseModellingKind(value, field)
-		default:
-			return model.SubmodelElementMetadata{}, fmt.Errorf("SMREPO-PARSESMEMETA-UNKNOWNFIELD unknown metadata field '%s'", field)
-		}
-
-		if err != nil {
-			return model.SubmodelElementMetadata{}, fmt.Errorf("SMREPO-PARSESMEMETA-INVALIDFIELD invalid metadata field '%s': %w", field, err)
+		if err := parseSubmodelElementMetadataField(&metadata, modelType, field, value); err != nil {
+			return model.SubmodelElementMetadata{}, err
 		}
 	}
 
@@ -390,4 +358,57 @@ func ParseSubmodelElementMetadataPayload(raw any) (model.SubmodelElementMetadata
 	}
 
 	return metadata, nil
+}
+
+func parseSubmodelElementMetadataField(metadata *model.SubmodelElementMetadata, modelType string, field string, value any) error {
+	validateTypeSpecific, isTypeSpecific := submodelElementTypeSpecificMetadataFields[modelType][field]
+	_, isCommon := submodelElementMetadataCommonFields[field]
+	switch {
+	case !isTypeSpecific && !isCommon:
+		return fmt.Errorf("SMREPO-PARSESMEMETA-UNKNOWNFIELD unknown metadata field '%s'", field)
+	case value == nil && (isTypeSpecific || field == "modelType"):
+		return fmt.Errorf("SMREPO-PARSESMEMETA-INVALIDFIELD invalid metadata field '%s': %s must not be null", field, field)
+	case value == nil:
+		return nil
+	}
+
+	var err error
+	if isTypeSpecific {
+		err = validateTypeSpecific(value, field)
+	} else {
+		err = setCommonSubmodelElementMetadataField(metadata, field, value)
+	}
+	if err != nil {
+		return fmt.Errorf("SMREPO-PARSESMEMETA-INVALIDFIELD invalid metadata field '%s': %w", field, err)
+	}
+	return nil
+}
+
+func setCommonSubmodelElementMetadataField(metadata *model.SubmodelElementMetadata, field string, value any) error {
+	var err error
+	switch field {
+	case "extensions":
+		metadata.Extensions, err = parseExtensions(value, field)
+	case "category":
+		metadata.Category, err = parseStringField(value, field)
+	case "idShort":
+		metadata.IdShort, err = parseStringField(value, field)
+	case "displayName":
+		metadata.DisplayName, err = parseLangStringNameTypes(value, field)
+	case "description":
+		metadata.Description, err = parseLangStringTextTypes(value, field)
+	case "modelType":
+		metadata.ModelType, err = parseModelType(value, field)
+	case "embeddedDataSpecifications":
+		metadata.EmbeddedDataSpecifications, err = parseEmbeddedDataSpecifications(value, field)
+	case "semanticId":
+		metadata.SemanticID, err = parseReference(value, field)
+	case "supplementalSemanticIds":
+		metadata.SupplementalSemanticIds, err = parseReferences(value, field)
+	case "qualifiers":
+		metadata.Qualifiers, err = parseQualifiers(value, field)
+	case "kind":
+		metadata.Kind, err = parseModellingKind(value, field)
+	}
+	return err
 }

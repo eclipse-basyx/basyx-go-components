@@ -1,0 +1,14 @@
+kind: fixed
+body: >-
+  Return only the fields of the Part 2 metadata schemas from the Submodel Repository
+  `$metadata` endpoints of submodel elements. Child elements of collections, lists,
+  entities, and annotated relationships are no longer included, and value fields
+  such as `valueId`, `contentType`, `first`, `second`, `observed`, `entityType`,
+  `globalAssetId`, `specificAssetIds`, and operation variables are left out. The
+  list endpoint therefore returns only top-level elements. Both endpoints read only
+  the requested elements' own rows instead of their subtrees.
+time: 2026-10-30T12:00:00+01:00
+custom:
+  Impact: Medium
+  PullRequest: 801
+  SecurityImpact: None.

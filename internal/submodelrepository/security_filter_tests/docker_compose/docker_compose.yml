@@ -44,6 +44,36 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
 
+  submodel-repository-security-filter-strict:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=strict
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+    ports:
+      - "127.0.0.1:${BASYX_IT_STRICT_API_PORT:-6005}:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"
+
   keycloak:
     image: keycloak/keycloak:26.7.4
     environment:
