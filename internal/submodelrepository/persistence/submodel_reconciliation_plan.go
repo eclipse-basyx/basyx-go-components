@@ -210,7 +210,7 @@ func buildSubmodelReconciliationMetadata(
 	if err != nil {
 		return submodelReconciliationMetadata{}, err
 	}
-	target.CoreChanged = !reconciliationIDShortsEqual(previous.IDShort, target.IDShort) ||
+	target.CoreChanged = !reflect.DeepEqual(previous.IDShort, target.IDShort) ||
 		!reflect.DeepEqual(previous.Category, target.Category) ||
 		!reflect.DeepEqual(previous.Kind, target.Kind)
 	target.PayloadChanged = !reflect.DeepEqual(previous.Description, target.Description) ||
@@ -223,17 +223,6 @@ func buildSubmodelReconciliationMetadata(
 	target.SemanticIDChanged = !reflect.DeepEqual(previous.SemanticID, target.SemanticID)
 	target.SupplementalChanged = !reflect.DeepEqual(previous.SupplementalRefs, target.SupplementalRefs)
 	return target, nil
-}
-
-func reconciliationIDShortsEqual(previous *string, target *string) bool {
-	return reconciliationIDShortValue(previous) == reconciliationIDShortValue(target)
-}
-
-func reconciliationIDShortValue(idShort *string) string {
-	if idShort == nil {
-		return ""
-	}
-	return *idShort
 }
 
 func buildSubmodelReconciliationMetadataValues(submodel types.ISubmodel) (submodelReconciliationMetadata, error) {
