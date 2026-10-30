@@ -271,12 +271,29 @@ func submodelDatabaseIDAsInt(submodelDBID int64) (int, error) {
 }
 
 func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix string) error {
+	return s.verifyWithMode(errorPrefix, func(collector func(*verification.VerificationError) bool) {
+		verification.VerifySubmodel(submodel, collector)
+	})
+}
+
+// VerificationEnabled reports whether the configured verification mode verifies objects at all.
+func (s *SubmodelDatabase) VerificationEnabled() bool {
+	return gen.NormalizeVerificationMode(s.verificationMode) != gen.VerificationModeOff
+}
+
+// VerifySubmodelElement verifies the submodel element including its children
+// according to the configured verification mode.
+func (s *SubmodelDatabase) VerifySubmodelElement(submodelElement types.ISubmodelElement, errorPrefix string) error {
+	return s.verifyWithMode(errorPrefix, func(collector func(*verification.VerificationError) bool) {
+		verification.Verify(submodelElement, collector)
+	})
+}
+
+func (s *SubmodelDatabase) verifyWithMode(errorPrefix string, verify func(func(*verification.VerificationError) bool)) error {
 	return gen.ValidateWithMode(
 		s.verificationMode,
 		errorPrefix,
-		func(collector func(*verification.VerificationError) bool) {
-			verification.VerifySubmodel(submodel, collector)
-		},
+		verify,
 		func(message string) error {
 			return common.NewErrBadRequest(errorPrefix + " " + message)
 		},

@@ -53,6 +53,10 @@ type SubmodelRepositoryAPIAPIService struct {
 
 const componentName = "SMREPO"
 
+// metadataReadLevel loads submodel elements without their children, which the
+// metadata representation leaves out.
+const metadataReadLevel = "core"
+
 const (
 	invocationDelegationQualifierType = "invocationDelegation"
 	defaultDelegationTimeout          = 30 * time.Second
@@ -524,91 +528,13 @@ func toSubmodelElementMetadata(element types.ISubmodelElement) (map[string]any, 
 		return nil, err
 	}
 
-	sanitizeSubmodelElementMetadata(jsonElement)
+	modelType, _ := jsonElement["modelType"].(string)
+	for field := range jsonElement {
+		if !common.IsSubmodelElementMetadataField(modelType, field) {
+			delete(jsonElement, field)
+		}
+	}
 	return jsonElement, nil
-}
-
-func sanitizeSubmodelElementMetadata(metadata map[string]any) {
-	modelType, _ := metadata["modelType"].(string)
-
-	switch modelType {
-	case "Property", "MultiLanguageProperty", "Blob", "File":
-		delete(metadata, "value")
-	case "Range":
-		delete(metadata, "min")
-		delete(metadata, "max")
-	case "SubmodelElementCollection", "SubmodelElementList":
-		sanitizeSubmodelElementSliceField(metadata, "value")
-	case "Operation":
-		sanitizeOperationVariables(metadata, "inputVariables")
-		sanitizeOperationVariables(metadata, "outputVariables")
-		sanitizeOperationVariables(metadata, "inoutputVariables")
-	case "Entity":
-		sanitizeSubmodelElementSliceField(metadata, "statements")
-	case "AnnotatedRelationshipElement":
-		sanitizeSubmodelElementSliceField(metadata, "annotations")
-	}
-}
-
-func sanitizeSubmodelElementSliceField(metadata map[string]any, field string) {
-	rawField, exists := metadata[field]
-	if !exists {
-		return
-	}
-
-	rawSlice, ok := rawField.([]any)
-	if !ok {
-		delete(metadata, field)
-		return
-	}
-
-	hasSubmodelElements := false
-	for _, rawElement := range rawSlice {
-		elementMap, mapOK := rawElement.(map[string]any)
-		if !mapOK {
-			continue
-		}
-
-		hasSubmodelElements = true
-		sanitizeSubmodelElementMetadata(elementMap)
-	}
-
-	if !hasSubmodelElements {
-		delete(metadata, field)
-	}
-}
-
-func sanitizeOperationVariables(metadata map[string]any, field string) {
-	rawVariables, exists := metadata[field]
-	if !exists {
-		return
-	}
-
-	variables, ok := rawVariables.([]any)
-	if !ok {
-		delete(metadata, field)
-		return
-	}
-
-	for _, rawVariable := range variables {
-		variableMap, mapOK := rawVariable.(map[string]any)
-		if !mapOK {
-			continue
-		}
-
-		rawValue, hasValue := variableMap["value"]
-		if !hasValue {
-			continue
-		}
-
-		valueElement, valueOK := rawValue.(map[string]any)
-		if !valueOK {
-			delete(variableMap, "value")
-			continue
-		}
-
-		sanitizeSubmodelElementMetadata(valueElement)
-	}
 }
 
 func getModelTypeLiteral(element types.ISubmodelElement) string {
@@ -1779,7 +1705,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false, "")
+	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false, metadataReadLevel)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -2186,7 +2112,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathMetadataSubmod
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	element, err := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, false, "")
+	element, err := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, false, metadataReadLevel)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
@@ -2238,11 +2164,8 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		patchJSON = rawPatchJSON
 	}
 
-	if existingModelType, ok := existingJSON["modelType"].(string); ok {
-		if patchModelType, ok := patchJSON["modelType"].(string); ok && patchModelType != existingModelType {
-			mismatchErr := errors.New("metadata modelType must match existing submodel element modelType")
-			return newAPIErrorResponse(mismatchErr, http.StatusBadRequest, operation, "InvalidSubmodelElementMetadata"), nil
-		}
+	if validationErr := s.validateSubmodelElementMetadataPatch(existingJSON, patchJSON); validationErr != nil {
+		return newAPIErrorResponse(validationErr, http.StatusBadRequest, operation, "InvalidSubmodelElementMetadata"), nil
 	}
 
 	mergedJSON := mergeSubmodelElementMetadataPatch(existingJSON, patchJSON)
@@ -2268,6 +2191,25 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
+}
+
+// validateSubmodelElementMetadataPatch verifies the patched element together
+// with its children, so that changed type attributes stay consistent with the
+// unchanged values.
+func (s *SubmodelRepositoryAPIAPIService) validateSubmodelElementMetadataPatch(existingJSON map[string]any, patchJSON map[string]any) error {
+	existingModelType, _ := existingJSON["modelType"].(string)
+	if patchModelType, ok := patchJSON["modelType"].(string); ok && patchModelType != existingModelType {
+		return errors.New("SMREPO-PATCHSMEMETA-MODELTYPEMISMATCH metadata modelType must match existing submodel element modelType")
+	}
+	if !s.submodelBackend.VerificationEnabled() {
+		return nil
+	}
+
+	patchedElement, err := jsonization.SubmodelElementFromJsonable(mergeJSONObjects(existingJSON, patchJSON))
+	if err != nil {
+		return fmt.Errorf("SMREPO-PATCHSMEMETA-PARSEPATCHED %w", err)
+	}
+	return s.submodelBackend.VerifySubmodelElement(patchedElement, "SMREPO-PATCHSMEMETA-VERIFY")
 }
 
 // GetSubmodelElementByPathValueOnlySubmodelRepo - Returns a specific submodel element from the Submodel at a specified path in the ValueOnly representation

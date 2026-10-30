@@ -1,0 +1,16 @@
+kind: fixed
+body: >-
+  Accept the type-specific fields of the Part 2 metadata schemas in Submodel
+  Repository `PATCH .../submodel-elements/{idShortPath}/$metadata`: `valueType` of
+  Property and Range, `orderRelevant`, `semanticIdListElement`,
+  `typeValueListElement`, and `valueTypeListElement` of SubmodelElementList, and
+  `direction`, `state`, `messageTopic`, `messageBroker`, `lastUpdate`,
+  `minInterval`, and `maxInterval` of BasicEventElement. Fields outside the metadata
+  representation are still rejected, and the patched element is verified together
+  with its unchanged value and children according to the configured verification
+  mode.
+time: 2026-10-30T12:00:01+01:00
+custom:
+  Impact: Medium
+  PullRequest: 801
+  SecurityImpact: None.

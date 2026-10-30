@@ -1243,7 +1243,7 @@ func TestContractSubmodelRepository(t *testing.T) {
 		assert.NotEmpty(t, submodelElements, "submodelElements must be omitted when empty or contain at least one element")
 	})
 
-	t.Run("GetAllSubmodelElementsMetadataReturnsHierarchyWithoutPropertyValues", func(t *testing.T) {
+	t.Run("GetAllSubmodelElementsMetadataOmitsChildElementsAndPropertyValues", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-sme-metadata-all-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractSMEMetadataAll%d", time.Now().UnixNano())
 		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
@@ -1291,19 +1291,9 @@ func TestContractSubmodelRepository(t *testing.T) {
 
 		collectionMetadata := findMetadataByIDShort(t, response.Result, "MainCollection")
 		assert.Equal(t, "SubmodelElementCollection", collectionMetadata["modelType"])
-
-		rawNestedMetadata, hasNestedMetadata := collectionMetadata["value"]
-		require.True(t, hasNestedMetadata, "collection metadata should include nested metadata hierarchy")
-
-		nestedMetadata, ok := rawNestedMetadata.([]any)
-		require.True(t, ok, "collection metadata hierarchy must be an array")
-		require.NotEmpty(t, nestedMetadata)
-
-		firstNestedMetadata, ok := nestedMetadata[0].(map[string]any)
-		require.True(t, ok, "nested metadata entry must be an object")
-		assert.Equal(t, "NestedProperty", firstNestedMetadata["idShort"])
-		_, hasNestedValue := firstNestedMetadata["value"]
-		assert.False(t, hasNestedValue, "nested property metadata should not include value payload")
+		_, hasCollectionValue := collectionMetadata["value"]
+		assert.False(t, hasCollectionValue, "collection metadata should not include child elements")
+		assert.Len(t, response.Result, 2, "metadata list should contain only top-level elements")
 	})
 
 	t.Run("GetSubmodelElementByPathMetadataReturnsMetadataWithoutPropertyValues", func(t *testing.T) {
