@@ -32,28 +32,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVerificationScope(t *testing.T) {
+func TestVerificationLevel(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name          string
-		path          string
-		element       types.ISubmodelElement
-		expectedPath  string
-		expectedLevel string
-	}{
-		{name: "list member", path: "Readings[0]", element: types.NewProperty(types.DataTypeDefXSDInt), expectedPath: "Readings", expectedLevel: ""},
-		{name: "list", path: "Readings", element: types.NewSubmodelElementList(types.AASSubmodelElementsProperty), expectedPath: "Readings", expectedLevel: ""},
-		{name: "collection", path: "Housing", element: types.NewSubmodelElementCollection(), expectedPath: "Housing", expectedLevel: "core"},
-		{name: "property", path: "Housing.Color", element: types.NewProperty(types.DataTypeDefXSDString), expectedPath: "Housing.Color", expectedLevel: "core"},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-			path, level := verificationScope(testCase.path, testCase.element)
-			require.Equal(t, testCase.expectedPath, path)
-			require.Equal(t, testCase.expectedLevel, level)
-		})
-	}
+	require.Equal(t, "", verificationLevel(types.NewSubmodelElementList(types.AASSubmodelElementsProperty)))
+	require.Equal(t, "core", verificationLevel(types.NewSubmodelElementCollection()))
+	require.Equal(t, "core", verificationLevel(types.NewProperty(types.DataTypeDefXSDString)))
 }

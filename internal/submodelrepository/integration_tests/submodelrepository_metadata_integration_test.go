@@ -214,11 +214,23 @@ func getJSONMap(t *testing.T, endpoint string) map[string]any {
 	return decodeMap(t, body)
 }
 
+func sendJSONExpectingStatus(t *testing.T, method string, endpoint string, payload map[string]any, expectedStatus int) {
+	t.Helper()
+	statusCode, body, err := requestJSON(method, endpoint, payload)
+	require.NoError(t, err)
+	require.Equal(t, expectedStatus, statusCode, "%s %s payload=%#v response=%s", method, endpoint, payload, string(body))
+}
+
 func patchMetadata(t *testing.T, endpoint string, payload map[string]any, expectedStatus int) {
 	t.Helper()
-	statusCode, body, err := requestJSON(http.MethodPatch, endpoint+"/$metadata", payload)
-	require.NoError(t, err)
-	require.Equal(t, expectedStatus, statusCode, "payload=%#v response=%s", payload, string(body))
+	sendJSONExpectingStatus(t, http.MethodPatch, endpoint+"/$metadata", payload, expectedStatus)
+}
+
+func requireListMemberCount(t *testing.T, listURL string, expectedCount int) {
+	t.Helper()
+	members, ok := getJSONMap(t, listURL)["value"].([]any)
+	require.True(t, ok, "list value must be an array")
+	require.Len(t, members, expectedCount)
 }
 
 func TestSubmodelElementMetadataContainsOnlyMetadataFields(t *testing.T) {
@@ -336,7 +348,7 @@ func TestPatchSubmodelElementMetadataTypeSpecificFields(t *testing.T) {
 	})
 }
 
-func TestPatchSubmodelElementMetadataStrictVerification(t *testing.T) {
+func TestSubmodelElementWritesStrictVerification(t *testing.T) {
 	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryStrictBaseURL, "sme-metadata-strict", metadataStrictTestSubmodelPayload)
 	temperatureURL := elementsURL + "/Temperature"
 	readingsURL := elementsURL + "/Readings"
@@ -368,5 +380,43 @@ func TestPatchSubmodelElementMetadataStrictVerification(t *testing.T) {
 		patchMetadata(t, readingsURL, map[string]any{"modelType": "SubmodelElementList", "valueTypeListElement": "xs:string"}, http.StatusBadRequest)
 
 		require.Equal(t, "xs:int", getJSONMap(t, readingsURL+"/$metadata")["valueTypeListElement"])
+	})
+
+	t.Run("rejects a regular PATCH of a list member that conflicts with the enclosing list", func(t *testing.T) {
+		sendJSONExpectingStatus(t, http.MethodPatch, firstReadingURL, map[string]any{"modelType": "Property", "valueType": "xs:long"}, http.StatusBadRequest)
+
+		require.Equal(t, "xs:int", getJSONMap(t, firstReadingURL)["valueType"])
+	})
+
+	t.Run("rejects a regular PATCH of a list that conflicts with its members", func(t *testing.T) {
+		sendJSONExpectingStatus(t, http.MethodPatch, readingsURL, map[string]any{
+			"modelType":            "SubmodelElementList",
+			"typeValueListElement": "Property",
+			"valueTypeListElement": "xs:string",
+		}, http.StatusBadRequest)
+
+		require.Equal(t, "xs:int", getJSONMap(t, readingsURL+"/$metadata")["valueTypeListElement"])
+	})
+
+	t.Run("rejects a PUT of a list member that conflicts with the enclosing list", func(t *testing.T) {
+		sendJSONExpectingStatus(t, http.MethodPut, firstReadingURL, metadataTestProperty("", "xs:long", "1"), http.StatusBadRequest)
+
+		element := getJSONMap(t, firstReadingURL)
+		require.Equal(t, "xs:int", element["valueType"])
+		require.Equal(t, "1", element["value"])
+	})
+
+	t.Run("rejects a POST of a list member that conflicts with the list", func(t *testing.T) {
+		sendJSONExpectingStatus(t, http.MethodPost, readingsURL, metadataTestProperty("", "xs:long", "3"), http.StatusBadRequest)
+
+		requireListMemberCount(t, readingsURL, 2)
+	})
+
+	t.Run("accepts writes of list members that match the list", func(t *testing.T) {
+		sendJSONExpectingStatus(t, http.MethodPost, readingsURL, metadataTestProperty("", "xs:int", "3"), http.StatusCreated)
+		sendJSONExpectingStatus(t, http.MethodPut, firstReadingURL, metadataTestProperty("", "xs:int", "10"), http.StatusNoContent)
+
+		requireListMemberCount(t, readingsURL, 3)
+		require.Equal(t, "10", getJSONMap(t, firstReadingURL)["value"])
 	})
 }

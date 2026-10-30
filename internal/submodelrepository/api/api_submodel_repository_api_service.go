@@ -2177,7 +2177,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		applyNullMetadataClearsToSubmodelElement(mergedElement, rawPatchJSON)
 	}
 
-	if err := s.submodelBackend.PatchSubmodelElementMetadata(ctx, decodedSubmodelIdentifier, idShortPath, mergedElement); err != nil {
+	if err := s.submodelBackend.UpdateSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, mergedElement, false); err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}

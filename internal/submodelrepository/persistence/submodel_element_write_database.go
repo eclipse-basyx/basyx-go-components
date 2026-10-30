@@ -439,6 +439,9 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 	if err != nil {
 		return err
 	}
+	if err = s.verifyEnclosingListTx(ctx, tx, submodelID, insertedPath, "SMREPO-ADDSMEBYPATH-VERIFYLIST"); err != nil {
+		return err
+	}
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-ADDSMEBYPATH-SHOULDENFORCE")
 	if enforceErr != nil {
 		return enforceErr
@@ -518,16 +521,9 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 		return false, err
 	}
 
-	if elementExists {
-		historyMutation, err = s.replaceSubmodelElementForPut(ctx, tx, submodelID, idShortPath, submodelElement)
-		if err != nil {
-			return false, err
-		}
-	} else {
-		historyMutation, err = s.createSubmodelElementForPut(ctx, tx, submodelID, idShortPath, submodelElement)
-		if err != nil {
-			return false, err
-		}
+	historyMutation, err = s.writeSubmodelElementForPut(ctx, tx, submodelID, idShortPath, submodelElement, elementExists)
+	if err != nil {
+		return false, err
 	}
 
 	if shouldEnforce {
@@ -541,6 +537,28 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 	}
 
 	return elementExists, nil
+}
+
+func (s *SubmodelDatabase) writeSubmodelElementForPut(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	idShortPath string,
+	submodelElement types.ISubmodelElement,
+	elementExists bool,
+) (submodelElementRootMutation, error) {
+	writeForPut := s.createSubmodelElementForPut
+	if elementExists {
+		writeForPut = s.replaceSubmodelElementForPut
+	}
+	historyMutation, err := writeForPut(ctx, tx, submodelID, idShortPath, submodelElement)
+	if err != nil {
+		return submodelElementRootMutation{}, err
+	}
+	if err = s.verifyEnclosingListTx(ctx, tx, submodelID, idShortPath, "SMREPO-PUTSME-VERIFYLIST"); err != nil {
+		return submodelElementRootMutation{}, err
+	}
+	return historyMutation, nil
 }
 
 func shouldCheckInsertedElementVisibility(shouldEnforce bool, insertedPath string) bool {
@@ -745,20 +763,9 @@ func (s *SubmodelDatabase) ensureSubmodelElementCanBeDeleted(ctx context.Context
 }
 
 // UpdateSubmodelElement updates a submodel element and checks ABAC access on old and new state when ABAC is enabled.
-func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
-	return s.updateSubmodelElement(ctx, submodelID, idShortOrPath, submodelElement, isPut, nil)
-}
-
-// PatchSubmodelElementMetadata applies a metadata PATCH to a submodel element and
-// verifies the persisted element, or the enclosing list of a list member, before
-// the transaction commits.
-func (s *SubmodelDatabase) PatchSubmodelElementMetadata(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement) error {
-	return s.updateSubmodelElement(ctx, submodelID, idShortOrPath, submodelElement, false, s.verifyUpdatedSubmodelElementTx)
-}
-
-type updatedSubmodelElementVerifier func(ctx context.Context, tx *sql.Tx, submodelID string, updatedPath string, submodelElement types.ISubmodelElement) error
-
-func (s *SubmodelDatabase) updateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool, verifyUpdated updatedSubmodelElementVerifier) (err error) {
+// Before the transaction commits, the persisted element, or the enclosing list of a
+// list member, is verified according to the configured verification mode.
+func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -786,10 +793,8 @@ func (s *SubmodelDatabase) updateSubmodelElement(ctx context.Context, submodelID
 	}
 
 	updatedPath := submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut)
-	if verifyUpdated != nil {
-		if err = verifyUpdated(ctx, tx, submodelID, updatedPath, submodelElement); err != nil {
-			return err
-		}
+	if err = s.verifyUpdatedSubmodelElementTx(ctx, tx, submodelID, updatedPath, submodelElement); err != nil {
+		return err
 	}
 
 	if shouldEnforce {
@@ -809,29 +814,62 @@ func (s *SubmodelDatabase) updateSubmodelElement(ctx context.Context, submodelID
 }
 
 func (s *SubmodelDatabase) verifyUpdatedSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, updatedPath string, submodelElement types.ISubmodelElement) error {
+	return s.verifyWrittenSubmodelElementTx(ctx, tx, submodelID, updatedPath, verificationLevel(submodelElement), "SMREPO-UPDSME-VERIFY")
+}
+
+// verifyEnclosingListTx verifies a written list member against its enclosing list,
+// because a valid member can still violate the list's constraints.
+func (s *SubmodelDatabase) verifyEnclosingListTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, errorPrefix string) error {
+	if _, isListMember := submodelelements.EnclosingListPath(path); !isListMember {
+		return nil
+	}
+	return s.verifyWrittenSubmodelElementTx(ctx, tx, submodelID, path, "core", errorPrefix)
+}
+
+// verifyWrittenSubmodelElementTx verifies the persisted element at path and, for a
+// list member, the attributes of the enclosing list against that member only, so
+// the cost does not grow with the list.
+func (s *SubmodelDatabase) verifyWrittenSubmodelElementTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, level string, errorPrefix string) error {
 	if !s.verificationEnabled() {
 		return nil
 	}
 
-	verificationPath, level := verificationScope(updatedPath, submodelElement)
-	persistedElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, verificationPath, false, level)
+	persistedElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, path, false, level)
 	if err != nil {
 		return err
 	}
-	return s.verifySubmodelElement(persistedElement, "SMREPO-PATCHSMEMETA-VERIFY")
+	verificationRoot, err := attachToEnclosingListTx(ctx, tx, submodelID, path, persistedElement)
+	if err != nil {
+		return err
+	}
+	return s.verifySubmodelElement(verificationRoot, errorPrefix)
 }
 
-// verificationScope selects the element whose constraints a change at path can
-// violate. Only list constraints span children, so other elements are read
-// without them.
-func verificationScope(path string, submodelElement types.ISubmodelElement) (string, string) {
-	if listPath, isListMember := submodelelements.EnclosingListPath(path); isListMember {
-		return listPath, ""
+func attachToEnclosingListTx(ctx context.Context, tx *sql.Tx, submodelID string, path string, member types.ISubmodelElement) (types.ISubmodelElement, error) {
+	listPath, isListMember := submodelelements.EnclosingListPath(path)
+	if !isListMember {
+		return member, nil
 	}
+
+	enclosingElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, listPath, false, "core")
+	if err != nil {
+		return nil, err
+	}
+	enclosingList, ok := enclosingElement.(types.ISubmodelElementList)
+	if !ok {
+		return nil, common.NewInternalServerError("SMREPO-VERIFYSME-NOTALIST Element at path '" + listPath + "' is not a SubmodelElementList")
+	}
+	enclosingList.SetValue([]types.ISubmodelElement{member})
+	return enclosingList, nil
+}
+
+// verificationLevel reads lists with their members because list constraints span
+// them; other elements are verified without children.
+func verificationLevel(submodelElement types.ISubmodelElement) string {
 	if submodelElement.ModelType() == types.ModelTypeSubmodelElementList {
-		return path, ""
+		return ""
 	}
-	return path, "core"
+	return "core"
 }
 
 func (s *SubmodelDatabase) ensureSubmodelElementCanBeUpdated(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string) (context.Context, error) {
