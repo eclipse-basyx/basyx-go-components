@@ -271,13 +271,30 @@ func submodelDatabaseIDAsInt(submodelDBID int64) (int, error) {
 }
 
 func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix string) error {
+	return s.verifyWithMode(errorPrefix, true, func(collector func(*verification.VerificationError) bool) {
+		verification.VerifySubmodel(submodel, collector)
+	})
+}
+
+func (s *SubmodelDatabase) verificationEnabled() bool {
+	return gen.NormalizeVerificationMode(s.verificationMode) != gen.VerificationModeOff
+}
+
+func (s *SubmodelDatabase) verifySubmodelElement(submodelElement types.ISubmodelElement, errorPrefix string, discloseDetails bool) error {
+	return s.verifyWithMode(errorPrefix, discloseDetails, func(collector func(*verification.VerificationError) bool) {
+		verification.Verify(submodelElement, collector)
+	})
+}
+
+func (s *SubmodelDatabase) verifyWithMode(errorPrefix string, discloseDetails bool, verify func(func(*verification.VerificationError) bool)) error {
 	return gen.ValidateWithMode(
 		s.verificationMode,
 		errorPrefix,
-		func(collector func(*verification.VerificationError) bool) {
-			verification.VerifySubmodel(submodel, collector)
-		},
+		verify,
 		func(message string) error {
+			if !discloseDetails {
+				return common.NewErrBadRequest(errorPrefix + " the resulting submodel element violates metamodel constraints")
+			}
 			return common.NewErrBadRequest(errorPrefix + " " + message)
 		},
 	)

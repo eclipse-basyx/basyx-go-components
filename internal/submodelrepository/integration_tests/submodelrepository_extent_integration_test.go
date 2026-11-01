@@ -137,7 +137,10 @@ func TestSubmodelRepositoryExtentShapesBlobValues(t *testing.T) {
 		status, responseBody, err := requestJSON(http.MethodGet, baseURL+"/submodels/"+submodelIDEncoded+"/submodel-elements/TopBlob/$metadata", nil)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, status, "response=%s", string(responseBody))
-		requireElementBlobValueState(t, decodeMap(t, responseBody), "text/plain", "", false)
+		blobMetadata := decodeMap(t, responseBody)
+		require.Equal(t, "Blob", blobMetadata["modelType"])
+		require.NotContains(t, blobMetadata, "contentType")
+		require.NotContains(t, blobMetadata, "value")
 
 		status, responseBody, err = requestJSON(http.MethodGet, baseURL+"/submodels/"+submodelIDEncoded+"/submodel-elements/MainCollection.NestedBlob/$reference", nil)
 		require.NoError(t, err)

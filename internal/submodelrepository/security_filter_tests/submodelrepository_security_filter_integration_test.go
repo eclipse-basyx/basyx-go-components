@@ -39,6 +39,7 @@ import (
 
 var (
 	securityFilterBaseURL          = testenv.LocalhostURLFromEnv("BASYX_IT_API_PORT", 6004)
+	securityFilterStrictBaseURL    = testenv.LocalhostURLFromEnv("BASYX_IT_STRICT_API_PORT", 6005)
 	securityFilterKeycloakTokenURL = testenv.LocalhostURLFromEnv("BASYX_IT_KEYCLOAK_PORT", 8080) + "/realms/basyx/protocol/openid-connect/token"
 )
 
@@ -91,10 +92,12 @@ func getAnonymousCursorResponse(t *testing.T, submodelIdentifier string, suffix 
 func TestMain(m *testing.M) {
 	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-security-filter", []testenv.PortBinding{
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "strict-api", EnvVar: "BASYX_IT_STRICT_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
 	})
 	securityFilterBaseURL = runtime.LocalhostURL("api")
+	securityFilterStrictBaseURL = runtime.LocalhostURL("strict-api")
 	securityFilterKeycloakTokenURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
 	securityEnv := testenv.PrepareSecurityEnvOrExit("security_env", map[string]string{
 		"http://localhost:8080": runtime.LocalhostURL("keycloak"),
