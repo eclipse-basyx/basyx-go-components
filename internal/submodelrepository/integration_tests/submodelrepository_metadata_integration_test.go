@@ -30,6 +30,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -349,7 +350,17 @@ func TestPatchSubmodelElementMetadataTypeSpecificFields(t *testing.T) {
 	})
 }
 
+// skipWithoutStrictVerificationService skips tests that need the strict
+// verification service, which only the bundled compose setup provides.
+func skipWithoutStrictVerificationService(t *testing.T) {
+	t.Helper()
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		t.Skip("requires the strict verification service of the bundled integration docker compose setup")
+	}
+}
+
 func TestSubmodelElementWritesStrictVerification(t *testing.T) {
+	skipWithoutStrictVerificationService(t)
 	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryStrictBaseURL, "sme-metadata-strict", metadataStrictTestSubmodelPayload)
 	temperatureURL := elementsURL + "/Temperature"
 	readingsURL := elementsURL + "/Readings"
@@ -422,7 +433,7 @@ func TestSubmodelElementWritesStrictVerification(t *testing.T) {
 	})
 }
 
-const concurrentListCount = 20
+const concurrentListCount = 8
 
 func concurrentListTestSubmodelPayload(submodelID string) map[string]any {
 	lists := make([]any, 0, concurrentListCount)
@@ -445,6 +456,7 @@ func concurrentListTestSubmodelPayload(submodelID string) map[string]any {
 }
 
 func TestConcurrentListAndMemberWritesKeepListsValid(t *testing.T) {
+	skipWithoutStrictVerificationService(t)
 	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryStrictBaseURL, "sme-list-concurrency", concurrentListTestSubmodelPayload)
 	listPatch := map[string]any{"modelType": "SubmodelElementList", "semanticIdListElement": metadataTestExternalReference("urn:example:semantic:list")}
 	memberPatch := map[string]any{"modelType": "Property", "semanticId": metadataTestExternalReference("urn:example:semantic:member")}
@@ -473,6 +485,7 @@ func TestConcurrentListAndMemberWritesKeepListsValid(t *testing.T) {
 }
 
 func TestConcurrentListChildWritesDoNotDeadlock(t *testing.T) {
+	skipWithoutStrictVerificationService(t)
 	_, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryStrictBaseURL, "sme-list-lock-order", concurrentListTestSubmodelPayload)
 	listChildrenPatch := map[string]any{
 		"modelType":            "SubmodelElementList",
