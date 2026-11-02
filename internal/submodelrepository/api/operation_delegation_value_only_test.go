@@ -195,13 +195,6 @@ func TestOperationResultToValueOnlyRejectsMissingDuplicateAndUnrepresentableArgu
 			arguments: []any{operationVariableJSON("duplicate", "first"), operationVariableJSON("duplicate", "second")},
 			errorCode: "SMREPO-OPVALRES-DUPLICATE-outputArguments",
 		},
-		{
-			name: "unrepresentable",
-			arguments: []any{map[string]any{"value": map[string]any{
-				"modelType": "Capability", "idShort": "capability",
-			}}},
-			errorCode: "SMREPO-OPVALRES-UNREPRESENTABLE-outputArguments-capability",
-		},
 	}
 
 	for _, test := range tests {
@@ -374,6 +367,22 @@ func TestOperationValueOnlyResultOmitsArgumentsWithoutValue(t *testing.T) {
 		require.NoError(t, err, declaration)
 		require.Equal(t, map[string]any{}, result["outputArguments"], declaration)
 	}
+}
+
+func TestOperationValueOnlyResultOmitsArgumentsNotSerializedInValueOnly(t *testing.T) {
+	result, err := operationResultToValueOnly([]any{
+		operationVariableJSON("sum", "8"),
+		map[string]any{"value": map[string]any{"modelType": "Capability", "idShort": "capability"}},
+		map[string]any{"value": map[string]any{"modelType": "Operation", "idShort": "operation"}},
+		map[string]any{"value": map[string]any{
+			"modelType": "SubmodelElementList", "idShort": "capabilities", "typeValueListElement": "Capability",
+			"value": []any{map[string]any{"modelType": "Capability"}},
+		}},
+	})
+	require.NoError(t, err)
+	actual, err := json.Marshal(result["outputArguments"])
+	require.NoError(t, err)
+	require.JSONEq(t, `{"sum":"8"}`, string(actual))
 }
 
 func TestOperationValueOnlyEmptyNamedFields(t *testing.T) {

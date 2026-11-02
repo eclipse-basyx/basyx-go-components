@@ -18,26 +18,47 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
+const valueOnlyLevelCore = "core"
+
 type valueOnlyConverter struct {
 	strict bool
+	core   bool
 }
 
-// SubmodelToValueOnly converts a Submodel to its Value-Only representation
+func valueOnlyConverterAtLevel(level string) valueOnlyConverter {
+	return valueOnlyConverter{core: level == valueOnlyLevelCore}
+}
+
+// SubmodelToValueOnly converts a deeply loaded Submodel to its Value-Only representation
 func SubmodelToValueOnly(s types.ISubmodel) (SubmodelValue, error) {
-	result, err := valueOnlyConverter{}.namedElements(s.SubmodelElements())
+	return SubmodelToValueOnlyAtLevel(s, "")
+}
+
+// SubmodelToValueOnlyAtLevel converts a Submodel loaded with the given level to its Value-Only representation.
+// With level core, the children of nested collections and lists are not loaded, so these containers are
+// serialized as {} and [] respectively.
+func SubmodelToValueOnlyAtLevel(s types.ISubmodel, level string) (SubmodelValue, error) {
+	result, err := valueOnlyConverterAtLevel(level).namedElements(s.SubmodelElements())
 	return SubmodelValue(result), err
 }
 
-// SubmodelElementToValueOnly converts any SubmodelElement to its Value-Only representation.
+// SubmodelElementToValueOnly converts any deeply loaded SubmodelElement to its Value-Only representation.
 // Scalar values without a JSON-native representation are serialized as their lexical string.
 func SubmodelElementToValueOnly(element types.ISubmodelElement) (SubmodelElementValue, error) {
-	return valueOnlyConverter{}.element(element)
+	return SubmodelElementToValueOnlyAtLevel(element, "")
 }
 
-// SubmodelElementToNamedValueOnly converts a SubmodelElement to its Value-Only member of a container,
-// keyed by its idShort. It returns nil if the element is not serialized as a container member.
-func SubmodelElementToNamedValueOnly(element types.ISubmodelElement) (SubmodelElementCollectionValue, error) {
-	idShort, valueOnly, err := valueOnlyConverter{}.namedElement(element)
+// SubmodelElementToValueOnlyAtLevel converts a SubmodelElement loaded with the given level to its
+// Value-Only representation.
+func SubmodelElementToValueOnlyAtLevel(element types.ISubmodelElement, level string) (SubmodelElementValue, error) {
+	return valueOnlyConverterAtLevel(level).element(element)
+}
+
+// SubmodelElementToNamedValueOnly converts a SubmodelElement loaded with the given level to its Value-Only
+// member of a container, keyed by its idShort. It returns nil if the element is not serialized as a
+// container member.
+func SubmodelElementToNamedValueOnly(element types.ISubmodelElement, level string) (SubmodelElementCollectionValue, error) {
+	idShort, valueOnly, err := valueOnlyConverterAtLevel(level).namedElement(element)
 	if err != nil || valueOnly == nil {
 		return nil, err
 	}
@@ -160,7 +181,7 @@ func (c valueOnlyConverter) namedElements(elements []types.ISubmodelElement) (ma
 // Entity statements or annotations. Members without a value are not serialized there.
 func (c valueOnlyConverter) namedElement(element types.ISubmodelElement) (string, SubmodelElementValue, error) {
 	idShort := element.IDShort()
-	if idShort == nil || *idShort == "" || !SubmodelElementHasValueOnlyValue(element) {
+	if idShort == nil || *idShort == "" || !c.isSerializedMember(element) {
 		return "", nil, nil
 	}
 	valueOnly, err := c.element(element)
@@ -168,6 +189,24 @@ func (c valueOnlyConverter) namedElement(element types.ISubmodelElement) (string
 		return "", nil, fmt.Errorf("failed to convert element '%s': %w", *idShort, err)
 	}
 	return *idShort, valueOnly, nil
+}
+
+// isSerializedMember reports whether a container member is serialized. With level core, collections and
+// lists are serialized although their children are not loaded.
+func (c valueOnlyConverter) isSerializedMember(element types.ISubmodelElement) bool {
+	if c.core && isValueOnlyContainer(element) {
+		return true
+	}
+	return SubmodelElementHasValueOnlyValue(element)
+}
+
+func isValueOnlyContainer(element types.ISubmodelElement) bool {
+	switch element.(type) {
+	case *types.SubmodelElementCollection, *types.SubmodelElementList:
+		return true
+	default:
+		return false
+	}
 }
 
 // list keeps every member, even without a value, so that indices match the Normal serialization.

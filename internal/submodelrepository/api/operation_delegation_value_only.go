@@ -409,10 +409,7 @@ func operationResultArgumentsToValueOnly(payload any, group string) (map[string]
 		if err != nil {
 			return nil, fmt.Errorf("SMREPO-OPVALRES-CONVERT-%s-%s %w", group, name, err)
 		}
-		if valueOnly == nil {
-			return nil, fmt.Errorf("SMREPO-OPVALRES-UNREPRESENTABLE-%s-%s argument cannot be represented as value-only", group, name)
-		}
-		if gen.SubmodelElementHasValueOnlyValue(operationVariable.Value()) {
+		if valueOnly != nil && gen.SubmodelElementHasValueOnlyValue(operationVariable.Value()) {
 			result[name] = valueOnly
 		}
 	}

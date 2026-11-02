@@ -140,12 +140,12 @@ func TestSubmodelElementToNamedValueOnlySkipsElementsWithoutValue(t *testing.T) 
 
 	elements := missingValuesTestElements(t)
 	for _, idShort := range []string{"prop", "mlp", "rngnone", "fileNone", "blobNone", "ref", "entity", "emptyColl", "emptyList", "withOperation"} {
-		valueOnly, err := SubmodelElementToNamedValueOnly(elements[idShort])
+		valueOnly, err := SubmodelElementToNamedValueOnly(elements[idShort], "")
 		require.NoError(t, err, idShort)
 		require.Nil(t, valueOnly, idShort)
 	}
 
-	valueOnly, err := SubmodelElementToNamedValueOnly(elements["rngmin"])
+	valueOnly, err := SubmodelElementToNamedValueOnly(elements["rngmin"], "")
 	require.NoError(t, err)
 	actual, err := json.Marshal(valueOnly)
 	require.NoError(t, err)
@@ -185,4 +185,42 @@ func TestSubmodelToValueOnlyKeepsExplicitlyEmptyContainers(t *testing.T) {
 	actual, err := json.Marshal(valueOnly)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"collection": {}, "list": []}`, string(actual))
+}
+
+func TestValueOnlyAtCoreLevelSerializesUnloadedContainers(t *testing.T) {
+	t.Parallel()
+
+	root := types.NewSubmodelElementCollection()
+	root.SetIDShort(stringPointer("root"))
+	collection := types.NewSubmodelElementCollection()
+	collection.SetIDShort(stringPointer("collection"))
+	list := types.NewSubmodelElementList(types.AASSubmodelElementsProperty)
+	list.SetIDShort(stringPointer("list"))
+	unset := types.NewProperty(types.DataTypeDefXSDInt)
+	unset.SetIDShort(stringPointer("unset"))
+	root.SetValue([]types.ISubmodelElement{collection, list, unset})
+	submodel := types.NewSubmodel("urn:example:core")
+	submodel.SetSubmodelElements([]types.ISubmodelElement{collection, list, unset})
+
+	for level, expected := range map[string]string{
+		"core": `{"collection": {}, "list": []}`,
+		"deep": `{}`,
+		"":     `{}`,
+	} {
+		element, err := SubmodelElementToValueOnlyAtLevel(root, level)
+		require.NoError(t, err, level)
+		actual, err := json.Marshal(element)
+		require.NoError(t, err, level)
+		require.JSONEq(t, expected, string(actual), level)
+
+		valueOnly, err := SubmodelToValueOnlyAtLevel(submodel, level)
+		require.NoError(t, err, level)
+		actual, err = json.Marshal(valueOnly)
+		require.NoError(t, err, level)
+		require.JSONEq(t, expected, string(actual), level)
+	}
+
+	member, err := SubmodelElementToNamedValueOnly(collection, "core")
+	require.NoError(t, err)
+	require.Equal(t, SubmodelElementCollectionValue{"collection": SubmodelElementCollectionValue{}}, member)
 }
