@@ -42,6 +42,7 @@ import (
 
 // RangeValue represents the Value-Only serialization of a Range.
 // Both bounds are serialized with the JSON type that the ValueOnly mapping assigns to its valueType.
+// A bound without a value is omitted.
 type RangeValue struct {
 	Max       *string
 	Min       *string
@@ -51,8 +52,8 @@ type RangeValue struct {
 // MarshalValueOnly serializes RangeValue in Value-Only format
 func (r RangeValue) MarshalValueOnly() ([]byte, error) {
 	return json.Marshal(struct {
-		Max any `json:"max"`
-		Min any `json:"min"`
+		Max any `json:"max,omitempty"`
+		Min any `json:"min,omitempty"`
 	}{
 		Max: ValueOnlyScalarToJSON(r.Max, r.ValueType),
 		Min: ValueOnlyScalarToJSON(r.Min, r.ValueType),

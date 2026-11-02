@@ -1771,22 +1771,13 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 
 	valueOnlyResults := make([]gen.SubmodelElementValue, 0, len(elements))
 	for _, element := range elements {
-		valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
+		valueOnly, convErr := gen.SubmodelElementToNamedValueOnly(element)
 		if convErr != nil {
-			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), nil
+			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToNamedValueOnly"), nil
 		}
-		if valueOnly == nil {
-			continue
+		if valueOnly != nil {
+			valueOnlyResults = append(valueOnlyResults, valueOnly)
 		}
-
-		idShort := element.IDShort()
-		if idShort == nil || *idShort == "" {
-			continue
-		}
-
-		wrapped := make(gen.SubmodelElementCollectionValue)
-		wrapped[*idShort] = valueOnly
-		valueOnlyResults = append(valueOnlyResults, wrapped)
 	}
 
 	res := gen.GetSubmodelElementsValueResult{

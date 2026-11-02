@@ -391,6 +391,7 @@ func operationResultArgumentsToValueOnly(payload any, group string) (map[string]
 		return nil, fmt.Errorf("SMREPO-OPVALRES-PARSEGROUP-%s %w", group, err)
 	}
 	result := make(map[string]any, len(jsonableArguments))
+	names := make(map[string]struct{}, len(jsonableArguments))
 	for index, jsonable := range jsonableArguments {
 		operationVariable, err := jsonization.OperationVariableFromJsonable(jsonable)
 		if err != nil {
@@ -400,9 +401,10 @@ func operationResultArgumentsToValueOnly(payload any, group string) (map[string]
 		if err != nil {
 			return nil, err
 		}
-		if _, duplicate := result[name]; duplicate {
+		if _, duplicate := names[name]; duplicate {
 			return nil, fmt.Errorf("SMREPO-OPVALRES-DUPLICATE-%s argument idShort %q occurs more than once", group, name)
 		}
+		names[name] = struct{}{}
 		valueOnly, err := operationElementToValueOnly(operationVariable.Value())
 		if err != nil {
 			return nil, fmt.Errorf("SMREPO-OPVALRES-CONVERT-%s-%s %w", group, name, err)
@@ -410,7 +412,9 @@ func operationResultArgumentsToValueOnly(payload any, group string) (map[string]
 		if valueOnly == nil {
 			return nil, fmt.Errorf("SMREPO-OPVALRES-UNREPRESENTABLE-%s-%s argument cannot be represented as value-only", group, name)
 		}
-		result[name] = valueOnly
+		if gen.SubmodelElementHasValueOnlyValue(operationVariable.Value()) {
+			result[name] = valueOnly
+		}
 	}
 	return result, nil
 }

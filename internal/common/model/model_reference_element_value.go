@@ -49,8 +49,12 @@ type ReferenceElementValue struct {
 	Keys []map[string]any `json:"keys,omitempty"`
 }
 
-// MarshalValueOnly serializes ReferenceElementValue in Value-Only format
+// MarshalValueOnly serializes ReferenceElementValue in Value-Only format.
+// A ReferenceElement without a value is serialized as null.
 func (r ReferenceElementValue) MarshalValueOnly() ([]byte, error) {
+	if r.isEmpty() {
+		return []byte("null"), nil
+	}
 	type Alias ReferenceElementValue
 	return json.Marshal((Alias)(r))
 }
@@ -63,4 +67,8 @@ func (r ReferenceElementValue) MarshalJSON() ([]byte, error) {
 // GetModelType returns the model type name for ReferenceElement
 func (r ReferenceElementValue) GetModelType() types.ModelType {
 	return types.ModelTypeReferenceElement
+}
+
+func (r ReferenceElementValue) isEmpty() bool {
+	return r.Type == "" && r.ReferredSemanticId == nil && len(r.Keys) == 0
 }

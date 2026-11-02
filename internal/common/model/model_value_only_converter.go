@@ -34,6 +34,50 @@ func SubmodelElementToValueOnly(element types.ISubmodelElement) (SubmodelElement
 	return valueOnlyConverter{}.element(element)
 }
 
+// SubmodelElementToNamedValueOnly converts a SubmodelElement to its Value-Only member of a container,
+// keyed by its idShort. It returns nil if the element is not serialized as a container member.
+func SubmodelElementToNamedValueOnly(element types.ISubmodelElement) (SubmodelElementCollectionValue, error) {
+	idShort, valueOnly, err := valueOnlyConverter{}.namedElement(element)
+	if err != nil || valueOnly == nil {
+		return nil, err
+	}
+	return SubmodelElementCollectionValue{idShort: valueOnly}, nil
+}
+
+// SubmodelElementHasValueOnlyValue reports whether at least one attribute that the Value-Only format
+// maps is set, consistent with the attributes the Normal serialization emits.
+// Elements without such a value are not serialized as members of a container.
+func SubmodelElementHasValueOnlyValue(element types.ISubmodelElement) bool {
+	switch e := element.(type) {
+	case *types.Property:
+		return e.Value() != nil
+	case *types.MultiLanguageProperty:
+		return e.Value() != nil
+	case *types.Range:
+		return e.Min() != nil || e.Max() != nil
+	case *types.File:
+		return e.ContentType() != nil || e.Value() != nil
+	case *types.Blob:
+		return e.ContentType() != nil || e.Value() != nil
+	case *types.ReferenceElement:
+		return e.Value() != nil
+	case *types.SubmodelElementCollection:
+		return e.Value() != nil
+	case *types.SubmodelElementList:
+		return e.Value() != nil
+	case *types.Entity:
+		return entityHasValueOnlyValue(e)
+	case *types.RelationshipElement, *types.AnnotatedRelationshipElement, *types.BasicEventElement:
+		return true
+	default:
+		return false
+	}
+}
+
+func entityHasValueOnlyValue(e *types.Entity) bool {
+	return e.EntityType() != nil || e.GlobalAssetID() != nil || e.SpecificAssetIDs() != nil || e.Statements() != nil
+}
+
 // SubmodelElementToValueOnlyStrict converts any SubmodelElement to its Value-Only representation
 // and rejects scalar values that are not consistent with their valueType.
 func SubmodelElementToValueOnlyStrict(element types.ISubmodelElement) (SubmodelElementValue, error) {
@@ -101,21 +145,33 @@ func (c valueOnlyConverter) verifyScalar(lexical *string, valueType types.DataTy
 func (c valueOnlyConverter) namedElements(elements []types.ISubmodelElement) (map[string]SubmodelElementValue, error) {
 	result := make(map[string]SubmodelElementValue, len(elements))
 	for _, element := range elements {
-		idShort := element.IDShort()
-		if idShort == nil || *idShort == "" {
-			continue
-		}
-		valueOnly, err := c.element(element)
+		idShort, valueOnly, err := c.namedElement(element)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert element '%s': %w", *idShort, err)
+			return nil, err
 		}
 		if valueOnly != nil {
-			result[*idShort] = valueOnly
+			result[idShort] = valueOnly
 		}
 	}
 	return result, nil
 }
 
+// namedElement converts an element that is a member of a Submodel, a SubmodelElementCollection,
+// Entity statements or annotations. Members without a value are not serialized there.
+func (c valueOnlyConverter) namedElement(element types.ISubmodelElement) (string, SubmodelElementValue, error) {
+	idShort := element.IDShort()
+	if idShort == nil || *idShort == "" || !SubmodelElementHasValueOnlyValue(element) {
+		return "", nil, nil
+	}
+	valueOnly, err := c.element(element)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to convert element '%s': %w", *idShort, err)
+	}
+	return *idShort, valueOnly, nil
+}
+
+// list keeps every member, even without a value, so that indices match the Normal serialization.
+// A list containing a member that is not serialized in Value-Only is omitted as a whole.
 func (c valueOnlyConverter) list(sel *types.SubmodelElementList) (SubmodelElementValue, error) {
 	result := make(SubmodelElementListValue, 0, len(sel.Value()))
 	for i, element := range sel.Value() {
@@ -123,9 +179,10 @@ func (c valueOnlyConverter) list(sel *types.SubmodelElementList) (SubmodelElemen
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert element at index %d: %w", i, err)
 		}
-		if valueOnly != nil {
-			result = append(result, valueOnly)
+		if valueOnly == nil {
+			return nil, nil
 		}
+		result = append(result, valueOnly)
 	}
 	return result, nil
 }
@@ -229,29 +286,18 @@ func FileToValueOnly(f *types.File) FileValue {
 	fileValue := FileValue{}
 	if f.ContentType() != nil {
 		fileValue.ContentType = *f.ContentType()
-	} else {
-		fileValue.ContentType = ""
 	}
 	if f.Value() != nil {
 		fileValue.Value = *f.Value()
-	} else {
-		fileValue.Value = ""
 	}
 	return fileValue
 }
 
 // BlobToValueOnly converts a Blob to BlobValue
 func BlobToValueOnly(b *types.Blob) BlobValue {
-	blobValue := BlobValue{}
+	blobValue := BlobValue{Value: b.Value()}
 	if b.ContentType() != nil {
 		blobValue.ContentType = *b.ContentType()
-	} else {
-		blobValue.ContentType = ""
-	}
-	if b.Value() != nil {
-		blobValue.Value = b.Value()
-	} else {
-		blobValue.Value = nil
 	}
 	return blobValue
 }

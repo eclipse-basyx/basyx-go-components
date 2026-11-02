@@ -42,7 +42,6 @@ const valueOnlyNativeTypesSubmodelValue = `{
 	"Ratio": 42.0,
 	"Enabled": true,
 	"Serial": "42",
-	"Unset": null,
 	"Infinite": "INF",
 	"Big": 18446744073709551615,
 	"Amount": 1234567890.1234567890123456789,
@@ -130,10 +129,8 @@ func TestValueOnlyNativeTypesPatchAppliesTypedValues(t *testing.T) {
 	body := requireValueOnlyStatus(t, http.MethodGet, endpoint+"/$value?extent=withBlobValue", nil, http.StatusOK)
 	require.JSONEq(t, fmt.Sprintf(`{
 		"Count": 7,
-		"Ratio": null,
 		"Enabled": false,
 		"Serial": "42",
-		"Unset": null,
 		"Infinite": "-INF",
 		"Big": 0,
 		"Amount": 9.5,

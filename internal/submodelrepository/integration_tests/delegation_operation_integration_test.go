@@ -450,6 +450,6 @@ func assertDelegatedValueOnlyEcho(t *testing.T, baseURL string, encodedSubmodelI
 		OutputArguments json.RawMessage `json:"outputArguments"`
 	}
 	require.NoError(t, json.Unmarshal(body, &payload))
-	require.JSONEq(t, arguments, string(payload.OutputArguments))
+	require.JSONEq(t, `{"enabled":true,"large":18446744073709551615,"bounds":{"min":1,"max":10}}`, string(payload.OutputArguments))
 	require.Contains(t, string(body), "18446744073709551615")
 }

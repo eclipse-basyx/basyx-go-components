@@ -72,7 +72,6 @@ func TestSubmodelToValueOnlyUsesJSONNativeTypes(t *testing.T) {
 		"Ratio": 42.0,
 		"Enabled": true,
 		"Serial": "42",
-		"Unset": null,
 		"Infinite": "INF",
 		"Limits": {"min": 5, "max": 18446744073709551615},
 		"Nested": {"Values": [0.10]},

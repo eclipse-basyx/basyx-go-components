@@ -279,8 +279,6 @@ func TestOperationValueOnlyScalarRoundTrip(t *testing.T) {
 		{"decimal", `{"modelType":"Property","valueType":"xs:decimal"}`, `1234567890.1234567890123456789`},
 		{"range", `{"modelType":"Range","valueType":"xs:int"}`, `{"min":1,"max":10}`},
 		{"nested", `{"modelType":"SubmodelElementCollection","value":[{"modelType":"Property","idShort":"enabled","valueType":"xs:boolean"},{"modelType":"SubmodelElementList","idShort":"numbers","typeValueListElement":"Property","valueTypeListElement":"xs:int","value":[{"modelType":"Property","valueType":"xs:int"}]}]}`, `{"enabled":false,"numbers":[3]}`},
-		{"empty collection", `{"modelType":"SubmodelElementCollection"}`, `{}`},
-		{"empty list", `{"modelType":"SubmodelElementList","typeValueListElement":"Property","valueTypeListElement":"xs:int"}`, `[]`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -360,6 +358,22 @@ func valueOnlyTestDeclaration(t *testing.T, declaration string) types.IOperation
 	element, err := jsonization.SubmodelElementFromJsonable(raw)
 	require.NoError(t, err)
 	return types.NewOperationVariable(element)
+}
+
+func TestOperationValueOnlyResultOmitsArgumentsWithoutValue(t *testing.T) {
+	for _, declaration := range []string{
+		`{"modelType":"Property","valueType":"xs:int"}`,
+		`{"modelType":"MultiLanguageProperty"}`,
+		`{"modelType":"Range","valueType":"xs:int"}`,
+		`{"modelType":"File"}`,
+		`{"modelType":"ReferenceElement"}`,
+		`{"modelType":"SubmodelElementCollection"}`,
+		`{"modelType":"SubmodelElementList","typeValueListElement":"Property","valueTypeListElement":"xs:int"}`,
+	} {
+		result, err := operationResultToValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, declaration)})
+		require.NoError(t, err, declaration)
+		require.Equal(t, map[string]any{}, result["outputArguments"], declaration)
+	}
 }
 
 func TestOperationValueOnlyEmptyNamedFields(t *testing.T) {

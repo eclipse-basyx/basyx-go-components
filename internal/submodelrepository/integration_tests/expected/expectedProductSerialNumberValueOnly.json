@@ -1,6 +1,5 @@
 {
     "NestedCollection1": {
         "DeepNestedProperty": 42
-    },
-    "NestedCollection2": {}
+    }
 }

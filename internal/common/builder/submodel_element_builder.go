@@ -711,7 +711,9 @@ func buildBlob(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 	}
 
 	blob := types.NewBlob()
-	blob.SetContentType(&valueRow.ContentType)
+	if valueRow.ContentType != "" {
+		blob.SetContentType(&valueRow.ContentType)
+	}
 
 	// Postgres bytea is commonly returned as: \x<hex>
 	raw := strings.TrimSpace(valueRow.Value)
