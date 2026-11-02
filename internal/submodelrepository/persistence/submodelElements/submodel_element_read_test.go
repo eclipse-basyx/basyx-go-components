@@ -45,40 +45,106 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildSubmodelElementReferenceBuildsKeyChainForNestedPathWithListIndex(t *testing.T) {
+func TestBuildSubmodelElementReferenceUsesModelTypeOfListItems(t *testing.T) {
 	t.Parallel()
 
-	reference, err := buildSubmodelElementReference("sm-1", types.ModelTypeSubmodelElementList, "test.test[0]")
-	require.NoError(t, err)
+	testCases := []struct {
+		name          string
+		idShortPath   string
+		modelTypes    []types.ModelType
+		expectedTypes []types.KeyTypes
+	}{
+		{
+			name:          "property in list",
+			idShortPath:   "readings[0]",
+			modelTypes:    []types.ModelType{types.ModelTypeSubmodelElementList, types.ModelTypeProperty},
+			expectedTypes: []types.KeyTypes{types.KeyTypesSubmodelElementList, types.KeyTypesProperty},
+		},
+		{
+			name:        "property in collection in list",
+			idShortPath: "documents[0].title",
+			modelTypes:  []types.ModelType{types.ModelTypeSubmodelElementList, types.ModelTypeSubmodelElementCollection, types.ModelTypeProperty},
+			expectedTypes: []types.KeyTypes{
+				types.KeyTypesSubmodelElementList,
+				types.KeyTypesSubmodelElementCollection,
+				types.KeyTypesProperty,
+			},
+		},
+		{
+			name:          "property in nested list",
+			idShortPath:   "matrix[0][1]",
+			modelTypes:    []types.ModelType{types.ModelTypeSubmodelElementList, types.ModelTypeSubmodelElementList, types.ModelTypeProperty},
+			expectedTypes: []types.KeyTypes{types.KeyTypesSubmodelElementList, types.KeyTypesSubmodelElementList, types.KeyTypesProperty},
+		},
+		{
+			name:          "statement of entity",
+			idShortPath:   "machine.serialNumber",
+			modelTypes:    []types.ModelType{types.ModelTypeEntity, types.ModelTypeProperty},
+			expectedTypes: []types.KeyTypes{types.KeyTypesEntity, types.KeyTypesProperty},
+		},
+	}
 
-	keys := reference.Keys()
-	require.Len(t, keys, 4)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 
-	require.Equal(t, types.KeyTypesSubmodel, keys[0].Type())
-	require.Equal(t, "sm-1", keys[0].Value())
-	require.Equal(t, types.KeyTypesSubmodelElementCollection, keys[1].Type())
-	require.Equal(t, "test", keys[1].Value())
-	require.Equal(t, types.KeyTypesSubmodelElementCollection, keys[2].Type())
-	require.Equal(t, "test", keys[2].Value())
-	require.Equal(t, types.KeyTypesSubmodelElementList, keys[3].Type())
-	require.Equal(t, "0", keys[3].Value())
+			segments, err := parseReferencePathSegments(testCase.idShortPath)
+			require.NoError(t, err)
+
+			reference, err := buildSubmodelElementReference("sm-1", segments, testCase.modelTypes)
+			require.NoError(t, err)
+			require.Equal(t, types.ReferenceTypesModelReference, reference.Type())
+
+			keys := reference.Keys()
+			require.Len(t, keys, len(segments)+1)
+			require.Equal(t, types.KeyTypesSubmodel, keys[0].Type())
+			require.Equal(t, "sm-1", keys[0].Value())
+			for i, segment := range segments {
+				require.Equal(t, testCase.expectedTypes[i], keys[i+1].Type())
+				require.Equal(t, segment.Value, keys[i+1].Value())
+			}
+		})
+	}
 }
 
-func TestBuildSubmodelElementReferenceBuildsKeyChainForNestedDotPath(t *testing.T) {
+func TestBuildSubmodelElementReferenceRejectsMismatchedModelTypes(t *testing.T) {
 	t.Parallel()
 
-	reference, err := buildSubmodelElementReference("sm-1", types.ModelTypeProperty, "parent.child")
+	segments, err := parseReferencePathSegments("readings[0]")
 	require.NoError(t, err)
 
-	keys := reference.Keys()
-	require.Len(t, keys, 3)
+	_, err = buildSubmodelElementReference("sm-1", segments, []types.ModelType{types.ModelTypeProperty})
+	require.True(t, common.IsErrBadRequest(err))
+}
 
-	require.Equal(t, types.KeyTypesSubmodel, keys[0].Type())
-	require.Equal(t, "sm-1", keys[0].Value())
-	require.Equal(t, types.KeyTypesSubmodelElementCollection, keys[1].Type())
-	require.Equal(t, "parent", keys[1].Value())
-	require.Equal(t, types.KeyTypesProperty, keys[2].Type())
-	require.Equal(t, "child", keys[2].Value())
+func TestReferenceSegmentPathsListsTargetAndAncestors(t *testing.T) {
+	t.Parallel()
+
+	segments, err := parseReferencePathSegments("machine.parts[0][1].serialNumber")
+	require.NoError(t, err)
+
+	require.Equal(t, []string{
+		"machine",
+		"machine.parts",
+		"machine.parts[0]",
+		"machine.parts[0][1]",
+		"machine.parts[0][1].serialNumber",
+	}, referenceSegmentPaths(segments))
+}
+
+func TestSubmodelElementModelTypesByPathsReuseSQLShapeForDifferentDepths(t *testing.T) {
+	t.Parallel()
+
+	shallowQuery, shallowArgs, err := buildSubmodelElementModelTypesByPathsQuery(42, []string{"readings"})
+	require.NoError(t, err)
+	deepQuery, deepArgs, err := buildSubmodelElementModelTypesByPathsQuery(42, []string{"documents", "documents[0]", "documents[0].title"})
+	require.NoError(t, err)
+
+	require.Equal(t, shallowQuery, deepQuery)
+	require.Len(t, shallowArgs, 2)
+	require.Len(t, deepArgs, 2)
+	require.Contains(t, shallowQuery, "ANY($")
+	require.NotContains(t, deepQuery, "documents")
 }
 
 func TestEscapeSQLLikePatternEscapesWildcardCharacters(t *testing.T) {
