@@ -860,18 +860,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 		return newAPIErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
 	}
 
-	_, aasLookupErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier)
-	if aasLookupErr != nil {
-		if common.IsErrDenied(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
-		}
-		if common.IsErrBadRequest(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
+	shellCtx, response, ok := s.LookupSuperpathShell(ctx, operation, decodedAASIdentifier, grammar.RightsEnumUPDATE)
+	if !ok {
+		return response, nil
 	}
 
 	var isUpdate bool
@@ -885,7 +876,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 		"AASREPO-PUTSMBYID-STARTTX",
 		"AASREPO-PUTSMBYID-COMMIT",
 		func(tx *sql.Tx) error {
-			createReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, submodelReference)
+			createReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(shellCtx, tx, decodedAASIdentifier, submodelReference)
 			if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
 				referenceCreateAASNotFound = isCreateSubmodelReferenceAASNotFoundErr(createReferenceErr)
 				return createReferenceErr
@@ -950,15 +941,20 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
+	shellCtx, response, ok := SuperpathShellContext(ctx, operation, decodedAASIdentifier, grammar.RightsEnumUPDATE)
+	if !ok {
+		return response, nil
+	}
+
 	deleteErr := s.assetAdministrationShellBackend.ExecuteInTransaction(
 		"AASREPO-DELSMBYID-STARTTX",
 		"AASREPO-DELSMBYID-COMMIT",
 		func(tx *sql.Tx) error {
-			if err := s.assetAdministrationShellBackend.CheckSubmodelReferenceForDeletionInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+			if err := s.assetAdministrationShellBackend.CheckSubmodelReferenceForDeletionInTransaction(shellCtx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
 				return err
 			}
 
-			if err := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+			if err := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(shellCtx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
 				return err
 			}
 
@@ -1089,21 +1085,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureAASSubmodelRefer
 	if isAASSubmodelMutationOperation(operation) {
 		ctx = common.WithWriterPostgresReads(ctx)
 	}
-	_, aasLookupErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier)
-	if aasLookupErr != nil {
-		if common.IsErrDenied(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), nil, false
-		}
-		if common.IsErrNotFound(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil, false
-		}
-		if common.IsErrBadRequest(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil, false
-		}
-		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil, false
+	shellCtx, response, ok := s.LookupSuperpathShell(ctx, operation, decodedAASIdentifier, grammar.RightsEnumREAD)
+	if !ok {
+		return response, nil, false
 	}
 
-	referenceCheckErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(ctx, decodedAASIdentifier, decodedSubmodelIdentifier)
+	referenceCheckErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(shellCtx, decodedAASIdentifier, decodedSubmodelIdentifier)
 	if referenceCheckErr != nil {
 		if common.IsErrNotFound(referenceCheckErr) {
 			return newAPIErrorResponse(referenceCheckErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil, false
@@ -1115,6 +1102,43 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureAASSubmodelRefer
 	}
 
 	return gen.ImplResponse{}, nil, true
+}
+
+// LookupSuperpathShell checks that the caller may access the enclosing Asset
+// Administration Shell of a superpath request with right and that it exists.
+// The returned context must be used for all shell lookups of the request.
+func (s *AssetAdministrationShellRepositoryAPIAPIService) LookupSuperpathShell(ctx context.Context, operation string, aasIdentifier string, right grammar.RightsEnum) (context.Context, gen.ImplResponse, bool) {
+	shellCtx, response, ok := SuperpathShellContext(ctx, operation, aasIdentifier, right)
+	if !ok {
+		return nil, response, false
+	}
+	if _, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(shellCtx, aasIdentifier); err != nil {
+		return nil, superpathShellErrorResponse(err, operation, "GetAssetAdministrationShellByID"), false
+	}
+	return shellCtx, gen.ImplResponse{}, true
+}
+
+// SuperpathShellContext authorizes the enclosing Asset Administration Shell of
+// a superpath request with right and returns the context for its shell lookups.
+func SuperpathShellContext(ctx context.Context, operation string, aasIdentifier string, right grammar.RightsEnum) (context.Context, gen.ImplResponse, bool) {
+	shellCtx, err := auth.SuperpathShellContext(ctx, aasIdentifier, right)
+	if err != nil {
+		return nil, superpathShellErrorResponse(err, operation, "AuthorizeAssetAdministrationShell"), false
+	}
+	return shellCtx, gen.ImplResponse{}, true
+}
+
+func superpathShellErrorResponse(err error, operation string, internalErrorInfo string) gen.ImplResponse {
+	if common.IsErrDenied(err) {
+		return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden")
+	}
+	if common.IsErrNotFound(err) {
+		return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound")
+	}
+	if common.IsErrBadRequest(err) {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest")
+	}
+	return newAPIErrorResponse(err, http.StatusInternalServerError, operation, internalErrorInfo)
 }
 
 func isAASSubmodelMutationOperation(operation string) bool {

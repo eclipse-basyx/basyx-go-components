@@ -26,6 +26,8 @@
 
 package auth
 
+import "github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+
 // EvalInput is the minimal set of request properties the ABAC engine needs to
 // evaluate a decision.
 type EvalInput struct {
@@ -36,6 +38,7 @@ type EvalInput struct {
 	Globals   GlobalAttributes
 
 	objectContext *objectMatchContext
+	rights        []grammar.RightsEnum
 }
 
 // Claims represents token claims extracted from a verified token.

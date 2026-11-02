@@ -375,6 +375,7 @@ func TestABACPolicyManagementRuleLifecycleStories(t *testing.T) {
 		nestedVersionID := clonePolicyVersion(t, activePolicyVersionID(t, adminToken), adminToken)
 		setPolicyRuleEnabled(t, nestedVersionID, literalRuleIndex, false, adminToken)
 		nestedRuleIndex := createRoleRouteReadRule(t, nestedVersionID, "viewer", nestedRoute, adminToken)
+		shellRuleIndex := createRoleRouteReadRule(t, nestedVersionID, "viewer", "/shells/"+encodedAASA, adminToken)
 		validatePolicyVersion(t, nestedVersionID, adminToken)
 		activatePolicyVersion(t, nestedVersionID, adminToken)
 
@@ -386,6 +387,7 @@ func TestABACPolicyManagementRuleLifecycleStories(t *testing.T) {
 		referenceRoute := "/submodels/" + encodedSubmodelA + "/$reference"
 		referenceVersionID := clonePolicyVersion(t, activePolicyVersionID(t, adminToken), adminToken)
 		setPolicyRuleEnabled(t, referenceVersionID, nestedRuleIndex, false, adminToken)
+		setPolicyRuleEnabled(t, referenceVersionID, shellRuleIndex, false, adminToken)
 		createRoleRouteReadRule(t, referenceVersionID, "viewer", referenceRoute, adminToken)
 		validatePolicyVersion(t, referenceVersionID, adminToken)
 		activatePolicyVersion(t, referenceVersionID, adminToken)

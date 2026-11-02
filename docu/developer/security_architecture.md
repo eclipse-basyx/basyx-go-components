@@ -413,6 +413,14 @@ Object coverage follows these BaSyx rules:
 - Nested AAS Environment Submodel routes require a dedicated grant, such as an
   explicit `$sm` object; element-specific access can instead use an explicit
   `$sme` object. An explicitly matching `ROUTE` remains a route-level grant.
+- A Submodel superpath (`/shells/{aasIdentifier}/submodels/...`) additionally
+  requires access to the enclosing shell: `READ` for every operation, and
+  `UPDATE` for `PUT` and `DELETE` of the Submodel, which add or remove the
+  shell's Submodel reference. The shell is checked with the `$aas` and `ROUTE`
+  rules of `/shells/{aasIdentifier}` and their formulas; the Submodel and its
+  elements keep the formulas of the superpath rules. Without a matching shell
+  rule the request is answered with `403`, and a shell excluded by a formula
+  is answered with `404`. ReBAC grants on the shell still apply.
 - An `IDENTIFIABLE` `$sm` object covers the Submodel and its Submodel Elements.
 - A `$sme` `REFERABLE` covers the named element and all descendants at segment
   boundaries. For example, `Metrics` covers `Metrics.Temperature`, but not
