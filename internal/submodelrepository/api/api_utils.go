@@ -27,114 +27,12 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
 )
-
-func buildModelReference(submodelID string, keyTypes []string, keyValues []string) (types.IReference, error) {
-	if submodelID == "" || len(keyTypes) == 0 || len(keyValues) == 0 || len(keyTypes) != len(keyValues) {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPARAMS Invalid reference parameters")
-	}
-
-	keys := make([]any, 0, len(keyTypes)+1)
-	keys = append(keys, map[string]any{
-		"type":  "Submodel",
-		"value": submodelID,
-	})
-
-	for i := range keyTypes {
-		if keyTypes[i] == "" || keyValues[i] == "" {
-			return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPARAMS Invalid reference key parameters")
-		}
-
-		keys = append(keys, map[string]any{
-			"type":  keyTypes[i],
-			"value": keyValues[i],
-		})
-	}
-
-	jsonableReference := map[string]any{
-		"type": "ModelReference",
-		"keys": keys,
-	}
-
-	return jsonization.ReferenceFromJsonable(jsonableReference)
-}
-
-func parseModelReferencePathSegments(idShortPath string) ([]submodelpath.Segment, error) {
-	segments, err := submodelpath.ParseIDShortPathSegments(idShortPath)
-	if err == nil {
-		return segments, nil
-	}
-
-	if errors.Is(err, submodelpath.ErrEmptyPath) {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPARAMS Invalid reference parameters")
-	}
-	if errors.Is(err, submodelpath.ErrEmptyListIndex) {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Empty list index in idShort path")
-	}
-	return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Invalid idShort path syntax")
-}
-
-func resolveModelReferencePathKeys(
-	idShortPath string,
-	finalModelType string,
-	resolvePathModelType func(path string) (string, error),
-) ([]string, []string, error) {
-	if finalModelType == "" {
-		return nil, nil, common.NewInternalServerError("SMREPO-BUILDREF-EMPTYFINALTYPE Empty modelType for target submodel element")
-	}
-
-	segments, parseErr := parseModelReferencePathSegments(idShortPath)
-	if parseErr != nil {
-		return nil, nil, parseErr
-	}
-
-	keyTypes := make([]string, 0, len(segments))
-	keyValues := make([]string, 0, len(segments))
-	currentPath := ""
-
-	for i, segment := range segments {
-		isLast := i == len(segments)-1
-
-		if segment.IsIndex {
-			keyTypes = append(keyTypes, "SubmodelElementList")
-			keyValues = append(keyValues, segment.Value)
-
-			currentPath += "[" + segment.Value + "]"
-			continue
-		}
-
-		if currentPath == "" {
-			currentPath = segment.Value
-		} else {
-			currentPath += "." + segment.Value
-		}
-
-		keyType := finalModelType
-		if !isLast {
-			resolvedModelType, resolveErr := resolvePathModelType(currentPath)
-			if resolveErr != nil {
-				return nil, nil, resolveErr
-			}
-			if resolvedModelType == "" {
-				return nil, nil, common.NewInternalServerError("SMREPO-BUILDREF-EMPTYPARENTTYPE Empty modelType for parent submodel element")
-			}
-			keyType = resolvedModelType
-		}
-
-		keyTypes = append(keyTypes, keyType)
-		keyValues = append(keyValues, segment.Value)
-	}
-
-	return keyTypes, keyValues, nil
-}
 
 func isLevelValid(level string) bool {
 	return level == "core" || level == "" || level == "deep"

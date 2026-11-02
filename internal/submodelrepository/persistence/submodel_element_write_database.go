@@ -168,6 +168,18 @@ func (s *SubmodelDatabase) GetSubmodelElementWithoutChildren(ctx context.Context
 	return result, err
 }
 
+// GetSubmodelElementReference builds the model reference of the submodel element at path
+// and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelElementReference(ctx context.Context, submodelID string, idShortPath string) (types.IReference, error) {
+	var result types.IReference
+	err := common.ExecuteInReadTransaction(ctx, s.readDB(ctx), "SMREPO-GETSMEREF-STARTTX", "SMREPO-GETSMEREF-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = submodelelements.GetSubmodelElementReferenceByPathTx(ctx, tx, submodelID, idShortPath)
+		return txErr
+	})
+	return result, err
+}
+
 // GetSubmodelElementsWithoutChildren retrieves a page of top-level submodel
 // elements without their child elements and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelElementsWithoutChildren(ctx context.Context, submodelID string, limit *int, cursor string) ([]types.ISubmodelElement, string, error) {

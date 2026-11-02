@@ -712,7 +712,11 @@ func GetSubmodelElementReferencesBySubmodelID(ctx context.Context, db DBQueryer,
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-MISSINGMODELTYPE Missing model type for root element id")
 		}
 
-		reference, referenceErr := buildSubmodelElementReference(submodelID, modelType, rootElement.path)
+		segments, parsePathErr := parseReferencePathSegments(rootElement.path)
+		if parsePathErr != nil {
+			return nil, "", parsePathErr
+		}
+		reference, referenceErr := buildSubmodelElementReference(submodelID, segments, []types.ModelType{modelType})
 		if referenceErr != nil {
 			return nil, "", referenceErr
 		}
@@ -738,54 +742,128 @@ func buildSubmodelElementModelTypesQuery(submodelDatabaseID int, rootIDs []int64
 		ToSQL()
 }
 
-func buildSubmodelElementReference(submodelID string, modelType types.ModelType, idShortPath string) (types.IReference, error) {
-	if submodelID == "" || idShortPath == "" {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPARAMS Invalid reference parameters")
-	}
-
-	modelTypeLiteral, ok := stringification.ModelTypeToString(modelType)
-	if !ok {
-		return nil, common.NewInternalServerError("SMREPO-BUILDSMEREF-MODELTYPE Unknown model type for reference")
-	}
-	modelTypeKeyType, ok := stringification.KeyTypesFromString(modelTypeLiteral)
-	if !ok {
-		return nil, common.NewInternalServerError("SMREPO-BUILDSMEREF-KEYTYPE Unknown key type for model type")
-	}
-
-	pathSegments, parsePathErr := parseReferencePathSegments(idShortPath)
+// GetSubmodelElementReferenceByPathTx builds the model reference of the submodel element at path
+// from an existing transaction and applies optional ABAC formula filters from ctx.
+func GetSubmodelElementReferenceByPathTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) (types.IReference, error) {
+	segments, parsePathErr := parseReferencePathSegments(idShortPath)
 	if parsePathErr != nil {
 		return nil, parsePathErr
 	}
-
-	keys := make([]types.IKey, 0, len(pathSegments)+1)
-
-	firstKey := types.Key{}
-	firstKey.SetType(types.KeyTypesSubmodel)
-	firstKey.SetValue(submodelID)
-	keys = append(keys, &firstKey)
-
-	for i, segment := range pathSegments {
-		key := types.Key{}
-		isLast := i == len(pathSegments)-1
-
-		switch {
-		case segment.IsIndex:
-			key.SetType(types.KeyTypesSubmodelElementList)
-		case isLast:
-			key.SetType(modelTypeKeyType)
-		default:
-			key.SetType(types.KeyTypesSubmodelElementCollection)
-		}
-
-		key.SetValue(segment.Value)
-		keys = append(keys, &key)
+	submodelDatabaseID, err := submodelDatabaseIDForPathReadTx(tx, submodelID, idShortPath)
+	if err != nil {
+		return nil, err
 	}
 
-	reference := types.Reference{}
-	reference.SetType(types.ReferenceTypesModelReference)
-	reference.SetKeys(keys)
+	authorized, err := IsSubmodelElementPathAuthorized(ctx, tx, submodelDatabaseID, idShortPath)
+	if err != nil {
+		return nil, err
+	}
+	if !authorized {
+		return nil, newSubmodelElementReferenceNotFoundError(submodelID, idShortPath)
+	}
 
-	return &reference, nil
+	segmentPaths := referenceSegmentPaths(segments)
+	modelTypesByPath, err := getSubmodelElementModelTypesByPaths(ctx, tx, submodelDatabaseID, segmentPaths)
+	if err != nil {
+		return nil, err
+	}
+
+	modelTypes := make([]types.ModelType, 0, len(segmentPaths))
+	for _, segmentPath := range segmentPaths {
+		modelType, exists := modelTypesByPath[segmentPath]
+		if !exists {
+			return nil, newSubmodelElementReferenceNotFoundError(submodelID, idShortPath)
+		}
+		modelTypes = append(modelTypes, modelType)
+	}
+
+	return buildSubmodelElementReference(submodelID, segments, modelTypes)
+}
+
+func newSubmodelElementReferenceNotFoundError(submodelID string, idShortPath string) error {
+	return common.NewErrNotFound("SMREPO-GETSMEREF-NOTFOUND SubmodelElement with idShort or path '" + idShortPath + "' not found in submodel '" + submodelID + "'")
+}
+
+func referenceSegmentPaths(segments []submodelpath.Segment) []string {
+	paths := make([]string, 0, len(segments))
+	for i := range segments {
+		paths = append(paths, submodelpath.BuildIDShortPathFromSegments(segments[:i+1]))
+	}
+	return paths
+}
+
+func getSubmodelElementModelTypesByPaths(ctx context.Context, db DBQueryer, submodelDatabaseID int64, paths []string) (map[string]types.ModelType, error) {
+	query, args, err := buildSubmodelElementModelTypesByPathsQuery(submodelDatabaseID, paths)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEREF-BUILDMODELTYPESQ " + err.Error())
+	}
+
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEREF-EXECMODELTYPESQ " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	modelTypesByPath := make(map[string]types.ModelType, len(paths))
+	for rows.Next() {
+		var path string
+		var modelTypeInt int64
+		if scanErr := rows.Scan(&path, &modelTypeInt); scanErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMEREF-SCANMODELTYPESQ " + scanErr.Error())
+		}
+		modelTypesByPath[path] = types.ModelType(modelTypeInt)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEREF-ROWSERRMODELTYPESQ " + rowsErr.Error())
+	}
+
+	return modelTypesByPath, nil
+}
+
+func buildSubmodelElementModelTypesByPathsQuery(submodelDatabaseID int64, paths []string) (string, []any, error) {
+	return goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(
+			goqu.I("sme.idshort_path"),
+			goqu.I("sme.model_type"),
+		).
+		Where(
+			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
+			common.PostgreSQLTextArrayContains(goqu.I("sme.idshort_path"), paths),
+		).
+		Prepared(true).
+		ToSQL()
+}
+
+func buildSubmodelElementReference(submodelID string, segments []submodelpath.Segment, modelTypes []types.ModelType) (types.IReference, error) {
+	if submodelID == "" || len(segments) == 0 || len(segments) != len(modelTypes) {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPARAMS Invalid reference parameters")
+	}
+
+	keys := make([]types.IKey, 0, len(segments)+1)
+	keys = append(keys, types.NewKey(types.KeyTypesSubmodel, submodelID))
+
+	for i, modelType := range modelTypes {
+		keyType, err := submodelElementKeyType(modelType)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, types.NewKey(keyType, segments[i].Value))
+	}
+
+	return types.NewReference(types.ReferenceTypesModelReference, keys), nil
+}
+
+func submodelElementKeyType(modelType types.ModelType) (types.KeyTypes, error) {
+	modelTypeLiteral, ok := stringification.ModelTypeToString(modelType)
+	if !ok {
+		return 0, common.NewInternalServerError("SMREPO-BUILDSMEREF-MODELTYPE Unknown model type for reference")
+	}
+	keyType, ok := stringification.KeyTypesFromString(modelTypeLiteral)
+	if !ok {
+		return 0, common.NewInternalServerError("SMREPO-BUILDSMEREF-KEYTYPE Unknown key type for model type")
+	}
+	return keyType, nil
 }
 
 func parseReferencePathSegments(idShortPath string) ([]submodelpath.Segment, error) {

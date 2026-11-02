@@ -533,20 +533,6 @@ func toSubmodelElementMetadata(element types.ISubmodelElement) (map[string]any, 
 	return jsonElement, nil
 }
 
-func getModelTypeLiteral(element types.ISubmodelElement) string {
-	jsonElement, err := jsonization.ToJsonable(element)
-	if err != nil {
-		return ""
-	}
-
-	modelType, ok := jsonElement["modelType"].(string)
-	if !ok {
-		return ""
-	}
-
-	return modelType
-}
-
 // GetAllSubmodels retrieves all submodels from the repository with optional filtering and pagination.
 // It supports filtering by idShort and provides pagination through cursor-based navigation.
 //
@@ -2266,56 +2252,15 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	element, err := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, false, "core")
+	reference, err := s.submodelBackend.GetSubmodelElementReference(ctx, decodedSubmodelIdentifier, idShortPath)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
-	}
-
-	modelTypeLiteral := getModelTypeLiteral(element)
-	if modelTypeLiteral == "" {
-		internalErr := common.NewInternalServerError("SMREPO-GETSMEREF-MODELTYPE Empty modelType for submodel element")
-		return newAPIErrorResponse(internalErr, http.StatusInternalServerError, operation, "EmptyModelType"), nil
-	}
-
-	keyTypes, keyValues, keyResolutionErr := resolveModelReferencePathKeys(
-		idShortPath,
-		modelTypeLiteral,
-		func(path string) (string, error) {
-			parentElement, parentErr := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, path, false, "core")
-			if parentErr != nil {
-				if common.IsErrBadRequest(parentErr) || common.IsErrNotFound(parentErr) {
-					return "", parentErr
-				}
-				return "", common.NewInternalServerError("SMREPO-BUILDREF-GETPARENT " + parentErr.Error())
-			}
-
-			parentModelType := getModelTypeLiteral(parentElement)
-			if parentModelType == "" {
-				return "", common.NewInternalServerError("SMREPO-BUILDREF-PARENTMODELTYPE Empty modelType for parent submodel element")
-			}
-
-			return parentModelType, nil
-		},
-	)
-	if keyResolutionErr != nil {
-		if common.IsErrBadRequest(keyResolutionErr) {
-			return newAPIErrorResponse(keyResolutionErr, http.StatusBadRequest, operation, "BadReferencePath"), nil
-		}
-		if common.IsErrNotFound(keyResolutionErr) {
-			return newAPIErrorResponse(keyResolutionErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
-		}
-		return newAPIErrorResponse(keyResolutionErr, http.StatusInternalServerError, operation, "ResolveReferenceKeys"), nil
-	}
-
-	reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, keyTypes, keyValues)
-	if referenceErr != nil {
-		return newAPIErrorResponse(referenceErr, http.StatusInternalServerError, operation, "BuildModelReference"), nil
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementReference"), nil
 	}
 
 	var jsonableRef map[string]any
