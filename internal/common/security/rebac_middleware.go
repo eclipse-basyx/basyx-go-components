@@ -157,19 +157,20 @@ const (
 	reBACOutcomeUnavailable
 )
 
-// resolveReBAC consults the resolver for requests ABAC does not fully allow.
+// resolveReBAC consults the resolver for requests ABAC does not fully allow,
+// including superpaths whose shell ABAC does not fully allow.
 // Anonymous requests and uncovered routes keep ABAC-only semantics.
 func resolveReBAC(
 	r *http.Request,
 	settings ABACSettings,
-	model *AccessModel,
+	session *AuthorizationSession,
 	evaluation AuthorizationEvaluation,
 	routePath string,
 ) (reBACOutcome, ReBACRoute, *ReBACGrantSet) {
 	if settings.ReBAC == nil || evaluation.Reason == DecisionRouteNotFound {
 		return reBACOutcomeABACOnly, ReBACRoute{}, nil
 	}
-	route, found := model.matchReBACRoute(r.Method, routePath)
+	route, found := session.model.matchReBACRoute(r.Method, routePath)
 	if !found {
 		return reBACOutcomeABACOnly, ReBACRoute{}, nil
 	}
@@ -180,6 +181,9 @@ func resolveReBAC(
 		return reBACOutcomeABACOnly, route, nil
 	}
 	pending := reBACPendingRights(evaluation, route.Rights)
+	if len(pending) == 0 && session.superpathShellNeedsReBAC(route) {
+		pending = slices.Clone(route.Rights)
+	}
 	if len(pending) == 0 {
 		return reBACOutcomeABACOnly, route, nil
 	}

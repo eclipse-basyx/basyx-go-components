@@ -174,3 +174,44 @@ func TestSuperpathShellContextPreservesInternalAndDisabledContexts(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, internal, unchanged)
 }
+
+func TestSuperpathResolvesReBACShellGrantWhenSubmodelABACIsUnrestricted(t *testing.T) {
+	grants := NewReBACGrantSet(grammar.RightsEnumREAD)
+	require.NoError(t, grants.AllowResources(SemanticResourceAAS, []string{grantedAASUUID}, grammar.RightsEnumREAD))
+	openSubmodels := superpathRule(map[string]string{"IDENTIFIABLE": `$sm("*")`}, nil, "READ")
+
+	resolver := &fakeReBACResolver{covered: true, grants: grants}
+	ctx := serveSuperpath(t, http.MethodGet, resolver, openSubmodels)
+	require.EqualValues(t, 1, resolver.calls.Load())
+	shellCtx, err := SuperpathShellContext(ctx, superpathAASID, grammar.RightsEnumREAD)
+	require.NoError(t, err)
+	require.Contains(t, aasFormulaSQL(shellCtx, t), grantedAASUUID)
+
+	resolver = &fakeReBACResolver{covered: true, grants: grants}
+	openShells := superpathRule(map[string]string{"IDENTIFIABLE": `$aas("*")`}, nil, "READ")
+	serveSuperpath(t, http.MethodGet, resolver, openSubmodels, openShells)
+	require.Zero(t, resolver.calls.Load(), "ABAC allows the shell and the Submodel unconditionally")
+}
+
+func TestSuperpathShellRight(t *testing.T) {
+	submodel := "/shells/{aasIdentifier}/submodels/{submodelIdentifier}"
+	for _, test := range []struct {
+		method, pattern string
+		right           grammar.RightsEnum
+		superpath       bool
+	}{
+		{http.MethodGet, submodel, grammar.RightsEnumREAD, true},
+		{http.MethodPatch, submodel, grammar.RightsEnumREAD, true},
+		{http.MethodPut, submodel, grammar.RightsEnumUPDATE, true},
+		{http.MethodDelete, submodel, grammar.RightsEnumUPDATE, true},
+		{http.MethodPut, submodel + "/submodel-elements/{idShortPath}", grammar.RightsEnumREAD, true},
+		{http.MethodDelete, submodel + "/submodel-elements/{idShortPath}", grammar.RightsEnumREAD, true},
+		{http.MethodGet, "/shells/{aasIdentifier}", "", false},
+		{http.MethodDelete, "/shells/{aasIdentifier}/submodel-refs/{submodelIdentifier}", "", false},
+		{http.MethodGet, "/submodels/{submodelIdentifier}", "", false},
+	} {
+		right, superpath := superpathShellRight(ReBACRoute{Method: test.method, Pattern: test.pattern})
+		require.Equal(t, test.superpath, superpath, test)
+		require.Equal(t, test.right, right, test)
+	}
+}

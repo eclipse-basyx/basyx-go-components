@@ -27,10 +27,41 @@ package auth
 
 import (
 	"context"
+	"net/http"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
+
+const (
+	superpathRoutePrefix     = "/shells/{aasIdentifier}/submodels/"
+	superpathSubmodelPattern = superpathRoutePrefix + "{submodelIdentifier}"
+)
+
+// superpathShellRight returns the right a superpath route requires on its
+// shell: UPDATE for PUT and DELETE of the Submodel, which change the shell's
+// Submodel references, and READ otherwise.
+func superpathShellRight(route ReBACRoute) (grammar.RightsEnum, bool) {
+	if !strings.HasPrefix(route.Pattern, superpathRoutePrefix) {
+		return "", false
+	}
+	if route.Pattern == superpathSubmodelPattern && (route.Method == http.MethodPut || route.Method == http.MethodDelete) {
+		return grammar.RightsEnumUPDATE, true
+	}
+	return grammar.RightsEnumREAD, true
+}
+
+// superpathShellNeedsReBAC reports superpath routes whose shell ABAC does not
+// allow unconditionally, so that ReBAC grants on the shell must be resolved.
+func (s *AuthorizationSession) superpathShellNeedsReBAC(route ReBACRoute) bool {
+	right, ok := superpathShellRight(route)
+	if !ok {
+		return false
+	}
+	shellPath := joinBasePath(s.model.basePath, "/shells/"+route.Params["aasIdentifier"])
+	return len(reBACPendingRights(s.evaluateRight(right, shellPath), []grammar.RightsEnum{right})) > 0
+}
 
 // SuperpathShellContext binds the authorization of the enclosing Asset
 // Administration Shell of a superpath request (/shells/{aasIdentifier}/submodels/...)
