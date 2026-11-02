@@ -1,0 +1,15 @@
+kind: fixed
+body: >-
+  Omit submodel elements and optional fields without a value from Value-Only
+  ($value) responses of the Submodel Repository, the AAS Repository superpaths,
+  and AAS Environment, instead of emitting null, empty strings, empty arrays, or
+  empty objects. This applies to Submodels, collections, Entity statements,
+  annotations, the submodel element listing, and Operation result arguments.
+  SubmodelElementList members stay in place for index stability, a list that
+  contains Operations or Capabilities is omitted, and PATCH $value accepts null
+  for a ReferenceElement so responses can be sent back unchanged.
+time: 2026-11-02T13:45:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 804
+  SecurityImpact: None.
