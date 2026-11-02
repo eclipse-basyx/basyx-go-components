@@ -875,11 +875,11 @@ func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAsset
 }
 
 // CheckSubmodelReferenceForDeletionInTransaction hides references in inaccessible AASs.
+// ctx must carry the authorization of the AAS, see auth.SuperpathShellContext.
 func (s *AssetAdministrationShellDatabase) CheckSubmodelReferenceForDeletionInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier, submodelIdentifier string) error {
 	if tx == nil {
 		return common.NewInternalServerError("AASREPO-CHECKDELSMREF-NILTX transaction must not be nil")
 	}
-	ctx = auth.SelectFormulaForRight(ctx, grammar.RightsEnumDELETE)
 	if _, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-CHECKDELSMREF"); err != nil {
 		return err
 	}

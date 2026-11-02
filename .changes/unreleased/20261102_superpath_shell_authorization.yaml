@@ -1,0 +1,18 @@
+kind: security
+body: >-
+  With ABAC, Submodel superpaths of the AAS Repository and AAS Environment now
+  also require access to the enclosing shell, checked with the $aas and ROUTE
+  rules of /shells/{aasIdentifier}: READ for every superpath operation, and
+  UPDATE for PUT and DELETE of the Submodel, which add or remove the shell's
+  Submodel reference. A policy that grants superpaths only through $sm, $sme,
+  or /shells/*/submodels/* ROUTE rules needs an additional rule on the shell.
+time: 2026-11-02T18:30:00+01:00
+custom:
+  Impact: Medium
+  PullRequest: 810
+  SecurityImpact: >-
+    Previously ABAC did not authorize the shell of a superpath request, so a
+    caller without access to a shell could use its superpaths and learn that the
+    shell exists and references the Submodel. A shell without a matching rule is
+    now answered with 403, and a shell excluded by a formula with 404, as for a
+    direct shell request. This matches the existing ReBAC superpath rules.

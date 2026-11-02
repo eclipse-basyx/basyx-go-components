@@ -97,13 +97,7 @@ func EnvironmentResourceContext(ctx context.Context, resource SemanticResourceKi
 	aggregate, _ := ctx.Value(environmentAuthorizationContextKey{}).(*environmentAuthorization)
 	session := AuthorizationSessionFromContext(ctx)
 	if aggregate == nil {
-		if cfg, ok := common.ConfigFromContext(ctx); ok && !cfg.ABAC.Enabled {
-			return ctx, nil
-		}
-		if session != nil || ClaimsFromContext(ctx) != nil {
-			return nil, common.NewErrDenied("AUTH-ENVCONTEXT-MISSING aggregate authorization is missing")
-		}
-		return ctx, nil
+		return contextWithoutResourceAuthorization(ctx, session != nil, "AUTH-ENVCONTEXT-MISSING aggregate authorization is missing")
 	}
 	evaluation, found := aggregate.evaluations[resource]
 	if !found || session == nil {
@@ -116,9 +110,32 @@ func EnvironmentResourceContext(ctx context.Context, resource SemanticResourceKi
 	if !evaluation.Allowed {
 		filter = failClosedQueryFilter(aggregate.rights...)
 	}
+	return bindResourceAuthorization(ctx, session, resource, evaluation, filter), nil
+}
+
+// contextWithoutResourceAuthorization keeps ctx for disabled security and
+// internal calls, and denies requests whose authorization is missing.
+func contextWithoutResourceAuthorization(ctx context.Context, hasSession bool, errorMessage string) (context.Context, error) {
+	if cfg, ok := common.ConfigFromContext(ctx); ok && !cfg.ABAC.Enabled {
+		return ctx, nil
+	}
+	if hasSession || ClaimsFromContext(ctx) != nil {
+		return nil, common.NewErrDenied(errorMessage)
+	}
+	return ctx, nil
+}
+
+// bindResourceAuthorization replaces all ABAC views of ctx with the
+// authorization of one resource. ReBAC grants are preserved.
+func bindResourceAuthorization(
+	ctx context.Context,
+	session *AuthorizationSession,
+	resource SemanticResourceKind,
+	evaluation AuthorizationEvaluation,
+	filter *QueryFilter,
+) context.Context {
 	ctx = context.WithValue(ctx, filterKey, filter)
 	ctx = context.WithValue(ctx, authorizedQueryContextKey{}, (*AuthorizedQuery)(nil))
 	ctx = context.WithValue(ctx, selectedFormulaRightKey, struct{}{})
-	ctx = context.WithValue(ctx, authorizationSessionContextKey{}, session.withOuterAccess(accessViewFromEvaluation(resource, evaluation)))
-	return ctx, nil
+	return context.WithValue(ctx, authorizationSessionContextKey{}, session.withOuterAccess(accessViewFromEvaluation(resource, evaluation)))
 }
