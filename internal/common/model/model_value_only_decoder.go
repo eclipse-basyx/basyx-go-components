@@ -386,12 +386,22 @@ func decodeBlobPatch(raw json.RawMessage) (ValueOnlyPatch, error) {
 	return BlobValuePatch{ContentType: contentType, Value: &content}, nil
 }
 
+// isEmptyReferenceElementValue accepts null, the Value-Only serialization of a ReferenceElement
+// without a value, and the empty object for compatibility.
+func isEmptyReferenceElementValue(jsonable any) bool {
+	if jsonable == nil {
+		return true
+	}
+	object, ok := jsonable.(map[string]any)
+	return ok && len(object) == 0
+}
+
 func decodeReferenceElementPatch(raw json.RawMessage) (ValueOnlyPatch, error) {
 	jsonable, err := decodeValueOnlyJSON(raw)
 	if err != nil {
 		return nil, err
 	}
-	if object, ok := jsonable.(map[string]any); ok && len(object) == 0 {
+	if isEmptyReferenceElementValue(jsonable) {
 		return ReferenceElementValuePatch{}, nil
 	}
 	reference, err := decodeReferenceJsonable(jsonable)

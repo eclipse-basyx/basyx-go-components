@@ -502,26 +502,23 @@ func buildSelectedSubmodelElements(dialect goqu.DialectWrapper, level string) *g
 			goqu.I("selected_root.root_rank").As("root_rank"),
 		)
 
-	joinColumn := "selected_sme.root_sme_id"
 	if level == "core" {
-		joinColumn = "selected_sme.parent_sme_id"
+		return roots
 	}
 	children := dialect.From(goqu.T("submodel_element").As("selected_sme")).
 		Join(
 			goqu.T("selected_submodel_roots").As("selected_root"),
 			goqu.On(
 				goqu.I("selected_sme.submodel_id").Eq(goqu.I("selected_root.submodel_id")),
-				goqu.I(joinColumn).Eq(goqu.I("selected_root.root_id")),
+				goqu.I("selected_sme.root_sme_id").Eq(goqu.I("selected_root.root_id")),
 			),
 		).
 		Select(
 			goqu.I("selected_sme.id").As("element_id"),
 			goqu.I("selected_root.submodel_id").As("submodel_id"),
 			goqu.I("selected_root.root_rank").As("root_rank"),
-		)
-	if level != "core" {
-		children = children.Where(goqu.I("selected_sme.id").Neq(goqu.I("selected_root.root_id")))
-	}
+		).
+		Where(goqu.I("selected_sme.id").Neq(goqu.I("selected_root.root_id")))
 
 	return roots.UnionAll(children)
 }

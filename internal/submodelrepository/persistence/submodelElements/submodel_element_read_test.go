@@ -663,12 +663,14 @@ func TestSubmodelElementPageQueryShapeIsIndependentOfPageSize(t *testing.T) {
 	require.NotContains(t, oneQuery, `"property_element"`)
 }
 
-func TestSubmodelElementCorePageSelectsOnlyRootsAndDirectChildren(t *testing.T) {
+func TestSubmodelElementCorePageSelectsOnlyRoots(t *testing.T) {
 	t.Parallel()
 
 	query, _, err := buildSubmodelElementPageQuery(contextWithABACDisabled(t), []int64{1}, "core")
 	require.NoError(t, err)
-	require.Contains(t, query, `"selected_sme"."parent_sme_id" = "selected_root"."root_id"`)
+	require.Contains(t, query, `SELECT "selected_root"."root_id" AS "element_id"`)
+	require.NotContains(t, query, `"selected_sme"`)
+	require.NotContains(t, query, "UNION ALL")
 }
 
 func TestSubmodelElementPageValueQueryShapeIsIndependentOfPageSize(t *testing.T) {

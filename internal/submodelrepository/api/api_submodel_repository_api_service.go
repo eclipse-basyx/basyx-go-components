@@ -1084,7 +1084,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 
 	valueOnlyResults := make([]map[string]any, len(sms))
 	for index, sm := range sms {
-		valueOnly, convErr := gen.SubmodelToValueOnly(sm)
+		valueOnly, convErr := gen.SubmodelToValueOnlyAtLevel(sm, level)
 		if convErr != nil {
 			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
 		}
@@ -1479,7 +1479,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
-	valueOnly, convErr := gen.SubmodelToValueOnly(sm)
+	valueOnly, convErr := gen.SubmodelToValueOnlyAtLevel(sm, level)
 	if convErr != nil {
 		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelToValueOnly"), nil
 	}
@@ -1771,22 +1771,13 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 
 	valueOnlyResults := make([]gen.SubmodelElementValue, 0, len(elements))
 	for _, element := range elements {
-		valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
+		valueOnly, convErr := gen.SubmodelElementToNamedValueOnly(element, level)
 		if convErr != nil {
-			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), nil
+			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToNamedValueOnly"), nil
 		}
-		if valueOnly == nil {
-			continue
+		if valueOnly != nil {
+			valueOnlyResults = append(valueOnlyResults, valueOnly)
 		}
-
-		idShort := element.IDShort()
-		if idShort == nil || *idShort == "" {
-			continue
-		}
-
-		wrapped := make(gen.SubmodelElementCollectionValue)
-		wrapped[*idShort] = valueOnly
-		valueOnlyResults = append(valueOnlyResults, wrapped)
 	}
 
 	res := gen.GetSubmodelElementsValueResult{
@@ -2225,7 +2216,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
 	}
-	valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
+	valueOnly, convErr := gen.SubmodelElementToValueOnlyAtLevel(element, level)
 	if convErr != nil {
 		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), nil
 	}
