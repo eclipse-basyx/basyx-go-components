@@ -9,7 +9,7 @@ body: >-
 time: 2026-11-02T18:30:00+01:00
 custom:
   Impact: Medium
-  PullRequest: 810
+  PullRequest: 812
   SecurityImpact: >-
     Previously ABAC did not authorize the shell of a superpath request, so a
     caller without access to a shell could use its superpaths and learn that the
