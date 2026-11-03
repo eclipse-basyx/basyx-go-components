@@ -1,0 +1,16 @@
+kind: fixed
+body: >-
+  Return an OperationResult with status 200 from
+  GET /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-results/{handleId}
+  and its $value variant in the Submodel Repository and the AAS Repository
+  superpath when an asynchronously invoked operation fails during processing,
+  as required by Part 2 V3.2, instead of 502 with an error Result.
+  executionState is Timeout when clientTimeoutDuration runs out and Failed for
+  every other error, success is false, and messages describe the error.
+  Clients that treated a non-200 result as a failed invocation must check
+  executionState instead.
+time: 2026-11-03T14:00:00+01:00
+custom:
+  Impact: Medium
+  PullRequest: 832
+  SecurityImpact: None.
