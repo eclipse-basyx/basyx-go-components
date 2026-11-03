@@ -2678,13 +2678,15 @@ func (s *SubmodelRepositoryAPIAPIService) executePreparedOperationAsync(
 	if delegateErr != nil {
 		slog.ErrorContext(delegationCtx, "asynchronous delegated operation invocation failed", "error.code", "SMREPO-INVOKEOPASY-DELEGATE", "async_job.handle_id", handleID, "error", delegateErr)
 		errorResponse := newAPIErrorResponse(delegateErr, http.StatusBadGateway, operation, "DelegateOperationCall")
-		s.failPreparedOperationAsync(delegationCtx, handleID, errorResponse, "SMREPO-INVOKEOPASY-PERSISTFAILURE")
+		executionState := delegationFailureExecutionState(delegationCtx, delegateErr)
+		s.failPreparedOperationAsync(delegationCtx, handleID, executionState, errorResponse, "SMREPO-INVOKEOPASY-PERSISTFAILURE")
 		return
 	}
 
 	if !isSuccessfulDelegatedStatus(statusCode) {
 		slog.WarnContext(delegationCtx, "asynchronous delegated operation returned an unsuccessful status", "error.code", "SMREPO-INVOKEOPASY-STATUS", "async_job.handle_id", handleID, "http.response.status_code", statusCode)
-		s.failPreparedOperationAsync(delegationCtx, handleID, newDelegatedStatusErrorResponse(statusCode, operation), "SMREPO-INVOKEOPASY-PERSISTSTATUS")
+		errorResponse := newDelegatedStatusErrorResponse(statusCode, operation)
+		s.failPreparedOperationAsync(delegationCtx, handleID, gen.EXECUTIONSTATE_FAILED, errorResponse, "SMREPO-INVOKEOPASY-PERSISTSTATUS")
 		return
 	}
 
@@ -2692,7 +2694,7 @@ func (s *SubmodelRepositoryAPIAPIService) executePreparedOperationAsync(
 	if resultErr != nil {
 		slog.ErrorContext(delegationCtx, "asynchronous delegated operation returned an invalid result", "error.code", "SMREPO-INVOKEOPASY-INVALIDRESULT", "async_job.handle_id", handleID, "error", resultErr)
 		errorResponse := newAPIErrorResponse(resultErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult")
-		s.failPreparedOperationAsync(delegationCtx, handleID, errorResponse, "SMREPO-INVOKEOPASY-PERSISTINVALID")
+		s.failPreparedOperationAsync(delegationCtx, handleID, gen.EXECUTIONSTATE_FAILED, errorResponse, "SMREPO-INVOKEOPASY-PERSISTINVALID")
 		return
 	}
 
@@ -2703,10 +2705,17 @@ func (s *SubmodelRepositoryAPIAPIService) executePreparedOperationAsync(
 	}
 }
 
-func (s *SubmodelRepositoryAPIAPIService) failPreparedOperationAsync(ctx context.Context, handleID string, response gen.ImplResponse, errorCode string) {
+func (s *SubmodelRepositoryAPIAPIService) failPreparedOperationAsync(
+	ctx context.Context,
+	handleID string,
+	executionState gen.ExecutionState,
+	response gen.ImplResponse,
+	errorCode string,
+) {
 	persistenceCtx, cancelPersistence := asyncPersistenceContext(ctx)
 	defer cancelPersistence()
-	if err := s.asyncJobManager.Fail(persistenceCtx, handleID, response.Code, response.Body); err != nil {
+	result := newFailedOperationResult(executionState, errorResponseMessages(response))
+	if err := s.asyncJobManager.Fail(persistenceCtx, handleID, response.Code, result); err != nil {
 		slog.ErrorContext(persistenceCtx, "asynchronous delegated operation failure persistence failed", "error.code", errorCode, "error", err, "async_job.handle_id", handleID)
 	}
 }
@@ -2738,23 +2747,11 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsyncValueOnly(ctx cont
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
-	_ = ctx
 	const operation = "GetOperationAsyncStatus"
 
-	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	record, response, ok := s.findOperationAsyncRecord(ctx, submodelIdentifier, idShortPath, handleID, operation)
 	if !ok {
 		return response, nil
-	}
-
-	record, found, handleErr := s.asyncJobManager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
-	if handleErr != nil {
-		return newAPIErrorResponse(handleErr, http.StatusInternalServerError, operation, "ReadHandle"), nil
-	}
-	if !found ||
-		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
-		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {
-		handleErr := common.NewErrNotFound(handleID)
-		return newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), nil
 	}
 
 	if record.ExecutionState == "Running" {
@@ -2775,32 +2772,15 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Co
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
-	_ = ctx
 	const operation = "GetOperationAsyncResult"
 
-	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	record, response, ok := s.findFinishedOperationAsyncRecord(ctx, submodelIdentifier, idShortPath, handleID, operation)
 	if !ok {
 		return response, nil
 	}
 
-	record, found, handleErr := s.asyncJobManager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
-	if handleErr != nil {
-		return newAPIErrorResponse(handleErr, http.StatusInternalServerError, operation, "ReadHandle"), nil
-	}
-	if !found ||
-		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
-		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {
-		handleErr := common.NewErrNotFound(handleID)
-		return newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), nil
-	}
-
-	if record.ExecutionState == "Running" {
-		notCompletedErr := errors.New("SMREPO-GETOPASYRES-RUNNING operation is still running")
-		return newAPIErrorResponse(notCompletedErr, http.StatusBadRequest, operation, "OperationStillRunning"), nil
-	}
-
 	if record.ExecutionState == "Failed" {
-		return storedOperationFailureResponse(record, operation), nil
+		return gen.Response(http.StatusOK, storedOperationFailureResult(record, operation)), nil
 	}
 
 	return gen.Response(http.StatusOK, record.Payload), nil
@@ -2812,15 +2792,63 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Co
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
 	const operation = "GetOperationAsyncResultValueOnly"
 
-	result, resultErr := s.GetOperationAsyncResult(ctx, submodelIdentifier, idShortPath, handleID)
-	if resultErr != nil || result.Code != http.StatusOK {
-		return result, resultErr
+	record, response, ok := s.findFinishedOperationAsyncRecord(ctx, submodelIdentifier, idShortPath, handleID, operation)
+	if !ok {
+		return response, nil
 	}
-	valueOnlyResult, conversionErr := operationResultToValueOnly(result.Body)
+
+	if record.ExecutionState == "Failed" {
+		return gen.Response(http.StatusOK, storedOperationFailureResult(record, operation)), nil
+	}
+
+	valueOnlyResult, conversionErr := operationResultToValueOnly(record.Payload)
 	if conversionErr != nil {
 		return newAPIErrorResponse(conversionErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult"), nil
 	}
 	return gen.Response(http.StatusOK, valueOnlyResult), nil
+}
+
+func (s *SubmodelRepositoryAPIAPIService) findOperationAsyncRecord(
+	ctx context.Context,
+	submodelIdentifier string,
+	idShortPath string,
+	handleID string,
+	operation string,
+) (asyncjob.Record, gen.ImplResponse, bool) {
+	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	if !ok {
+		return asyncjob.Record{}, response, false
+	}
+
+	record, found, handleErr := s.asyncJobManager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
+	if handleErr != nil {
+		return asyncjob.Record{}, newAPIErrorResponse(handleErr, http.StatusInternalServerError, operation, "ReadHandle"), false
+	}
+	if !found ||
+		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
+		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {
+		handleErr := common.NewErrNotFound(handleID)
+		return asyncjob.Record{}, newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), false
+	}
+	return record, gen.ImplResponse{}, true
+}
+
+func (s *SubmodelRepositoryAPIAPIService) findFinishedOperationAsyncRecord(
+	ctx context.Context,
+	submodelIdentifier string,
+	idShortPath string,
+	handleID string,
+	operation string,
+) (asyncjob.Record, gen.ImplResponse, bool) {
+	record, response, ok := s.findOperationAsyncRecord(ctx, submodelIdentifier, idShortPath, handleID, operation)
+	if !ok {
+		return asyncjob.Record{}, response, false
+	}
+	if record.ExecutionState == "Running" {
+		notCompletedErr := errors.New("SMREPO-GETOPASYRES-RUNNING operation is still running")
+		return asyncjob.Record{}, newAPIErrorResponse(notCompletedErr, http.StatusBadRequest, operation, "OperationStillRunning"), false
+	}
+	return record, gen.ImplResponse{}, true
 }
 
 func (s *SubmodelRepositoryAPIAPIService) querySubmodelIdentifiers(ctx context.Context, limit int32, cursor string) (gen.ImplResponse, error) {
