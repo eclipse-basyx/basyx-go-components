@@ -185,12 +185,7 @@ func TestDeniedAttachmentUploadsRejectBeforeMultipartValidationAndSizeEnforcemen
 	})
 	require.NoError(t, err)
 
-	encodedAAS := base64.RawURLEncoding.EncodeToString([]byte("urn:test:aas:security:missing"))
-	encodedSubmodel := base64.RawURLEncoding.EncodeToString([]byte("urn:test:submodel:security:missing"))
-	attachmentPaths := []string{
-		"/submodels/" + encodedSubmodel + "/submodel-elements/NoSuchElement/attachment",
-		"/shells/" + encodedAAS + "/submodels/" + encodedSubmodel + "/submodel-elements/NoSuchElement/attachment",
-	}
+	attachmentPaths := createAttachmentUploadTargets(t, adminToken)
 
 	oversizedPayload, oversizedContentType := buildAttachmentMultipart(
 		t,
@@ -233,6 +228,33 @@ func TestDeniedAttachmentUploadsRejectBeforeMultipartValidationAndSizeEnforcemen
 				http.StatusForbidden,
 			)
 		})
+	}
+}
+
+func createAttachmentUploadTargets(t *testing.T, bearerToken string) []string {
+	t.Helper()
+
+	uniqueID := time.Now().UnixNano()
+	aasID := fmt.Sprintf("urn:test:aas:security:upload-limit:%d", uniqueID)
+	submodelID := fmt.Sprintf("urn:test:submodel:security:upload-limit:%d", uniqueID)
+	encodedAAS := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	encodedSubmodel := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+
+	createStoryAAS(t, aasID, "UploadLimitShell", bearerToken)
+	body := fmt.Sprintf(`{
+		"id":%q,
+		"idShort":"UploadLimitSubmodel",
+		"modelType":"Submodel",
+		"kind":"Instance",
+		"submodelElements":[
+			{"idShort":"Document","modelType":"File","contentType":"application/octet-stream"}
+		]
+	}`, submodelID)
+	assertStatus(t, http.MethodPut, testBaseURL+"/shells/"+encodedAAS+"/submodels/"+encodedSubmodel, body, bearerToken, http.StatusCreated)
+
+	return []string{
+		"/submodels/" + encodedSubmodel + "/submodel-elements/Document/attachment",
+		"/shells/" + encodedAAS + "/submodels/" + encodedSubmodel + "/submodel-elements/Document/attachment",
 	}
 }
 
