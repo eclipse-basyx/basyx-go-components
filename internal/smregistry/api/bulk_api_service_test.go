@@ -162,14 +162,13 @@ func TestBulkServiceDeleteFailureResult(t *testing.T) {
 	result := service.GetResult(context.Background(), handleID)
 	require.Equal(t, http.StatusBadRequest, result.Code)
 
-	body := result.Body.(map[string]any)
-	require.EqualValues(t, 2, body["processedCount"])
-	require.EqualValues(t, 0, body["successfulCount"])
-	require.EqualValues(t, 2, body["failedCount"])
-	messages, ok := body["messages"].([]model.Message)
+	body, ok := result.Body.(model.Result)
 	require.True(t, ok)
-	require.Len(t, messages, 1)
-	require.Equal(t, "Error", messages[0].MessageType)
+	require.Len(t, body.Messages, 1)
+	require.Equal(t, "Error", body.Messages[0].MessageType)
+	require.Equal(t, "404", body.Messages[0].Code)
+	require.Equal(t, "bulk-item-1", body.Messages[0].CorrelationID)
+	require.Equal(t, "item[1] (urn:bad): not found", body.Messages[0].Text)
 }
 
 func awaitSMResultAvailability(t *testing.T, service *BulkService, handleID string) {

@@ -1966,14 +1966,7 @@ paths:
         '204':
           description: Bulk request completed successfully
         '400':
-          description: 'Bulk request completed with descriptor failures. Processing
-            is strict atomic: if one descriptor operation fails, the complete transaction
-            is rolled back. The response body contains processedCount, successfulCount,
-            failedCount and details about failing descriptor operations.'
-          content:
-            application/json:
-              schema:
-                type: object
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request
         '404':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
