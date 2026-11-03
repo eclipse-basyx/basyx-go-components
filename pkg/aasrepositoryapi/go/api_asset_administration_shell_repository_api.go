@@ -2629,14 +2629,13 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetAdministrat
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	if !query.Has("date") {
-		c.errorHandler(w, r, &RequiredError{"date"}, nil)
-		return
-	}
-	dateParam, err := parseTime(query.Get("date"))
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Param: "date", Err: err}, nil)
-		return
+	var dateParam time.Time
+	if query.Has("date") {
+		dateParam, err = parseTime(query.Get("date"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "date", Err: err}, nil)
+			return
+		}
 	}
 
 	result, err := c.service.GetAssetAdministrationShellVersionByIdAndDate(r.Context(), aasIdentifierParam, dateParam)

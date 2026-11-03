@@ -131,6 +131,11 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, "type-v3-child", latestHistorical["assetInformation"].(map[string]any)["assetType"])
+
+	latestWithoutDate, status, err := getJSONResponse(fmt.Sprintf("%s/shells/%s/$history", baseURL, encodedAASID))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	require.Equal(t, "type-v3-child", latestWithoutDate["assetInformation"].(map[string]any)["assetType"])
 	requireAASHistoryPayloadTypes(t, aasID, []string{"snapshot", "diff", "diff"})
 
 	recent, status, err := getJSONResponse(baseURL + "/shells/$recent-changes?limit=10")
@@ -155,6 +160,10 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	requireAASHistoryPayloadTypes(t, aasID, []string{"snapshot", "diff", "diff", "snapshot"})
 
 	status, err = getResponseStatus(fmt.Sprintf("%s/shells/%s/$history?date=%s", baseURL, encodedAASID, time.Now().UTC().Format(time.RFC3339Nano)))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, status)
+
+	status, err = getResponseStatus(fmt.Sprintf("%s/shells/%s/$history", baseURL, encodedAASID))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotFound, status)
 
