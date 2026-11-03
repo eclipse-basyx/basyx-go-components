@@ -120,7 +120,11 @@ func runAttachmentUploadAction(t *testing.T, step testenv.JSONSuiteStep, tokenPr
 
 	payload := &bytes.Buffer{}
 	writer := multipart.NewWriter(payload)
-	filePart, err := writer.CreateFormFile("file", filepath.Base(step.Data))
+	partFileName := filepath.Base(step.Data)
+	if fileName := strings.TrimSpace(step.Headers["X-Upload-FileName"]); fileName != "" {
+		partFileName = fileName
+	}
+	filePart, err := writer.CreateFormFile("file", partFileName)
 	if err != nil {
 		require.NoError(t, err)
 		return
@@ -128,12 +132,6 @@ func runAttachmentUploadAction(t *testing.T, step testenv.JSONSuiteStep, tokenPr
 	if _, err := io.Copy(filePart, file); err != nil {
 		require.NoError(t, err)
 		return
-	}
-	if fileName := strings.TrimSpace(step.Headers["X-Upload-FileName"]); fileName != "" {
-		if err := writer.WriteField("fileName", fileName); err != nil {
-			require.NoError(t, err)
-			return
-		}
 	}
 	if err := writer.Close(); err != nil {
 		require.NoError(t, err)

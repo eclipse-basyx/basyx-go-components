@@ -30,6 +30,7 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -659,7 +660,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 }
 
 // PutThumbnailAasRepository -
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, file io.Reader) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, contentType string, file io.Reader) (gen.ImplResponse, error) {
 
 	const operation = "PutThumbnailAasRepository"
 
@@ -668,7 +669,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	err := s.assetAdministrationShellBackend.PutThumbnailByAASIDReader(ctx, decodedIdentifier, fileName, file)
+	err := s.assetAdministrationShellBackend.PutThumbnailByAASIDReader(ctx, decodedIdentifier, file, binarycontent.UploadDeclaration{
+		FileName:     fileName,
+		ContentTypes: []string{contentType},
+	})
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil

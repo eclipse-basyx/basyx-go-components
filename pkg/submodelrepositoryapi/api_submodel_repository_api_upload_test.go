@@ -22,6 +22,7 @@ type captureSubmodelFileUploadService struct {
 	contentType string
 	content     []byte
 	readErr     error
+	status      int
 }
 
 func (s *captureSubmodelFileUploadService) PutFileByPathSubmodelRepo(
@@ -117,62 +118,76 @@ func TestPutFileByPathSubmodelRepoReturnsPayloadTooLargeForOversizedStream(t *te
 	}
 }
 
-func TestPutFileByPathSubmodelRepoUsesFileNameFieldWhenItFollowsFile(t *testing.T) {
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
-
+func TestPutFileByPathSubmodelRepoIgnoresFileNameField(t *testing.T) {
 	payload := []byte("submodel attachment payload")
-	request := newMultipartUploadRequestWithFileNameOrder(
-		t,
-		"/submodels/sm/submodel-elements/file/attachment",
-		"metadata-name.txt",
-		"part-name.txt",
-		payload,
-		false,
+	request := newMultipartUploadRequestWithFileNameField(
+		t, "/submodels/sm/submodel-elements/file/attachment", "field-name.txt", "part-name.txt", payload,
 	)
+	service := putSubmodelFileByPath(request)
+
+	assertCapturedSubmodelUpload(t, service, "part-name.txt", payload)
+}
+
+func TestPutFileByPathSubmodelRepoAcceptsPartWithoutFileName(t *testing.T) {
+	payload := []byte("submodel attachment payload")
+	request := newMultipartUploadRequestWithFileNameField(t, "/submodels/sm/submodel-elements/file/attachment", "", "", payload)
+	service := putSubmodelFileByPath(request)
+
+	assertCapturedSubmodelUpload(t, service, "", payload)
+}
+
+func putSubmodelFileByPath(request *http.Request) *captureSubmodelFileUploadService {
 	addRouteParam(request, "submodelIdentifier", "sm")
 	addRouteParam(request, "idShortPath", "file")
-
 	service := &captureSubmodelFileUploadService{}
 	controller := NewSubmodelRepositoryAPIAPIController(service, "", "")
 	response := httptest.NewRecorder()
-
 	controller.PutFileByPathSubmodelRepo(response, request)
+	service.status = response.Code
+	return service
+}
 
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("expected upload to succeed, got status %d body %s", response.Code, response.Body.String())
+func assertCapturedSubmodelUpload(t *testing.T, service *captureSubmodelFileUploadService, expectedFileName string, expectedPayload []byte) {
+	t.Helper()
+
+	if service.status != http.StatusNoContent {
+		t.Fatalf("expected upload to succeed, got status %d", service.status)
 	}
-	if service.fileName != "metadata-name.txt" {
-		t.Fatalf("expected metadata filename metadata-name.txt, got %q", service.fileName)
+	if service.fileName != expectedFileName {
+		t.Fatalf("expected fileName %q, got %q", expectedFileName, service.fileName)
 	}
 	if service.contentType != "application/x-step" {
 		t.Fatalf("expected content type application/x-step, got %q", service.contentType)
 	}
-	if !bytes.Equal(service.content, payload) {
-		t.Fatalf("expected uploaded payload %q, got %q", string(payload), string(service.content))
+	if !bytes.Equal(service.content, expectedPayload) {
+		t.Fatalf("expected uploaded payload %q, got %q", string(expectedPayload), string(service.content))
 	}
 }
 
 func newMultipartUploadRequest(t *testing.T, target string, fileName string, payload []byte) *http.Request {
-	return newMultipartUploadRequestWithFileNameOrder(t, target, fileName, fileName, payload, true)
+	return newMultipartUploadRequestWithFileNameField(t, target, "", fileName, payload)
 }
 
-func newMultipartUploadRequestWithFileNameOrder(
+func newMultipartUploadRequestWithFileNameField(
 	t *testing.T,
 	target string,
 	fieldFileName string,
 	partFileName string,
 	payload []byte,
-	fileNameBeforeFile bool,
 ) *http.Request {
 	t.Helper()
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	if fileNameBeforeFile {
+	if fieldFileName != "" {
 		writeFileNameField(t, writer, fieldFileName)
 	}
+	contentDisposition := `form-data; name="file"`
+	if partFileName != "" {
+		contentDisposition += `; filename="` + partFileName + `"`
+	}
 	partHeader := textproto.MIMEHeader{}
-	partHeader.Set("Content-Disposition", `form-data; name="file"; filename="`+partFileName+`"`)
+	partHeader.Set("Content-Disposition", contentDisposition)
 	partHeader.Set("Content-Type", "application/x-step")
 	part, err := writer.CreatePart(partHeader)
 	if err != nil {
@@ -180,9 +195,6 @@ func newMultipartUploadRequestWithFileNameOrder(
 	}
 	if _, err = part.Write(payload); err != nil {
 		t.Fatalf("failed to write multipart payload: %v", err)
-	}
-	if !fileNameBeforeFile {
-		writeFileNameField(t, writer, fieldFileName)
 	}
 	if err = writer.Close(); err != nil {
 		t.Fatalf("failed to close multipart writer: %v", err)

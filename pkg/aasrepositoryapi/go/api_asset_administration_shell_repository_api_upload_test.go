@@ -24,7 +24,8 @@ type captureAASUploadService struct {
 	readErr     error
 }
 
-func (s *captureAASUploadService) PutThumbnailAasRepository(_ context.Context, _ string, fileName string, file io.Reader) (commonmodel.ImplResponse, error) {
+func (s *captureAASUploadService) PutThumbnailAasRepository(_ context.Context, _ string, fileName string, contentType string, file io.Reader) (commonmodel.ImplResponse, error) {
+	s.contentType = contentType
 	return s.capture(fileName, file)
 }
 
@@ -169,17 +170,10 @@ func TestPutFileByPathAasRepositoryReturnsPayloadTooLargeForOversizedStream(t *t
 	}
 }
 
-func TestPutThumbnailAasRepositoryUsesFileNameFieldWhenItFollowsFile(t *testing.T) {
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
-
+func TestPutThumbnailAasRepositoryIgnoresFileNameField(t *testing.T) {
 	payload := []byte("thumbnail payload")
-	request := newMultipartUploadRequestWithFileNameOrder(
-		t,
-		"/shells/aas/asset-information/thumbnail",
-		"metadata-thumbnail.bin",
-		"part-thumbnail.bin",
-		payload,
-		false,
+	request := newMultipartUploadRequestWithFileNameField(
+		t, "/shells/aas/asset-information/thumbnail", "field-thumbnail.png", "part-thumbnail.png", payload,
 	)
 	addRouteParam(request, "aasIdentifier", "aas")
 
@@ -189,20 +183,30 @@ func TestPutThumbnailAasRepositoryUsesFileNameFieldWhenItFollowsFile(t *testing.
 
 	controller.PutThumbnailAasRepository(response, request)
 
-	assertCapturedUpload(t, response, service, "metadata-thumbnail.bin", payload)
+	assertCapturedUpload(t, response, service, "part-thumbnail.png", payload)
+	if service.contentType != "application/x-step" {
+		t.Fatalf("expected thumbnail part content type application/x-step, got %q", service.contentType)
+	}
 }
 
-func TestPutFileByPathAasRepositoryUsesFileNameFieldWhenItFollowsFile(t *testing.T) {
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+func TestPutThumbnailAasRepositoryAcceptsPartWithoutFileName(t *testing.T) {
+	payload := []byte("thumbnail payload")
+	request := newMultipartUploadRequestWithFileNameField(t, "/shells/aas/asset-information/thumbnail", "", "", payload)
+	addRouteParam(request, "aasIdentifier", "aas")
 
+	service := &captureAASUploadService{}
+	controller := NewAssetAdministrationShellRepositoryAPIAPIController(service, "", "")
+	response := httptest.NewRecorder()
+
+	controller.PutThumbnailAasRepository(response, request)
+
+	assertCapturedUpload(t, response, service, "", payload)
+}
+
+func TestPutFileByPathAasRepositoryIgnoresFileNameField(t *testing.T) {
 	payload := []byte("aas-scoped attachment payload")
-	request := newMultipartUploadRequestWithFileNameOrder(
-		t,
-		"/shells/aas/submodels/sm/submodel-elements/file/attachment",
-		"metadata-name.ifc",
-		"part-name.ifc",
-		payload,
-		false,
+	request := newMultipartUploadRequestWithFileNameField(
+		t, "/shells/aas/submodels/sm/submodel-elements/file/attachment", "field-name.ifc", "part-name.ifc", payload,
 	)
 	addRouteParam(request, "aasIdentifier", "aas")
 	addRouteParam(request, "submodelIdentifier", "sm")
@@ -214,7 +218,7 @@ func TestPutFileByPathAasRepositoryUsesFileNameFieldWhenItFollowsFile(t *testing
 
 	controller.PutFileByPathAasRepository(response, request)
 
-	assertCapturedUpload(t, response, service, "metadata-name.ifc", payload)
+	assertCapturedUpload(t, response, service, "part-name.ifc", payload)
 	if service.contentType != "application/x-step" {
 		t.Fatalf("expected content type application/x-step, got %q", service.contentType)
 	}
@@ -238,26 +242,29 @@ func assertCapturedUpload(t *testing.T, response *httptest.ResponseRecorder, ser
 }
 
 func newMultipartUploadRequest(t *testing.T, target string, fileName string, payload []byte) *http.Request {
-	return newMultipartUploadRequestWithFileNameOrder(t, target, fileName, fileName, payload, true)
+	return newMultipartUploadRequestWithFileNameField(t, target, "", fileName, payload)
 }
 
-func newMultipartUploadRequestWithFileNameOrder(
+func newMultipartUploadRequestWithFileNameField(
 	t *testing.T,
 	target string,
 	fieldFileName string,
 	partFileName string,
 	payload []byte,
-	fileNameBeforeFile bool,
 ) *http.Request {
 	t.Helper()
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	if fileNameBeforeFile {
+	if fieldFileName != "" {
 		writeFileNameField(t, writer, fieldFileName)
 	}
+	contentDisposition := `form-data; name="file"`
+	if partFileName != "" {
+		contentDisposition += `; filename="` + partFileName + `"`
+	}
 	partHeader := textproto.MIMEHeader{}
-	partHeader.Set("Content-Disposition", `form-data; name="file"; filename="`+partFileName+`"`)
+	partHeader.Set("Content-Disposition", contentDisposition)
 	partHeader.Set("Content-Type", "application/x-step")
 	part, err := writer.CreatePart(partHeader)
 	if err != nil {
@@ -265,9 +272,6 @@ func newMultipartUploadRequestWithFileNameOrder(
 	}
 	if _, err = part.Write(payload); err != nil {
 		t.Fatalf("failed to write multipart payload: %v", err)
-	}
-	if !fileNameBeforeFile {
-		writeFileNameField(t, writer, fieldFileName)
 	}
 	if err = writer.Close(); err != nil {
 		t.Fatalf("failed to close multipart writer: %v", err)

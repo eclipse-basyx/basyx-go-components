@@ -127,7 +127,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	GetAssetInformationAasRepository(context.Context, string) (model.ImplResponse, error)
 	PutAssetInformationAasRepository(context.Context, string, AssetInformation) (model.ImplResponse, error)
 	GetThumbnailAasRepository(context.Context, string) (model.ImplResponse, error)
-	PutThumbnailAasRepository(context.Context, string, string, io.Reader) (model.ImplResponse, error)
+	PutThumbnailAasRepository(context.Context, string, string, string, io.Reader) (model.ImplResponse, error)
 	DeleteThumbnailAasRepository(context.Context, string) (model.ImplResponse, error)
 	GetAllSubmodelReferencesAasRepository(context.Context, string, int32, string) (model.ImplResponse, error)
 	PostSubmodelReferenceAasRepository(context.Context, string, Reference) (model.ImplResponse, error)

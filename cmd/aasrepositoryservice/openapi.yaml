@@ -445,11 +445,14 @@ paths:
             schema:
               type: object
               properties:
-                fileName:
-                  type: string
                 file:
                   type: string
                   format: binary
+                  description: >-
+                    Binary content. A source filename, if supplied, is conveyed in the
+                    `filename` parameter of this part's `Content-Disposition` header.
+              required:
+                - file
             encoding:
               file:
                 contentType: application/octet-stream
@@ -1846,11 +1849,14 @@ paths:
             schema:
               type: object
               properties:
-                fileName:
-                  type: string
                 file:
                   type: string
                   format: binary
+                  description: >-
+                    Binary content. A source filename, if supplied, is conveyed in the
+                    `filename` parameter of this part's `Content-Disposition` header.
+              required:
+                - file
             encoding:
               file:
                 contentType: application/octet-stream

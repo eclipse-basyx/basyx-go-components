@@ -120,7 +120,7 @@ func (controller *AASXAsyncFileServerAPIAPIController) PostAsyncAASXPackage(writ
 	}
 	defer func() { _ = upload.Close() }()
 
-	result, err := controller.service.PostAsyncAASXPackage(request.Context(), upload.File, uploadAASIDs(upload), uploadFileName(upload))
+	result, err := controller.service.PostAsyncAASXPackage(request.Context(), upload.File, uploadAASIDs(upload), upload.MultipartFileName)
 	if err != nil {
 		controller.errorHandler(writer, request, err, &result)
 		return

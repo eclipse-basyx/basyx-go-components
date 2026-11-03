@@ -1,0 +1,12 @@
+kind: fixed
+body: >-
+  PutThumbnail now stores the content type of each upload, taken from the
+  part's Content-Type like PutFileByPath, instead of keeping the content type
+  of the first upload for the lifetime of the shell. DeleteThumbnail clears the
+  content type, so a later upload no longer inherits it, and AASX import passes
+  the thumbnail's declared content type.
+time: 2026-11-02T23:31:00+01:00
+custom:
+  Impact: Medium
+  PullRequest: 819
+  SecurityImpact: None.

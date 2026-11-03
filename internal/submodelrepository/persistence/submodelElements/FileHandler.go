@@ -346,7 +346,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodel
 		return err
 	}
 
-	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, nil, metadata)
+	upload, err := metadata.resolveUpload(file, fileName, nil)
 	if err != nil {
 		return err
 	}
@@ -362,14 +362,14 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodel
 		}
 	}
 
-	newOID, err := createAndWriteLargeObject(tx, uploadContent)
+	newOID, err := createAndWriteLargeObject(tx, upload.Content)
 	if err != nil {
 		return err
 	}
 	if err := upsertFileDataOID(tx, dialect, metadata.elementID, newOID, oldOID.Valid); err != nil {
 		return err
 	}
-	return updateFileElementAttachment(tx, dialect, metadata.elementID, newOID, resolvedFileName, resolvedContentType)
+	return updateFileElementAttachment(tx, dialect, metadata.elementID, newOID, upload.FileName, upload.ContentType)
 }
 
 // UploadManagedFileAttachmentReaderTx stores a deduplicated internal attachment.
@@ -410,12 +410,12 @@ func (p PostgreSQLFileHandler) UploadManagedFileAttachmentReaderTx(
 	}); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, declaredContentTypes, metadata)
+	upload, err := metadata.resolveUpload(file, fileName, declaredContentTypes)
 	if err != nil {
 		return binarycontent.Reference{}, "", err
 	}
 	reference, err := binarycontent.StoreReferenceTx(
-		ctx, tx, uploadContent, binarycontent.TableFileReference, "file_element_id", metadata.elementID, resolvedFileName,
+		ctx, tx, upload.Content, binarycontent.TableFileReference, "file_element_id", metadata.elementID, upload.FileName,
 	)
 	if err != nil {
 		return binarycontent.Reference{}, "", err
@@ -423,10 +423,10 @@ func (p PostgreSQLFileHandler) UploadManagedFileAttachmentReaderTx(
 	if err = deleteLegacyFileData(tx, dialect, metadata.elementID); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	if err = updateManagedFileElementAttachment(tx, dialect, reference, resolvedContentType); err != nil {
+	if err = updateManagedFileElementAttachment(tx, dialect, reference, upload.ContentType); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	return reference, resolvedContentType, nil
+	return reference, upload.ContentType, nil
 }
 
 // UploadManagedFileAttachmentTx stores a deduplicated attachment from a file.
@@ -443,9 +443,12 @@ func (p PostgreSQLFileHandler) UploadManagedFileAttachmentTx(ctx context.Context
 
 type fileElementUploadMetadata struct {
 	elementID           int64
+	idShort             sql.NullString
 	existingContentType sql.NullString
 	existingFileName    sql.NullString
 }
+
+const fallbackAttachmentBaseName = "file"
 
 func withReopenedUploadFile(file *os.File, useFile func(io.Reader) error) error {
 	reopenedFile, err := reopenUploadedFile(file)
@@ -487,7 +490,7 @@ func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, subm
 			goqu.T("file_element"),
 			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id"))),
 		).
-		Select("submodel_element.id", "file_element.content_type", "file_element.file_name").
+		Select("submodel_element.id", "submodel_element.id_short", "file_element.content_type", "file_element.file_name").
 		Where(goqu.C("submodel_id").Eq(submodelDatabaseID), goqu.C("idshort_path").Eq(idShortPath)).
 		ToSQL()
 	if err != nil {
@@ -495,7 +498,7 @@ func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, subm
 	}
 
 	var metadata fileElementUploadMetadata
-	err = tx.QueryRow(query, args...).Scan(&metadata.elementID, &metadata.existingContentType, &metadata.existingFileName)
+	err = tx.QueryRow(query, args...).Scan(&metadata.elementID, &metadata.idShort, &metadata.existingContentType, &metadata.existingFileName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fileElementUploadMetadata{}, common.NewErrNotFound("submodel element not found")
@@ -505,37 +508,27 @@ func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, subm
 	return metadata, nil
 }
 
-func resolveUploadFileMetadata(
-	file io.Reader,
-	fileName string,
-	declaredContentTypes []string,
-	metadata fileElementUploadMetadata,
-) (string, string, io.Reader, error) {
-	detectedContentType, uploadContent, err := common.SniffContentTypeReader(file)
-	if err != nil {
-		return "", "", nil, fmt.Errorf("failed to read file for content type detection: %w", err)
-	}
-
-	resolvedFileName := strings.TrimSpace(fileName)
-	if resolvedFileName == "" && metadata.existingFileName.Valid {
-		resolvedFileName = metadata.existingFileName.String
-	}
-
-	orderedDeclarations := make([]string, 0, len(declaredContentTypes)+1)
-	orderedDeclarations = append(orderedDeclarations, declaredContentTypes...)
-	if !common.HasAuthoritativeContentTypeDeclaration(declaredContentTypes...) {
-		orderedDeclarations = append(orderedDeclarations, metadata.existingContentType.String)
-	}
-	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(
-		detectedContentType,
-		resolvedFileName,
-		orderedDeclarations...,
+func (metadata fileElementUploadMetadata) resolveUpload(file io.Reader, fileName string, declaredContentTypes []string) (binarycontent.ResolvedUpload, error) {
+	upload, err := binarycontent.ResolveUpload(
+		file,
+		binarycontent.UploadDeclaration{FileName: fileName, ContentTypes: declaredContentTypes},
+		binarycontent.StoredMetadata{FileName: metadata.existingFileName.String, ContentType: metadata.existingContentType.String},
+		metadata.fallbackFileBaseName(),
 	)
-	if mismatchDetectedVsDeclared {
+	if err != nil {
+		return binarycontent.ResolvedUpload{}, err
+	}
+	if upload.TypeMismatch {
 		slog.Warn("detected attachment content type differs from declared content type; preserving declared content type", "error.code", "SMREPO-UPLOADATTACHMENT-RESOLVEMIME")
 	}
+	return upload, nil
+}
 
-	return resolvedFileName, resolvedContentType, uploadContent, nil
+func (metadata fileElementUploadMetadata) fallbackFileBaseName() string {
+	if idShort := strings.TrimSpace(metadata.idShort.String); idShort != "" {
+		return idShort
+	}
+	return fallbackAttachmentBaseName
 }
 
 func readExistingFileOID(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64) (sql.NullInt64, error) {
