@@ -46,11 +46,11 @@ func (s *SubmodelRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 	descriptors []model.SubmodelDescriptor,
 ) asyncjob.BulkResult {
 	if len(descriptors) == 0 {
-		return successfulAtomicResult(0)
+		return asyncjob.SuccessfulAtomicResult()
 	}
 	failure := validateBulkCreateSubmodelDescriptors(descriptors)
 	if failure.StatusCode != 0 {
-		return failedAtomicResult(descriptorIDsFromSubmodelDescriptors(descriptors), failure)
+		return asyncjob.FailedAtomicResult(descriptorIDsFromSubmodelDescriptors(descriptors), failure)
 	}
 
 	err := s.smRegistryBackend.ExecuteInTransaction(
@@ -68,9 +68,9 @@ func (s *SubmodelRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 				Message:    err.Error(),
 			}
 		}
-		return failedAtomicResult(descriptorIDsFromSubmodelDescriptors(descriptors), failure)
+		return asyncjob.FailedAtomicResult(descriptorIDsFromSubmodelDescriptors(descriptors), failure)
 	}
-	return successfulAtomicResult(len(descriptors))
+	return asyncjob.SuccessfulAtomicResult()
 }
 
 // ExecuteBulkPutAtomic performs bulk upsert atomically in one transaction.
@@ -134,9 +134,9 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelDescriptorBulk(
 				Message:    err.Error(),
 			}
 		}
-		return failedAtomicResult(descriptorIDsFromSubmodelDescriptors(descriptors), failure)
+		return asyncjob.FailedAtomicResult(descriptorIDsFromSubmodelDescriptors(descriptors), failure)
 	}
-	return successfulAtomicResult(len(descriptors))
+	return asyncjob.SuccessfulAtomicResult()
 }
 
 func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelIdentifierBulk(
@@ -157,9 +157,9 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelIdentifierBulk(
 				Message:    err.Error(),
 			}
 		}
-		return failedAtomicResult(normalizeSubmodelIdentifiers(submodelIdentifiers), failure)
+		return asyncjob.FailedAtomicResult(normalizeSubmodelIdentifiers(submodelIdentifiers), failure)
 	}
-	return successfulAtomicResult(len(submodelIdentifiers))
+	return asyncjob.SuccessfulAtomicResult()
 }
 
 func (s *SubmodelRegistryAPIAPIService) executeBulkCreateSubmodelDescriptorsTx(
@@ -389,27 +389,6 @@ func (s *SubmodelRegistryAPIAPIService) upsertDescriptorInTransaction(
 		return smBulkPutErrorStatusCode(err), err
 	}
 	return http.StatusNoContent, nil
-}
-
-func successfulAtomicResult(itemCount int) asyncjob.BulkResult {
-	return asyncjob.BulkResult{
-		Success:         true,
-		ProcessedCount:  itemCount,
-		SuccessfulCount: itemCount,
-		FailedCount:     0,
-	}
-}
-
-func failedAtomicResult(itemIdentifiers []string, failure asyncjob.ItemFailure) asyncjob.BulkResult {
-	failures := asyncjob.ExpandAtomicFailures(itemIdentifiers, failure)
-	itemCount := len(itemIdentifiers)
-	return asyncjob.BulkResult{
-		Success:         false,
-		ProcessedCount:  itemCount,
-		SuccessfulCount: 0,
-		FailedCount:     itemCount,
-		Failures:        failures,
-	}
 }
 
 func descriptorIDsFromSubmodelDescriptors(descriptors []model.SubmodelDescriptor) []string {

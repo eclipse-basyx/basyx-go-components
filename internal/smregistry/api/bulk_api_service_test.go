@@ -68,12 +68,7 @@ func TestBulkServiceResultLifecycle(t *testing.T) {
 	runningMessages := running.Body.(model.Result).Messages
 	require.Contains(t, runningMessages[0].CorrelationID, "-GetBulkAsyncResult-BadRequest-OperationStillRunning")
 
-	require.NoError(t, manager.Complete(t.Context(), handleID, asyncjob.BulkResult{
-		Success:         true,
-		ProcessedCount:  1,
-		SuccessfulCount: 1,
-		FailedCount:     0,
-	}))
+	require.NoError(t, manager.Complete(t.Context(), handleID, asyncjob.SuccessfulAtomicResult()))
 
 	found := service.GetStatus(context.Background(), handleID)
 	require.Equal(t, http.StatusFound, found.Code)
@@ -144,10 +139,6 @@ func TestBulkServiceDeleteFailureResult(t *testing.T) {
 	manager := asyncjob.NewManager("SMR-BULK-TEST", time.Minute)
 	service := NewBulkService(smBulkServiceStub{
 		deleteResult: asyncjob.BulkResult{
-			Success:         false,
-			ProcessedCount:  2,
-			SuccessfulCount: 0,
-			FailedCount:     2,
 			Failures: []asyncjob.ItemFailure{
 				{Index: 1, Identifier: "urn:bad", StatusCode: http.StatusNotFound, Message: "not found"},
 			},
