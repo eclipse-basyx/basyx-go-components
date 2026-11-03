@@ -77,6 +77,8 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 
 	if i != nil {
 		switch r := i.(type) {
+		case model.PlainText:
+			return model.WritePlainText(w, r, status)
 		case Redirect:
 			wHeader.Set("Location", r.Location)
 			if status != nil {

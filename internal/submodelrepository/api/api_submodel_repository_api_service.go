@@ -839,7 +839,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedSubmodel"), nil
 	}
 
-	return gen.Response(http.StatusOK, jwsString), nil
+	return gen.Response(http.StatusOK, gen.PlainText(jwsString)), nil
 }
 
 // GetSignedSubmodelByIDValueOnly retrieves a signed submodel in its Value-Only representation by its base64-encoded identifier.
@@ -865,7 +865,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedSubmodel"), nil
 	}
 
-	return gen.Response(http.StatusOK, jwsString), nil
+	return gen.Response(http.StatusOK, gen.PlainText(jwsString)), nil
 }
 
 // DeleteSubmodelByID removes a submodel from the repository by its base64-encoded identifier.
