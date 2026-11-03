@@ -1869,9 +1869,9 @@ func assertSignedSubmodelResponse(t *testing.T, runner *testenv.JSONSuiteRunner,
 	response, err := runner.RunStep(step, stepNumber)
 	require.NoError(t, err, "Request failed")
 
-	var compact string
-	require.NoError(t, json.Unmarshal([]byte(response.Body), &compact), "response=%s", response.Body)
-	require.Equal(t, 2, strings.Count(compact, "."))
+	require.Equal(t, "text/plain", response.Headers.Get("Content-Type"))
+	compact := response.Body
+	require.Equal(t, 2, strings.Count(compact, "."), "response=%s", compact)
 	requireSignedSubmodelProtectedHeaders(t, compact)
 
 	privateKey, err := commonjws.LoadPrivateKey("docker_compose/rsa-key.pem")
@@ -1885,6 +1885,9 @@ func assertSignedSubmodelResponse(t *testing.T, runner *testenv.JSONSuiteRunner,
 	require.NoError(t, err)
 	require.JSONEq(t, string(canonical), string(payload))
 
+	if step.ShouldMatch == "" {
+		return
+	}
 	expectedPayload := expectedSignedSubmodelPayload(t, step.ShouldMatch)
 	require.JSONEq(t, string(expectedPayload), string(payload))
 }

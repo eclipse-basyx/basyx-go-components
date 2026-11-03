@@ -458,7 +458,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedAssetAdministrationShell"), nil
 	}
 
-	return gen.Response(http.StatusOK, jwsString), nil
+	return gen.Response(http.StatusOK, gen.PlainText(jwsString)), nil
 }
 
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellVersionByIdAndDate(ctx context.Context, aasIdentifier string, date time.Time) (gen.ImplResponse, error) {
