@@ -1825,7 +1825,7 @@ func TestPathNotationEndpoints(t *testing.T) {
 		assert.NotContains(t, paths, "TopProperty")
 	})
 
-	t.Run("GetSubmodelElementByPathPathCoreReturnsOnlyRequestedPath", func(t *testing.T) {
+	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPathAndDirectChildren", func(t *testing.T) {
 		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection/$path?level=core", baseURL, submodelIDEncoded), nil)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
@@ -1833,7 +1833,18 @@ func TestPathNotationEndpoints(t *testing.T) {
 		var paths []string
 		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
 
-		assert.Equal(t, []string{"MainCollection"}, paths)
+		assert.ElementsMatch(t, []string{"MainCollection", "MainCollection.NestedProperty", "MainCollection.NestedList"}, paths)
+	})
+
+	t.Run("GetSubmodelElementByPathPathCoreOnListReturnsListItems", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection.NestedList/$path?level=core", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.ElementsMatch(t, []string{"MainCollection.NestedList", "MainCollection.NestedList[0]", "MainCollection.NestedList[1]"}, paths)
 	})
 
 }

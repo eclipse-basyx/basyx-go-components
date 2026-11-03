@@ -516,10 +516,10 @@ func TestAddSMEVisibleTreeQueryForLevelUsesRowFilterOnlyForCore(t *testing.T) {
 func TestAddSMEVisibleSubtreeQueryForLevelRecursesOnlyForDeep(t *testing.T) {
 	t.Parallel()
 
-	allow := true
+	deny := false
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sme": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
+			"$sme.ARestricted": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
 		},
 	})
 	dataset := goqu.Dialect("postgres").
@@ -531,6 +531,8 @@ func TestAddSMEVisibleSubtreeQueryForLevelRecursesOnlyForDeep(t *testing.T) {
 	coreSQL, _, err := coreQuery.ToSQL()
 	require.NoError(t, err)
 	require.NotContains(t, coreSQL, "visible_sme_subtree_ids")
+	require.Contains(t, coreSQL, `"sme"."idshort_path"`)
+	require.Contains(t, coreSQL, "ARestricted")
 
 	deepQuery, err := addSMEVisibleSubtreeQueryForLevel(ctx, dataset, 42, "Target", "deep")
 	require.NoError(t, err)
