@@ -1418,12 +1418,12 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, statusCode, "Expected 400 Bad Request for a JSON number on xs:string: %s", responseBody)
 	})
 
-	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPath", func(t *testing.T) {
+	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPathAndDirectChildren", func(t *testing.T) {
 		paths, pathStatusCode, pathErr := getJSONArrayResponse(fmt.Sprintf("%s/submodel-elements/MainCollection/$path?level=core", submodelEndpoint))
 		require.NoError(t, pathErr, "GET submodel element $path request failed")
 		require.Equal(t, http.StatusOK, pathStatusCode, "Expected 200 OK for GET submodel element $path")
 
-		assert.Equal(t, []string{"MainCollection"}, paths)
+		assert.ElementsMatch(t, []string{"MainCollection", "MainCollection.NestedProperty", "MainCollection.NestedBlob"}, paths)
 	})
 
 	t.Run("GetSubmodelByIdPathReturnsNotFoundIfSubmodelNotReferencedInAAS", func(t *testing.T) {
