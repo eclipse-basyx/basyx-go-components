@@ -159,7 +159,7 @@ func (c *AASXFileServerAPIAPIController) PostAASXPackage(w http.ResponseWriter, 
 		return
 	}
 	defer func() { _ = upload.Close() }()
-	result, err := c.service.PostAASXPackage(r.Context(), upload.File, uploadAASIDs(upload), uploadFileName(upload))
+	result, err := c.service.PostAASXPackage(r.Context(), upload.File, uploadAASIDs(upload), upload.MultipartFileName)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -206,7 +206,7 @@ func (c *AASXFileServerAPIAPIController) PutAASXByPackageId(w http.ResponseWrite
 		return
 	}
 	defer func() { _ = upload.Close() }()
-	result, err := c.service.PutAASXByPackageId(r.Context(), packageIdParam, upload.File, uploadAASIDs(upload), uploadFileName(upload))
+	result, err := c.service.PutAASXByPackageId(r.Context(), packageIdParam, upload.File, uploadAASIDs(upload), upload.MultipartFileName)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -226,14 +226,6 @@ func (c *AASXFileServerAPIAPIController) readPackageUpload(w http.ResponseWriter
 		return nil, common.NewInternalServerError("AASXFILES-UPLOAD-NOSTAGER upload stager is not configured")
 	}
 	return common.ReadMultipartUpload(w, r, c.maxUploadSizeBytes, "file", c.uploadStager)
-}
-
-func uploadFileName(upload *common.MultipartUpload) string {
-	fileName := strings.TrimSpace(upload.FirstField("fileName"))
-	if fileName == "" {
-		fileName = upload.MultipartFileName
-	}
-	return fileName
 }
 
 func uploadAASIDs(upload *common.MultipartUpload) []string {

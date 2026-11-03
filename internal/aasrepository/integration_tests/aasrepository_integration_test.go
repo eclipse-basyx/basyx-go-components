@@ -36,9 +36,11 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -159,19 +161,17 @@ func uploadThumbnail(endpoint string, filePath string, fileName string) (int, er
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	partFileName := filepath.Base(filePath)
+	if fileName != "" {
+		partFileName = fileName
+	}
+	part, err := writer.CreateFormFile("file", partFileName)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create form file: %v", err)
 	}
 	_, err = io.Copy(part, file)
 	if err != nil {
 		return 0, fmt.Errorf("failed to copy file: %v", err)
-	}
-
-	if fileName != "" {
-		if err = writer.WriteField("fileName", fileName); err != nil {
-			return 0, fmt.Errorf("failed to write fileName field: %v", err)
-		}
 	}
 
 	err = writer.Close()
@@ -2013,4 +2013,80 @@ func assertSubmodelReferencePagination(t *testing.T, runner *testenv.JSONSuiteRu
 	expected, err = os.ReadFile("expected/expectedAssetAdministrationShellSubmodelReferencesFilterCursor.json")
 	require.NoError(t, err)
 	require.JSONEq(t, string(expected), second.Body)
+}
+
+// TestThumbnailContentTypeFollowsEachUpload covers
+// eclipse-basyx/basyx-go-components#814 and #813 for PutThumbnail: the part's
+// Content-Type describes each upload, DeleteThumbnail leaves no stale type,
+// and the file name is optional.
+func TestThumbnailContentTypeFollowsEachUpload(t *testing.T) {
+	baseURL := aasRepositoryBaseURL
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_content_type_%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode)
+
+	jpeg := []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00")
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR")
+
+	require.Equal(t, http.StatusNoContent, putRawThumbnail(t, thumbnailEndpoint, `form-data; name="file"; filename="photo.jpg"`, "image/jpeg", jpeg))
+	assertDefaultThumbnail(t, baseURL, aasIdentifier, "photo.jpg", "image/jpeg")
+
+	require.Equal(t, http.StatusNoContent, putRawThumbnail(t, thumbnailEndpoint, `form-data; name="file"; filename="photo.png"`, "image/png", png))
+	assertDefaultThumbnail(t, baseURL, aasIdentifier, "photo.png", "image/png")
+	content, contentType, getStatusCode, getErr := downloadThumbnail(thumbnailEndpoint)
+	require.NoError(t, getErr)
+	require.Equal(t, http.StatusOK, getStatusCode)
+	require.Equal(t, png, content)
+	require.Equal(t, "image/png", contentType)
+
+	require.Equal(t, http.StatusNoContent, putRawThumbnail(t, thumbnailEndpoint, `form-data; name="file"; filename="photo.jpg"`, "image/jpeg", jpeg))
+	deleteRequest, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, thumbnailEndpoint, nil)
+	require.NoError(t, err)
+	deleteResponse, err := http.DefaultClient.Do(deleteRequest)
+	require.NoError(t, err)
+	_ = deleteResponse.Body.Close()
+	require.Equal(t, http.StatusNoContent, deleteResponse.StatusCode)
+
+	require.Equal(t, http.StatusNoContent, putRawThumbnail(t, thumbnailEndpoint, `form-data; name="file"`, "application/octet-stream", png))
+	assertDefaultThumbnail(t, baseURL, aasIdentifier, "thumbnail.png", "image/png")
+}
+
+func assertDefaultThumbnail(t *testing.T, baseURL string, aasIdentifier string, fileName string, contentType string) {
+	t.Helper()
+	payload, statusCode, err := getJSONResponse(fmt.Sprintf("%s/shells/%s/asset-information", baseURL, aasIdentifier))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode)
+	thumbnail, ok := payload["defaultThumbnail"].(map[string]any)
+	require.True(t, ok, "defaultThumbnail should be present: %v", payload)
+	require.Regexp(t, `^/aasx/files/[A-Za-z0-9_-]{32}/`+regexp.QuoteMeta(fileName)+`$`, thumbnail["path"])
+	require.Equal(t, contentType, thumbnail["contentType"])
+}
+
+func putRawThumbnail(t *testing.T, endpoint string, contentDisposition string, contentType string, payload []byte) int {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Disposition", contentDisposition)
+	header.Set("Content-Type", contentType)
+	part, err := writer.CreatePart(header)
+	require.NoError(t, err)
+	_, err = part.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPut, endpoint, &body)
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	require.NoError(t, err)
+	defer func() { _ = response.Body.Close() }()
+	responseBody, _ := io.ReadAll(response.Body)
+	if response.StatusCode >= http.StatusBadRequest {
+		t.Logf("thumbnail upload response: %s", string(responseBody))
+	}
+	return response.StatusCode
 }

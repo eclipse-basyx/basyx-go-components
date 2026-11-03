@@ -27,12 +27,17 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -377,4 +382,104 @@ func binaryContentRowCount(t *testing.T) int64 {
 	var count int64
 	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&count))
 	return count
+}
+
+// TestUploadFileAttachmentWithoutFileName covers uploads whose file part has no
+// filename (eclipse-basyx/basyx-go-components#813): the file name is optional
+// in the V3.2 PutFileByPath request body.
+func TestUploadFileAttachmentWithoutFileName(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:nameless-upload-%d", time.Now().UnixNano())
+	encodedID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + encodedID
+	status, body, err := requestJSON(http.MethodPost, submodelRepositoryBaseURL+"/submodels", map[string]any{
+		"id":        submodelID,
+		"modelType": "Submodel",
+		"submodelElements": []any{
+			map[string]any{"idShort": "manual", "modelType": "File", "contentType": "text/plain"},
+			map[string]any{"idShort": "guide", "modelType": "File", "contentType": "text/plain"},
+			map[string]any{
+				"idShort":              "Images",
+				"modelType":            "SubmodelElementList",
+				"typeValueListElement": "File",
+				"value":                []any{map[string]any{"modelType": "File", "contentType": "image/png"}},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _, _ = requestJSON(http.MethodDelete, endpoint, nil) })
+
+	t.Run("FirstUploadIsNamedAfterElement", func(t *testing.T) {
+		payload := []byte("Hello, manual!")
+		attachmentEndpoint := endpoint + "/submodel-elements/manual/attachment"
+		require.Equal(t, http.StatusNoContent, putRawMultipartAttachment(t, attachmentEndpoint, `form-data; name="file"`, "text/plain", payload))
+
+		assertManagedFileElement(t, endpoint+"/submodel-elements/manual", "manual.txt", "text/plain")
+		content, _, downloadStatus, downloadErr := downloadFileAttachment(attachmentEndpoint)
+		require.NoError(t, downloadErr)
+		require.Equal(t, http.StatusOK, downloadStatus)
+		require.Equal(t, payload, content)
+		assertAttachmentFileName(t, attachmentEndpoint, "manual.txt")
+	})
+
+	t.Run("ListItemWithoutIdShortIsNamedFile", func(t *testing.T) {
+		attachmentEndpoint := endpoint + "/submodel-elements/" + url.PathEscape("Images[0]") + "/attachment"
+		png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR")
+		require.Equal(t, http.StatusNoContent, putRawMultipartAttachment(t, attachmentEndpoint, `form-data; name="file"`, "image/png", png))
+
+		assertManagedFileElement(t, endpoint+"/submodel-elements/"+url.PathEscape("Images[0]"), "file.png", "image/png")
+	})
+
+	t.Run("PartFileNameIsUsedAndFileNameFieldIgnored", func(t *testing.T) {
+		attachmentEndpoint := endpoint + "/submodel-elements/guide/attachment"
+		status := putRawMultipartAttachmentWithFileNameField(t, attachmentEndpoint, "ignored.txt", `form-data; name="file"; filename="handbook.txt"`, "text/plain", []byte("guide"))
+		require.Equal(t, http.StatusNoContent, status)
+
+		assertManagedFileElement(t, endpoint+"/submodel-elements/guide", "handbook.txt", "text/plain")
+	})
+}
+
+func assertManagedFileElement(t *testing.T, elementEndpoint string, fileName string, contentType string) {
+	t.Helper()
+	status, body, err := requestJSON(http.MethodGet, elementEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	var element map[string]any
+	require.NoError(t, json.Unmarshal(body, &element))
+	require.Regexp(t, `^/aasx/files/[A-Za-z0-9_-]{32}/`+regexp.QuoteMeta(fileName)+`$`, element["value"])
+	require.Equal(t, contentType, element["contentType"])
+}
+
+func putRawMultipartAttachment(t *testing.T, endpoint string, contentDisposition string, contentType string, payload []byte) int {
+	t.Helper()
+	return putRawMultipartAttachmentWithFileNameField(t, endpoint, "", contentDisposition, contentType, payload)
+}
+
+func putRawMultipartAttachmentWithFileNameField(t *testing.T, endpoint string, fileNameField string, contentDisposition string, contentType string, payload []byte) int {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if fileNameField != "" {
+		require.NoError(t, writer.WriteField("fileName", fileNameField))
+	}
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Disposition", contentDisposition)
+	header.Set("Content-Type", contentType)
+	part, err := writer.CreatePart(header)
+	require.NoError(t, err)
+	_, err = part.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPut, endpoint, &body)
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	require.NoError(t, err)
+	defer func() { _ = response.Body.Close() }()
+	responseBody, _ := io.ReadAll(response.Body)
+	if response.StatusCode >= http.StatusBadRequest {
+		t.Logf("attachment upload response: %s", string(responseBody))
+	}
+	return response.StatusCode
 }

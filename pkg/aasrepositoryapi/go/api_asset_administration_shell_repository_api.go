@@ -700,9 +700,9 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepo
 	}
 
 	var result model.ImplResponse
-	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+	err := HandleMultipartFileStream(r, "file", func(fileName string, contentType string, file io.Reader) error {
 		var uploadErr error
-		result, uploadErr = c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileName, file)
+		result, uploadErr = c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileName, contentType, file)
 		return uploadErr
 	})
 	if err != nil {
@@ -2178,7 +2178,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 	}
 
 	var result model.ImplResponse
-	err := HandleMultipartFileStreamWithContentType(r, "file", "fileName", func(fileName string, contentType string, file io.Reader) error {
+	err := HandleMultipartFileStream(r, "file", func(fileName string, contentType string, file io.Reader) error {
 		var uploadErr error
 		result, uploadErr = c.service.PutFileByPathAasRepository(
 			r.Context(),

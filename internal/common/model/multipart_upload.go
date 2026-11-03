@@ -26,7 +26,6 @@
 package model
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -34,145 +33,52 @@ import (
 	"strings"
 )
 
-const maxMultipartMetadataFieldBytes int64 = 1 << 20
-
-// HandleMultipartFileStream streams a multipart file part without staging it on disk.
-func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey string, handleFile func(fileName string, file io.Reader) error) error {
-	return HandleMultipartFileStreamWithContentType(
-		r,
-		fileKey,
-		fileNameKey,
-		func(fileName string, _ string, file io.Reader) error {
-			return handleFile(fileName, file)
-		},
-	)
-}
-
-// HandleMultipartFileStreamWithContentType streams a multipart file part and
-// supplies its declared content type without staging it on disk.
-func HandleMultipartFileStreamWithContentType(
+// HandleMultipartFileStream streams the first multipart part named fileKey
+// without staging it on disk. The file name and content type are taken from
+// that part's headers; all other parts are discarded.
+func HandleMultipartFileStream(
 	r *http.Request,
 	fileKey string,
-	fileNameKey string,
 	handleFile func(fileName string, contentType string, file io.Reader) error,
 ) error {
 	reader, err := r.MultipartReader()
 	if err != nil {
 		return &ParsingError{Err: err}
 	}
-
-	handler := multipartFileStreamHandler{
-		fileKey:     fileKey,
-		fileNameKey: fileNameKey,
-		handleFile:  handleFile,
-	}
-	return handler.handleParts(reader)
-}
-
-type multipartFileStreamHandler struct {
-	fileKey      string
-	fileNameKey  string
-	fileName     string
-	bufferedFile *bufferedMultipartFile
-	completed    bool
-	handleFile   func(fileName string, contentType string, file io.Reader) error
-}
-
-func (h *multipartFileStreamHandler) handleParts(reader *multipart.Reader) error {
 	for {
-		part, err := reader.NextPart()
-		if err != nil {
-			return h.handleNextPartError(err)
+		part, nextErr := reader.NextPart()
+		if nextErr != nil {
+			return multipartNextPartError(fileKey, nextErr)
 		}
-		if err := h.handlePart(part); err != nil {
-			return err
+		if part.FormName() != fileKey {
+			discardMultipartPart(part)
+			continue
 		}
-		if h.completed {
-			return nil
-		}
+		return handleStreamingMultipartFile(part, fileKey, handleFile)
 	}
 }
 
-func (h *multipartFileStreamHandler) handleNextPartError(err error) error {
-	if !errors.Is(err, io.EOF) {
-		return &ParsingError{Err: err}
+func multipartNextPartError(fileKey string, err error) error {
+	if errors.Is(err, io.EOF) {
+		return &ParsingError{Param: fileKey, Err: errors.New("multipart file field is required")}
 	}
-	if h.bufferedFile == nil {
-		return &ParsingError{Param: h.fileKey, Err: errors.New("multipart file field is required")}
+	if maxBytesErr := maxBytesErrorFromError(err); maxBytesErr != nil {
+		return &ParsingError{Param: fileKey, Err: maxBytesErr}
 	}
-	return h.handleBufferedMultipartFile()
-}
-
-func (h *multipartFileStreamHandler) handlePart(part *multipart.Part) error {
-	switch part.FormName() {
-	case h.fileNameKey:
-		return h.handleFileNamePart(part)
-	case h.fileKey:
-		return h.handleFilePart(part)
-	default:
-		discardMultipartPart(part)
-		return nil
-	}
-}
-
-func (h *multipartFileStreamHandler) handleFileNamePart(part *multipart.Part) error {
-	value, readErr := readMultipartMetadataField(part)
-	closeErr := part.Close()
-	if readErr != nil {
-		return &ParsingError{Param: h.fileNameKey, Err: readErr}
-	}
-	if closeErr != nil {
-		return &ParsingError{Param: h.fileNameKey, Err: closeErr}
-	}
-	if value != "" && h.fileName == "" {
-		h.fileName = value
-	}
-	return nil
-}
-
-func (h *multipartFileStreamHandler) handleFilePart(part *multipart.Part) error {
-	if h.bufferedFile != nil {
-		discardMultipartPart(part)
-		return nil
-	}
-	if h.fileName != "" {
-		if err := handleStreamingMultipartFile(part, h.fileKey, h.fileName, h.handleFile); err != nil {
-			return err
-		}
-		h.completed = true
-		return nil
-	}
-
-	bufferedFile, err := bufferMultipartFilePart(part, h.fileKey)
-	if err != nil {
-		return err
-	}
-	h.bufferedFile = bufferedFile
-	return nil
-}
-
-func (h *multipartFileStreamHandler) handleBufferedMultipartFile() error {
-	resolvedFileName := strings.TrimSpace(h.fileName)
-	if resolvedFileName == "" {
-		resolvedFileName = h.bufferedFile.fileName
-	}
-	return h.handleFile(resolvedFileName, h.bufferedFile.contentType, bytes.NewReader(h.bufferedFile.content))
-}
-
-type bufferedMultipartFile struct {
-	fileName    string
-	contentType string
-	content     []byte
+	return &ParsingError{Err: err}
 }
 
 func handleStreamingMultipartFile(
 	part *multipart.Part,
 	fileKey string,
-	fileName string,
 	handleFile func(fileName string, contentType string, file io.Reader) error,
 ) error {
 	fileReader := &maxBytesTrackingReader{reader: part}
-	handleErr := handleFile(fileName, strings.TrimSpace(part.Header.Get("Content-Type")), fileReader)
+	handleErr := handleFile(
+		strings.TrimSpace(part.FileName()),
+		strings.TrimSpace(part.Header.Get("Content-Type")),
+		fileReader,
+	)
 	closeErr := part.Close()
 	if maxBytesErr := fileReader.MaxBytesError(); maxBytesErr != nil {
 		return &ParsingError{Param: fileKey, Err: maxBytesErr}
@@ -184,27 +90,6 @@ func handleStreamingMultipartFile(
 		return multipartCloseError(fileKey, closeErr)
 	}
 	return nil
-}
-
-func bufferMultipartFilePart(part *multipart.Part, fileKey string) (*bufferedMultipartFile, error) {
-	fileReader := &maxBytesTrackingReader{reader: part}
-	var buffer bytes.Buffer
-	_, copyErr := io.Copy(&buffer, fileReader)
-	closeErr := part.Close()
-	if maxBytesErr := fileReader.MaxBytesError(); maxBytesErr != nil {
-		return nil, &ParsingError{Param: fileKey, Err: maxBytesErr}
-	}
-	if copyErr != nil {
-		return nil, &ParsingError{Param: fileKey, Err: copyErr}
-	}
-	if closeErr != nil {
-		return nil, multipartCloseError(fileKey, closeErr)
-	}
-	return &bufferedMultipartFile{
-		fileName:    strings.TrimSpace(part.FileName()),
-		contentType: strings.TrimSpace(part.Header.Get("Content-Type")),
-		content:     buffer.Bytes(),
-	}, nil
 }
 
 type maxBytesTrackingReader struct {
@@ -237,17 +122,6 @@ func multipartCloseError(fileKey string, err error) error {
 		return &ParsingError{Param: fileKey, Err: maxBytesErr}
 	}
 	return &ParsingError{Param: fileKey, Err: err}
-}
-
-func readMultipartMetadataField(part *multipart.Part) (string, error) {
-	content, err := io.ReadAll(io.LimitReader(part, maxMultipartMetadataFieldBytes+1))
-	if err != nil {
-		return "", err
-	}
-	if int64(len(content)) > maxMultipartMetadataFieldBytes {
-		return "", errors.New("multipart metadata field is too large")
-	}
-	return strings.TrimSpace(string(content)), nil
 }
 
 func discardMultipartPart(part *multipart.Part) {

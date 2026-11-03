@@ -105,7 +105,11 @@ func uploadFileAttachment(endpoint string, filePath string, fileName string) (in
 	}
 
 	partHeader := textproto.MIMEHeader{}
-	partHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filepath.Base(filePath)))
+	partFileName := filepath.Base(filePath)
+	if fileName != "" {
+		partFileName = fileName
+	}
+	partHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, partFileName))
 	if readBytes > 0 {
 		partHeader.Set("Content-Type", http.DetectContentType(signature[:readBytes]))
 	}
@@ -116,13 +120,6 @@ func uploadFileAttachment(endpoint string, filePath string, fileName string) (in
 	_, err = io.Copy(part, file)
 	if err != nil {
 		return 0, fmt.Errorf("failed to copy file: %v", err)
-	}
-
-	// Add the fileName field if provided
-	if fileName != "" {
-		if err := writer.WriteField("fileName", fileName); err != nil {
-			return 0, fmt.Errorf("failed to write fileName field: %v", err)
-		}
 	}
 
 	err = writer.Close()

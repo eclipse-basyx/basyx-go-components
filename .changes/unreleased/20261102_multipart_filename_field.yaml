@@ -1,0 +1,18 @@
+kind: removed
+body: >-
+  The non-standard fileName form field is no longer read by PutFileByPath,
+  PutThumbnail, PostAASXPackage, PutAASXByPackageId, and PostAsyncAASXPackage.
+  As defined by the V3.2 OpenAPI, the file name comes from the filename
+  parameter of the file part's Content-Disposition header; browsers and the
+  BaSyx UI already send it. Attachment and thumbnail uploads are now always
+  streamed. The /upload endpoint of AAS Environment still reads fileName.
+time: 2026-11-02T23:32:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 816
+  SecurityImpact: >-
+    Attachment and thumbnail uploads without a fileName field before the file
+    part, which includes uploads from the BaSyx UI and most HTTP clients, were
+    buffered in memory up to the configured upload size limit per request. They
+    are now streamed to PostgreSQL, which bounds the memory a concurrent upload
+    can occupy.
