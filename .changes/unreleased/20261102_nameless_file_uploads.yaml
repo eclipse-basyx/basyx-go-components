@@ -11,5 +11,5 @@ body: >-
 time: 2026-11-02T23:30:00+01:00
 custom:
   Impact: Medium
-  PullRequest: 816
+  PullRequest: 819
   SecurityImpact: None.
