@@ -737,7 +737,7 @@ func requireAASDescriptorCursorExists(page *goqu.SelectDataset, cursor string) *
 		Select(goqu.L("1")).
 		Where(cursorAAS.Col(common.ColAASID).Eq(cursor)).
 		Limit(1)
-	return page.Where(goqu.L("EXISTS ?", cursorExists))
+	return page.Where(goqu.Exists(cursorExists))
 }
 
 // ExistsAASByID performs a lightweight existence check for an AAS by its Id

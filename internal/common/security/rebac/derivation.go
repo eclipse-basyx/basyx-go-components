@@ -31,6 +31,7 @@ import (
 	"database/sql"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 )
 
 const derivationTable = "rebac_derivation"
@@ -43,7 +44,7 @@ func recordDerivation(ctx context.Context, tx *sql.Tx, kind ResourceKind, object
 		"object_type": kind.ObjectType,
 		"source_uuid": goqu.L("?::uuid", sourceUUID),
 		"source_type": source.ObjectType,
-	}).OnConflict(goqu.DoNothing()).Prepared(true)
+	}).OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression("object_uuid"))).Prepared(true)
 	_, err := execDataset(ctx, tx, "REBAC-RECORDDERIVATION", ds)
 	return err
 }

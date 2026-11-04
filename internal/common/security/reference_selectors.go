@@ -164,7 +164,7 @@ func submodelReferencePredicate(ctx context.Context, predicate referencePredicat
 	}
 	referred = goqu.Func("coalesce", goqu.Func("nullif", referred, goqu.Cast(goqu.V("{}"), "jsonb")), goqu.Cast(goqu.V("null"), "jsonb"))
 	ds = ds.Where(goqu.Cast(goqu.V(predicate.referredJSON), "jsonb").Eq(referred))
-	return goqu.Func("EXISTS", ds), nil
+	return goqu.Exists(ds), nil
 }
 
 func visibleReferenceKeys(ctx context.Context, predicate referencePredicate, spec referenceSQLSpec) (*goqu.SelectDataset, error) {
@@ -212,5 +212,5 @@ func conceptDescriptionReferencePredicate(ctx context.Context, predicate referen
 	if err != nil {
 		return nil, err
 	}
-	return goqu.Func("EXISTS", ds), nil
+	return goqu.Exists(ds), nil
 }

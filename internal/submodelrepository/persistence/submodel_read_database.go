@@ -331,7 +331,7 @@ func (s *SubmodelDatabase) GetAllSubmodelPathsPage(
 			Select(goqu.L("1")).
 			Where(goqu.I("cursor_submodel.submodel_identifier").Eq(submodelCursor))
 		visibleSubmodels = visibleSubmodels.Where(
-			goqu.Func("EXISTS", cursorExists),
+			goqu.Exists(cursorExists),
 			goqu.I("submodel.submodel_identifier").Gte(submodelCursor),
 		)
 	}

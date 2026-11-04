@@ -1324,7 +1324,7 @@ func addSMEPathAncestorVisibilityQuery(
 		Where(goqu.I(ancestorCTE + ".parent_sme_id").IsNull())
 	return query.
 		WithRecursive(ancestorCTE+"(id,parent_sme_id)", ancestors).
-		Where(goqu.L("EXISTS (?)", visibleRoot)), nil
+		Where(goqu.Exists(visibleRoot)), nil
 }
 
 func buildSMEPathAuthorizationQuery(
@@ -1534,7 +1534,7 @@ func readSubmodelElementRowsByPath(ctx context.Context, db DBQueryer, submodelDa
 	if authorizationErr != nil {
 		return nil, authorizationErr
 	}
-	innerQuery = innerQuery.Where(goqu.L("EXISTS (?)", authorizationQuery))
+	innerQuery = innerQuery.Where(goqu.Exists(authorizationQuery))
 	innerQuery, rowFilterErr := addSMERowFilterQueries(ctx, innerQuery)
 	if rowFilterErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ROWFILTER " + rowFilterErr.Error())

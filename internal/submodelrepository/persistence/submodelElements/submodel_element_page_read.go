@@ -233,7 +233,7 @@ func buildAllSubmodelElementPathsPageQuery(
 			goqu.I("authorized_path.submodel_identifier").Gt(submodelCursor),
 			goqu.And(
 				goqu.I("authorized_path.submodel_identifier").Eq(submodelCursor),
-				goqu.Func("EXISTS", cursorExists),
+				goqu.Exists(cursorExists),
 				pathBoundary,
 			),
 		))
@@ -385,7 +385,7 @@ func addCandidatePathAncestorVisibilityQuery(
 		Select(goqu.L("1")).
 		Where(goqu.I(ancestorCTE + ".parent_sme_id").IsNull()).
 		Limit(1)
-	return query.Where(goqu.Func("EXISTS", visibleRoot)), nil
+	return query.Where(goqu.Exists(visibleRoot)), nil
 }
 
 func buildSubmodelElementPageQuery(

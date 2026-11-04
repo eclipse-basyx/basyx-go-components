@@ -84,7 +84,7 @@ func unclaimedAssetLinks(ctx context.Context, q Queryer, authUUID string) (bool,
 	granted := dialect.From(goqu.T(grantTable).As("g")).Select(goqu.L("1")).Where(goqu.I("g.object_uuid").Eq(target))
 	derived := dialect.From(goqu.T(derivationTable).As("d")).Select(goqu.L("1")).Where(goqu.I("d.object_uuid").Eq(target))
 	return exists(ctx, q, "REBAC-UNCLAIMEDASSETLINKS",
-		goqu.And(existsQuery(created), goqu.L("NOT EXISTS (?)", granted), goqu.L("NOT EXISTS (?)", derived)))
+		goqu.And(existsQuery(created), goqu.L("NOT ?", goqu.Exists(granted)), goqu.L("NOT ?", goqu.Exists(derived))))
 }
 
 // claimDiscoveryEntry derives the discovery entry that the discovery

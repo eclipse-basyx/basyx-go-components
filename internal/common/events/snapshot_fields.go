@@ -130,7 +130,8 @@ func submodelAssetOwnersTx(ctx context.Context, tx *sql.Tx, submodelID string) (
 	}
 	dialect := goqu.Dialect("postgres")
 	query, args, err := dialect.From(goqu.T("aas_submodel_reference_key").As("k")).
-		SelectDistinct(goqu.I("ai.global_asset_id"), goqu.I("aas.aas_id")).
+		Select(goqu.I("ai.global_asset_id"), goqu.I("aas.aas_id")).
+		Distinct().
 		Join(goqu.T("aas_submodel_reference").As("r"), goqu.On(goqu.I("r.id").Eq(goqu.I("k.reference_id")))).
 		Join(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("r.aas_id")))).
 		Join(goqu.T("aas"), goqu.On(goqu.I("aas.id").Eq(goqu.I("r.aas_id")))).

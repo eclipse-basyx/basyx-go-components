@@ -181,7 +181,7 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 			Select(goqu.L("1")).
 			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
 		ds = ds.Where(
-			goqu.Func("EXISTS", cursorExists),
+			goqu.Exists(cursorExists),
 			goqu.I("aas.aas_id").Gte(cursor),
 		)
 	}
@@ -235,7 +235,7 @@ func buildGetAssetAdministrationShellIdentifiersDataset(
 			Select(goqu.L("1")).
 			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
 		ds = ds.Where(
-			goqu.Func("EXISTS", cursorExists),
+			goqu.Exists(cursorExists),
 			goqu.I("aas.aas_id").Gte(cursor),
 		)
 	}
@@ -423,7 +423,7 @@ func buildSpecificAssetIDFilterExpression(dialect *goqu.DialectWrapper, specific
 			goqu.I("specific_asset_id_filter.name").Eq(specificAssetID.Name()),
 			goqu.I("specific_asset_id_filter.value").Eq(specificAssetID.Value()),
 		))
-	return goqu.L("EXISTS ?", existsSub)
+	return goqu.Exists(existsSub)
 }
 
 func uniqueSpecificAssetIDs(specificAssetIDs []types.ISpecificAssetID) []types.ISpecificAssetID {
@@ -516,7 +516,8 @@ func buildListAASIdentifiersBySubmodelIdentifierQuery(dialect *goqu.DialectWrapp
 		From(goqu.T("aas_submodel_reference").As("r")).
 		InnerJoin(goqu.T("aas_submodel_reference_key").As("k"), goqu.On(goqu.I("k.reference_id").Eq(goqu.I("r.id")))).
 		InnerJoin(goqu.T("aas").As("a"), goqu.On(goqu.I("a.id").Eq(goqu.I("r.aas_id")))).
-		SelectDistinct(goqu.I("a.aas_id")).
+		Select(goqu.I("a.aas_id")).
+		Distinct().
 		Where(goqu.I("k.value").Eq(submodelIdentifier)).
 		Order(goqu.I("a.aas_id").Asc()).
 		Prepared(true).

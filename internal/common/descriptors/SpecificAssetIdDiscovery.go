@@ -260,7 +260,7 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 		)
 		batch := &common.PostgreSQLBatch{}
 		if err = batch.AppendDataset(conditional.RevisionUpsertIfDataset(
-			conditional.Ref(conditional.KindAASDescriptor, aasID), goqu.L("EXISTS ?", ownedLinks),
+			conditional.Ref(conditional.KindAASDescriptor, aasID), goqu.Exists(ownedLinks),
 		)); err != nil {
 			return common.NewInternalServerError("DISC-REPLACESPECASSETIDS-BUILDREVISION " + err.Error())
 		}
@@ -317,7 +317,7 @@ func appendLinkedDescriptorRevision(ctx context.Context, batch *common.PostgreSQ
 		Select(common.TAASDescriptor.Col(common.ColDescriptorID)).
 		Where(common.TAASDescriptor.Col(common.ColAASID).Eq(aasID))
 	if err := batch.AppendDataset(conditional.RevisionUpsertIfDataset(
-		conditional.Ref(conditional.KindAASDescriptor, aasID), goqu.L("EXISTS ?", descriptor),
+		conditional.Ref(conditional.KindAASDescriptor, aasID), goqu.Exists(descriptor),
 	)); err != nil {
 		return nil, common.NewInternalServerError("DISC-ADDSPECASSETIDS-BUILDREVISION " + err.Error())
 	}

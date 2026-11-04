@@ -38,6 +38,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -144,7 +145,7 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 
 		ensurePayloadQuery, ensurePayloadArgs, ensurePayloadErr := goqu.Dialect("postgres").Insert("property_element_payload").
 			Rows(goqu.Record{"property_element_id": elementID}).
-			OnConflict(goqu.DoNothing()).
+			OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression("property_element_id"))).
 			ToSQL()
 		if ensurePayloadErr != nil {
 			return ensurePayloadErr

@@ -290,7 +290,7 @@ func TestAASIdentifierPageEmbedsInclusiveCursorValidation(t *testing.T) {
 	require.NoError(t, err)
 	query, _, err := dataset.Prepared(true).ToSQL()
 	require.NoError(t, err)
-	require.Contains(t, query, `EXISTS((SELECT`)
+	require.Contains(t, query, `EXISTS (SELECT`)
 	require.Contains(t, query, `SELECT 1 FROM "aas" AS "cursor_aas"`)
 	require.Contains(t, query, `"aas"."aas_id" >=`)
 	require.Contains(t, query, `ORDER BY "aas"."aas_id" ASC`)

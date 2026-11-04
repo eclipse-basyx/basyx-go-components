@@ -638,7 +638,7 @@ func buildConceptDescriptionPageQuery(
 			Select(goqu.L("1")).
 			Where(goqu.I("cursor_cd.id").Eq(trimmedCursor))
 		query = query.
-			Where(goqu.Func("EXISTS", cursorExists)).
+			Where(goqu.Exists(cursorExists)).
 			Where(goqu.C("id").Gte(trimmedCursor))
 	}
 

@@ -955,7 +955,7 @@ func readDownloadFileMetadata(ctx context.Context, tx *sql.Tx, submodelID string
 		Select(
 			goqu.I("sme.id"),
 			goqu.I("fe.content_type"),
-			goqu.COALESCE(goqu.Func("NULLIF", goqu.I("fe.file_name"), goqu.V("")), goqu.I("fbr.safe_file_name")),
+			goqu.COALESCE(goqu.NULLIF(goqu.I("fe.file_name"), goqu.V("")), goqu.I("fbr.safe_file_name")),
 			goqu.I("fe.value"),
 		).
 		Where(goqu.I("sm.submodel_identifier").Eq(submodelID), goqu.I("sme.idshort_path").Eq(idShortPath)).ToSQL()
