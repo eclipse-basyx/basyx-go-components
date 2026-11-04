@@ -71,7 +71,7 @@ func linkedSubmodels(subjectKeys []string, permission string) *goqu.SelectDatase
 		Select(goqu.I("link.submodel_uuid")).
 		Where(
 			goqu.I("link.aas_uuid").In(grantedObjects(TypeAAS, subjectKeys, permission)),
-			goqu.L("EXISTS (?)", submodelReferenceExists("link")),
+			goqu.Exists(submodelReferenceExists("link")),
 		)
 }
 
@@ -209,7 +209,7 @@ func exists(ctx context.Context, q Queryer, code string, conditions ...exp.Expre
 }
 
 func existsQuery(ds *goqu.SelectDataset) exp.Expression {
-	return goqu.L("EXISTS (?)", ds)
+	return goqu.Exists(ds)
 }
 
 // isRepositoryAdmin reports whether the subjects administer a repository

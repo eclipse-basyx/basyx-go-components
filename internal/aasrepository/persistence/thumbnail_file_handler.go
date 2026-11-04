@@ -210,7 +210,7 @@ func (h *PostgreSQLThumbnailFileHandler) uploadManagedThumbnailTx(
 
 func ensureManagedThumbnailElement(ctx context.Context, tx *sql.Tx, aasDBID int64) error {
 	query, args, err := goqu.Insert("thumbnail_file_element").Rows(goqu.Record{"id": aasDBID}).
-		OnConflict(goqu.DoNothing()).ToSQL()
+		OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression("id"))).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDENSUREELEMENT " + err.Error())
 	}

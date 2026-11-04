@@ -181,7 +181,7 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 			Select(goqu.L("1")).
 			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
 		ds = ds.Where(
-			goqu.Func("EXISTS", cursorExists),
+			goqu.Exists(cursorExists),
 			goqu.I("aas.aas_id").Gte(cursor),
 		)
 	}
@@ -235,7 +235,7 @@ func buildGetAssetAdministrationShellIdentifiersDataset(
 			Select(goqu.L("1")).
 			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
 		ds = ds.Where(
-			goqu.Func("EXISTS", cursorExists),
+			goqu.Exists(cursorExists),
 			goqu.I("aas.aas_id").Gte(cursor),
 		)
 	}
@@ -423,7 +423,7 @@ func buildSpecificAssetIDFilterExpression(dialect *goqu.DialectWrapper, specific
 			goqu.I("specific_asset_id_filter.name").Eq(specificAssetID.Name()),
 			goqu.I("specific_asset_id_filter.value").Eq(specificAssetID.Value()),
 		))
-	return goqu.L("EXISTS ?", existsSub)
+	return goqu.Exists(existsSub)
 }
 
 func uniqueSpecificAssetIDs(specificAssetIDs []types.ISpecificAssetID) []types.ISpecificAssetID {

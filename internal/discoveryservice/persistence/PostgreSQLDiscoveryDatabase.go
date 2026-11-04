@@ -287,7 +287,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			Select(goqu.L("1")).
 			Where(goqu.I("cursor_ai.aasid").Eq(cursor))
 		ds = ds.
-			Where(goqu.Func("EXISTS", cursorExists)).
+			Where(goqu.Exists(cursorExists)).
 			Where(ai.Col("aasid").Gte(cursor))
 	}
 
@@ -309,7 +309,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 					goqu.I("sai.name").Eq(link.Name),
 					goqu.I("sai.value").Eq(link.Value),
 				))
-			ds = ds.Where(goqu.L("EXISTS ?", existsSub))
+			ds = ds.Where(goqu.Exists(existsSub))
 		}
 	}
 

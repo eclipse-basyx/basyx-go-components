@@ -543,7 +543,7 @@ func ListCompanyDescriptors(
 				goqu.L("? ~ ?", assetID, assetIdPattern.Col(common.ColRegexPattern)),
 			)
 
-		ds = ds.Where(goqu.L("EXISTS ?", assetIdRegexExists))
+		ds = ds.Where(goqu.Exists(assetIdRegexExists))
 	}
 
 	if peekLimit < 0 {

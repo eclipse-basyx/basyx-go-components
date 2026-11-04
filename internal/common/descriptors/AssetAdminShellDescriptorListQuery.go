@@ -944,7 +944,7 @@ func jsonArrayAggregate(value exp.Expression, order ...exp.Expression) exp.Expre
 }
 
 func emptyJSONToNull(value exp.Expression) exp.Expression {
-	return goqu.Func("NULLIF", goqu.Func("NULLIF", value, goqu.L("'[]'::jsonb")), goqu.L("'{}'::jsonb"))
+	return goqu.NULLIF(goqu.NULLIF(value, goqu.L("'[]'::jsonb")), goqu.L("'{}'::jsonb"))
 }
 
 func buildAssetKindStringExpression(value exp.Expression) exp.CaseExpression {

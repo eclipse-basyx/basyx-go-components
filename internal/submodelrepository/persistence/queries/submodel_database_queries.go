@@ -164,7 +164,7 @@ func SelectSubmodelDataset(
 			Where(goqu.Ex{"s2.submodel_identifier": *cursor})
 
 		selectDS = selectDS.
-			Where(goqu.Func("EXISTS", cursorExistsDS)).
+			Where(goqu.Exists(cursorExistsDS)).
 			Where(goqu.I("submodel.submodel_identifier").Gte(*cursor))
 	}
 	switch {
@@ -212,7 +212,7 @@ func SelectSubmodelIdentifierDataset(
 			Select(goqu.L("1")).
 			Where(goqu.Ex{"cursor_submodel.submodel_identifier": cursor})
 		selectDS = selectDS.
-			Where(goqu.Func("EXISTS", cursorExistsDS)).
+			Where(goqu.Exists(cursorExistsDS)).
 			Where(goqu.I("submodel.submodel_identifier").Gte(cursor))
 	}
 	if limit == 0 {
@@ -238,7 +238,7 @@ func ApplySubmodelSemanticIDFilter(selectDS *goqu.SelectDataset, semanticID stri
 		Select(goqu.L("1")).
 		Where(goqu.I("ssrk_filter.reference_id").Eq(goqu.I("submodel.id"))).
 		Where(goqu.I("ssrk_filter.value").Eq(semanticID))
-	return selectDS.Where(goqu.Func("EXISTS", semanticIDFilterDS))
+	return selectDS.Where(goqu.Exists(semanticIDFilterDS))
 }
 
 // BuildSubmodelListSQL builds the final SQL for a masked submodel list query.

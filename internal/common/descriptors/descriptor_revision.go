@@ -206,7 +206,7 @@ func DeleteDiscoveryEntryTx(ctx context.Context, tx *sql.Tx, aasID string) (bool
 	)
 	query, args, err := d.Delete(identifier).
 		Where(identifier.Col("aasid").Eq(aasID)).
-		Returning(goqu.L("EXISTS ?", ownedLinks)).
+		Returning(goqu.Exists(ownedLinks)).
 		Prepared(true).
 		ToSQL()
 	if err != nil {

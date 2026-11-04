@@ -372,7 +372,7 @@ func queriedElementCondition(submodelColumn exp.IdentifierExpression, pathColumn
 				goqu.L("? LIKE (? || '[%]%') ESCAPE '!'", pathColumn, escaped),
 			),
 		)
-	return goqu.L("EXISTS (?)", granted)
+	return goqu.Exists(granted)
 }
 
 // ReBACOnlyRowCondition restricts the rows of a backend without formula
