@@ -78,12 +78,22 @@ func ProvidedChildElements(element types.ISubmodelElement) ([]types.ISubmodelEle
 
 // IsContainerModelType reports whether elements of the model type own child elements.
 func IsContainerModelType(modelType types.ModelType) bool {
+	_, isContainer := ChildElementField(modelType)
+	return isContainer
+}
+
+// ChildElementField returns the serialized field that carries the child
+// elements of a container model type.
+func ChildElementField(modelType types.ModelType) (string, bool) {
 	switch modelType {
-	case types.ModelTypeSubmodelElementCollection, types.ModelTypeSubmodelElementList,
-		types.ModelTypeEntity, types.ModelTypeAnnotatedRelationshipElement:
-		return true
+	case types.ModelTypeSubmodelElementCollection, types.ModelTypeSubmodelElementList:
+		return "value", true
+	case types.ModelTypeEntity:
+		return "statements", true
+	case types.ModelTypeAnnotatedRelationshipElement:
+		return "annotations", true
 	default:
-		return false
+		return "", false
 	}
 }
 

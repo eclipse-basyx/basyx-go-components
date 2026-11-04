@@ -49,6 +49,7 @@ import (
 	smapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	smdb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	aasgen "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
+	dppapi "github.com/eclipse-basyx/basyx-go-components/pkg/dppapiservice/go"
 	smgen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -165,6 +166,9 @@ func newIDShortHarness(t *testing.T, mode string, service idShortService) *idSho
 		router.Method(route.Method, route.Pattern, route.HandlerFunc)
 	}
 	for _, route := range aasgen.NewAssetAdministrationShellRepositoryAPIAPIController(aas, "", mode).Routes() {
+		router.Method(route.Method, route.Pattern, route.HandlerFunc)
+	}
+	for _, route := range dppapi.NewDPPRepositoryRouter(dppapi.NewDPPRepositoryService(shells, backend)).OrderedRoutes() {
 		router.Method(route.Method, route.Pattern, route.HandlerFunc)
 	}
 	if service.environment {

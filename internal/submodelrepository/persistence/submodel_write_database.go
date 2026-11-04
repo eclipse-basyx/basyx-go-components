@@ -47,7 +47,7 @@ import (
 
 // CreateSubmodel creates a new submodel and performs an ABAC re-check before commit when ABAC is enabled.
 func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.ISubmodel) (err error) {
-	if err := s.verifySubmodel(submodel, "SMREPO-NEWSM-VERIFY"); err != nil {
+	if err := s.verifySubmodelWithElements(submodel, "SMREPO-NEWSM"); err != nil {
 		return err
 	}
 
@@ -79,7 +79,7 @@ func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *
 		return common.NewInternalServerError("SMREPO-NEWSM-NILTX transaction must not be nil")
 	}
 
-	if err := s.verifySubmodel(submodel, "SMREPO-NEWSM-VERIFY"); err != nil {
+	if err := s.verifySubmodelWithElements(submodel, "SMREPO-NEWSM"); err != nil {
 		return err
 	}
 
@@ -276,6 +276,13 @@ func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix 
 	})
 }
 
+func (s *SubmodelDatabase) verifySubmodelWithElements(submodel types.ISubmodel, errorScope string) error {
+	if err := requireSubmodelIDShorts(submodel, errorScope+"-MISSINGIDSHORT"); err != nil {
+		return err
+	}
+	return s.verifySubmodel(submodel, errorScope+"-VERIFY")
+}
+
 func (s *SubmodelDatabase) verificationEnabled() bool {
 	return gen.NormalizeVerificationMode(s.verificationMode) != gen.VerificationModeOff
 }
@@ -307,7 +314,7 @@ func (s *SubmodelDatabase) PatchSubmodel(ctx context.Context, submodelID string,
 		return common.NewErrBadRequest("SMREPO-PATCHSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
 
-	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSM-VERIFY"); err != nil {
+	if err := s.verifySubmodelWithElements(submodel, "SMREPO-PATCHSM"); err != nil {
 		return err
 	}
 
@@ -346,7 +353,7 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(ctx context.Context, submo
 		return common.NewErrBadRequest("SMREPO-PATCHSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
 
-	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSM-VERIFY"); err != nil {
+	if err := s.verifySubmodelWithElements(submodel, "SMREPO-PATCHSM"); err != nil {
 		return err
 	}
 	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
@@ -500,7 +507,7 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
 
-	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
+	if err := s.verifySubmodelWithElements(submodel, "SMREPO-PUTSM"); err != nil {
 		return false, err
 	}
 
@@ -530,7 +537,7 @@ func (s *SubmodelDatabase) PutSubmodelWithResult(ctx context.Context, submodelID
 		return PutSubmodelResult{}, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
 
-	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
+	if err := s.verifySubmodelWithElements(submodel, "SMREPO-PUTSM"); err != nil {
 		return PutSubmodelResult{}, err
 	}
 
@@ -575,7 +582,7 @@ func (s *SubmodelDatabase) PutSubmodelInTransactionWithResult(ctx context.Contex
 		return PutSubmodelResult{}, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
 
-	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
+	if err := s.verifySubmodelWithElements(submodel, "SMREPO-PUTSM"); err != nil {
 		return PutSubmodelResult{}, err
 	}
 

@@ -1,0 +1,29 @@
+kind: fixed
+body: >-
+  Enforce AASd-117 for submodel elements in every verification mode. An element
+  without idShort, or with an empty idShort, that is not a direct child of a
+  SubmodelElementList is now rejected instead of being stored under an empty
+  idShort path that could not be addressed afterwards. This covers top-level
+  elements, collection values, entity statements, annotations, and operation
+  variable values on POST, PUT, and PATCH of submodel elements and of whole
+  Submodels in the Submodel Repository, the AAS Repository superpath, and AAS
+  Environment including uploads, as well as DPP creation, DPP updates, and DPP
+  data element updates. These services answer with 400 and an error code
+  ending in -MISSINGIDSHORT, unless strict semantic verification already
+  rejects the request with its own error; the DPP endpoints currently answer
+  with 409 instead. Previously, POSTing such an element and updating a DPP data
+  element with it were accepted in every mode, and the other writes rejected it
+  only in strict mode. List items remain allowed without idShort. Upgrade note:
+  elements stored without idShort by earlier versions are kept, and PATCH
+  requests that do not include them are not affected, but writing them back
+  unchanged, for example by PUTting a Submodel as it was read, is now rejected;
+  add the missing idShorts in that PUT to repair them.
+time: 2026-11-03T12:00:00+01:00
+custom:
+  Impact: Medium
+  PullRequest: 821
+  SecurityImpact: >-
+    A submodel element POSTed without idShort skipped the ABAC visibility check
+    that runs after an insert, so it could be created even when the caller's
+    rules would not allow that element to be visible. Such requests are now
+    rejected before anything is written.
