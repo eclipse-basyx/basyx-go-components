@@ -449,15 +449,14 @@ func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload
 		return 0, nil, errors.New("SMREPO-DOOPDELG-MISSINGHOST delegation URL host is missing")
 	}
 
-	return doTrustedDelegatedOperationCall(ctx, delegationURL, payload, timeout, newDelegationAddressGuard(nil, nil))
+	return doTrustedDelegatedOperationCall(ctx, delegationURL, payload, newDelegationHTTPClient(timeout, defaultDelegationHTTPTransport()))
 }
 
 func doTrustedDelegatedOperationCall(
 	ctx context.Context,
 	delegationURL string,
 	payload []types.IOperationVariable,
-	timeout time.Duration,
-	delegationGuard delegationAddressGuard,
+	httpClient *http.Client,
 ) (int, any, error) {
 	requestBody, marshalErr := serializeDelegatedOperationPayload(payload)
 	if marshalErr != nil {
@@ -475,7 +474,6 @@ func doTrustedDelegatedOperationCall(
 		request.Header.Set("Authorization", authorizationHeader)
 	}
 
-	httpClient := newDelegationHTTPClient(timeout, delegationGuard)
 	// #nosec G107,G704 -- delegation requests use a guarded transport that allowlists and pins the resolved IP before dialing.
 	response, responseErr := httpClient.Do(request)
 	if responseErr != nil {
