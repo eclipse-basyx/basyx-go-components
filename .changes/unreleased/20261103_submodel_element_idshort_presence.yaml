@@ -20,10 +20,17 @@ body: >-
   add the missing idShorts in that PUT to repair them.
 time: 2026-11-03T12:00:00+01:00
 custom:
-  Impact: Medium
-  PullRequest: 821
+  Impact: High
+  PullRequest: 842
   SecurityImpact: >-
-    A submodel element POSTed without idShort skipped the ABAC visibility check
-    that runs after an insert, so it could be created even when the caller's
-    rules would not allow that element to be visible. Such requests are now
-    rejected before anything is written.
+    With ABAC enabled, a submodel element POSTed without idShort, or with an
+    empty one, skipped the check after the insert that verifies that the
+    created element is allowed by the caller's ABAC rules. A caller allowed to
+    add elements only under conditions, for example a certain semanticId or
+    idShort prefix, could therefore store an element that did not meet them,
+    on POST /submodels/{id}/submodel-elements and on POST by path into a
+    collection, entity, or annotated relationship, including the AAS
+    Repository superpath. The element could not be addressed afterwards, so it
+    could only be removed by replacing or deleting the Submodel. Such requests
+    are now rejected and nothing is stored, and the check runs for every
+    created element.
