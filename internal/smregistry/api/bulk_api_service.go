@@ -196,13 +196,5 @@ func (s *BulkService) GetResult(ctx context.Context, handleID string) model.Impl
 		return model.Response(http.StatusNoContent, nil)
 	}
 
-	return model.Response(http.StatusBadRequest, map[string]any{
-		"messages":        asyncjob.ToMessages(record.Result.Failures),
-		"executionState":  "Completed",
-		"success":         false,
-		"processedCount":  record.Result.ProcessedCount,
-		"successfulCount": record.Result.SuccessfulCount,
-		"failedCount":     record.Result.FailedCount,
-		"details":         record.Result.Failures,
-	})
+	return model.Response(http.StatusBadRequest, model.Result{Messages: asyncjob.ToMessages(record.Result.Failures)})
 }
