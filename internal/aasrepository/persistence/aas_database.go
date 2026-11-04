@@ -536,6 +536,7 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 	if err := validateAASCreateSubmodelReferences(aas.Submodels()); err != nil {
 		return err
 	}
+	auth.FillReBACCreator(ctx, aas)
 
 	batch := &common.PostgreSQLBatch{}
 	if err := appendAASCreateRoot(batch, dialect, aas); err != nil {

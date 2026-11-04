@@ -189,6 +189,7 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 }
 
 func insertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
+	aasd = fillAASDescriptorCreator(aasd, auth.ReBACCreatorReference(ctx))
 	d := goqu.Dialect(common.Dialect)
 
 	descTbl := goqu.T(common.TblDescriptor)

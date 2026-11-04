@@ -235,6 +235,7 @@ func loadConceptDescriptionHistorySnapshotBeforeMutationTx(ctx context.Context, 
 }
 
 func (b *ConceptDescriptionBackend) createConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, cd types.IConceptDescription) error {
+	auth.FillReBACCreator(ctx, cd)
 	conceptDescriptionString, err := conceptDescriptionToJSONString(cd)
 	if err != nil {
 		return err
