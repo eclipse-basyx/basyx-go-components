@@ -33,6 +33,17 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+// SuccessfulAtomicResult returns the result of a bulk request whose items were all committed.
+func SuccessfulAtomicResult() BulkResult {
+	return BulkResult{Success: true}
+}
+
+// FailedAtomicResult returns the result of an atomically rolled back bulk
+// request with one failure per incoming request item.
+func FailedAtomicResult(itemIdentifiers []string, rootFailure ItemFailure) BulkResult {
+	return BulkResult{Failures: ExpandAtomicFailures(itemIdentifiers, rootFailure)}
+}
+
 // ExpandAtomicFailures expands a root failure into per-item failures for an
 // atomically rolled back bulk request. Each returned item links to one incoming
 // request item by index.

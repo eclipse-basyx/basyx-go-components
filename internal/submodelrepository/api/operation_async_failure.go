@@ -27,8 +27,10 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -37,46 +39,106 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-// storedOperationFailureResponse returns the response for a failed asynchronous
-// operation. Only an error Result created by this service is returned as
-// stored; earlier versions also stored delegated endpoint bodies unchanged,
-// which are replaced by a generic 502 so that they never reach clients.
-func storedOperationFailureResponse(record asyncjob.Record, operation string) gen.ImplResponse {
+const asyncJobCorrelationPrefix = "ASYNCJOB-"
+
+// failedOperationResult is the OperationResult of an asynchronous invocation
+// that failed or timed out during processing.
+type failedOperationResult struct {
+	ExecutionState gen.ExecutionState `json:"executionState"`
+	Success        bool               `json:"success"`
+	Messages       []gen.Message      `json:"messages"`
+}
+
+func newFailedOperationResult(executionState gen.ExecutionState, messages []gen.Message) failedOperationResult {
+	return failedOperationResult{ExecutionState: executionState, Success: false, Messages: messages}
+}
+
+// delegationFailureExecutionState reports Timeout when the delegated call
+// exceeded the effective client timeout and Failed for every other error.
+func delegationFailureExecutionState(delegationCtx context.Context, delegateErr error) gen.ExecutionState {
+	if errors.Is(delegationCtx.Err(), context.DeadlineExceeded) || errors.Is(delegateErr, context.DeadlineExceeded) {
+		return gen.EXECUTIONSTATE_TIMEOUT
+	}
+	var netErr net.Error
+	if errors.As(delegateErr, &netErr) && netErr.Timeout() {
+		return gen.EXECUTIONSTATE_TIMEOUT
+	}
+	return gen.EXECUTIONSTATE_FAILED
+}
+
+func errorResponseMessages(response gen.ImplResponse) []gen.Message {
+	if result, ok := response.Body.(gen.Result); ok {
+		return result.Messages
+	}
+	return nil
+}
+
+// storedOperationFailureResult returns the OperationResult of a failed
+// asynchronous operation. Only messages created by this service are returned;
+// earlier versions stored error Results or delegated endpoint bodies, which are
+// mapped to Failed, with foreign content replaced by a generic message.
+func storedOperationFailureResult(record asyncjob.Record, operation string) failedOperationResult {
+	if result, ok := ownFailedOperationResult(record.ErrorBody); ok {
+		return result
+	}
+	if result, ok := ownErrorResult(record.ErrorBody); ok {
+		return newFailedOperationResult(gen.EXECUTIONSTATE_FAILED, result.Messages)
+	}
 	failedErr := errors.New("SMREPO-GETOPASYRES-FAILED delegated operation failed")
-	if record.ErrorStatus <= 0 {
-		return newAPIErrorResponse(failedErr, http.StatusInternalServerError, operation, "DelegatedOperationFailed")
+	failedResponse := newAPIErrorResponse(failedErr, http.StatusBadGateway, operation, "DelegatedOperationFailed")
+	return newFailedOperationResult(gen.EXECUTIONSTATE_FAILED, errorResponseMessages(failedResponse))
+}
+
+func ownFailedOperationResult(body any) (failedOperationResult, bool) {
+	var result failedOperationResult
+	if !decodeStoredBody(body, &result) || result.Success || !isFailureExecutionState(result.ExecutionState) {
+		return failedOperationResult{}, false
 	}
-	if result, ok := ownErrorResult(record.ErrorBody); ok && record.ErrorStatus >= http.StatusBadRequest {
-		return gen.Response(record.ErrorStatus, result)
+	if !normalizeOwnErrorMessages(result.Messages) {
+		return failedOperationResult{}, false
 	}
-	return newAPIErrorResponse(failedErr, http.StatusBadGateway, operation, "DelegatedOperationFailed")
+	return result, true
+}
+
+func isFailureExecutionState(executionState gen.ExecutionState) bool {
+	return executionState == gen.EXECUTIONSTATE_FAILED || executionState == gen.EXECUTIONSTATE_TIMEOUT
 }
 
 // ownErrorResult accepts a stored error body as a Result object or, as written
 // by earlier versions, a bare message array, and normalizes its timestamps to UTC.
 func ownErrorResult(body any) (gen.Result, bool) {
-	encoded, err := json.Marshal(body)
-	if err != nil {
-		return gen.Result{}, false
-	}
-
 	var result gen.Result
-	if decodeStrictJSON(encoded, &result) != nil && decodeStrictJSON(encoded, &result.Messages) != nil {
+	if !decodeStoredBody(body, &result) && !decodeStoredBody(body, &result.Messages) {
 		return gen.Result{}, false
 	}
-	if len(result.Messages) == 0 {
+	if !normalizeOwnErrorMessages(result.Messages) {
 		return gen.Result{}, false
-	}
-	for index := range result.Messages {
-		if !normalizeOwnErrorMessage(&result.Messages[index]) {
-			return gen.Result{}, false
-		}
 	}
 	return result, true
 }
 
+func decodeStoredBody(body any, target any) bool {
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return false
+	}
+	return decodeStrictJSON(encoded, target) == nil
+}
+
+func normalizeOwnErrorMessages(messages []gen.Message) bool {
+	if len(messages) == 0 {
+		return false
+	}
+	for index := range messages {
+		if !normalizeOwnErrorMessage(&messages[index]) {
+			return false
+		}
+	}
+	return true
+}
+
 func normalizeOwnErrorMessage(message *gen.Message) bool {
-	if message.MessageType != "Error" || !strings.HasPrefix(message.CorrelationID, componentName+"-") {
+	if message.MessageType != "Error" || !isOwnCorrelationID(message.CorrelationID) {
 		return false
 	}
 	timestamp, err := time.Parse(time.RFC3339, message.Timestamp)
@@ -85,6 +147,10 @@ func normalizeOwnErrorMessage(message *gen.Message) bool {
 	}
 	message.Timestamp = timestamp.UTC().Format(time.RFC3339)
 	return true
+}
+
+func isOwnCorrelationID(correlationID string) bool {
+	return strings.HasPrefix(correlationID, componentName+"-") || strings.HasPrefix(correlationID, asyncJobCorrelationPrefix)
 }
 
 func decodeStrictJSON(data []byte, target any) error {

@@ -30,7 +30,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -385,7 +384,7 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db DBQueryer, 
 	return paths, nextCursor, nil
 }
 
-// GetSubmodelElementPathsByPath returns persisted idshort_path values for a submodel element path and, for deep level, its descendants.
+// GetSubmodelElementPathsByPath returns persisted idshort_path values for a submodel element path and its direct children (core level) or all descendants (deep level).
 func GetSubmodelElementPathsByPath(ctx context.Context, db DBQueryer, submodelID string, idShortPath string, level string) ([]string, error) {
 	if submodelID == "" {
 		return nil, common.NewErrBadRequest("SMREPO-GETSMEPATHSBYPATH-EMPTYSMID Submodel id must not be empty")
@@ -411,17 +410,7 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db DBQueryer, submodelID
 		Select(goqu.I("sme.idshort_path")).
 		Where(goqu.I("sme.submodel_id").Eq(submodelDatabaseID))
 
-	if level == "core" {
-		query = query.Where(goqu.I("sme.idshort_path").Eq(idShortPath))
-	} else {
-		descendantPattern := "^" + regexp.QuoteMeta(idShortPath) + `(\.|\[)`
-		query = query.Where(
-			goqu.Or(
-				goqu.I("sme.idshort_path").Eq(idShortPath),
-				goqu.L(`"sme"."idshort_path" ~ ?`, descendantPattern),
-			),
-		)
-	}
+	query = query.Where(smeRowScopeCondition(dialect, int64(submodelDatabaseID), idShortPath, smeRowScopeForLevel(level)))
 
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
 	if collectorErr != nil {
@@ -1227,7 +1216,7 @@ func addSMEVisibleSubtreeQueryForLevel(
 	level string,
 ) (*goqu.SelectDataset, error) {
 	if level == "core" {
-		return query, nil
+		return addSMERowFilterQueries(ctx, query)
 	}
 	return addSMEVisibleSubtreeQuery(ctx, query, submodelDatabaseID, targetPath)
 }

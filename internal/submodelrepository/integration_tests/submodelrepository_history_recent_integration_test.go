@@ -139,6 +139,11 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	require.Equal(t, "v3-from-value-only", getPropertyValueByIDShort(t, decodeMap(t, body), "Temperature"))
 
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history", baseURL, encodedSubmodelID), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	require.Equal(t, "v3-from-value-only", getPropertyValueByIDShort(t, decodeMap(t, body), "Temperature"))
+
 	attachmentEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/Attachment/attachment", baseURL, encodedSubmodelID)
 	statusCode, uploadErr := uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "marcus.gif")
 	require.NoError(t, uploadErr)
@@ -186,6 +191,10 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	requireSubmodelHistoryPayloadTypes(t, submodelID, []string{"snapshot", "diff", "diff", "snapshot", "diff", "snapshot"})
 
 	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, status, "response=%s", string(body))
+
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history", baseURL, encodedSubmodelID), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotFound, status, "response=%s", string(body))
 

@@ -458,7 +458,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedAssetAdministrationShell"), nil
 	}
 
-	return gen.Response(http.StatusOK, jwsString), nil
+	return gen.Response(http.StatusOK, gen.PlainText(jwsString)), nil
 }
 
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellVersionByIdAndDate(ctx context.Context, aasIdentifier string, date time.Time) (gen.ImplResponse, error) {
@@ -1032,6 +1032,16 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureSubmodelBackend(
 
 	err := common.NewInternalServerError("AASREPO-NOSMBACKEND submodel backend is not configured")
 	return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil, false
+}
+
+func toAASFileResponse(response gen.ImplResponse) gen.ImplResponse {
+	switch body := response.Body.(type) {
+	case submodelopenapi.FileDownload:
+		response.Body = openapi.FileDownload(body)
+	case submodelopenapi.Redirect:
+		response.Body = openapi.Redirect(body)
+	}
+	return response
 }
 
 func toAASOperationRedirect(
@@ -1660,7 +1670,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetFileByPathAasReposi
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.GetFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath)
+	response, err := s.submodelAPI.GetFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath)
+	return toAASFileResponse(response), err
 }
 
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy

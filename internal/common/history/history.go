@@ -120,16 +120,18 @@ func latestVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 //
 // table must be one of the history table constants from this package and
 // identifier must match the entity identifier stored in that table. The function
-// selects the newest version whose valid_from is not later than at, restores it
-// from its nearest full-snapshot checkpoint, and returns not found when no row is
-// valid at that instant or the selected row represents a deletion.
+// selects the newest version whose valid_from is not later than at, or the
+// newest version overall when at is the zero time, restores it from its nearest
+// full-snapshot checkpoint, and returns not found when no row is valid at that
+// instant or the selected row represents a deletion.
 //
 // Parameters:
 //   - ctx: Request context used for database reads.
 //   - db: Database handle that can read the history and payload tables.
 //   - table: History table name, for example TableAAS or TableConcept.
 //   - identifier: Stable entity identifier to restore.
-//   - at: Point in time for the historical lookup.
+//   - at: Point in time for the historical lookup; the zero time selects the
+//     latest version.
 //
 // Returns:
 //   - map[string]any: Reconstructed full entity snapshot valid at at.
@@ -151,10 +153,7 @@ func SnapshotByDate(ctx context.Context, db *sql.DB, table string, identifier st
 	historyAlias := goqu.T(table).As("history")
 	query, args, err := goqu.From(historyAlias).
 		Select(historyAlias.Col("history_id")).
-		Where(
-			historyAlias.Col("identifier").Eq(identifier),
-			historyAlias.Col("valid_from").Lte(at.UTC()),
-		).
+		Where(snapshotByDateConditions(historyAlias, identifier, at)...).
 		Order(historyAlias.Col("valid_from").Desc(), historyAlias.Col("history_id").Desc()).
 		Limit(1).
 		ToSQL()
@@ -177,6 +176,14 @@ func SnapshotByDate(ctx context.Context, db *sql.DB, table string, identifier st
 		return nil, common.NewErrNotFound("HISTORY-GET-DELETED historical version is deleted at the requested date")
 	}
 	return version.snapshot, nil
+}
+
+func snapshotByDateConditions(historyAlias exp.AliasedExpression, identifier string, at time.Time) []exp.Expression {
+	conditions := []exp.Expression{historyAlias.Col("identifier").Eq(identifier)}
+	if !at.IsZero() {
+		conditions = append(conditions, historyAlias.Col("valid_from").Lte(at.UTC()))
+	}
+	return conditions
 }
 
 func restoreVersionByHistoryID(ctx context.Context, queryer historyQueryer, table string, identifier string, historyID int64) (latestVersion, error) {

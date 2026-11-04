@@ -32,7 +32,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -47,15 +46,15 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-const defaultPackageContentType = "application/asset-administration-shell-package"
+// PackageContentType is the media type of every AASX package in the AASX File Server API.
+const PackageContentType = "application/asset-administration-shell-package"
 
 // PackageRecord contains package metadata returned by list and write operations.
 type PackageRecord struct {
-	DBID        int64
-	PackageID   string
-	FileName    string
-	ContentType string
-	AASIDs      []string
+	DBID      int64
+	PackageID string
+	FileName  string
+	AASIDs    []string
 }
 
 // PackageBinary combines package metadata with a streamed package body.
@@ -122,7 +121,7 @@ func (p *AASXFileServerDatabase) listPackagesInTransaction(ctx context.Context, 
 
 	dialect := goqu.Dialect("postgres")
 	ds := dialect.From("aasx_package").
-		Select("id", "package_id", "file_name", "content_type").
+		Select("id", "package_id", "file_name").
 		Order(goqu.I("id").Asc())
 
 	if cursorID > 0 {
@@ -160,7 +159,7 @@ func (p *AASXFileServerDatabase) listPackagesInTransaction(ctx context.Context, 
 	records := make([]PackageRecord, 0, pagination.BufferCapacity(int(limit)+1))
 	for rows.Next() {
 		var row PackageRecord
-		if scanErr := rows.Scan(&row.DBID, &row.PackageID, &row.FileName, &row.ContentType); scanErr != nil {
+		if scanErr := rows.Scan(&row.DBID, &row.PackageID, &row.FileName); scanErr != nil {
 			return nil, 0, common.NewInternalServerError("AASXFS-LISTPACKAGES-SCAN " + scanErr.Error())
 		}
 		records = append(records, row)
@@ -241,19 +240,18 @@ func (p *AASXFileServerDatabase) putPackage(ctx context.Context, packageID strin
 
 	normalizedAASIDs := normalizeAASIDs(aasIDs)
 	resolvedFileName := normalizeFileName(fileName, "")
-	detectedContentType, err := resolvePackageContentTypeForUpload(file, resolvedFileName, common.AASXLimitsFromContext(ctx))
-	if err != nil {
+	if err := validatePackageForUpload(file, common.AASXLimitsFromContext(ctx)); err != nil {
 		return nil, false, err
 	}
-	if _, err = file.Seek(0, io.SeekStart); err != nil {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return nil, false, common.NewInternalServerError("AASXFS-PUTPACKAGE-SEEK " + err.Error())
 	}
 
 	var record *PackageRecord
 	updated := false
-	err = file.Promote(ctx, func(ctx context.Context, tx *sql.Tx, newOID int64, _ int64) error {
+	err := file.Promote(ctx, func(ctx context.Context, tx *sql.Tx, newOID int64, _ int64) error {
 		var persistErr error
-		record, updated, persistErr = persistStagedPackage(ctx, tx, packageID, newOID, normalizedAASIDs, resolvedFileName, detectedContentType, allowUpdate)
+		record, updated, persistErr = persistStagedPackage(ctx, tx, packageID, newOID, normalizedAASIDs, resolvedFileName, allowUpdate)
 		return persistErr
 	})
 	if err != nil {
@@ -295,7 +293,7 @@ func authorizePackageUpsert(ctx context.Context, tx *sql.Tx, packageDBID int64, 
 	return nil
 }
 
-func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, newOID int64, aasIDs []string, fileName string, contentType string, allowUpdate bool) (*PackageRecord, bool, error) {
+func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, newOID int64, aasIDs []string, fileName string, allowUpdate bool) (*PackageRecord, bool, error) {
 	dialect := goqu.Dialect("postgres")
 	selectSQL, selectArgs, err := dialect.From("aasx_package").Select("id", "file_oid", "file_name").
 		Where(goqu.C("package_id").Eq(packageID)).ForUpdate(exp.Wait).ToSQL()
@@ -321,7 +319,7 @@ func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, new
 	if fileName == "" {
 		fileName = packageID + ".aasx"
 	}
-	stored := storedPackage{packageID: packageID, oid: newOID, fileName: fileName, contentType: contentType, aasIDs: aasIDs}
+	stored := storedPackage{packageID: packageID, oid: newOID, fileName: fileName, aasIDs: aasIDs}
 	if exists {
 		record, updateErr := updateStagedPackageTx(ctx, tx, existingID, existingOID, stored)
 		return record, true, updateErr
@@ -332,22 +330,21 @@ func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, new
 
 // storedPackage is the package state a staged upload promotes.
 type storedPackage struct {
-	packageID   string
-	oid         int64
-	fileName    string
-	contentType string
-	aasIDs      []string
+	packageID string
+	oid       int64
+	fileName  string
+	aasIDs    []string
 }
 
 func (p storedPackage) record(dbID int64) *PackageRecord {
-	return &PackageRecord{DBID: dbID, PackageID: p.packageID, FileName: p.fileName, ContentType: p.contentType, AASIDs: p.aasIDs}
+	return &PackageRecord{DBID: dbID, PackageID: p.packageID, FileName: p.fileName, AASIDs: p.aasIDs}
 }
 
 // updateStagedPackageTx swaps the content and metadata of an existing package
 // and unlinks its previous large object.
 func updateStagedPackageTx(ctx context.Context, tx *sql.Tx, existingID int64, existingOID int64, stored storedPackage) (*PackageRecord, error) {
 	query, args, err := goqu.Dialect("postgres").Update("aasx_package").Set(goqu.Record{
-		"file_oid": stored.oid, "file_name": stored.fileName, "content_type": stored.contentType,
+		"file_oid": stored.oid, "file_name": stored.fileName, "content_type": PackageContentType,
 	}).Where(goqu.C("id").Eq(existingID)).ToSQL()
 	if err != nil {
 		return nil, common.NewInternalServerError("AASXFS-PUTPACKAGE-BUILDUPDATE " + err.Error())
@@ -367,7 +364,7 @@ func updateStagedPackageTx(ctx context.Context, tx *sql.Tx, existingID int64, ex
 // insertStagedPackageTx inserts a new package.
 func insertStagedPackageTx(ctx context.Context, tx *sql.Tx, stored storedPackage) (*PackageRecord, error) {
 	query, args, err := goqu.Dialect("postgres").Insert("aasx_package").Rows(goqu.Record{
-		"package_id": stored.packageID, "file_oid": stored.oid, "file_name": stored.fileName, "content_type": stored.contentType,
+		"package_id": stored.packageID, "file_oid": stored.oid, "file_name": stored.fileName, "content_type": PackageContentType,
 	}).Returning("id").ToSQL()
 	if err != nil {
 		return nil, common.NewInternalServerError("AASXFS-PUTPACKAGE-BUILDINSERT " + err.Error())
@@ -420,7 +417,7 @@ func (p *AASXFileServerDatabase) GetPackageByID(ctx context.Context, packageID s
 
 	dialect := goqu.Dialect("postgres")
 	query, args, err := dialect.From("aasx_package").
-		Select("id", "file_oid", "file_name", "content_type").
+		Select("id", "file_oid", "file_name").
 		Where(goqu.C("package_id").Eq(packageID)).
 		Prepared(true).
 		ToSQL()
@@ -431,8 +428,7 @@ func (p *AASXFileServerDatabase) GetPackageByID(ctx context.Context, packageID s
 	var packageDBID int64
 	var fileOID int64
 	var fileName string
-	var contentType string
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&packageDBID, &fileOID, &fileName, &contentType); err != nil {
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&packageDBID, &fileOID, &fileName); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound("AASXFS-GETPACKAGE-NOTFOUND package not found")
 		}
@@ -452,11 +448,10 @@ func (p *AASXFileServerDatabase) GetPackageByID(ctx context.Context, packageID s
 
 	return &PackageBinary{
 		PackageRecord: PackageRecord{
-			DBID:        packageDBID,
-			PackageID:   packageID,
-			FileName:    fileName,
-			ContentType: contentType,
-			AASIDs:      aasIDs,
+			DBID:      packageDBID,
+			PackageID: packageID,
+			FileName:  fileName,
+			AASIDs:    aasIDs,
 		},
 		Content: content,
 	}, nil
@@ -607,82 +602,51 @@ func replaceAASIDs(ctx context.Context, tx *sql.Tx, packageDBID int64, aasIDs []
 	return nil
 }
 
-func resolvePackageContentTypeForUpload(file io.ReadSeeker, fileName string, limits common.AASXLimits) (string, error) {
+func validatePackageForUpload(file io.ReadSeeker, limits common.AASXLimits) error {
 	if file == nil {
-		return "", common.NewErrBadRequest("AASXFS-RESOLVEMIME-NILFILE package file must not be nil")
+		return common.NewErrBadRequest("AASXFS-VALIDATEPACKAGE-NILFILE package file must not be nil")
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return common.NewInternalServerError("AASXFS-VALIDATEPACKAGE-SEEK " + err.Error())
 	}
 
-	signature := make([]byte, 512)
-	readBytes, err := file.Read(signature)
-	if err != nil && err != io.EOF {
-		return "", common.NewInternalServerError("AASXFS-RESOLVEMIME-READSIGNATURE " + err.Error())
+	err := validateAASXEnvironmentSpec(file, limits)
+	if errors.Is(err, aasx.ErrReaderLimitExceeded) {
+		return common.NewErrPayloadTooLarge("AASXFS-VALIDATEPACKAGE-AASXLIMIT " + err.Error())
 	}
-
-	detectedContentType := ""
-	if readBytes > 0 {
-		detectedContentType = strings.TrimSpace(http.DetectContentType(signature[:readBytes]))
+	if err != nil {
+		return common.NewErrBadRequest("AASXFS-VALIDATEPACKAGE-INVALIDAASX " + err.Error())
 	}
-
-	resolvedContentType, _ := common.ResolveUploadedContentType(detectedContentType, fileName)
-
-	aasxContentType, aasxErr := detectAASXEnvironmentContentType(file, limits)
-	if errors.Is(aasxErr, aasx.ErrReaderLimitExceeded) {
-		return "", common.NewErrPayloadTooLarge("AASXFS-RESOLVEMIME-AASXLIMIT " + aasxErr.Error())
-	}
-	if aasxErr != nil {
-		return "", common.NewErrBadRequest("AASXFS-RESOLVEMIME-INVALIDAASX " + aasxErr.Error())
-	}
-	if aasxContentType != "" {
-		resolvedContentType = aasxContentType
-	}
-
-	if resolvedContentType == "" || resolvedContentType == "application/octet-stream" || resolvedContentType == "application/zip" {
-		resolvedContentType = defaultPackageContentType
-	}
-
-	return resolvedContentType, nil
+	return nil
 }
 
-func detectAASXEnvironmentContentType(file io.ReadSeeker, limits common.AASXLimits) (string, error) {
-	if file == nil {
-		return "", common.NewErrBadRequest("AASXFS-DETECTAASX-NILFILE package file must not be nil")
-	}
-
-	if _, err := file.Seek(0, 0); err != nil {
-		return "", common.NewInternalServerError("AASXFS-DETECTAASX-SEEK " + err.Error())
-	}
-
+func validateAASXEnvironmentSpec(file io.ReadSeeker, limits common.AASXLimits) error {
 	packaging := aasx.NewPackaging()
 	packageReader, err := packaging.OpenReadFromStream(file, limits.ReaderOptions()...)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer func() { _ = packageReader.Close() }()
 
 	specs, err := packageReader.Specs()
 	if err != nil {
-		return "", err
+		return err
 	}
 
+	if !hasSingleSpecFormat(specs) {
+		return errors.New("AASXFS-VALIDATEAASX-NOSINGLEFORMAT no unambiguous JSON/XML AASX spec found")
+	}
+	return nil
+}
+
+func hasSingleSpecFormat(specs []*aasx.Part) bool {
 	hasJSONSpec := false
 	hasXMLSpec := false
 	for _, spec := range specs {
-		if aasxSpecLooksJSON(spec) {
-			hasJSONSpec = true
-		}
-		if aasxSpecLooksXML(spec) {
-			hasXMLSpec = true
-		}
+		hasJSONSpec = hasJSONSpec || aasxSpecLooksJSON(spec)
+		hasXMLSpec = hasXMLSpec || aasxSpecLooksXML(spec)
 	}
-
-	if hasJSONSpec && !hasXMLSpec {
-		return "application/aasx+json", nil
-	}
-	if hasXMLSpec && !hasJSONSpec {
-		return "application/aasx+xml", nil
-	}
-
-	return "", fmt.Errorf("AASXFS-DETECTAASX-NOSINGLEFORMAT no unambiguous JSON/XML AASX spec found")
+	return hasJSONSpec != hasXMLSpec
 }
 
 func aasxSpecLooksJSON(specPart *aasx.Part) bool {
@@ -720,18 +684,15 @@ func normalizeAASIDs(aasIDs []string) []string {
 	result := make([]string, 0, len(aasIDs))
 
 	for _, raw := range aasIDs {
-		parts := strings.Split(raw, ",")
-		for _, part := range parts {
-			trimmed := strings.TrimSpace(part)
-			if trimmed == "" {
-				continue
-			}
-			if _, exists := seen[trimmed]; exists {
-				continue
-			}
-			seen[trimmed] = struct{}{}
-			result = append(result, trimmed)
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			continue
 		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		result = append(result, trimmed)
 	}
 
 	return result

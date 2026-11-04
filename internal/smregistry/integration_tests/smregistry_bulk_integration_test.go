@@ -250,13 +250,18 @@ func assertBulkResultStatus(t *testing.T, handleID string, expectedStatus int) m
 
 func assertAtomicBulkFailureBody(t *testing.T, body map[string]any, requestedCount int) {
 	t.Helper()
-	require.False(t, body["success"].(bool))
-	require.EqualValues(t, requestedCount, body["processedCount"])
-	require.EqualValues(t, 0, body["successfulCount"])
-	require.EqualValues(t, requestedCount, body["failedCount"])
-	details, ok := body["details"].([]any)
+	require.Len(t, body, 1, "bulk failure result must be a Result with only messages")
+	messages, ok := body["messages"].([]any)
 	require.True(t, ok)
-	require.NotEmpty(t, details)
+	require.Len(t, messages, requestedCount)
+	for index, entry := range messages {
+		message, isObject := entry.(map[string]any)
+		require.True(t, isObject)
+		require.Equal(t, "Error", message["messageType"])
+		require.Equal(t, fmt.Sprintf("bulk-item-%d", index), message["correlationId"])
+		require.NotEmpty(t, message["code"])
+		require.NotEmpty(t, message["text"])
+	}
 }
 
 func doRequest(t *testing.T, client *http.Client, method string, endpoint string, payload any) (int, []byte, http.Header) {

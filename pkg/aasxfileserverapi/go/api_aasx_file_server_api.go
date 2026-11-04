@@ -112,7 +112,7 @@ func normalizeContextPath(contextPath string) string {
 }
 
 func (c *AASXFileServerAPIAPIController) buildPackageLocation(packageID string) string {
-	return c.contextPath + "/packages/" + url.PathEscape(packageID)
+	return c.contextPath + "/packages/" + url.PathEscape(common.EncodeString(packageID))
 }
 
 // GetAllAASXPackageIds - Returns a list of available AASX packages at the server
@@ -229,12 +229,7 @@ func (c *AASXFileServerAPIAPIController) readPackageUpload(w http.ResponseWriter
 }
 
 func uploadAASIDs(upload *common.MultipartUpload) []string {
-	values := upload.Fields["aasIds"]
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		result = append(result, strings.Split(value, ",")...)
-	}
-	return result
+	return upload.Fields["aasIds"]
 }
 
 // DeleteAASXByPackageId - Deletes a specific AASX package from the server

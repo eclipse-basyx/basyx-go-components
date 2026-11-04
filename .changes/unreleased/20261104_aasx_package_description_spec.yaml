@@ -1,0 +1,14 @@
+kind: fixed
+body: >-
+  Return the package descriptions of the AASX File Server as in Part 2 V3.2:
+  a description has only packageId and aasIds, which give the identifiers as
+  they are instead of base64url-encoded, and GET /packages gives the paging
+  metadata as paging_metadata instead of pagingMetadata. Each aasIds part of a
+  multipart upload is one identifier, so an identifier with a comma is no
+  longer split; clients that sent several identifiers in one comma-separated
+  part must send one part per identifier.
+time: 2026-11-04T12:00:00+01:00
+custom:
+  Impact: Medium
+  PullRequest: 836
+  SecurityImpact: None.

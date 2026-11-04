@@ -110,7 +110,8 @@ func uploadHiddenPackage(t *testing.T, owner string, marker string) {
 	t.Helper()
 	content, err := os.ReadFile(samplePackage)
 	require.NoError(t, err)
-	created := uploadFile(t, owner, http.MethodPost, packagesURL+"/packages", marker+".aasx", content)
+	packageURL := packagesURL + "/packages/" + enc("urn:rebac-it:"+marker+":package")
+	created := uploadFile(t, owner, http.MethodPut, packageURL, marker+".aasx", content)
 	expectStatus(t, http.StatusCreated, created, "upload package")
 }
 

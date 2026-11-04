@@ -136,11 +136,11 @@ func (s *AASXFileServerAPIAPIService) GetAllAASXPackageIds(ctx context.Context, 
 
 	nextCursor := ""
 	if nextCursorID > 0 {
-		nextCursor = common.EncodeString(strconv.FormatInt(nextCursorID, 10))
+		nextCursor = strconv.FormatInt(nextCursorID, 10)
 	}
 
 	return openapi.Response(http.StatusOK, openapi.GetPackageDescriptionsResult{
-		PagingMetadata: openapi.PagedResultPagingMetadata{Cursor: nextCursor},
+		PagingMetadata: common.APIPagingMetadata(nextCursor),
 		Result:         result,
 	}), nil
 }
@@ -446,7 +446,7 @@ func (s *AASXFileServerAPIAPIService) GetAASXByPackageId(ctx context.Context, pa
 
 	return openapi.Response(http.StatusOK, openapi.FileDownload{
 		Content:     pkg.Content,
-		ContentType: pkg.ContentType,
+		ContentType: persistence.PackageContentType,
 		Filename:    pkg.FileName,
 		Headers: map[string]string{
 			"X-FileName": pkg.FileName,
@@ -526,16 +526,9 @@ func (s *AASXFileServerAPIAPIService) DeleteAASXByPackageId(ctx context.Context,
 }
 
 func toPackageDescription(record persistence.PackageRecord) openapi.PackageDescription {
-	aasIDs := make([]string, 0, len(record.AASIDs))
-	for _, aasID := range record.AASIDs {
-		aasIDs = append(aasIDs, common.EncodeString(aasID))
-	}
-
 	return openapi.PackageDescription{
-		PackageId:   common.EncodeString(record.PackageID),
-		AasIds:      aasIDs,
-		FileName:    record.FileName,
-		ContentType: record.ContentType,
+		PackageId: record.PackageID,
+		AasIds:    record.AASIDs,
 	}
 }
 

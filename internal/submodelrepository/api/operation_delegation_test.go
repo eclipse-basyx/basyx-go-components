@@ -37,6 +37,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -462,7 +463,7 @@ func TestDelegationHTTPClientRejectsDisallowedResolvedIPBeforeDial(t *testing.T)
 	}
 
 	guard := newDelegationAddressGuard(resolveToPrivateIP, failOnDial)
-	client := newDelegationHTTPClient(time.Second, guard)
+	client := newDelegationHTTPClient(time.Second, newDelegationHTTPTransport(guard))
 	_, err := client.Post("http://service.internal:8080/delegate", "application/json", strings.NewReader("[]"))
 	require.ErrorContains(t, err, "UNTRUSTEDRESOLVED")
 	require.False(t, dialed)
@@ -493,7 +494,7 @@ func TestDelegationHTTPClientRechecksRedirectTargets(t *testing.T) {
 	t.Setenv(delegationTrustedHostsKey, serverURL.Host)
 
 	guard := newDelegationAddressGuard(nil, nil)
-	client := newDelegationHTTPClient(2*time.Second, guard)
+	client := newDelegationHTTPClient(2*time.Second, newDelegationHTTPTransport(guard))
 	_, err := client.Get(redirectServer.URL)
 	require.ErrorContains(t, err, "UNTRUSTED")
 }
@@ -516,6 +517,54 @@ func TestDelegatedOperationForwardsAuthorizationAfterStrictTrust(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, statusCode)
 	require.Equal(t, "Bearer delegated", capturedAuthorization)
+}
+
+func newCountingDelegationServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+
+	openedConnections := &atomic.Int32{}
+	delegationServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	}))
+	delegationServer.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			openedConnections.Add(1)
+		}
+	}
+	delegationServer.Start()
+	t.Cleanup(delegationServer.Close)
+
+	return delegationServer, openedConnections
+}
+
+func TestDelegatedOperationCallsReuseOneConnection(t *testing.T) {
+	delegationServer, openedConnections := newCountingDelegationServer(t)
+	t.Setenv(delegationTrustedHostsKey, mustParseDelegationTestURL(t, delegationServer.URL).Host)
+
+	ctx := contextWithABACDisabled(t)
+	for range 20 {
+		statusCode, _, err := doDelegatedOperationCall(ctx, delegationServer.URL, []types.IOperationVariable{}, time.Second)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode)
+	}
+
+	require.Equal(t, int32(1), openedConnections.Load())
+}
+
+func TestDelegatedOperationDoesNotReuseConnectionAfterTrustIsRevoked(t *testing.T) {
+	delegationServer, openedConnections := newCountingDelegationServer(t)
+	t.Setenv(delegationTrustedHostsKey, mustParseDelegationTestURL(t, delegationServer.URL).Host)
+
+	ctx := contextWithABACDisabled(t)
+	statusCode, _, err := doDelegatedOperationCall(ctx, delegationServer.URL, []types.IOperationVariable{}, time.Second)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode)
+
+	t.Setenv(delegationTrustedHostsKey, "")
+	_, _, err = doDelegatedOperationCall(ctx, delegationServer.URL, []types.IOperationVariable{}, time.Second)
+	require.ErrorContains(t, err, "UNTRUSTED")
+	require.Equal(t, int32(1), openedConnections.Load())
 }
 
 func TestDelegatedOperationPropagatesActiveTraceContext(t *testing.T) {

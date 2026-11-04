@@ -1825,7 +1825,7 @@ func TestPathNotationEndpoints(t *testing.T) {
 		assert.NotContains(t, paths, "TopProperty")
 	})
 
-	t.Run("GetSubmodelElementByPathPathCoreReturnsOnlyRequestedPath", func(t *testing.T) {
+	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPathAndDirectChildren", func(t *testing.T) {
 		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection/$path?level=core", baseURL, submodelIDEncoded), nil)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
@@ -1833,7 +1833,18 @@ func TestPathNotationEndpoints(t *testing.T) {
 		var paths []string
 		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
 
-		assert.Equal(t, []string{"MainCollection"}, paths)
+		assert.ElementsMatch(t, []string{"MainCollection", "MainCollection.NestedProperty", "MainCollection.NestedList"}, paths)
+	})
+
+	t.Run("GetSubmodelElementByPathPathCoreOnListReturnsListItems", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection.NestedList/$path?level=core", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.ElementsMatch(t, []string{"MainCollection.NestedList", "MainCollection.NestedList[0]", "MainCollection.NestedList[1]"}, paths)
 	})
 
 }
@@ -1869,9 +1880,9 @@ func assertSignedSubmodelResponse(t *testing.T, runner *testenv.JSONSuiteRunner,
 	response, err := runner.RunStep(step, stepNumber)
 	require.NoError(t, err, "Request failed")
 
-	var compact string
-	require.NoError(t, json.Unmarshal([]byte(response.Body), &compact), "response=%s", response.Body)
-	require.Equal(t, 2, strings.Count(compact, "."))
+	require.Equal(t, "text/plain", response.Headers.Get("Content-Type"))
+	compact := response.Body
+	require.Equal(t, 2, strings.Count(compact, "."), "response=%s", compact)
 	requireSignedSubmodelProtectedHeaders(t, compact)
 
 	privateKey, err := commonjws.LoadPrivateKey("docker_compose/rsa-key.pem")
@@ -1885,6 +1896,9 @@ func assertSignedSubmodelResponse(t *testing.T, runner *testenv.JSONSuiteRunner,
 	require.NoError(t, err)
 	require.JSONEq(t, string(canonical), string(payload))
 
+	if step.ShouldMatch == "" {
+		return
+	}
 	expectedPayload := expectedSignedSubmodelPayload(t, step.ShouldMatch)
 	require.JSONEq(t, string(expectedPayload), string(payload))
 }

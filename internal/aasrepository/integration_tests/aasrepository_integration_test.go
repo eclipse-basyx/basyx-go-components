@@ -1307,6 +1307,61 @@ func TestGetSubmodelByIdAasRepositoryReturnsSubmodel(t *testing.T) {
 	assert.Equal(t, "Submodel", payload["modelType"], "Expected submodel modelType in GET response")
 }
 
+func TestFileAttachmentAasRepositoryReturnsFileContent(t *testing.T) {
+	baseURL := aasRepositoryBaseURL
+	aasID := fmt.Sprintf("https://example.com/ids/aas/file-attachment-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/file-attachment-%d", time.Now().UnixNano())
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	submodelEndpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+	externalFileURL := "https://example.com/manual.pdf"
+
+	body := fmt.Sprintf(
+		`{"id":"%s","idShort":"FileAttachmentViaAAS","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"manual","modelType":"File","contentType":"image/gif"},{"idShort":"externalManual","modelType":"File","contentType":"application/pdf","value":"%s"}]}`,
+		submodelID,
+		externalFileURL,
+	)
+	_, putStatusCode, _, putErr := putJSONResponse(submodelEndpoint, body)
+	require.NoError(t, putErr, "PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, putStatusCode, "Expected 201 Created when creating submodel via AAS endpoint")
+
+	t.Run("ManagedFileReturnsBinaryContent", func(t *testing.T) {
+		expectedContent := []byte("GIF89a" + submodelID)
+		testFilePath := createTemporaryBinaryTestFile(t, "manual.gif", expectedContent)
+
+		attachmentEndpoint := submodelEndpoint + "/submodel-elements/manual/attachment"
+		uploadStatusCode, uploadErr := uploadThumbnail(attachmentEndpoint, testFilePath, "manual.gif")
+		require.NoError(t, uploadErr, "Attachment upload failed")
+		require.Equal(t, http.StatusNoContent, uploadStatusCode, "Expected 204 No Content for attachment upload")
+
+		content, contentType, getStatusCode, getErr := downloadThumbnail(attachmentEndpoint)
+		require.NoError(t, getErr, "Attachment download failed")
+		require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK for attachment download")
+		assert.Equal(t, "image/gif", contentType, "Attachment Content-Type should be the file's content type")
+		assert.Equal(t, expectedContent, content, "Attachment body should be the uploaded file content")
+	})
+
+	t.Run("ExternalFileRedirectsToLocation", func(t *testing.T) {
+		client := &http.Client{
+			Timeout: 10 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		resp, getErr := client.Get(submodelEndpoint + "/submodel-elements/externalManual/attachment")
+		require.NoError(t, getErr, "External attachment request failed")
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusFound, resp.StatusCode, "Expected 302 Found for an external file")
+		assert.Equal(t, externalFileURL, resp.Header.Get("Location"), "Expected Location of the external file")
+	})
+}
+
 func TestPostSubmodelReferenceAasRepositoryReturnsConflictOnDuplicate(t *testing.T) {
 	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/submodel-ref-duplicate-%d", time.Now().UnixNano())
@@ -1418,12 +1473,12 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, statusCode, "Expected 400 Bad Request for a JSON number on xs:string: %s", responseBody)
 	})
 
-	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPath", func(t *testing.T) {
+	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPathAndDirectChildren", func(t *testing.T) {
 		paths, pathStatusCode, pathErr := getJSONArrayResponse(fmt.Sprintf("%s/submodel-elements/MainCollection/$path?level=core", submodelEndpoint))
 		require.NoError(t, pathErr, "GET submodel element $path request failed")
 		require.Equal(t, http.StatusOK, pathStatusCode, "Expected 200 OK for GET submodel element $path")
 
-		assert.Equal(t, []string{"MainCollection"}, paths)
+		assert.ElementsMatch(t, []string{"MainCollection", "MainCollection.NestedProperty", "MainCollection.NestedBlob"}, paths)
 	})
 
 	t.Run("GetSubmodelByIdPathReturnsNotFoundIfSubmodelNotReferencedInAAS", func(t *testing.T) {

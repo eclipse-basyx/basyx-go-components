@@ -66,7 +66,7 @@ func putPackageConditionally(t *testing.T, packageURL string, relativePath strin
 func TestConditionalPackageLifecycle(t *testing.T) {
 	uploadBody, uploadStatus, _ := uploadAASXPackage(t, "../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx")
 	require.Equal(t, http.StatusCreated, uploadStatus)
-	packageURL := baseURL + "/packages/" + decodePackageDescription(t, uploadBody).PackageId
+	packageURL := packageURL(baseURL, decodePackageDescription(t, uploadBody).PackageId)
 	t.Cleanup(func() { testenv.DoHTTP(t, http.MethodDelete, packageURL, nil, nil) })
 
 	download := testenv.DoHTTP(t, http.MethodGet, packageURL, nil, nil)

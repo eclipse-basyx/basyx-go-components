@@ -55,6 +55,7 @@ const (
 
 	serializationContentTypeJSON        = "application/json"
 	serializationContentTypeXML         = "application/xml"
+	serializationContentTypeAASZip      = "application/aas+zip"
 	serializationContentTypeAASXXML     = "application/aasx+xml"
 	serializationContentTypeAASXXMLAlt  = "application/asset-administration-shell+xml"
 	serializationContentTypeAASXXMLPkg  = "application/asset-administration-shell-package+xml"
@@ -262,7 +263,7 @@ func resolveSerializationFormat(contentType string) (serializationFormat, error)
 		return serializationFormat{specContentType: serializationContentTypeJSON, fileName: "environment.json"}, nil
 	case serializationContentTypeXML:
 		return serializationFormat{specContentType: serializationContentTypeXML, fileName: "environment.xml"}, nil
-	case serializationContentTypeAASXXML, serializationContentTypeAASXXMLAlt, serializationContentTypeAASXXMLPkg:
+	case serializationContentTypeAASZip, serializationContentTypeAASXXML, serializationContentTypeAASXXMLAlt, serializationContentTypeAASXXMLPkg:
 		return serializationFormat{specContentType: serializationContentTypeXML, specURI: serializationAASXXMLSpecURI, fileName: "environment.aasx", aasx: true}, nil
 	case serializationContentTypeAASXJSON, serializationContentTypeAASXJSONAlt, serializationContentTypeAASXJSONPkg:
 		return serializationFormat{specContentType: serializationContentTypeJSON, specURI: serializationAASXJSONSpecURI, fileName: "environment.aasx", aasx: true}, nil
@@ -1131,6 +1132,7 @@ func negotiateSerializationContentType(acceptHeader string) (string, error) {
 			return serializationContentTypeAASXXML, nil
 		case serializationContentTypeJSON,
 			serializationContentTypeXML,
+			serializationContentTypeAASZip,
 			serializationContentTypeAASXXML,
 			serializationContentTypeAASXXMLAlt,
 			serializationContentTypeAASXXMLPkg,

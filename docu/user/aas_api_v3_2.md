@@ -490,7 +490,7 @@ Descriptor timestamp filters use the descriptor payload's persisted `administrat
 
 ## Signed Reads
 
-Signed endpoints return a compact JWS string for the requested AAS or Submodel.
+Signed endpoints return the compact JWS for the requested AAS or Submodel as a `text/plain` body, without JSON quoting.
 
 Example:
 

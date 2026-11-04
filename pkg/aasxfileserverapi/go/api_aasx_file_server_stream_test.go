@@ -35,6 +35,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 	"time"
 
@@ -133,8 +134,10 @@ func TestPostAASXPackageStreamsFileAndIgnoresFileNameField(t *testing.T) {
 	if _, err = part.Write([]byte("package-content")); err != nil {
 		t.Fatal(err)
 	}
-	if err = writer.WriteField("aasIds", "one,two"); err != nil {
-		t.Fatal(err)
+	for _, aasID := range []string{"urn:a,1", "two"} {
+		if err = writer.WriteField("aasIds", aasID); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err = writer.WriteField("fileName", "ignored.aasx"); err != nil {
 		t.Fatal(err)
@@ -153,7 +156,7 @@ func TestPostAASXPackageStreamsFileAndIgnoresFileNameField(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("expected status 201, got %d: %s", response.Code, response.Body.String())
 	}
-	if service.fileName != "package.aasx" || len(service.aasIDs) != 2 || string(service.content) != "package-content" {
+	if service.fileName != "package.aasx" || !slices.Equal(service.aasIDs, []string{"urn:a,1", "two"}) || string(service.content) != "package-content" {
 		t.Fatalf("unexpected captured upload: filename=%q aasIDs=%v content=%q", service.fileName, service.aasIDs, service.content)
 	}
 }
