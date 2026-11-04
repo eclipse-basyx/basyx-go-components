@@ -36,6 +36,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
@@ -49,13 +50,24 @@ type delegationAddressGuard struct {
 	dialContext        func(context.Context, string, string) (net.Conn, error)
 }
 
+type delegationTransportEntry struct {
+	trustedHostsConfig string
+	transport          *http.Transport
+}
+
+var sharedDelegationTransport atomic.Pointer[delegationTransportEntry]
+
 type trustedDelegationTarget struct {
 	originalAuthority string
 	resolvedAuthority string
 }
 
 func parseTrustedDelegationAuthorities() delegationAuthoritySet {
-	rawHosts := strings.TrimSpace(os.Getenv(delegationTrustedHostsKey))
+	return parseTrustedDelegationAuthorityList(os.Getenv(delegationTrustedHostsKey))
+}
+
+func parseTrustedDelegationAuthorityList(trustedHostsConfig string) delegationAuthoritySet {
+	rawHosts := strings.TrimSpace(trustedHostsConfig)
 	if rawHosts == "" {
 		return delegationAuthoritySet{}
 	}
@@ -178,6 +190,14 @@ func newDelegationAddressGuard(
 	resolveHost func(context.Context, string) ([]netip.Addr, error),
 	dialContext func(context.Context, string, string) (net.Conn, error),
 ) delegationAddressGuard {
+	return newDelegationAddressGuardForAuthorities(parseTrustedDelegationAuthorities(), resolveHost, dialContext)
+}
+
+func newDelegationAddressGuardForAuthorities(
+	trustedAuthorities delegationAuthoritySet,
+	resolveHost func(context.Context, string) ([]netip.Addr, error),
+	dialContext func(context.Context, string, string) (net.Conn, error),
+) delegationAddressGuard {
 	if resolveHost == nil {
 		resolveHost = func(ctx context.Context, host string) ([]netip.Addr, error) {
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
@@ -190,7 +210,7 @@ func newDelegationAddressGuard(
 	}
 
 	return delegationAddressGuard{
-		trustedAuthorities: parseTrustedDelegationAuthorities(),
+		trustedAuthorities: trustedAuthorities,
 		resolveHost:        resolveHost,
 		dialContext:        dialContext,
 	}
@@ -340,10 +360,37 @@ func (g delegationAddressGuard) dialTrustedTargets(ctx context.Context, network 
 	return nil, fmt.Errorf("SMREPO-DELDIAL-EXEC %w", lastDialErr)
 }
 
-func newDelegationHTTPClient(timeout time.Duration, guard delegationAddressGuard) *http.Client {
+func newDelegationHTTPClient(timeout time.Duration, transport *http.Transport) *http.Client {
 	return &http.Client{
 		Timeout:   timeout,
-		Transport: telemetry.HTTPClientTransport(newDelegationHTTPTransport(guard)),
+		Transport: telemetry.HTTPClientTransport(transport),
+	}
+}
+
+func defaultDelegationHTTPTransport() *http.Transport {
+	trustedHostsConfig := os.Getenv(delegationTrustedHostsKey)
+	for {
+		current := sharedDelegationTransport.Load()
+		if current != nil && current.trustedHostsConfig == trustedHostsConfig {
+			return current.transport
+		}
+
+		replacement := &delegationTransportEntry{
+			trustedHostsConfig: trustedHostsConfig,
+			transport: newDelegationHTTPTransport(
+				newDelegationAddressGuardForAuthorities(parseTrustedDelegationAuthorityList(trustedHostsConfig), nil, nil),
+			),
+		}
+		if sharedDelegationTransport.CompareAndSwap(current, replacement) {
+			closeIdleDelegationConnections(current)
+			return replacement.transport
+		}
+	}
+}
+
+func closeIdleDelegationConnections(entry *delegationTransportEntry) {
+	if entry != nil {
+		entry.transport.CloseIdleConnections()
 	}
 }
 
