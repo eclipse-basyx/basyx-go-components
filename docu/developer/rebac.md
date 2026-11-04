@@ -134,6 +134,17 @@ transaction of a mutation. They are no-ops while ReBAC is disabled.
 - `RecordReBACSubmodelCreatedWithShell` links Submodels created with a
   passport to its shell.
 
+Create paths also fill a missing `administration.creator` before the
+payload is persisted, so that the stored resource, the response, history
+and synchronized descriptors carry the same value. `FillReBACCreator`
+handles identifiables, and `FillMissingCreator` with
+`ReBACCreatorReference` handles descriptors. The reference is an
+`ExternalReference` with one `GlobalReference` key `<issuer>|<subject>`
+(`common.FormatReBACPrincipal`). It is not filled while ReBAC is disabled,
+for anonymous callers or under a `ReBACSource`, because derived resources
+mirror their source. Update paths never call these helpers: the creator is
+business data that clients may change or remove.
+
 Ownership assigned at creation is part of the resource history; the audit
 trail records access changes only.
 
@@ -215,7 +226,9 @@ your pull request under `database/patches/`, register it in
    `rebac_grant` and the other `rebac_*` tables that list object types.
 2. Define a `ResourceKind` in `store.go` (semantic kind, object type, table,
    route prefix and parameter, rows query) and add it to `AllKinds`.
-3. Call the `RecordReBAC*` helpers in the create and delete transactions.
+3. Call the `RecordReBAC*` helpers in the create and delete transactions,
+   and fill a missing administrative creator on creation if the kind
+   carries `administration`.
 4. Extend `ValidateRelation`.
 5. Mount its `$access` routes through `RegisterManagementRoutes` in the
    service's `main.go`.

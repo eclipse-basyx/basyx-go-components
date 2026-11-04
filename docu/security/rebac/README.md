@@ -59,6 +59,18 @@ or wildcard grants.
 
 - **Ownership.** An authenticated creator becomes owner in the same
   transaction. Owners share, invite and delete.
+- **Administrative creator.** When a shell, Submodel, concept description,
+  shell descriptor or Submodel descriptor (also one created inside a shell
+  descriptor) is created without `administration.creator`, BaSyx fills it
+  with the caller. The value is an `ExternalReference` with one
+  `GlobalReference` key `<issuer>|<subject>`, where the subject is taken
+  from `rebac.subjectClaim`. This is the same notation as
+  `rebac.administrators`. A creator sent by the client is kept, and updates
+  never change the field, so clients can still change or remove it. It is
+  business data and grants no access. Anonymous creations stay unchanged,
+  and synchronized descriptors mirror their source. Everyone who can read
+  the resource sees the value, so choose a `rebac.subjectClaim` that does
+  not expose personal data you do not want to share.
 - **Element grants.** Access can be shared for a single SubmodelElement
   path and its children, without the rest of the Submodel.
 - **Shell links.** An owner of both can let the viewers, editors and

@@ -105,6 +105,12 @@ type ReBACAdministrator struct {
 	Group   string
 }
 
+// FormatReBACPrincipal returns the issuer-scoped notation issuer|principal
+// that identifies a ReBAC principal in configuration and business data.
+func FormatReBACPrincipal(issuer string, principal string) string {
+	return issuer + "|" + principal
+}
+
 // ParseReBACAdministrator parses "issuer|subject" or "issuer|group:<name>".
 func ParseReBACAdministrator(entry string) (ReBACAdministrator, error) {
 	issuer, principal, found := strings.Cut(strings.TrimSpace(entry), "|")
@@ -134,10 +140,10 @@ func normalizeReBACAdministrators(entries []string) ([]string, error) {
 			return nil, err
 		}
 		if admin.Group != "" {
-			normalized = append(normalized, admin.Issuer+"|group:"+admin.Group)
+			normalized = append(normalized, FormatReBACPrincipal(admin.Issuer, "group:"+admin.Group))
 			continue
 		}
-		normalized = append(normalized, admin.Issuer+"|"+admin.Subject)
+		normalized = append(normalized, FormatReBACPrincipal(admin.Issuer, admin.Subject))
 	}
 	return normalized, nil
 }
