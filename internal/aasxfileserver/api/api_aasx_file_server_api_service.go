@@ -446,7 +446,7 @@ func (s *AASXFileServerAPIAPIService) GetAASXByPackageId(ctx context.Context, pa
 
 	return openapi.Response(http.StatusOK, openapi.FileDownload{
 		Content:     pkg.Content,
-		ContentType: pkg.ContentType,
+		ContentType: persistence.PackageContentType,
 		Filename:    pkg.FileName,
 		Headers: map[string]string{
 			"X-FileName": pkg.FileName,
