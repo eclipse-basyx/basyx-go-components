@@ -29,13 +29,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"maps"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 	"github.com/stretchr/testify/require"
@@ -130,7 +135,7 @@ func TestPackageLifecycle(t *testing.T) {
 	require.NotEmpty(t, listResult.Result)
 	require.Contains(t, collectPackageIDs(listResult.Result), created.PackageId)
 
-	downloadResp, downloadBody := request(t, http.MethodGet, baseURL+"/packages/"+created.PackageId, nil, "")
+	downloadResp, downloadBody := request(t, http.MethodGet, packageURL(baseURL, created.PackageId), nil, "")
 	require.Equal(t, http.StatusOK, downloadResp.StatusCode)
 	require.NotEmpty(t, downloadResp.Header.Get("X-FileName"))
 	require.NotEmpty(t, downloadBody)
@@ -138,11 +143,50 @@ func TestPackageLifecycle(t *testing.T) {
 	updateStatus := putAASXPackage(t, created.PackageId, "../../aasenvironment/integration_tests/testdata/ProductionPlanSFKL.aasx")
 	require.Equal(t, http.StatusNoContent, updateStatus)
 
-	deleteResp, _ := request(t, http.MethodDelete, baseURL+"/packages/"+created.PackageId, nil, "")
+	deleteResp, _ := request(t, http.MethodDelete, packageURL(baseURL, created.PackageId), nil, "")
 	require.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
 
-	notFoundResp, _ := request(t, http.MethodGet, baseURL+"/packages/"+created.PackageId, nil, "")
+	notFoundResp, _ := request(t, http.MethodGet, packageURL(baseURL, created.PackageId), nil, "")
 	require.Equal(t, http.StatusNotFound, notFoundResp.StatusCode)
+}
+
+func TestPackageDescriptionsFollowOpenAPI(t *testing.T) {
+	const packagePath = "../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx"
+	aasIDs := []string{"urn:example:aas:openapi,1", "urn:example:aas:openapi:2"}
+
+	payload, contentType := multipartFilePayload(t, packagePath, aasIDs)
+	postResp, postBody := request(t, http.MethodPost, baseURL+"/packages", bytes.NewReader(payload), contentType)
+	require.Equalf(t, http.StatusCreated, postResp.StatusCode, "post response: %s", postBody)
+	posted := requirePackageDescriptionBody(t, postBody, aasIDs)
+	t.Cleanup(func() { request(t, http.MethodDelete, packageURL(baseURL, posted.PackageId), nil, "") })
+	require.Equal(t, "/packages/"+url.PathEscape(common.EncodeString(posted.PackageId)), postResp.Header.Get("Location"))
+
+	putPackageID := "urn:example:package:" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	payload, contentType = multipartFilePayload(t, packagePath, aasIDs)
+	putResp, putBody := request(t, http.MethodPut, packageURL(baseURL, putPackageID), bytes.NewReader(payload), contentType)
+	require.Equalf(t, http.StatusCreated, putResp.StatusCode, "put response: %s", putBody)
+	t.Cleanup(func() { request(t, http.MethodDelete, packageURL(baseURL, putPackageID), nil, "") })
+	require.Equal(t, putPackageID, requirePackageDescriptionBody(t, putBody, aasIDs).PackageId)
+
+	listResp, listBody := request(t, http.MethodGet, baseURL+"/packages?aasId="+url.QueryEscape(common.EncodeString(aasIDs[0])), nil, "")
+	require.Equal(t, http.StatusOK, listResp.StatusCode)
+	var page map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(listBody, &page))
+	require.Contains(t, page, "paging_metadata")
+	require.NotContains(t, page, "pagingMetadata")
+	var listed openapi.GetPackageDescriptionsResult
+	require.NoError(t, json.Unmarshal(listBody, &listed))
+	require.ElementsMatch(t, []string{posted.PackageId, putPackageID}, collectPackageIDs(listed.Result))
+}
+
+func requirePackageDescriptionBody(t *testing.T, body []byte, expectedAASIDs []string) openapi.PackageDescription {
+	t.Helper()
+	var properties map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(body, &properties))
+	require.ElementsMatch(t, []string{"packageId", "aasIds"}, slices.Collect(maps.Keys(properties)))
+	description := decodePackageDescription(t, body)
+	require.Equal(t, expectedAASIDs, description.AasIds)
+	return description
 }
 
 func uploadAASXPackage(t *testing.T, relativePath string) ([]byte, int, http.Header) {
@@ -185,7 +229,7 @@ func putAASXPackage(t *testing.T, packageID string, relativePath string) int {
 
 	require.NoError(t, writer.Close())
 
-	resp, _ := request(t, http.MethodPut, baseURL+"/packages/"+packageID, body, writer.FormDataContentType())
+	resp, _ := request(t, http.MethodPut, packageURL(baseURL, packageID), body, writer.FormDataContentType())
 	return resp.StatusCode
 }
 
@@ -206,6 +250,10 @@ func decodePackageDescription(t *testing.T, body []byte) openapi.PackageDescript
 	return created
 }
 
+func packageURL(serviceURL string, packageID string) string {
+	return serviceURL + "/packages/" + url.PathEscape(common.EncodeString(packageID))
+}
+
 func collectPackageIDs(items []openapi.PackageDescription) []string {
 	result := make([]string, 0, len(items))
 	for _, item := range items {
@@ -214,10 +262,10 @@ func collectPackageIDs(items []openapi.PackageDescription) []string {
 	return result
 }
 
-func request(t *testing.T, method string, url string, body io.Reader, contentType string) (*http.Response, []byte) {
+func request(t *testing.T, method string, endpoint string, body io.Reader, contentType string) (*http.Response, []byte) {
 	t.Helper()
 
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequest(method, endpoint, body)
 	require.NoError(t, err)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)

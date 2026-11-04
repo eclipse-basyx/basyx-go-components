@@ -72,7 +72,7 @@ func TestPackagesBelongToTheirUploader(t *testing.T) {
 	expectStatus(t, http.StatusCreated, created, "upload package")
 	packageID, _ := created.json(t)["packageId"].(string)
 	require.NotEmpty(t, packageID)
-	packageURL := packagesURL + "/packages/" + packageID
+	packageURL := packagesURL + "/packages/" + enc(packageID)
 
 	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, packageURL, nil, nil), "unshared package")
 	require.NotContains(t, string(call(t, "bob", http.MethodGet, packagesURL+"/packages", nil, nil).body), packageID, "unshared packages are not listed")

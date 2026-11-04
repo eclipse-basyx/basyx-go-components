@@ -103,12 +103,12 @@ func TestAsyncUploadCompletesAfterRequestCleanupAndAcrossReplicas(t *testing.T) 
 		deletePackage(t, replicaBURL, created.PackageId, "")
 	})
 
-	download := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages/"+url.PathEscape(created.PackageId), nil, "")
+	download := doAsyncRequest(t, http.MethodGet, packageURL(replicaBURL, created.PackageId), nil, "")
 	require.Equal(t, http.StatusOK, download.status)
 	expected, err := os.ReadFile(filepath.Clean(validAASXPath))
 	require.NoError(t, err)
 	require.Equal(t, expected, download.body)
-	require.Equal(t, filepath.Base(validAASXPath), created.FileName)
+	require.Equal(t, filepath.Base(validAASXPath), download.header.Get("X-FileName"))
 }
 
 func TestAsyncCapacityRejectsBeforeStagingAndKeepsStatusResponsive(t *testing.T) {
@@ -160,11 +160,8 @@ func TestAsyncUploadPreservesAASIDsAndSupportsFiltering(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 
 	aasIDOne := "urn:example:aas:async-one"
-	aasIDTwo := "https://example.com/aas/async-two"
-	accepted := postAsyncFileWithAASIDs(t, baseURL, validAASXPath, []string{
-		" " + aasIDOne + ", " + aasIDTwo + " ",
-		" , " + aasIDOne + ", , ",
-	})
+	aasIDTwo := "urn:example:aas:async,two"
+	accepted := postAsyncFileWithAASIDs(t, baseURL, validAASXPath, []string{" " + aasIDOne + " ", aasIDTwo, " ", aasIDOne})
 	handle := assertAcceptedOperation(t, accepted, baseURL)
 	result := awaitAsyncResult(t, replicaBURL, handle)
 	require.Equal(t, "Completed", result.ExecutionState)
@@ -174,7 +171,7 @@ func TestAsyncUploadPreservesAASIDsAndSupportsFiltering(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
 	t.Cleanup(func() { deletePackage(t, replicaBURL, created.PackageId, "") })
-	require.Equal(t, []string{common.EncodeString(aasIDOne), common.EncodeString(aasIDTwo)}, created.AasIds)
+	require.Equal(t, []string{aasIDOne, aasIDTwo}, created.AasIds)
 
 	for _, aasID := range []string{aasIDOne, aasIDTwo} {
 		filtered := doAsyncRequest(t, http.MethodGet, replicaBURL+"/packages?aasId="+url.QueryEscape(common.EncodeString(aasID)), nil, "")
@@ -445,7 +442,7 @@ func TestSuccessfulAsyncUploadRetainsOneReferencedLargeObjectUntilPackageDeletio
 	created := packageDifference(t, packagesBefore.Result, packagesAfter.Result)
 	require.Equal(t, largeObjectsBefore+1, countLargeObjects(t, db), "successful staging left a duplicate large object")
 
-	deleted := doAsyncRequest(t, http.MethodDelete, replicaBURL+"/packages/"+url.PathEscape(created.PackageId), nil, "")
+	deleted := doAsyncRequest(t, http.MethodDelete, packageURL(replicaBURL, created.PackageId), nil, "")
 	require.Equal(t, http.StatusNoContent, deleted.status)
 	require.Eventually(t, func() bool { return countLargeObjects(t, db) == largeObjectsBefore }, 5*time.Second, 50*time.Millisecond)
 }
@@ -738,7 +735,7 @@ func listPackagesFrom(t *testing.T, serviceURL string) (openapi.GetPackageDescri
 
 func deletePackage(t *testing.T, serviceURL string, packageID string, token string) {
 	t.Helper()
-	response := doAuthorizedAsyncRequest(t, http.MethodDelete, serviceURL+"/packages/"+url.PathEscape(packageID), nil, "", token)
+	response := doAuthorizedAsyncRequest(t, http.MethodDelete, packageURL(serviceURL, packageID), nil, "", token)
 	require.Equalf(t, http.StatusNoContent, response.status, "delete response: %s", response.body)
 }
 
@@ -959,10 +956,8 @@ func addedLargeObjectOID(t *testing.T, before []int64, after []int64) int64 {
 	return added[0]
 }
 
-func packageLargeObjectOID(t *testing.T, db *sql.DB, encodedPackageID string) int64 {
+func packageLargeObjectOID(t *testing.T, db *sql.DB, packageID string) int64 {
 	t.Helper()
-	packageID, err := common.DecodeString(encodedPackageID)
-	require.NoError(t, err)
 	query, args, err := goqu.Dialect("postgres").From("aasx_package").
 		Select(goqu.C("file_oid")).Where(goqu.C("package_id").Eq(packageID)).ToSQL()
 	require.NoError(t, err)
