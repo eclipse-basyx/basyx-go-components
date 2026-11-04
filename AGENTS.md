@@ -59,7 +59,7 @@
 - Do a Self-Code Review to ensure that the changes meet the task requirements and adhere to coding standards. (CC, DRY)
 
 ## Run Integration Tests
-- go test -v ./internal/submodelrepository/integration_tests
+- Run the integration tests of every component the change affects: go test -v ./internal/<component>/integration_tests
 - NEVER USE ADDITIONAL FLAGS (e.g. -run) UNLESS SPECIFICALLY REQUESTED IN THE TASK. ALL TESTS MUST BE RUN TO ENSURE CODE QUALITY AND INTEGRITY.
 
 ## Security Relevant Notes:
