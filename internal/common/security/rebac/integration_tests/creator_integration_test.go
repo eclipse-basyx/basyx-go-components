@@ -130,6 +130,23 @@ func TestCreatorIsFilledForRegisteredDescriptors(t *testing.T) {
 	createAndExpectCreator(t, "alice", environmentURL+"/submodel-descriptors", environmentURL+"/submodel-descriptors/"+enc(standaloneID), standalone, expected)
 }
 
+func TestEmbeddedDescriptorsAddedByAnUpdateGetTheCreator(t *testing.T) {
+	bootstrapCreators(t)
+	expected := principalCreator(t, "alice")
+	shellID, existingID, addedID := unique("creator-parent"), unique("creator-existing"), unique("creator-added")
+	expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, environmentURL+"/shell-descriptors", shellDescriptor(shellID, existingID), nil), "register descriptor")
+
+	replacement := shellDescriptor(shellID, existingID)
+	replacement["administration"] = map[string]any{"creator": expected}
+	replacement["submodelDescriptors"] = append(replacement["submodelDescriptors"].([]any),
+		map[string]any{"id": addedID, "idShort": "added", "endpoints": descriptorEndpoint("submodels")})
+	expectStatus(t, http.StatusNoContent, call(t, "alice", http.MethodPut, shellDescriptorURL(shellID), replacement, nil), "add an embedded descriptor by replacing the shell descriptor")
+
+	require.Equal(t, expected, readCreator(t, "alice", shellDescriptorURL(shellID)), "the updated shell descriptor keeps the creator it was sent")
+	require.Nil(t, readCreator(t, "alice", shellDescriptorURL(shellID)+"/submodel-descriptors/"+enc(existingID)), "updated embedded descriptors are not filled")
+	require.Equal(t, expected, readCreator(t, "alice", shellDescriptorURL(shellID)+"/submodel-descriptors/"+enc(addedID)), "embedded descriptors added by an update carry the creator")
+}
+
 func TestSynchronizedDescriptorsMirrorTheirSource(t *testing.T) {
 	shellID, submodelID := createShellWithSubmodel(t, "alice")
 	expected := principalCreator(t, "alice")

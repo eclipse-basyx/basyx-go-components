@@ -636,7 +636,7 @@ func reconcileEmbeddedSubmodelDescriptorsTx(
 			if _, err = insertSubmodelDescriptorAtPositionTx(
 				tx,
 				sql.NullInt64{Int64: aasDescriptorID, Valid: true},
-				descriptor,
+				FillSubmodelDescriptorCreator(ctx, descriptor),
 				position,
 			); err != nil {
 				return common.NewInternalServerError("AASDESC-UPDATE-SUBMODELS-INSERT " + err.Error())
