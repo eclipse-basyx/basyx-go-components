@@ -516,7 +516,8 @@ func buildListAASIdentifiersBySubmodelIdentifierQuery(dialect *goqu.DialectWrapp
 		From(goqu.T("aas_submodel_reference").As("r")).
 		InnerJoin(goqu.T("aas_submodel_reference_key").As("k"), goqu.On(goqu.I("k.reference_id").Eq(goqu.I("r.id")))).
 		InnerJoin(goqu.T("aas").As("a"), goqu.On(goqu.I("a.id").Eq(goqu.I("r.aas_id")))).
-		SelectDistinct(goqu.I("a.aas_id")).
+		Select(goqu.I("a.aas_id")).
+		Distinct().
 		Where(goqu.I("k.value").Eq(submodelIdentifier)).
 		Order(goqu.I("a.aas_id").Asc()).
 		Prepared(true).

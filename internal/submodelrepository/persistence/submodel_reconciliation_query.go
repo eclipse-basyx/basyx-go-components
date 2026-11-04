@@ -227,7 +227,8 @@ func deleteElementTargets(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 			goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")),
 			goqu.I("sme.idshort_path").Eq(goqu.I("d.path")),
 		)).
-		SelectDistinct(goqu.I("sme.id"))
+		Select(goqu.I("sme.id")).
+		Distinct()
 }
 
 func changedFileRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {

@@ -44,7 +44,8 @@ func (s *SubmodelDatabase) ListGlobalAssetIDsBySubmodelID(ctx context.Context, s
 		From(goqu.T("aas_submodel_reference_key").As("k")).
 		InnerJoin(goqu.T("aas_submodel_reference").As("r"), goqu.On(goqu.I("r.id").Eq(goqu.I("k.reference_id")))).
 		InnerJoin(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("r.aas_id")))).
-		SelectDistinct(goqu.I("ai.global_asset_id")).
+		Select(goqu.I("ai.global_asset_id")).
+		Distinct().
 		Where(
 			goqu.I("k.value").Eq(submodelIdentifier),
 			goqu.I("ai.global_asset_id").IsNotNull(),
