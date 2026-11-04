@@ -26,24 +26,38 @@ import http.client
 import http.cookiejar
 import json
 import os
-from pathlib import Path
 import socket
 import subprocess
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
 from html.parser import HTMLParser
+from pathlib import Path
 
-BASE = "http://localhost:18584"
-ISSUER = "http://localhost:18580/realms/basyx-mcp"
+BASE = os.environ.get("BASYX_MCP_IT_BASE_URL", "http://localhost:18584").rstrip("/")
+ISSUER = os.environ.get(
+    "BASYX_MCP_IT_ISSUER_URL", "http://localhost:18580/realms/basyx-mcp"
+)
 DIRECTORY = Path(__file__).resolve().parent
 
 
 def token(user):
-    body = urllib.parse.urlencode({"grant_type": "password", "client_id": "basyx-mcp", "username": user, "password": "sandbox-" + user, "scope": "openid"}).encode()
-    with urllib.request.urlopen(urllib.request.Request(ISSUER + "/protocol/openid-connect/token", data=body), timeout=15) as response:
+    body = urllib.parse.urlencode(
+        {
+            "grant_type": "password",
+            "client_id": "basyx-mcp",
+            "username": user,
+            "password": "sandbox-" + user,
+            "scope": "openid",
+        }
+    ).encode()
+    with urllib.request.urlopen(
+        urllib.request.Request(ISSUER + "/protocol/openid-connect/token", data=body),
+        timeout=15,
+    ) as response:
         return json.load(response)["access_token"]
 
 
@@ -52,24 +66,62 @@ class Inspector:
         self.token = token(user)
         self.url = BASE + "/mcp?profile=" + profile
         executable = os.environ.get("MCP_INSPECTOR_BIN")
-        self.command = [executable] if executable else ["npx", "--yes", "@modelcontextprotocol/inspector@2.12.0"]
+        self.command = (
+            [executable]
+            if executable
+            else ["npx", "--yes", "@modelcontextprotocol/inspector@2.12.0"]
+        )
         self.environment = os.environ | {"MCP_CATALOG_PATH": catalogue}
 
     def request(self, method, options=()):
-        command = self.command + ["--cli", self.url, "--transport", "http", "--method", method] + list(options) + ["--header", "Authorization: Bearer " + self.token]
-        result = subprocess.run(command, capture_output=True, text=True, timeout=60, env=self.environment, check=False)
-        if result.returncode:
-            raise RuntimeError((result.stderr or result.stdout).replace(self.token, "[redacted]"))
-        return json.loads(result.stdout)
+        command = (
+            self.command
+            + ["--cli", self.url, "--transport", "http", "--method", method]
+            + list(options)
+            + ["--header", "Authorization: Bearer " + self.token]
+        )
+        for attempt in range(3):
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=self.environment,
+                check=False,
+            )
+            if not result.returncode:
+                return json.loads(result.stdout)
+            if "MCP-LIMIT-RATE" in (result.stderr + result.stdout) and attempt < 2:
+                print(
+                    "Rate limit reached; waiting 60 seconds before retrying this test request.",
+                    flush=True,
+                )
+                time.sleep(60)
+                continue
+            if result.returncode:
+                raise RuntimeError(
+                    (result.stderr or result.stdout).replace(self.token, "[redacted]")
+                )
 
     def call(self, name, arguments=None):
         options = ["--tool-name", name]
         if arguments:
-            options += ["--tool-arg"] + [key + "=" + (value if isinstance(value, str) else json.dumps(value, separators=(",", ":"))) for key, value in arguments.items()]
+            options += ["--tool-arg"] + [
+                key
+                + "="
+                + (
+                    value
+                    if isinstance(value, str)
+                    else json.dumps(value, separators=(",", ":"))
+                )
+                for key, value in arguments.items()
+            ]
         result = self.request("tools/call", options)
         if result.get("isError"):
             raise RuntimeError(json.dumps(result.get("structuredContent", result)))
-        return result.get("structuredContent") or json.loads(result["content"][0]["text"])
+        return result.get("structuredContent") or json.loads(
+            result["content"][0]["text"]
+        )
 
 
 class Page(HTMLParser):
@@ -113,7 +165,10 @@ class LocalHTTP(urllib.request.HTTPHandler):
 class SandboxCookies(http.cookiejar.DefaultCookiePolicy):
     def return_ok_secure(self, cookie, request):
         # Browsers permit Secure cookies on localhost; mirror that only for this fixed test realm.
-        if cookie.domain == "keycloak.localhost" and urllib.parse.urlsplit(request.full_url).hostname == "keycloak.localhost":
+        if (
+            cookie.domain == "keycloak.localhost"
+            and urllib.parse.urlsplit(request.full_url).hostname == "keycloak.localhost"
+        ):
             return True
         return super().return_ok_secure(cookie, request)
 
@@ -122,18 +177,34 @@ def approve_for_test(uri):
     """Simulate the human approval UI only for the fixed disposable test account."""
     if not uri.startswith(BASE + "/mcp/confirm/"):
         raise ValueError("Approval URL is outside the disposable sandbox")
-    client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar(policy=SandboxCookies())), LocalHTTP())
+    client = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(
+            http.cookiejar.CookieJar(policy=SandboxCookies())
+        ),
+        LocalHTTP(),
+    )
     with client.open(uri, timeout=15) as response:
         page = Page(response.read().decode())
-    if urllib.parse.urlsplit(page.action).netloc != "keycloak.localhost:18580":
+    if urllib.parse.urlsplit(page.action).netloc != "keycloak.localhost:" + str(
+        urllib.parse.urlsplit(ISSUER).port
+    ):
         raise ValueError("Unexpected sandbox identity provider")
-    form = page.inputs | {"username": "alice", "password": "sandbox-alice", "credentialId": ""}
-    with client.open(urllib.request.Request(page.action, data=urllib.parse.urlencode(form).encode()), timeout=15) as response:
+    form = page.inputs | {
+        "username": "alice",
+        "password": "sandbox-alice",
+        "credentialId": "",
+    }
+    with client.open(
+        urllib.request.Request(page.action, data=urllib.parse.urlencode(form).encode()),
+        timeout=15,
+    ) as response:
         page = Page(response.read().decode())
     if "csrf" not in page.inputs:
         raise RuntimeError("OAuth did not reach the approval form")
     form = page.inputs | {"approve": "yes"}
-    request = urllib.request.Request(uri, data=urllib.parse.urlencode(form).encode(), headers={"Origin": BASE})
+    request = urllib.request.Request(
+        uri, data=urllib.parse.urlencode(form).encode(), headers={"Origin": BASE}
+    )
     with client.open(request, timeout=15) as response:
         page = Page(response.read().decode())
     if not page.pre or len(page.pre[-1]) != 64:
@@ -154,10 +225,20 @@ def creation_demo(client):
     assert client.call("validate_aas_draft", {"draft": draft})["valid"]
     plan = client.call("plan_create_aas", {"draft": draft})
     confirmation = approve_for_test(plan["confirmation_url"])
-    assert client.call("apply_plan", {"plan_id": plan["plan_id"], "confirm_token": confirmation})["status"] == "applied"
+    assert (
+        client.call(
+            "apply_plan", {"plan_id": plan["plan_id"], "confirm_token": confirmation}
+        )["status"]
+        == "applied"
+    )
     changeset = client.call("get_changeset", {"id": plan["plan_id"]})
     confirmation = approve_for_test(changeset["confirmation_url"])
-    assert client.call("rollback_changeset", {"id": plan["plan_id"], "confirm_token": confirmation})["status"] == "rolled_back"
+    assert (
+        client.call(
+            "rollback_changeset", {"id": plan["plan_id"], "confirm_token": confirmation}
+        )["status"]
+        == "rolled_back"
+    )
 
 
 def main():
@@ -166,23 +247,77 @@ def main():
         alice = Inspector("alice", "analyst", catalogue)
         assert alice.request("tools/list")["tools"]
         assert alice.call("find_asset", {"query": "M-4711"})["result"]
-        assert alice.call("get_element", {"submodel": "urn:example:sm:technical-public", "path": "Temperature"})["data"] == 48
-        print("PASS 1: find motor temperature")
-        assert alice.call("describe_asset", {"shell": "urn:example:aas:motor-public"})["submodels"]
-        alice.request("prompts/get", ["--prompt-name", "ask_asset", "--prompt-args", "shell=urn:example:aas:motor-public", "question=Describe the motor"])
+        assert (
+            alice.call(
+                "get_element",
+                {"submodel": "urn:example:sm:technical-public", "path": "Temperature"},
+            )["data"]
+            == 48
+        )
+        measurement = alice.call(
+            "get_asset_measurement", {"shell": "M-4711", "query": "Temperature"}
+        )
+        assert measurement["data"] == 48 and measurement["measurement_time"] is None
+        assert measurement["retrieved_at"] and measurement["unit"] == "degC"
+        assert alice.call("find_elements", {"shell": "M4711", "query": "Temperature"})[
+            "result"
+        ]
+        print(
+            "PASS 1: find motor temperature with provenance and explicit unknown sample age"
+        )
+        assert alice.call("describe_asset", {"shell": "urn:example:aas:motor-public"})[
+            "submodels"
+        ]
+        alice.request(
+            "prompts/get",
+            [
+                "--prompt-name",
+                "ask_asset",
+                "--prompt-args",
+                "shell=urn:example:aas:motor-public",
+                "question=Describe the motor",
+            ],
+        )
         print("PASS 2: describe and ask asset")
         for uri in ("aasql://grammar", "aasql://fields"):
             alice.request("resources/read", ["--uri", uri])
-        query = {"$condition": {"$match": [{"$eq": [{"$field": "$sm#idShort"}, {"$strVal": "TechnicalData"}]}, {"$gt": [{"$numCast": {"$field": "$sme.RatedPower#value"}}, {"$numVal": 10}]}]}}
-        assert alice.call("query_aasql", {"target": "shells", "aasql": query, "dry_run": True})["valid"]
-        assert len(alice.call("query_aasql", {"target": "shells", "aasql": query})["result"]) == 2
+        query = {
+            "$condition": {
+                "$match": [
+                    {"$eq": [{"$field": "$sm#idShort"}, {"$strVal": "TechnicalData"}]},
+                    {
+                        "$gt": [
+                            {"$numCast": {"$field": "$sme.RatedPower#value"}},
+                            {"$numVal": 10},
+                        ]
+                    },
+                ]
+            }
+        }
+        assert alice.call(
+            "query_aasql", {"target": "shells", "aasql": query, "dry_run": True}
+        )["valid"]
+        assert (
+            len(
+                alice.call("query_aasql", {"target": "shells", "aasql": query})[
+                    "result"
+                ]
+            )
+            == 2
+        )
         print("PASS 3: validated AASQL selection")
         alice.call("list_read_models")
-        arguments = {"name": "value_statistics_by_semantic_id", "params": {"semanticId": "urn:example:rated-power"}}
+        arguments = {
+            "name": "value_statistics_by_semantic_id",
+            "params": {"semanticId": "urn:example:rated-power"},
+        }
         assert float(alice.call("run_read_model", arguments)["result"][0]["avg"]) == 18
         print("PASS 4: authorized aggregation")
         bob = Inspector("bob", "analyst", catalogue)
-        assert len(bob.call("query_aasql", {"target": "shells", "aasql": query})["result"]) == 1
+        assert (
+            len(bob.call("query_aasql", {"target": "shells", "aasql": query})["result"])
+            == 1
+        )
         assert float(bob.call("run_read_model", arguments)["result"][0]["avg"]) == 12
         print("PASS 5: restricted-user parity")
         creation_demo(Inspector("alice", "operator", catalogue))

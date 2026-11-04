@@ -167,6 +167,7 @@ func (m *Module) serveAuthenticated(w http.ResponseWriter, r *http.Request) {
 	}
 	identity.Profile = profile
 	if !m.allow(identity) {
+		w.Header().Set("Retry-After", "60")
 		writeHTTPError(w, 429, aol.Failure("MCP-LIMIT-RATE", "request rate limit exceeded", "Wait for the next minute before retrying."))
 		return
 	}

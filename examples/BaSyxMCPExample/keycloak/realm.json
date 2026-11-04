@@ -84,6 +84,52 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "codex-basyx-mvp",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1:18585/callback",
+        "http://127.0.0.1:18586/callback",
+        "http://127.0.0.1:18587/callback"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:18585",
+        "http://127.0.0.1:18586",
+        "http://127.0.0.1:18587"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "basyx-mcp",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "role",
+            "claim.name": "role",
+            "jsonType.label": "String",
+            "access.token.claim": "true"
+          }
+        }
+      ],
+      "name": "Codex local BaSyx MVP",
+      "optionalClientScopes": [
+        "offline_access"
+      ]
     }
   ],
   "users": [

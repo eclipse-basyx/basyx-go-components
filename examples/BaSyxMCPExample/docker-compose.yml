@@ -5,6 +5,8 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: sandbox
       POSTGRES_DB: mcp
+    volumes:
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d mcp"]
       interval: 2s
@@ -27,14 +29,15 @@ services:
     image: quay.io/keycloak/keycloak:26.0
     command: ["start-dev", "--import-realm"]
     environment:
-      KC_HOSTNAME: http://keycloak.localhost:18580
+      KC_HOSTNAME: http://keycloak.localhost:${BASYX_MCP_OIDC_PORT:-18580}
       KC_HOSTNAME_STRICT: "false"
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: sandbox-admin
     ports:
-      - "127.0.0.1:18580:8080"
+      - "127.0.0.1:${BASYX_MCP_OIDC_PORT:-18580}:8080"
     volumes:
-      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+      - keycloak_data:/opt/keycloak/data
+      - ${BASYX_MCP_REALM_FILE:-./keycloak/realm.json}:/opt/keycloak/data/import/realm.json:ro
     healthcheck:
       test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/8080"]
       interval: 3s
@@ -47,10 +50,11 @@ services:
       dockerfile: cmd/aasenvironmentservice/Dockerfile
     command: ["/app/aasenvironmentservice", "-config", "/config/mcp.yaml"]
     ports:
-      - "127.0.0.1:18584:5004"
+      - "127.0.0.1:${BASYX_MCP_API_PORT:-18584}:5004"
     volumes:
-      - ./config.yaml:/config/mcp.yaml:ro
+      - ${BASYX_MCP_CONFIG_FILE:-./config.yaml}:/config/mcp.yaml:ro
       - ./security:/security:ro
+      - ${BASYX_MCP_TRUSTLIST_FILE:-./security/trustlist.json}:/security/trustlist.json:ro
       - ./templates:/templates:ro
       - ./seed:/seed:ro
     extra_hosts:
@@ -61,3 +65,23 @@ services:
       keycloak:
         condition: service_healthy
     restart: on-failure
+
+  seed:
+    image: python:3.13-alpine
+    command: ["python", "/example/pilot.py", "seed"]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      MCP_SEED_API_URL: http://aas-environment:5004
+      MCP_SEED_ISSUER_URL: http://keycloak:8080/realms/basyx-mcp
+    volumes:
+      - .:/example:ro
+      - seed_state:/state
+    depends_on:
+      aas-environment:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  postgres_data:
+  keycloak_data:
+  seed_state:

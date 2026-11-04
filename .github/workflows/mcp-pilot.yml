@@ -1,0 +1,56 @@
+name: MCP Pilot Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'internal/**'
+      - 'cmd/aasenvironmentservice/**'
+      - 'cmd/basyxconfigurationservice/**'
+      - 'database/patches/**'
+      - 'examples/BaSyxMCPExample/**'
+      - 'docu/mcp/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/mcp-pilot.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASYX_MCP_IT_URL: http://localhost:18584/mcp
+      BASYX_MCP_IT_BASE_URL: http://localhost:18584
+      BASYX_MCP_IT_ISSUER_URL: http://localhost:18580/realms/basyx-mcp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Unit and setup contracts
+        run: |
+          go test -race ./internal/aol ./internal/mcp
+          python3 -m unittest discover -s examples/BaSyxMCPExample -p test_pilot.py -v
+      - name: Start disposable pilot with approved-write scenarios enabled
+        run: python3 examples/BaSyxMCPExample/pilot.py start --project basyx-mcp-pilot-test-ci --enable-writes
+      - name: Go SDK acceptance
+        run: go test -v ./internal/mcp/integration_tests
+      - name: Independent Inspector client acceptance
+        run: python3 examples/BaSyxMCPExample/smoke_inspector.py
+      - name: Large assets and recreation persistence
+        run: python3 examples/BaSyxMCPExample/smoke_pilot.py --project basyx-mcp-pilot-test-ci
+      - name: Service logs on failure
+        if: failure()
+        run: docker compose -p basyx-mcp-pilot-test-ci -f examples/BaSyxMCPExample/docker-compose.yml logs --no-color --tail=200
+      - name: Remove this job's disposable data
+        if: always()
+        run: docker compose -p basyx-mcp-pilot-test-ci -f examples/BaSyxMCPExample/docker-compose.yml down -v

@@ -30,7 +30,7 @@ Select a profile using `?profile=analyst` on the endpoint URL or the `Mcp-Profil
 | analyst | default plus query |
 | operator | default plus create |
 
-Configure `mcp.profiles.<name>.toolsets` and `denyTools` to restrict a profile further. A denied tool is absent from `tools/list` and cannot be invoked. The default profile has seven tools.
+Configure `mcp.profiles.<name>.toolsets` and `denyTools` to restrict a profile further. A denied tool is absent from `tools/list` and cannot be invoked. The default profile has nine tools.
 
 Default budgets are 65,536 response bytes, 1 MiB request bytes, 50 items per page, 1,000 scanned resources, 100 internal calls per tool, 120 requests per minute per subject, eight concurrent tool calls and a 30-second tool deadline. Requests are limited to 64 nested JSON containers. Limits reject work with distinct codes; aggregate scans never return incomplete statistics. Cursors must be followed to finish a paged result.
 
@@ -39,16 +39,24 @@ Default budgets are 65,536 response bytes, 1 MiB request bytes, 50 items per pag
 | Toolset | Tools |
 | --- | --- |
 | discovery | `find_asset` |
-| read | `get_shell`, `list_submodels_of_shell`, `get_submodel_value`, `get_element`, `describe_asset` |
+| read | `get_shell`, `list_submodels_of_shell`, `get_submodel_value`, `get_element`, `describe_asset`, `find_elements`, `get_asset_measurement` |
 | query | `query_aasql`, `list_read_models`, `run_read_model` |
 | create | `list_submodel_templates`, `get_submodel_template`, `validate_aas_draft`, `plan_create_aas`, `apply_plan`, `get_changeset`, `rollback_changeset` |
 | docs | `search_docs` |
 
-IDs are always plain text. `get_submodel_value` pages through the value-only element collection. `get_element` takes an idShortPath such as `Measurements.Temperature` or `Measurements[0].Temperature`. Units are included when they are present in authorized metadata. Descriptions compose authorized data and label values with source paths. Concept descriptions are resolved only through the local authorized API; referenced external URLs are never fetched.
+IDs are always plain text. `get_shell`, `describe_asset`, `find_elements` and `get_asset_measurement` accept a canonical shell ID or an unambiguous name/idShort/global asset ID. Alias resolution searches only caller-visible fields and refuses ambiguous matches. `find_asset` returns compact shell summaries and native continuation cursors; use `get_shell` for the complete authorized shell.
 
-Retrieved content is tagged as untrusted data. It never defines tools or server instructions. `ask_asset(shell, question)` is a prompt for the client LLM to use `describe_asset` and cite sources.
+`get_submodel_value` pages through the value-only element collection. `get_element` takes an idShortPath such as `Measurements.Temperature` or `Measurements[0].Temperature`. Units are included when present in authorized metadata. `find_elements(shell, query?, semanticId?, cursor?, limit?)` searches authorized element metadata, including collections and lists, and returns concrete paths without values. Supply a name or exact semantic ID. Scans fail explicitly at their configured limit; they never choose a measurement from an incomplete scan.
 
-`aasql://grammar` documents the running JSON expression dialect; `aasql://fields` derives example field paths from the shared resolver. `query_aasql` takes `target: shells | submodels`, an `aasql` JSON object, optional `dry_run` and a cursor. Dry runs decode and resolve expressions without making API or database calls. They do not prove that data exists or that the caller will be authorized at execution time.
+`get_asset_measurement(shell, query?, semanticId?)` reads a scalar only when exactly one visible candidate matches. Multiple candidates return `status: ambiguous` with paths for the client to select through `get_element`. Responses include the source, available ETag and `retrieved_at`; `measurement_time: null` explicitly means the source did not provide a sensor observation time. A repository read is not evidence of a fresh sensor sample.
+
+`describe_asset(shell, cursor?, limit?)` pages submodel references (at most three per page), with bounded metadata and value previews. It resolves nested element paths through metadata, reads a small sample using the caller's authorization, and labels truncated values. Follow the outer `paging_metadata.cursor` for subsequent submodels. Each submodel's preview and element cursor are explicitly identified; use `find_elements` and `get_element` for complete detail. Unavailable submodels appear as omissions rather than a successful complete description. Local concept descriptions are read through the authorized API; external URLs are never fetched.
+
+Collection tools accept an optional positive integer `limit`, capped by the server's configured page size. Discovery, value pages and AASQL pages shrink automatically when needed, accounting for MCP text and structured-result encoding. A single oversized item still fails with a specific budget error and guidance. Administrators can adjust `mcp.limits.maxResultBytes` in the mounted configuration and restart the AAS Environment; no image rebuild is needed for a budget change. The example uses 1 MiB and twenty items per page; the component defaults remain as listed above.
+
+Retrieved content is tagged as untrusted data. It never defines tools or server instructions. `ask_asset(shell, question)` guides the client to choose measurement lookup or paged descriptions, cite sources and disclose unknown sample age.
+
+`aasql://grammar` documents the running JSON expression dialect; `aasql://fields` derives example field paths from the shared resolver. `query_aasql` takes `target: shells | submodels`, an `aasql` JSON object, optional `dry_run`, `limit` and a cursor. Dry runs decode and resolve expressions without making API or database calls. They do not prove that data exists or that the caller will be authorized at execution time.
 
 `value_statistics_by_semantic_id` takes `semanticId` and an optional AASQL `condition`, returning count/min/max/avg/sum for visible numeric Property values, grouped by explicit unit. Empty units form a separate, unknown-unit group; no conversion is inferred. Numeric outputs use decimal strings. `count_submodels_by_semantic_id` counts distinct visible submodels by visible semantic ID. No matches produce an empty result list. Free-form SQL is not supported.
 
@@ -99,3 +107,11 @@ Multi-resource creation is a saga. Database outages, concurrent changes or revok
 Plan transitions and their agent/tool identity are recorded in `aol_event`; resource receipts carry their own audit fields in `aol_receipt`. This remains available when functional history is disabled. These tables are operational audit records, not a replacement for the optional tamper-evident history/evidence service. Plan/provenance retention must follow the operator's data-retention policy.
 
 See [the sandbox](../../examples/BaSyxMCPExample/README.md) and [the architecture](../developer/mcp_aol_architecture.md).
+
+## Local pilot acceptance
+
+The [pilot helper](../../examples/BaSyxMCPExample/README.md) starts, checks, connects and stops the example. Initialization is a one-time create-only job; restarts preserve edits and deletions. Named PostgreSQL, Keycloak and initialization-state volumes survive container recreation. The pilot starts read-only; writes need an explicit `--enable-writes` on startup.
+
+Automated acceptance covers the Go SDK and independent Inspector CLI, permission parity, aliases, measurement provenance, identifier-only AASQL projections, a multi-megabyte asset with bounded descriptions, and preservation of edited data and runtime OAuth clients across container recreation. The CI workflow runs these scenarios against its own disposable project. Server readiness and login success remain separate from a specific chat having the tools attached.
+
+The Codex helper uses the documented [MCP configuration fields](https://learn.chatgpt.com/docs/config-file/config-reference) and [`codex mcp login`](https://learn.chatgpt.com/docs/extend/mcp?surface=cli). It preserves unrelated configuration and uses a registered public PKCE client rather than embedding a bearer token.

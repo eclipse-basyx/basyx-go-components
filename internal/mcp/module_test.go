@@ -174,4 +174,36 @@ func TestTransportRejectsRequestDepthBytesAndRateLimits(t *testing.T) {
 	m.Handler().ServeHTTP(response, httptest.NewRequest("POST", "http://localhost/mcp", strings.NewReader(`{}`)))
 	require.Equal(t, 429, response.Code)
 	require.Contains(t, response.Body.String(), "MCP-LIMIT-RATE")
+	require.Equal(t, "60", response.Header().Get("Retry-After"))
+}
+
+func TestPilotMeasurementToolsAreAvailableInDefaultProfile(t *testing.T) {
+	m := testModule(t)
+	for _, name := range []string{"find_elements", "get_asset_measurement"} {
+		found := false
+		for _, tool := range catalogue {
+			if tool.name == name {
+				found = m.visible("default", tool)
+			}
+		}
+		require.True(t, found, name)
+	}
+}
+func TestPilotArgumentsRejectInvalidPageSizes(t *testing.T) {
+	for _, number := range []string{"0", "-1", "1.5", "1001"} {
+		require.Error(t, decodeArguments(json.RawMessage(`{"query":"motor","limit":`+number+`}`), catalogue[0], arguments{}))
+	}
+	require.NoError(t, decodeArguments(json.RawMessage(`{"query":"motor","limit":2}`), catalogue[0], arguments{}))
+}
+
+func TestPilotQueryKeepsIdentifierOnlyProjection(t *testing.T) {
+	m := testModule(t)
+	m.reader.Dispatch.Router = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"result":["urn:motor"],"paging_metadata":{"cursor":"next"}}`))
+	})
+	result, err := m.query(t.Context(), arguments{"target": "shells", "aasql": map[string]any{"$condition": map[string]any{"$boolean": true}, "$select": "id"}})
+	require.NoError(t, err)
+	raw, _ := json.Marshal(result)
+	require.Contains(t, string(raw), `"urn:motor"`)
+	require.Contains(t, string(raw), `"next"`)
 }

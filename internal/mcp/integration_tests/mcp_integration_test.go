@@ -55,6 +55,14 @@ func endpoint(t *testing.T) string {
 	return value
 }
 
+func testIssuer() string {
+	if value := os.Getenv("BASYX_MCP_IT_ISSUER_URL"); value != "" {
+		return value
+	}
+	return "http://localhost:18580/realms/basyx-mcp"
+}
+func testOIDCPort() string { uri, _ := url.Parse(testIssuer()); return uri.Port() }
+
 type bearerTransport struct {
 	token string
 	base  http.RoundTripper
@@ -67,7 +75,7 @@ func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 func userToken(t *testing.T, user string) string {
 	t.Helper()
-	response, err := http.PostForm("http://localhost:18580/realms/basyx-mcp/protocol/openid-connect/token", url.Values{"grant_type": {"password"}, "client_id": {"basyx-mcp"}, "username": {user}, "password": {"sandbox-" + user}, "scope": {"openid"}})
+	response, err := http.PostForm(testIssuer()+"/protocol/openid-connect/token", url.Values{"grant_type": {"password"}, "client_id": {"basyx-mcp"}, "username": {user}, "password": {"sandbox-" + user}, "scope": {"openid"}})
 	require.NoError(t, err)
 	defer func() { _ = response.Body.Close() }()
 	require.Equal(t, 200, response.StatusCode)
@@ -109,6 +117,17 @@ func TestLiveDiscoveryReadDescriptionQueryAndDocs(t *testing.T) {
 	require.Contains(t, value["source"], "Temperature")
 	description := call(t, c, "describe_asset", map[string]any{"shell": "urn:example:aas:motor-public"})
 	require.NotEmpty(t, description["submodels"])
+	measurement := call(t, c, "get_asset_measurement", map[string]any{"shell": "M-4711", "query": "Temperature"})
+	require.Equal(t, float64(48), measurement["data"])
+	require.Equal(t, "degC", measurement["unit"])
+	require.Nil(t, measurement["measurement_time"])
+	require.NotEmpty(t, measurement["retrieved_at"])
+	paths := call(t, c, "find_elements", map[string]any{"shell": "M4711", "semanticId": "urn:example:temperature", "limit": 1})
+	require.Len(t, paths["result"], 1)
+	identifiers := call(t, c, "query_aasql", map[string]any{"target": "shells", "aasql": map[string]any{"$select": "id", "$condition": map[string]any{"$boolean": true}}, "limit": 1})
+	require.Len(t, identifiers["result"], 1)
+	require.IsType(t, "", identifiers["result"].([]any)[0])
+	require.NotEmpty(t, identifiers["paging_metadata"])
 	condition := map[string]any{"$condition": map[string]any{"$eq": []any{map[string]any{"$field": "$sm#idShort"}, map[string]any{"$strVal": "TechnicalData"}}}}
 	dry := call(t, c, "query_aasql", map[string]any{"target": "submodels", "aasql": condition, "dry_run": true})
 	require.Equal(t, false, dry["executed"])
@@ -214,7 +233,7 @@ func (b browserTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.URL.Host == "keycloak.localhost:18580" {
+	if r.URL.Host == "keycloak.localhost:"+testOIDCPort() {
 		cookies := response.Cookies()
 		response.Header.Del("Set-Cookie")
 		for _, cookie := range cookies {
@@ -231,8 +250,8 @@ func approveInTestBrowser(t *testing.T, uri string) string {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		if address == "keycloak.localhost:18580" {
-			address = "127.0.0.1:18580"
+		if address == "keycloak.localhost:"+testOIDCPort() {
+			address = "127.0.0.1:" + testOIDCPort()
 		}
 		return dialer.DialContext(ctx, network, address)
 	}
@@ -415,6 +434,8 @@ func assertReadVisibility(t *testing.T, client *sdk.ClientSession, user string) 
 			{"describe_asset", map[string]any{"shell": shell}},
 			{"get_submodel_value", map[string]any{"submodel": submodel}},
 			{"get_element", map[string]any{"submodel": submodel, "path": "Temperature"}},
+			{"find_elements", map[string]any{"shell": shell, "query": "Temperature"}},
+			{"get_asset_measurement", map[string]any{"shell": shell, "query": "Temperature"}},
 		}
 		for _, test := range cases {
 			t.Run(visibility+"/"+test.name, func(t *testing.T) {

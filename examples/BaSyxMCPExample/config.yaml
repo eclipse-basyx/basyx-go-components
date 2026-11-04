@@ -19,9 +19,7 @@
     "trustlistPath": "/security/trustlist.json"
   },
   "general": {
-    "aasPreconfigPaths": [
-      "/seed"
-    ],
+    "aasPreconfigPaths": [],
     "externalUrl": "http://localhost:18584",
     "aasRegistryIntegration": true,
     "submodelRegistryIntegration": true
@@ -32,7 +30,7 @@
   },
   "mcp": {
     "enabled": true,
-    "writeMode": "confirm",
+    "writeMode": "disabled",
     "publicUrl": "http://localhost:18584/mcp",
     "confirmationClientId": "basyx-mcp",
     "authorizationServers": [
@@ -42,6 +40,10 @@
     "allowedTemplates": [
       "demo-nameplate",
       "demo-technical-data"
-    ]
+    ],
+    "limits": {
+      "maxResultBytes": 1048576,
+      "maxItemsPerPage": 20
+    }
   }
 }
