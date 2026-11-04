@@ -165,8 +165,8 @@ func TestCreatePackageTransfersOriginalStagedUploadToPromotion(t *testing.T) {
 func TestNormalizeAASIDs(t *testing.T) {
 	t.Parallel()
 
-	result := normalizeAASIDs([]string{"id1,id2", " id2 ", "", "id3", "id1"})
-	require.Equal(t, []string{"id1", "id2", "id3"}, result)
+	result := normalizeAASIDs([]string{"urn:a,1", " id2 ", "", "id2", "urn:a,1"})
+	require.Equal(t, []string{"urn:a,1", "id2"}, result)
 }
 
 func TestNormalizeFileName(t *testing.T) {

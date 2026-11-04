@@ -14,10 +14,6 @@ type PackageDescription struct {
 	PackageId string `json:"packageId"`
 
 	AasIds []string `json:"aasIds,omitempty"`
-
-	FileName string `json:"fileName,omitempty"`
-
-	ContentType string `json:"contentType,omitempty"`
 }
 
 // AssertPackageDescriptionRequired checks if the required fields are not zero-ed

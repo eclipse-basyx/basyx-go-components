@@ -720,18 +720,15 @@ func normalizeAASIDs(aasIDs []string) []string {
 	result := make([]string, 0, len(aasIDs))
 
 	for _, raw := range aasIDs {
-		parts := strings.Split(raw, ",")
-		for _, part := range parts {
-			trimmed := strings.TrimSpace(part)
-			if trimmed == "" {
-				continue
-			}
-			if _, exists := seen[trimmed]; exists {
-				continue
-			}
-			seen[trimmed] = struct{}{}
-			result = append(result, trimmed)
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			continue
 		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		result = append(result, trimmed)
 	}
 
 	return result
