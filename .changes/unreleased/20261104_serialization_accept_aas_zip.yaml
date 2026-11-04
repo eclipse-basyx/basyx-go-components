@@ -1,0 +1,12 @@
+kind: fixed
+body: >-
+  GET /serialization of the AAS Environment accepts Accept:
+  application/aas+zip, the AASX media type of the OpenAPI and of Part 5, and
+  answers with an AASX package containing the XML serialization and with the
+  Content-Type application/aas+zip. The previously accepted AASX media types
+  still work.
+time: 2026-11-04T12:00:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 837
+  SecurityImpact: None.

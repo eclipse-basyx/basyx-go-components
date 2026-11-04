@@ -286,6 +286,7 @@ func TestSerializationDownloadAASXWithoutUploadContainsSameIds(t *testing.T) {
 		{name: "AASXJSON", accept: "application/aasx+json"},
 		{name: "AASXXMLAlt", accept: "application/asset-administration-shell+xml"},
 		{name: "AASXJSONAlt", accept: "application/asset-administration-shell+json"},
+		{name: "AASZip", accept: "application/aas+zip"},
 	}
 
 	for _, testCase := range testCases {
@@ -318,6 +319,19 @@ func TestSerializationDownloadAASXWithoutUploadContainsSameIds(t *testing.T) {
 	}
 }
 
+func TestSerializationDownloadAASZipReturnsXMLPackageWithRequestedContentType(t *testing.T) {
+	resetDatabaseForUploadIT(t, serializationIntegrationDSN)
+	postJSONFixture(t, serializationBaseURL+"/shells", "testdata/serialization_asset_administration_shell.json", http.StatusCreated)
+
+	payload, header := requestSerialization(t, "application/aas+zip", []string{serializationFixtureAASID}, nil, false)
+
+	require.Equal(t, "application/aas+zip", header.Get("Content-Type"))
+	specParts, closePackage := readAASXSpecPartsFromPayload(t, payload)
+	defer closePackage()
+	require.Len(t, specParts, 1)
+	require.Equal(t, "/aasx/xml/content.xml", specParts[0].URI.String())
+}
+
 func TestSerializationDownloadAASXWithoutUploadContainsSubsetIds(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -327,6 +341,7 @@ func TestSerializationDownloadAASXWithoutUploadContainsSubsetIds(t *testing.T) {
 		{name: "AASXJSON", accept: "application/aasx+json"},
 		{name: "AASXXMLAlt", accept: "application/asset-administration-shell+xml"},
 		{name: "AASXJSONAlt", accept: "application/asset-administration-shell+json"},
+		{name: "AASZip", accept: "application/aas+zip"},
 	}
 
 	expectedAASID := "urn:example:aas:registry-sync-post"
@@ -1171,6 +1186,13 @@ func storedIdentifiers(t *testing.T, collectionPath string) []string {
 func downloadAASXSerializationFilteredEnvironment(t *testing.T, acceptHeader string, aasIDs []string, submodelIDs []string, includeConceptDescriptions bool) []byte {
 	t.Helper()
 
+	body, _ := requestSerialization(t, acceptHeader, aasIDs, submodelIDs, includeConceptDescriptions)
+	return body
+}
+
+func requestSerialization(t *testing.T, acceptHeader string, aasIDs []string, submodelIDs []string, includeConceptDescriptions bool) ([]byte, http.Header) {
+	t.Helper()
+
 	query := url.Values{}
 	query.Set("includeConceptDescriptions", strconv.FormatBool(includeConceptDescriptions))
 
@@ -1202,5 +1224,5 @@ func downloadAASXSerializationFilteredEnvironment(t *testing.T, acceptHeader str
 	require.NoError(t, err)
 	require.Equalf(t, http.StatusOK, resp.StatusCode, "filtered serialization request failed for Accept %q: %s", acceptHeader, string(body))
 
-	return body
+	return body, resp.Header
 }
