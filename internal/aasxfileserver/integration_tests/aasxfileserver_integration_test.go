@@ -122,6 +122,8 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+const aasxPackageContentType = "application/asset-administration-shell-package"
+
 func TestPackageLifecycle(t *testing.T) {
 	uploadBody, uploadStatus, uploadHeaders := uploadAASXPackage(t, "../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx")
 	require.Equal(t, http.StatusCreated, uploadStatus)
@@ -138,10 +140,15 @@ func TestPackageLifecycle(t *testing.T) {
 	downloadResp, downloadBody := request(t, http.MethodGet, packageURL(baseURL, created.PackageId), nil, "")
 	require.Equal(t, http.StatusOK, downloadResp.StatusCode)
 	require.NotEmpty(t, downloadResp.Header.Get("X-FileName"))
+	require.Equal(t, aasxPackageContentType, downloadResp.Header.Get("Content-Type"))
 	require.NotEmpty(t, downloadBody)
 
 	updateStatus := putAASXPackage(t, created.PackageId, "../../aasenvironment/integration_tests/testdata/ProductionPlanSFKL.aasx")
 	require.Equal(t, http.StatusNoContent, updateStatus)
+
+	updatedResp, _ := request(t, http.MethodGet, packageURL(baseURL, created.PackageId), nil, "")
+	require.Equal(t, http.StatusOK, updatedResp.StatusCode)
+	require.Equal(t, aasxPackageContentType, updatedResp.Header.Get("Content-Type"))
 
 	deleteResp, _ := request(t, http.MethodDelete, packageURL(baseURL, created.PackageId), nil, "")
 	require.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
