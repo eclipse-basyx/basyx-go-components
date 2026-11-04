@@ -1034,6 +1034,16 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureSubmodelBackend(
 	return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil, false
 }
 
+func toAASFileResponse(response gen.ImplResponse) gen.ImplResponse {
+	switch body := response.Body.(type) {
+	case submodelopenapi.FileDownload:
+		response.Body = openapi.FileDownload(body)
+	case submodelopenapi.Redirect:
+		response.Body = openapi.Redirect(body)
+	}
+	return response
+}
+
 func toAASOperationRedirect(
 	response gen.ImplResponse,
 	aasIdentifier string,
@@ -1660,7 +1670,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetFileByPathAasReposi
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.GetFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath)
+	response, err := s.submodelAPI.GetFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath)
+	return toAASFileResponse(response), err
 }
 
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy

@@ -133,6 +133,39 @@ func TestToAASOperationRedirectRewritesSubmodelNamespace(t *testing.T) {
 	)
 }
 
+func TestToAASFileResponseWritesAttachmentContent(t *testing.T) {
+	t.Parallel()
+
+	response := toAASFileResponse(model.Response(http.StatusOK, submodelopenapi.FileDownload{
+		Content:     []byte("Read me."),
+		ContentType: "text/plain",
+		Filename:    "manual.txt",
+	}))
+
+	recorder := httptest.NewRecorder()
+	require.NoError(t, aasopenapi.EncodeJSONResponse(response.Body, &response.Code, recorder))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "text/plain", recorder.Header().Get("Content-Type"))
+	require.Contains(t, recorder.Header().Get("Content-Disposition"), "manual.txt")
+	require.Equal(t, "Read me.", recorder.Body.String())
+}
+
+func TestToAASFileResponseWritesExternalFileRedirect(t *testing.T) {
+	t.Parallel()
+
+	response := toAASFileResponse(model.Response(http.StatusFound, submodelopenapi.Redirect{
+		Location: "https://example.com/manual.pdf",
+	}))
+
+	recorder := httptest.NewRecorder()
+	require.NoError(t, aasopenapi.EncodeJSONResponse(response.Body, &response.Code, recorder))
+
+	require.Equal(t, http.StatusFound, recorder.Code)
+	require.Equal(t, "https://example.com/manual.pdf", recorder.Header().Get("Location"))
+	require.Empty(t, recorder.Body.String())
+}
+
 func TestInvokeOperationAsyncAasRepositoryRequiresClientTimeoutDuration(t *testing.T) {
 	t.Parallel()
 
