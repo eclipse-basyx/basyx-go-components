@@ -210,6 +210,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 	if err := history.LockMutationTx(ctx, tx, history.TableSubmodelDescriptor, submodel.Id); err != nil {
 		return model.SubmodelDescriptor{}, err
 	}
+	submodel = descriptors.FillSubmodelDescriptorCreator(ctx, submodel)
 	batch, err := descriptors.BuildSubmodelDescriptorsCreateBatch(ctx, tx, []model.SubmodelDescriptor{submodel})
 	if err != nil {
 		return model.SubmodelDescriptor{}, err

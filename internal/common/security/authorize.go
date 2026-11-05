@@ -167,7 +167,7 @@ func serveAuthorizedRequest(
 	}
 
 	environment := session.evaluateEnvironment(r.Method, policyPath, routePath)
-	outcome, route, grants := resolveReBAC(r, settings, model, evaluation, routePath)
+	outcome, route, grants := resolveReBAC(r, settings, session, evaluation, routePath)
 	switch outcome {
 	case reBACOutcomeManagement:
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), reBACRouteContextKey{}, route)))

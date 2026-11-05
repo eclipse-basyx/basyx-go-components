@@ -115,7 +115,7 @@ func TestGetSignedSubmodelSignsFullRepresentation(t *testing.T) {
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
 	certificateChain := []string{newTestCertificate(t, privateKey)}
 	sut.SetJWSCertificateChain(certificateChain)
-	setupSignedSubmodelHappyPathExpectations(mock, "sm-signed")
+	setupSignedSubmodelHappyPathExpectations(mock, "sm-signed", new("idShort"))
 
 	jwsCompact, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm-signed")
 	require.NoError(t, err)
@@ -135,6 +135,43 @@ func TestGetSignedSubmodelSignsFullRepresentation(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetSignedSubmodelPreservesIDShortPresence(t *testing.T) {
+	t.Parallel()
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	for _, testCase := range []struct {
+		name    string
+		idShort *string
+	}{
+		{name: "absent"},
+		{name: "empty", idShort: new("")},
+		{name: "populated", idShort: new("SignedName")},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			sut := &SubmodelDatabase{db: db, privateKey: privateKey}
+			setupSignedSubmodelHappyPathExpectations(mock, "sm-presence", testCase.idShort)
+
+			compact, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm-presence")
+			require.NoError(t, err)
+			signed, err := jose.ParseSigned(compact)
+			require.NoError(t, err)
+			payload, err := signed.Verify(&privateKey.PublicKey)
+			require.NoError(t, err)
+			var document map[string]any
+			require.NoError(t, json.Unmarshal(payload, &document))
+			value, present := document["idShort"]
+			require.Equal(t, testCase.idShort != nil, present)
+			if testCase.idShort != nil {
+				require.Equal(t, *testCase.idShort, value)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
 func TestGetSignedSubmodelSignsValueOnlyRepresentation(t *testing.T) {
 	t.Parallel()
 
@@ -150,7 +187,7 @@ func TestGetSignedSubmodelSignsValueOnlyRepresentation(t *testing.T) {
 	require.NoError(t, err)
 
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
-	setupSignedSubmodelHappyPathExpectations(mock, "sm-value-only")
+	setupSignedSubmodelHappyPathExpectations(mock, "sm-value-only", new("idShort"))
 
 	jwsCompact, err := sut.GetSignedSubmodelValueOnly(contextWithABACDisabled(t), "sm-value-only")
 	require.NoError(t, err)
@@ -225,7 +262,7 @@ func requireCanonicalJSONPayload(t *testing.T, payload []byte) {
 	require.Equal(t, string(canonical), string(payload))
 }
 
-func setupSignedSubmodelHappyPathExpectations(mock sqlmock.Sqlmock, submodelIdentifier string) {
+func setupSignedSubmodelHappyPathExpectations(mock sqlmock.Sqlmock, submodelIdentifier string, idShort *string) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM "submodel" INNER JOIN "submodel_payload"`).
 		WillReturnRows(sqlmock.NewRows([]string{
@@ -244,7 +281,7 @@ func setupSignedSubmodelHappyPathExpectations(mock sqlmock.Sqlmock, submodelIden
 			"sort_submodel_identifier",
 		}).AddRow(
 			submodelIdentifier,
-			"idShort",
+			idShort,
 			nil,
 			nil,
 			nil,

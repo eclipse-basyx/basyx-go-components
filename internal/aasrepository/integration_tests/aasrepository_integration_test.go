@@ -36,9 +36,11 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -159,19 +161,17 @@ func uploadThumbnail(endpoint string, filePath string, fileName string) (int, er
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	partFileName := filepath.Base(filePath)
+	if fileName != "" {
+		partFileName = fileName
+	}
+	part, err := writer.CreateFormFile("file", partFileName)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create form file: %v", err)
 	}
 	_, err = io.Copy(part, file)
 	if err != nil {
 		return 0, fmt.Errorf("failed to copy file: %v", err)
-	}
-
-	if fileName != "" {
-		if err = writer.WriteField("fileName", fileName); err != nil {
-			return 0, fmt.Errorf("failed to write fileName field: %v", err)
-		}
 	}
 
 	err = writer.Close()
@@ -1307,6 +1307,61 @@ func TestGetSubmodelByIdAasRepositoryReturnsSubmodel(t *testing.T) {
 	assert.Equal(t, "Submodel", payload["modelType"], "Expected submodel modelType in GET response")
 }
 
+func TestFileAttachmentAasRepositoryReturnsFileContent(t *testing.T) {
+	baseURL := aasRepositoryBaseURL
+	aasID := fmt.Sprintf("https://example.com/ids/aas/file-attachment-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/file-attachment-%d", time.Now().UnixNano())
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	submodelEndpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+	externalFileURL := "https://example.com/manual.pdf"
+
+	body := fmt.Sprintf(
+		`{"id":"%s","idShort":"FileAttachmentViaAAS","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"manual","modelType":"File","contentType":"image/gif"},{"idShort":"externalManual","modelType":"File","contentType":"application/pdf","value":"%s"}]}`,
+		submodelID,
+		externalFileURL,
+	)
+	_, putStatusCode, _, putErr := putJSONResponse(submodelEndpoint, body)
+	require.NoError(t, putErr, "PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, putStatusCode, "Expected 201 Created when creating submodel via AAS endpoint")
+
+	t.Run("ManagedFileReturnsBinaryContent", func(t *testing.T) {
+		expectedContent := []byte("GIF89a" + submodelID)
+		testFilePath := createTemporaryBinaryTestFile(t, "manual.gif", expectedContent)
+
+		attachmentEndpoint := submodelEndpoint + "/submodel-elements/manual/attachment"
+		uploadStatusCode, uploadErr := uploadThumbnail(attachmentEndpoint, testFilePath, "manual.gif")
+		require.NoError(t, uploadErr, "Attachment upload failed")
+		require.Equal(t, http.StatusNoContent, uploadStatusCode, "Expected 204 No Content for attachment upload")
+
+		content, contentType, getStatusCode, getErr := downloadThumbnail(attachmentEndpoint)
+		require.NoError(t, getErr, "Attachment download failed")
+		require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK for attachment download")
+		assert.Equal(t, "image/gif", contentType, "Attachment Content-Type should be the file's content type")
+		assert.Equal(t, expectedContent, content, "Attachment body should be the uploaded file content")
+	})
+
+	t.Run("ExternalFileRedirectsToLocation", func(t *testing.T) {
+		client := &http.Client{
+			Timeout: 10 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		resp, getErr := client.Get(submodelEndpoint + "/submodel-elements/externalManual/attachment")
+		require.NoError(t, getErr, "External attachment request failed")
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusFound, resp.StatusCode, "Expected 302 Found for an external file")
+		assert.Equal(t, externalFileURL, resp.Header.Get("Location"), "Expected Location of the external file")
+	})
+}
+
 func TestPostSubmodelReferenceAasRepositoryReturnsConflictOnDuplicate(t *testing.T) {
 	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/submodel-ref-duplicate-%d", time.Now().UnixNano())
@@ -1418,12 +1473,12 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, statusCode, "Expected 400 Bad Request for a JSON number on xs:string: %s", responseBody)
 	})
 
-	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPath", func(t *testing.T) {
+	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPathAndDirectChildren", func(t *testing.T) {
 		paths, pathStatusCode, pathErr := getJSONArrayResponse(fmt.Sprintf("%s/submodel-elements/MainCollection/$path?level=core", submodelEndpoint))
 		require.NoError(t, pathErr, "GET submodel element $path request failed")
 		require.Equal(t, http.StatusOK, pathStatusCode, "Expected 200 OK for GET submodel element $path")
 
-		assert.Equal(t, []string{"MainCollection"}, paths)
+		assert.ElementsMatch(t, []string{"MainCollection", "MainCollection.NestedProperty", "MainCollection.NestedBlob"}, paths)
 	})
 
 	t.Run("GetSubmodelByIdPathReturnsNotFoundIfSubmodelNotReferencedInAAS", func(t *testing.T) {
@@ -2013,4 +2068,80 @@ func assertSubmodelReferencePagination(t *testing.T, runner *testenv.JSONSuiteRu
 	expected, err = os.ReadFile("expected/expectedAssetAdministrationShellSubmodelReferencesFilterCursor.json")
 	require.NoError(t, err)
 	require.JSONEq(t, string(expected), second.Body)
+}
+
+// TestThumbnailContentTypeFollowsEachUpload covers
+// eclipse-basyx/basyx-go-components#814 and #813 for PutThumbnail: the part's
+// Content-Type describes each upload, DeleteThumbnail leaves no stale type,
+// and the file name is optional.
+func TestThumbnailContentTypeFollowsEachUpload(t *testing.T) {
+	baseURL := aasRepositoryBaseURL
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_content_type_%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode)
+
+	jpeg := []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00")
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR")
+
+	require.Equal(t, http.StatusNoContent, putRawThumbnail(t, thumbnailEndpoint, `form-data; name="file"; filename="photo.jpg"`, "image/jpeg", jpeg))
+	assertDefaultThumbnail(t, baseURL, aasIdentifier, "photo.jpg", "image/jpeg")
+
+	require.Equal(t, http.StatusNoContent, putRawThumbnail(t, thumbnailEndpoint, `form-data; name="file"; filename="photo.png"`, "image/png", png))
+	assertDefaultThumbnail(t, baseURL, aasIdentifier, "photo.png", "image/png")
+	content, contentType, getStatusCode, getErr := downloadThumbnail(thumbnailEndpoint)
+	require.NoError(t, getErr)
+	require.Equal(t, http.StatusOK, getStatusCode)
+	require.Equal(t, png, content)
+	require.Equal(t, "image/png", contentType)
+
+	require.Equal(t, http.StatusNoContent, putRawThumbnail(t, thumbnailEndpoint, `form-data; name="file"; filename="photo.jpg"`, "image/jpeg", jpeg))
+	deleteRequest, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, thumbnailEndpoint, nil)
+	require.NoError(t, err)
+	deleteResponse, err := http.DefaultClient.Do(deleteRequest)
+	require.NoError(t, err)
+	_ = deleteResponse.Body.Close()
+	require.Equal(t, http.StatusNoContent, deleteResponse.StatusCode)
+
+	require.Equal(t, http.StatusNoContent, putRawThumbnail(t, thumbnailEndpoint, `form-data; name="file"`, "application/octet-stream", png))
+	assertDefaultThumbnail(t, baseURL, aasIdentifier, "thumbnail.png", "image/png")
+}
+
+func assertDefaultThumbnail(t *testing.T, baseURL string, aasIdentifier string, fileName string, contentType string) {
+	t.Helper()
+	payload, statusCode, err := getJSONResponse(fmt.Sprintf("%s/shells/%s/asset-information", baseURL, aasIdentifier))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode)
+	thumbnail, ok := payload["defaultThumbnail"].(map[string]any)
+	require.True(t, ok, "defaultThumbnail should be present: %v", payload)
+	require.Regexp(t, `^/aasx/files/[A-Za-z0-9_-]{32}/`+regexp.QuoteMeta(fileName)+`$`, thumbnail["path"])
+	require.Equal(t, contentType, thumbnail["contentType"])
+}
+
+func putRawThumbnail(t *testing.T, endpoint string, contentDisposition string, contentType string, payload []byte) int {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Disposition", contentDisposition)
+	header.Set("Content-Type", contentType)
+	part, err := writer.CreatePart(header)
+	require.NoError(t, err)
+	_, err = part.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPut, endpoint, &body)
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	require.NoError(t, err)
+	defer func() { _ = response.Body.Close() }()
+	responseBody, _ := io.ReadAll(response.Body)
+	if response.StatusCode >= http.StatusBadRequest {
+		t.Logf("thumbnail upload response: %s", string(responseBody))
+	}
+	return response.StatusCode
 }

@@ -41,9 +41,9 @@ import (
 )
 
 type FileValue struct {
-	ContentType string `json:"contentType"`
+	ContentType string `json:"contentType,omitempty"`
 
-	Value string `json:"value"`
+	Value string `json:"value,omitempty"`
 }
 
 // MarshalValueOnly serializes FileValue in Value-Only format

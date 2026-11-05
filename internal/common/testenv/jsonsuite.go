@@ -39,11 +39,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
@@ -358,7 +360,7 @@ func waitForBulkFailureResult(
 		if statusCode == http.StatusNoContent {
 			t.Fatalf("expected failed bulk result, got successful 204 response")
 		}
-		if statusCode == http.StatusBadRequest && bulkResultHasDetails(body) {
+		if statusCode == http.StatusBadRequest && bulkResultHasItemMessages(body) {
 			return body
 		}
 		if time.Now().After(deadline) {
@@ -368,59 +370,60 @@ func waitForBulkFailureResult(
 	}
 }
 
-func bulkResultHasDetails(body string) bool {
-	var result struct {
-		Details []bulkFailureDetail `json:"details"`
-	}
-	if err := json.Unmarshal([]byte(body), &result); err != nil {
+const bulkItemCorrelationIDPrefix = "bulk-item-"
+
+func bulkResultHasItemMessages(body string) bool {
+	result, err := decodeBulkFailureResult(body)
+	if err != nil {
 		return false
 	}
-	return len(result.Details) > 0
+	for _, message := range result.Messages {
+		if strings.HasPrefix(message.CorrelationID, bulkItemCorrelationIDPrefix) {
+			return true
+		}
+	}
+	return false
 }
 
-type bulkFailureDetail struct {
-	Index      int    `json:"index"`
-	Identifier string `json:"identifier"`
-	StatusCode int    `json:"statusCode"`
-	Message    string `json:"message"`
+func decodeBulkFailureResult(body string) (model.Result, error) {
+	decoder := json.NewDecoder(strings.NewReader(body))
+	decoder.DisallowUnknownFields()
+	var result model.Result
+	err := decoder.Decode(&result)
+	return result, err
 }
 
 func assertBulkFailureResult(t *testing.T, step JSONSuiteStep, body string) {
 	t.Helper()
 
-	var result struct {
-		ExecutionState string              `json:"executionState"`
-		Success        bool                `json:"success"`
-		FailedCount    int                 `json:"failedCount"`
-		Details        []bulkFailureDetail `json:"details"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(body), &result))
-	require.Equal(t, "Completed", result.ExecutionState)
-	require.False(t, result.Success)
-	require.NotZero(t, result.FailedCount)
+	result, err := decodeBulkFailureResult(body)
+	require.NoError(t, err, "bulk failure result must be a Result with only messages")
 
 	expectedStatus := step.ExpectedBulkFailureStatus
 	if expectedStatus == 0 {
 		expectedStatus = http.StatusForbidden
 	}
 
-	for _, detail := range result.Details {
-		if detail.Index != step.ExpectedBulkFailureIndex {
+	expectedCorrelationID := fmt.Sprintf("%s%d", bulkItemCorrelationIDPrefix, step.ExpectedBulkFailureIndex)
+	expectedTextPrefix := fmt.Sprintf("item[%d] (%s):", step.ExpectedBulkFailureIndex, step.ExpectedBulkFailureID)
+	for _, message := range result.Messages {
+		if message.CorrelationID != expectedCorrelationID {
 			continue
 		}
-		if step.ExpectedBulkFailureID != "" && detail.Identifier != step.ExpectedBulkFailureID {
+		if step.ExpectedBulkFailureID != "" && !strings.HasPrefix(message.Text, expectedTextPrefix) {
 			continue
 		}
-		require.Equal(t, expectedStatus, detail.StatusCode)
+		require.Equal(t, "Error", message.MessageType)
+		require.Equal(t, strconv.Itoa(expectedStatus), message.Code)
 		return
 	}
 
 	t.Fatalf(
-		"expected bulk failure detail index=%d identifier=%q status=%d, got %+v",
+		"expected bulk failure message index=%d identifier=%q status=%d, got %+v",
 		step.ExpectedBulkFailureIndex,
 		step.ExpectedBulkFailureID,
 		expectedStatus,
-		result.Details,
+		result.Messages,
 	)
 }
 

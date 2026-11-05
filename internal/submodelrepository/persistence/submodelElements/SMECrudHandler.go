@@ -41,6 +41,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
@@ -251,7 +252,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	// Ensure payload row exists
 	ensurePayloadQuery, ensurePayloadArgs, err := dialect.Insert("submodel_element_payload").
 		Rows(goqu.Record{"submodel_element_id": existingID}).
-		OnConflict(goqu.DoNothing()).
+		OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression("submodel_element_id"))).
 		ToSQL()
 	if err != nil {
 		return err

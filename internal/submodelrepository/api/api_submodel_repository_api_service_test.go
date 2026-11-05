@@ -59,64 +59,6 @@ func contextWithABACDisabled(t *testing.T) context.Context {
 	return cfgCtx
 }
 
-func TestResolveModelReferencePathKeysUsesEntityForParentSegment(t *testing.T) {
-	t.Parallel()
-
-	keyTypes, keyValues, err := resolveModelReferencePathKeys(
-		"DemoEntity.StatementProperty1",
-		"Property",
-		func(path string) (string, error) {
-			if path == "DemoEntity" {
-				return "Entity", nil
-			}
-			return "", nil
-		},
-	)
-	require.NoError(t, err)
-	require.Equal(t, []string{"Entity", "Property"}, keyTypes)
-	require.Equal(t, []string{"DemoEntity", "StatementProperty1"}, keyValues)
-}
-
-func TestResolveModelReferencePathKeysUsesAnnotatedRelationshipElementForParentSegment(t *testing.T) {
-	t.Parallel()
-
-	keyTypes, keyValues, err := resolveModelReferencePathKeys(
-		"DemoAnnotatedRelationshipElement.AnnotationProperty1",
-		"Property",
-		func(path string) (string, error) {
-			if path == "DemoAnnotatedRelationshipElement" {
-				return "AnnotatedRelationshipElement", nil
-			}
-			return "", nil
-		},
-	)
-	require.NoError(t, err)
-	require.Equal(t, []string{"AnnotatedRelationshipElement", "Property"}, keyTypes)
-	require.Equal(t, []string{"DemoAnnotatedRelationshipElement", "AnnotationProperty1"}, keyValues)
-}
-
-func TestResolveModelReferencePathKeysBuildsListIndexSegment(t *testing.T) {
-	t.Parallel()
-
-	keyTypes, keyValues, err := resolveModelReferencePathKeys(
-		"test.test[0]",
-		"SubmodelElementList",
-		func(path string) (string, error) {
-			switch path {
-			case "test":
-				return "SubmodelElementCollection", nil
-			case "test.test":
-				return "SubmodelElementCollection", nil
-			default:
-				return "", nil
-			}
-		},
-	)
-	require.NoError(t, err)
-	require.Equal(t, []string{"SubmodelElementCollection", "SubmodelElementCollection", "SubmodelElementList"}, keyTypes)
-	require.Equal(t, []string{"test", "test", "0"}, keyValues)
-}
-
 func TestGetSubmodelElementByPathSubmodelRepoRejectsInvalidLevel(t *testing.T) {
 	t.Parallel()
 
@@ -362,11 +304,12 @@ func TestValueOnlyAsyncResultPreservesRunningFailureAndPathIsolation(t *testing.
 	failedHandle, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: "test", Metadata: metadata})
 	require.NoError(t, err)
 	failure := newAPIErrorResponse(errors.New("delegate failed"), http.StatusBadGateway, "InvokeOperationAsync", "DelegateOperationCall")
-	require.NoError(t, sut.asyncJobManager.Fail(t.Context(), failedHandle, failure.Code, failure.Body))
+	storedFailure := newFailedOperationResult(gen.EXECUTIONSTATE_FAILED, errorResponseMessages(failure))
+	require.NoError(t, sut.asyncJobManager.Fail(t.Context(), failedHandle, failure.Code, storedFailure))
 	failedResult, err := sut.GetOperationAsyncResultValueOnly(ctx, encodedSubmodelID, "Ops.Add", failedHandle)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusBadGateway, failedResult.Code)
-	require.Equal(t, failure.Body, failedResult.Body)
+	require.Equal(t, http.StatusOK, failedResult.Code)
+	require.Equal(t, storedFailure, failedResult.Body)
 
 	clockNow := time.Now()
 	expiringManager, err := asyncjob.NewManagerWithClock("SMREPO-ASYNC-EXPIRED", time.Minute, func() time.Time { return clockNow })
@@ -391,10 +334,44 @@ func TestDelegatedOperationErrorStatusReturnsBadGatewayResult(t *testing.T) {
 	requireDelegatedStatusErrorResult(t, response, http.StatusBadRequest)
 }
 
-func TestAsyncDelegatedOperationErrorStatusReturnsBadGatewayResult(t *testing.T) {
+func TestAsyncDelegatedOperationErrorStatusReturnsFailedOperationResult(t *testing.T) {
 	delegationURL := startFailingDelegationServer(t, http.StatusInternalServerError)
+
+	result := executeAsyncDelegationAndGetResult(t, delegationURL, time.Second)
+
+	require.Equal(t, gen.EXECUTIONSTATE_FAILED, result.ExecutionState)
+	require.False(t, result.Success)
+	require.Len(t, result.Messages, 1)
+	require.Equal(t, "502", result.Messages[0].Code)
+	require.Contains(t, result.Messages[0].Text, fmt.Sprintf("HTTP %d", http.StatusInternalServerError))
+	require.NotContains(t, result.Messages[0].Text, "remoteDetail")
+}
+
+func TestAsyncDelegatedOperationClientTimeoutReturnsTimeoutOperationResult(t *testing.T) {
+	release := make(chan struct{})
+	delegationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(delegationServer.Close)
+	t.Cleanup(func() { close(release) })
+	t.Setenv(delegationTrustedHostsKey, mustParseDelegationTestURL(t, delegationServer.URL).Host)
+
+	result := executeAsyncDelegationAndGetResult(t, delegationServer.URL, 50*time.Millisecond)
+
+	require.Equal(t, gen.EXECUTIONSTATE_TIMEOUT, result.ExecutionState)
+	require.False(t, result.Success)
+	require.Len(t, result.Messages, 1)
+	require.Contains(t, result.Messages[0].Text, "SMREPO-DOOPDELG-EXECREQ")
+}
+
+func executeAsyncDelegationAndGetResult(t *testing.T, delegationURL string, timeout time.Duration) failedOperationResult {
+	t.Helper()
 	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
-	decodedSubmodelID := "sm-delegated-status"
+	decodedSubmodelID := "sm-delegated-failure"
 	handleID, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{
 		JobKind: "test",
 		Metadata: map[string]string{
@@ -406,11 +383,14 @@ func TestAsyncDelegatedOperationErrorStatusReturnsBadGatewayResult(t *testing.T)
 	require.True(t, sut.tryAcquireAsyncDelegationSlot())
 
 	ctx := contextWithABACDisabled(t)
-	sut.executePreparedOperationAsync(ctx, handleID, delegationURL, nil, time.Second, "InvokeOperationAsync")
+	sut.executePreparedOperationAsync(ctx, handleID, delegationURL, nil, timeout, "InvokeOperationAsync")
 	response, err := sut.GetOperationAsyncResult(ctx, common.EncodeString(decodedSubmodelID), "Ops.Add", handleID)
 
 	require.NoError(t, err)
-	requireDelegatedStatusErrorResult(t, response, http.StatusInternalServerError)
+	require.Equal(t, http.StatusOK, response.Code)
+	result, ok := response.Body.(failedOperationResult)
+	require.True(t, ok, "expected OperationResult body, got %T", response.Body)
+	return result
 }
 
 func startFailingDelegationServer(t *testing.T, status int) string {

@@ -47,6 +47,7 @@ import (
 	aasxmlization "github.com/FriedJannik/aas-go-sdk/xmlization"
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
@@ -816,62 +817,17 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 
 	specURI := normalizePartURI(specPart.URI)
 	fileLocations := CollectAASXFileElementLocations(environment)
-	uploaded := 0
+	importedLocations := make(map[int]struct{}, len(fileLocations))
 
 	for _, relationship := range supplementaries {
 		if normalizePartURI(relationship.Spec.URI) != specURI {
 			continue
 		}
 
-		matched := false
-		for _, location := range fileLocations {
-			if !matchesSupplementaryTarget(location.FileValue, relationship.Spec.URI, relationship.Supplementary.URI) {
-				continue
-			}
-
-			uploadName := filepath.Base(normalizePartURI(relationship.Supplementary.URI))
-			if uploadName == "." || uploadName == "/" || uploadName == "" {
-				uploadName = filepath.Base(strings.TrimSpace(location.FileValue))
-			}
-			if uploadName == "." || uploadName == "/" || uploadName == "" {
-				uploadName = "supplementary.bin"
-			}
-
-			partStream, streamErr := openLimitedAASXPart(relationship.Supplementary, common.AASXLimitsFromContext(ctx).MaxPartExpandedSizeBytes, "supplementary")
-			if streamErr != nil {
-				return fmt.Errorf("AASENV-UPLDSUPPL-OPENSTREAM failed to open supplementary '%s': %w", normalizePartURI(relationship.Supplementary.URI), streamErr)
-			}
-			fileElementContentType := ""
-			if contentType := location.FileElement.ContentType(); contentType != nil {
-				fileElementContentType = *contentType
-			}
-			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistory(
-				ctx,
-				location.SubmodelID,
-				location.IDShortPath,
-				partStream,
-				uploadName,
-				fileElementContentType,
-				relationship.Supplementary.ContentType,
-			)
-			closeErr := partStream.Close()
-			if uploadErr != nil {
-				return fmt.Errorf(
-					"AASENV-UPLDSUPPL-UPLOAD failed to upload supplementary '%s' for submodel '%s' at path '%s': %w",
-					uploadName,
-					location.SubmodelID,
-					location.IDShortPath,
-					uploadErr,
-				)
-			}
-			if closeErr != nil {
-				return fmt.Errorf("AASENV-UPLDSUPPL-CLOSESTREAM failed to close supplementary '%s': %w", uploadName, closeErr)
-			}
-
-			matched = true
-			uploaded++
+		matched, uploadErr := s.uploadSupplementaryRelationship(ctx, relationship, fileLocations, importedLocations)
+		if uploadErr != nil {
+			return uploadErr
 		}
-
 		if !matched {
 			supplementaryURIForLog := sanitizeUploadLogValue(normalizePartURI(relationship.Supplementary.URI))
 			// #nosec G706 -- value is sanitized to strip CR/LF control characters before logging.
@@ -879,8 +835,124 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 		}
 	}
 
-	slog.InfoContext(ctx, "supplementary file attachments uploaded", "attachment_count", uploaded)
+	warnFileReferencesWithoutSupplementaryRelationship(ctx, packageReader, specPart.URI, fileLocations, importedLocations)
+	slog.InfoContext(ctx, "supplementary file attachments uploaded", "attachment_count", len(importedLocations))
 	return nil
+}
+
+func (s *uploadAPIService) uploadSupplementaryRelationship(
+	ctx context.Context,
+	relationship *aasx.SupplementaryRelationship,
+	fileLocations []AASXFileElementLocation,
+	importedLocations map[int]struct{},
+) (bool, error) {
+	matched := false
+	for index, location := range fileLocations {
+		if !matchesSupplementaryTarget(location.FileValue, relationship.Spec.URI, relationship.Supplementary.URI) {
+			continue
+		}
+		if err := s.uploadSupplementaryToFileElement(ctx, relationship.Supplementary, location); err != nil {
+			return false, err
+		}
+		matched = true
+		importedLocations[index] = struct{}{}
+	}
+	return matched, nil
+}
+
+func (s *uploadAPIService) uploadSupplementaryToFileElement(ctx context.Context, supplementary *aasx.Part, location AASXFileElementLocation) error {
+	uploadName := supplementaryUploadName(supplementary, location)
+	partStream, streamErr := openLimitedAASXPart(supplementary, common.AASXLimitsFromContext(ctx).MaxPartExpandedSizeBytes, "supplementary")
+	if streamErr != nil {
+		return fmt.Errorf("AASENV-UPLDSUPPL-OPENSTREAM failed to open supplementary '%s': %w", normalizePartURI(supplementary.URI), streamErr)
+	}
+	fileElementContentType := ""
+	if contentType := location.FileElement.ContentType(); contentType != nil {
+		fileElementContentType = *contentType
+	}
+	uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistory(
+		ctx,
+		location.SubmodelID,
+		location.IDShortPath,
+		partStream,
+		uploadName,
+		fileElementContentType,
+		supplementary.ContentType,
+	)
+	closeErr := partStream.Close()
+	if uploadErr != nil {
+		return fmt.Errorf(
+			"AASENV-UPLDSUPPL-UPLOAD failed to upload supplementary '%s' for submodel '%s' at path '%s': %w",
+			uploadName,
+			location.SubmodelID,
+			location.IDShortPath,
+			uploadErr,
+		)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("AASENV-UPLDSUPPL-CLOSESTREAM failed to close supplementary '%s': %w", uploadName, closeErr)
+	}
+	return nil
+}
+
+func supplementaryUploadName(supplementary *aasx.Part, location AASXFileElementLocation) string {
+	uploadName := filepath.Base(normalizePartURI(supplementary.URI))
+	if uploadName == "." || uploadName == "/" || uploadName == "" {
+		uploadName = filepath.Base(strings.TrimSpace(location.FileValue))
+	}
+	if uploadName == "." || uploadName == "/" || uploadName == "" {
+		uploadName = "supplementary.bin"
+	}
+	return uploadName
+}
+
+// warnFileReferencesWithoutSupplementaryRelationship reports File elements
+// whose value names a package part that the specification does not relate as
+// aas-suppl (IDTA-01005). Such parts are not imported as attachments.
+func warnFileReferencesWithoutSupplementaryRelationship(
+	ctx context.Context,
+	packageReader *aasx.PackageRead,
+	specURI *url.URL,
+	fileLocations []AASXFileElementLocation,
+	importedLocations map[int]struct{},
+) {
+	for index, location := range fileLocations {
+		if _, imported := importedLocations[index]; imported {
+			continue
+		}
+		partURI := unrelatedPackagePartURI(packageReader, location.FileValue, specURI)
+		if partURI == "" {
+			continue
+		}
+		// #nosec G706 -- values are sanitized to strip CR/LF control characters before logging.
+		slog.WarnContext(
+			ctx,
+			"File element references a package part without an aas-suppl relationship; attachment not imported",
+			"error.code", "AASENV-UPLDSUPPL-NOSUPPLREL",
+			"submodel_id", sanitizeUploadLogValue(location.SubmodelID),
+			"id_short_path", sanitizeUploadLogValue(location.IDShortPath),
+			"part_uri", sanitizeUploadLogValue(partURI),
+		)
+	}
+}
+
+func unrelatedPackagePartURI(packageReader *aasx.PackageRead, fileValue string, specURI *url.URL) string {
+	if packageReader == nil || IsExternalAASXReference(fileValue) {
+		return ""
+	}
+	partURI := resolveReferenceAgainstSpec(strings.TrimSpace(fileValue), specURI)
+	if partURI == "" {
+		return ""
+	}
+	parsedPartURI, err := url.Parse(partURI)
+	if err != nil {
+		return ""
+	}
+	part, err := packageReader.FindPart(parsedPartURI)
+	if err != nil || part == nil {
+		return ""
+	}
+	return partURI
 }
 
 func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
@@ -924,7 +996,10 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 		if streamErr != nil {
 			return fmt.Errorf("AASENV-UPLDTHUMB-OPENSTREAM failed to open thumbnail for AAS '%s': %w", aas.ID(), streamErr)
 		}
-		uploadErr := s.persistence.AASRepository.PutThumbnailByAASIDReader(ctx, aas.ID(), thumbnailName, partStream)
+		uploadErr := s.persistence.AASRepository.PutThumbnailByAASIDReader(ctx, aas.ID(), partStream, binarycontent.UploadDeclaration{
+			FileName:     thumbnailName,
+			ContentTypes: []string{defaultThumbnailContentType(aas), thumbnailPart.ContentType},
+		})
 		closeErr := partStream.Close()
 		if uploadErr != nil {
 			return fmt.Errorf("AASENV-UPLDTHUMB-UPLOAD failed to store thumbnail for AAS '%s': %w", aas.ID(), uploadErr)
@@ -938,6 +1013,13 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 
 	slog.InfoContext(ctx, "AAS thumbnails stored", "aas_count", uploaded)
 	return nil
+}
+
+func defaultThumbnailContentType(aas aastypes.IAssetAdministrationShell) string {
+	if contentType := aas.AssetInformation().DefaultThumbnail().ContentType(); contentType != nil {
+		return *contentType
+	}
+	return ""
 }
 
 func validateAASXThumbnailLimits(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {

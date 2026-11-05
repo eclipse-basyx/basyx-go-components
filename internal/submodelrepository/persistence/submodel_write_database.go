@@ -155,9 +155,10 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelCreateDoesNotExist(ctx context.C
 	)
 }
 
-// createSubmodelInTransaction inserts a new Submodel and makes an
-// authenticated creator its ReBAC owner.
+// createSubmodelInTransaction inserts a new Submodel, fills its missing
+// administrative creator and makes an authenticated creator its ReBAC owner.
 func (s *SubmodelDatabase) createSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	auth.FillReBACCreator(ctx, submodel)
 	if err := s.insertSubmodelInTransaction(ctx, tx, submodel); err != nil {
 		return err
 	}
@@ -271,13 +272,30 @@ func submodelDatabaseIDAsInt(submodelDBID int64) (int, error) {
 }
 
 func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix string) error {
+	return s.verifyWithMode(errorPrefix, true, func(collector func(*verification.VerificationError) bool) {
+		verification.VerifySubmodel(submodel, collector)
+	})
+}
+
+func (s *SubmodelDatabase) verificationEnabled() bool {
+	return gen.NormalizeVerificationMode(s.verificationMode) != gen.VerificationModeOff
+}
+
+func (s *SubmodelDatabase) verifySubmodelElement(submodelElement types.ISubmodelElement, errorPrefix string, discloseDetails bool) error {
+	return s.verifyWithMode(errorPrefix, discloseDetails, func(collector func(*verification.VerificationError) bool) {
+		verification.Verify(submodelElement, collector)
+	})
+}
+
+func (s *SubmodelDatabase) verifyWithMode(errorPrefix string, discloseDetails bool, verify func(func(*verification.VerificationError) bool)) error {
 	return gen.ValidateWithMode(
 		s.verificationMode,
 		errorPrefix,
-		func(collector func(*verification.VerificationError) bool) {
-			verification.VerifySubmodel(submodel, collector)
-		},
+		verify,
 		func(message string) error {
+			if !discloseDetails {
+				return common.NewErrBadRequest(errorPrefix + " the resulting submodel element violates metamodel constraints")
+			}
 			return common.NewErrBadRequest(errorPrefix + " " + message)
 		},
 	)

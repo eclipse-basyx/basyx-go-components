@@ -331,7 +331,7 @@ func (s *SubmodelDatabase) GetAllSubmodelPathsPage(
 			Select(goqu.L("1")).
 			Where(goqu.I("cursor_submodel.submodel_identifier").Eq(submodelCursor))
 		visibleSubmodels = visibleSubmodels.Where(
-			goqu.Func("EXISTS", cursorExists),
+			goqu.Exists(cursorExists),
 			goqu.I("submodel.submodel_identifier").Gte(submodelCursor),
 		)
 	}
@@ -385,13 +385,24 @@ func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx 
 		return submodel, nil
 	}
 
-	unlimited := -1
-	submodelElements, _, err := submodelelements.GetSubmodelElementsBySubmodelIDTx(ctx, tx, submodelIdentifier, &unlimited, "", includeBlobValue, level)
+	submodelElements, err := getSubmodelElementsForLevelInTransaction(ctx, tx, submodelIdentifier, includeBlobValue, level)
 	if err != nil {
 		return nil, err
 	}
 	submodel.SetSubmodelElements(submodelElements)
 	return submodel, nil
+}
+
+// getSubmodelElementsForLevelInTransaction loads all top-level elements of a Submodel. With level core,
+// only these direct children of the Submodel are loaded, without their own children.
+func getSubmodelElementsForLevelInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string, includeBlobValue bool, level string) ([]types.ISubmodelElement, error) {
+	unlimited := -1
+	if level == "core" {
+		submodelElements, _, err := submodelelements.GetSubmodelElementsWithoutChildrenBySubmodelIDTx(ctx, tx, submodelIdentifier, &unlimited, "", includeBlobValue)
+		return submodelElements, err
+	}
+	submodelElements, _, err := submodelelements.GetSubmodelElementsBySubmodelIDTx(ctx, tx, submodelIdentifier, &unlimited, "", includeBlobValue, level)
+	return submodelElements, err
 }
 
 func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (types.ISubmodel, error) {
@@ -799,8 +810,10 @@ func scanSubmodelMetadataRow(rows *sql.Rows) (types.ISubmodel, error) {
 
 	var submodel types.ISubmodel
 	submodel = types.NewSubmodel(identifier.String)
-	idShortValue := idShort.String
-	submodel.SetIDShort(&idShortValue)
+	if idShort.Valid {
+		idShortValue := idShort.String
+		submodel.SetIDShort(&idShortValue)
+	}
 	if category.Valid {
 		categoryValue := category.String
 		submodel.SetCategory(&categoryValue)

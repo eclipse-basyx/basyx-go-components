@@ -40,6 +40,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
@@ -146,29 +147,75 @@ func TestGetSubmodelsByListFiltersUsesIDShortColumn(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetSubmodelByIDPreservesEmptyIDShortForNullDatabaseValue(t *testing.T) {
+func TestGetSubmodelByIDPreservesIDShortPresence(t *testing.T) {
 	t.Parallel()
 
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() {
-		_ = db.Close()
-	}()
+	for _, testCase := range []struct {
+		name    string
+		idShort *string
+	}{
+		{name: "absent"},
+		{name: "empty", idShort: new("")},
+		{name: "populated", idShort: new("SubmodelName")},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			sut := &SubmodelDatabase{db: db}
+			submodelID := "urn:sm:id-short:" + testCase.name
 
-	sut := &SubmodelDatabase{db: db}
-	submodelID := "urn:sm:null-id-short"
+			mock.ExpectBegin()
+			mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
+				WillReturnRows(sqlmock.NewRows(submodelStateColumns()).
+					AddRow(submodelID, testCase.idShort, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, submodelID))
+			mock.ExpectCommit()
 
-	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
-		WillReturnRows(sqlmock.NewRows(submodelStateColumns()).
-			AddRow(submodelID, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, submodelID))
-	mock.ExpectCommit()
+			submodel, err := sut.GetSubmodelByID(contextWithABACDisabled(t), submodelID, "deep", true, true)
+			require.NoError(t, err)
+			require.Equal(t, testCase.idShort, submodel.IDShort())
+			jsonable, err := jsonization.ToJsonable(submodel)
+			require.NoError(t, err)
+			value, present := jsonable["idShort"]
+			require.Equal(t, testCase.idShort != nil, present)
+			if testCase.idShort != nil {
+				require.Equal(t, *testCase.idShort, value)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
 
-	submodel, err := sut.GetSubmodelByID(contextWithABACDisabled(t), submodelID, "deep", true, true)
-	require.NoError(t, err)
-	require.NotNil(t, submodel.IDShort())
-	require.Empty(t, *submodel.IDShort())
-	require.NoError(t, mock.ExpectationsWereMet())
+func TestSubmodelIDShortVerificationPreservesPresence(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []commonmodel.VerificationMode{
+		commonmodel.VerificationModeOff, commonmodel.VerificationModePermissive, commonmodel.VerificationModeStrict,
+	} {
+		t.Run(string(mode), func(t *testing.T) {
+			for _, testCase := range []struct {
+				name    string
+				idShort *string
+			}{
+				{name: "absent"},
+				{name: "empty", idShort: new("")},
+				{name: "populated", idShort: new("VerifiedName")},
+			} {
+				t.Run(testCase.name, func(t *testing.T) {
+					submodel := types.NewSubmodel("urn:sm:verification")
+					submodel.SetIDShort(testCase.idShort)
+					sut := &SubmodelDatabase{verificationMode: mode}
+					err := sut.verifySubmodel(submodel, "SMREPO-IDSHORTTEST-VERIFY")
+					if mode == commonmodel.VerificationModeStrict && testCase.name == "empty" {
+						require.True(t, common.IsErrBadRequest(err))
+					} else {
+						require.NoError(t, err)
+					}
+					require.Equal(t, testCase.idShort, submodel.IDShort())
+				})
+			}
+		})
+	}
 }
 
 func TestGetSubmodelsClosesLookaheadRowsBeforeSupplementalReferenceQuery(t *testing.T) {

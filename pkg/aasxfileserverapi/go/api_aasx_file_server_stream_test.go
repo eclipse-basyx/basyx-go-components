@@ -35,6 +35,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 	"time"
 
@@ -122,21 +123,23 @@ func (service *captureAASXFileServerService) DeleteAASXByPackageId(context.Conte
 	return Response(http.StatusNoContent, nil), nil
 }
 
-func TestPostAASXPackageStreamsFileAndReadsTrailingMetadata(t *testing.T) {
+func TestPostAASXPackageStreamsFileAndIgnoresFileNameField(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir()+"/missing")
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	part, err := writer.CreateFormFile("file", "fallback.aasx")
+	part, err := writer.CreateFormFile("file", "package.aasx")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = part.Write([]byte("package-content")); err != nil {
 		t.Fatal(err)
 	}
-	if err = writer.WriteField("aasIds", "one,two"); err != nil {
-		t.Fatal(err)
+	for _, aasID := range []string{"urn:a,1", "two"} {
+		if err = writer.WriteField("aasIds", aasID); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err = writer.WriteField("fileName", "selected.aasx"); err != nil {
+	if err = writer.WriteField("fileName", "ignored.aasx"); err != nil {
 		t.Fatal(err)
 	}
 	if err = writer.Close(); err != nil {
@@ -153,7 +156,7 @@ func TestPostAASXPackageStreamsFileAndReadsTrailingMetadata(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("expected status 201, got %d: %s", response.Code, response.Body.String())
 	}
-	if service.fileName != "selected.aasx" || len(service.aasIDs) != 2 || string(service.content) != "package-content" {
+	if service.fileName != "package.aasx" || !slices.Equal(service.aasIDs, []string{"urn:a,1", "two"}) || string(service.content) != "package-content" {
 		t.Fatalf("unexpected captured upload: filename=%q aasIDs=%v content=%q", service.fileName, service.aasIDs, service.content)
 	}
 }

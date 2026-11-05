@@ -34,7 +34,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -537,6 +536,7 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 	if err := validateAASCreateSubmodelReferences(aas.Submodels()); err != nil {
 		return err
 	}
+	auth.FillReBACCreator(ctx, aas)
 
 	batch := &common.PostgreSQLBatch{}
 	if err := appendAASCreateRoot(batch, dialect, aas); err != nil {
@@ -875,11 +875,11 @@ func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAsset
 }
 
 // CheckSubmodelReferenceForDeletionInTransaction hides references in inaccessible AASs.
+// ctx must carry the authorization of the AAS, see auth.SuperpathShellContext.
 func (s *AssetAdministrationShellDatabase) CheckSubmodelReferenceForDeletionInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier, submodelIdentifier string) error {
 	if tx == nil {
 		return common.NewInternalServerError("AASREPO-CHECKDELSMREF-NILTX transaction must not be nil")
 	}
-	ctx = auth.SelectFormulaForRight(ctx, grammar.RightsEnumDELETE)
 	if _, err := lockAssetAdministrationShellMutationTx(ctx, tx, aasIdentifier, "AASREPO-CHECKDELSMREF"); err != nil {
 		return err
 	}
@@ -1932,23 +1932,18 @@ func (s *AssetAdministrationShellDatabase) StreamThumbnailByAASID(ctx context.Co
 	return nil
 }
 
-// PutThumbnailByAASID uploads or replaces the thumbnail and checks ABAC visibility.
-func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Context, aasIdentifier string, fileName string, file *os.File) error {
-	return s.PutThumbnailByAASIDReader(ctx, aasIdentifier, fileName, file)
-}
-
 // PutThumbnailByAASIDReader streams a thumbnail into persistence after checking
 // the request's ABAC visibility.
 //
 // Parameters:
 //   - ctx: Request context preserving authorization and cancellation.
 //   - aasIdentifier: Identifier of the thumbnail's Asset Administration Shell.
-//   - fileName: Original filename used to derive content metadata.
 //   - file: Thumbnail source consumed before the method returns.
+//   - declaration: File name and content types the upload source declares.
 //
 // Returns:
 //   - error: Visibility, validation, transaction, or persistence error.
-func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context.Context, aasIdentifier string, fileName string, file io.Reader) error {
+func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context.Context, aasIdentifier string, file io.Reader, declaration binarycontent.UploadDeclaration) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
@@ -2018,7 +2013,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
 
-	reference, contentType, uploadErr := thumbnailHandler.uploadManagedThumbnailTx(ctx, tx, aasIdentifier, fileName, file)
+	reference, contentType, uploadErr := thumbnailHandler.uploadManagedThumbnailTx(ctx, tx, aasIdentifier, file, declaration)
 	if uploadErr != nil {
 		return uploadErr
 	}

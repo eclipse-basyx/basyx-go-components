@@ -524,105 +524,13 @@ func toSubmodelElementMetadata(element types.ISubmodelElement) (map[string]any, 
 		return nil, err
 	}
 
-	sanitizeSubmodelElementMetadata(jsonElement)
+	modelType, _ := jsonElement["modelType"].(string)
+	for field := range jsonElement {
+		if !common.IsSubmodelElementMetadataField(modelType, field) {
+			delete(jsonElement, field)
+		}
+	}
 	return jsonElement, nil
-}
-
-func sanitizeSubmodelElementMetadata(metadata map[string]any) {
-	modelType, _ := metadata["modelType"].(string)
-
-	switch modelType {
-	case "Property", "MultiLanguageProperty", "Blob", "File":
-		delete(metadata, "value")
-	case "Range":
-		delete(metadata, "min")
-		delete(metadata, "max")
-	case "SubmodelElementCollection", "SubmodelElementList":
-		sanitizeSubmodelElementSliceField(metadata, "value")
-	case "Operation":
-		sanitizeOperationVariables(metadata, "inputVariables")
-		sanitizeOperationVariables(metadata, "outputVariables")
-		sanitizeOperationVariables(metadata, "inoutputVariables")
-	case "Entity":
-		sanitizeSubmodelElementSliceField(metadata, "statements")
-	case "AnnotatedRelationshipElement":
-		sanitizeSubmodelElementSliceField(metadata, "annotations")
-	}
-}
-
-func sanitizeSubmodelElementSliceField(metadata map[string]any, field string) {
-	rawField, exists := metadata[field]
-	if !exists {
-		return
-	}
-
-	rawSlice, ok := rawField.([]any)
-	if !ok {
-		delete(metadata, field)
-		return
-	}
-
-	hasSubmodelElements := false
-	for _, rawElement := range rawSlice {
-		elementMap, mapOK := rawElement.(map[string]any)
-		if !mapOK {
-			continue
-		}
-
-		hasSubmodelElements = true
-		sanitizeSubmodelElementMetadata(elementMap)
-	}
-
-	if !hasSubmodelElements {
-		delete(metadata, field)
-	}
-}
-
-func sanitizeOperationVariables(metadata map[string]any, field string) {
-	rawVariables, exists := metadata[field]
-	if !exists {
-		return
-	}
-
-	variables, ok := rawVariables.([]any)
-	if !ok {
-		delete(metadata, field)
-		return
-	}
-
-	for _, rawVariable := range variables {
-		variableMap, mapOK := rawVariable.(map[string]any)
-		if !mapOK {
-			continue
-		}
-
-		rawValue, hasValue := variableMap["value"]
-		if !hasValue {
-			continue
-		}
-
-		valueElement, valueOK := rawValue.(map[string]any)
-		if !valueOK {
-			delete(variableMap, "value")
-			continue
-		}
-
-		sanitizeSubmodelElementMetadata(valueElement)
-	}
-}
-
-func getModelTypeLiteral(element types.ISubmodelElement) string {
-	jsonElement, err := jsonization.ToJsonable(element)
-	if err != nil {
-		return ""
-	}
-
-	modelType, ok := jsonElement["modelType"].(string)
-	if !ok {
-		return ""
-	}
-
-	return modelType
 }
 
 // GetAllSubmodels retrieves all submodels from the repository with optional filtering and pagination.
@@ -931,7 +839,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedSubmodel"), nil
 	}
 
-	return gen.Response(http.StatusOK, jwsString), nil
+	return gen.Response(http.StatusOK, gen.PlainText(jwsString)), nil
 }
 
 // GetSignedSubmodelByIDValueOnly retrieves a signed submodel in its Value-Only representation by its base64-encoded identifier.
@@ -957,7 +865,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedSubmodel"), nil
 	}
 
-	return gen.Response(http.StatusOK, jwsString), nil
+	return gen.Response(http.StatusOK, gen.PlainText(jwsString)), nil
 }
 
 // DeleteSubmodelByID removes a submodel from the repository by its base64-encoded identifier.
@@ -1162,7 +1070,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 
 	valueOnlyResults := make([]map[string]any, len(sms))
 	for index, sm := range sms {
-		valueOnly, convErr := gen.SubmodelToValueOnly(sm)
+		valueOnly, convErr := gen.SubmodelToValueOnlyAtLevel(sm, level)
 		if convErr != nil {
 			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
 		}
@@ -1557,7 +1465,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
-	valueOnly, convErr := gen.SubmodelToValueOnly(sm)
+	valueOnly, convErr := gen.SubmodelToValueOnlyAtLevel(sm, level)
 	if convErr != nil {
 		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelToValueOnly"), nil
 	}
@@ -1779,7 +1687,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false, "")
+	elements, nextCursor, err := s.submodelBackend.GetSubmodelElementsWithoutChildren(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -1849,22 +1757,13 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 
 	valueOnlyResults := make([]gen.SubmodelElementValue, 0, len(elements))
 	for _, element := range elements {
-		valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
+		valueOnly, convErr := gen.SubmodelElementToNamedValueOnly(element, level)
 		if convErr != nil {
-			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), nil
+			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToNamedValueOnly"), nil
 		}
-		if valueOnly == nil {
-			continue
+		if valueOnly != nil {
+			valueOnlyResults = append(valueOnlyResults, valueOnly)
 		}
-
-		idShort := element.IDShort()
-		if idShort == nil || *idShort == "" {
-			continue
-		}
-
-		wrapped := make(gen.SubmodelElementCollectionValue)
-		wrapped[*idShort] = valueOnly
-		valueOnlyResults = append(valueOnlyResults, wrapped)
 	}
 
 	res := gen.GetSubmodelElementsValueResult{
@@ -2186,7 +2085,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathMetadataSubmod
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	element, err := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, false, "")
+	element, err := s.submodelBackend.GetSubmodelElementWithoutChildren(ctx, decodedSubmodelIdentifier, idShortPath)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
@@ -2238,11 +2137,8 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		patchJSON = rawPatchJSON
 	}
 
-	if existingModelType, ok := existingJSON["modelType"].(string); ok {
-		if patchModelType, ok := patchJSON["modelType"].(string); ok && patchModelType != existingModelType {
-			mismatchErr := errors.New("metadata modelType must match existing submodel element modelType")
-			return newAPIErrorResponse(mismatchErr, http.StatusBadRequest, operation, "InvalidSubmodelElementMetadata"), nil
-		}
+	if validationErr := validateSubmodelElementMetadataModelType(existingJSON, patchJSON); validationErr != nil {
+		return newAPIErrorResponse(validationErr, http.StatusBadRequest, operation, "InvalidSubmodelElementMetadata"), nil
 	}
 
 	mergedJSON := mergeSubmodelElementMetadataPatch(existingJSON, patchJSON)
@@ -2268,6 +2164,14 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
+}
+
+func validateSubmodelElementMetadataModelType(existingJSON map[string]any, patchJSON map[string]any) error {
+	existingModelType, _ := existingJSON["modelType"].(string)
+	if patchModelType, ok := patchJSON["modelType"].(string); ok && patchModelType != existingModelType {
+		return errors.New("SMREPO-PATCHSMEMETA-MODELTYPEMISMATCH metadata modelType must match existing submodel element modelType")
+	}
+	return nil
 }
 
 // GetSubmodelElementByPathValueOnlySubmodelRepo - Returns a specific submodel element from the Submodel at a specified path in the ValueOnly representation
@@ -2298,7 +2202,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
 	}
-	valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
+	valueOnly, convErr := gen.SubmodelElementToValueOnlyAtLevel(element, level)
 	if convErr != nil {
 		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), nil
 	}
@@ -2348,56 +2252,15 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	element, err := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, false, "core")
+	reference, err := s.submodelBackend.GetSubmodelElementReference(ctx, decodedSubmodelIdentifier, idShortPath)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
-	}
-
-	modelTypeLiteral := getModelTypeLiteral(element)
-	if modelTypeLiteral == "" {
-		internalErr := common.NewInternalServerError("SMREPO-GETSMEREF-MODELTYPE Empty modelType for submodel element")
-		return newAPIErrorResponse(internalErr, http.StatusInternalServerError, operation, "EmptyModelType"), nil
-	}
-
-	keyTypes, keyValues, keyResolutionErr := resolveModelReferencePathKeys(
-		idShortPath,
-		modelTypeLiteral,
-		func(path string) (string, error) {
-			parentElement, parentErr := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, path, false, "core")
-			if parentErr != nil {
-				if common.IsErrBadRequest(parentErr) || common.IsErrNotFound(parentErr) {
-					return "", parentErr
-				}
-				return "", common.NewInternalServerError("SMREPO-BUILDREF-GETPARENT " + parentErr.Error())
-			}
-
-			parentModelType := getModelTypeLiteral(parentElement)
-			if parentModelType == "" {
-				return "", common.NewInternalServerError("SMREPO-BUILDREF-PARENTMODELTYPE Empty modelType for parent submodel element")
-			}
-
-			return parentModelType, nil
-		},
-	)
-	if keyResolutionErr != nil {
-		if common.IsErrBadRequest(keyResolutionErr) {
-			return newAPIErrorResponse(keyResolutionErr, http.StatusBadRequest, operation, "BadReferencePath"), nil
-		}
-		if common.IsErrNotFound(keyResolutionErr) {
-			return newAPIErrorResponse(keyResolutionErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
-		}
-		return newAPIErrorResponse(keyResolutionErr, http.StatusInternalServerError, operation, "ResolveReferenceKeys"), nil
-	}
-
-	reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, keyTypes, keyValues)
-	if referenceErr != nil {
-		return newAPIErrorResponse(referenceErr, http.StatusInternalServerError, operation, "BuildModelReference"), nil
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementReference"), nil
 	}
 
 	var jsonableRef map[string]any
@@ -2815,13 +2678,15 @@ func (s *SubmodelRepositoryAPIAPIService) executePreparedOperationAsync(
 	if delegateErr != nil {
 		slog.ErrorContext(delegationCtx, "asynchronous delegated operation invocation failed", "error.code", "SMREPO-INVOKEOPASY-DELEGATE", "async_job.handle_id", handleID, "error", delegateErr)
 		errorResponse := newAPIErrorResponse(delegateErr, http.StatusBadGateway, operation, "DelegateOperationCall")
-		s.failPreparedOperationAsync(delegationCtx, handleID, errorResponse, "SMREPO-INVOKEOPASY-PERSISTFAILURE")
+		executionState := delegationFailureExecutionState(delegationCtx, delegateErr)
+		s.failPreparedOperationAsync(delegationCtx, handleID, executionState, errorResponse, "SMREPO-INVOKEOPASY-PERSISTFAILURE")
 		return
 	}
 
 	if !isSuccessfulDelegatedStatus(statusCode) {
 		slog.WarnContext(delegationCtx, "asynchronous delegated operation returned an unsuccessful status", "error.code", "SMREPO-INVOKEOPASY-STATUS", "async_job.handle_id", handleID, "http.response.status_code", statusCode)
-		s.failPreparedOperationAsync(delegationCtx, handleID, newDelegatedStatusErrorResponse(statusCode, operation), "SMREPO-INVOKEOPASY-PERSISTSTATUS")
+		errorResponse := newDelegatedStatusErrorResponse(statusCode, operation)
+		s.failPreparedOperationAsync(delegationCtx, handleID, gen.EXECUTIONSTATE_FAILED, errorResponse, "SMREPO-INVOKEOPASY-PERSISTSTATUS")
 		return
 	}
 
@@ -2829,7 +2694,7 @@ func (s *SubmodelRepositoryAPIAPIService) executePreparedOperationAsync(
 	if resultErr != nil {
 		slog.ErrorContext(delegationCtx, "asynchronous delegated operation returned an invalid result", "error.code", "SMREPO-INVOKEOPASY-INVALIDRESULT", "async_job.handle_id", handleID, "error", resultErr)
 		errorResponse := newAPIErrorResponse(resultErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult")
-		s.failPreparedOperationAsync(delegationCtx, handleID, errorResponse, "SMREPO-INVOKEOPASY-PERSISTINVALID")
+		s.failPreparedOperationAsync(delegationCtx, handleID, gen.EXECUTIONSTATE_FAILED, errorResponse, "SMREPO-INVOKEOPASY-PERSISTINVALID")
 		return
 	}
 
@@ -2840,10 +2705,17 @@ func (s *SubmodelRepositoryAPIAPIService) executePreparedOperationAsync(
 	}
 }
 
-func (s *SubmodelRepositoryAPIAPIService) failPreparedOperationAsync(ctx context.Context, handleID string, response gen.ImplResponse, errorCode string) {
+func (s *SubmodelRepositoryAPIAPIService) failPreparedOperationAsync(
+	ctx context.Context,
+	handleID string,
+	executionState gen.ExecutionState,
+	response gen.ImplResponse,
+	errorCode string,
+) {
 	persistenceCtx, cancelPersistence := asyncPersistenceContext(ctx)
 	defer cancelPersistence()
-	if err := s.asyncJobManager.Fail(persistenceCtx, handleID, response.Code, response.Body); err != nil {
+	result := newFailedOperationResult(executionState, errorResponseMessages(response))
+	if err := s.asyncJobManager.Fail(persistenceCtx, handleID, response.Code, result); err != nil {
 		slog.ErrorContext(persistenceCtx, "asynchronous delegated operation failure persistence failed", "error.code", errorCode, "error", err, "async_job.handle_id", handleID)
 	}
 }
@@ -2875,23 +2747,11 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsyncValueOnly(ctx cont
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
-	_ = ctx
 	const operation = "GetOperationAsyncStatus"
 
-	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	record, response, ok := s.findOperationAsyncRecord(ctx, submodelIdentifier, idShortPath, handleID, operation)
 	if !ok {
 		return response, nil
-	}
-
-	record, found, handleErr := s.asyncJobManager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
-	if handleErr != nil {
-		return newAPIErrorResponse(handleErr, http.StatusInternalServerError, operation, "ReadHandle"), nil
-	}
-	if !found ||
-		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
-		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {
-		handleErr := common.NewErrNotFound(handleID)
-		return newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), nil
 	}
 
 	if record.ExecutionState == "Running" {
@@ -2912,32 +2772,15 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Co
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
-	_ = ctx
 	const operation = "GetOperationAsyncResult"
 
-	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	record, response, ok := s.findFinishedOperationAsyncRecord(ctx, submodelIdentifier, idShortPath, handleID, operation)
 	if !ok {
 		return response, nil
 	}
 
-	record, found, handleErr := s.asyncJobManager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
-	if handleErr != nil {
-		return newAPIErrorResponse(handleErr, http.StatusInternalServerError, operation, "ReadHandle"), nil
-	}
-	if !found ||
-		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
-		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {
-		handleErr := common.NewErrNotFound(handleID)
-		return newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), nil
-	}
-
-	if record.ExecutionState == "Running" {
-		notCompletedErr := errors.New("SMREPO-GETOPASYRES-RUNNING operation is still running")
-		return newAPIErrorResponse(notCompletedErr, http.StatusBadRequest, operation, "OperationStillRunning"), nil
-	}
-
 	if record.ExecutionState == "Failed" {
-		return storedOperationFailureResponse(record, operation), nil
+		return gen.Response(http.StatusOK, storedOperationFailureResult(record, operation)), nil
 	}
 
 	return gen.Response(http.StatusOK, record.Payload), nil
@@ -2949,15 +2792,63 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Co
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
 	const operation = "GetOperationAsyncResultValueOnly"
 
-	result, resultErr := s.GetOperationAsyncResult(ctx, submodelIdentifier, idShortPath, handleID)
-	if resultErr != nil || result.Code != http.StatusOK {
-		return result, resultErr
+	record, response, ok := s.findFinishedOperationAsyncRecord(ctx, submodelIdentifier, idShortPath, handleID, operation)
+	if !ok {
+		return response, nil
 	}
-	valueOnlyResult, conversionErr := operationResultToValueOnly(result.Body)
+
+	if record.ExecutionState == "Failed" {
+		return gen.Response(http.StatusOK, storedOperationFailureResult(record, operation)), nil
+	}
+
+	valueOnlyResult, conversionErr := operationResultToValueOnly(record.Payload)
 	if conversionErr != nil {
 		return newAPIErrorResponse(conversionErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult"), nil
 	}
 	return gen.Response(http.StatusOK, valueOnlyResult), nil
+}
+
+func (s *SubmodelRepositoryAPIAPIService) findOperationAsyncRecord(
+	ctx context.Context,
+	submodelIdentifier string,
+	idShortPath string,
+	handleID string,
+	operation string,
+) (asyncjob.Record, gen.ImplResponse, bool) {
+	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	if !ok {
+		return asyncjob.Record{}, response, false
+	}
+
+	record, found, handleErr := s.asyncJobManager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
+	if handleErr != nil {
+		return asyncjob.Record{}, newAPIErrorResponse(handleErr, http.StatusInternalServerError, operation, "ReadHandle"), false
+	}
+	if !found ||
+		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
+		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {
+		handleErr := common.NewErrNotFound(handleID)
+		return asyncjob.Record{}, newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), false
+	}
+	return record, gen.ImplResponse{}, true
+}
+
+func (s *SubmodelRepositoryAPIAPIService) findFinishedOperationAsyncRecord(
+	ctx context.Context,
+	submodelIdentifier string,
+	idShortPath string,
+	handleID string,
+	operation string,
+) (asyncjob.Record, gen.ImplResponse, bool) {
+	record, response, ok := s.findOperationAsyncRecord(ctx, submodelIdentifier, idShortPath, handleID, operation)
+	if !ok {
+		return asyncjob.Record{}, response, false
+	}
+	if record.ExecutionState == "Running" {
+		notCompletedErr := errors.New("SMREPO-GETOPASYRES-RUNNING operation is still running")
+		return asyncjob.Record{}, newAPIErrorResponse(notCompletedErr, http.StatusBadRequest, operation, "OperationStillRunning"), false
+	}
+	return record, gen.ImplResponse{}, true
 }
 
 func (s *SubmodelRepositoryAPIAPIService) querySubmodelIdentifiers(ctx context.Context, limit int32, cursor string) (gen.ImplResponse, error) {

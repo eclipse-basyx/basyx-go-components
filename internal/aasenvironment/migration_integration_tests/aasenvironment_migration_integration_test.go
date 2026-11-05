@@ -260,7 +260,6 @@ func uploadMultipartBinary(t *testing.T, endpoint string, fileName string, paylo
 	t.Helper()
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	require.NoError(t, writer.WriteField("fileName", fileName))
 	part, err := writer.CreateFormFile("file", fileName)
 	require.NoError(t, err)
 	_, err = part.Write(payload)

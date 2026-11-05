@@ -311,7 +311,7 @@ func TestReBACGrantNeverBypassesCallerConditions(t *testing.T) {
 		t.Fatalf("expected ReBAC grant and caller condition:\n%s\n%v", sql, args)
 	}
 	grantIndex := strings.Index(sql, "rebac_granted_aas")
-	andIndex := strings.Index(sql, ")))) AND ")
+	andIndex := strings.Index(sql, ") AND EXISTS (")
 	if grantIndex < 0 || andIndex < grantIndex || strings.Contains(sql, " OR ") {
 		t.Fatalf("caller condition must be ANDed outside the widened security condition:\n%s", sql)
 	}

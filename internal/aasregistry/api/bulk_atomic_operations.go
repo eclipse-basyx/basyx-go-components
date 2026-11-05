@@ -46,11 +46,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 	descriptors []model.AssetAdministrationShellDescriptor,
 ) asyncjob.BulkResult {
 	if len(descriptors) == 0 {
-		return successfulAtomicResult(0)
+		return asyncjob.SuccessfulAtomicResult()
 	}
 	failure := validateBulkCreateDescriptors(descriptors)
 	if failure.StatusCode != 0 {
-		return failedAtomicResult(descriptorIDsFromAASDescriptors(descriptors), failure)
+		return asyncjob.FailedAtomicResult(descriptorIDsFromAASDescriptors(descriptors), failure)
 	}
 
 	err := s.aasRegistryBackend.ExecuteInTransaction(
@@ -86,9 +86,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 				Message:    err.Error(),
 			}
 		}
-		return failedAtomicResult(descriptorIDsFromAASDescriptors(descriptors), failure)
+		return asyncjob.FailedAtomicResult(descriptorIDsFromAASDescriptors(descriptors), failure)
 	}
-	return successfulAtomicResult(len(descriptors))
+	return asyncjob.SuccessfulAtomicResult()
 }
 
 func (s *AssetAdministrationShellRegistryAPIAPIService) ensureAASDescriptorsDoNotExist(
@@ -195,9 +195,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASDescript
 				Message:    err.Error(),
 			}
 		}
-		return failedAtomicResult(descriptorIDsFromAASDescriptors(descriptors), failure)
+		return asyncjob.FailedAtomicResult(descriptorIDsFromAASDescriptors(descriptors), failure)
 	}
-	return successfulAtomicResult(len(descriptors))
+	return asyncjob.SuccessfulAtomicResult()
 }
 
 func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASIdentifierBulk(
@@ -218,9 +218,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASIdentifi
 				Message:    err.Error(),
 			}
 		}
-		return failedAtomicResult(normalizeAASIdentifiers(aasIdentifiers), failure)
+		return asyncjob.FailedAtomicResult(normalizeAASIdentifiers(aasIdentifiers), failure)
 	}
-	return successfulAtomicResult(len(aasIdentifiers))
+	return asyncjob.SuccessfulAtomicResult()
 }
 
 func (s *AssetAdministrationShellRegistryAPIAPIService) executeBulkDeleteAASIdentifiersTx(
@@ -359,27 +359,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) upsertDescriptorInTransa
 		return aasBulkPutErrorStatusCode(err), err
 	}
 	return http.StatusNoContent, nil
-}
-
-func successfulAtomicResult(itemCount int) asyncjob.BulkResult {
-	return asyncjob.BulkResult{
-		Success:         true,
-		ProcessedCount:  itemCount,
-		SuccessfulCount: itemCount,
-		FailedCount:     0,
-	}
-}
-
-func failedAtomicResult(itemIdentifiers []string, failure asyncjob.ItemFailure) asyncjob.BulkResult {
-	failures := asyncjob.ExpandAtomicFailures(itemIdentifiers, failure)
-	itemCount := len(itemIdentifiers)
-	return asyncjob.BulkResult{
-		Success:         false,
-		ProcessedCount:  itemCount,
-		SuccessfulCount: 0,
-		FailedCount:     itemCount,
-		Failures:        failures,
-	}
 }
 
 func descriptorIDsFromAASDescriptors(descriptors []model.AssetAdministrationShellDescriptor) []string {

@@ -38,6 +38,7 @@ import (
 	aasrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 // CustomAASRepositoryService is a pass-through stub for future combined logic.
@@ -102,14 +103,13 @@ func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Co
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	descriptor, descriptorErr := s.syncConfig.BuildAASDescriptor(aas)
-	if descriptorErr != nil {
-		return newAASRepoErrorResponse(descriptorErr, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
-	}
-
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if err := s.persistence.AASRepository.CreateAssetAdministrationShellInTransaction(ctx, tx, aas); err != nil {
 			return err
+		}
+		descriptor, descriptorErr := s.syncConfig.BuildAASDescriptor(aas)
+		if descriptorErr != nil {
+			return descriptorErr
 		}
 
 		return s.persistence.AASRegistry.InsertAdministrationShellDescriptorInTransaction(
@@ -438,20 +438,12 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		return newAASRepoErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
 	}
 
-	if _, aasLookupErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier); aasLookupErr != nil {
-		if common.IsErrDenied(aasLookupErr) {
-			return newAASRepoErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(aasLookupErr) {
-			return newAASRepoErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
-		}
-		if common.IsErrBadRequest(aasLookupErr) {
-			return newAASRepoErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
+	shellCtx, response, ok := s.LookupSuperpathShell(ctx, operation, decodedAASIdentifier, grammar.RightsEnumUPDATE)
+	if !ok {
+		return response, nil
 	}
 
-	isUpdate, _, err := s.putSubmodelAndSyncDescriptors(ctx, decodedAASIdentifier, decodedSubmodelIdentifier, submodel)
+	isUpdate, _, err := s.putSubmodelAndSyncDescriptors(ctx, shellCtx, decodedAASIdentifier, decodedSubmodelIdentifier, submodel)
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAASRepoErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
@@ -482,6 +474,7 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 
 func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 	ctx context.Context,
+	shellCtx context.Context,
 	aasIdentifier string,
 	submodelIdentifier string,
 	submodel types.ISubmodel,
@@ -493,7 +486,7 @@ func (s *CustomAASRepositoryService) putSubmodelAndSyncDescriptors(
 			types.ReferenceTypesModelReference,
 			[]types.IKey{types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)},
 		)
-		createReferenceErr := s.persistence.AASRepository.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, aasIdentifier, submodelReference)
+		createReferenceErr := s.persistence.AASRepository.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(shellCtx, tx, aasIdentifier, submodelReference)
 		if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
 			return createReferenceErr
 		}
@@ -557,12 +550,17 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 		return newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
+	shellCtx, response, ok := aasrepositoryapi.SuperpathShellContext(ctx, operation, decodedAASIdentifier, grammar.RightsEnumUPDATE)
+	if !ok {
+		return response, nil
+	}
+
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-		if checkErr := s.persistence.AASRepository.CheckSubmodelReferenceForDeletionInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); checkErr != nil {
+		if checkErr := s.persistence.AASRepository.CheckSubmodelReferenceForDeletionInTransaction(shellCtx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); checkErr != nil {
 			return checkErr
 		}
 
-		if deleteRefErr := s.persistence.AASRepository.DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); deleteRefErr != nil {
+		if deleteRefErr := s.persistence.AASRepository.DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(shellCtx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); deleteRefErr != nil {
 			return deleteRefErr
 		}
 
@@ -736,20 +734,12 @@ func (s *CustomAASRepositoryService) decodeAndEnsureAASSubmodelReference(ctx con
 		return "", "", newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), false
 	}
 
-	if _, aasLookupErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier); aasLookupErr != nil {
-		if common.IsErrDenied(aasLookupErr) {
-			return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), false
-		}
-		if common.IsErrNotFound(aasLookupErr) {
-			return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), false
-		}
-		if common.IsErrBadRequest(aasLookupErr) {
-			return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), false
-		}
-		return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), false
+	shellCtx, response, ok := s.LookupSuperpathShell(ctx, operation, decodedAASIdentifier, grammar.RightsEnumREAD)
+	if !ok {
+		return "", "", response, false
 	}
 
-	if referenceCheckErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(ctx, decodedAASIdentifier, decodedSubmodelIdentifier); referenceCheckErr != nil {
+	if referenceCheckErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(shellCtx, decodedAASIdentifier, decodedSubmodelIdentifier); referenceCheckErr != nil {
 		if common.IsErrNotFound(referenceCheckErr) {
 			return "", "", newAASRepoErrorResponse(referenceCheckErr, http.StatusNotFound, operation, "SubmodelNotFound"), false
 		}

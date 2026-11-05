@@ -45,6 +45,16 @@ func TestNegotiateSerializationContentTypeSupportsAASXAliasMediaTypes(t *testing
 		expected     string
 	}{
 		{
+			name:         "AASZip",
+			acceptHeader: "application/aas+zip",
+			expected:     serializationContentTypeAASZip,
+		},
+		{
+			name:         "AASZipWithQuality",
+			acceptHeader: "application/aas+zip;q=1.0, application/json;q=0.5",
+			expected:     serializationContentTypeAASZip,
+		},
+		{
 			name:         "AliasXML",
 			acceptHeader: "application/asset-administration-shell+xml",
 			expected:     serializationContentTypeAASXXMLAlt,
@@ -93,6 +103,15 @@ func TestNegotiateSerializationContentTypeSupportsAASXAliasMediaTypes(t *testing
 			require.Equal(t, testCase.expected, contentType)
 		})
 	}
+}
+
+func TestResolveSerializationFormatWritesXMLSpecIntoAASZipPackage(t *testing.T) {
+	format, err := resolveSerializationFormat(serializationContentTypeAASZip)
+	require.NoError(t, err)
+	require.True(t, format.aasx)
+	require.Equal(t, serializationContentTypeXML, format.specContentType)
+	require.Equal(t, serializationAASXXMLSpecURI, format.specURI)
+	require.Equal(t, "environment.aasx", format.fileName)
 }
 
 func TestNegotiateSerializationContentTypeReturnsBadRequestForUnsupportedType(t *testing.T) {

@@ -76,6 +76,7 @@ const actionAssertSignedSubmodel = "ASSERT_SIGNED_SUBMODEL"
 var submodelRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
 var submodelRepositoryEventFeedBaseURL = testenv.LocalURLFromEnv("BASYX_IT_EVENT_FEED_API_PORT", 6024)
 var submodelRepositoryReplicaBaseURL = testenv.LocalURLFromEnv("BASYX_IT_REPLICA_API_PORT", 6014)
+var submodelRepositoryStrictBaseURL = testenv.LocalURLFromEnv("BASYX_IT_STRICT_API_PORT", 6015)
 var submodelRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6007)
 var submodelRepositoryAASBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
 var submodelRepositoryAASExternalURL = testenv.LocalURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
@@ -104,7 +105,11 @@ func uploadFileAttachment(endpoint string, filePath string, fileName string) (in
 	}
 
 	partHeader := textproto.MIMEHeader{}
-	partHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filepath.Base(filePath)))
+	partFileName := filepath.Base(filePath)
+	if fileName != "" {
+		partFileName = fileName
+	}
+	partHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, partFileName))
 	if readBytes > 0 {
 		partHeader.Set("Content-Type", http.DetectContentType(signature[:readBytes]))
 	}
@@ -115,13 +120,6 @@ func uploadFileAttachment(endpoint string, filePath string, fileName string) (in
 	_, err = io.Copy(part, file)
 	if err != nil {
 		return 0, fmt.Errorf("failed to copy file: %v", err)
-	}
-
-	// Add the fileName field if provided
-	if fileName != "" {
-		if err := writer.WriteField("fileName", fileName); err != nil {
-			return 0, fmt.Errorf("failed to write fileName field: %v", err)
-		}
 	}
 
 	err = writer.Close()
@@ -1243,7 +1241,7 @@ func TestContractSubmodelRepository(t *testing.T) {
 		assert.NotEmpty(t, submodelElements, "submodelElements must be omitted when empty or contain at least one element")
 	})
 
-	t.Run("GetAllSubmodelElementsMetadataReturnsHierarchyWithoutPropertyValues", func(t *testing.T) {
+	t.Run("GetAllSubmodelElementsMetadataOmitsChildElementsAndPropertyValues", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-sme-metadata-all-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractSMEMetadataAll%d", time.Now().UnixNano())
 		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
@@ -1291,19 +1289,9 @@ func TestContractSubmodelRepository(t *testing.T) {
 
 		collectionMetadata := findMetadataByIDShort(t, response.Result, "MainCollection")
 		assert.Equal(t, "SubmodelElementCollection", collectionMetadata["modelType"])
-
-		rawNestedMetadata, hasNestedMetadata := collectionMetadata["value"]
-		require.True(t, hasNestedMetadata, "collection metadata should include nested metadata hierarchy")
-
-		nestedMetadata, ok := rawNestedMetadata.([]any)
-		require.True(t, ok, "collection metadata hierarchy must be an array")
-		require.NotEmpty(t, nestedMetadata)
-
-		firstNestedMetadata, ok := nestedMetadata[0].(map[string]any)
-		require.True(t, ok, "nested metadata entry must be an object")
-		assert.Equal(t, "NestedProperty", firstNestedMetadata["idShort"])
-		_, hasNestedValue := firstNestedMetadata["value"]
-		assert.False(t, hasNestedValue, "nested property metadata should not include value payload")
+		_, hasCollectionValue := collectionMetadata["value"]
+		assert.False(t, hasCollectionValue, "collection metadata should not include child elements")
+		assert.Len(t, response.Result, 2, "metadata list should contain only top-level elements")
 	})
 
 	t.Run("GetSubmodelElementByPathMetadataReturnsMetadataWithoutPropertyValues", func(t *testing.T) {
@@ -1837,7 +1825,7 @@ func TestPathNotationEndpoints(t *testing.T) {
 		assert.NotContains(t, paths, "TopProperty")
 	})
 
-	t.Run("GetSubmodelElementByPathPathCoreReturnsOnlyRequestedPath", func(t *testing.T) {
+	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPathAndDirectChildren", func(t *testing.T) {
 		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection/$path?level=core", baseURL, submodelIDEncoded), nil)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
@@ -1845,7 +1833,18 @@ func TestPathNotationEndpoints(t *testing.T) {
 		var paths []string
 		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
 
-		assert.Equal(t, []string{"MainCollection"}, paths)
+		assert.ElementsMatch(t, []string{"MainCollection", "MainCollection.NestedProperty", "MainCollection.NestedList"}, paths)
+	})
+
+	t.Run("GetSubmodelElementByPathPathCoreOnListReturnsListItems", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection.NestedList/$path?level=core", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.ElementsMatch(t, []string{"MainCollection.NestedList", "MainCollection.NestedList[0]", "MainCollection.NestedList[1]"}, paths)
 	})
 
 }
@@ -1881,9 +1880,9 @@ func assertSignedSubmodelResponse(t *testing.T, runner *testenv.JSONSuiteRunner,
 	response, err := runner.RunStep(step, stepNumber)
 	require.NoError(t, err, "Request failed")
 
-	var compact string
-	require.NoError(t, json.Unmarshal([]byte(response.Body), &compact), "response=%s", response.Body)
-	require.Equal(t, 2, strings.Count(compact, "."))
+	require.Equal(t, "text/plain", response.Headers.Get("Content-Type"))
+	compact := response.Body
+	require.Equal(t, 2, strings.Count(compact, "."), "response=%s", compact)
 	requireSignedSubmodelProtectedHeaders(t, compact)
 
 	privateKey, err := commonjws.LoadPrivateKey("docker_compose/rsa-key.pem")
@@ -1897,6 +1896,9 @@ func assertSignedSubmodelResponse(t *testing.T, runner *testenv.JSONSuiteRunner,
 	require.NoError(t, err)
 	require.JSONEq(t, string(canonical), string(payload))
 
+	if step.ShouldMatch == "" {
+		return
+	}
 	expectedPayload := expectedSignedSubmodelPayload(t, step.ShouldMatch)
 	require.JSONEq(t, string(expectedPayload), string(payload))
 }
@@ -2612,6 +2614,7 @@ func TestMain(m *testing.M) {
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
 		{Name: "event-feed-api", EnvVar: "BASYX_IT_EVENT_FEED_API_PORT"},
 		{Name: "replica-api", EnvVar: "BASYX_IT_REPLICA_API_PORT"},
+		{Name: "strict-api", EnvVar: "BASYX_IT_STRICT_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "aas-api", EnvVar: "BASYX_IT_AAS_API_PORT"},
 		{Name: "sync-api", EnvVar: "BASYX_IT_SYNC_API_PORT"},
@@ -2625,6 +2628,7 @@ func TestMain(m *testing.M) {
 	submodelRepositoryBaseURL = runtime.LocalURL("api")
 	submodelRepositoryEventFeedBaseURL = runtime.LocalURL("event-feed-api")
 	submodelRepositoryReplicaBaseURL = runtime.LocalURL("replica-api")
+	submodelRepositoryStrictBaseURL = runtime.LocalURL("strict-api")
 	submodelRepositoryAASBaseURL = runtime.LocalhostURL("aas-api")
 	submodelRepositoryAASExternalURL = runtime.LocalURL("aas-api")
 	submodelRepositorySyncBaseURL = runtime.LocalhostURL("sync-api")

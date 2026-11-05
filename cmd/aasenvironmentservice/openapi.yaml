@@ -1966,14 +1966,7 @@ paths:
         '204':
           description: Bulk request completed successfully
         '400':
-          description: 'Bulk request completed with descriptor failures. Processing
-            is strict atomic: if one descriptor operation fails, the complete transaction
-            is rolled back. The response body contains processedCount, successfulCount,
-            failedCount and details about failing descriptor operations.'
-          content:
-            application/json:
-              schema:
-                type: object
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request
         '404':
           $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
         '500':
@@ -2736,11 +2729,14 @@ paths:
             schema:
               type: object
               properties:
-                fileName:
-                  type: string
                 file:
                   type: string
                   format: binary
+                  description: >-
+                    Binary content. A source filename, if supplied, is conveyed in the
+                    `filename` parameter of this part's `Content-Disposition` header.
+              required:
+                - file
             encoding:
               file:
                 contentType: application/octet-stream
@@ -4143,11 +4139,14 @@ paths:
             schema:
               type: object
               properties:
-                fileName:
-                  type: string
                 file:
                   type: string
                   format: binary
+                  description: >-
+                    Binary content. A source filename, if supplied, is conveyed in the
+                    `filename` parameter of this part's `Content-Disposition` header.
+              required:
+                - file
             encoding:
               file:
                 contentType: application/octet-stream
@@ -6017,11 +6016,14 @@ paths:
             schema:
               type: object
               properties:
-                fileName:
-                  type: string
                 file:
                   type: string
                   format: binary
+                  description: >-
+                    Binary content. A source filename, if supplied, is conveyed in the
+                    `filename` parameter of this part's `Content-Disposition` header.
+              required:
+                - file
             encoding:
               file:
                 contentType: application/octet-stream
@@ -6488,9 +6490,9 @@ paths:
       tags:
         - Submodel Repository API
       summary: Returns a specific Submodel valid at a specific point in time
-      operationId: GetSubmodelByIdAndDate
+      operationId: GetSubmodelVersionByIdAndDate
       x-semanticIds:
-        - https://admin-shell.io/aas/API/GetSubmodelByIdAndDate/3/2
+        - https://admin-shell.io/aas/API/GetSubmodelVersionByIdAndDate/3/2
       parameters:
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Level'
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Extent'

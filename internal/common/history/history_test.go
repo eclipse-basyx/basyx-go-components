@@ -67,6 +67,18 @@ func TestSnapshotByDateRestoresDiffBackedVersion(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestSnapshotByDateConditionsSelectLatestVersionForZeroDate(t *testing.T) {
+	historyAlias := goqu.T(TableAAS).As("history")
+
+	latestSQL, _, err := goqu.From(historyAlias).Where(snapshotByDateConditions(historyAlias, "aas-1", time.Time{})...).ToSQL()
+	require.NoError(t, err)
+	require.NotContains(t, latestSQL, "valid_from")
+
+	datedSQL, _, err := goqu.From(historyAlias).Where(snapshotByDateConditions(historyAlias, "aas-1", time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC))...).ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, datedSQL, `"history"."valid_from" <= `)
+}
+
 func TestSnapshotByDateRestoresFromEarlySizeFallbackSnapshot(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

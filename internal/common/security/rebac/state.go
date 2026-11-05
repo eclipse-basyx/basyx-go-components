@@ -31,8 +31,10 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -82,7 +84,7 @@ func unclaimedAssetLinks(ctx context.Context, q Queryer, authUUID string) (bool,
 	granted := dialect.From(goqu.T(grantTable).As("g")).Select(goqu.L("1")).Where(goqu.I("g.object_uuid").Eq(target))
 	derived := dialect.From(goqu.T(derivationTable).As("d")).Select(goqu.L("1")).Where(goqu.I("d.object_uuid").Eq(target))
 	return exists(ctx, q, "REBAC-UNCLAIMEDASSETLINKS",
-		goqu.And(existsQuery(created), goqu.L("NOT EXISTS (?)", granted), goqu.L("NOT EXISTS (?)", derived)))
+		goqu.And(existsQuery(created), goqu.L("NOT ?", goqu.Exists(granted)), goqu.L("NOT ?", goqu.Exists(derived))))
 }
 
 // claimDiscoveryEntry derives the discovery entry that the discovery
@@ -118,11 +120,26 @@ func recordSourceOfCreated(ctx context.Context, tx *sql.Tx, kind ResourceKind, i
 	return true, recordDerivation(ctx, tx, kind, authUUID, sourceKind, sourceUUID)
 }
 
-func (c *Coordinator) assignCreatorOwner(ctx context.Context, tx *sql.Tx, kind ResourceKind, authUUID string) error {
-	if !auth.IsAuthenticated(ctx) {
+// CreatorReference returns the external reference naming the authenticated
+// principal of ctx in issuer|subject notation, or nil for anonymous callers.
+func (c *Coordinator) CreatorReference(ctx context.Context) types.IReference {
+	principal, ok := c.authenticatedPrincipal(ctx)
+	if !ok {
 		return nil
 	}
-	principal, ok := PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.claims)
+	key := types.NewKey(types.KeyTypesGlobalReference, common.FormatReBACPrincipal(principal.Issuer, principal.Subject))
+	return types.NewReference(types.ReferenceTypesExternalReference, []types.IKey{key})
+}
+
+func (c *Coordinator) authenticatedPrincipal(ctx context.Context) (Principal, bool) {
+	if !auth.IsAuthenticated(ctx) {
+		return Principal{}, false
+	}
+	return PrincipalFromClaims(auth.ClaimsFromContext(ctx), c.claims)
+}
+
+func (c *Coordinator) assignCreatorOwner(ctx context.Context, tx *sql.Tx, kind ResourceKind, authUUID string) error {
+	principal, ok := c.authenticatedPrincipal(ctx)
 	if !ok {
 		return nil
 	}

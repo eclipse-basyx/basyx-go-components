@@ -119,14 +119,13 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	descriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(submodel)
-	if descriptorErr != nil {
-		return newSubmodelRepoErrorResponse(descriptorErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
-	}
-
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if createErr := s.persistence.SubmodelRepository.CreateSubmodelInTransaction(ctx, tx, submodel); createErr != nil {
 			return createErr
+		}
+		descriptor, descriptorErr := s.syncConfig.BuildSubmodelDescriptor(submodel)
+		if descriptorErr != nil {
+			return descriptorErr
 		}
 
 		if _, insertErr := s.persistence.SubmodelRegistry.InsertSubmodelDescriptorInTransaction(

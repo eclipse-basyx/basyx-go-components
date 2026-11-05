@@ -1,0 +1,9 @@
+kind: fixed
+body: >-
+  Return a Blob that was stored without a contentType without one, instead of
+  with an empty contentType string.
+time: 2026-11-02T13:46:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 804
+  SecurityImpact: None.

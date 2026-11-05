@@ -10,15 +10,17 @@
 
 package openapi
 
-type GetPackageDescriptionsResult struct {
-	PagingMetadata PagedResultPagingMetadata `json:"pagingMetadata,omitempty"`
+import "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 
-	Result []PackageDescription `json:"result,omitempty"`
+type GetPackageDescriptionsResult struct {
+	PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
+
+	Result []PackageDescription `json:"result"`
 }
 
 // AssertGetPackageDescriptionsResultRequired checks if the required fields are not zero-ed
 func AssertGetPackageDescriptionsResultRequired(obj GetPackageDescriptionsResult) error {
-	if err := AssertPagedResultPagingMetadataRequired(obj.PagingMetadata); err != nil {
+	if err := model.AssertPagedResultPagingMetadataRequired(obj.PagingMetadata); err != nil {
 		return err
 	}
 	for _, el := range obj.Result {
@@ -31,7 +33,7 @@ func AssertGetPackageDescriptionsResultRequired(obj GetPackageDescriptionsResult
 
 // AssertGetPackageDescriptionsResultConstraints checks if the values respects the defined constraints
 func AssertGetPackageDescriptionsResultConstraints(obj GetPackageDescriptionsResult) error {
-	if err := AssertPagedResultPagingMetadataConstraints(obj.PagingMetadata); err != nil {
+	if err := model.AssertPagedResultPagingMetadataConstraints(obj.PagingMetadata); err != nil {
 		return err
 	}
 	for _, el := range obj.Result {

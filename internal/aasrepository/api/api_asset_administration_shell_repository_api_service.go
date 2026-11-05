@@ -30,6 +30,7 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/eventfeed"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -457,7 +458,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedAssetAdministrationShell"), nil
 	}
 
-	return gen.Response(http.StatusOK, jwsString), nil
+	return gen.Response(http.StatusOK, gen.PlainText(jwsString)), nil
 }
 
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellVersionByIdAndDate(ctx context.Context, aasIdentifier string, date time.Time) (gen.ImplResponse, error) {
@@ -659,7 +660,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 }
 
 // PutThumbnailAasRepository -
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, file io.Reader) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, contentType string, file io.Reader) (gen.ImplResponse, error) {
 
 	const operation = "PutThumbnailAasRepository"
 
@@ -668,7 +669,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	err := s.assetAdministrationShellBackend.PutThumbnailByAASIDReader(ctx, decodedIdentifier, fileName, file)
+	err := s.assetAdministrationShellBackend.PutThumbnailByAASIDReader(ctx, decodedIdentifier, file, binarycontent.UploadDeclaration{
+		FileName:     fileName,
+		ContentTypes: []string{contentType},
+	})
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
@@ -860,18 +864,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 		return newAPIErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
 	}
 
-	_, aasLookupErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier)
-	if aasLookupErr != nil {
-		if common.IsErrDenied(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
-		}
-		if common.IsErrBadRequest(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
+	shellCtx, response, ok := s.LookupSuperpathShell(ctx, operation, decodedAASIdentifier, grammar.RightsEnumUPDATE)
+	if !ok {
+		return response, nil
 	}
 
 	var isUpdate bool
@@ -885,7 +880,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 		"AASREPO-PUTSMBYID-STARTTX",
 		"AASREPO-PUTSMBYID-COMMIT",
 		func(tx *sql.Tx) error {
-			createReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, submodelReference)
+			createReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(shellCtx, tx, decodedAASIdentifier, submodelReference)
 			if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
 				referenceCreateAASNotFound = isCreateSubmodelReferenceAASNotFoundErr(createReferenceErr)
 				return createReferenceErr
@@ -950,15 +945,20 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
+	shellCtx, response, ok := SuperpathShellContext(ctx, operation, decodedAASIdentifier, grammar.RightsEnumUPDATE)
+	if !ok {
+		return response, nil
+	}
+
 	deleteErr := s.assetAdministrationShellBackend.ExecuteInTransaction(
 		"AASREPO-DELSMBYID-STARTTX",
 		"AASREPO-DELSMBYID-COMMIT",
 		func(tx *sql.Tx) error {
-			if err := s.assetAdministrationShellBackend.CheckSubmodelReferenceForDeletionInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+			if err := s.assetAdministrationShellBackend.CheckSubmodelReferenceForDeletionInTransaction(shellCtx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
 				return err
 			}
 
-			if err := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+			if err := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(shellCtx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
 				return err
 			}
 
@@ -1034,6 +1034,16 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureSubmodelBackend(
 	return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil, false
 }
 
+func toAASFileResponse(response gen.ImplResponse) gen.ImplResponse {
+	switch body := response.Body.(type) {
+	case submodelopenapi.FileDownload:
+		response.Body = openapi.FileDownload(body)
+	case submodelopenapi.Redirect:
+		response.Body = openapi.Redirect(body)
+	}
+	return response
+}
+
 func toAASOperationRedirect(
 	response gen.ImplResponse,
 	aasIdentifier string,
@@ -1089,21 +1099,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureAASSubmodelRefer
 	if isAASSubmodelMutationOperation(operation) {
 		ctx = common.WithWriterPostgresReads(ctx)
 	}
-	_, aasLookupErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier)
-	if aasLookupErr != nil {
-		if common.IsErrDenied(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), nil, false
-		}
-		if common.IsErrNotFound(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil, false
-		}
-		if common.IsErrBadRequest(aasLookupErr) {
-			return newAPIErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil, false
-		}
-		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil, false
+	shellCtx, response, ok := s.LookupSuperpathShell(ctx, operation, decodedAASIdentifier, grammar.RightsEnumREAD)
+	if !ok {
+		return response, nil, false
 	}
 
-	referenceCheckErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(ctx, decodedAASIdentifier, decodedSubmodelIdentifier)
+	referenceCheckErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(shellCtx, decodedAASIdentifier, decodedSubmodelIdentifier)
 	if referenceCheckErr != nil {
 		if common.IsErrNotFound(referenceCheckErr) {
 			return newAPIErrorResponse(referenceCheckErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil, false
@@ -1115,6 +1116,43 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureAASSubmodelRefer
 	}
 
 	return gen.ImplResponse{}, nil, true
+}
+
+// LookupSuperpathShell checks that the caller may access the enclosing Asset
+// Administration Shell of a superpath request with right and that it exists.
+// The returned context must be used for all shell lookups of the request.
+func (s *AssetAdministrationShellRepositoryAPIAPIService) LookupSuperpathShell(ctx context.Context, operation string, aasIdentifier string, right grammar.RightsEnum) (context.Context, gen.ImplResponse, bool) {
+	shellCtx, response, ok := SuperpathShellContext(ctx, operation, aasIdentifier, right)
+	if !ok {
+		return nil, response, false
+	}
+	if _, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(shellCtx, aasIdentifier); err != nil {
+		return nil, superpathShellErrorResponse(err, operation, "GetAssetAdministrationShellByID"), false
+	}
+	return shellCtx, gen.ImplResponse{}, true
+}
+
+// SuperpathShellContext authorizes the enclosing Asset Administration Shell of
+// a superpath request with right and returns the context for its shell lookups.
+func SuperpathShellContext(ctx context.Context, operation string, aasIdentifier string, right grammar.RightsEnum) (context.Context, gen.ImplResponse, bool) {
+	shellCtx, err := auth.SuperpathShellContext(ctx, aasIdentifier, right)
+	if err != nil {
+		return nil, superpathShellErrorResponse(err, operation, "AuthorizeAssetAdministrationShell"), false
+	}
+	return shellCtx, gen.ImplResponse{}, true
+}
+
+func superpathShellErrorResponse(err error, operation string, internalErrorInfo string) gen.ImplResponse {
+	if common.IsErrDenied(err) {
+		return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden")
+	}
+	if common.IsErrNotFound(err) {
+		return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound")
+	}
+	if common.IsErrBadRequest(err) {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest")
+	}
+	return newAPIErrorResponse(err, http.StatusInternalServerError, operation, internalErrorInfo)
 }
 
 func isAASSubmodelMutationOperation(operation string) bool {
@@ -1632,7 +1670,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetFileByPathAasReposi
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.GetFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath)
+	response, err := s.submodelAPI.GetFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath)
+	return toAASFileResponse(response), err
 }
 
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy

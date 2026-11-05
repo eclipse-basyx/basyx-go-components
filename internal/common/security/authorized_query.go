@@ -219,6 +219,19 @@ func (s *AuthorizationSession) evaluate(method string, requestPath string) Autho
 	}, s.options)
 }
 
+func (s *AuthorizationSession) evaluateRight(right grammar.RightsEnum, requestPath string) AuthorizationEvaluation {
+	if s == nil || s.model == nil {
+		return AuthorizationEvaluation{Reason: DecisionNoMatch}
+	}
+	return s.model.AuthorizeWithFilterWithOptions(EvalInput{
+		Path:      requestPath,
+		RoutePath: requestPath,
+		Claims:    s.claims,
+		Globals:   s.globals,
+		rights:    []grammar.RightsEnum{right},
+	}, s.options)
+}
+
 func (s *AuthorizationSession) semanticView(
 	resource SemanticResourceKind,
 	outerResource SemanticResourceKind,

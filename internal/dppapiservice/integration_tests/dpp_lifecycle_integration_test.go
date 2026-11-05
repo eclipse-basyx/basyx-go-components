@@ -660,9 +660,6 @@ func uploadAttachment(t *testing.T, client *http.Client, attachmentURL string, f
 	if _, err = part.Write(payload); err != nil {
 		t.Fatalf("write attachment form file: %v", err)
 	}
-	if err = writer.WriteField("fileName", fileName); err != nil {
-		t.Fatalf("write attachment filename: %v", err)
-	}
 	if err = writer.Close(); err != nil {
 		t.Fatalf("close attachment form: %v", err)
 	}

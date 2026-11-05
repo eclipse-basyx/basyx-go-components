@@ -64,12 +64,8 @@ type ItemFailure struct {
 
 // BulkResult captures the final result of a bulk job.
 type BulkResult struct {
-	ExecutionState  string        `json:"executionState"`
-	Success         bool          `json:"success"`
-	ProcessedCount  int           `json:"processedCount"`
-	SuccessfulCount int           `json:"successfulCount"`
-	FailedCount     int           `json:"failedCount"`
-	Failures        []ItemFailure `json:"failures,omitempty"`
+	Success  bool          `json:"success"`
+	Failures []ItemFailure `json:"failures,omitempty"`
 }
 
 // Record stores one asynchronous job state.
@@ -391,7 +387,6 @@ func (m *Manager) start(ctx context.Context, tx *sql.Tx, ownerKey string, option
 
 // Complete stores the terminal result of a bulk job.
 func (m *Manager) Complete(ctx context.Context, handleID string, result BulkResult) error {
-	result.ExecutionState = executionStateCompleted
 	return m.transition(ctx, handleID, Record{
 		ExecutionState: executionStateCompleted,
 		Result:         result,

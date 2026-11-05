@@ -111,7 +111,7 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	cdDatabase, err := persistence.NewConceptDescriptionBackendFromPools(pools.Writer, pools.Reader)
+	cdDatabase, err := persistence.NewConceptDescriptionBackendFromPools(pools.Writer, pools.Reader, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}

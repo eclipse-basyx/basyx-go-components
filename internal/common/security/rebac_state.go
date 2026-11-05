@@ -29,6 +29,8 @@ package auth
 import (
 	"context"
 	"database/sql"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 type reBACStateContextKey struct{}
@@ -69,6 +71,7 @@ type ReBACState interface {
 	ResourceDeleted(ctx context.Context, tx *sql.Tx, resource SemanticResourceKind, identifier string) error
 	SubmodelReferencesRemoved(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifiers []string) error
 	SubmodelCreatedWithShell(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error
+	CreatorReference(ctx context.Context) types.IReference
 }
 
 // WithReBACState attaches the ReBAC state recorder to ctx.
@@ -129,4 +132,44 @@ func RecordReBACSubmodelCreatedWithShell(ctx context.Context, tx *sql.Tx, aasIde
 		return nil
 	}
 	return state.SubmodelCreatedWithShell(ctx, tx, aasIdentifier, submodelIdentifier)
+}
+
+// ReBACCreatorReference returns the creator reference of resources the
+// authenticated caller of ctx creates, or nil while ReBAC is disabled, for
+// anonymous callers and for resources derived from a ReBACSource, which
+// mirror their source.
+func ReBACCreatorReference(ctx context.Context) types.IReference {
+	state := ReBACStateFromContext(ctx)
+	if state == nil {
+		return nil
+	}
+	if _, derived := ReBACSourceFromContext(ctx); derived {
+		return nil
+	}
+	return state.CreatorReference(ctx)
+}
+
+// FillMissingCreator returns administration with creator set when it has no
+// creator yet. A nil creator returns administration unchanged.
+func FillMissingCreator(administration types.IAdministrativeInformation, creator types.IReference) types.IAdministrativeInformation {
+	if creator == nil || (administration != nil && administration.Creator() != nil) {
+		return administration
+	}
+	if administration == nil {
+		administration = types.NewAdministrativeInformation()
+	}
+	administration.SetCreator(creator)
+	return administration
+}
+
+// FillReBACCreator sets the administrative creator of an identifiable
+// created under ctx to the authenticated caller when it has none. Call it
+// only when the identifiable is created; the creator stays business data
+// that clients may change or remove later.
+func FillReBACCreator(ctx context.Context, identifiable types.IIdentifiable) {
+	creator := ReBACCreatorReference(ctx)
+	if creator == nil {
+		return
+	}
+	identifiable.SetAdministration(FillMissingCreator(identifiable.Administration(), creator))
 }

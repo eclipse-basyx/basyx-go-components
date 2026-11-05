@@ -56,6 +56,20 @@ func startAdderMicroservice(t *testing.T) (string, func()) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(arguments)
 	})
+	mux.HandleFunc("/delegate/omitted", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(delegatedOutputsNotSerializedInValueOnly())
+	})
+	mux.HandleFunc("/delegate/broken", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/delegate/slow", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(2 * time.Second):
+		case <-r.Context().Done():
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 	mux.HandleFunc("/delegate/add", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -202,7 +216,8 @@ func TestDelegationOperation(t *testing.T) {
 		},
 	}
 
-	submodelPayload["submodelElements"] = append(submodelPayload["submodelElements"].([]any), delegatedValueOnlyEchoOperation(delegationURL))
+	submodelPayload["submodelElements"] = append(submodelPayload["submodelElements"].([]any), delegatedValueOnlyEchoOperation(delegationURL), delegatedOperationTo(delegationURL, "OmittedOutputs", "/delegate/omitted"),
+		delegatedOperationTo(delegationURL, "Broken", "/delegate/broken"), delegatedOperationTo(delegationURL, "Slow", "/delegate/slow"))
 	submodelBody, err := json.Marshal(submodelPayload)
 	require.NoError(t, err)
 
@@ -338,6 +353,50 @@ func TestDelegationOperation(t *testing.T) {
 	require.Equalf(t, http.StatusOK, compatibilityResultResponse.StatusCode, "compatibility value-only result body: %s", string(compatibilityResultBody))
 	assertDelegatedAdditionValueOnlyResult(t, compatibilityResultBody)
 	assertDelegatedValueOnlyEcho(t, baseURL, encodedSubmodelID)
+	assertDelegatedValueOnlyOmitsUnserializableOutputs(t, noRedirectClient, baseURL, encodedSubmodelID)
+	operationsURL := baseURL + "/submodels/" + encodedSubmodelID + "/submodel-elements/"
+	assertAsyncDelegationFailureResult(t, noRedirectClient, operationsURL+"Broken", "PT10S", "Failed", "HTTP 500")
+	assertAsyncDelegationFailureResult(t, noRedirectClient, operationsURL+"Slow", "PT0.5S", "Timeout", "SMREPO-DOOPDELG-EXECREQ")
+}
+
+func delegatedOperationTo(delegationURL string, idShort string, delegatePath string) map[string]any {
+	return map[string]any{
+		"modelType": "Operation", "idShort": idShort,
+		"qualifiers": []any{map[string]any{"type": "invocationDelegation", "valueType": "xs:string", "value": strings.Replace(delegationURL, "/delegate/add?a=5&b=3", delegatePath, 1)}},
+	}
+}
+
+func assertAsyncDelegationFailureResult(t *testing.T, client *http.Client, operationURL string, clientTimeout string, expectedState string, expectedText string) {
+	t.Helper()
+	requestBody := []byte(`{"clientTimeoutDuration":"` + clientTimeout + `"}`)
+	statusLocation := startDelegatedAsyncInvocation(t, client, operationURL+"/invoke-async", requestBody)
+	resultLocation := waitForDelegatedOperationResultLocation(t, client, statusLocation)
+
+	for _, location := range []string{resultLocation, resultLocation + "/$value"} {
+		// #nosec G704 -- resultLocation is issued by the fixed local repository endpoint.
+		response, err := client.Get(location)
+		require.NoError(t, err)
+		body, err := io.ReadAll(response.Body)
+		require.NoError(t, err)
+		require.NoError(t, response.Body.Close())
+		require.Equalf(t, http.StatusOK, response.StatusCode, "async failure result body: %s", string(body))
+
+		var result struct {
+			ExecutionState string `json:"executionState"`
+			Success        *bool  `json:"success"`
+			Messages       []struct {
+				MessageType string `json:"messageType"`
+				Text        string `json:"text"`
+			} `json:"messages"`
+		}
+		require.NoError(t, json.Unmarshal(body, &result))
+		require.Equal(t, expectedState, result.ExecutionState)
+		require.NotNil(t, result.Success)
+		require.False(t, *result.Success)
+		require.Len(t, result.Messages, 1)
+		require.Equal(t, "Error", result.Messages[0].MessageType)
+		require.Contains(t, result.Messages[0].Text, expectedText)
+	}
 }
 
 func invokeDelegatedOperation(t *testing.T, endpoint string, body []byte) *http.Response {
@@ -450,6 +509,52 @@ func assertDelegatedValueOnlyEcho(t *testing.T, baseURL string, encodedSubmodelI
 		OutputArguments json.RawMessage `json:"outputArguments"`
 	}
 	require.NoError(t, json.Unmarshal(body, &payload))
-	require.JSONEq(t, arguments, string(payload.OutputArguments))
+	require.JSONEq(t, `{"enabled":true,"large":18446744073709551615,"bounds":{"min":1,"max":10}}`, string(payload.OutputArguments))
 	require.Contains(t, string(body), "18446744073709551615")
+}
+
+func delegatedOutputsNotSerializedInValueOnly() []any {
+	outputs := []any{}
+	for _, element := range []map[string]any{
+		{"modelType": "Property", "idShort": "sum", "valueType": "xs:int", "value": "8"},
+		{"modelType": "Capability", "idShort": "capability"},
+		{"modelType": "Operation", "idShort": "operation"},
+		{"modelType": "SubmodelElementList", "idShort": "capabilities", "typeValueListElement": "Capability", "value": []any{map[string]any{"modelType": "Capability"}}},
+	} {
+		outputs = append(outputs, map[string]any{"value": element})
+	}
+	return outputs
+}
+
+func assertDelegatedValueOnlyOmitsUnserializableOutputs(t *testing.T, client *http.Client, baseURL string, encodedSubmodelID string) {
+	t.Helper()
+	operationURL := baseURL + "/submodels/" + encodedSubmodelID + "/submodel-elements/OmittedOutputs"
+	requestBody := []byte(`{"clientTimeoutDuration":"PT10S"}`)
+
+	response := invokeDelegatedOperation(t, operationURL+"/invoke/$value", requestBody)
+	defer func() { _ = response.Body.Close() }()
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusOK, response.StatusCode, "value-only invoke response body: %s", string(body))
+	assertDelegatedOutputArguments(t, body, `{"sum":8}`)
+
+	statusLocation := startDelegatedAsyncInvocation(t, client, operationURL+"/invoke-async/$value", requestBody)
+	resultLocation := waitForDelegatedOperationResultLocation(t, client, statusLocation)
+	// #nosec G704 -- resultLocation is issued by the fixed local repository endpoint.
+	asyncResponse, err := client.Get(resultLocation + "/$value")
+	require.NoError(t, err)
+	defer func() { _ = asyncResponse.Body.Close() }()
+	asyncBody, err := io.ReadAll(asyncResponse.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusOK, asyncResponse.StatusCode, "value-only async result body: %s", string(asyncBody))
+	assertDelegatedOutputArguments(t, asyncBody, `{"sum":8}`)
+}
+
+func assertDelegatedOutputArguments(t *testing.T, body []byte, expected string) {
+	t.Helper()
+	var payload struct {
+		OutputArguments json.RawMessage `json:"outputArguments"`
+	}
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.JSONEq(t, expected, string(payload.OutputArguments))
 }

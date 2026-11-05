@@ -33,6 +33,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // BuildAdministrationShellDescriptorCreateBatch builds insert statements for one AAS descriptor.
@@ -52,6 +53,7 @@ func BuildAdministrationShellDescriptorCreateBatch(
 	ctx context.Context,
 	descriptor model.AssetAdministrationShellDescriptor,
 ) (*common.PostgreSQLBatch, error) {
+	descriptor = fillAASDescriptorCreator(descriptor, auth.ReBACCreatorReference(ctx))
 	batch := &common.PostgreSQLBatch{}
 	descriptorID := common.PostgreSQLCurrentSequenceValue(common.TblDescriptor, common.ColID)
 

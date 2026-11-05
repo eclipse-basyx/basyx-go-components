@@ -69,3 +69,55 @@ func TestParseSubmodelElementMetadataPayload_RejectsNullModelType(t *testing.T) 
 		t.Fatal("expected error for null modelType, got nil")
 	}
 }
+
+func TestParseSubmodelElementMetadataPayload_AcceptsTypeSpecificFields(t *testing.T) {
+	payloads := []map[string]any{
+		{"modelType": "Property", "valueType": "xs:int"},
+		{"modelType": "Range", "valueType": "xs:double"},
+		{
+			"modelType":             "SubmodelElementList",
+			"orderRelevant":         false,
+			"typeValueListElement":  "Property",
+			"valueTypeListElement":  "xs:int",
+			"semanticIdListElement": map[string]any{"type": "ExternalReference", "keys": []any{map[string]any{"type": "GlobalReference", "value": "urn:test"}}},
+		},
+		{"modelType": "BasicEventElement", "direction": "output", "state": "on", "messageTopic": "topic", "lastUpdate": "2026-01-01T00:00:00Z"},
+	}
+	for _, payload := range payloads {
+		if _, err := ParseSubmodelElementMetadataPayload(payload); err != nil {
+			t.Fatalf("expected payload %v to be accepted, got error: %v", payload, err)
+		}
+	}
+}
+
+func TestParseSubmodelElementMetadataPayload_RejectsFieldsOutsideMetadata(t *testing.T) {
+	payloads := []map[string]any{
+		{"modelType": "Property", "value": "1"},
+		{"modelType": "Property", "valueId": map[string]any{}},
+		{"modelType": "MultiLanguageProperty", "valueType": "xs:string"},
+		{"modelType": "Entity", "entityType": "SelfManagedEntity"},
+		{"modelType": "Operation", "inputVariables": []any{}},
+		{"modelType": "SubmodelElementCollection", "value": []any{}},
+		{"modelType": "BasicEventElement", "observed": map[string]any{}},
+	}
+	for _, payload := range payloads {
+		if _, err := ParseSubmodelElementMetadataPayload(payload); err == nil {
+			t.Fatalf("expected payload %v to be rejected", payload)
+		}
+	}
+}
+
+func TestParseSubmodelElementMetadataPayload_RejectsInvalidTypeSpecificValues(t *testing.T) {
+	payloads := []map[string]any{
+		{"modelType": "Property", "valueType": "xs:unknown"},
+		{"modelType": "Property", "valueType": nil},
+		{"modelType": "SubmodelElementList", "orderRelevant": "false"},
+		{"modelType": "BasicEventElement", "direction": "sideways"},
+		{"modelType": "BasicEventElement", "messageTopic": nil},
+	}
+	for _, payload := range payloads {
+		if _, err := ParseSubmodelElementMetadataPayload(payload); err == nil {
+			t.Fatalf("expected payload %v to be rejected", payload)
+		}
+	}
+}

@@ -303,15 +303,35 @@ func TestReconciliationPlanDetectsIdenticalSubmodelsAsNoOp(t *testing.T) {
 	require.Empty(t, plan.Deletes)
 }
 
-func TestReconciliationMetadataTreatsMissingAndEmptyIDShortAsEqual(t *testing.T) {
-	previous := types.NewSubmodel("sm")
-	emptyIDShort := ""
-	previous.SetIDShort(&emptyIDShort)
-	target := types.NewSubmodel("sm")
+func TestReconciliationMetadataPreservesIDShortPresence(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		previous *string
+		target   *string
+		changed  bool
+	}{
+		{name: "absent unchanged"},
+		{name: "empty unchanged", previous: new(""), target: new("")},
+		{name: "populated unchanged", previous: new("Name"), target: new("Name")},
+		{name: "absent to empty", target: new(""), changed: true},
+		{name: "empty to absent", previous: new(""), changed: true},
+		{name: "absent to populated", target: new("Name"), changed: true},
+		{name: "populated to absent", previous: new("Name"), changed: true},
+		{name: "populated to empty", previous: new("Name"), target: new(""), changed: true},
+		{name: "populated changed", previous: new("Name"), target: new("Other"), changed: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			previous := types.NewSubmodel("sm")
+			previous.SetIDShort(testCase.previous)
+			target := types.NewSubmodel("sm")
+			target.SetIDShort(testCase.target)
 
-	metadata, err := buildSubmodelReconciliationMetadata(previous, target)
-	require.NoError(t, err)
-	require.False(t, metadata.CoreChanged)
+			metadata, err := buildSubmodelReconciliationMetadata(previous, target)
+			require.NoError(t, err)
+			require.Equal(t, testCase.changed, metadata.CoreChanged)
+			require.Equal(t, testCase.target, metadata.IDShort)
+		})
+	}
 }
 
 func TestReconciliationPlanDetectsMetadataOnlyChange(t *testing.T) {

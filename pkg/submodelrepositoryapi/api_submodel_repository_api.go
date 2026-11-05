@@ -824,14 +824,13 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdAndDate(w http.Respo
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	if !query.Has("date") {
-		c.errorHandler(w, r, &RequiredError{"date"}, nil)
-		return
-	}
-	dateParam, err := parseTime(query.Get("date"))
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Param: "date", Err: err}, nil)
-		return
+	var dateParam time.Time
+	if query.Has("date") {
+		dateParam, err = parseTime(query.Get("date"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "date", Err: err}, nil)
+			return
+		}
 	}
 	levelParam := "deep"
 	if query.Has("level") {
@@ -1980,7 +1979,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 	}
 
 	var result model.ImplResponse
-	err := HandleMultipartFileStreamWithContentType(r, "file", "fileName", func(fileName string, contentType string, file io.Reader) error {
+	err := HandleMultipartFileStream(r, "file", func(fileName string, contentType string, file io.Reader) error {
 		var uploadErr error
 		result, uploadErr = c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileName, contentType, file)
 		return uploadErr

@@ -81,3 +81,32 @@ func TestToMessages_CreatesOneMessagePerFailure(t *testing.T) {
 	require.NotEmpty(t, messages[1].Timestamp)
 	require.Equal(t, "bulk-item-1", messages[1].CorrelationID)
 }
+
+func TestSuccessfulAtomicResult_HasNoFailures(t *testing.T) {
+	result := SuccessfulAtomicResult()
+	require.True(t, result.Success)
+	require.Empty(t, result.Failures)
+}
+
+func TestFailedAtomicResult_HasOneFailurePerItem(t *testing.T) {
+	rootFailure := ItemFailure{Index: 1, Identifier: "id-2", StatusCode: 409, Message: "conflict"}
+
+	result := FailedAtomicResult([]string{"id-1", "id-2"}, rootFailure)
+
+	require.False(t, result.Success)
+	require.Len(t, result.Failures, 2)
+	require.Equal(t, rootFailure, result.Failures[1])
+	require.Equal(t, "id-1", result.Failures[0].Identifier)
+}
+
+func TestDecodeRecordJSON_IgnoresRemovedBulkResultCounters(t *testing.T) {
+	storedResult := []byte(`{"executionState":"Completed","success":false,"processedCount":1,"successfulCount":0,"failedCount":1,` +
+		`"failures":[{"index":0,"identifier":"id-1","statusCode":409,"message":"conflict"}]}`)
+
+	var record Record
+	require.NoError(t, decodeRecordJSON(&record, nil, storedResult, nil, nil))
+
+	require.True(t, record.HasResult)
+	require.False(t, record.Result.Success)
+	require.Equal(t, []ItemFailure{{Index: 0, Identifier: "id-1", StatusCode: 409, Message: "conflict"}}, record.Result.Failures)
+}

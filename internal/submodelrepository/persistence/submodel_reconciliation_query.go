@@ -138,7 +138,7 @@ func sanitizeManagedFileRows(dialect goqu.DialectWrapper, source string) *goqu.S
 			When(
 				goqu.And(
 					goqu.L("? ->> 'typeTable' = 'file_element'", row),
-					goqu.Func("EXISTS", reassigned),
+					goqu.Exists(reassigned),
 				),
 				goqu.Func("jsonb_set", row, goqu.L("'{typeData,value}'::text[]"), goqu.L("'null'::jsonb"), goqu.L("TRUE")),
 			).
@@ -169,23 +169,25 @@ func (b *reconciliationQueryBuilder) addResolutionAndCleanupCTEs() {
 		Join(goqu.T("file_cleanup_targets").As("cleanup"), goqu.On(goqu.I("cleanup.id").Eq(goqu.I("fd.id")))).
 		Select(goqu.Func("lo_unlink", goqu.I("fd.file_oid")).As("unlinked")))
 	b.add("deleted_changed_file_references", b.dialect.Delete("file_binary_reference").
-		Where(goqu.Func("EXISTS", b.dialect.From(goqu.T("changed_file_rows").As("changed")).
+		Where(goqu.Exists(b.dialect.From(goqu.T("changed_file_rows").As("changed")).
 			Select(goqu.L("1")).
 			Where(goqu.I("file_binary_reference.file_element_id").Eq(goqu.I("changed.id"))))).
 		Returning(goqu.I("file_binary_reference.file_element_id")))
 	b.add("deleted_changed_file_data", b.dialect.Delete("file_data").
 		Where(
-			goqu.Func("EXISTS", b.dialect.From(goqu.T("changed_file_rows").As("changed")).
+			goqu.Exists(b.dialect.From(goqu.T("changed_file_rows").As("changed")).
 				Select(goqu.L("1")).
 				Where(goqu.I("file_data.id").Eq(goqu.I("changed.id")))),
+
 			goqu.L("(SELECT COUNT(*) FROM unlinked_large_objects) >= 0"),
 		).
 		Returning(goqu.I("file_data.id")))
 	b.add("deleted_element_rows", b.dialect.Delete("submodel_element").
 		Where(
-			goqu.Func("EXISTS", b.dialect.From(goqu.T("delete_element_targets").As("target")).
+			goqu.Exists(b.dialect.From(goqu.T("delete_element_targets").As("target")).
 				Select(goqu.L("1")).
 				Where(goqu.I("submodel_element.id").Eq(goqu.I("target.id")))),
+
 			goqu.L("(SELECT COUNT(*) FROM unlinked_large_objects) >= 0"),
 		).
 		Returning(goqu.I("submodel_element.id")))
@@ -227,7 +229,8 @@ func deleteElementTargets(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 			goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")),
 			goqu.I("sme.idshort_path").Eq(goqu.I("d.path")),
 		)).
-		SelectDistinct(goqu.I("sme.id"))
+		Select(goqu.I("sme.id")).
+		Distinct()
 }
 
 func changedFileRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
@@ -271,7 +274,7 @@ func (b *reconciliationQueryBuilder) addSubmodelMetadataCTEs() {
 	b.add("upserted_submodel_payload", upsertSubmodelPayload(b.dialect))
 	b.add("deleted_submodel_semantic_id", b.dialect.Delete("submodel_semantic_id_reference").
 		Where(
-			goqu.Func("EXISTS", b.dialect.From(goqu.T("target_submodel").As("target"), goqu.T("reconciliation_plan").As("p")).
+			goqu.Exists(b.dialect.From(goqu.T("target_submodel").As("target"), goqu.T("reconciliation_plan").As("p")).
 				Select(goqu.L("1")).
 				Where(
 					goqu.I("submodel_semantic_id_reference.id").Eq(goqu.I("target.id")),
@@ -348,9 +351,9 @@ func insertSubmodelSemanticPayload(dialect goqu.DialectWrapper) *goqu.InsertData
 		Select(goqu.I("inserted.id"), goqu.L("p.data -> 'metadata' -> 'semanticId' -> 'payload'")).
 		Where(
 			goqu.L("(SELECT COUNT(*) FROM updated_submodel_semantic_payload) >= 0"),
-			goqu.Func("NOT EXISTS", dialect.From("submodel_semantic_id_reference_payload").
+			goqu.L("NOT ?", goqu.Exists(dialect.From("submodel_semantic_id_reference_payload").
 				Select(goqu.L("1")).
-				Where(goqu.I("reference_id").Eq(goqu.I("inserted.id")))),
+				Where(goqu.I("reference_id").Eq(goqu.I("inserted.id"))))),
 		)
 	return dialect.Insert("submodel_semantic_id_reference_payload").Cols("reference_id", "parent_reference_payload").FromQuery(source).Returning("reference_id")
 }
@@ -366,10 +369,10 @@ func deleteSubmodelSemanticKeys(dialect goqu.DialectWrapper) *goqu.DeleteDataset
 		Select(goqu.L("1")).
 		Where(
 			goqu.I("submodel_semantic_id_reference_key.reference_id").Eq(goqu.I("inserted.id")),
-			goqu.Func("NOT EXISTS", matchingPosition),
+			goqu.L("NOT ?", goqu.Exists(matchingPosition)),
 		)
 	return dialect.Delete("submodel_semantic_id_reference_key").
-		Where(goqu.Func("EXISTS", matchingReference)).
+		Where(goqu.Exists(matchingReference)).
 		Returning(goqu.I("submodel_semantic_id_reference_key.reference_id"))
 }
 
@@ -417,10 +420,10 @@ func deleteRootSupplementalReferences(dialect goqu.DialectWrapper) *goqu.DeleteD
 		Where(
 			goqu.I("submodel_supplemental_semantic_id_reference.submodel_id").Eq(goqu.I("target.id")),
 			goqu.L("COALESCE((p.data -> 'metadata' ->> 'supplementalChanged')::boolean, false)"),
-			goqu.Func("NOT EXISTS", matchingPosition),
+			goqu.L("NOT ?", goqu.Exists(matchingPosition)),
 		)
 	return dialect.Delete("submodel_supplemental_semantic_id_reference").
-		Where(goqu.Func("EXISTS", matchingOwner)).
+		Where(goqu.Exists(matchingOwner)).
 		Returning(goqu.I("submodel_supplemental_semantic_id_reference.id"))
 }
 
@@ -456,9 +459,9 @@ func insertRootSupplementalPayload(dialect goqu.DialectWrapper) *goqu.InsertData
 		Select(goqu.I("inserted.id"), jsonObject("source.row", "payload")).
 		Where(
 			goqu.L("(SELECT COUNT(*) FROM updated_submodel_supplemental_payload) >= 0"),
-			goqu.Func("NOT EXISTS", dialect.From("submodel_supplemental_semantic_id_reference_payload").
+			goqu.L("NOT ?", goqu.Exists(dialect.From("submodel_supplemental_semantic_id_reference_payload").
 				Select(goqu.L("1")).
-				Where(goqu.I("reference_id").Eq(goqu.I("inserted.id")))),
+				Where(goqu.I("reference_id").Eq(goqu.I("inserted.id"))))),
 		)
 	return dialect.Insert("submodel_supplemental_semantic_id_reference_payload").Cols("reference_id", "parent_reference_payload").FromQuery(source).Returning("reference_id")
 }
@@ -478,10 +481,10 @@ func deleteRootSupplementalKeys(dialect goqu.DialectWrapper) *goqu.DeleteDataset
 		Select(goqu.L("1")).
 		Where(
 			goqu.I("submodel_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("inserted.id")),
-			goqu.Func("NOT EXISTS", matchingPosition),
+			goqu.L("NOT ?", goqu.Exists(matchingPosition)),
 		)
 	return dialect.Delete("submodel_supplemental_semantic_id_reference_key").
-		Where(goqu.Func("EXISTS", matchingReference)).
+		Where(goqu.Exists(matchingReference)).
 		Returning(goqu.I("submodel_supplemental_semantic_id_reference_key.reference_id"))
 }
 
@@ -569,7 +572,7 @@ func upsertElementPayloads(dialect goqu.DialectWrapper) *goqu.InsertDataset {
 
 func (b *reconciliationQueryBuilder) addElementReferenceCTEs() {
 	b.add("deleted_element_semantic_ids", b.dialect.Delete("submodel_element_semantic_id_reference").
-		Where(goqu.Func("EXISTS", b.dialect.From(goqu.T("resolved_update_rows").As("u")).
+		Where(goqu.Exists(b.dialect.From(goqu.T("resolved_update_rows").As("u")).
 			Select(goqu.L("1")).
 			Where(
 				goqu.I("submodel_element_semantic_id_reference.id").Eq(goqu.I("u.id")),
@@ -627,9 +630,9 @@ func insertElementSemanticPayloads(dialect goqu.DialectWrapper) *goqu.InsertData
 		Select(goqu.I("a.id"), jsonNestedObject("a.row", "semanticId", "payload")).
 		Where(
 			goqu.L("(SELECT COUNT(*) FROM updated_element_semantic_payloads) >= 0"),
-			goqu.Func("NOT EXISTS", dialect.From("submodel_element_semantic_id_reference_payload").
+			goqu.L("NOT ?", goqu.Exists(dialect.From("submodel_element_semantic_id_reference_payload").
 				Select(goqu.L("1")).
-				Where(goqu.I("reference_id").Eq(goqu.I("a.id")))),
+				Where(goqu.I("reference_id").Eq(goqu.I("a.id"))))),
 		)
 	return dialect.Insert("submodel_element_semantic_id_reference_payload").Cols("reference_id", "parent_reference_payload").FromQuery(source).Returning("reference_id")
 }
@@ -646,10 +649,10 @@ func deleteElementSemanticKeys(dialect goqu.DialectWrapper) *goqu.DeleteDataset 
 		Select(goqu.L("1")).
 		Where(
 			goqu.I("submodel_element_semantic_id_reference_key.reference_id").Eq(goqu.I("inserted.id")),
-			goqu.Func("NOT EXISTS", matchingPosition),
+			goqu.L("NOT ?", goqu.Exists(matchingPosition)),
 		)
 	return dialect.Delete("submodel_element_semantic_id_reference_key").
-		Where(goqu.Func("EXISTS", matchingReference)).
+		Where(goqu.Exists(matchingReference)).
 		Returning(goqu.I("submodel_element_semantic_id_reference_key.reference_id"))
 }
 
@@ -692,10 +695,10 @@ func deleteElementSupplementalReferences(dialect goqu.DialectWrapper) *goqu.Dele
 		Where(
 			goqu.I("submodel_element_supplemental_semantic_id_reference.submodel_element_id").Eq(goqu.I("a.id")),
 			jsonChange("a.row", "supplementalId"),
-			goqu.Func("NOT EXISTS", matchingPosition),
+			goqu.L("NOT ?", goqu.Exists(matchingPosition)),
 		)
 	return dialect.Delete("submodel_element_supplemental_semantic_id_reference").
-		Where(goqu.Func("EXISTS", matchingOwner)).
+		Where(goqu.Exists(matchingOwner)).
 		Returning(goqu.I("submodel_element_supplemental_semantic_id_reference.id"))
 }
 
@@ -728,9 +731,9 @@ func insertElementSupplementalPayloads(dialect goqu.DialectWrapper) *goqu.Insert
 		)).Select(goqu.I("inserted.id"), jsonObject("source.row", "payload")).
 		Where(
 			goqu.L("(SELECT COUNT(*) FROM updated_element_supplemental_payloads) >= 0"),
-			goqu.Func("NOT EXISTS", dialect.From("submodel_element_supplemental_semantic_id_reference_payload").
+			goqu.L("NOT ?", goqu.Exists(dialect.From("submodel_element_supplemental_semantic_id_reference_payload").
 				Select(goqu.L("1")).
-				Where(goqu.I("reference_id").Eq(goqu.I("inserted.id")))),
+				Where(goqu.I("reference_id").Eq(goqu.I("inserted.id"))))),
 		)
 	return dialect.Insert("submodel_element_supplemental_semantic_id_reference_payload").Cols("reference_id", "parent_reference_payload").FromQuery(source).Returning("reference_id")
 }
@@ -750,10 +753,10 @@ func deleteElementSupplementalKeys(dialect goqu.DialectWrapper) *goqu.DeleteData
 		Select(goqu.L("1")).
 		Where(
 			goqu.I("submodel_element_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("inserted.id")),
-			goqu.Func("NOT EXISTS", matchingPosition),
+			goqu.L("NOT ?", goqu.Exists(matchingPosition)),
 		)
 	return dialect.Delete("submodel_element_supplemental_semantic_id_reference_key").
-		Where(goqu.Func("EXISTS", matchingReference)).
+		Where(goqu.Exists(matchingReference)).
 		Returning(goqu.I("submodel_element_supplemental_semantic_id_reference_key.reference_id"))
 }
 
@@ -850,7 +853,7 @@ func buildTypeUpsert(dialect goqu.DialectWrapper, spec reconciliationTypeSpec) *
 		}
 		insert = insert.OnConflict(goqu.DoUpdate("id", excludedRecord(updateColumns...)))
 	} else {
-		insert = insert.OnConflict(goqu.DoNothing())
+		insert = insert.OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression("id")))
 	}
 	return insert.Returning("id")
 }
@@ -869,7 +872,7 @@ func deleteAffectedRows(dialect goqu.DialectWrapper, table string, ownerColumn s
 		Select(goqu.L("1")).
 		Where(conditions...)
 	return dialect.Delete(table).
-		Where(goqu.Func("EXISTS", matching)).
+		Where(goqu.Exists(matching)).
 		Returning(goqu.I(table + "." + ownerColumn))
 }
 
@@ -891,7 +894,7 @@ func deleteEmptyValueIDRows(
 			),
 		)
 	return dialect.Delete(table).
-		Where(goqu.Func("EXISTS", matching)).
+		Where(goqu.Exists(matching)).
 		Returning(goqu.I(table + "." + ownerColumn))
 }
 

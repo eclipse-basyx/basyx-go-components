@@ -1,0 +1,12 @@
+kind: fixed
+body: >-
+  GET /packages/{packageId} of the AASX File Server returns every package with
+  the Content-Type application/asset-administration-shell-package, as the
+  OpenAPI defines, instead of application/aasx+xml or application/aasx+json
+  derived from the package's environment. This also applies to packages
+  stored before the update.
+time: 2026-11-04T14:00:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 840
+  SecurityImpact: None.

@@ -1,0 +1,15 @@
+kind: fixed
+body: >-
+  Accept file uploads without a file name in PutFileByPath of the Submodel
+  Repository, the AAS Repository superpath, and AAS Environment, and in
+  PutThumbnail, as the V3.2 request body defines the file name as optional.
+  Previously the first such upload was rejected with 400
+  BINARYCONTENT-FILENAME-EMPTY. A nameless upload keeps the previously stored
+  file name; otherwise it is named after the File element's idShort (file for
+  list items without idShort) or thumbnail, with an extension matching the
+  resolved content type, for example manual.txt.
+time: 2026-11-02T23:30:00+01:00
+custom:
+  Impact: Medium
+  PullRequest: 819
+  SecurityImpact: None.

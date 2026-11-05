@@ -1,0 +1,12 @@
+kind: changed
+body: >-
+  AASX import now logs the warning AASENV-UPLDSUPPL-NOSUPPLREL with the
+  Submodel, idShort path, and part when a File element references a package
+  part that is not related to the AAS specification as aas-suppl. Such parts,
+  for example a package thumbnail reused as product image, are not imported as
+  attachments (IDTA-01005); previously they were skipped without a hint.
+time: 2026-11-02T23:33:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 819
+  SecurityImpact: None.

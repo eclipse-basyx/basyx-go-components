@@ -31,8 +31,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/doug-martin/goqu/v9"
@@ -43,6 +41,8 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
+
+const fallbackThumbnailBaseName = "thumbnail"
 
 // PostgreSQLThumbnailFileHandler handles thumbnail file operations for AAS asset information.
 type PostgreSQLThumbnailFileHandler struct {
@@ -159,301 +159,13 @@ func (h *PostgreSQLThumbnailFileHandler) DownloadThumbnailByAASID(aasIdentifier 
 	return fileContent, contentType.String, fileName.String, path, nil
 }
 
-// UploadThumbnailByAASID uploads thumbnail content for an AAS and persists metadata.
-// nolint:revive // cyclomatic complexity of 33
-func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier string, fileName string, file *os.File) error {
-	return h.UploadThumbnailByAASIDReader(aasIdentifier, fileName, file)
-}
-
-// UploadThumbnailByAASIDReader streams thumbnail content from a reader and
-// persists its metadata atomically.
-//
-// Parameters:
-//   - aasIdentifier: Identifier of the thumbnail's Asset Administration Shell.
-//   - fileName: Original filename used to derive content metadata.
-//   - file: Thumbnail source consumed before the method returns.
-//
-// Returns:
-//   - error: Transaction, metadata, content, or persistence error.
-func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASIDReader(aasIdentifier string, fileName string, file io.Reader) error {
-	tx, cleanup, err := common.StartTransaction(h.db)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
-
-	err = h.uploadThumbnailByAASIDReaderInTransaction(tx, aasIdentifier, fileName, file)
-	if err != nil {
-		return err
-	}
-
-	err = common.CommitTransaction(tx)
-	if err != nil {
-		return common.CommitError("AASREPO-PUTTHUMBNAIL-COMMIT", err)
-	}
-
-	return nil
-}
-
-// nolint:revive // cyclomatic complexity of 33
-func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransaction(tx *sql.Tx, aasIdentifier string, fileName string, file io.Reader) error {
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-GETAASDBID " + err.Error())
-	}
-
-	if file == nil {
-		return common.NewErrBadRequest("AASREPO-PUTTHUMBNAIL-MISSINGFILE file payload is required")
-	}
-
-	dialect := goqu.Dialect("postgres")
-
-	existingElementSQL, existingElementArgs, existingElementBuildErr := dialect.
-		From("thumbnail_file_element").
-		Select("content_type", "file_name").
-		Where(goqu.I("id").Eq(aasDBID)).
-		ToSQL()
-	if existingElementBuildErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDEXISTINGELEMENTSQL " + existingElementBuildErr.Error())
-	}
-
-	var existingContentType sql.NullString
-	var existingFileName sql.NullString
-	existingElementErr := tx.QueryRow(existingElementSQL, existingElementArgs...).Scan(&existingContentType, &existingFileName)
-	if existingElementErr != nil && existingElementErr != sql.ErrNoRows {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECEXISTINGELEMENTSQL " + existingElementErr.Error())
-	}
-
-	detectedContentType, uploadContent, sniffErr := common.SniffContentTypeReader(file)
-	if sniffErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READCONTENTTYPE " + sniffErr.Error())
-	}
-
-	resolvedFileName := strings.TrimSpace(fileName)
-	if resolvedFileName == "" && existingFileName.Valid {
-		resolvedFileName = existingFileName.String
-	}
-
-	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, resolvedFileName, existingContentType.String)
-	if mismatchDetectedVsDeclared {
-		slog.Warn("detected thumbnail content type differs from declared content type; preserving declared content type", "error.code", "AASREPO-PUTTHUMBNAIL-RESOLVEMIME")
-	}
-
-	oldOIDQuery, oldOIDArgs, oldOIDBuildErr := dialect.
-		From("thumbnail_file_data").
-		Select("file_oid").
-		Where(goqu.I("id").Eq(aasDBID)).
-		ToSQL()
-	if oldOIDBuildErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDOIDSQL " + oldOIDBuildErr.Error())
-	}
-
-	var oldOID sql.NullInt64
-	oldOIDErr := tx.QueryRow(oldOIDQuery, oldOIDArgs...).Scan(&oldOID)
-	if oldOIDErr != nil && oldOIDErr != sql.ErrNoRows {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECOIDSQL " + oldOIDErr.Error())
-	}
-
-	if oldOID.Valid {
-		if _, unlinkErr := tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64); unlinkErr != nil {
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-UNLINKOLDLO " + unlinkErr.Error())
-		}
-	}
-
-	var newOID int64
-	if createErr := tx.QueryRow(`SELECT lo_create(0)`).Scan(&newOID); createErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-CREATELO " + createErr.Error())
-	}
-
-	var loFD int
-	if loOpenErr := tx.QueryRow(`SELECT lo_open($1, $2)`, newOID, 0x00020000).Scan(&loFD); loOpenErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-OPENLO " + loOpenErr.Error())
-	}
-
-	buffer := make([]byte, 8192)
-	for {
-		readCount, chunkErr := uploadContent.Read(buffer)
-		if readCount > 0 {
-			if _, writeErr := tx.Exec(`SELECT lowrite($1, $2)`, loFD, buffer[:readCount]); writeErr != nil {
-				_, _ = tx.Exec(`SELECT lo_close($1)`, loFD)
-				return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-WRITELO " + writeErr.Error())
-			}
-		}
-
-		if chunkErr != nil {
-			if chunkErr == io.EOF {
-				break
-			}
-			_, _ = tx.Exec(`SELECT lo_close($1)`, loFD)
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READFILE " + chunkErr.Error())
-		}
-	}
-
-	if _, loCloseErr := tx.Exec(`SELECT lo_close($1)`, loFD); loCloseErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-CLOSELO " + loCloseErr.Error())
-	}
-
-	if oldOID.Valid {
-		updateOIDSQL, updateOIDArgs, updateOIDBuildErr := dialect.Update("thumbnail_file_data").
-			Set(goqu.Record{"file_oid": newOID}).
-			Where(goqu.I("id").Eq(aasDBID)).
-			ToSQL()
-		if updateOIDBuildErr != nil {
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDUPDATEOIDSQL " + updateOIDBuildErr.Error())
-		}
-		if _, updateOIDErr := tx.Exec(updateOIDSQL, updateOIDArgs...); updateOIDErr != nil {
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECUPDATEOIDSQL " + updateOIDErr.Error())
-		}
-	} else {
-		ensureElementSQL, ensureElementArgs, ensureElementBuildErr := dialect.Insert("thumbnail_file_element").
-			Rows(goqu.Record{
-				"id":           aasDBID,
-				"content_type": resolvedContentType,
-				"file_name":    resolvedFileName,
-				"value":        "",
-			}).
-			OnConflict(goqu.DoNothing()).
-			ToSQL()
-		if ensureElementBuildErr != nil {
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDENSUREELEMENTSQL " + ensureElementBuildErr.Error())
-		}
-		if _, ensureElementErr := tx.Exec(ensureElementSQL, ensureElementArgs...); ensureElementErr != nil {
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECENSUREELEMENTSQL " + ensureElementErr.Error())
-		}
-
-		insertOIDSQL, insertOIDArgs, insertOIDBuildErr := dialect.Insert("thumbnail_file_data").
-			Rows(goqu.Record{"id": aasDBID, "file_oid": newOID}).
-			ToSQL()
-		if insertOIDBuildErr != nil {
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDINSERTOIDSQL " + insertOIDBuildErr.Error())
-		}
-		if _, insertOIDErr := tx.Exec(insertOIDSQL, insertOIDArgs...); insertOIDErr != nil {
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECINSERTOIDSQL " + insertOIDErr.Error())
-		}
-	}
-
-	upsertElementSQL, upsertElementArgs, upsertElementBuildErr := dialect.Insert("thumbnail_file_element").
-		Rows(goqu.Record{
-			"id":           aasDBID,
-			"content_type": resolvedContentType,
-			"file_name":    resolvedFileName,
-			"value":        strconv.FormatInt(newOID, 10),
-		}).
-		OnConflict(goqu.DoUpdate("id", goqu.Record{
-			"content_type": resolvedContentType,
-			"file_name":    resolvedFileName,
-			"value":        strconv.FormatInt(newOID, 10),
-		})).
-		ToSQL()
-	if upsertElementBuildErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDELEMENTSQL " + upsertElementBuildErr.Error())
-	}
-
-	if _, upsertElementErr := tx.Exec(upsertElementSQL, upsertElementArgs...); upsertElementErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECELEMENTSQL " + upsertElementErr.Error())
-	}
-
-	return nil
-}
-
-// DeleteThumbnailByAASID deletes thumbnail content and metadata for an AAS.
-func (h *PostgreSQLThumbnailFileHandler) DeleteThumbnailByAASID(aasIdentifier string) error {
-	tx, cleanup, err := common.StartTransaction(h.db)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
-
-	err = h.deleteThumbnailByAASIDInTransaction(tx, aasIdentifier)
-	if err != nil {
-		return err
-	}
-
-	err = common.CommitTransaction(tx)
-	if err != nil {
-		return common.CommitError("AASREPO-DELTHUMBNAIL-COMMIT", err)
-	}
-
-	return nil
-}
-
-func (h *PostgreSQLThumbnailFileHandler) deleteThumbnailByAASIDInTransaction(tx *sql.Tx, aasIdentifier string) error {
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("AASREPO-DELTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-GETAASDBID " + err.Error())
-	}
-
-	dialect := goqu.Dialect("postgres")
-	oidSQL, oidArgs, oidBuildErr := dialect.
-		From("thumbnail_file_data").
-		Select("file_oid").
-		Where(goqu.I("id").Eq(aasDBID)).
-		ToSQL()
-	if oidBuildErr != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-BUILDOIDSQL " + oidBuildErr.Error())
-	}
-
-	var fileOID sql.NullInt64
-	oidErr := tx.QueryRow(oidSQL, oidArgs...).Scan(&fileOID)
-	if oidErr != nil {
-		if oidErr == sql.ErrNoRows {
-			return common.NewErrNotFound("AASREPO-DELTHUMBNAIL-DATANOTFOUND Thumbnail data for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-EXECOIDSQL " + oidErr.Error())
-	}
-
-	if !fileOID.Valid {
-		return common.NewErrNotFound("AASREPO-DELTHUMBNAIL-NULLOID Thumbnail file OID is null")
-	}
-
-	if _, unlinkErr := tx.Exec(`SELECT lo_unlink($1)`, fileOID.Int64); unlinkErr != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-UNLINKLO " + unlinkErr.Error())
-	}
-
-	deleteDataSQL, deleteDataArgs, deleteDataBuildErr := dialect.Delete("thumbnail_file_data").
-		Where(goqu.I("id").Eq(aasDBID)).
-		ToSQL()
-	if deleteDataBuildErr != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-BUILDDELETEDATASQL " + deleteDataBuildErr.Error())
-	}
-	if _, deleteDataErr := tx.Exec(deleteDataSQL, deleteDataArgs...); deleteDataErr != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-EXECDELETEDATASQL " + deleteDataErr.Error())
-	}
-
-	updateElementSQL, updateElementArgs, updateElementBuildErr := dialect.Update("thumbnail_file_element").
-		Set(goqu.Record{
-			"value":     "",
-			"file_name": nil,
-		}).
-		Where(goqu.I("id").Eq(aasDBID)).
-		ToSQL()
-	if updateElementBuildErr != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-BUILDELEMENTSQL " + updateElementBuildErr.Error())
-	}
-
-	updateResult, updateErr := tx.Exec(updateElementSQL, updateElementArgs...)
-	if updateErr != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-EXECELEMENTSQL " + updateErr.Error())
-	}
-
-	rowsAffected, rowsErr := updateResult.RowsAffected()
-	if rowsErr != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-GETROWCOUNT " + rowsErr.Error())
-	}
-	if rowsAffected == 0 {
-		return common.NewErrNotFound("AASREPO-DELTHUMBNAIL-THUMBNAILNOTFOUND Thumbnail for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-	}
-
-	return nil
-}
-
-func (h *PostgreSQLThumbnailFileHandler) uploadManagedThumbnailTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, fileName string, file io.Reader) (binarycontent.Reference, string, error) {
+func (h *PostgreSQLThumbnailFileHandler) uploadManagedThumbnailTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+	file io.Reader,
+	declaration binarycontent.UploadDeclaration,
+) (binarycontent.Reference, string, error) {
 	if file == nil {
 		return binarycontent.Reference{}, "", common.NewErrBadRequest("AASREPO-PUTTHUMBNAIL-MISSINGFILE file payload is required")
 	}
@@ -466,39 +178,39 @@ func (h *PostgreSQLThumbnailFileHandler) uploadManagedThumbnailTx(ctx context.Co
 	}); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	detectedContentType, uploadContent, err := common.SniffContentTypeReader(file)
+	upload, err := binarycontent.ResolveUpload(
+		file,
+		declaration,
+		binarycontent.StoredMetadata{FileName: metadata.ExistingFileName.String, ContentType: metadata.ExistingContentType.String},
+		fallbackThumbnailBaseName,
+	)
 	if err != nil {
-		return binarycontent.Reference{}, "", common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READCONTENTTYPE " + err.Error())
+		return binarycontent.Reference{}, "", err
 	}
-	resolvedFileName := strings.TrimSpace(fileName)
-	if resolvedFileName == "" && metadata.ExistingFileName.Valid {
-		resolvedFileName = metadata.ExistingFileName.String
-	}
-	resolvedContentType, mismatch := common.ResolveUploadedContentType(detectedContentType, resolvedFileName, metadata.ExistingContentType.String)
-	if mismatch {
+	if upload.TypeMismatch {
 		slog.WarnContext(ctx, "detected thumbnail content type differs from declared content type; preserving declared content type", "error.code", "AASREPO-PUTTHUMBNAIL-RESOLVEMIME")
 	}
 	if err = ensureManagedThumbnailElement(ctx, tx, metadata.AASDBID); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
 	reference, err := binarycontent.StoreReferenceTx(
-		ctx, tx, uploadContent, binarycontent.TableThumbnailReference, "thumbnail_element_id", metadata.AASDBID, resolvedFileName,
+		ctx, tx, upload.Content, binarycontent.TableThumbnailReference, "thumbnail_element_id", metadata.AASDBID, upload.FileName,
 	)
 	if err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	if err = upsertManagedThumbnailElement(ctx, tx, reference, resolvedContentType); err != nil {
+	if err = upsertManagedThumbnailElement(ctx, tx, reference, upload.ContentType); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
 	if err = deleteLegacyThumbnailData(ctx, tx, metadata.AASDBID); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	return reference, resolvedContentType, touchAAS(ctx, tx, aasIdentifier, conditional.OpUpdate)
+	return reference, upload.ContentType, touchAAS(ctx, tx, aasIdentifier, conditional.OpUpdate)
 }
 
 func ensureManagedThumbnailElement(ctx context.Context, tx *sql.Tx, aasDBID int64) error {
 	query, args, err := goqu.Insert("thumbnail_file_element").Rows(goqu.Record{"id": aasDBID}).
-		OnConflict(goqu.DoNothing()).ToSQL()
+		OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression("id"))).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDENSUREELEMENT " + err.Error())
 	}
@@ -698,7 +410,7 @@ func (h *PostgreSQLThumbnailFileHandler) deleteManagedThumbnailTx(ctx context.Co
 	if err = deleteLegacyThumbnailData(ctx, tx, metadata.AASDBID); err != nil {
 		return err
 	}
-	query, args, err := goqu.Update("thumbnail_file_element").Set(goqu.Record{"value": "", "file_name": nil}).
+	query, args, err := goqu.Update("thumbnail_file_element").Set(goqu.Record{"value": "", "file_name": nil, "content_type": nil}).
 		Where(goqu.C("id").Eq(metadata.AASDBID)).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-BUILDELEMENT " + err.Error())

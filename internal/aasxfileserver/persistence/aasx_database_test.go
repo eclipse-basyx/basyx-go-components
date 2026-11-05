@@ -112,19 +112,15 @@ func TestParseCursorID(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestResolvePackageContentTypeRejectsMalformedAASX(t *testing.T) {
+func TestValidatePackageForUploadRejectsMalformedAASX(t *testing.T) {
 	t.Parallel()
 
-	_, err := resolvePackageContentTypeForUpload(
-		bytes.NewReader([]byte("not an AASX package")),
-		"invalid.aasx",
-		common.AASXLimitsFromConfig(nil),
-	)
+	err := validatePackageForUpload(bytes.NewReader([]byte("not an AASX package")), common.AASXLimitsFromConfig(nil))
 	require.Error(t, err)
 	require.True(t, common.IsErrBadRequest(err), "expected bad request, got %v", err)
 }
 
-func TestResolvePackageContentTypeDoesNotReadAASXIntoOneBuffer(t *testing.T) {
+func TestValidatePackageForUploadDoesNotReadAASXIntoOneBuffer(t *testing.T) {
 	t.Parallel()
 
 	filePath := filepath.Clean("../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx")
@@ -136,13 +132,7 @@ func TestResolvePackageContentTypeDoesNotReadAASXIntoOneBuffer(t *testing.T) {
 	require.Greater(t, fileInfo.Size(), int64(maximumPackageReadRequest))
 
 	guardedPackage := &guardedReadSeeker{ReadSeeker: file, maximumReadRequest: maximumPackageReadRequest}
-	contentType, err := resolvePackageContentTypeForUpload(
-		guardedPackage,
-		filepath.Base(filePath),
-		common.AASXLimitsFromConfig(nil),
-	)
-	require.NoError(t, err)
-	require.Equal(t, "application/aasx+xml", contentType)
+	require.NoError(t, validatePackageForUpload(guardedPackage, common.AASXLimitsFromConfig(nil)))
 }
 
 func TestCreatePackageTransfersOriginalStagedUploadToPromotion(t *testing.T) {
@@ -165,8 +155,8 @@ func TestCreatePackageTransfersOriginalStagedUploadToPromotion(t *testing.T) {
 func TestNormalizeAASIDs(t *testing.T) {
 	t.Parallel()
 
-	result := normalizeAASIDs([]string{"id1,id2", " id2 ", "", "id3", "id1"})
-	require.Equal(t, []string{"id1", "id2", "id3"}, result)
+	result := normalizeAASIDs([]string{"urn:a,1", " id2 ", "", "id2", "urn:a,1"})
+	require.Equal(t, []string{"urn:a,1", "id2"}, result)
 }
 
 func TestNormalizeFileName(t *testing.T) {
@@ -176,39 +166,21 @@ func TestNormalizeFileName(t *testing.T) {
 	require.Equal(t, "upload-file.aasx", normalizeFileName("", "upload-file.aasx"))
 }
 
-func TestDetectAASXEnvironmentContentType(t *testing.T) {
+func TestValidatePackageForUploadAcceptsXMLAndJSONEnvironments(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name         string
-		relativeAASX string
-		expected     string
-	}{
-		{
-			name:         "xml environment aasx",
-			relativeAASX: "../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx",
-			expected:     "application/aasx+xml",
-		},
-		{
-			name:         "json environment aasx",
-			relativeAASX: "../../aasenvironment/integration_tests/testdata/ProductionPlanSFKL.aasx",
-			expected:     "application/aasx+json",
-		},
-	}
-
-	for _, tt := range testCases {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for name, relativeAASX := range map[string]string{
+		"xml environment aasx":  "../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx",
+		"json environment aasx": "../../aasenvironment/integration_tests/testdata/ProductionPlanSFKL.aasx",
+	} {
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			filePath := filepath.Clean(tt.relativeAASX)
-			tempFile, err := os.Open(filePath)
+			file, err := os.Open(filepath.Clean(relativeAASX))
 			require.NoError(t, err)
-			defer func() { _ = tempFile.Close() }()
+			defer func() { _ = file.Close() }()
 
-			resolved, err := detectAASXEnvironmentContentType(tempFile, common.AASXLimitsFromConfig(nil))
-			require.NoError(t, err)
-			require.Equal(t, tt.expected, resolved)
+			require.NoError(t, validatePackageForUpload(file, common.AASXLimitsFromConfig(nil)))
 		})
 	}
 }
@@ -235,7 +207,7 @@ func TestListPackagesLargeLimitsKeepLookaheadPositive(t *testing.T) {
 			mock.ExpectBegin()
 			mock.ExpectQuery("SELECT").
 				WithArgs(positiveInt64Argument{}).
-				WillReturnRows(sqlmock.NewRows([]string{"id", "package_id", "file_name", "content_type"}))
+				WillReturnRows(sqlmock.NewRows([]string{"id", "package_id", "file_name"}))
 			mock.ExpectCommit()
 
 			records, nextCursor, err := backend.ListPackages(t.Context(), limit, 0, "")

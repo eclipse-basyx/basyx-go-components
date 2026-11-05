@@ -30,7 +30,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -83,28 +82,47 @@ func GetSubmodelElementByIDShortOrPath(ctx context.Context, db *sql.DB, submodel
 
 // GetSubmodelElementByIDShortOrPathTx loads a submodel element by path from an existing transaction.
 func GetSubmodelElementByIDShortOrPathTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string, includeBlobValue bool, level string) (types.ISubmodelElement, error) {
-	if tx == nil {
-		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATHTX-NILTX transaction must not be nil")
-	}
-	if submodelID == "" {
-		return nil, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-EMPTYSMID Submodel id must not be empty")
-	}
-	if idShortOrPath == "" {
-		return nil, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-EMPTYPATH idShort or path must not be empty")
-	}
 	if level != "" && level != "core" && level != "deep" {
 		return nil, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-BADLEVEL level must be one of '', 'core', or 'deep'")
 	}
-
-	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if submodelIDErr != nil {
-		if errors.Is(submodelIDErr, sql.ErrNoRows) {
-			return nil, common.NewErrNotFound(submodelID)
-		}
-		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATHTX-GETSMDATABASEID " + submodelIDErr.Error())
+	submodelDatabaseID, err := submodelDatabaseIDForPathReadTx(tx, submodelID, idShortOrPath)
+	if err != nil {
+		return nil, err
 	}
 
-	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, tx, submodelID, int64(submodelDatabaseID), idShortOrPath, level, includeBlobValue)
+	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, tx, submodelID, submodelDatabaseID, idShortOrPath, level, includeBlobValue)
+}
+
+// GetSubmodelElementWithoutChildrenByPathTx loads only the element at path,
+// without any child elements, from an existing transaction.
+func GetSubmodelElementWithoutChildrenByPathTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string, includeBlobValue bool) (types.ISubmodelElement, error) {
+	submodelDatabaseID, err := submodelDatabaseIDForPathReadTx(tx, submodelID, idShortOrPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return getSubmodelElementByPathWithScope(ctx, tx, submodelID, submodelDatabaseID, idShortOrPath, smeRowScopeSelf, includeBlobValue)
+}
+
+func submodelDatabaseIDForPathReadTx(tx *sql.Tx, submodelID string, idShortOrPath string) (int64, error) {
+	if tx == nil {
+		return 0, common.NewInternalServerError("SMREPO-GETSMEBYPATHTX-NILTX transaction must not be nil")
+	}
+	if submodelID == "" {
+		return 0, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-EMPTYSMID Submodel id must not be empty")
+	}
+	if idShortOrPath == "" {
+		return 0, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-EMPTYPATH idShort or path must not be empty")
+	}
+
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, common.NewErrNotFound(submodelID)
+		}
+		return 0, common.NewInternalServerError("SMREPO-GETSMEBYPATHTX-GETSMDATABASEID " + err.Error())
+	}
+	return int64(submodelDatabaseID), nil
 }
 
 // IsSubmodelElementPathAuthorized checks the active formula and structural
@@ -154,8 +172,11 @@ func hasSMEPathAuthorizationConstraints(ctx context.Context) (bool, error) {
 }
 
 func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db DBQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string, includeBlobValue bool) (types.ISubmodelElement, error) {
-	includeChildren := level != "core"
-	parsedRows, readRowsErr := readSubmodelElementRowsByPath(ctx, db, submodelDatabaseID, idShortOrPath, includeChildren, includeBlobValue)
+	return getSubmodelElementByPathWithScope(ctx, db, submodelID, submodelDatabaseID, idShortOrPath, smeRowScopeForLevel(level), includeBlobValue)
+}
+
+func getSubmodelElementByPathWithScope(ctx context.Context, db DBQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, scope smeRowScope, includeBlobValue bool) (types.ISubmodelElement, error) {
+	parsedRows, readRowsErr := readSubmodelElementRowsByPath(ctx, db, submodelDatabaseID, idShortOrPath, scope, includeBlobValue)
 
 	if readRowsErr != nil {
 		return nil, readRowsErr
@@ -363,7 +384,7 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db DBQueryer, 
 	return paths, nextCursor, nil
 }
 
-// GetSubmodelElementPathsByPath returns persisted idshort_path values for a submodel element path and, for deep level, its descendants.
+// GetSubmodelElementPathsByPath returns persisted idshort_path values for a submodel element path and its direct children (core level) or all descendants (deep level).
 func GetSubmodelElementPathsByPath(ctx context.Context, db DBQueryer, submodelID string, idShortPath string, level string) ([]string, error) {
 	if submodelID == "" {
 		return nil, common.NewErrBadRequest("SMREPO-GETSMEPATHSBYPATH-EMPTYSMID Submodel id must not be empty")
@@ -389,17 +410,7 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db DBQueryer, submodelID
 		Select(goqu.I("sme.idshort_path")).
 		Where(goqu.I("sme.submodel_id").Eq(submodelDatabaseID))
 
-	if level == "core" {
-		query = query.Where(goqu.I("sme.idshort_path").Eq(idShortPath))
-	} else {
-		descendantPattern := "^" + regexp.QuoteMeta(idShortPath) + `(\.|\[)`
-		query = query.Where(
-			goqu.Or(
-				goqu.I("sme.idshort_path").Eq(idShortPath),
-				goqu.L(`"sme"."idshort_path" ~ ?`, descendantPattern),
-			),
-		)
-	}
+	query = query.Where(smeRowScopeCondition(dialect, int64(submodelDatabaseID), idShortPath, smeRowScopeForLevel(level)))
 
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
 	if collectorErr != nil {
@@ -482,11 +493,21 @@ func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	return getSubmodelElementsByDatabaseID(ctx, db, int64(submodelDatabaseID), limit, cursor, level, includeBlobValue)
+	return getSubmodelElementsByDatabaseID(ctx, db, int64(submodelDatabaseID), limit, cursor, smeRowScopeForLevel(level), includeBlobValue)
 }
 
 // GetSubmodelElementsBySubmodelIDTx loads top-level submodel elements from an existing transaction.
 func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodelID string, limit *int, cursor string, includeBlobValue bool, level string) ([]types.ISubmodelElement, string, error) {
+	return getSubmodelElementsBySubmodelIDTx(ctx, tx, submodelID, limit, cursor, smeRowScopeForLevel(level), includeBlobValue)
+}
+
+// GetSubmodelElementsWithoutChildrenBySubmodelIDTx loads a page of top-level
+// submodel elements without any child elements from an existing transaction.
+func GetSubmodelElementsWithoutChildrenBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodelID string, limit *int, cursor string, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
+	return getSubmodelElementsBySubmodelIDTx(ctx, tx, submodelID, limit, cursor, smeRowScopeSelf, includeBlobValue)
+}
+
+func getSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodelID string, limit *int, cursor string, scope smeRowScope, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
 	if tx == nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-NILTX transaction must not be nil")
 	}
@@ -508,7 +529,7 @@ func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodel
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	return getSubmodelElementsByDatabaseID(ctx, tx, int64(submodelDatabaseID), limit, cursor, level, includeBlobValue)
+	return getSubmodelElementsByDatabaseID(ctx, tx, int64(submodelDatabaseID), limit, cursor, scope, includeBlobValue)
 }
 
 // GetSubmodelElementsByDatabaseIDTxInPersistenceOrder loads a complete Submodel
@@ -573,7 +594,7 @@ func getRootElementIDsInPersistenceOrder(ctx context.Context, db DBQueryer, subm
 	return rootIDs, nil
 }
 
-func getSubmodelElementsByDatabaseID(ctx context.Context, db DBQueryer, submodelDatabaseID int64, limit *int, cursor string, level string, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
+func getSubmodelElementsByDatabaseID(ctx context.Context, db DBQueryer, submodelDatabaseID int64, limit *int, cursor string, scope smeRowScope, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
 	rootElements, nextCursor, rootPathErr := getRootElementPage(ctx, db, submodelDatabaseID, limit, cursor)
 	if rootPathErr != nil {
 		return nil, "", rootPathErr
@@ -587,9 +608,9 @@ func getSubmodelElementsByDatabaseID(ctx context.Context, db DBQueryer, submodel
 		rootIDs = append(rootIDs, rootElement.id)
 	}
 
-	includeChildren := level != "core"
-	isGetSubmodelElements := true
-	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(ctx, db, submodelDatabaseID, rootIDs, includeChildren, isGetSubmodelElements, includeBlobValue)
+	includeChildren := scope == smeRowScopeSubtree
+	includeDirectChildren := scope == smeRowScopeDirectChildren
+	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(ctx, db, submodelDatabaseID, rootIDs, includeChildren, includeDirectChildren, includeBlobValue)
 	if readRowsErr != nil {
 		return nil, "", readRowsErr
 	}
@@ -680,7 +701,11 @@ func GetSubmodelElementReferencesBySubmodelID(ctx context.Context, db DBQueryer,
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-MISSINGMODELTYPE Missing model type for root element id")
 		}
 
-		reference, referenceErr := buildSubmodelElementReference(submodelID, modelType, rootElement.path)
+		segments, parsePathErr := parseReferencePathSegments(rootElement.path)
+		if parsePathErr != nil {
+			return nil, "", parsePathErr
+		}
+		reference, referenceErr := buildSubmodelElementReference(submodelID, segments, []types.ModelType{modelType})
 		if referenceErr != nil {
 			return nil, "", referenceErr
 		}
@@ -706,54 +731,128 @@ func buildSubmodelElementModelTypesQuery(submodelDatabaseID int, rootIDs []int64
 		ToSQL()
 }
 
-func buildSubmodelElementReference(submodelID string, modelType types.ModelType, idShortPath string) (types.IReference, error) {
-	if submodelID == "" || idShortPath == "" {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPARAMS Invalid reference parameters")
-	}
-
-	modelTypeLiteral, ok := stringification.ModelTypeToString(modelType)
-	if !ok {
-		return nil, common.NewInternalServerError("SMREPO-BUILDSMEREF-MODELTYPE Unknown model type for reference")
-	}
-	modelTypeKeyType, ok := stringification.KeyTypesFromString(modelTypeLiteral)
-	if !ok {
-		return nil, common.NewInternalServerError("SMREPO-BUILDSMEREF-KEYTYPE Unknown key type for model type")
-	}
-
-	pathSegments, parsePathErr := parseReferencePathSegments(idShortPath)
+// GetSubmodelElementReferenceByPathTx builds the model reference of the submodel element at path
+// from an existing transaction and applies optional ABAC formula filters from ctx.
+func GetSubmodelElementReferenceByPathTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) (types.IReference, error) {
+	segments, parsePathErr := parseReferencePathSegments(idShortPath)
 	if parsePathErr != nil {
 		return nil, parsePathErr
 	}
-
-	keys := make([]types.IKey, 0, len(pathSegments)+1)
-
-	firstKey := types.Key{}
-	firstKey.SetType(types.KeyTypesSubmodel)
-	firstKey.SetValue(submodelID)
-	keys = append(keys, &firstKey)
-
-	for i, segment := range pathSegments {
-		key := types.Key{}
-		isLast := i == len(pathSegments)-1
-
-		switch {
-		case segment.IsIndex:
-			key.SetType(types.KeyTypesSubmodelElementList)
-		case isLast:
-			key.SetType(modelTypeKeyType)
-		default:
-			key.SetType(types.KeyTypesSubmodelElementCollection)
-		}
-
-		key.SetValue(segment.Value)
-		keys = append(keys, &key)
+	submodelDatabaseID, err := submodelDatabaseIDForPathReadTx(tx, submodelID, idShortPath)
+	if err != nil {
+		return nil, err
 	}
 
-	reference := types.Reference{}
-	reference.SetType(types.ReferenceTypesModelReference)
-	reference.SetKeys(keys)
+	authorized, err := IsSubmodelElementPathAuthorized(ctx, tx, submodelDatabaseID, idShortPath)
+	if err != nil {
+		return nil, err
+	}
+	if !authorized {
+		return nil, newSubmodelElementReferenceNotFoundError(submodelID, idShortPath)
+	}
 
-	return &reference, nil
+	segmentPaths := referenceSegmentPaths(segments)
+	modelTypesByPath, err := getSubmodelElementModelTypesByPaths(ctx, tx, submodelDatabaseID, segmentPaths)
+	if err != nil {
+		return nil, err
+	}
+
+	modelTypes := make([]types.ModelType, 0, len(segmentPaths))
+	for _, segmentPath := range segmentPaths {
+		modelType, exists := modelTypesByPath[segmentPath]
+		if !exists {
+			return nil, newSubmodelElementReferenceNotFoundError(submodelID, idShortPath)
+		}
+		modelTypes = append(modelTypes, modelType)
+	}
+
+	return buildSubmodelElementReference(submodelID, segments, modelTypes)
+}
+
+func newSubmodelElementReferenceNotFoundError(submodelID string, idShortPath string) error {
+	return common.NewErrNotFound("SMREPO-GETSMEREF-NOTFOUND SubmodelElement with idShort or path '" + idShortPath + "' not found in submodel '" + submodelID + "'")
+}
+
+func referenceSegmentPaths(segments []submodelpath.Segment) []string {
+	paths := make([]string, 0, len(segments))
+	for i := range segments {
+		paths = append(paths, submodelpath.BuildIDShortPathFromSegments(segments[:i+1]))
+	}
+	return paths
+}
+
+func getSubmodelElementModelTypesByPaths(ctx context.Context, db DBQueryer, submodelDatabaseID int64, paths []string) (map[string]types.ModelType, error) {
+	query, args, err := buildSubmodelElementModelTypesByPathsQuery(submodelDatabaseID, paths)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEREF-BUILDMODELTYPESQ " + err.Error())
+	}
+
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEREF-EXECMODELTYPESQ " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	modelTypesByPath := make(map[string]types.ModelType, len(paths))
+	for rows.Next() {
+		var path string
+		var modelTypeInt int64
+		if scanErr := rows.Scan(&path, &modelTypeInt); scanErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMEREF-SCANMODELTYPESQ " + scanErr.Error())
+		}
+		modelTypesByPath[path] = types.ModelType(modelTypeInt)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEREF-ROWSERRMODELTYPESQ " + rowsErr.Error())
+	}
+
+	return modelTypesByPath, nil
+}
+
+func buildSubmodelElementModelTypesByPathsQuery(submodelDatabaseID int64, paths []string) (string, []any, error) {
+	return goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(
+			goqu.I("sme.idshort_path"),
+			goqu.I("sme.model_type"),
+		).
+		Where(
+			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
+			common.PostgreSQLTextArrayContains(goqu.I("sme.idshort_path"), paths),
+		).
+		Prepared(true).
+		ToSQL()
+}
+
+func buildSubmodelElementReference(submodelID string, segments []submodelpath.Segment, modelTypes []types.ModelType) (types.IReference, error) {
+	if submodelID == "" || len(segments) == 0 || len(segments) != len(modelTypes) {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPARAMS Invalid reference parameters")
+	}
+
+	keys := make([]types.IKey, 0, len(segments)+1)
+	keys = append(keys, types.NewKey(types.KeyTypesSubmodel, submodelID))
+
+	for i, modelType := range modelTypes {
+		keyType, err := submodelElementKeyType(modelType)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, types.NewKey(keyType, segments[i].Value))
+	}
+
+	return types.NewReference(types.ReferenceTypesModelReference, keys), nil
+}
+
+func submodelElementKeyType(modelType types.ModelType) (types.KeyTypes, error) {
+	modelTypeLiteral, ok := stringification.ModelTypeToString(modelType)
+	if !ok {
+		return 0, common.NewInternalServerError("SMREPO-BUILDSMEREF-MODELTYPE Unknown model type for reference")
+	}
+	keyType, ok := stringification.KeyTypesFromString(modelTypeLiteral)
+	if !ok {
+		return 0, common.NewInternalServerError("SMREPO-BUILDSMEREF-KEYTYPE Unknown key type for model type")
+	}
+	return keyType, nil
 }
 
 func parseReferencePathSegments(idShortPath string) ([]submodelpath.Segment, error) {
@@ -1117,7 +1216,7 @@ func addSMEVisibleSubtreeQueryForLevel(
 	level string,
 ) (*goqu.SelectDataset, error) {
 	if level == "core" {
-		return query, nil
+		return addSMERowFilterQueries(ctx, query)
 	}
 	return addSMEVisibleSubtreeQuery(ctx, query, submodelDatabaseID, targetPath)
 }
@@ -1225,7 +1324,7 @@ func addSMEPathAncestorVisibilityQuery(
 		Where(goqu.I(ancestorCTE + ".parent_sme_id").IsNull())
 	return query.
 		WithRecursive(ancestorCTE+"(id,parent_sme_id)", ancestors).
-		Where(goqu.L("EXISTS (?)", visibleRoot)), nil
+		Where(goqu.Exists(visibleRoot)), nil
 }
 
 func buildSMEPathAuthorizationQuery(
@@ -1327,7 +1426,50 @@ func buildMaskedSMEValuePayloadExpr(rawValueAlias string) exp.Expression {
 	return goqu.L("(COALESCE(?::jsonb, '{}'::jsonb) - 'value')", goqu.I(rawValueAlias))
 }
 
-func readSubmodelElementRowsByPath(ctx context.Context, db DBQueryer, submodelDatabaseID int64, idShortOrPath string, includeChildren bool, includeBlobValue bool) ([]loadedSMERow, error) {
+// smeRowScope selects which rows a path read loads besides the element itself.
+type smeRowScope int
+
+const (
+	smeRowScopeSubtree smeRowScope = iota
+	smeRowScopeDirectChildren
+	smeRowScopeSelf
+)
+
+func smeRowScopeForLevel(level string) smeRowScope {
+	if level == "core" {
+		return smeRowScopeDirectChildren
+	}
+	return smeRowScopeSubtree
+}
+
+func smeRowScopeCondition(dialect goqu.DialectWrapper, submodelDatabaseID int64, idShortOrPath string, scope smeRowScope) exp.Expression {
+	element := goqu.I("sme.idshort_path").Eq(idShortOrPath)
+	switch scope {
+	case smeRowScopeSelf:
+		return element
+	case smeRowScopeDirectChildren:
+		return goqu.Or(
+			element,
+			goqu.I("sme.parent_sme_id").In(
+				dialect.From(goqu.T("submodel_element").As("sme_parent")).
+					Select(goqu.I("sme_parent.id")).
+					Where(
+						goqu.I("sme_parent.submodel_id").Eq(submodelDatabaseID),
+						goqu.I("sme_parent.idshort_path").Eq(idShortOrPath),
+					),
+			),
+		)
+	default:
+		escapedPath := escapeSQLLikePattern(idShortOrPath)
+		return goqu.Or(
+			element,
+			idShortPathLikeEscaped(goqu.I("sme.idshort_path"), escapedPath+".%"),
+			idShortPathLikeEscaped(goqu.I("sme.idshort_path"), escapedPath+"[%"),
+		)
+	}
+}
+
+func readSubmodelElementRowsByPath(ctx context.Context, db DBQueryer, submodelDatabaseID int64, idShortOrPath string, scope smeRowScope, includeBlobValue bool) ([]loadedSMERow, error) {
 	dialect := goqu.Dialect("postgres")
 	rowCollector, collectorErr := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
 	if collectorErr != nil {
@@ -1383,38 +1525,16 @@ func readSubmodelElementRowsByPath(ctx context.Context, db DBQueryer, submodelDa
 			goqu.L("COALESCE(sme_sem_payload.parent_reference_payload, '{}'::jsonb)").As("raw_semantic_payload"),
 		}, maskRuntime.Projections()...)...)
 
-	if includeChildren {
-		escapedPath := escapeSQLLikePattern(idShortOrPath)
-		innerQuery = innerQuery.Where(
-			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.Or(
-				goqu.I("sme.idshort_path").Eq(idShortOrPath),
-				idShortPathLikeEscaped(goqu.I("sme.idshort_path"), escapedPath+".%"),
-				idShortPathLikeEscaped(goqu.I("sme.idshort_path"), escapedPath+"[%"),
-			),
-		)
-	} else {
-		innerQuery = innerQuery.Where(
-			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.Or(
-				goqu.I("sme.idshort_path").Eq(idShortOrPath),
-				goqu.I("sme.parent_sme_id").In(
-					dialect.From(goqu.T("submodel_element").As("sme_parent")).
-						Select(goqu.I("sme_parent.id")).
-						Where(
-							goqu.I("sme_parent.submodel_id").Eq(submodelDatabaseID),
-							goqu.I("sme_parent.idshort_path").Eq(idShortOrPath),
-						),
-				),
-			),
-		)
-	}
+	innerQuery = innerQuery.Where(
+		goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
+		smeRowScopeCondition(dialect, submodelDatabaseID, idShortOrPath, scope),
+	)
 
 	authorizationQuery, authorizationErr := buildSMEPathAuthorizationQuery(ctx, submodelDatabaseID, idShortOrPath)
 	if authorizationErr != nil {
 		return nil, authorizationErr
 	}
-	innerQuery = innerQuery.Where(goqu.L("EXISTS (?)", authorizationQuery))
+	innerQuery = innerQuery.Where(goqu.Exists(authorizationQuery))
 	innerQuery, rowFilterErr := addSMERowFilterQueries(ctx, innerQuery)
 	if rowFilterErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ROWFILTER " + rowFilterErr.Error())

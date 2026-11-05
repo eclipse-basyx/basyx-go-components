@@ -700,9 +700,9 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepo
 	}
 
 	var result model.ImplResponse
-	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+	err := HandleMultipartFileStream(r, "file", func(fileName string, contentType string, file io.Reader) error {
 		var uploadErr error
-		result, uploadErr = c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileName, file)
+		result, uploadErr = c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileName, contentType, file)
 		return uploadErr
 	})
 	if err != nil {
@@ -2178,7 +2178,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 	}
 
 	var result model.ImplResponse
-	err := HandleMultipartFileStreamWithContentType(r, "file", "fileName", func(fileName string, contentType string, file io.Reader) error {
+	err := HandleMultipartFileStream(r, "file", func(fileName string, contentType string, file io.Reader) error {
 		var uploadErr error
 		result, uploadErr = c.service.PutFileByPathAasRepository(
 			r.Context(),
@@ -2629,14 +2629,13 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetAdministrat
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	if !query.Has("date") {
-		c.errorHandler(w, r, &RequiredError{"date"}, nil)
-		return
-	}
-	dateParam, err := parseTime(query.Get("date"))
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Param: "date", Err: err}, nil)
-		return
+	var dateParam time.Time
+	if query.Has("date") {
+		dateParam, err = parseTime(query.Get("date"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "date", Err: err}, nil)
+			return
+		}
 	}
 
 	result, err := c.service.GetAssetAdministrationShellVersionByIdAndDate(r.Context(), aasIdentifierParam, dateParam)

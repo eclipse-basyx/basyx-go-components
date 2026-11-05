@@ -1,0 +1,21 @@
+kind: fixed
+body: >-
+  Verify writes of SubmodelElementList members against their enclosing list in the
+  Submodel Repository. `PUT` and `PATCH` of a list member, `POST` of a new member
+  into a list, and `PATCH` of a list are now verified before the transaction commits
+  according to the configured verification mode, so strict mode rejects members
+  that violate the list's `typeValueListElement`, `valueTypeListElement`, or
+  `semanticIdListElement` (AASd-107, AASd-108, AASd-109) with HTTP 400 instead of
+  storing an invalid list. Each member write checks only the written member against
+  the list's own attributes, so its cost does not grow with the list size. Writes of
+  a list and of its members are serialized per Submodel, so concurrent writes cannot
+  combine into an invalid list, and verification checks the complete persisted list
+  even when access rules hide some members from the caller, without revealing them
+  in the error. `PATCH` of any
+  submodel element now also verifies the merged result with its unchanged value,
+  not only the request payload.
+time: 2026-10-30T12:00:02+01:00
+custom:
+  Impact: Medium
+  PullRequest: 801
+  SecurityImpact: None.

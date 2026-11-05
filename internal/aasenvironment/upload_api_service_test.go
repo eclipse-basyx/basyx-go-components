@@ -29,9 +29,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -190,4 +193,70 @@ func TestValidateAASXThumbnailLimitsRejectsOversizedThumbnailBeforeImport(t *tes
 	if !common.IsErrPayloadTooLarge(err) {
 		t.Fatalf("expected payload-too-large error, got %v", err)
 	}
+}
+
+func TestWarnFileReferencesWithoutSupplementaryRelationshipReportsOnlyUnrelatedPackageParts(t *testing.T) {
+	var destination bytes.Buffer
+	writer, err := aasx.NewPackaging().CreateWriter(&destination)
+	if err != nil {
+		t.Fatalf("failed to create AASX writer: %v", err)
+	}
+	specURI := mustParseTestURL(t, "/aasx/environment.json")
+	specPart, err := writer.PutPartFromStream(specURI, "application/json", bytes.NewReader([]byte("{}")))
+	if err != nil {
+		t.Fatalf("failed to put spec part: %v", err)
+	}
+	if err = writer.MakeSpec(specPart); err != nil {
+		t.Fatalf("failed to mark spec part: %v", err)
+	}
+	relatedPart, err := writer.PutPartFromStream(mustParseTestURL(t, "/aasx/files/related.png"), "image/png", bytes.NewReader([]byte("related")))
+	if err != nil {
+		t.Fatalf("failed to put related part: %v", err)
+	}
+	if err = writer.RelateSupplementaryToSpec(relatedPart, specPart); err != nil {
+		t.Fatalf("failed to relate supplementary part: %v", err)
+	}
+	if _, err = writer.PutPartFromStream(mustParseTestURL(t, "/aasx/files/unrelated.jpg"), "image/jpeg", bytes.NewReader([]byte("unrelated"))); err != nil {
+		t.Fatalf("failed to put unrelated part: %v", err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatalf("failed to close AASX writer: %v", err)
+	}
+	packageReader, err := aasx.NewPackaging().OpenReadFromStream(bytes.NewReader(destination.Bytes()))
+	if err != nil {
+		t.Fatalf("failed to open AASX package: %v", err)
+	}
+	defer func() { _ = packageReader.Close() }()
+
+	locations := []AASXFileElementLocation{
+		{SubmodelID: "sm", IDShortPath: "Images[0]", FileValue: "/aasx/files/unrelated.jpg"},
+		{SubmodelID: "sm", IDShortPath: "Logo", FileValue: "/aasx/files/related.png"},
+		{SubmodelID: "sm", IDShortPath: "Missing", FileValue: "/aasx/files/missing.png"},
+		{SubmodelID: "sm", IDShortPath: "External", FileValue: "https://example.com/image.png"},
+	}
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	defer slog.SetDefault(previousLogger)
+
+	warnFileReferencesWithoutSupplementaryRelationship(t.Context(), packageReader, specURI, locations, map[int]struct{}{1: {}})
+
+	logLines := strings.Split(strings.TrimSpace(logs.String()), "\n")
+	if len(logLines) != 1 {
+		t.Fatalf("expected exactly one warning, got %d: %s", len(logLines), logs.String())
+	}
+	for _, expected := range []string{`"error.code":"AASENV-UPLDSUPPL-NOSUPPLREL"`, `"id_short_path":"Images[0]"`, `"part_uri":"/aasx/files/unrelated.jpg"`} {
+		if !strings.Contains(logLines[0], expected) {
+			t.Fatalf("expected warning to contain %s, got %s", expected, logLines[0])
+		}
+	}
+}
+
+func mustParseTestURL(t *testing.T, rawURL string) *url.URL {
+	t.Helper()
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("failed to parse URL %q: %v", rawURL, err)
+	}
+	return parsed
 }

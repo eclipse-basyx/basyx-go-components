@@ -147,6 +147,8 @@ func TestDecodeValueOnlyReferences(t *testing.T) {
 
 	cleared := decodeSingle(t, `{}`, schemaNode("Ref", types.ModelTypeReferenceElement))
 	require.Equal(t, ReferenceElementValuePatch{}, cleared)
+	clearedByNull := decodeSingle(t, `null`, schemaNode("Ref", types.ModelTypeReferenceElement))
+	require.Equal(t, ReferenceElementValuePatch{}, clearedByNull)
 
 	relationship := decodeSingle(t, `{"second":`+testReferenceJSON+`}`, schemaNode("Rel", types.ModelTypeRelationshipElement)).(RelationshipValuePatch)
 	require.Nil(t, relationship.First)

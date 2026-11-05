@@ -64,6 +64,25 @@ type Redirect struct {
 	Location string
 }
 
+// PlainText is a helper payload type that signals the response encoder to write the body verbatim as text/plain.
+type PlainText string
+
+// WritePlainText writes body verbatim with the text/plain media type and the given status, or 200 OK if status is nil.
+func WritePlainText(w http.ResponseWriter, body PlainText, status *int) error {
+	wHeader := w.Header()
+	wHeader.Set("Content-Type", "text/plain")
+	wHeader.Set("X-Content-Type-Options", "nosniff")
+
+	if status != nil {
+		w.WriteHeader(*status)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	_, err := io.WriteString(w, string(body))
+	return err
+}
+
 // SetSafeDownloadHeaders sets HTTP headers for safely downloading a file, including Content-Type and Content-Disposition.
 func SetSafeDownloadHeaders(wHeader http.Header, filename, contentType string) {
 	if contentType == "" {

@@ -45,40 +45,106 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildSubmodelElementReferenceBuildsKeyChainForNestedPathWithListIndex(t *testing.T) {
+func TestBuildSubmodelElementReferenceUsesModelTypeOfListItems(t *testing.T) {
 	t.Parallel()
 
-	reference, err := buildSubmodelElementReference("sm-1", types.ModelTypeSubmodelElementList, "test.test[0]")
-	require.NoError(t, err)
+	testCases := []struct {
+		name          string
+		idShortPath   string
+		modelTypes    []types.ModelType
+		expectedTypes []types.KeyTypes
+	}{
+		{
+			name:          "property in list",
+			idShortPath:   "readings[0]",
+			modelTypes:    []types.ModelType{types.ModelTypeSubmodelElementList, types.ModelTypeProperty},
+			expectedTypes: []types.KeyTypes{types.KeyTypesSubmodelElementList, types.KeyTypesProperty},
+		},
+		{
+			name:        "property in collection in list",
+			idShortPath: "documents[0].title",
+			modelTypes:  []types.ModelType{types.ModelTypeSubmodelElementList, types.ModelTypeSubmodelElementCollection, types.ModelTypeProperty},
+			expectedTypes: []types.KeyTypes{
+				types.KeyTypesSubmodelElementList,
+				types.KeyTypesSubmodelElementCollection,
+				types.KeyTypesProperty,
+			},
+		},
+		{
+			name:          "property in nested list",
+			idShortPath:   "matrix[0][1]",
+			modelTypes:    []types.ModelType{types.ModelTypeSubmodelElementList, types.ModelTypeSubmodelElementList, types.ModelTypeProperty},
+			expectedTypes: []types.KeyTypes{types.KeyTypesSubmodelElementList, types.KeyTypesSubmodelElementList, types.KeyTypesProperty},
+		},
+		{
+			name:          "statement of entity",
+			idShortPath:   "machine.serialNumber",
+			modelTypes:    []types.ModelType{types.ModelTypeEntity, types.ModelTypeProperty},
+			expectedTypes: []types.KeyTypes{types.KeyTypesEntity, types.KeyTypesProperty},
+		},
+	}
 
-	keys := reference.Keys()
-	require.Len(t, keys, 4)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 
-	require.Equal(t, types.KeyTypesSubmodel, keys[0].Type())
-	require.Equal(t, "sm-1", keys[0].Value())
-	require.Equal(t, types.KeyTypesSubmodelElementCollection, keys[1].Type())
-	require.Equal(t, "test", keys[1].Value())
-	require.Equal(t, types.KeyTypesSubmodelElementCollection, keys[2].Type())
-	require.Equal(t, "test", keys[2].Value())
-	require.Equal(t, types.KeyTypesSubmodelElementList, keys[3].Type())
-	require.Equal(t, "0", keys[3].Value())
+			segments, err := parseReferencePathSegments(testCase.idShortPath)
+			require.NoError(t, err)
+
+			reference, err := buildSubmodelElementReference("sm-1", segments, testCase.modelTypes)
+			require.NoError(t, err)
+			require.Equal(t, types.ReferenceTypesModelReference, reference.Type())
+
+			keys := reference.Keys()
+			require.Len(t, keys, len(segments)+1)
+			require.Equal(t, types.KeyTypesSubmodel, keys[0].Type())
+			require.Equal(t, "sm-1", keys[0].Value())
+			for i, segment := range segments {
+				require.Equal(t, testCase.expectedTypes[i], keys[i+1].Type())
+				require.Equal(t, segment.Value, keys[i+1].Value())
+			}
+		})
+	}
 }
 
-func TestBuildSubmodelElementReferenceBuildsKeyChainForNestedDotPath(t *testing.T) {
+func TestBuildSubmodelElementReferenceRejectsMismatchedModelTypes(t *testing.T) {
 	t.Parallel()
 
-	reference, err := buildSubmodelElementReference("sm-1", types.ModelTypeProperty, "parent.child")
+	segments, err := parseReferencePathSegments("readings[0]")
 	require.NoError(t, err)
 
-	keys := reference.Keys()
-	require.Len(t, keys, 3)
+	_, err = buildSubmodelElementReference("sm-1", segments, []types.ModelType{types.ModelTypeProperty})
+	require.True(t, common.IsErrBadRequest(err))
+}
 
-	require.Equal(t, types.KeyTypesSubmodel, keys[0].Type())
-	require.Equal(t, "sm-1", keys[0].Value())
-	require.Equal(t, types.KeyTypesSubmodelElementCollection, keys[1].Type())
-	require.Equal(t, "parent", keys[1].Value())
-	require.Equal(t, types.KeyTypesProperty, keys[2].Type())
-	require.Equal(t, "child", keys[2].Value())
+func TestReferenceSegmentPathsListsTargetAndAncestors(t *testing.T) {
+	t.Parallel()
+
+	segments, err := parseReferencePathSegments("machine.parts[0][1].serialNumber")
+	require.NoError(t, err)
+
+	require.Equal(t, []string{
+		"machine",
+		"machine.parts",
+		"machine.parts[0]",
+		"machine.parts[0][1]",
+		"machine.parts[0][1].serialNumber",
+	}, referenceSegmentPaths(segments))
+}
+
+func TestSubmodelElementModelTypesByPathsReuseSQLShapeForDifferentDepths(t *testing.T) {
+	t.Parallel()
+
+	shallowQuery, shallowArgs, err := buildSubmodelElementModelTypesByPathsQuery(42, []string{"readings"})
+	require.NoError(t, err)
+	deepQuery, deepArgs, err := buildSubmodelElementModelTypesByPathsQuery(42, []string{"documents", "documents[0]", "documents[0].title"})
+	require.NoError(t, err)
+
+	require.Equal(t, shallowQuery, deepQuery)
+	require.Len(t, shallowArgs, 2)
+	require.Len(t, deepArgs, 2)
+	require.Contains(t, shallowQuery, "ANY($")
+	require.NotContains(t, deepQuery, "documents")
 }
 
 func TestEscapeSQLLikePatternEscapesWildcardCharacters(t *testing.T) {
@@ -152,10 +218,44 @@ func captureSubmodelElementPathReadQuery(t *testing.T, idShortPath string) strin
 	t.Helper()
 
 	return captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
-		rows, err := readSubmodelElementRowsByPath(contextWithABACDisabled(t), db, 42, idShortPath, true, true)
+		rows, err := readSubmodelElementRowsByPath(contextWithABACDisabled(t), db, 42, idShortPath, smeRowScopeSubtree, true)
 		require.Empty(t, rows)
 		return err
 	})
+}
+
+func TestSubmodelElementSelfPathReadExcludesChildren(t *testing.T) {
+	t.Parallel()
+
+	selfQuery := captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
+		rows, err := readSubmodelElementRowsByPath(contextWithABACDisabled(t), db, 42, "Readings", smeRowScopeSelf, false)
+		require.Empty(t, rows)
+		return err
+	})
+	coreQuery := captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
+		rows, err := readSubmodelElementRowsByPath(contextWithABACDisabled(t), db, 42, "Readings", smeRowScopeDirectChildren, false)
+		require.Empty(t, rows)
+		return err
+	})
+
+	require.NotContains(t, selfQuery, "sme_parent")
+	require.NotContains(t, selfQuery, "LIKE")
+	require.Contains(t, coreQuery, "sme_parent")
+}
+
+func TestSubmodelElementRootPageReadWithoutChildrenExcludesDirectChildren(t *testing.T) {
+	t.Parallel()
+
+	readRootPage := func(includeDirectChildren bool) string {
+		return captureSubmodelElementReadQuery(t, func(db *sql.DB) error {
+			rows, err := readSubmodelElementRowsByRootIDs(contextWithABACDisabled(t), db, 42, []int64{11}, false, includeDirectChildren, false)
+			require.Empty(t, rows)
+			return err
+		})
+	}
+
+	require.NotContains(t, readRootPage(false), `"sme"."parent_sme_id" = ANY`)
+	require.Contains(t, readRootPage(true), `"sme"."parent_sme_id" = ANY`)
 }
 
 func captureSubmodelElementPathListQuery(t *testing.T, idShortPath string) string {
@@ -385,7 +485,7 @@ func TestAddSMEVisibleTreeQueryFiltersAncestorsBeforeLimit(t *testing.T) {
 	require.Contains(t, sqlQuery, `"visible_sme_child"."parent_sme_id" = "visible_sme_parent"."id"`)
 	require.Contains(t, sqlQuery, `"visible_sme_root"."idshort_path"`)
 	require.Contains(t, sqlQuery, `"visible_sme_child"."idshort_path"`)
-	require.Contains(t, sqlQuery, `"sme"."id" IN ((SELECT "id" FROM "visible_sme_ids"))`)
+	require.Contains(t, sqlQuery, `"sme"."id" IN (SELECT "id" FROM "visible_sme_ids")`)
 	require.NotContains(t, sqlQuery, `"submodel_element"."idshort_path"`)
 	require.Contains(t, sqlQuery, "LIMIT 2")
 }
@@ -416,10 +516,10 @@ func TestAddSMEVisibleTreeQueryForLevelUsesRowFilterOnlyForCore(t *testing.T) {
 func TestAddSMEVisibleSubtreeQueryForLevelRecursesOnlyForDeep(t *testing.T) {
 	t.Parallel()
 
-	allow := true
+	deny := false
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
-			"$sme": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &allow}, false),
+			"$sme.ARestricted": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
 		},
 	})
 	dataset := goqu.Dialect("postgres").
@@ -431,6 +531,8 @@ func TestAddSMEVisibleSubtreeQueryForLevelRecursesOnlyForDeep(t *testing.T) {
 	coreSQL, _, err := coreQuery.ToSQL()
 	require.NoError(t, err)
 	require.NotContains(t, coreSQL, "visible_sme_subtree_ids")
+	require.Contains(t, coreSQL, `"sme"."idshort_path"`)
+	require.Contains(t, coreSQL, "ARestricted")
 
 	deepQuery, err := addSMEVisibleSubtreeQueryForLevel(ctx, dataset, 42, "Target", "deep")
 	require.NoError(t, err)
@@ -629,12 +731,14 @@ func TestSubmodelElementPageQueryShapeIsIndependentOfPageSize(t *testing.T) {
 	require.NotContains(t, oneQuery, `"property_element"`)
 }
 
-func TestSubmodelElementCorePageSelectsOnlyRootsAndDirectChildren(t *testing.T) {
+func TestSubmodelElementCorePageSelectsOnlyRoots(t *testing.T) {
 	t.Parallel()
 
 	query, _, err := buildSubmodelElementPageQuery(contextWithABACDisabled(t), []int64{1}, "core")
 	require.NoError(t, err)
-	require.Contains(t, query, `"selected_sme"."parent_sme_id" = "selected_root"."root_id"`)
+	require.Contains(t, query, `SELECT "selected_root"."root_id" AS "element_id"`)
+	require.NotContains(t, query, `"selected_sme"`)
+	require.NotContains(t, query, "UNION ALL")
 }
 
 func TestSubmodelElementPageValueQueryShapeIsIndependentOfPageSize(t *testing.T) {
