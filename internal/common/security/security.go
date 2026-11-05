@@ -201,6 +201,14 @@ func abacDeniedAsNotFoundPrefixes(contextPath string) []string {
 }
 
 func setupOIDC(ctx context.Context, cfg *common.Config) (*OIDC, error) {
+	trustlist, err := readTrustlist(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return newOIDCFromTrustlist(ctx, trustlist)
+}
+
+func readTrustlist(cfg *common.Config) ([]common.OIDCProviderConfig, error) {
 	trustlistData, err := os.ReadFile(cfg.OIDC.TrustlistPath)
 	if err != nil {
 		return nil, fmt.Errorf("read OIDC trustlist: %w", err)
@@ -210,7 +218,10 @@ func setupOIDC(ctx context.Context, cfg *common.Config) (*OIDC, error) {
 	if err := json.Unmarshal(trustlistData, &trustlist); err != nil {
 		return nil, fmt.Errorf("parse OIDC trustlist: %w", err)
 	}
+	return trustlist, nil
+}
 
+func newOIDCFromTrustlist(ctx context.Context, trustlist []common.OIDCProviderConfig) (*OIDC, error) {
 	oidcProviders := make([]OIDCProviderSettings, 0, len(trustlist))
 	for _, p := range trustlist {
 		oidcProviders = append(oidcProviders, OIDCProviderSettings{
@@ -255,4 +266,25 @@ func toClaimMappingSettings(configs []common.OIDCClaimMappingConfig) []OIDCClaim
 		})
 	}
 	return settings
+}
+
+// NewAudienceBoundOIDC builds token verification from the REST trustlist for a transport that requires
+// audience-bound tokens, such as MCP. It also returns the trusted issuers as authorization servers.
+func NewAudienceBoundOIDC(ctx context.Context, cfg *common.Config) (*OIDC, []string, error) {
+	trustlist, err := readTrustlist(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	issuers := make([]string, 0, len(trustlist))
+	for _, p := range trustlist {
+		if strings.TrimSpace(p.Audience) == "" {
+			return nil, nil, fmt.Errorf("SECURITY-NEWAUDIENCEOIDC-AUDIENCE: trusted issuer %q requires an audience", p.Issuer)
+		}
+		issuers = append(issuers, p.Issuer)
+	}
+	oidc, err := newOIDCFromTrustlist(ctx, trustlist)
+	if err != nil {
+		return nil, nil, err
+	}
+	return oidc, issuers, nil
 }

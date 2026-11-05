@@ -1,0 +1,115 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      {
+        "name": "username_attr",
+        "attributes": [
+          {
+            "CLAIM": "preferred_username"
+          }
+        ]
+      }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "aas_api",
+        "objects": [
+          {
+            "ROUTE": "/shells"
+          },
+          {
+            "ROUTE": "/shells/*"
+          },
+          {
+            "ROUTE": "/submodels"
+          },
+          {
+            "ROUTE": "/submodels/*"
+          },
+          {
+            "ROUTE": "/concept-descriptions"
+          },
+          {
+            "ROUTE": "/concept-descriptions/*"
+          },
+          {
+            "ROUTE": "/query/shells"
+          },
+          {
+            "ROUTE": "/query/submodels"
+          }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      {
+        "name": "read",
+        "acl": {
+          "USEATTRIBUTES": "username_attr",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "full",
+        "acl": {
+          "USEATTRIBUTES": "username_attr",
+          "RIGHTS": [
+            "ALL"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "is_alice",
+        "formula": {
+          "$eq": [
+            {
+              "$attribute": {
+                "CLAIM": "preferred_username"
+              }
+            },
+            {
+              "$strVal": "alice"
+            }
+          ]
+        }
+      },
+      {
+        "name": "is_bob",
+        "formula": {
+          "$eq": [
+            {
+              "$attribute": {
+                "CLAIM": "preferred_username"
+              }
+            },
+            {
+              "$strVal": "bob"
+            }
+          ]
+        }
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "full",
+        "USEOBJECTS": [
+          "aas_api"
+        ],
+        "USEFORMULA": "is_alice"
+      },
+      {
+        "USEACL": "read",
+        "USEOBJECTS": [
+          "aas_api"
+        ],
+        "USEFORMULA": "is_bob"
+      }
+    ]
+  }
+}

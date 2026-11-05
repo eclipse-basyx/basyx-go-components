@@ -58,6 +58,7 @@ import (
 	cdrdb "github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
 	discoveryapi "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	discoverydb "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
+	basyxmcp "github.com/eclipse-basyx/basyx-go-components/internal/mcp"
 	smregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/api"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
@@ -301,6 +302,13 @@ func runServer(ctx context.Context, configPath string) error {
 
 	eventFeedModule.RegisterRoutes(apiRouter)
 
+	if cfg.MCP.Enabled {
+		mcpModule, mcpErr := basyxmcp.New(ctx, cfg, r)
+		if mcpErr != nil {
+			return fmt.Errorf("AASENV-MCP-INIT: %w", mcpErr)
+		}
+		mcpModule.Register(r)
+	}
 	r.Mount(base, apiRouter)
 
 	// Register /upload endpoint

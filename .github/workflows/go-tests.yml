@@ -10,6 +10,7 @@ on:
       - '**.sql'
       - 'internal/**/*.json'
       - 'cmd/aasxfileserverservice/openapi.yaml'
+      - 'examples/BaSyxMCPExample/secured/keycloak/**'
   push:
     branches: [main]
     paths:
@@ -20,6 +21,7 @@ on:
       - '**.sql'
       - 'internal/**/*.json'
       - 'cmd/aasxfileserverservice/openapi.yaml'
+      - 'examples/BaSyxMCPExample/secured/keycloak/**'
 
 permissions:
   contents: read
@@ -454,6 +456,46 @@ jobs:
       - name: Run aas environment integration tests
         run: |
           cd internal/aasenvironment/integration_tests
+          go test -v .
+
+  mcp-unit-tests:
+    name: MCP Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run MCP unit tests
+        run: go test -v ./internal/mcp
+
+  mcp-integration-tests:
+    name: MCP Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run MCP integration tests
+        run: |
+          cd internal/mcp/integration_tests
           go test -v .
 
   aas-environment-marker-access-integration-tests:

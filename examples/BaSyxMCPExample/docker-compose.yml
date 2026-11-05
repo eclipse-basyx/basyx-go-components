@@ -1,0 +1,53 @@
+services:
+  aas-environment:
+    container_name: basyx-mcp-aas-environment
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      - SERVER_PORT=8081
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - ABAC_ENABLED=false
+      - GENERAL_EXTERNALURL=http://localhost:8081
+      - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration
+      - MCP_ENABLED=true
+      - MCP_WRITESENABLED=true
+    volumes:
+      - ./aas:/app/preconfiguration:ro
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  db:
+    container_name: basyx-mcp-db
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  basyx_configuration:
+    container_name: basyx-mcp-configuration
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+    depends_on:
+      db:
+        condition: service_healthy
