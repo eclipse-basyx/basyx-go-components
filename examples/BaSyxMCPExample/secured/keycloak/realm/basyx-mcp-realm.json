@@ -5,6 +5,7 @@
   "sslRequired": "none",
   "defaultDefaultClientScopes": ["basic", "profile", "basyx-aas-environment"],
   "defaultOptionalClientScopes": ["offline_access"],
+  "scopeMappings": [{ "clientScope": "offline_access", "roles": ["offline_access"] }],
   "clientScopes": [
     {
       "name": "basic",
@@ -101,6 +102,7 @@
       "clientId": "basyx-mcp-test",
       "name": "Password grant client for tests and scripts",
       "publicClient": true,
+      "fullScopeAllowed": false,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": true
     }
@@ -113,6 +115,7 @@
       "emailVerified": true,
       "firstName": "Alice",
       "lastName": "Example",
+      "realmRoles": ["offline_access"],
       "credentials": [{ "type": "password", "value": "alice", "temporary": false }]
     },
     {
@@ -122,6 +125,7 @@
       "emailVerified": true,
       "firstName": "Bob",
       "lastName": "Example",
+      "realmRoles": ["offline_access"],
       "credentials": [{ "type": "password", "value": "bob", "temporary": false }]
     }
   ]

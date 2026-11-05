@@ -26,11 +26,14 @@
 package integrationtests
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -322,6 +325,7 @@ func TestMCPSecuredEndpointAppliesCallerPermissions(t *testing.T) {
 	mustCallTool(t, alice, "delete_shell", map[string]any{"shellId": shellID})
 }
 
+// fetchToken requests an offline refresh token like Codex does, with a client limited to its scopes.
 func fetchToken(t *testing.T, user string) string {
 	t.Helper()
 	form := url.Values{
@@ -329,17 +333,33 @@ func fetchToken(t *testing.T, user string) string {
 		"client_id":  {"basyx-mcp-test"},
 		"username":   {user},
 		"password":   {user},
+		"scope":      {"openid offline_access"},
 	}
 	response, err := http.PostForm(issuerURL+"/protocol/openid-connect/token", form) //nolint:gosec,noctx // Fixed local test endpoint.
 	require.NoError(t, err)
 	defer func() { _ = response.Body.Close() }()
-	require.Equal(t, http.StatusOK, response.StatusCode)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, response.StatusCode, string(body))
 	var token struct {
-		AccessToken string `json:"access_token"`
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
 	}
-	require.NoError(t, json.NewDecoder(response.Body).Decode(&token))
+	require.NoError(t, json.Unmarshal(body, &token))
 	require.NotEmpty(t, token.AccessToken)
+	require.Equal(t, "Offline", jwtClaim(t, token.RefreshToken, "typ"))
 	return token.AccessToken
+}
+
+func jwtClaim(t *testing.T, token, claim string) any {
+	t.Helper()
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3)
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+	claims := map[string]any{}
+	require.NoError(t, json.Unmarshal(payload, &claims))
+	return claims[claim]
 }
 
 func getJSON(t *testing.T, endpoint string) map[string]any {

@@ -124,6 +124,9 @@ setup:
   client scopes. Dynamically registered clients receive it.
 - The anonymous client registration policy *Trusted Hosts* lists `localhost` and `127.0.0.1` and
   checks the redirect URIs, but not the host that sends the registration request.
+- Users have the realm role `offline_access`, and the `offline_access` client scope maps it.
+  Clients such as Codex request refresh tokens with this scope, and self-registered clients only
+  receive roles through their scopes.
 - The anonymous policy *Allowed Client Scopes* also allows `openid`. Some clients, for example
   Codex, request it when they register, but it is not a Keycloak client scope and is rejected
   otherwise.
