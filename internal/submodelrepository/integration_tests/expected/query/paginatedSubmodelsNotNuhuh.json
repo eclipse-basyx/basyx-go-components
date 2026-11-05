@@ -4548,6 +4548,7 @@
                     "inoutputVariables": [
                         {
                             "value": {
+                                "idShort": "InoutputValue",
                                 "modelType": "Property",
                                 "value": "Test_InOut",
                                 "valueType": "xs:string"
@@ -4557,6 +4558,7 @@
                     "inputVariables": [
                         {
                             "value": {
+                                "idShort": "InputValue",
                                 "modelType": "Property",
                                 "value": "Test",
                                 "valueType": "xs:string"
@@ -4567,6 +4569,7 @@
                     "outputVariables": [
                         {
                             "value": {
+                                "idShort": "OutputValue",
                                 "modelType": "Property",
                                 "value": "Test_Out",
                                 "valueType": "xs:string"

@@ -701,7 +701,9 @@ func TestAddSubmodelElementSubmodelNotFoundRollsBack(t *testing.T) {
 	}()
 
 	sut := &SubmodelDatabase{db: db}
-	var elem types.ISubmodelElement
+	idShort := "Temperature"
+	elem := types.NewProperty(types.DataTypeDefXSDString)
+	elem.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel.*FOR NO KEY UPDATE`).WillReturnError(sql.ErrNoRows)

@@ -40,7 +40,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/conditional"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
@@ -50,6 +49,9 @@ import (
 )
 
 func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (string, error) {
+	if err := requireOwnIDShort(submodelElement, false, "SMREPO-ADDSME-MISSINGIDSHORT"); err != nil {
+		return "", err
+	}
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForNoKeyUpdateContext(ctx, tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -80,7 +82,7 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.C
 		submodelID,
 		submodelDatabaseID,
 		nil,
-		submodelElement,
+		*submodelElement.IDShort(),
 		"SMREPO-ADDSME-COLLISION Duplicate submodel element idShort",
 		"SMREPO-ADDSME-CHKDUP-ABACDENIED existing submodel element is not accessible under ABAC constraints",
 	); err != nil {
@@ -102,12 +104,7 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.C
 		return "", err
 	}
 
-	idShort := submodelElement.IDShort()
-	if idShort == nil {
-		return "", nil
-	}
-
-	return *idShort, nil
+	return *submodelElement.IDShort(), nil
 }
 
 func (s *SubmodelDatabase) updateSubmodelElementInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
@@ -268,6 +265,9 @@ func (s *SubmodelDatabase) GetSubmodelElementReferences(ctx context.Context, sub
 
 // AddSubmodelElement adds a top-level submodel element and performs an ABAC re-check before commit when ABAC is enabled.
 func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID string, submodelElement types.ISubmodelElement) (err error) {
+	if err = requireSubmodelElementIDShorts(submodelElement, false, "SMREPO-ADDSME-MISSINGIDSHORT"); err != nil {
+		return err
+	}
 	tx, cleanup, err := common.StartTransactionContext(ctx, s.db)
 	if err != nil {
 		return err
@@ -287,20 +287,15 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 	if enforceErr != nil {
 		return enforceErr
 	}
-	if shouldCheckInsertedElementVisibility(shouldEnforce, insertedPath) {
+	if shouldEnforce {
 		if err = s.ensureCreatedSubmodelElementIsVisible(ctx, tx, submodelID, insertedPath); err != nil {
 			return err
 		}
 	}
 
-	if insertedPath == "" {
-		err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, history.ChangeUpdated)
-	} else {
-		err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
-			currentPath: insertedPath,
-		})
-	}
-	if err != nil {
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
+		currentPath: insertedPath,
+	}); err != nil {
 		return err
 	}
 
@@ -324,14 +319,12 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 	if !parentAuthorized {
 		return "", newSubmodelElementParentNotFoundError(parentPath)
 	}
-	isFromList := false
-	switch parent.modelType {
-	case types.ModelTypeSubmodelElementCollection, types.ModelTypeEntity, types.ModelTypeAnnotatedRelationshipElement:
-		isFromList = false
-	case types.ModelTypeSubmodelElementList:
-		isFromList = true
-	default:
+	isFromList, acceptsChildren := insertParentChildPlacement(parent.modelType)
+	if !acceptsChildren {
 		return "", common.NewErrBadRequest("SMREPO-ADDSMEBYPATH-BADPARENT Parent element does not support child elements")
+	}
+	if err = requireOwnIDShort(submodelElement, isFromList, "SMREPO-ADDSMEBYPATH-MISSINGIDSHORT"); err != nil {
+		return "", err
 	}
 	idShort := ""
 	if elementIDShort := submodelElement.IDShort(); elementIDShort != nil {
@@ -382,9 +375,6 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 	}
 	if isFromList {
 		return fmt.Sprintf("%s[%d]", parentPath, parent.nextPosition), nil
-	}
-	if submodelElement.IDShort() == nil || *submodelElement.IDShort() == "" {
-		return "", nil
 	}
 	return parentPath + "." + *submodelElement.IDShort(), nil
 }
@@ -461,6 +451,9 @@ func newSubmodelElementParentNotFoundError(parentPath string) error {
 // AddSubmodelElementWithPath adds a submodel element under an existing container path
 // while preserving ABAC visibility checks from ctx.
 func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
+	if err := requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-ADDSMEBYPATH-MISSINGIDSHORT"); err != nil {
+		return err
+	}
 	tx, cleanup, err := common.StartTransactionContext(ctx, s.db)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-ADDSMEBYPATH-STARTTX " + err.Error())
@@ -480,7 +473,7 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 	if enforceErr != nil {
 		return enforceErr
 	}
-	if shouldCheckInsertedElementVisibility(shouldEnforce, insertedPath) {
+	if shouldEnforce {
 		if err = s.ensureCreatedSubmodelElementIsVisible(ctx, tx, submodelID, insertedPath); err != nil {
 			return err
 		}
@@ -533,6 +526,9 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 	idShortPath string,
 	submodelElement types.ISubmodelElement,
 ) (bool, error) {
+	if err := requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-PUTSME-MISSINGIDSHORT"); err != nil {
+		return false, err
+	}
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -598,10 +594,6 @@ func (s *SubmodelDatabase) ensurePutResultIsVisibleAndValidTx(ctx context.Contex
 		}
 	}
 	return s.verifyEnclosingListTx(ctx, tx, submodelID, idShortPath, "SMREPO-PUTSME-VERIFYLIST")
-}
-
-func shouldCheckInsertedElementVisibility(shouldEnforce bool, insertedPath string) bool {
-	return shouldEnforce && insertedPath != ""
 }
 
 func (s *SubmodelDatabase) ensureCreatedSubmodelElementIsVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) error {
@@ -805,6 +797,9 @@ func (s *SubmodelDatabase) ensureSubmodelElementCanBeDeleted(ctx context.Context
 // Before the transaction commits, the persisted element, or the enclosing list of a
 // list member, is verified according to the configured verification mode.
 func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (err error) {
+	if err = requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-UPDSME-MISSINGIDSHORT"); err != nil {
+		return err
+	}
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -1130,20 +1125,15 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateDoesNotExist(
 	submodelID string,
 	submodelDatabaseID int,
 	parentElementID *int,
-	submodelElement types.ISubmodelElement,
+	idShort string,
 	conflictMessage string,
 	deniedMessage string,
 ) error {
-	idShortPtr := submodelElement.IDShort()
-	if idShortPtr == nil || *idShortPtr == "" {
-		return nil
-	}
-
 	duplicatePath := ""
 	return createprecheck.EnsureVisibleCreate(
 		ctx,
 		func(readCtx context.Context) (bool, error) {
-			path, exists, err := siblingIDShortCollisionPathInTx(readCtx, tx, submodelDatabaseID, parentElementID, *idShortPtr)
+			path, exists, err := siblingIDShortCollisionPathInTx(readCtx, tx, submodelDatabaseID, parentElementID, idShort)
 			if err != nil {
 				return false, err
 			}

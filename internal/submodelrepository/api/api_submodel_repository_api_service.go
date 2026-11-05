@@ -36,6 +36,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
 )
 
@@ -237,15 +238,6 @@ func mergeJSONObjects(base map[string]any, patch map[string]any) map[string]any 
 	return merged
 }
 
-// submodelElementChildFields maps container model types to the field that
-// carries their child elements.
-var submodelElementChildFields = map[string]string{
-	"SubmodelElementCollection":    "value",
-	"SubmodelElementList":          "value",
-	"Entity":                       "statements",
-	"AnnotatedRelationshipElement": "annotations",
-}
-
 // mergeSubmodelElementPatch merges patch into base and keeps the value only
 // when the patch sets it, so that unpatched values and children stay unchanged.
 func mergeSubmodelElementPatch(base map[string]any, patch map[string]any) map[string]any {
@@ -256,13 +248,29 @@ func mergeSubmodelElementPatch(base map[string]any, patch map[string]any) map[st
 	return merged
 }
 
+// storedOnlyUnlessPatchedFields returns the fields that persistence keeps
+// unchanged when a PATCH omits them.
+func storedOnlyUnlessPatchedFields(element map[string]any) []string {
+	modelTypeName, _ := element["modelType"].(string)
+	modelType, known := stringification.ModelTypeFromString(modelTypeName)
+	if !known {
+		return nil
+	}
+	if modelType == types.ModelTypeOperation {
+		return []string{"inputVariables", "outputVariables", "inoutputVariables"}
+	}
+	if field, isContainer := submodelelements.ChildElementField(modelType); isContainer {
+		return []string{field}
+	}
+	return nil
+}
+
 // mergeSubmodelElementMetadataPatch merges patch into base and keeps child
-// elements only when the patch sets them, so that unpatched children are not
-// rewritten.
+// elements and operation variables only when the patch sets them, so that
+// unpatched stored values are neither validated again nor rewritten.
 func mergeSubmodelElementMetadataPatch(base map[string]any, patch map[string]any) map[string]any {
 	merged := mergeJSONObjects(base, patch)
-	modelType, _ := merged["modelType"].(string)
-	if field, isContainer := submodelElementChildFields[modelType]; isContainer {
+	for _, field := range storedOnlyUnlessPatchedFields(merged) {
 		if _, patched := patch[field]; !patched {
 			delete(merged, field)
 		}

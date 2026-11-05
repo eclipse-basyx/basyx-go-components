@@ -415,3 +415,60 @@ func requireDelegatedStatusErrorResult(t *testing.T, response gen.ImplResponse, 
 	require.Contains(t, result.Messages[0].Text, fmt.Sprintf("HTTP %d", delegatedStatus))
 	require.NotContains(t, result.Messages[0].Text, "remoteDetail")
 }
+
+func TestMergeSubmodelElementPatchKeepsStoredOnlyFieldsOutOfUnrelatedPatches(t *testing.T) {
+	t.Parallel()
+	storedVariables := []any{map[string]any{"value": map[string]any{"modelType": "Property", "valueType": "xs:int"}}}
+	patchedVariables := []any{map[string]any{"value": map[string]any{"modelType": "Property", "idShort": "In", "valueType": "xs:int"}}}
+	description := []any{map[string]any{"language": "en", "text": "patched"}}
+	testCases := []struct {
+		name           string
+		base           map[string]any
+		patch          map[string]any
+		droppedFields  []string
+		expectedFields map[string]any
+	}{
+		{
+			name:           "operation variables are dropped when not patched",
+			base:           map[string]any{"modelType": "Operation", "idShort": "Op", "inputVariables": storedVariables, "outputVariables": storedVariables, "inoutputVariables": storedVariables},
+			patch:          map[string]any{"description": description},
+			droppedFields:  []string{"inputVariables", "outputVariables", "inoutputVariables"},
+			expectedFields: map[string]any{"description": description},
+		},
+		{
+			name:           "patched operation variables are kept",
+			base:           map[string]any{"modelType": "Operation", "idShort": "Op", "inputVariables": storedVariables, "outputVariables": storedVariables},
+			patch:          map[string]any{"inputVariables": patchedVariables},
+			droppedFields:  []string{"outputVariables"},
+			expectedFields: map[string]any{"inputVariables": patchedVariables},
+		},
+		{
+			name:          "collection children are dropped when not patched",
+			base:          map[string]any{"modelType": "SubmodelElementCollection", "idShort": "Coll", "value": storedVariables},
+			patch:         map[string]any{"description": description},
+			droppedFields: []string{"value"},
+		},
+		{
+			name:          "entity statements are dropped when not patched",
+			base:          map[string]any{"modelType": "Entity", "idShort": "Ent", "statements": storedVariables},
+			patch:         map[string]any{"description": description},
+			droppedFields: []string{"statements"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			for _, merge := range []func(map[string]any, map[string]any) map[string]any{mergeSubmodelElementPatch, mergeSubmodelElementMetadataPatch} {
+				merged := merge(testCase.base, testCase.patch)
+				for _, field := range testCase.droppedFields {
+					require.NotContains(t, merged, field)
+				}
+				for field, value := range testCase.expectedFields {
+					require.Equal(t, value, merged[field])
+				}
+				require.Equal(t, testCase.base["idShort"], merged["idShort"])
+			}
+		})
+	}
+}

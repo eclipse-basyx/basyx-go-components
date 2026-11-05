@@ -178,15 +178,41 @@ func TestUploadAASXWithoutStrictVerificationRejectsInvalidDateTime(t *testing.T)
 	require.Contains(t, string(responseBody), "not consistent with xs:dateTime")
 
 	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
-	response := doHTTPIntegrationRequest(t, &http.Client{Timeout: 30 * time.Second}, mustNewRequest(
-		t,
-		http.MethodGet,
-		aasEnvBaseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/DateOfManufacture",
-	))
+	requireUploadNotStored(t, "/submodels/"+encodedSubmodelID+"/submodel-elements/DateOfManufacture", "invalid Property must not be stored")
+}
+
+func TestUploadAASXRejectsSubmodelElementWithoutIDShort(t *testing.T) {
+	const submodelID = "urn:basyx:integration:upload-missing-idshort"
+	specification := []byte(`{
+		"assetAdministrationShells": [],
+		"submodels": [{
+			"id": "` + submodelID + `",
+			"idShort": "MissingIDShortSubmodel",
+			"modelType": "Submodel",
+			"submodelElements": [{
+				"idShort": "Coll",
+				"modelType": "SubmodelElementCollection",
+				"value": [{"modelType": "Property", "valueType": "xs:string", "value": "nameless"}]
+			}]
+		}],
+		"conceptDescriptions": []
+	}`)
+
+	status, responseBody := uploadAASXPayload(t, buildUploadAASXFixture(t, specification), "missing-idshort.aasx")
+	require.Equal(t, http.StatusBadRequest, status, "AASX with a nameless element must be rejected: %s", string(responseBody))
+	require.Contains(t, string(responseBody), "-MISSINGIDSHORT")
+
+	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	requireUploadNotStored(t, "/submodels/"+encodedSubmodelID, "Submodel with a nameless element must not be stored")
+}
+
+func requireUploadNotStored(t *testing.T, resourcePath string, message string) {
+	t.Helper()
+	response := doHTTPIntegrationRequest(t, &http.Client{Timeout: 30 * time.Second}, mustNewRequest(t, http.MethodGet, aasEnvBaseURL+resourcePath))
 	defer func() { _ = response.Body.Close() }()
 	responseBody, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusNotFound, response.StatusCode, "invalid Property must not be stored: %s", string(responseBody))
+	require.Equal(t, http.StatusNotFound, response.StatusCode, "%s: %s", message, string(responseBody))
 }
 
 func TestUploadCombinedExampleEmbeddedFileMIMETypes(t *testing.T) {
