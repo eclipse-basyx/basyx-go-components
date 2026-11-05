@@ -1,87 +1,53 @@
 services:
-  postgres:
+  aas-environment:
+    container_name: basyx-mcp-aas-environment
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      - SERVER_PORT=8081
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - ABAC_ENABLED=false
+      - GENERAL_EXTERNALURL=http://localhost:8081
+      - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration
+      - MCP_ENABLED=true
+      - MCP_WRITESENABLED=true
+    volumes:
+      - ./aas:/app/preconfiguration:ro
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  db:
+    container_name: basyx-mcp-db
     image: postgres:18
     environment:
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: sandbox
-      POSTGRES_DB: mcp
-    volumes:
-      - postgres_data:/var/lib/postgresql
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d mcp"]
-      interval: 2s
-      timeout: 2s
-      retries: 30
-  configuration:
-    build:
-      context: ../..
-      dockerfile: cmd/basyxconfigurationservice/Dockerfile
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: sandbox
-      POSTGRES_DBNAME: mcp
-    depends_on:
-      postgres:
-        condition: service_healthy
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    command: ["start-dev", "--import-realm"]
-    environment:
-      KC_HOSTNAME: http://keycloak.localhost:${BASYX_MCP_OIDC_PORT:-18580}
-      KC_HOSTNAME_STRICT: "false"
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: sandbox-admin
-    ports:
-      - "127.0.0.1:${BASYX_MCP_OIDC_PORT:-18580}:8080"
-    volumes:
-      - keycloak_data:/opt/keycloak/data
-      - ${BASYX_MCP_REALM_FILE:-./keycloak/realm.json}:/opt/keycloak/data/import/realm.json:ro
-    healthcheck:
-      test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/8080"]
-      interval: 3s
-      timeout: 3s
-      retries: 60
-      start_period: 20s
-  aas-environment:
-    build:
-      context: ../..
-      dockerfile: cmd/aasenvironmentservice/Dockerfile
-    command: ["/app/aasenvironmentservice", "-config", "/config/mcp.yaml"]
-    ports:
-      - "127.0.0.1:${BASYX_MCP_API_PORT:-18584}:5004"
-    volumes:
-      - ${BASYX_MCP_CONFIG_FILE:-./config.yaml}:/config/mcp.yaml:ro
-      - ./security:/security:ro
-      - ${BASYX_MCP_TRUSTLIST_FILE:-./security/trustlist.json}:/security/trustlist.json:ro
-      - ./templates:/templates:ro
-      - ./seed:/seed:ro
-    extra_hosts:
-      - "keycloak.localhost:host-gateway"
-    depends_on:
-      configuration:
-        condition: service_completed_successfully
-      keycloak:
-        condition: service_healthy
-    restart: on-failure
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
 
-  seed:
-    image: python:3.13-alpine
-    command: ["python", "/example/pilot.py", "seed"]
+  basyx_configuration:
+    container_name: basyx-mcp-configuration
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
     environment:
-      PYTHONDONTWRITEBYTECODE: "1"
-      MCP_SEED_API_URL: http://aas-environment:5004
-      MCP_SEED_ISSUER_URL: http://keycloak:8080/realms/basyx-mcp
-    volumes:
-      - .:/example:ro
-      - seed_state:/state
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
     depends_on:
-      aas-environment:
+      db:
         condition: service_healthy
-    restart: "no"
-
-volumes:
-  postgres_data:
-  keycloak_data:
-  seed_state:

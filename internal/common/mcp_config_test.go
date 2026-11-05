@@ -35,19 +35,39 @@ func TestMCPConfigurationDefaultsAndEnvironment(t *testing.T) {
 	cfg, err := LoadConfig("")
 	require.NoError(t, err)
 	require.False(t, cfg.MCP.Enabled)
-	require.Equal(t, "disabled", cfg.MCP.WriteMode)
-	require.Equal(t, 65536, cfg.MCP.Limits.MaxResultBytes)
-	t.Setenv("BASYX_MCP_ENABLED", "true")
+	require.False(t, cfg.MCP.WritesEnabled)
+	require.Equal(t, "/mcp", cfg.MCP.Path)
+	require.Equal(t, 262144, cfg.MCP.MaxResultBytes)
+
+	t.Setenv("MCP_ENABLED", "true")
+	t.Setenv("MCP_WRITESENABLED", "true")
 	cfg, err = LoadConfig("")
 	require.NoError(t, err)
 	require.True(t, cfg.MCP.Enabled)
+	require.True(t, cfg.MCP.WritesEnabled)
 }
 
-func TestMCPConfigurationRejectsUnsafeLimitsAndPaths(t *testing.T) {
+func TestMCPConfigurationRejectsInvalidPathsAndBudgets(t *testing.T) {
 	for _, cfg := range []MCPConfig{
-		{Path: "/", WriteMode: "disabled", Limits: MCPLimits{MaxResultBytes: 1}},
-		{Path: "/mcp", WriteMode: "automatic"},
+		{Path: "/", MaxResultBytes: 4096},
+		{Path: "mcp", MaxResultBytes: 4096},
+		{Path: "/mcp/", MaxResultBytes: 4096},
+		{Path: "/mcp/*", MaxResultBytes: 4096},
+		{Path: "/mcp", MaxResultBytes: 1},
 	} {
 		require.Error(t, cfg.Validate())
 	}
+	require.NoError(t, MCPConfig{Path: "/mcp", MaxResultBytes: 4096}.Validate())
+}
+
+func TestMCPResourceURL(t *testing.T) {
+	cfg := &Config{MCP: MCPConfig{Path: "/mcp"}}
+	cfg.Server.Port = 8081
+	require.Equal(t, "http://localhost:8081/mcp", MCPResourceURL(cfg))
+
+	cfg.Server.ContextPath = "/api"
+	require.Equal(t, "http://localhost:8081/api/mcp", MCPResourceURL(cfg))
+
+	cfg.General.ExternalURL = "https://basyx.example.org/api/, https://other.example.org"
+	require.Equal(t, "https://basyx.example.org/api/mcp", MCPResourceURL(cfg))
 }

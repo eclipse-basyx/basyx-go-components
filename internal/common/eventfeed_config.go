@@ -26,8 +26,6 @@
 package common
 
 import (
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -83,12 +81,5 @@ func eventFeedSourceBaseURL(cfg *Config) string {
 	if source := strings.TrimRight(strings.TrimSpace(cfg.Eventing.Feed.SourceBaseURL), "/"); source != "" {
 		return source
 	}
-	if external := NormalizePrimaryExternalBaseURL(cfg.General.ExternalURL); external != "" {
-		return external
-	}
-	port := cfg.Server.Port
-	if port == 0 {
-		port = DefaultConfig.ServerPort
-	}
-	return "http://" + net.JoinHostPort("localhost", strconv.Itoa(port)) + NormalizeBasePath(cfg.Server.ContextPath)
+	return PublicBaseURL(cfg)
 }

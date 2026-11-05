@@ -1,0 +1,97 @@
+x-aas-environment: &aas-environment
+  build:
+    context: ../../../..
+    dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+  depends_on:
+    basyx_configuration:
+      condition: service_completed_successfully
+  extra_hosts:
+    - "localhost:host-gateway"
+
+x-database-environment: &database-environment
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: admin
+  POSTGRES_PASSWORD: admin123
+  POSTGRES_DBNAME: basyxTestDB
+  POSTGRES_MAXOPENCONNECTIONS: "50"
+  POSTGRES_MAXIDLECONNECTIONS: "50"
+  POSTGRES_CONNMAXLIFETIMEMINUTES: "5"
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  basyx_configuration:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment: *database-environment
+    depends_on:
+      db:
+        condition: service_healthy
+
+  aas-environment:
+    <<: *aas-environment
+    environment:
+      <<: *database-environment
+      SERVER_PORT: "5004"
+      SERVER_STRICTVERIFICATION: "off"
+      ABAC_ENABLED: "false"
+      MCP_ENABLED: "true"
+      MCP_WRITESENABLED: "true"
+    ports:
+      - "127.0.0.1:${BASYX_IT_API_PORT:-6004}:5004"
+
+  aas-environment-secured:
+    <<: *aas-environment
+    environment:
+      <<: *database-environment
+      SERVER_PORT: "5004"
+      SERVER_STRICTVERIFICATION: "off"
+      ABAC_ENABLED: "true"
+      ABAC_MODELPATH: /security_env/access-rules.json
+      OIDC_TRUSTLISTPATH: /security_env/trustlist.json
+      GENERAL_EXTERNALURL: http://127.0.0.1:${BASYX_IT_SECURED_API_PORT:-6005}
+      MCP_ENABLED: "true"
+      MCP_WRITESENABLED: "true"
+    ports:
+      - "127.0.0.1:${BASYX_IT_SECURED_API_PORT:-6005}:5004"
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-./security_env}:/security_env:ro
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+
+  keycloak:
+    image: keycloak/keycloak:26.7.4
+    environment:
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    command: ["start-dev", "--import-realm"]
+    ports:
+      - "0.0.0.0:${BASYX_IT_KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+
+  keycloak-healthcheck:
+    image: curlimages/curl:8.15.0
+    command: ["sh", "-c", "until curl -sf http://keycloak:9000/health/ready; do sleep 3; done"]
+    depends_on:
+      - keycloak

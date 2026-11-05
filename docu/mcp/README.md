@@ -1,117 +1,128 @@
-# Integrated MCP
+# MCP Endpoint
 
-The AAS Environment can expose a deterministic MCP endpoint alongside its REST API. The server contains no LLM or document parser. Documents stay with the client; only extracted drafts and their source references reach BaSyx.
+The AAS Environment can serve a [Model Context Protocol](https://modelcontextprotocol.io) (MCP)
+endpoint next to its REST API. MCP clients such as Claude Code or Codex then read and change Asset
+Administration Shells, submodels and submodel elements through it.
 
-## Enable the endpoint
+Each tool call is a request to the AAS Environment API, sent inside the service with the caller's
+token. Authentication, ABAC and ReBAC rules, validation, conditional requests, history and eventing
+behave as they do for REST calls.
 
-The endpoint is disabled by default. Run the configuration service to apply schema `v1.2.4` before starting updated services. Enable it in the AAS Environment YAML or override the flag with `BASYX_MCP_ENABLED=true`.
+## Enable the Endpoint
 
-```yaml
-mcp:
-  enabled: true
-  path: /mcp
-  allowAnonymous: false
-  publicUrl: https://basyx.example.org/mcp
-  authorizationServers: [https://identity.example.org/realms/basyx]
-  writeMode: disabled
+| Setting | Environment variable | Default | Description |
+| --- | --- | --- | --- |
+| `mcp.enabled` | `MCP_ENABLED` | `false` | Serve the MCP endpoint |
+| `mcp.path` | `MCP_PATH` | `/mcp` | Endpoint path below the context path |
+| `mcp.writesEnabled` | `MCP_WRITESENABLED` | `false` | Offer the tools that create, change and delete data |
+| `mcp.maxResultBytes` | `MCP_MAXRESULTBYTES` | `262144` | Largest API response a tool returns; larger results fail with a hint to page or narrow the request |
+
+The endpoint is `<general.externalUrl><mcp.path>`, for example `http://localhost:8081/mcp`. Without
+`general.externalUrl` the service uses `http://localhost:<server.port><server.contextPath>`. The
+endpoint uses the stateless Streamable HTTP transport.
+
+## Connect a Client
+
+Claude Code:
+
+```bash
+claude mcp add --transport http basyx http://localhost:8081/mcp
 ```
 
-Use the existing OIDC trustlist, with a nonempty audience for every trusted issuer. MCP and REST are interfaces to the same BaSyx protected resource. API tools forward the original token only to the in-process BaSyx router. No downstream URLs, agent service accounts or SQL strings are accepted. The public URL must use HTTPS except for a loopback sandbox. Serve the configured URL through the existing reverse proxy.
+Codex:
 
-Without a token, authenticated deployments return HTTP 401 with protected-resource metadata discovery. An invalid token is not treated as anonymous. `allowAnonymous: true` is intended for an explicitly public, read-only environment; it cannot be combined with confirmed writes.
-
-## Profiles and limits
-
-Select a profile using `?profile=analyst` on the endpoint URL or the `Mcp-Profile` header. The default is `default`. Profiles restrict the tool catalogue; all data operations still require the caller's normal REST permissions.
-
-| Profile | Toolsets |
-| --- | --- |
-| default | discovery, read, docs |
-| analyst | default plus query |
-| operator | default plus create |
-
-Configure `mcp.profiles.<name>.toolsets` and `denyTools` to restrict a profile further. A denied tool is absent from `tools/list` and cannot be invoked. The default profile has nine tools.
-
-Default budgets are 65,536 response bytes, 1 MiB request bytes, 50 items per page, 1,000 scanned resources, 100 internal calls per tool, 120 requests per minute per subject, eight concurrent tool calls and a 30-second tool deadline. Requests are limited to 64 nested JSON containers. Limits reject work with distinct codes; aggregate scans never return incomplete statistics. Cursors must be followed to finish a paged result.
-
-## Tools, resources and prompts
-
-| Toolset | Tools |
-| --- | --- |
-| discovery | `find_asset` |
-| read | `get_shell`, `list_submodels_of_shell`, `get_submodel_value`, `get_element`, `describe_asset`, `find_elements`, `get_asset_measurement` |
-| query | `query_aasql`, `list_read_models`, `run_read_model` |
-| create | `list_submodel_templates`, `get_submodel_template`, `validate_aas_draft`, `plan_create_aas`, `apply_plan`, `get_changeset`, `rollback_changeset` |
-| docs | `search_docs` |
-
-IDs are always plain text. `get_shell`, `describe_asset`, `find_elements` and `get_asset_measurement` accept a canonical shell ID or an unambiguous name/idShort/global asset ID. Alias resolution searches only caller-visible fields and refuses ambiguous matches. `find_asset` returns compact shell summaries and native continuation cursors; use `get_shell` for the complete authorized shell.
-
-`get_submodel_value` pages through the value-only element collection. `get_element` takes an idShortPath such as `Measurements.Temperature` or `Measurements[0].Temperature`. Units are included when present in authorized metadata. `find_elements(shell, query?, semanticId?, cursor?, limit?)` searches authorized element metadata, including collections and lists, and returns concrete paths without values. Supply a name or exact semantic ID. Scans fail explicitly at their configured limit; they never choose a measurement from an incomplete scan.
-
-`get_asset_measurement(shell, query?, semanticId?)` reads a scalar only when exactly one visible candidate matches. Multiple candidates return `status: ambiguous` with paths for the client to select through `get_element`. Responses include the source, available ETag and `retrieved_at`; `measurement_time: null` explicitly means the source did not provide a sensor observation time. A repository read is not evidence of a fresh sensor sample.
-
-`describe_asset(shell, cursor?, limit?)` pages submodel references (at most three per page), with bounded metadata and value previews. It resolves nested element paths through metadata, reads a small sample using the caller's authorization, and labels truncated values. Follow the outer `paging_metadata.cursor` for subsequent submodels. Each submodel's preview and element cursor are explicitly identified; use `find_elements` and `get_element` for complete detail. Unavailable submodels appear as omissions rather than a successful complete description. Local concept descriptions are read through the authorized API; external URLs are never fetched.
-
-Collection tools accept an optional positive integer `limit`, capped by the server's configured page size. Discovery, value pages and AASQL pages shrink automatically when needed, accounting for MCP text and structured-result encoding. A single oversized item still fails with a specific budget error and guidance. Administrators can adjust `mcp.limits.maxResultBytes` in the mounted configuration and restart the AAS Environment; no image rebuild is needed for a budget change. The example uses 1 MiB and twenty items per page; the component defaults remain as listed above.
-
-Retrieved content is tagged as untrusted data. It never defines tools or server instructions. `ask_asset(shell, question)` guides the client to choose measurement lookup or paged descriptions, cite sources and disclose unknown sample age.
-
-`aasql://grammar` documents the running JSON expression dialect; `aasql://fields` derives example field paths from the shared resolver. `query_aasql` takes `target: shells | submodels`, an `aasql` JSON object, optional `dry_run`, `limit` and a cursor. Dry runs decode and resolve expressions without making API or database calls. They do not prove that data exists or that the caller will be authorized at execution time.
-
-`value_statistics_by_semantic_id` takes `semanticId` and an optional AASQL `condition`, returning count/min/max/avg/sum for visible numeric Property values, grouped by explicit unit. Empty units form a separate, unknown-unit group; no conversion is inferred. Numeric outputs use decimal strings. `count_submodels_by_semantic_id` counts distinct visible submodels by visible semantic ID. No matches produce an empty result list. Free-form SQL is not supported.
-
-`basyx-docs://...` resources embed Markdown and the AAS Environment OpenAPI from the same source build as the binary. `search_docs` returns bounded excerpts and resource references without a network dependency.
-
-## Confirmed AAS creation
-
-Enable `writeMode: confirm` separately. Configure `confirmationClientId` as a public OAuth authorization-code client with PKCE and register `<publicUrl>/callback` as its exact redirect URI. The sandbox supplies a working example.
-
-Operators need provable CREATE, full READ and DELETE permissions on every target: creation, verification and compensation are preflighted without executing resource handlers. Field-dependent grants that cannot establish this contract are rejected. Each actual API call rechecks current permissions, including after approval.
-
-1. Extract a draft in the client and attach document/page references.
-2. Select allowlisted templates and call `validate_aas_draft`.
-3. Call `plan_create_aas`. Review its immutable proposal at `confirmation_url`.
-4. Sign in to the confirmation page as the same issuer/subject, review the data and submit the explicit approval form.
-5. Copy its short-lived token into `apply_plan(plan_id, confirm_token)`.
-6. Inspect the changeset. To revert, obtain a separate rollback approval and call `rollback_changeset`.
-
-The endpoint uses stateless Streamable HTTP. The hosted approval page is the fallback for clients without elicitation support; no model-callable `confirm=true` tool exists. An API token alone cannot submit the confirmation form: it also requires the authenticated browser session, a same-origin POST and CSRF protection. Confirmation tokens are hashed at rest and bound to subject, issuer, action, proposal hash (including pinned template artifacts) and plan ID. Compare-and-swap consumes them once.
-
-Draft format:
-
-```json
-{
-  "shell": {"id": "urn:aas:example", "modelType": "AssetAdministrationShell", "assetInformation": {"assetKind": "Instance", "globalAssetId": "asset-1"}},
-  "submodels": [],
-  "templates": {},
-  "sources": [{"document": "datasheet.pdf", "page": 1, "location": "rated power"}]
-}
+```bash
+codex mcp add basyx --url http://localhost:8081/mcp
 ```
 
-The server creates shell references to exactly the submodels in the draft. Identifiers must be unique; existing resources are never overwritten. The client must provide a template slug per submodel ID. L1 verification is strict even when ordinary REST verification is permissive.
+If the endpoint requires a token, the client starts a browser sign-in. Run `/mcp` in Claude Code or
+`codex mcp login basyx`. Clients that run in the cloud, for example custom connectors on claude.ai,
+need an endpoint that is reachable over the internet with HTTPS.
 
-## Template artifacts
+The [MCP example](../../examples/BaSyxMCPExample/README.md) starts a local AAS Environment with MCP
+enabled.
 
-Set `templateDirectory` and `allowedTemplates`. Each allowlisted slug requires `<slug>.structure.json` and `<slug>.cheatsheet.md`, mounted read-only. Structure nodes use the `submodel_info` 2.x tree fields: `schema_slug`, `schema_version`, `root`, `id_short`, `model_type`, `value_type`, `semantic_id`, `cardinality`, `children`, and list `item_schema`.
+## Tools
 
-The validator checks metamodel validity, mandatory elements, cardinality, types, semantic IDs, nesting and unexpected elements. Unknown cardinalities fail closed when loading artifacts. Qualify artifacts before enabling them; extraction warnings and free-text business rules are not executable semantic validation. L3 semantic plausibility and automatic template recommendation are outside this MVP.
+| Tool | API call | Hint |
+| --- | --- | --- |
+| `list_shells` | `GET /shells` | read-only |
+| `get_shell` | `GET /shells/{id}` | read-only |
+| `list_submodels` | `GET /submodels` | read-only |
+| `get_submodel` | `GET /submodels/{id}` or `/$value` | read-only |
+| `get_submodel_element` | `GET /submodels/{id}/submodel-elements/{path}` or `/$value` | read-only |
+| `get_concept_description` | `GET /concept-descriptions/{id}` | read-only |
+| `query_shells` | `POST /query/shells` | read-only |
+| `query_submodels` | `POST /query/submodels` | read-only |
+| `create_shell` | `POST /shells` | additive |
+| `create_submodel` | `POST /submodels`, optionally `POST /shells/{id}/submodel-refs` | additive |
+| `add_submodel_element` | `POST /submodels/{id}/submodel-elements[/{path}]` | additive |
+| `set_submodel_element_value` | `PATCH /submodels/{id}/submodel-elements/{path}/$value` | destructive |
+| `delete_shell` | `DELETE /shells/{id}` | destructive |
+| `delete_submodel` | `DELETE /submodels/{id}` | destructive |
+| `delete_submodel_element` | `DELETE /submodels/{id}/submodel-elements/{path}` | destructive |
 
-The sandbox artifacts are explicitly labelled demonstration structures. They are not released IDTA templates or certified `submodel_info` outputs.
+The write tools are only listed with `mcp.writesEnabled: true`. Every tool carries MCP tool
+annotations. MCP clients use them to ask the user before a tool changes data; the server adds no
+confirmation step of its own.
 
-## Failure and recovery
+Tools take identifiers as plain text and encode them for the API. Collection tools accept `limit` and
+`cursor` and return `paging_metadata.cursor` for the next page. `list_submodels` matches `semanticId`
+against external references with a global reference key.
 
-Each create commits a revision receipt with its resource mutation. Repeated apply calls cannot create duplicate resources. Verification and rollback read from the writer pool even when a replica is configured. Automatic compensation deletes committed resources in reverse order and uses their original revisions. Rollback preflights revisions before deleting anything; a changed resource produces a conflict.
+Read tools return the resource's `etag`. Pass it to a change or delete tool to make the request
+conditional. If the resource changed in the meantime, the tool fails with HTTP 412 and the client can
+read it again. With `server.conditionalRequests.requireIfMatch`, changes without an `etag` fail with
+HTTP 428.
 
-Multi-resource creation is a saga. Database outages, concurrent changes or revoked permissions can prevent cleanup; these are recorded as `recovery_required` or `conflict`, never reported as successful rollback. After a process interruption and execution-lease expiry, the original user can inspect the changeset and approve recovery through rollback. There is no privileged background identity and no bearer-token persistence.
+`create_submodel` with `shellId` makes two API calls. If the shell reference cannot be added, the new
+submodel stays and the tool says so.
 
-Plan transitions and their agent/tool identity are recorded in `aol_event`; resource receipts carry their own audit fields in `aol_receipt`. This remains available when functional history is disabled. These tables are operational audit records, not a replacement for the optional tamper-evident history/evidence service. Plan/provenance retention must follow the operator's data-retention policy.
+Failed calls return a tool error with the API status, the API error message and a hint, for example
+`MCP-DISPATCH-HTTP404: Not Found ... Check the identifier or idShortPath`.
 
-See [the sandbox](../../examples/BaSyxMCPExample/README.md) and [the architecture](../developer/mcp_aol_architecture.md).
+## Security
 
-## Local pilot acceptance
+With `abac.enabled: false` the endpoint has no authentication, like the REST API. Do not expose it,
+and do not enable writes on an endpoint others can reach.
 
-The [pilot helper](../../examples/BaSyxMCPExample/README.md) starts, checks, connects and stops the example. Initialization is a one-time create-only job; restarts preserve edits and deletions. Named PostgreSQL, Keycloak and initialization-state volumes survive container recreation. The pilot starts read-only; writes need an explicit `--enable-writes` on startup.
+With `abac.enabled: true` the endpoint requires a bearer token and follows the
+[MCP authorization specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization):
 
-Automated acceptance covers the Go SDK and independent Inspector CLI, permission parity, aliases, measurement provenance, identifier-only AASQL projections, a multi-megabyte asset with bounded descriptions, and preservation of edited data and runtime OAuth clients across container recreation. The CI workflow runs these scenarios against its own disposable project. Server readiness and login success remain separate from a specific chat having the tools attached.
+- A request without a valid token receives HTTP 401 with
+  `WWW-Authenticate: Bearer resource_metadata="<metadata URL>"`.
+- The service publishes OAuth 2.0 protected resource metadata (RFC 9728) at
+  `/.well-known/oauth-protected-resource<context path><mcp.path>`. Its `resource` is the endpoint URL
+  and its `authorization_servers` are the issuers of the OIDC trustlist. A reverse proxy in front of
+  the service must forward this path as well.
+- Tokens are verified with the OIDC trustlist of the REST API. Every trusted issuer must have an
+  `audience`; otherwise the service does not start. Tokens for other audiences are rejected.
 
-The Codex helper uses the documented [MCP configuration fields](https://learn.chatgpt.com/docs/config-file/config-reference) and [`codex mcp login`](https://learn.chatgpt.com/docs/extend/mcp?surface=cli). It preserves unrelated configuration and uses a registered public PKCE client rather than embedding a bearer token.
+### Identity Provider Requirements
+
+The endpoint works with any OpenID Connect provider that the trustlist accepts. For Claude Code,
+Codex and other MCP clients to sign in, the provider must:
+
+1. Publish OAuth authorization server metadata or OpenID Connect discovery.
+2. Support the authorization code flow with PKCE (`S256`).
+3. Let the client obtain a client ID, in one of two ways:
+   - Dynamic client registration (RFC 7591). Clients register themselves with a loopback redirect
+     URI such as `http://localhost:<port>/callback`.
+   - A public client registered by an administrator. Pass its ID to the client, for example
+     `claude mcp add --transport http --client-id <id> --callback-port <port> basyx <url>`, and
+     register `http://localhost:<port>/callback` as its redirect URI.
+4. Put the trustlist `audience` into the access tokens it issues to these clients. MCP clients send
+   the endpoint URL as RFC 8707 `resource` parameter, but many providers ignore it, so configure the
+   audience in the provider.
+
+For Keycloak, the realm of the
+[integration tests](../../internal/mcp/integration_tests/docker_compose/keycloak/realm/basyx-mcp-realm.json)
+shows one setup:
+
+- A client scope `basyx-aas-environment` with an audience mapper, added to the realm's default
+  client scopes. Dynamically registered clients receive it.
+- The anonymous client registration policy *Trusted Hosts* lists `localhost` and `127.0.0.1` and
+  checks the redirect URIs, but not the host that sends the registration request.
+
+Providers without dynamic client registration, for example Microsoft Entra ID, need a registered
+client.

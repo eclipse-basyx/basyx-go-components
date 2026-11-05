@@ -239,9 +239,6 @@ func (p *pendingTx) flush(tx *sql.Tx) (*Flushed, error) {
 	if err = p.writeLocked(tx, locked, revisions); err != nil {
 		return nil, err
 	}
-	if err = observeRevisions(p.ctx, tx, revisions); err != nil {
-		return nil, err
-	}
 	return &Flushed{state: p.state, evaluated: evaluate, writeETag: p.writeETag(previous, revisions)}, nil
 }
 

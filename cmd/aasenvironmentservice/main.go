@@ -35,7 +35,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 	"sync/atomic"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
@@ -52,7 +51,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
@@ -305,17 +303,11 @@ func runServer(ctx context.Context, configPath string) error {
 	eventFeedModule.RegisterRoutes(apiRouter)
 
 	if cfg.MCP.Enabled {
-		specification, readErr := openapiSpec.ReadFile("openapi.yaml")
-		if readErr != nil {
-			return fmt.Errorf("AASENV-MCP-OPENAPI: %w", readErr)
+		mcpModule, mcpErr := basyxmcp.New(ctx, cfg, r)
+		if mcpErr != nil {
+			return fmt.Errorf("AASENV-MCP-INIT: %w", mcpErr)
 		}
-		module, moduleErr := basyxmcp.New(ctx, cfg, r, pools.Writer, pools.Reader, specification, auth.ABACSettings{Enabled: cfg.ABAC.Enabled, ModelProvider: abacRepo, EnableImplicitCasts: cfg.General.EnableImplicitCasts, ReBAC: rebacRuntime.Extensions().ReBAC})
-		if moduleErr != nil {
-			return fmt.Errorf("AASENV-MCP-INIT: %w", moduleErr)
-		}
-		path := strings.TrimRight(base, "/") + cfg.MCP.Path
-		r.Handle(path, module.Handler())
-		r.Handle(path+"/*", module.Handler())
+		mcpModule.Register(r)
 	}
 	r.Mount(base, apiRouter)
 

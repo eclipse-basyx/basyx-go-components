@@ -280,7 +280,7 @@ func PrintSplash(output io.Writer) error {
 // It combines server settings, database configuration, CORS policy,
 // OIDC authentication, and ABAC authorization settings.
 type Config struct {
-	MCP        MCPConfig            `mapstructure:"mcp" yaml:"mcp"`
+	MCP        MCPConfig            `mapstructure:"mcp" yaml:"mcp"`           // Optional MCP endpoint (AAS Environment only)
 	Logging    commonlogging.Config `mapstructure:"logging" yaml:"logging"`   // Process logging configuration
 	Server     ServerConfig         `mapstructure:"server" yaml:"server"`     // HTTP server configuration
 	Postgres   PostgresConfig       `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
@@ -592,7 +592,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	if err = validateHistoryAndEventingConfig(cfg); err != nil {
 		return nil, err
 	}
-	if err = applyMCPConfig(cfg); err != nil {
+	if err = cfg.MCP.Validate(); err != nil {
 		return nil, err
 	}
 	return cfg, nil

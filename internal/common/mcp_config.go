@@ -27,122 +27,40 @@ package common
 
 import (
 	"fmt"
-	"net"
-	"net/url"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
 )
 
-// MCPConfig controls the optional integrated agent interface.
+// MCPConfig controls the optional MCP endpoint of the AAS Environment.
 type MCPConfig struct {
-	Enabled              bool                  `mapstructure:"enabled" yaml:"enabled"`
-	Path                 string                `mapstructure:"path" yaml:"path"`
-	AllowAnonymous       bool                  `mapstructure:"allowAnonymous" yaml:"allowAnonymous"`
-	WriteMode            string                `mapstructure:"writeMode" yaml:"writeMode"`
-	ConfirmationClientID string                `mapstructure:"confirmationClientId" yaml:"confirmationClientId"`
-	PublicURL            string                `mapstructure:"publicUrl" yaml:"publicUrl"`
-	AuthorizationServers []string              `mapstructure:"authorizationServers" yaml:"authorizationServers"`
-	TemplateDirectory    string                `mapstructure:"templateDirectory" yaml:"templateDirectory"`
-	AllowedTemplates     []string              `mapstructure:"allowedTemplates" yaml:"allowedTemplates"`
-	Profiles             map[string]MCPProfile `mapstructure:"profiles" yaml:"profiles"`
-	Limits               MCPLimits             `mapstructure:"limits" yaml:"limits"`
+	Enabled        bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Path           string `mapstructure:"path" yaml:"path" json:"path"`
+	WritesEnabled  bool   `mapstructure:"writesEnabled" yaml:"writesEnabled" json:"writesEnabled"`
+	MaxResultBytes int    `mapstructure:"maxResultBytes" yaml:"maxResultBytes" json:"maxResultBytes"`
 }
 
-// MCPProfile only restricts the caller's existing permissions.
-type MCPProfile struct {
-	Toolsets  []string `mapstructure:"toolsets" yaml:"toolsets"`
-	DenyTools []string `mapstructure:"denyTools" yaml:"denyTools"`
-}
-
-// MCPLimits bounds work and response sizes independently of client prompts.
-type MCPLimits struct {
-	MaxResultBytes     int   `mapstructure:"maxResultBytes" yaml:"maxResultBytes"`
-	MaxRequestBytes    int64 `mapstructure:"maxRequestBytes" yaml:"maxRequestBytes"`
-	MaxItemsPerPage    int   `mapstructure:"maxItemsPerPage" yaml:"maxItemsPerPage"`
-	MaxScanItems       int   `mapstructure:"maxScanItems" yaml:"maxScanItems"`
-	MaxInternalCalls   int   `mapstructure:"maxInternalCalls" yaml:"maxInternalCalls"`
-	CallsPerMinute     int   `mapstructure:"callsPerMinute" yaml:"callsPerMinute"`
-	MaxConcurrentCalls int   `mapstructure:"maxConcurrentCalls" yaml:"maxConcurrentCalls"`
-	TimeoutSeconds     int   `mapstructure:"timeoutSeconds" yaml:"timeoutSeconds"`
-	PlanTTLSeconds     int   `mapstructure:"planTTLSeconds" yaml:"planTTLSeconds"`
-}
+const minMCPResultBytes = 1024
 
 func setMCPDefaults(v *viper.Viper) {
-	defaults := map[string]any{
-		"enabled": false, "path": "/mcp", "allowAnonymous": false, "writeMode": "disabled",
-		"publicUrl": "", "confirmationClientId": "", "authorizationServers": []string{}, "templateDirectory": "", "allowedTemplates": []string{},
-		"profiles.default.toolsets":  []string{"discovery", "read", "docs"},
-		"profiles.analyst.toolsets":  []string{"discovery", "read", "docs", "query"},
-		"profiles.operator.toolsets": []string{"discovery", "read", "docs", "create"},
-		"limits.maxResultBytes":      65536, "limits.maxRequestBytes": 1048576,
-		"limits.maxItemsPerPage": 50, "limits.maxScanItems": 1000, "limits.maxInternalCalls": 100,
-		"limits.callsPerMinute": 120, "limits.maxConcurrentCalls": 8, "limits.timeoutSeconds": 30, "limits.planTTLSeconds": 300,
-	}
-	for key, value := range defaults {
-		v.SetDefault("mcp."+key, value)
-	}
+	v.SetDefault("mcp.enabled", false)
+	v.SetDefault("mcp.path", "/mcp")
+	v.SetDefault("mcp.writesEnabled", false)
+	v.SetDefault("mcp.maxResultBytes", 262144)
 }
 
-func applyMCPConfig(cfg *Config) error {
-	if raw, ok := os.LookupEnv("BASYX_MCP_ENABLED"); ok {
-		enabled, err := strconv.ParseBool(raw)
-		if err != nil {
-			return fmt.Errorf("MCP-CONFIG-ENABLED: %w", err)
-		}
-		cfg.MCP.Enabled = enabled
-	}
-	return cfg.MCP.Validate()
-}
-
-// Validate rejects invalid operation modes and unbounded resource budgets.
+// Validate rejects MCP paths that cannot be mounted beside the API and unusable result budgets.
 func (c MCPConfig) Validate() error {
-	if c.Path == "/" || !strings.HasPrefix(c.Path, "/") || strings.ContainsAny(c.Path, "?#%{}") || strings.HasSuffix(c.Path, "/") || strings.Contains(c.Path, "..") {
-		return fmt.Errorf("MCP-CONFIG-PATH: use a non-root absolute path without a trailing slash")
+	if c.Path == "/" || !strings.HasPrefix(c.Path, "/") || strings.HasSuffix(c.Path, "/") || strings.ContainsAny(c.Path, "?#%{}*") || strings.Contains(c.Path, "..") {
+		return fmt.Errorf("MCP-VALIDATECONFIG-PATH: use a non-root absolute path without a trailing slash")
 	}
-	if c.WriteMode != "disabled" && c.WriteMode != "confirm" {
-		return fmt.Errorf("MCP-CONFIG-WRITEMODE: expected disabled or confirm")
-	}
-	if err := c.Limits.validate(); err != nil {
-		return err
-	}
-	if err := validateMCPPublicURL(c.PublicURL); err != nil {
-		return err
-	}
-	if c.Enabled && c.WriteMode == "confirm" && c.PublicURL == "" {
-		return fmt.Errorf("MCP-CONFIG-CONFIRMATION: publicUrl is required for human approval")
+	if c.MaxResultBytes < minMCPResultBytes {
+		return fmt.Errorf("MCP-VALIDATECONFIG-MAXRESULTBYTES: maxResultBytes must be at least %d", minMCPResultBytes)
 	}
 	return nil
 }
 
-func isLoopback(host string) bool { ip := net.ParseIP(host); return ip != nil && ip.IsLoopback() }
-
-func (l MCPLimits) validate() error {
-	if l.MaxResultBytes < 1024 || l.MaxRequestBytes < 1024 {
-		return fmt.Errorf("MCP-CONFIG-LIMITS: byte budgets must be at least 1024")
-	}
-	for _, budget := range []int{l.MaxItemsPerPage, l.MaxScanItems, l.MaxInternalCalls, l.CallsPerMinute, l.MaxConcurrentCalls, l.TimeoutSeconds, l.PlanTTLSeconds} {
-		if budget < 1 {
-			return fmt.Errorf("MCP-CONFIG-LIMITS: all budgets must be positive")
-		}
-	}
-	return nil
-}
-func validateMCPPublicURL(raw string) error {
-	if raw == "" {
-		return nil
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return fmt.Errorf("MCP-CONFIG-PUBLICURL: expected a URL without credentials, query or fragment")
-	}
-	if u.Scheme != "https" && u.Scheme != "http" {
-		return fmt.Errorf("MCP-CONFIG-PUBLICURL: expected HTTP(S)")
-	}
-	if u.Scheme == "http" && u.Hostname() != "localhost" && !isLoopback(u.Hostname()) {
-		return fmt.Errorf("MCP-CONFIG-PUBLICURL: HTTP is allowed only on loopback; use HTTPS")
-	}
-	return nil
+// MCPResourceURL returns the public URL of the MCP endpoint used as the OAuth protected resource identifier.
+func MCPResourceURL(cfg *Config) string {
+	return strings.TrimRight(PublicBaseURL(cfg), "/") + cfg.MCP.Path
 }

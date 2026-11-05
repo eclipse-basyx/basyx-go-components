@@ -28,7 +28,9 @@ package common
 
 import (
 	"context"
+	"net"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -91,4 +93,16 @@ func NormalizePrimaryExternalBaseURL(rawExternalURL string) string {
 	parsed.Fragment = ""
 
 	return strings.TrimRight(parsed.String(), "/")
+}
+
+// PublicBaseURL returns the configured external base URL, or the local API base URL when none is configured.
+func PublicBaseURL(cfg *Config) string {
+	if external := NormalizePrimaryExternalBaseURL(cfg.General.ExternalURL); external != "" {
+		return external
+	}
+	port := cfg.Server.Port
+	if port == 0 {
+		port = DefaultConfig.ServerPort
+	}
+	return "http://" + net.JoinHostPort("localhost", strconv.Itoa(port)) + NormalizeBasePath(cfg.Server.ContextPath)
 }
