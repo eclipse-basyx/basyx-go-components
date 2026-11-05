@@ -76,7 +76,7 @@ services:
         condition: service_completed_successfully
 
   keycloak:
-    image: keycloak/keycloak:26.7.4
+    image: keycloak/keycloak:26.8.1
     environment:
       KC_HOSTNAME: localhost
       KC_HOSTNAME_STRICT: "false"
@@ -88,7 +88,7 @@ services:
     ports:
       - "0.0.0.0:${BASYX_IT_KEYCLOAK_PORT:-8080}:8080"
     volumes:
-      - ./keycloak/realm:/opt/keycloak/data/import:ro
+      - ../../../../examples/BaSyxMCPExample/secured/keycloak/realm:/opt/keycloak/data/import:ro
 
   keycloak-healthcheck:
     image: curlimages/curl:8.15.0

@@ -124,6 +124,11 @@ setup:
   client scopes. Dynamically registered clients receive it.
 - The anonymous client registration policy *Trusted Hosts* lists `localhost` and `127.0.0.1` and
   checks the redirect URIs, but not the host that sends the registration request.
+- The other anonymous registration policies stay in place, in particular *Allowed Protocol Mapper
+  Types* and *Allowed Client Scopes*. They keep self-registered clients from adding protocol mappers
+  that put arbitrary claims, which ABAC rules may evaluate, into their tokens. A realm import that
+  defines its own client scopes or registration policies replaces Keycloak's defaults, so it must
+  list these policies explicitly.
 
 Providers without dynamic client registration, for example Microsoft Entra ID, need a registered
 client.

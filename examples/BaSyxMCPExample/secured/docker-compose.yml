@@ -31,7 +31,7 @@ services:
 
   keycloak-certificate:
     container_name: basyx-mcp-secured-keycloak-certificate
-    image: keycloak/keycloak:26.7.4
+    image: keycloak/keycloak:26.8.1
     user: "0"
     entrypoint: ["sh", "-c"]
     command:
@@ -50,7 +50,7 @@ services:
 
   keycloak:
     container_name: basyx-mcp-secured-keycloak
-    image: keycloak/keycloak:26.7.4
+    image: keycloak/keycloak:26.8.1
     command: ["start-dev", "--import-realm"]
     ports:
       - "127.0.0.1:8443:8443"
