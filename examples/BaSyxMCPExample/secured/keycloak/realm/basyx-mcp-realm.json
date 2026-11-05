@@ -74,7 +74,12 @@
       { "name": "Consent Required", "providerId": "consent-required", "subType": "anonymous" },
       { "name": "Full Scope Disabled", "providerId": "scope", "subType": "anonymous" },
       { "name": "Max Clients Limit", "providerId": "max-clients", "subType": "anonymous", "config": { "max-clients": ["200"] } },
-      { "name": "Allowed Client Scopes", "providerId": "allowed-client-templates", "subType": "anonymous", "config": { "allow-default-scopes": ["true"] } },
+      {
+        "name": "Allowed Client Scopes",
+        "providerId": "allowed-client-templates",
+        "subType": "anonymous",
+        "config": { "allow-default-scopes": ["true"], "allowed-client-scopes": ["openid"] }
+      },
       {
         "name": "Allowed Protocol Mapper Types",
         "providerId": "allowed-protocol-mappers",

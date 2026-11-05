@@ -124,6 +124,9 @@ setup:
   client scopes. Dynamically registered clients receive it.
 - The anonymous client registration policy *Trusted Hosts* lists `localhost` and `127.0.0.1` and
   checks the redirect URIs, but not the host that sends the registration request.
+- The anonymous policy *Allowed Client Scopes* also allows `openid`. Some clients, for example
+  Codex, request it when they register, but it is not a Keycloak client scope and is rejected
+  otherwise.
 - The other anonymous registration policies stay in place, in particular *Allowed Protocol Mapper
   Types* and *Allowed Client Scopes*. They keep self-registered clients from adding protocol mappers
   that put arbitrary claims, which ABAC rules may evaluate, into their tokens. A realm import that

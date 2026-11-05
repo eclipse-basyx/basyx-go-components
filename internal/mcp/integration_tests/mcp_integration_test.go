@@ -273,16 +273,35 @@ func TestMCPSecuredEndpointSupportsOAuthClientDiscovery(t *testing.T) {
 	registrationEndpoint, ok := server["registration_endpoint"].(string)
 	require.True(t, ok)
 
-	registration, err := json.Marshal(map[string]any{
+	for name, scope := range map[string]string{
+		"without scope":     "",
+		"with openid scope": "openid profile offline_access basyx-aas-environment",
+	} {
+		t.Run(name, func(t *testing.T) {
+			registered := registerClient(t, registrationEndpoint, "http://127.0.0.1:33418/callback", scope)
+			require.Equal(t, http.StatusCreated, registered.Status, string(registered.Body))
+		})
+	}
+
+	foreign := registerClient(t, registrationEndpoint, "https://client.example.org/callback", "")
+	require.Equal(t, http.StatusForbidden, foreign.Status, string(foreign.Body))
+}
+
+func registerClient(t *testing.T, registrationEndpoint, redirectURI, scope string) testenv.HTTPResult {
+	t.Helper()
+	request := map[string]any{
 		"client_name":                "BaSyx MCP integration test",
-		"redirect_uris":              []string{"http://localhost:33418/callback"},
+		"redirect_uris":              []string{redirectURI},
 		"grant_types":                []string{"authorization_code", "refresh_token"},
 		"response_types":             []string{"code"},
 		"token_endpoint_auth_method": "none",
-	})
+	}
+	if scope != "" {
+		request["scope"] = scope
+	}
+	registration, err := json.Marshal(request)
 	require.NoError(t, err)
-	registered := testenv.DoHTTP(t, http.MethodPost, registrationEndpoint, registration, nil)
-	require.Equal(t, http.StatusCreated, registered.Status, string(registered.Body))
+	return testenv.DoHTTP(t, http.MethodPost, registrationEndpoint, registration, nil)
 }
 
 func TestMCPSecuredEndpointAppliesCallerPermissions(t *testing.T) {
