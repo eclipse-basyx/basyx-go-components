@@ -11,9 +11,10 @@ body: >-
   data element updates. These services answer with 400 and an error code
   ending in -MISSINGIDSHORT, unless strict semantic verification already
   rejects the request with its own error; the DPP endpoints currently answer
-  with 409 instead. Previously, POSTing such an element and updating a DPP data
-  element with it were accepted in every mode, and the other writes rejected it
-  only in strict mode. List items remain allowed without idShort. Upgrade note:
+  with 409 instead. Previously, an element without idShort was accepted in
+  every mode when it was POSTed itself or sent in a DPP data element update;
+  all other writes rejected it only in strict mode. List items remain allowed
+  without idShort. Upgrade note:
   elements stored without idShort by earlier versions are kept, and PATCH
   requests that do not include them are not affected, but writing them back
   unchanged, for example by PUTting a Submodel as it was read, is now rejected;
