@@ -420,7 +420,7 @@ func ContentExistsTx(ctx context.Context, tx *sql.Tx, table string, ownerColumn 
 	managed := goqu.From(table).Select(goqu.L("1")).Where(goqu.C(ownerColumn).Eq(ownerID))
 	legacy := goqu.From(legacyDataTable(table)).Select(goqu.L("1")).
 		Where(goqu.C("id").Eq(ownerID), goqu.C("file_oid").IsNotNull())
-	query, args, err := goqu.Dialect("postgres").Select(goqu.L("EXISTS ? OR EXISTS ?", managed, legacy)).ToSQL()
+	query, args, err := goqu.Dialect("postgres").Select(goqu.Or(goqu.Exists(managed), goqu.Exists(legacy))).ToSQL()
 	if err != nil {
 		return false, common.NewInternalServerError("BINARYCONTENT-CONTENTEXISTS-BUILDQUERY " + err.Error())
 	}

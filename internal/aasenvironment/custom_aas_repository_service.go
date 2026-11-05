@@ -103,14 +103,13 @@ func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Co
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	descriptor, descriptorErr := s.syncConfig.BuildAASDescriptor(aas)
-	if descriptorErr != nil {
-		return newAASRepoErrorResponse(descriptorErr, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
-	}
-
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if err := s.persistence.AASRepository.CreateAssetAdministrationShellInTransaction(ctx, tx, aas); err != nil {
 			return err
+		}
+		descriptor, descriptorErr := s.syncConfig.BuildAASDescriptor(aas)
+		if descriptorErr != nil {
+			return descriptorErr
 		}
 
 		return s.persistence.AASRegistry.InsertAdministrationShellDescriptorInTransaction(

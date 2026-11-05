@@ -148,6 +148,7 @@ func insertSubmodelDescriptorForAASTx(
 	aasID string,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
+	submodel = FillSubmodelDescriptorCreator(ctx, submodel)
 	// Lookup AAS descriptor id by AAS Id string
 	d := goqu.Dialect(common.Dialect)
 	aas := goqu.T(common.TblAASDescriptor).As("aas")
@@ -601,6 +602,7 @@ func insertSubmodelDescriptorTx(
 	tx *sql.Tx,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
+	submodel = FillSubmodelDescriptorCreator(ctx, submodel)
 	err := createSubModelDescriptors(tx, sql.NullInt64{}, []model.SubmodelDescriptor{submodel})
 	if err != nil {
 		return model.SubmodelDescriptor{}, err

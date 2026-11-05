@@ -316,7 +316,7 @@ func buildAuthorizedSubmodelDescriptorListQuery(
 			Select(goqu.L("1")).
 			Where(authorizedTable.Col(common.ColAASID).Eq(cursor))
 		page = page.Where(
-			goqu.Func("EXISTS", cursorExists),
+			goqu.Exists(cursorExists),
 			authorizedTable.Col(common.ColAASID).Gte(cursor),
 		)
 	}
@@ -428,7 +428,7 @@ func buildStandaloneSubmodelDescriptorPage(
 				cursorSource.Col(common.ColAASDescriptorID).IsNull(),
 			)
 		page = page.Where(
-			goqu.Func("EXISTS", cursorExists),
+			goqu.Exists(cursorExists),
 			visible.Col(common.ColAASID).Gte(cursor),
 		)
 	}

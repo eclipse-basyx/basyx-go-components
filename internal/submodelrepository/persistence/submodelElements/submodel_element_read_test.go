@@ -485,7 +485,7 @@ func TestAddSMEVisibleTreeQueryFiltersAncestorsBeforeLimit(t *testing.T) {
 	require.Contains(t, sqlQuery, `"visible_sme_child"."parent_sme_id" = "visible_sme_parent"."id"`)
 	require.Contains(t, sqlQuery, `"visible_sme_root"."idshort_path"`)
 	require.Contains(t, sqlQuery, `"visible_sme_child"."idshort_path"`)
-	require.Contains(t, sqlQuery, `"sme"."id" IN ((SELECT "id" FROM "visible_sme_ids"))`)
+	require.Contains(t, sqlQuery, `"sme"."id" IN (SELECT "id" FROM "visible_sme_ids")`)
 	require.NotContains(t, sqlQuery, `"submodel_element"."idshort_path"`)
 	require.Contains(t, sqlQuery, "LIMIT 2")
 }

@@ -155,9 +155,10 @@ func (s *SubmodelDatabase) ensureVisibleSubmodelCreateDoesNotExist(ctx context.C
 	)
 }
 
-// createSubmodelInTransaction inserts a new Submodel and makes an
-// authenticated creator its ReBAC owner.
+// createSubmodelInTransaction inserts a new Submodel, fills its missing
+// administrative creator and makes an authenticated creator its ReBAC owner.
 func (s *SubmodelDatabase) createSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	auth.FillReBACCreator(ctx, submodel)
 	if err := s.insertSubmodelInTransaction(ctx, tx, submodel); err != nil {
 		return err
 	}

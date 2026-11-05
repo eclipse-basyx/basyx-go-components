@@ -95,7 +95,9 @@ func InsertGrant(ctx context.Context, tx *sql.Tx, grant Grant) (bool, error) {
 	if grant.ElementPath != "" {
 		record["element_path"] = grant.ElementPath
 	}
-	ds := dialect.Insert(grantTable).Rows(record).OnConflict(goqu.DoNothing()).Prepared(true)
+	ds := dialect.Insert(grantTable).Rows(record).
+		OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression("object_key", "relation", "subject_key"))).
+		Prepared(true)
 	result, err := execDataset(ctx, tx, "REBAC-INSERTGRANT", ds)
 	if err != nil {
 		return false, err
@@ -148,7 +150,7 @@ func ObjectRevision(ctx context.Context, q Queryer, objectKey string) (int64, er
 func LockObjectRevision(ctx context.Context, tx *sql.Tx, objectKey string) (int64, error) {
 	insert := dialect.Insert("rebac_object_revision").
 		Rows(goqu.Record{"object_key": objectKey, "revision": 0}).
-		OnConflict(goqu.DoNothing()).Prepared(true)
+		OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression("object_key"))).Prepared(true)
 	if _, err := execDataset(ctx, tx, "REBAC-LOCKOBJECTREVISION-ENSURE", insert); err != nil {
 		return 0, err
 	}
@@ -219,7 +221,7 @@ func InsertSubmodelLink(ctx context.Context, tx *sql.Tx, link SubmodelLink) erro
 		"submodel_uuid": goqu.L("?::uuid", link.SubmodelUUID),
 		"aas_uuid":      goqu.L("?::uuid", link.AASUUID),
 		"approved_by":   link.ApprovedBy,
-	}).OnConflict(goqu.DoNothing()).Prepared(true)
+	}).OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression("submodel_uuid", "aas_uuid"))).Prepared(true)
 	_, err := execDataset(ctx, tx, "REBAC-INSERTSUBMODELLINK", ds)
 	return err
 }

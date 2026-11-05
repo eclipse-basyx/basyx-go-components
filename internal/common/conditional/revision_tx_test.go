@@ -37,7 +37,7 @@ import (
 
 const (
 	upsertPattern      = `INSERT INTO "resource_revision" .* ON CONFLICT \(kind, identifier\) DO UPDATE SET "revision"=nextval\('basyx_resource_revision_seq'\) RETURNING "kind", "identifier", "revision"`
-	placeholderPattern = `INSERT INTO "resource_revision" .* ON CONFLICT DO NOTHING`
+	placeholderPattern = `INSERT INTO "resource_revision" .* ON CONFLICT \("kind", "identifier"\) DO NOTHING`
 	lockPattern        = `SELECT "revision" FROM "resource_revision" WHERE .* FOR UPDATE`
 	liveCheckPattern   = `SELECT EXISTS \(SELECT 1 FROM .* AS "live" WHERE .*\), COALESCE`
 	bumpPattern        = `INSERT INTO "resource_revision" .* ON CONFLICT \(kind, identifier\) DO UPDATE SET "revision"=nextval\('basyx_resource_revision_seq'\) RETURNING "revision"`

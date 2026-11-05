@@ -36,6 +36,7 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 type bulkCreateRows struct {
@@ -94,6 +95,7 @@ func BuildAdministrationShellDescriptorsCreateBatch(
 	tx *sql.Tx,
 	descriptors []model.AssetAdministrationShellDescriptor,
 ) (*common.PostgreSQLBatch, error) {
+	descriptors = fillAASDescriptorCreators(ctx, descriptors)
 	counts := countBulkCreateIDs(ctx, descriptors)
 	ids, err := reserveBulkCreateIDs(ctx, tx, counts)
 	if err != nil {
@@ -136,6 +138,7 @@ func BuildSubmodelDescriptorsCreateBatch(
 	tx *sql.Tx,
 	descriptors []model.SubmodelDescriptor,
 ) (*common.PostgreSQLBatch, error) {
+	descriptors = fillSubmodelDescriptorCreators(descriptors, auth.ReBACCreatorReference(ctx))
 	counts := countBulkSubmodelCreateIDs(descriptors)
 	ids, err := reserveBulkCreateIDs(ctx, tx, counts)
 	if err != nil {

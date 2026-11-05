@@ -235,6 +235,7 @@ func loadConceptDescriptionHistorySnapshotBeforeMutationTx(ctx context.Context, 
 }
 
 func (b *ConceptDescriptionBackend) createConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, cd types.IConceptDescription) error {
+	auth.FillReBACCreator(ctx, cd)
 	conceptDescriptionString, err := conceptDescriptionToJSONString(cd)
 	if err != nil {
 		return err
@@ -637,7 +638,7 @@ func buildConceptDescriptionPageQuery(
 			Select(goqu.L("1")).
 			Where(goqu.I("cursor_cd.id").Eq(trimmedCursor))
 		query = query.
-			Where(goqu.Func("EXISTS", cursorExists)).
+			Where(goqu.Exists(cursorExists)).
 			Where(goqu.C("id").Gte(trimmedCursor))
 	}
 

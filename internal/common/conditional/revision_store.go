@@ -75,7 +75,7 @@ func readRevision(ctx context.Context, q Queryer, ref ResourceRef) (int64, error
 func lockRevision(ctx context.Context, tx *sql.Tx, ref ResourceRef) (int64, error) {
 	placeholder := dialect.Insert(revisionTable).
 		Rows(goqu.Record{columnKind: string(ref.Kind), columnIdentifier: ref.Identifier, columnRevision: 0}).
-		OnConflict(goqu.DoNothing()).Prepared(true)
+		OnConflict(goqu.DoNothing().SetCols(exp.NewColumnListExpression(columnKind, columnIdentifier))).Prepared(true)
 	if err := execDataset(ctx, tx, "COMMON-CONDREQ-LOCKREVISION-ENSURE", placeholder); err != nil {
 		return 0, err
 	}

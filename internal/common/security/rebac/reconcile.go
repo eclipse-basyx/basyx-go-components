@@ -59,7 +59,7 @@ func (c *Coordinator) ReconcileOrphans(ctx context.Context) (ReconcileReport, er
 			return err
 		}
 		links, err := deleteMatching(ctx, tx, "REBAC-RECONCILE-LINKS", dialect.Delete("rebac_submodel_link").
-			Where(goqu.L("NOT EXISTS (?)", submodelReferenceExists("rebac_submodel_link"))))
+			Where(goqu.L("NOT ?", goqu.Exists(submodelReferenceExists("rebac_submodel_link")))))
 		if err != nil {
 			return err
 		}
@@ -117,7 +117,7 @@ func orphanResourceCondition(typeColumn exp.IdentifierExpression, uuidColumn exp
 		if kind.ObjectType == TypeSubmodel {
 			types = append(types, TypeElement)
 		}
-		conditions = append(conditions, goqu.And(typeColumn.In(types...), goqu.L("NOT EXISTS (?)", resourceExists(kind.AuthTable, uuidColumn))))
+		conditions = append(conditions, goqu.And(typeColumn.In(types...), goqu.L("NOT ?", goqu.Exists(resourceExists(kind.AuthTable, uuidColumn)))))
 	}
 	return goqu.Or(conditions...)
 }

@@ -189,7 +189,7 @@ func deletedResourceCondition(kind Kind) exp.Expression {
 		conditions = append(conditions, live.filter)
 	}
 	exists := dialect.From(goqu.T(live.table).As("live")).Select(goqu.L("1")).Where(conditions...)
-	return goqu.And(goqu.C(columnKind).Eq(string(kind)), goqu.L("NOT EXISTS ?", exists))
+	return goqu.And(goqu.C(columnKind).Eq(string(kind)), goqu.L("NOT ?", goqu.Exists(exists)))
 }
 
 func findTombstones(ctx context.Context, q Queryer, kind Kind, after string) ([]string, error) {
@@ -253,7 +253,7 @@ func readLiveRevision(ctx context.Context, q Queryer, ref ResourceRef) (bool, in
 		conditions = append(conditions, live.filter)
 	}
 	exists := dialect.From(goqu.T(live.table).As("live")).Select(goqu.L("1")).Where(conditions...)
-	ds := dialect.Select(goqu.L("EXISTS ?", exists), RevisionExpression(ref)).Prepared(true)
+	ds := dialect.Select(goqu.Exists(exists), RevisionExpression(ref)).Prepared(true)
 	query, args, err := ds.ToSQL()
 	if err != nil {
 		return false, 0, fmt.Errorf("COMMON-CONDREQ-READLIVEREVISION-BUILDQ: %w", err)

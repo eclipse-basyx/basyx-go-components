@@ -189,6 +189,7 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 }
 
 func insertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
+	aasd = fillAASDescriptorCreator(aasd, auth.ReBACCreatorReference(ctx))
 	d := goqu.Dialect(common.Dialect)
 
 	descTbl := goqu.T(common.TblDescriptor)
@@ -736,7 +737,7 @@ func requireAASDescriptorCursorExists(page *goqu.SelectDataset, cursor string) *
 		Select(goqu.L("1")).
 		Where(cursorAAS.Col(common.ColAASID).Eq(cursor)).
 		Limit(1)
-	return page.Where(goqu.L("EXISTS ?", cursorExists))
+	return page.Where(goqu.Exists(cursorExists))
 }
 
 // ExistsAASByID performs a lightweight existence check for an AAS by its Id

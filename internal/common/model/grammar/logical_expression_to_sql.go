@@ -1561,7 +1561,7 @@ func renderInlineExistsExpression(
 	if whereExpr != nil {
 		correlation = goqu.And(correlation, whereExpr)
 	}
-	return goqu.L("EXISTS ?", ds.Where(correlation)), nil
+	return goqu.Exists(ds.Where(correlation)), nil
 }
 
 func renderDerivedInlineExistsExpression(
@@ -1599,7 +1599,7 @@ func renderDerivedInlineExistsExpression(
 		From(inner.As(derivedAlias)).
 		Select(goqu.L("1")).
 		Where(correlation)
-	return goqu.L("EXISTS ?", outer)
+	return goqu.Exists(outer)
 }
 
 func buildSMEDescendantCorrelationForColumns(
