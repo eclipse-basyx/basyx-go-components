@@ -38,14 +38,16 @@ type createShellInput struct {
 }
 
 type createSubmodelInput struct {
-	Submodel map[string]any `json:"submodel" jsonschema:"Submodel in AAS JSON serialization with id, idShort and submodelElements"`
-	ShellID  string         `json:"shellId,omitempty" jsonschema:"Identifier of an existing shell that should reference the new submodel"`
+	Submodel  map[string]any `json:"submodel" jsonschema:"Submodel in AAS JSON serialization with id, idShort and submodelElements"`
+	ShellID   string         `json:"shellId,omitempty" jsonschema:"Identifier of an existing shell that should reference the new submodel"`
+	ShellETag string         `json:"shellEtag,omitempty" jsonschema:"ETag of the shell from get_shell; adding the reference fails if the shell changed since"`
 }
 
 type addElementInput struct {
 	SubmodelID string         `json:"submodelId" jsonschema:"Identifier (id) of the submodel, not encoded"`
 	ParentPath string         `json:"parentPath,omitempty" jsonschema:"idShortPath of a SubmodelElementCollection or SubmodelElementList to add the element to; empty adds it at submodel level"`
 	Element    map[string]any `json:"element" jsonschema:"Submodel element in AAS JSON serialization including modelType and idShort"`
+	ETag       string         `json:"etag,omitempty" jsonschema:"ETag of the submodel or parent element from a previous read; the write fails if it changed since"`
 }
 
 type setValueInput struct {
@@ -85,7 +87,7 @@ func (m *Module) addWriteTools(server *sdk.Server) {
 		Description: "Create a new Asset Administration Shell. Fails if the identifier already exists.",
 		Annotations: additiveAnnotations(),
 	}, func(ctx context.Context, req *sdk.CallToolRequest, in createShellInput) (*sdk.CallToolResult, any, error) {
-		return m.call(ctx, req, restCall{method: http.MethodPost, path: "/shells", body: in.Shell})
+		return m.write(ctx, req, restCall{method: http.MethodPost, path: "/shells", body: in.Shell})
 	})
 	sdk.AddTool(server, &sdk.Tool{
 		Name:        "create_submodel",
@@ -97,7 +99,7 @@ func (m *Module) addWriteTools(server *sdk.Server) {
 		Description: "Add a new element to a submodel or to a collection or list inside it.",
 		Annotations: additiveAnnotations(),
 	}, func(ctx context.Context, req *sdk.CallToolRequest, in addElementInput) (*sdk.CallToolResult, any, error) {
-		return m.call(ctx, req, restCall{method: http.MethodPost, path: elementPath(in.SubmodelID, in.ParentPath), body: in.Element})
+		return m.write(ctx, req, restCall{method: http.MethodPost, path: elementPath(in.SubmodelID, in.ParentPath), body: in.Element, ifMatch: in.ETag})
 	})
 	sdk.AddTool(server, &sdk.Tool{
 		Name:        "set_submodel_element_value",
@@ -105,7 +107,7 @@ func (m *Module) addWriteTools(server *sdk.Server) {
 		Annotations: destructiveAnnotations(),
 	}, func(ctx context.Context, req *sdk.CallToolRequest, in setValueInput) (*sdk.CallToolResult, any, error) {
 		path := withValueOnly(elementPath(in.SubmodelID, in.IDShortPath), true)
-		return m.call(ctx, req, restCall{method: http.MethodPatch, path: path, body: in.Value, ifMatch: in.ETag})
+		return m.write(ctx, req, restCall{method: http.MethodPatch, path: path, body: in.Value, ifMatch: in.ETag})
 	})
 	m.addDeleteTools(server)
 }
@@ -116,26 +118,26 @@ func (m *Module) addDeleteTools(server *sdk.Server) {
 		Description: "Delete an Asset Administration Shell. Its submodels are not deleted.",
 		Annotations: destructiveAnnotations(),
 	}, func(ctx context.Context, req *sdk.CallToolRequest, in deleteShellInput) (*sdk.CallToolResult, any, error) {
-		return m.call(ctx, req, restCall{method: http.MethodDelete, path: shellPath(in.ShellID), ifMatch: in.ETag})
+		return m.write(ctx, req, restCall{method: http.MethodDelete, path: shellPath(in.ShellID), ifMatch: in.ETag})
 	})
 	sdk.AddTool(server, &sdk.Tool{
 		Name:        "delete_submodel",
 		Description: "Delete a submodel with all its elements.",
 		Annotations: destructiveAnnotations(),
 	}, func(ctx context.Context, req *sdk.CallToolRequest, in deleteSubmodelInput) (*sdk.CallToolResult, any, error) {
-		return m.call(ctx, req, restCall{method: http.MethodDelete, path: submodelPath(in.SubmodelID), ifMatch: in.ETag})
+		return m.write(ctx, req, restCall{method: http.MethodDelete, path: submodelPath(in.SubmodelID), ifMatch: in.ETag})
 	})
 	sdk.AddTool(server, &sdk.Tool{
 		Name:        "delete_submodel_element",
 		Description: "Delete one submodel element, including all elements nested in it.",
 		Annotations: destructiveAnnotations(),
 	}, func(ctx context.Context, req *sdk.CallToolRequest, in deleteElementInput) (*sdk.CallToolResult, any, error) {
-		return m.call(ctx, req, restCall{method: http.MethodDelete, path: elementPath(in.SubmodelID, in.IDShortPath), ifMatch: in.ETag})
+		return m.write(ctx, req, restCall{method: http.MethodDelete, path: elementPath(in.SubmodelID, in.IDShortPath), ifMatch: in.ETag})
 	})
 }
 
 func (m *Module) createSubmodel(ctx context.Context, req *sdk.CallToolRequest, in createSubmodelInput) (*sdk.CallToolResult, any, error) {
-	_, created, err := m.call(ctx, req, restCall{method: http.MethodPost, path: "/submodels", body: in.Submodel})
+	_, created, err := m.write(ctx, req, restCall{method: http.MethodPost, path: "/submodels", body: in.Submodel})
 	if err != nil || in.ShellID == "" {
 		return nil, created, err
 	}
@@ -144,11 +146,17 @@ func (m *Module) createSubmodel(ctx context.Context, req *sdk.CallToolRequest, i
 		"type": "ModelReference",
 		"keys": []map[string]string{{"type": "Submodel", "value": submodelID}},
 	}
-	_, _, err = m.call(ctx, req, restCall{method: http.MethodPost, path: shellPath(in.ShellID) + "/submodel-refs", body: reference})
+	_, _, err = m.write(ctx, req, restCall{method: http.MethodPost, path: shellPath(in.ShellID) + "/submodel-refs", body: reference, ifMatch: in.ShellETag})
 	if err != nil {
 		return nil, nil, partialSubmodelCreation(err)
 	}
 	return nil, created, nil
+}
+
+// write dispatches a change; its result reports success even when the response body is too large to return.
+func (m *Module) write(ctx context.Context, req *sdk.CallToolRequest, call restCall) (*sdk.CallToolResult, any, error) {
+	call.mutation = true
+	return m.call(ctx, req, call)
 }
 
 func partialSubmodelCreation(err error) error {
@@ -158,6 +166,6 @@ func partialSubmodelCreation(err error) error {
 		linkErr.status = restErr.status
 	}
 	linkErr.message = "the submodel was created but the shell reference could not be added: " + linkErr.message
-	linkErr.hint = "Fix the cause and add the reference again, or delete the new submodel with delete_submodel"
+	linkErr.hint = "Delete the new submodel with delete_submodel, then call create_submodel again, with a current shellEtag from get_shell if needed"
 	return linkErr
 }

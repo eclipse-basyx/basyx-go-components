@@ -48,8 +48,10 @@ services:
       SERVER_PORT: "5004"
       SERVER_STRICTVERIFICATION: "off"
       ABAC_ENABLED: "false"
+      SERVER_CONDITIONALREQUESTS_REQUIREIFMATCH: "true"
       MCP_ENABLED: "true"
       MCP_WRITESENABLED: "true"
+      MCP_MAXRESULTBYTES: "65536"
     ports:
       - "127.0.0.1:${BASYX_IT_API_PORT:-6004}:5004"
 

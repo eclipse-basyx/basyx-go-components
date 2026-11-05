@@ -15,7 +15,7 @@ behave as they do for REST calls.
 | `mcp.enabled` | `MCP_ENABLED` | `false` | Serve the MCP endpoint |
 | `mcp.path` | `MCP_PATH` | `/mcp` | Endpoint path below the context path |
 | `mcp.writesEnabled` | `MCP_WRITESENABLED` | `false` | Offer the tools that create, change and delete data |
-| `mcp.maxResultBytes` | `MCP_MAXRESULTBYTES` | `262144` | Largest API response a tool returns; larger results fail with a hint to page or narrow the request |
+| `mcp.maxResultBytes` | `MCP_MAXRESULTBYTES` | `262144` | Largest API response a tool returns; larger reads fail with a hint to page or narrow the request |
 
 The endpoint is `<general.externalUrl><mcp.path>`, for example `http://localhost:8081/mcp`. Without
 `general.externalUrl` the service uses `http://localhost:<server.port><server.contextPath>`. The
@@ -70,13 +70,20 @@ Tools take identifiers as plain text and encode them for the API. Collection too
 `cursor` and return `paging_metadata.cursor` for the next page. `list_submodels` matches `semanticId`
 against external references with a global reference key.
 
-Read tools return the resource's `etag`. Pass it to a change or delete tool to make the request
-conditional. If the resource changed in the meantime, the tool fails with HTTP 412 and the client can
-read it again. With `server.conditionalRequests.requireIfMatch`, changes without an `etag` fail with
+Read and write tools return the resource's `etag`. Pass it to a change or delete tool to make the
+request conditional; `add_submodel_element` takes the `etag` of the submodel or parent element, and
+`create_submodel` takes the shell's `shellEtag` for the shell reference. If the resource changed in the
+meantime, the tool fails with HTTP 412 and the client can read it again. With
+`server.conditionalRequests.requireIfMatch`, changes of existing resources without an `etag` fail with
 HTTP 428.
 
 `create_submodel` with `shellId` makes two API calls. If the shell reference cannot be added, the new
 submodel stays and the tool says so.
+
+A read whose response exceeds `mcp.maxResultBytes` fails. A successful change whose response exceeds it
+still reports success with status, `etag` and location, but without the response body.
+
+When a client disconnects, the API request that its tool call started is cancelled.
 
 Failed calls return a tool error with the API status, the API error message and a hint, for example
 `MCP-DISPATCH-HTTP404: Not Found ... Check the identifier or idShortPath`.

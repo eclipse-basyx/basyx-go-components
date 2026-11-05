@@ -49,14 +49,16 @@ type restCall struct {
 	body          any
 	authorization string
 	ifMatch       string
+	mutation      bool
 }
 
 // restResult is a successful API response.
 type restResult struct {
-	status   int
-	etag     string
-	location string
-	body     json.RawMessage
+	status      int
+	etag        string
+	location    string
+	body        json.RawMessage
+	bodyOmitted bool
 }
 
 // restError reports a failed API call in a form the calling model can act on.
@@ -90,23 +92,30 @@ func (d restDispatcher) do(ctx context.Context, call restCall) (restResult, erro
 	}
 	recorder := &boundedRecorder{header: make(http.Header), limit: d.maxBytes}
 	d.router.ServeHTTP(recorder, request)
-	if recorder.overflow {
-		return restResult{}, &restError{
-			code:    "MCP-DISPATCH-RESULTTOOLARGE",
-			message: fmt.Sprintf("the response exceeds the configured limit of %d bytes", d.maxBytes),
-			hint:    "Request a smaller page with limit and cursor, use valueOnly, or read a single submodel element",
-		}
-	}
 	status := recorder.statusCode()
 	if status < 200 || status >= 300 {
 		return restResult{}, newRESTError(status, recorder.body.Bytes())
 	}
-	return restResult{
+	result := restResult{
 		status:   status,
 		etag:     recorder.header.Get("ETag"),
 		location: recorder.header.Get("Location"),
 		body:     recorder.body.Bytes(),
-	}, nil
+	}
+	if !recorder.overflow {
+		return result, nil
+	}
+	if call.mutation {
+		// The change is already committed; only its representation is too large to return.
+		result.body = nil
+		result.bodyOmitted = true
+		return result, nil
+	}
+	return restResult{}, &restError{
+		code:    "MCP-DISPATCH-RESULTTOOLARGE",
+		message: fmt.Sprintf("the response exceeds the configured limit of %d bytes", d.maxBytes),
+		hint:    "Request a smaller page with limit and cursor, use valueOnly, or read a single submodel element",
+	}
 }
 
 func (d restDispatcher) newRequest(ctx context.Context, call restCall) (*http.Request, error) {

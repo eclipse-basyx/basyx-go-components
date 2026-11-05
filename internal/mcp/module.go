@@ -81,10 +81,10 @@ func New(ctx context.Context, cfg *common.Config, router http.Handler) (*Module,
 		m.authorizationServers = issuers
 	}
 	server := m.newServer(cfg.MCP.WritesEnabled)
-	m.transport = sdk.NewStreamableHTTPHandler(
+	m.transport = withRequestCancellation(sdk.NewStreamableHTTPHandler(
 		func(*http.Request) *sdk.Server { return server },
-		&sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
-	)
+		&sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: true},
+	))
 	return m, nil
 }
 

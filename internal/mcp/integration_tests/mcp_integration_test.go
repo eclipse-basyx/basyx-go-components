@@ -126,9 +126,10 @@ type toolResult struct {
 	isError bool
 	text    string
 	output  struct {
-		Status int             `json:"status"`
-		ETag   string          `json:"etag"`
-		Data   json.RawMessage `json:"data"`
+		Status      int             `json:"status"`
+		ETag        string          `json:"etag"`
+		Data        json.RawMessage `json:"data"`
+		BodyOmitted bool            `json:"bodyOmitted"`
 	}
 }
 
@@ -193,6 +194,7 @@ func submodelFixture(id, semanticID string) map[string]any {
 	}
 }
 
+// TestMCPReadAndWriteRoundTrip runs against an AAS Environment that requires If-Match for every change.
 func TestMCPReadAndWriteRoundTrip(t *testing.T) {
 	session := mustConnectMCP(t, apiURL, "")
 	require.Len(t, toolNames(t, session), 15)
@@ -201,11 +203,15 @@ func TestMCPReadAndWriteRoundTrip(t *testing.T) {
 	shellID := "urn:basyx:mcp-it:aas:" + suffix
 	submodelID := "urn:basyx:mcp-it:sm:" + suffix
 	semanticID := "urn:basyx:mcp-it:semantic:" + suffix
+	shellArgs := map[string]any{"shellId": shellID}
+	submodelArgs := map[string]any{"submodelId": submodelID}
 
 	mustCallTool(t, session, "create_shell", map[string]any{"shell": shellFixture(shellID)})
-	mustCallTool(t, session, "create_submodel", map[string]any{"submodel": submodelFixture(submodelID, semanticID), "shellId": shellID})
+	mustCallTool(t, session, "create_submodel", map[string]any{
+		"submodel": submodelFixture(submodelID, semanticID), "shellId": shellID, "shellEtag": etagOf(t, session, "get_shell", shellArgs),
+	})
 
-	shell := mustCallTool(t, session, "get_shell", map[string]any{"shellId": shellID})
+	shell := mustCallTool(t, session, "get_shell", shellArgs)
 	require.Contains(t, string(shell.output.Data), submodelID)
 
 	listed := mustCallTool(t, session, "list_submodels", map[string]any{"semanticId": semanticID, "limit": 10})
@@ -216,32 +222,83 @@ func TestMCPReadAndWriteRoundTrip(t *testing.T) {
 	}})
 	require.Contains(t, string(queried.output.Data), submodelID)
 
+	speed := map[string]any{"modelType": "Property", "idShort": "Speed", "valueType": "xs:int", "value": "1500"}
+	unconditional := callTool(t, session, "add_submodel_element", map[string]any{"submodelId": submodelID, "element": speed})
+	require.True(t, unconditional.isError)
+	require.Contains(t, unconditional.text, "MCP-DISPATCH-HTTP428")
 	mustCallTool(t, session, "add_submodel_element", map[string]any{
-		"submodelId": submodelID,
-		"element":    map[string]any{"modelType": "Property", "idShort": "Speed", "valueType": "xs:int", "value": "1500"},
+		"submodelId": submodelID, "element": speed, "etag": etagOf(t, session, "get_submodel", submodelArgs),
 	})
 
-	element := mustCallTool(t, session, "get_submodel_element", map[string]any{"submodelId": submodelID, "idShortPath": "Temperature"})
-	require.NotEmpty(t, element.output.ETag)
+	temperature := map[string]any{"submodelId": submodelID, "idShortPath": "Temperature"}
+	temperatureETag := etagOf(t, session, "get_submodel_element", temperature)
 	mustCallTool(t, session, "set_submodel_element_value", map[string]any{
-		"submodelId": submodelID, "idShortPath": "Temperature", "value": "50", "etag": element.output.ETag,
+		"submodelId": submodelID, "idShortPath": "Temperature", "value": "50", "etag": temperatureETag,
 	})
 	value := mustCallTool(t, session, "get_submodel_element", map[string]any{"submodelId": submodelID, "idShortPath": "Temperature", "valueOnly": true})
 	require.Contains(t, string(value.output.Data), "50")
 
 	stale := callTool(t, session, "set_submodel_element_value", map[string]any{
-		"submodelId": submodelID, "idShortPath": "Temperature", "value": "51", "etag": element.output.ETag,
+		"submodelId": submodelID, "idShortPath": "Temperature", "value": "51", "etag": temperatureETag,
 	})
 	require.True(t, stale.isError)
 	require.Contains(t, stale.text, "MCP-DISPATCH-HTTP412")
 
-	mustCallTool(t, session, "delete_submodel_element", map[string]any{"submodelId": submodelID, "idShortPath": "Speed"})
-	mustCallTool(t, session, "delete_submodel", map[string]any{"submodelId": submodelID})
-	mustCallTool(t, session, "delete_shell", map[string]any{"shellId": shellID})
+	speedPath := map[string]any{"submodelId": submodelID, "idShortPath": "Speed"}
+	mustCallTool(t, session, "delete_submodel_element", withETag(speedPath, etagOf(t, session, "get_submodel_element", speedPath)))
+	mustCallTool(t, session, "delete_submodel", withETag(submodelArgs, etagOf(t, session, "get_submodel", submodelArgs)))
+	mustCallTool(t, session, "delete_shell", withETag(shellArgs, etagOf(t, session, "get_shell", shellArgs)))
 
-	missing := callTool(t, session, "get_shell", map[string]any{"shellId": shellID})
+	missing := callTool(t, session, "get_shell", shellArgs)
 	require.True(t, missing.isError)
 	require.Contains(t, missing.text, "MCP-DISPATCH-HTTP404")
+}
+
+// TestMCPLargeCreateStillReferencesShell creates a submodel whose response exceeds the MCP result limit.
+func TestMCPLargeCreateStillReferencesShell(t *testing.T) {
+	session := mustConnectMCP(t, apiURL, "")
+	suffix := uuid.NewString()
+	shellID := "urn:basyx:mcp-it:large:aas:" + suffix
+	submodelID := "urn:basyx:mcp-it:large:sm:" + suffix
+	shellArgs := map[string]any{"shellId": shellID}
+	submodel := submodelFixture(submodelID, "urn:basyx:mcp-it:semantic:"+suffix)
+	submodel["submodelElements"] = []any{
+		map[string]any{"modelType": "Property", "idShort": "Notes", "valueType": "xs:string", "value": strings.Repeat("x", 96*1024)},
+	}
+
+	mustCallTool(t, session, "create_shell", map[string]any{"shell": shellFixture(shellID)})
+	created := mustCallTool(t, session, "create_submodel", map[string]any{
+		"submodel": submodel, "shellId": shellID, "shellEtag": etagOf(t, session, "get_shell", shellArgs),
+	})
+	require.True(t, created.output.BodyOmitted, created.text)
+	require.Equal(t, http.StatusCreated, created.output.Status)
+	require.NotEmpty(t, created.output.ETag, "an omitted body must still report the new resource's etag")
+
+	shell := mustCallTool(t, session, "get_shell", shellArgs)
+	require.Contains(t, string(shell.output.Data), submodelID)
+
+	submodelArgs := map[string]any{"submodelId": submodelID}
+	tooLarge := callTool(t, session, "get_submodel", submodelArgs)
+	require.True(t, tooLarge.isError)
+	require.Contains(t, tooLarge.text, "MCP-DISPATCH-RESULTTOOLARGE")
+
+	mustCallTool(t, session, "delete_submodel", withETag(submodelArgs, created.output.ETag))
+	mustCallTool(t, session, "delete_shell", withETag(shellArgs, etagOf(t, session, "get_shell", shellArgs)))
+}
+
+func etagOf(t *testing.T, session *sdk.ClientSession, tool string, args map[string]any) string {
+	t.Helper()
+	result := mustCallTool(t, session, tool, args)
+	require.NotEmpty(t, result.output.ETag, "%s returned no etag", tool)
+	return result.output.ETag
+}
+
+func withETag(args map[string]any, etag string) map[string]any {
+	copied := map[string]any{"etag": etag}
+	for key, value := range args {
+		copied[key] = value
+	}
+	return copied
 }
 
 func TestMCPCreateWithInvalidPayloadReportsAPIError(t *testing.T) {

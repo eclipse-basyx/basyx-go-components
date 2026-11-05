@@ -26,6 +26,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -33,6 +34,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/go-chi/chi/v5"
@@ -322,4 +324,103 @@ func TestUnsecuredEndpointPublishesNoMetadata(t *testing.T) {
 	metadata := httptest.NewRecorder()
 	router.ServeHTTP(metadata, httptest.NewRequest(http.MethodGet, ProtectedResourceMetadataPrefix+"/api/mcp", nil))
 	require.Equal(t, http.StatusNotFound, metadata.Code)
+}
+
+func TestAdditiveWritesForwardParentETags(t *testing.T) {
+	api := &fakeAPI{}
+	session := connect(t, newTestModule(t, true, api))
+
+	result := callTool(t, session, "add_submodel_element", map[string]any{
+		"submodelId": "urn:example:sm", "element": map[string]any{"idShort": "Speed"}, "etag": `"3-sm"`,
+	})
+	require.False(t, result.IsError, resultText(result))
+	result = callTool(t, session, "create_submodel", map[string]any{
+		"submodel": map[string]any{"id": "urn:example:sm2"}, "shellId": "urn:example:aas", "shellEtag": `"4-aas"`,
+	})
+	require.False(t, result.IsError, resultText(result))
+
+	requests := api.recorded()
+	require.Len(t, requests, 3)
+	require.Equal(t, `"3-sm"`, requests[0].ifMatch)
+	require.Empty(t, requests[1].ifMatch, "creating a new submodel needs no precondition")
+	require.Equal(t, "/api/shells/"+common.EncodeString("urn:example:aas")+"/submodel-refs", requests[2].path)
+	require.Equal(t, `"4-aas"`, requests[2].ifMatch)
+}
+
+func TestOversizedMutationResponseReportsSuccess(t *testing.T) {
+	api := &fakeAPI{respond: func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"1-new"`)
+		w.Header().Set("Location", "/api"+r.URL.Path)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"urn:example:sm","padding":"` + strings.Repeat("x", 8192) + `"}`))
+	}}
+	session := connect(t, newTestModule(t, true, api))
+
+	result := callTool(t, session, "create_submodel", map[string]any{
+		"submodel": map[string]any{"id": "urn:example:sm"}, "shellId": "urn:example:aas",
+	})
+	require.False(t, result.IsError, resultText(result))
+	require.Len(t, api.recorded(), 2, "the shell reference must be added after an oversized create response")
+
+	output := map[string]any{}
+	require.NoError(t, json.Unmarshal([]byte(resultText(result)), &output))
+	require.Equal(t, float64(http.StatusCreated), output["status"])
+	require.Equal(t, `"1-new"`, output["etag"])
+	require.Equal(t, true, output["bodyOmitted"])
+	require.NotContains(t, output, "data")
+}
+
+func TestClientDisconnectCancelsDispatchedRequest(t *testing.T) {
+	for _, protocolVersion := range []string{"2025-06-18", "2025-11-25"} {
+		t.Run(protocolVersion, func(t *testing.T) {
+			entered := make(chan struct{})
+			cancelled := make(chan struct{})
+			release := make(chan struct{})
+			api := &fakeAPI{respond: func(w http.ResponseWriter, r *http.Request) {
+				close(entered)
+				select {
+				case <-r.Context().Done():
+					close(cancelled)
+				case <-release:
+				}
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}}
+			handlerDone := make(chan struct{})
+			router := chi.NewRouter()
+			newTestModule(t, false, api).Register(router)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer close(handlerDone)
+				router.ServeHTTP(w, r)
+			}))
+			t.Cleanup(server.Close)
+			t.Cleanup(func() { close(release) })
+
+			ctx, cancel := context.WithCancel(t.Context())
+			request, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/api/mcp",
+				strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_shells","arguments":{}}}`))
+			require.NoError(t, err)
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Accept", "application/json, text/event-stream")
+			request.Header.Set("MCP-Protocol-Version", protocolVersion)
+			go func() {
+				if response, doErr := http.DefaultClient.Do(request); doErr == nil {
+					_ = response.Body.Close()
+				}
+			}()
+
+			waitFor(t, entered, "the REST handler was not called")
+			cancel()
+			waitFor(t, cancelled, "the REST handler was not cancelled")
+			waitFor(t, handlerDone, "the MCP request was not released")
+		})
+	}
+}
+
+func waitFor(t *testing.T, done <-chan struct{}, message string) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal(message)
+	}
 }

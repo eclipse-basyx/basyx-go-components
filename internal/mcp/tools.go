@@ -193,6 +193,8 @@ func withValueOnly(path string, valueOnly bool) string {
 // call forwards the caller's credentials to the API and returns its result as tool output.
 func (m *Module) call(ctx context.Context, req *sdk.CallToolRequest, call restCall) (*sdk.CallToolResult, any, error) {
 	call.authorization = authorizationHeader(req)
+	ctx, cancel := linkRequestCancellation(ctx)
+	defer cancel()
 	result, err := m.dispatch.do(ctx, call)
 	if err != nil {
 		return nil, nil, err
@@ -214,6 +216,13 @@ func toolOutput(result restResult) map[string]any {
 	}
 	if result.etag != "" {
 		output["etag"] = result.etag
+	}
+	if result.location != "" {
+		output["location"] = result.location
+	}
+	if result.bodyOmitted {
+		output["bodyOmitted"] = true
+		output["note"] = "The operation succeeded; its response exceeds maxResultBytes and is omitted. Read the resource in smaller parts if needed."
 	}
 	return output
 }
