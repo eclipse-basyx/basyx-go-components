@@ -1,0 +1,13 @@
+kind: security
+body: >-
+  Update golang.org/x/crypto to a revision that no longer contains the
+  deprecated golang.org/x/crypto/openpgp package, so dependency scanners such
+  as Trivy no longer report GO-2026-5932.
+time: 2026-11-05T12:00:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 853
+  SecurityImpact: >-
+    None. BaSyx never imported the openpgp package; it uses only the ed25519 and
+    pbkdf2 packages of golang.org/x/crypto through go-jose, so the advisory did
+    not affect the built components.
