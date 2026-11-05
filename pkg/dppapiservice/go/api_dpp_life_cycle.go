@@ -45,7 +45,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // DPPLifeCycleAPIController binds http requests to an api service and writes the service results to the http response
@@ -181,7 +181,7 @@ func (c *DPPLifeCycleAPIController) ReadDPPById(w http.ResponseWriter, r *http.R
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	dppIdParam := decodePathParam(r, chi.URLParam(r, "dppId"))
+	dppIdParam := common.URLPathParam(r, "dppId")
 	if dppIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"dppId"}, nil)
 		return
@@ -205,7 +205,7 @@ func (c *DPPLifeCycleAPIController) ReadDPPById(w http.ResponseWriter, r *http.R
 
 // DeleteDPPById - Delete DPP by DPP ID
 func (c *DPPLifeCycleAPIController) DeleteDPPById(w http.ResponseWriter, r *http.Request) {
-	dppIdParam := decodePathParam(r, chi.URLParam(r, "dppId"))
+	dppIdParam := common.URLPathParam(r, "dppId")
 	if dppIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"dppId"}, nil)
 		return
@@ -222,7 +222,7 @@ func (c *DPPLifeCycleAPIController) DeleteDPPById(w http.ResponseWriter, r *http
 
 // UpdateDPPById - Update DPP by DPP ID
 func (c *DPPLifeCycleAPIController) UpdateDPPById(w http.ResponseWriter, r *http.Request) {
-	dppIdParam := decodePathParam(r, chi.URLParam(r, "dppId"))
+	dppIdParam := common.URLPathParam(r, "dppId")
 	if dppIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"dppId"}, nil)
 		return
@@ -286,7 +286,7 @@ func (c *DPPLifeCycleAPIController) ReadDPPByProductId(w http.ResponseWriter, r 
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	productIdParam := decodePathParam(r, chi.URLParam(r, "productId"))
+	productIdParam := common.URLPathParam(r, "productId")
 	if productIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"productId"}, nil)
 		return
@@ -315,7 +315,7 @@ func (c *DPPLifeCycleAPIController) ReadDPPVersionByIdAndDate(w http.ResponseWri
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	dppIdParam := decodePathParam(r, chi.URLParam(r, "dppId"))
+	dppIdParam := common.URLPathParam(r, "dppId")
 	if dppIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"dppId"}, nil)
 		return

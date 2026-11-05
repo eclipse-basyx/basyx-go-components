@@ -30,11 +30,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/go-chi/chi/v5"
 )
 
 func readRequestBody(w http.ResponseWriter, req *http.Request) ([]byte, error) {
@@ -60,22 +58,11 @@ func isRequestBodyTooLarge(err error) bool {
 }
 
 func pathParam(req *http.Request, name string) string {
-	return decodePathParam(req, chi.URLParam(req, name))
+	return common.URLPathParam(req, name)
 }
 
 func elementIdPathParam(req *http.Request) string {
-	return strings.TrimPrefix(decodePathParam(req, chi.URLParam(req, "*")), "/")
-}
-
-func decodePathParam(req *http.Request, value string) string {
-	if req.URL.RawPath == "" {
-		return value
-	}
-	decoded, err := url.PathUnescape(value)
-	if err != nil {
-		return value
-	}
-	return decoded
+	return strings.TrimPrefix(common.URLPathParam(req, "*"), "/")
 }
 
 func queryRepresentation(req *http.Request) (Representation, *ImplResponse) {
