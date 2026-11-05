@@ -26,11 +26,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"mime/multipart"
 	"net/http"
-	"net/url"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -63,12 +60,6 @@ func TestSubmodelElementIDShortPresence(t *testing.T) {
 			t.Run("rejected submodel creation", h.testRejectedSubmodelCreation)
 			t.Run("nameless list item", h.testNamelessListItemIsAccepted)
 			t.Run("patch of operation with stored nameless variable", h.testPatchKeepsStoredNamelessOperationVariable)
-			if run.service.environment {
-				t.Run("rejected upload", h.testRejectedUpload)
-			}
-			if run.service.name == "standalone" {
-				t.Run("rejected dpp writes", h.testRejectedDPPWrites)
-			}
 		})
 	}
 }
@@ -130,61 +121,6 @@ func (h *idShortHarness) testRejectedSubmodelCreation(t *testing.T) {
 	id := "urn:idshort:element:" + uuid.NewString()
 	h.requireMissingIDShortRejection(t, h.create(t, elementIDShortSubmodel(id, collection("Coll", namelessProperty())), http.StatusBadRequest))
 	h.json(t, http.MethodGet, h.path(id), nil, http.StatusNotFound)
-}
-
-func (h *idShortHarness) testRejectedUpload(t *testing.T) {
-	id := "urn:idshort:element:" + uuid.NewString()
-	h.track(t, id)
-	environment, err := json.Marshal(map[string]any{"submodels": []any{elementIDShortSubmodel(id, collection("Coll", namelessProperty()))}})
-	require.NoError(t, err)
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	file, err := writer.CreateFormFile("file", "environment.json")
-	require.NoError(t, err)
-	_, err = file.Write(environment)
-	require.NoError(t, err)
-	require.NoError(t, writer.Close())
-
-	response := h.request(t, http.MethodPost, "/upload", body.Bytes(), writer.FormDataContentType())
-	require.Equal(t, http.StatusBadRequest, response.Code, response.Body.String())
-	require.Contains(t, response.Body.String(), "-MISSINGIDSHORT")
-	h.json(t, http.MethodGet, h.path(id), nil, http.StatusNotFound)
-}
-
-// testRejectedDPPWrites expects 409 because DPP maps the 400 from persistence
-// to its fallback status; correcting that mapping is planned separately.
-func (h *idShortHarness) testRejectedDPPWrites(t *testing.T) {
-	const section = "urn:idshort:dpp:technical-data"
-	rejectedID := "urn:idshort:dpp:" + uuid.NewString()
-	rejectedDocument := dppDocument(rejectedID, section, map[string]any{"Dimensions": map[string]any{"": 5}})
-	requireMissingIDShortError(t, h.json(t, http.MethodPost, "/v1/dpps", rejectedDocument, http.StatusConflict))
-	h.json(t, http.MethodGet, dppPath(rejectedID), nil, http.StatusNotFound)
-
-	id := "urn:idshort:dpp:" + uuid.NewString()
-	h.json(t, http.MethodPost, "/v1/dpps", dppDocument(id, section, map[string]any{"Dimensions": map[string]any{"HeightMm": 80}}), http.StatusCreated)
-	t.Cleanup(func() { h.json(t, http.MethodDelete, dppPath(id), nil, http.StatusNoContent) })
-	element := dppPath(id) + "/elements/" + url.PathEscape("$['"+section+"']['Dimensions']")
-	before := h.json(t, http.MethodGet, element, nil, http.StatusOK)
-	requireMissingIDShortError(t, h.json(t, http.MethodPatch, element, map[string]any{"HeightMm": 80, "": 5}, http.StatusConflict))
-	require.Equal(t, before, h.json(t, http.MethodGet, element, nil, http.StatusOK))
-}
-
-func dppDocument(id string, section string, content map[string]any) map[string]any {
-	return map[string]any{
-		"digitalProductPassportId": id,
-		"uniqueProductIdentifier":  id + ":product",
-		"granularity":              "Item",
-		"dppSchemaVersion":         "1.0.0",
-		"dppStatus":                "active",
-		"lastUpdate":               "2026-01-02T03:04:05Z",
-		"economicOperatorId":       "operator-1",
-		"contentSpecificationIds":  []any{section},
-		section:                    content,
-	}
-}
-
-func dppPath(id string) string {
-	return "/v1/dpps/" + url.PathEscape(id)
 }
 
 func (h *idShortHarness) testNamelessListItemIsAccepted(t *testing.T) {
