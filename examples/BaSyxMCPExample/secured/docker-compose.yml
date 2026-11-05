@@ -1,0 +1,106 @@
+services:
+  aas-environment:
+    container_name: basyx-mcp-secured-aas-environment
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "127.0.0.1:8082:8082"
+    environment:
+      - SERVER_PORT=8082
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security/trustlist.json
+      - GENERAL_EXTERNALURL=http://localhost:8082
+      - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration
+      - MCP_ENABLED=true
+      - MCP_WRITESENABLED=true
+    volumes:
+      - ../aas:/app/preconfiguration:ro
+      - ./security:/security:ro
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    restart: unless-stopped
+
+  keycloak-certificate:
+    container_name: basyx-mcp-secured-keycloak-certificate
+    image: keycloak/keycloak:26.7.4
+    user: "0"
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        if [ ! -f /tls/keycloak.p12 ]; then
+          keytool -genkeypair -alias localhost -keyalg RSA -keysize 2048 -validity 825 \
+            -dname CN=localhost -ext san=dns:localhost,ip:127.0.0.1 -ext bc:c=ca:true \
+            -storetype PKCS12 -keystore /tls/keycloak.p12 -storepass password
+          keytool -exportcert -rfc -alias localhost -keystore /tls/keycloak.p12 \
+            -storepass password -file /tls/keycloak.crt
+          chmod 644 /tls/keycloak.p12 /tls/keycloak.crt
+        fi
+    volumes:
+      - ./keycloak/tls:/tls
+
+  keycloak:
+    container_name: basyx-mcp-secured-keycloak
+    image: keycloak/keycloak:26.7.4
+    command: ["start-dev", "--import-realm"]
+    ports:
+      - "127.0.0.1:8443:8443"
+    environment:
+      - KC_HOSTNAME=https://localhost:8443
+      - KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true
+      - KC_HTTP_ENABLED=true
+      - KC_HTTPS_KEY_STORE_FILE=/opt/keycloak/conf/tls/keycloak.p12
+      - KC_HTTPS_KEY_STORE_PASSWORD=password
+      - KC_HEALTH_ENABLED=true
+      - KC_HTTP_MANAGEMENT_SCHEME=http
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+      - ./keycloak/tls:/opt/keycloak/conf/tls:ro
+    depends_on:
+      keycloak-certificate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  db:
+    container_name: basyx-mcp-secured-db
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  basyx_configuration:
+    container_name: basyx-mcp-secured-configuration
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+    depends_on:
+      db:
+        condition: service_healthy

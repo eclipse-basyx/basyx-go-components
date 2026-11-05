@@ -103,21 +103,22 @@ With `abac.enabled: true` the endpoint requires a bearer token and follows the
 The endpoint works with any OpenID Connect provider that the trustlist accepts. For Claude Code,
 Codex and other MCP clients to sign in, the provider must:
 
-1. Publish OAuth authorization server metadata or OpenID Connect discovery.
-2. Support the authorization code flow with PKCE (`S256`).
-3. Let the client obtain a client ID, in one of two ways:
+1. Serve its endpoints over HTTPS with a certificate the client trusts. MCP clients do not open
+   sign-in pages over plain HTTP, even on `localhost`.
+2. Publish OAuth authorization server metadata or OpenID Connect discovery.
+3. Support the authorization code flow with PKCE (`S256`).
+4. Let the client obtain a client ID, in one of two ways:
    - Dynamic client registration (RFC 7591). Clients register themselves with a loopback redirect
      URI such as `http://localhost:<port>/callback`.
    - A public client registered by an administrator. Pass its ID to the client, for example
      `claude mcp add --transport http --client-id <id> --callback-port <port> basyx <url>`, and
      register `http://localhost:<port>/callback` as its redirect URI.
-4. Put the trustlist `audience` into the access tokens it issues to these clients. MCP clients send
+5. Put the trustlist `audience` into the access tokens it issues to these clients. MCP clients send
    the endpoint URL as RFC 8707 `resource` parameter, but many providers ignore it, so configure the
    audience in the provider.
 
-For Keycloak, the realm of the
-[integration tests](../../internal/mcp/integration_tests/docker_compose/keycloak/realm/basyx-mcp-realm.json)
-shows one setup:
+For Keycloak, the [secured MCP example](../../examples/BaSyxMCPExample/secured/README.md) shows one
+setup:
 
 - A client scope `basyx-aas-environment` with an audience mapper, added to the realm's default
   client scopes. Dynamically registered clients receive it.

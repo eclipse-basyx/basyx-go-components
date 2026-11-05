@@ -1,0 +1,7 @@
+[
+  {
+    "issuer": "https://localhost:8443/realms/basyx-mcp",
+    "discoveryUrl": "http://keycloak:8080/realms/basyx-mcp/.well-known/openid-configuration",
+    "audience": "basyx-aas-environment"
+  }
+]

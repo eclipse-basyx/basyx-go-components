@@ -5,7 +5,8 @@ MCP clients such as Claude Code or Codex can read and change the Asset Administr
 preloads the shell **IESEDriveMotorDM3000** from [`aas/IESEDriveMotorDM3000.aasx`](aas/IESEDriveMotorDM3000.aasx).
 
 The example has no authentication and allows writes. Use it only on your own machine; the port is
-bound to `127.0.0.1`.
+bound to `127.0.0.1`. The [secured variant](secured/README.md) adds Keycloak sign-in and per-user
+permissions.
 
 ## Start
 
