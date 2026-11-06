@@ -29,6 +29,7 @@ package common
 import (
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -56,6 +57,27 @@ func URLPathParam(r *http.Request, name string) string {
 	decoded, err := url.PathUnescape(value)
 	if err != nil {
 		return value
+	}
+	return decoded
+}
+
+// URLIDShortPathParam returns the idShortPath path parameter decoded like
+// URLPathParam, except that a path whose decoded form contains "/" keeps its
+// encoding, so that it addresses no element. ABAC matches ROUTE objects
+// against the decoded request path, in which such an idShort looks like
+// further path segments, for example an element "x/attachment" like the
+// attachment route of an element "x".
+//
+// Parameters:
+//   - r: Request routed by chi to a route with the parameter idShortPath
+//
+// Returns:
+//   - string: Decoded idShortPath, or the still encoded parameter if the
+//     decoded idShortPath contains "/"
+func URLIDShortPathParam(r *http.Request) string {
+	decoded := URLPathParam(r, "idShortPath")
+	if strings.Contains(decoded, "/") {
+		return chi.URLParam(r, "idShortPath")
 	}
 	return decoded
 }

@@ -1453,7 +1453,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelElementByPathSubmodelRep
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1498,7 +1498,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelElementByPathSubmodelRep
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1572,7 +1572,7 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1640,7 +1640,7 @@ func (c *SubmodelRepositoryAPIAPIController) DeleteSubmodelElementByPathSubmodel
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1667,7 +1667,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathSubmodelR
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1734,7 +1734,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelElementByPathMetadataSub
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1756,7 +1756,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathMetadataS
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1803,7 +1803,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelElementByPathValueOnlySu
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1848,7 +1848,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathValueOnly
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1889,7 +1889,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelElementByPathReferenceSu
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1916,7 +1916,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelElementByPathPathSubmode
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1947,7 +1947,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetFileByPathSubmodelRepo(w http.Re
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1972,7 +1972,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2013,7 +2013,7 @@ func (c *SubmodelRepositoryAPIAPIController) DeleteFileByPathSubmodelRepo(w http
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2040,7 +2040,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationSubmodelRepo(w http.
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2092,7 +2092,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationValueOnly(w http.Res
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2139,7 +2139,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsync(w http.Respons
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2170,7 +2170,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsyncValueOnly(w htt
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2205,7 +2205,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetOperationAsyncStatus(w http.Resp
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2233,7 +2233,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetOperationAsyncResult(w http.Resp
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2260,7 +2260,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetOperationAsyncResultValueOnly(w 
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := common.URLPathParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return

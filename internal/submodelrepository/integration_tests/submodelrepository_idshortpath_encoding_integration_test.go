@@ -57,8 +57,19 @@ func TestSubmodelElementByEncodedIDShortPath(t *testing.T) {
 		require.Equal(t, "x;y", h.json(t, http.MethodGet, location.EscapedPath(), nil, http.StatusOK)["idShort"])
 	})
 
-	t.Run("delete by encoded path", func(t *testing.T) {
-		h.json(t, http.MethodDelete, elements+"Coll.a%2Fb", nil, http.StatusNoContent)
-		h.json(t, http.MethodGet, elements+"Coll.a%2Fb", nil, http.StatusNotFound)
+	t.Run("idShortPath with slash stays unreachable", func(t *testing.T) {
+		h.json(t, http.MethodGet, elements+testenv.IDShortPathWithSlash, nil, http.StatusNotFound)
+		h.json(t, http.MethodDelete, elements+testenv.IDShortPathWithSlash, nil, http.StatusNotFound)
+		require.Contains(t, mustJSONString(t, h.json(t, http.MethodGet, elements+"Coll", nil, http.StatusOK)), `"idShort":"a/b"`)
 	})
+
+	t.Run("delete by encoded path", func(t *testing.T) {
+		h.json(t, http.MethodDelete, elements+"Coll.a%3Bb", nil, http.StatusNoContent)
+		h.json(t, http.MethodGet, elements+"Coll.a%3Bb", nil, http.StatusNotFound)
+	})
+}
+
+func mustJSONString(t *testing.T, value any) string {
+	t.Helper()
+	return string(mustJSON(t, value))
 }

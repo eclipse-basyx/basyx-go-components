@@ -59,19 +59,43 @@ func TestURLPathParamDecodesEveryClientEncodingOnce(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			require.Equal(t, testCase.want, routedURLPathParam(t, "/elements/"+testCase.segment))
+			require.Equal(t, testCase.want, routedParam(t, "/elements/"+testCase.segment, func(r *http.Request) string {
+				return URLPathParam(r, "idShortPath")
+			}))
 		})
 	}
 }
 
-func routedURLPathParam(t *testing.T, target string) string {
+func TestURLIDShortPathParamKeepsPathsWithSlashEncoded(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name    string
+		segment string
+		want    string
+	}{
+		{name: "plain path", segment: "Coll.plain", want: "Coll.plain"},
+		{name: "encoded semicolon", segment: "Coll.a%3Bb", want: "Coll.a;b"},
+		{name: "over-encoded dot", segment: "Coll%2Eplain", want: "Coll.plain"},
+		{name: "encoded slash", segment: "Coll.a%2Fb", want: "Coll.a%2Fb"},
+		{name: "encoded slash next to encoded semicolon", segment: "Coll.a%2Fb%3Bc", want: "Coll.a%2Fb%3Bc"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, testCase.want, routedParam(t, "/elements/"+testCase.segment, URLIDShortPathParam))
+		})
+	}
+}
+
+func routedParam(t *testing.T, target string, read func(*http.Request) string) string {
 	t.Helper()
 	routed := false
 	var value string
 	router := chi.NewRouter()
 	router.Get("/elements/{idShortPath}", func(_ http.ResponseWriter, r *http.Request) {
 		routed = true
-		value = URLPathParam(r, "idShortPath")
+		value = read(r)
 	})
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, target, nil))
 	require.True(t, routed, "request %q was not routed", target)

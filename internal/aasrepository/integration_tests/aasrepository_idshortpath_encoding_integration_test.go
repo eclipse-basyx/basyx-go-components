@@ -62,14 +62,26 @@ func TestSubmodelElementByEncodedIDShortPathAasRepository(t *testing.T) {
 		require.Equal(t, "x;y", element["idShort"])
 	})
 
-	t.Run("delete by encoded path", func(t *testing.T) {
-		statusCode, body, err := rawJSONRequest(http.MethodDelete, elements+"Coll.a%2Fb", "")
+	t.Run("idShortPath with slash stays unreachable", func(t *testing.T) {
+		requireStatus(t, http.MethodGet, elements+testenv.IDShortPathWithSlash, http.StatusNotFound)
+		requireStatus(t, http.MethodDelete, elements+testenv.IDShortPathWithSlash, http.StatusNotFound)
+		statusCode, body, err := rawJSONRequest(http.MethodGet, elements+"Coll", "")
 		require.NoError(t, err)
-		require.Equal(t, http.StatusNoContent, statusCode, string(body))
-		statusCode, body, err = rawJSONRequest(http.MethodGet, elements+"Coll.a%2Fb", "")
-		require.NoError(t, err)
-		require.Equal(t, http.StatusNotFound, statusCode, string(body))
+		require.Equal(t, http.StatusOK, statusCode, string(body))
+		require.Contains(t, string(body), `"idShort":"a/b"`)
 	})
+
+	t.Run("delete by encoded path", func(t *testing.T) {
+		requireStatus(t, http.MethodDelete, elements+"Coll.a%3Bb", http.StatusNoContent)
+		requireStatus(t, http.MethodGet, elements+"Coll.a%3Bb", http.StatusNotFound)
+	})
+}
+
+func requireStatus(t *testing.T, method string, endpoint string, expected int) {
+	t.Helper()
+	statusCode, body, err := rawJSONRequest(method, endpoint, "")
+	require.NoError(t, err)
+	require.Equal(t, expected, statusCode, string(body))
 }
 
 func createEncodedIDShortPathSuperpath(t *testing.T) string {
@@ -95,7 +107,5 @@ func createEncodedIDShortPathSuperpath(t *testing.T) string {
 
 func requireDeleted(t *testing.T, endpoint string) {
 	t.Helper()
-	statusCode, body, err := rawJSONRequest(http.MethodDelete, endpoint, "")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusNoContent, statusCode, string(body))
+	requireStatus(t, http.MethodDelete, endpoint, http.StatusNoContent)
 }

@@ -34,6 +34,10 @@ type IDShortPathEncodingCase struct {
 	IDShort string
 }
 
+// IDShortPathWithSlash addresses the element "a/b" of
+// IDShortPathEncodingSubmodel, which stays unreachable through idShortPath.
+const IDShortPathWithSlash = "Coll.a%2Fb"
+
 // IDShortPathEncodingCases returns percent-encodings that Go does not produce
 // itself, so the server receives them still encoded, next to an unencoded
 // control.
@@ -42,7 +46,6 @@ func IDShortPathEncodingCases() []IDShortPathEncodingCase {
 		{Name: "unencoded semicolon", Segment: "Coll.a;b", IDShort: "a;b"},
 		{Name: "encoded semicolon", Segment: "Coll.a%3Bb", IDShort: "a;b"},
 		{Name: "encoded colon", Segment: "Coll.a%3Ab", IDShort: "a:b"},
-		{Name: "encoded slash", Segment: "Coll.a%2Fb", IDShort: "a/b"},
 		{Name: "over-encoded dot", Segment: "Coll%2Eplain", IDShort: "plain"},
 		{Name: "encoded space next to encoded semicolon", Segment: "Coll.a%20b%3Bc", IDShort: "a b;c"},
 	}
