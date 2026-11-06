@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.13
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.6
 	github.com/coreos/go-oidc/v3 v3.21.0
-	github.com/doug-martin/goqu/v9 v9.23.0
+	github.com/doug-martin/goqu/v9 v9.24.0
 	github.com/eclipse/paho.golang v0.23.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
