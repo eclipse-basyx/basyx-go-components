@@ -3,5 +3,5 @@ body: Omit empty submodelElements in Submodel Repository list and query response
 time: 2026-11-06T10:05:21.0974742+01:00
 custom:
     Impact: Low
-    PullRequest: "854"
+    PullRequest: 854
     SecurityImpact: None.
