@@ -1060,6 +1060,9 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 	qf := auth.GetQueryFilter(ctx)
 	if qf != nil {
 		for fragment := range qf.Filters {
+			if !strings.HasPrefix(string(fragment), "$sme#") && !strings.HasPrefix(string(fragment), "$sme.") {
+				continue
+			}
 			if !strings.Contains(string(fragment), "#") {
 				continue
 			}
@@ -1422,6 +1425,15 @@ func buildSharedMaskVisibilityExpr(dataAlias string, runtime *auth.SharedFragmen
 	return goqu.And(conditions...), nil
 }
 
+func listMemberIDShortVisibility(dialect goqu.DialectWrapper, dataAlias string, mask exp.Expression) exp.Expression {
+	parent := dialect.From(goqu.T("submodel_element").As("idshort_parent"))
+	parent = parent.Select(goqu.L("1")).Where(
+		goqu.I("idshort_parent.id").Eq(goqu.I(dataAlias+".c_parent_sme_id")),
+		goqu.I("idshort_parent.model_type").Eq(types.ModelTypeSubmodelElementList),
+	)
+	return goqu.Or(goqu.L("NOT ?", goqu.Exists(parent)), mask)
+}
+
 func buildMaskedSMEValuePayloadExpr(rawValueAlias string) exp.Expression {
 	return goqu.L("(COALESCE(?::jsonb, '{}'::jsonb) - 'value')", goqu.I(rawValueAlias))
 }
@@ -1485,6 +1497,7 @@ func readSubmodelElementRowsByPath(ctx context.Context, db DBQueryer, submodelDa
 	if idShortVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-IDSHORTMASK " + idShortVisibleErr.Error())
 	}
+	idShortVisibleExpr = listMemberIDShortVisibility(dialect, dataAlias, idShortVisibleExpr)
 	semanticVisibleExpr, semanticVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.semantic)
 	if semanticVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-SEMMASK " + semanticVisibleErr.Error())
@@ -1593,6 +1606,7 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db DBQueryer, submode
 	if idShortVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-IDSHORTMASK " + idShortVisibleErr.Error())
 	}
+	idShortVisibleExpr = listMemberIDShortVisibility(dialect, dataAlias, idShortVisibleExpr)
 	semanticVisibleExpr, semanticVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.semantic)
 	if semanticVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-SEMMASK " + semanticVisibleErr.Error())

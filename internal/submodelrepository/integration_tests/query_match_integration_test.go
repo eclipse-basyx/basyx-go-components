@@ -74,6 +74,22 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}, {"a1-b0", "a1-b1"}}, nestedBValues(t, result))
 	})
 
+	t.Run("SubmodelFragmentsPreserveElements", func(t *testing.T) {
+		baseline := queryNestedMatchSubmodel(t)
+		for _, fragment := range []string{
+			"$sm#idShort", "$sm#semanticId", "$sm#semanticId.keys[]", "$sm#semanticId.keys[0]",
+			"$sm#supplementalSemanticIds", "$sm#supplementalSemanticIds[]", "$sm#supplementalSemanticIds[0]",
+			"$sm#supplementalSemanticIds[].keys[]", "$sm#supplementalSemanticIds[0].keys[0]",
+		} {
+			for _, allow := range []bool{true, false} {
+				t.Run(fmt.Sprintf("%s/%t", fragment, allow), func(t *testing.T) {
+					result := queryNestedMatchSubmodel(t, nestedMatchFilter(fragment, false, map[string]any{"$boolean": allow}))
+					assert.Equal(t, baseline["submodelElements"], result["submodelElements"])
+				})
+			}
+		}
+	})
+
 	for _, test := range []struct {
 		name     string
 		fragment string
@@ -81,6 +97,7 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 		{name: "TopLevelProperty", fragment: "$sme.guard#idShort"},
 		{name: "TopLevelList", fragment: "$sme.a#idShort"},
 		{name: "NamedElementInsideListEntry", fragment: "$sme.a[].b#idShort"},
+		{name: "MandatorySubmodelID", fragment: "$sm#id"},
 	} {
 		t.Run("RejectFilteringMandatoryIDShort/"+test.name, func(t *testing.T) {
 			payload := map[string]any{

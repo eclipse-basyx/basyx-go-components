@@ -45,6 +45,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSMEIdShortMaskChecksDirectParentType(t *testing.T) {
+	dialect := goqu.Dialect("postgres")
+	expr := listMemberIDShortVisibility(dialect, "data", goqu.L("FALSE"))
+	sql, args, err := dialect.From(goqu.T("rows").As("data")).Select(expr).Prepared(true).ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, sql, `"idshort_parent"."id" = "data"."c_parent_sme_id"`)
+	require.Contains(t, sql, `"idshort_parent"."model_type"`)
+	require.Contains(t, sql, "NOT EXISTS")
+	require.Equal(t, []interface{}{int64(types.ModelTypeSubmodelElementList)}, args)
+}
+
+func TestSMEMaskRuntimeIgnoresSubmodelFragments(t *testing.T) {
+	deny := false
+	filters := auth.FragmentFilters{}
+	for _, fragment := range []grammar.FragmentStringPattern{"$sm#idShort", "$sm#semanticId", "$sm#semanticId.keys[]", "$sm#supplementalSemanticIds[]"} {
+		filters[fragment] = auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false)
+	}
+	ctx := auth.WithQueryFilter(t.Context(), &auth.QueryFilter{Filters: filters})
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
+	require.NoError(t, err)
+	_, groups, err := buildSMEMaskRuntime(ctx, collector)
+	require.NoError(t, err)
+	require.Equal(t, []grammar.FragmentStringPattern{"$sme#idShort"}, groups.idShort)
+	require.Equal(t, []grammar.FragmentStringPattern{"$sme#semanticId"}, groups.semantic)
+}
+
 func TestBuildSubmodelElementReferenceUsesModelTypeOfListItems(t *testing.T) {
 	t.Parallel()
 

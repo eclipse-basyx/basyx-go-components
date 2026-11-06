@@ -52,6 +52,12 @@ func TestQueryFragmentFiltersOnlyTargetedFields(t *testing.T) {
 	})
 
 	baseline := queryFragmentScope(t, "")
+	for _, fragment := range []string{"$sm#semanticId.keys[]", "$sm#semanticId.keys[0]", "$sm#supplementalSemanticIds", "$sm#supplementalSemanticIds[]", "$sm#supplementalSemanticIds[0]", "$sm#supplementalSemanticIds[].keys[]", "$sm#supplementalSemanticIds[0].keys[0]"} {
+		t.Run("SubmodelScope/"+fragment, func(t *testing.T) {
+			result := queryFragmentScope(t, fragment)
+			assert.Equal(t, baseline["submodelElements"], result["submodelElements"])
+		})
+	}
 	tests := []struct {
 		name     string
 		fragment string
@@ -155,7 +161,9 @@ func fragmentScopeCollectionMember(t *testing.T, sm map[string]any, collection, 
 
 func fragmentScopeSubmodel() map[string]any {
 	propertyWithSemanticID := func(idShort, value string) map[string]any {
-		return property(idShort, value, []string{"urn:example:semantic:" + value})
+		result := property(idShort, value, []string{"urn:example:semantic:" + value})
+		result["supplementalSemanticIds"] = []any{reference("urn:example:supplemental:" + value)}
+		return result
 	}
 	collection := func(idShort, prefix string) map[string]any {
 		result := map[string]any{
@@ -177,7 +185,8 @@ func fragmentScopeSubmodel() map[string]any {
 	}
 	return map[string]any{
 		"id": fragmentScopeSubmodelID, "idShort": "FragmentScope", "modelType": "Submodel",
-		"semanticId": reference("urn:example:semantic:submodel"),
+		"semanticId":              reference("urn:example:semantic:submodel"),
+		"supplementalSemanticIds": []any{reference("urn:example:supplemental:submodel")},
 		"submodelElements": []any{
 			propertyWithSemanticID("outside", "outside"),
 			collection("details", "details"),
