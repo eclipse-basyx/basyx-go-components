@@ -1411,7 +1411,11 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.
 	}
 	patchJSON["id"] = decodedIdentifier
 
-	existingSubmodel, getErr := s.submodelBackend.GetSubmodelByID(ctx, decodedIdentifier, "core", true, true)
+	metadataCtx, filterErr := auth.ContextWithoutFragmentFilters(ctx)
+	if filterErr != nil {
+		return newAPIErrorResponse(filterErr, http.StatusInternalServerError, operation, "CloneMetadataContext"), nil
+	}
+	existingSubmodel, getErr := s.submodelBackend.GetSubmodelByID(metadataCtx, decodedIdentifier, "core", true, true)
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil

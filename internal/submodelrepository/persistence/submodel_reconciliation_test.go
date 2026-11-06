@@ -410,7 +410,7 @@ func TestContextWithoutFragmentFiltersPreservesUpdateFormula(t *testing.T) {
 			grammar.FragmentStringPattern("$sm#idShort"): {},
 		},
 	}
-	ctx, err := contextWithoutFragmentFilters(auth.WithQueryFilter(t.Context(), original))
+	ctx, err := auth.ContextWithoutFragmentFilters(auth.WithQueryFilter(t.Context(), original))
 	require.NoError(t, err)
 	filtered := auth.GetQueryFilter(ctx)
 	require.NotNil(t, filtered)

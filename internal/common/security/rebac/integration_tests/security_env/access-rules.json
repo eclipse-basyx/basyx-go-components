@@ -17,6 +17,7 @@
     "DEFACLS": [
       { "name": "public_read", "acl": { "USEATTRIBUTES": "anonymous", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
       { "name": "role_read", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "role_metadata", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ", "UPDATE"], "ACCESS": "ALLOW" } },
       { "name": "admin_all", "acl": { "USEATTRIBUTES": "admin_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
     ],
     "DEFFORMULAS": [
@@ -65,7 +66,7 @@
         "FILTER": { "FRAGMENT": "$sme", "MATCH": true, "USEFORMULA": "not_secret_element" }
       },
       {
-        "USEACL": "role_read", "USEOBJECTS": [ "submodel_read_routes" ],
+        "USEACL": "role_metadata", "USEOBJECTS": [ "submodel_read_routes" ],
         "USEFORMULA": "idshort_general_fixture",
         "FILTERLIST": [
           { "FRAGMENT": "$sm#idShort", "CONDITION": { "$boolean": false } },

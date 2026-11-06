@@ -187,6 +187,61 @@ func TestGetSubmodelByIDPreservesIDShortPresence(t *testing.T) {
 	}
 }
 
+func TestGetSubmodelByIDAppliesSubmodelFragmentMasks(t *testing.T) {
+	for _, visible := range []bool{false, true} {
+		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			sut := &SubmodelDatabase{db: db}
+			ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{Filters: auth.FragmentFilters{
+				"$sm#idShort":    auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &visible}, false),
+				"$sm#semanticId": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &visible}, false),
+			}})
+			var idShort, semanticID any
+			if visible {
+				idShort = "VisibleName"
+				semanticID = `{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:semantic"}]}`
+			}
+			mock.ExpectBegin()
+			mock.ExpectQuery(`SELECT .*CASE WHEN .* THEN "submodel_list_data"\."c1" ELSE NULL END.*CASE WHEN .* THEN "submodel_list_data"\."raw_semantic_id_payload" ELSE NULL END`).
+				WillReturnRows(sqlmock.NewRows(submodelStateColumns()[:12]).
+					AddRow("urn:filtered", idShort, nil, nil, nil, nil, nil, nil, nil, nil, nil, semanticID))
+			mock.ExpectCommit()
+			result, err := sut.GetSubmodelByID(ctx, "urn:filtered", "deep", true, true)
+			require.NoError(t, err)
+			require.Equal(t, "urn:filtered", result.ID())
+			require.Equal(t, visible, result.IDShort() != nil)
+			require.Equal(t, visible, result.SemanticID() != nil)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestGetFilteredSubmodelByIDNeverFallsBackToAnotherSubmodel(t *testing.T) {
+	for _, identifier := range []string{"", "urn:hidden"} {
+		t.Run(identifier, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			sut := &SubmodelDatabase{db: db}
+			deny := false
+			ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{Filters: auth.FragmentFilters{
+				"$sm#idShort": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
+			}})
+			mock.ExpectBegin()
+			if identifier != "" {
+				mock.ExpectQuery(`SELECT .*FROM .*"submodel"`).WillReturnRows(sqlmock.NewRows(submodelStateColumns()[:12]))
+			}
+			mock.ExpectRollback()
+			result, err := sut.GetSubmodelByID(ctx, identifier, "deep", true, true)
+			require.True(t, common.IsErrNotFound(err))
+			require.Nil(t, result)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
 func TestSubmodelIDShortVerificationPreservesPresence(t *testing.T) {
 	t.Parallel()
 	for _, mode := range []commonmodel.VerificationMode{

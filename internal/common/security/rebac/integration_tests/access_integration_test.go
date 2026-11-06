@@ -27,11 +27,13 @@
 package rebacintegration
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	neturl "net/url"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/stretchr/testify/require"
@@ -51,7 +53,10 @@ func TestSecurityIdentifierMasksAndReBACGrants(t *testing.T) {
 			fixture := idShortSecurityFixture(test.id)
 			expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, submodelURL+"/submodels", fixture, nil), "create fixture")
 			t.Cleanup(func() {
-				expectStatus(t, http.StatusNoContent, call(t, "alice", http.MethodDelete, submodelURL+"/submodels/"+enc(test.id), nil, nil), "delete fixture")
+				ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 15*time.Second)
+				defer cancel()
+				result := callRawWithContext(ctx, t, "alice", http.MethodDelete, submodelURL+"/submodels/"+enc(test.id), nil, "", nil)
+				expectStatus(t, http.StatusNoContent, result, "delete fixture")
 			})
 			storeLegacyListIDShorts(t, test.id)
 			target := submodelURL + "/submodels/" + enc(test.id)
@@ -61,6 +66,10 @@ func TestSecurityIdentifierMasksAndReBACGrants(t *testing.T) {
 			if !test.general {
 				return
 			}
+			metadata := call(t, "userx", http.MethodGet, target+"/$metadata", nil, nil)
+			expectStatus(t, http.StatusOK, metadata, "ABAC filtered metadata")
+			assertSecuritySubmodelMetadata(t, metadata.json(t), false)
+			assertMetadataPatchPreservesHiddenFields(t, target)
 
 			query := map[string]any{"$condition": map[string]any{"$eq": []any{map[string]any{"$field": "$sm#id"}, map[string]any{"$strVal": test.id}}}}
 			filtered := call(t, "userx", http.MethodPost, submodelURL+"/query/submodels", query, nil)
@@ -124,13 +133,7 @@ func queryResultSubmodel(t *testing.T, result response) map[string]any {
 
 func assertSecurityIDShorts(t *testing.T, model map[string]any, modelVisible, firstVisible, secondVisible bool) {
 	t.Helper()
-	if modelVisible {
-		require.Equal(t, "secured", model["idShort"])
-		require.Contains(t, model, "semanticId")
-	} else {
-		require.NotContains(t, model, "idShort")
-		require.NotContains(t, model, "semanticId")
-	}
+	assertSecuritySubmodelMetadata(t, model, modelVisible)
 	elements, ok := model["submodelElements"].([]any)
 	require.True(t, ok)
 	require.Len(t, elements, 2)
@@ -161,6 +164,29 @@ func assertSecurityIDShorts(t *testing.T, model map[string]any, modelVisible, fi
 		children := entry["value"].([]any)
 		require.Equal(t, "name", children[0].(map[string]any)["idShort"])
 	}
+}
+
+func assertSecuritySubmodelMetadata(t *testing.T, model map[string]any, modelVisible bool) {
+	t.Helper()
+	if modelVisible {
+		require.Equal(t, "secured", model["idShort"])
+		require.Contains(t, model, "semanticId")
+	} else {
+		require.NotContains(t, model, "idShort")
+		require.NotContains(t, model, "semanticId")
+	}
+}
+
+func assertMetadataPatchPreservesHiddenFields(t *testing.T, target string) {
+	t.Helper()
+	description := []any{map[string]any{"language": "en", "text": "Updated description"}}
+	patch := map[string]any{"modelType": "Submodel", "description": description}
+	expectStatus(t, http.StatusNoContent, call(t, "userx", http.MethodPatch, target+"/$metadata", patch, nil), "patch visible metadata")
+	ownerRead := call(t, "alice", http.MethodGet, target, nil, nil)
+	expectStatus(t, http.StatusOK, ownerRead, "owner read after metadata patch")
+	model := ownerRead.json(t)
+	assertSecuritySubmodelMetadata(t, model, true)
+	require.Equal(t, description, model["description"])
 }
 
 func TestDenialsWithoutGrantsLookExactlyLikeABAC(t *testing.T) {
