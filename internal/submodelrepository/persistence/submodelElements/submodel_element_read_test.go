@@ -48,12 +48,29 @@ import (
 func TestSMEIdShortMaskChecksDirectParentType(t *testing.T) {
 	dialect := goqu.Dialect("postgres")
 	expr := listMemberIDShortVisibility(dialect, "data", goqu.L("FALSE"))
-	sql, args, err := dialect.From(goqu.T("rows").As("data")).Select(expr).Prepared(true).ToSQL()
+	sqlQuery, args, err := dialect.From(goqu.T("rows").As("data")).Select(expr).Prepared(true).ToSQL()
 	require.NoError(t, err)
-	require.Contains(t, sql, `"idshort_parent"."id" = "data"."c_parent_sme_id"`)
-	require.Contains(t, sql, `"idshort_parent"."model_type"`)
-	require.Contains(t, sql, "NOT EXISTS")
+	require.Contains(t, sqlQuery, `"idshort_parent"."id" = "data"."c_parent_sme_id"`)
+	require.Contains(t, sqlQuery, `"idshort_parent"."model_type"`)
+	require.Contains(t, sqlQuery, "NOT EXISTS")
 	require.Equal(t, []interface{}{int64(types.ModelTypeSubmodelElementList)}, args)
+}
+
+func TestSubmodelElementPageIDShortMaskChecksDirectParentType(t *testing.T) {
+	deny := false
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{Filters: auth.FragmentFilters{
+		"$sme#idShort": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
+	}})
+	for _, level := range []string{"core", "deep"} {
+		t.Run(level, func(t *testing.T) {
+			query, args, err := buildSubmodelElementPageQuery(ctx, []int64{1}, level)
+			require.NoError(t, err)
+			require.Contains(t, query, `"idshort_parent"."id" = "submodel_element_page_data"."c_parent_sme_id"`)
+			require.Contains(t, query, `"idshort_parent"."model_type"`)
+			require.Contains(t, query, "NOT EXISTS")
+			require.Contains(t, args, int64(types.ModelTypeSubmodelElementList))
+		})
+	}
 }
 
 func TestSMEMaskRuntimeIgnoresSubmodelFragments(t *testing.T) {

@@ -13,6 +13,15 @@
                                                     "category":  "VARIABLE",
                                                     "idShort":  "InstanceId",
                                                     "modelType":  "Property",
+                                                    "semanticId":  {
+                                                        "keys": [
+                                                            {
+                                                                "type": "GlobalReference",
+                                                                "value": "http://opcfoundation.org/UA/DI/1.1/DeviceType/Serialnumber_4"
+                                                            }
+                                                        ],
+                                                        "type": "ExternalReference"
+                                                    },
                                                     "supplementalSemanticIds":  [
                                                                                     {
                                                                                         "keys":  [
@@ -63,6 +72,15 @@
                                                                     ],
                                                     "idShort":  "ManufacturerName",
                                                     "modelType":  "Property",
+                                                    "semanticId":  {
+                                                        "keys": [
+                                                            {
+                                                                "type": "GlobalReference",
+                                                                "value": "0173-1#02-AAO677#002_8"
+                                                            }
+                                                        ],
+                                                        "type": "ExternalReference"
+                                                    },
                                                     "qualifiers":  [
                                                                        {
                                                                            "kind":  "ConceptQualifier",
@@ -101,7 +119,16 @@
                                                                         }
                                                                     ],
                                                     "idShort":  "NewTestCollection",
-                                                    "modelType":  "SubmodelElementCollection"
+                                                    "modelType":  "SubmodelElementCollection",
+                                                    "semanticId":  {
+                                                        "keys": [
+                                                            {
+                                                                "type": "GlobalReference",
+                                                                "value": "http://acplt.org/SubmodelElementCollections/NewTestCollection_9"
+                                                            }
+                                                        ],
+                                                        "type": "ExternalReference"
+                                                    }
                                                 }
                                             ]
                    },
