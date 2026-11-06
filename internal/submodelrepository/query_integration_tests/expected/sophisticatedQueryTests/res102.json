@@ -222,10 +222,7 @@
                                                        }
                                                    ],
                                           "type":  "ExternalReference"
-                                      },
-                       "submodelElements":  [
-
-                                            ]
+                                      }
                    }
                ]
 }

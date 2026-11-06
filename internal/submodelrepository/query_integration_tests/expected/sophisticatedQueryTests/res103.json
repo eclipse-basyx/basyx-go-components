@@ -5,8 +5,7 @@
             "id": "submodel-29cf5801-eabd-4e8b-8e6c-6fbf72c01037",
             "idShort": "Identification",
             "kind": "Instance",
-            "modelType": "Submodel",
-            "submodelElements": []
+            "modelType": "Submodel"
         },
         {
             "id": "YERPENDERPENDERP",
@@ -25,8 +24,7 @@
                     }
                 ],
                 "type": "ExternalReference"
-            },
-            "submodelElements": []
+            }
         }
     ]
 }

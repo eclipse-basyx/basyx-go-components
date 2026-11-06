@@ -5,8 +5,7 @@
             "idShort": "Query_Language_Submodel_1",
             "modelType": "Submodel",
             "id": "https://nuhuh.de/?text=SubmodelAQueryLanguage",
-            "kind": "Instance",
-            "submodelElements": []
+            "kind": "Instance"
         }
     ]
 }
