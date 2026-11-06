@@ -28,6 +28,7 @@ package rebacintegration
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	neturl "net/url"
@@ -58,8 +59,11 @@ func TestSecurityIdentifierMasksAndReBACGrants(t *testing.T) {
 				result := callRawWithContext(ctx, t, "alice", http.MethodDelete, submodelURL+"/submodels/"+enc(test.id), nil, "", nil)
 				expectStatus(t, http.StatusNoContent, result, "delete fixture")
 			})
-			storeLegacyListIDShorts(t, test.id)
 			target := submodelURL + "/submodels/" + enc(test.id)
+			if test.general {
+				assertMetadataPatchPreservesHiddenFields(t, target, test.id)
+			}
+			storeLegacyListIDShorts(t, test.id)
 			result := call(t, "userx", http.MethodGet, target, nil, nil)
 			expectStatus(t, http.StatusOK, result, "ABAC filtered read")
 			assertSecurityIDShorts(t, result.json(t), !test.general, false, !test.general)
@@ -69,7 +73,6 @@ func TestSecurityIdentifierMasksAndReBACGrants(t *testing.T) {
 			metadata := call(t, "userx", http.MethodGet, target+"/$metadata", nil, nil)
 			expectStatus(t, http.StatusOK, metadata, "ABAC filtered metadata")
 			assertSecuritySubmodelMetadata(t, metadata.json(t), false)
-			assertMetadataPatchPreservesHiddenFields(t, target)
 
 			query := map[string]any{"$condition": map[string]any{"$eq": []any{map[string]any{"$field": "$sm#id"}, map[string]any{"$strVal": test.id}}}}
 			filtered := call(t, "userx", http.MethodPost, submodelURL+"/query/submodels", query, nil)
@@ -109,15 +112,35 @@ func storeLegacyListIDShorts(t *testing.T, id string) {
 	dialect := goqu.Dialect("postgres")
 	submodelID := dialect.From("submodel").Select("id").Where(goqu.C("submodel_identifier").Eq(id))
 	for index, name := range []string{"legacyFirst", "legacySecond"} {
-		query, args, err := dialect.Update("submodel_element").Set(goqu.Record{"id_short": name}).
+		query, args, err := dialect.From("submodel_element").Select("id", "id_short").
 			Where(goqu.C("submodel_id").Eq(submodelID), goqu.C("idshort_path").Eq("items["+strconv.Itoa(index)+"]")).Prepared(true).ToSQL()
 		require.NoError(t, err)
-		result, err := db.ExecContext(t.Context(), query, args...)
-		require.NoError(t, err)
-		count, err := result.RowsAffected()
-		require.NoError(t, err)
-		require.EqualValues(t, 1, count)
+		var elementID int64
+		var original sql.NullString
+		require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&elementID, &original))
+		var originalValue any
+		if original.Valid {
+			originalValue = original.String
+		}
+		t.Cleanup(func() {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 15*time.Second)
+			defer cancel()
+			setFixtureElementIDShort(ctx, t, db, elementID, originalValue)
+		})
+		setFixtureElementIDShort(t.Context(), t, db, elementID, name)
 	}
+}
+
+func setFixtureElementIDShort(ctx context.Context, t *testing.T, db *sql.DB, elementID int64, value any) {
+	t.Helper()
+	query, args, err := goqu.Dialect("postgres").Update("submodel_element").
+		Set(goqu.Record{"id_short": value}).Where(goqu.C("id").Eq(elementID)).Prepared(true).ToSQL()
+	require.NoError(t, err)
+	result, err := db.ExecContext(ctx, query, args...)
+	require.NoError(t, err)
+	count, err := result.RowsAffected()
+	require.NoError(t, err)
+	require.EqualValues(t, 1, count)
 }
 
 func queryResultSubmodel(t *testing.T, result response) map[string]any {
@@ -177,10 +200,10 @@ func assertSecuritySubmodelMetadata(t *testing.T, model map[string]any, modelVis
 	}
 }
 
-func assertMetadataPatchPreservesHiddenFields(t *testing.T, target string) {
+func assertMetadataPatchPreservesHiddenFields(t *testing.T, target, submodelID string) {
 	t.Helper()
 	description := []any{map[string]any{"language": "en", "text": "Updated description"}}
-	patch := map[string]any{"modelType": "Submodel", "description": description}
+	patch := map[string]any{"id": submodelID, "modelType": "Submodel", "description": description}
 	expectStatus(t, http.StatusNoContent, call(t, "userx", http.MethodPatch, target+"/$metadata", patch, nil), "patch visible metadata")
 	ownerRead := call(t, "alice", http.MethodGet, target, nil, nil)
 	expectStatus(t, http.StatusOK, ownerRead, "owner read after metadata patch")
