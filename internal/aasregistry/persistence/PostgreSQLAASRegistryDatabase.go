@@ -256,13 +256,21 @@ func (p *PostgreSQLAASRegistryDatabase) insertAdministrationShellDescriptorBatch
 		if scanErr := batchResults.QueryRow().Scan(&createdAt); scanErr != nil {
 			return common.NewInternalServerError("AASREG-PGBATCH-READCREATEDAT " + scanErr.Error())
 		}
-		result.CreatedAt = &createdAt
+		result = descriptorWithCreatedAt(ctx, result, createdAt)
 		return nil
 	})
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	return result, nil
+}
+
+func descriptorWithCreatedAt(ctx context.Context, descriptor model.AssetAdministrationShellDescriptor, createdAt time.Time) model.AssetAdministrationShellDescriptor {
+	descriptor.CreatedAt = nil
+	if descriptors.IncludeAASDescriptorCreatedAt(ctx) {
+		descriptor.CreatedAt = &createdAt
+	}
+	return descriptor
 }
 
 // buildAdministrationShellDescriptorInsertBatch builds the create statements

@@ -163,7 +163,7 @@ func buildSingleStatementAASDescriptorListQuery(
 		{Fragment: "$aasdesc#description", FlagAlias: "flag_description", RawAlias: common.ColDescriptionPayload},
 		{Fragment: "$aasdesc#extension", FlagAlias: "flag_extension", RawAlias: common.ColExtensionsPayload},
 	}
-	includeCreatedAt := includeAASDescriptorCreatedAtFromContext(ctx)
+	includeCreatedAt := IncludeAASDescriptorCreatedAt(ctx)
 	if includeCreatedAt {
 		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{
 			Fragment: "$aasdesc#createdAt", FlagAlias: "flag_createdat", RawAlias: common.ColCreatedAt,
@@ -290,7 +290,7 @@ func buildAASDescriptorJSON(
 		{name: "specificAssetIds", value: specificAssetIDs},
 		{name: "submodelDescriptors", value: submodelDescriptors},
 	}
-	if includeAASDescriptorCreatedAtFromContext(ctx) {
+	if IncludeAASDescriptorCreatedAt(ctx) {
 		fields = append(fields, descriptorJSONField{name: "createdAt", value: maskedExpressions[8]})
 	}
 	return buildMaskedJSONObject(ctx, nil, fields)
