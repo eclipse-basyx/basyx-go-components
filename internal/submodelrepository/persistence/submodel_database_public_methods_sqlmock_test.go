@@ -1252,6 +1252,33 @@ func TestGetSubmodelReferencesReturnsModelReferencesWithSingleSubmodelKey(t *tes
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetSubmodelsWithElementsOmitsEmptyElements(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{
+		"identifier", "id_short", "category", "kind", "description", "display_name", "administration",
+		"embedded_data_specifications", "supplemental_semantic_ids", "extensions", "qualifiers", "semantic_id", "database_id",
+	}).AddRow("sm-empty", "Empty", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(7)))
+	mock.ExpectQuery("WITH").WillReturnRows(sqlmock.NewRows([]string{"submodel_id"}))
+	mock.ExpectCommit()
+
+	sut := &SubmodelDatabase{db: db}
+	result, _, err := sut.GetSubmodelsWithElementsByListFilters(
+		contextWithABACDisabled(t), 100, "", "", "", time.Time{}, time.Time{}, "deep", true,
+	)
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	jsonable, err := jsonization.ToJsonable(result[0])
+	require.NoError(t, err)
+	require.NotContains(t, jsonable, "submodelElements")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetSubmodelsWithElementsUsesThreePageWideSelects(t *testing.T) {
 	t.Parallel()
 

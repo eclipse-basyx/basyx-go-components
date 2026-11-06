@@ -189,7 +189,11 @@ func (s *SubmodelDatabase) GetSubmodelsWithElementsByListFilters(
 				return common.NewInternalServerError("SMREPO-GETSMSWITHELEMS-PAGEMISMATCH Submodel and database id counts differ")
 			}
 			for index, submodel := range result {
-				submodel.SetSubmodelElements(elements[databaseIDs[index]])
+				pageElements := elements[databaseIDs[index]]
+				if len(pageElements) == 0 {
+					pageElements = nil
+				}
+				submodel.SetSubmodelElements(pageElements)
 			}
 			return nil
 		},

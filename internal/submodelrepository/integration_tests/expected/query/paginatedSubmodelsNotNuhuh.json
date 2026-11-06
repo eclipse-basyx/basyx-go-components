@@ -4373,8 +4373,7 @@
             "id": "MarcusThisIsAMinimalAdministrationSubmodel",
             "idShort": "Identification",
             "kind": "Instance",
-            "modelType": "Submodel",
-            "submodelElements": []
+            "modelType": "Submodel"
         },
         {
             "administration": {
