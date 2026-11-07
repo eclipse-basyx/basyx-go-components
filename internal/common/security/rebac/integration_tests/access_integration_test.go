@@ -27,14 +27,190 @@
 package rebacintegration
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	neturl "net/url"
 	"strconv"
 	"testing"
+	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSecurityIdentifierMasksAndReBACGrants(t *testing.T) {
+	bootstrapCreators(t)
+	for _, test := range []struct {
+		id      string
+		general bool
+	}{
+		{"urn:rebac-it:idshort-general", true},
+		{"urn:rebac-it:idshort-index", false},
+		{"urn:rebac-it:idshort-union", false},
+	} {
+		t.Run(test.id, func(t *testing.T) {
+			fixture := idShortSecurityFixture(test.id)
+			expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, submodelURL+"/submodels", fixture, nil), "create fixture")
+			t.Cleanup(func() {
+				ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 15*time.Second)
+				defer cancel()
+				result := callRawWithContext(ctx, t, "alice", http.MethodDelete, submodelURL+"/submodels/"+enc(test.id), nil, "", nil)
+				expectStatus(t, http.StatusNoContent, result, "delete fixture")
+			})
+			target := submodelURL + "/submodels/" + enc(test.id)
+			if test.general {
+				assertMetadataPatchPreservesHiddenFields(t, target, test.id)
+			}
+			storeLegacyListIDShorts(t, test.id)
+			result := call(t, "userx", http.MethodGet, target, nil, nil)
+			expectStatus(t, http.StatusOK, result, "ABAC filtered read")
+			assertSecurityIDShorts(t, result.json(t), !test.general, false, !test.general)
+			if !test.general {
+				return
+			}
+			metadata := call(t, "userx", http.MethodGet, target+"/$metadata", nil, nil)
+			expectStatus(t, http.StatusOK, metadata, "ABAC filtered metadata")
+			assertSecuritySubmodelMetadata(t, metadata.json(t), false)
+
+			query := map[string]any{"$condition": map[string]any{"$eq": []any{map[string]any{"$field": "$sm#id"}, map[string]any{"$strVal": test.id}}}}
+			filtered := call(t, "userx", http.MethodPost, submodelURL+"/query/submodels", query, nil)
+			expectStatus(t, http.StatusOK, filtered, "ABAC filtered query")
+			assertSecurityIDShorts(t, queryResultSubmodel(t, filtered), false, false, false)
+
+			addGrants(t, "alice", submodelAccess(submodelURL, test.id), userGrant(t, "viewer", "userx"))
+			granted := call(t, "userx", http.MethodGet, target, nil, nil)
+			expectStatus(t, http.StatusOK, granted, "ReBAC granted read")
+			assertSecurityIDShorts(t, granted.json(t), true, true, true)
+			query["$filters"] = []any{map[string]any{"$fragment": "$sme.items[0]#idShort", "$condition": map[string]any{"$boolean": false}}}
+			callerFiltered := call(t, "userx", http.MethodPost, submodelURL+"/query/submodels", query, nil)
+			expectStatus(t, http.StatusOK, callerFiltered, "caller filter with ReBAC grant")
+			assertSecurityIDShorts(t, queryResultSubmodel(t, callerFiltered), true, false, true)
+		})
+	}
+}
+
+func idShortSecurityFixture(id string) map[string]any {
+	semantic := map[string]any{"type": "ExternalReference", "keys": []any{map[string]any{"type": "GlobalReference", "value": "urn:security:semantic"}}}
+	outside := property("outside", "visible")
+	outside["semanticId"] = semantic
+	fixture := submodel(id, "secured", outside, map[string]any{
+		"modelType": "SubmodelElementList", "idShort": "items", "typeValueListElement": "SubmodelElementCollection",
+		"value": []any{
+			map[string]any{"modelType": "SubmodelElementCollection", "value": []any{property("name", "first")}},
+			map[string]any{"modelType": "SubmodelElementCollection", "value": []any{property("name", "second")}},
+		},
+	})
+	fixture["semanticId"] = semantic
+	return fixture
+}
+
+func storeLegacyListIDShorts(t *testing.T, id string) {
+	t.Helper()
+	db := openDB(t)
+	dialect := goqu.Dialect("postgres")
+	submodelID := dialect.From("submodel").Select("id").Where(goqu.C("submodel_identifier").Eq(id))
+	for index, name := range []string{"legacyFirst", "legacySecond"} {
+		query, args, err := dialect.From("submodel_element").Select("id", "id_short").
+			Where(goqu.C("submodel_id").Eq(submodelID), goqu.C("idshort_path").Eq("items["+strconv.Itoa(index)+"]")).Prepared(true).ToSQL()
+		require.NoError(t, err)
+		var elementID int64
+		var original sql.NullString
+		require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&elementID, &original))
+		var originalValue any
+		if original.Valid {
+			originalValue = original.String
+		}
+		t.Cleanup(func() {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 15*time.Second)
+			defer cancel()
+			setFixtureElementIDShort(ctx, t, db, elementID, originalValue)
+		})
+		setFixtureElementIDShort(t.Context(), t, db, elementID, name)
+	}
+}
+
+func setFixtureElementIDShort(ctx context.Context, t *testing.T, db *sql.DB, elementID int64, value any) {
+	t.Helper()
+	query, args, err := goqu.Dialect("postgres").Update("submodel_element").
+		Set(goqu.Record{"id_short": value}).Where(goqu.C("id").Eq(elementID)).Prepared(true).ToSQL()
+	require.NoError(t, err)
+	result, err := db.ExecContext(ctx, query, args...)
+	require.NoError(t, err)
+	count, err := result.RowsAffected()
+	require.NoError(t, err)
+	require.EqualValues(t, 1, count)
+}
+
+func queryResultSubmodel(t *testing.T, result response) map[string]any {
+	t.Helper()
+	page := result.json(t)
+	items, ok := page["result"].([]any)
+	require.True(t, ok)
+	require.Len(t, items, 1)
+	model, ok := items[0].(map[string]any)
+	require.True(t, ok)
+	return model
+}
+
+func assertSecurityIDShorts(t *testing.T, model map[string]any, modelVisible, firstVisible, secondVisible bool) {
+	t.Helper()
+	assertSecuritySubmodelMetadata(t, model, modelVisible)
+	elements, ok := model["submodelElements"].([]any)
+	require.True(t, ok)
+	require.Len(t, elements, 2)
+	byIDShort := make(map[string]map[string]any, len(elements))
+	for _, value := range elements {
+		element, ok := value.(map[string]any)
+		require.True(t, ok)
+		id, ok := element["idShort"].(string)
+		require.True(t, ok)
+		byIDShort[id] = element
+	}
+	outside := byIDShort["outside"]
+	require.NotNil(t, outside)
+	require.Equal(t, "outside", outside["idShort"])
+	require.Contains(t, outside, "semanticId")
+	list := byIDShort["items"]
+	require.NotNil(t, list)
+	require.Equal(t, "items", list["idShort"])
+	entries := list["value"].([]any)
+	require.Len(t, entries, 2)
+	for i, visible := range []bool{firstVisible, secondVisible} {
+		entry := entries[i].(map[string]any)
+		if visible {
+			require.Equal(t, []string{"legacyFirst", "legacySecond"}[i], entry["idShort"])
+		} else {
+			require.NotContains(t, entry, "idShort")
+		}
+		children := entry["value"].([]any)
+		require.Equal(t, "name", children[0].(map[string]any)["idShort"])
+	}
+}
+
+func assertSecuritySubmodelMetadata(t *testing.T, model map[string]any, modelVisible bool) {
+	t.Helper()
+	if modelVisible {
+		require.Equal(t, "secured", model["idShort"])
+		require.Contains(t, model, "semanticId")
+	} else {
+		require.NotContains(t, model, "idShort")
+		require.NotContains(t, model, "semanticId")
+	}
+}
+
+func assertMetadataPatchPreservesHiddenFields(t *testing.T, target, submodelID string) {
+	t.Helper()
+	description := []any{map[string]any{"language": "en", "text": "Updated description"}}
+	patch := map[string]any{"id": submodelID, "modelType": "Submodel", "description": description}
+	expectStatus(t, http.StatusNoContent, call(t, "userx", http.MethodPatch, target+"/$metadata", patch, nil), "patch visible metadata")
+	ownerRead := call(t, "alice", http.MethodGet, target, nil, nil)
+	expectStatus(t, http.StatusOK, ownerRead, "owner read after metadata patch")
+	model := ownerRead.json(t)
+	assertSecuritySubmodelMetadata(t, model, true)
+	require.Equal(t, description, model["description"])
+}
 
 func TestDenialsWithoutGrantsLookExactlyLikeABAC(t *testing.T) {
 	existing := createSubmodel(t, submodelURL, "alice", "denial-probe")

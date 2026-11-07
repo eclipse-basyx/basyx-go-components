@@ -29,6 +29,7 @@ package auth
 import (
 	"context"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
@@ -44,6 +45,21 @@ func WithQueryFilter(ctx context.Context, queryFilter *QueryFilter) context.Cont
 // removes row-level ABAC filters for technical checks such as existence probes.
 func WithoutQueryFilter(ctx context.Context) context.Context {
 	return context.WithValue(ctx, filterKey, struct{}{})
+}
+
+// ContextWithoutFragmentFilters keeps authorization formulas and request metadata
+// while exposing fields needed to merge an internal mutation state.
+func ContextWithoutFragmentFilters(ctx context.Context) (context.Context, error) {
+	queryFilter := GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return ctx, nil
+	}
+	cloned, err := CloneQueryFilter(queryFilter)
+	if err != nil {
+		return nil, common.NewInternalServerError("AUTH-CTXNOFRAG-CLONEFILTER " + err.Error())
+	}
+	cloned.Filters = nil
+	return WithQueryFilter(ctx, cloned), nil
 }
 
 // CloneQueryFilter returns a deep copy of an already compiled query filter.

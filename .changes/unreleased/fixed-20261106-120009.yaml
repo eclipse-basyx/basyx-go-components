@@ -1,0 +1,7 @@
+kind: fixed
+body: Correct query and security fragment scope so submodel fields do not mask submodel element fields. Reject filters targeting mandatory submodel IDs or named element idShorts, and restrict general element idShort filters to direct list members. Update affected queries and security policies before upgrading.
+time: 2026-11-06T12:00:09.1356109+01:00
+custom:
+    Impact: High
+    PullRequest: 855
+    SecurityImpact: Security fragment filters remain scoped to their intended fields; policies targeting mandatory identifiers are rejected during validation and must be updated.
