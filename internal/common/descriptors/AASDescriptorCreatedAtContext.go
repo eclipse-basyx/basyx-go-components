@@ -37,7 +37,8 @@ func WithIncludeAASDescriptorCreatedAt(ctx context.Context) context.Context {
 	return context.WithValue(ctx, includeAASDescriptorCreatedAtKey{}, true)
 }
 
-func includeAASDescriptorCreatedAtFromContext(ctx context.Context) bool {
+// IncludeAASDescriptorCreatedAt reports whether the request includes the DTR creation timestamp.
+func IncludeAASDescriptorCreatedAt(ctx context.Context) bool {
 	v, _ := ctx.Value(includeAASDescriptorCreatedAtKey{}).(bool)
 	return v
 }

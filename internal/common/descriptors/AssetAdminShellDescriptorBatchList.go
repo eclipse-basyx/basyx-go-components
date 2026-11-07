@@ -141,7 +141,7 @@ func buildBatchedAASDescriptorPageQuery(
 	aas := goqu.T(common.TblAASDescriptor).As("aas_descriptor")
 	payload := goqu.T(common.TblDescriptorPayload).As("aas_descriptor_payload")
 	var createdAt exp.Expression = goqu.L("NULL")
-	if includeAASDescriptorCreatedAtFromContext(ctx) {
+	if IncludeAASDescriptorCreatedAt(ctx) {
 		createdAt = aas.Col(common.ColCreatedAt)
 	}
 	dataset := dialect.From(page.As(pageAlias)).
