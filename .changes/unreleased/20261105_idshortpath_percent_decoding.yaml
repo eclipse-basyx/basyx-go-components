@@ -1,0 +1,22 @@
+kind: fixed
+body: >-
+  Requests on a submodel element by idShortPath in the Submodel Repository,
+  the AAS Repository superpath, and AAS Environment decode the percent-encoded
+  idShortPath, which AAS Part 2 requires clients to URL-encode. Previously, an
+  idShortPath with an encoded character that may also appear unencoded in a
+  URL path, for example %3B for ";", %3A for ":", or %2E for ".", was used
+  still encoded, so existing elements were answered with 404. This also
+  affected the URL in the Location header of a created element. An
+  idShortPath that contains "/" after decoding still addresses no element and
+  is answered with 404 as before.
+time: 2026-11-05T12:00:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 852
+  SecurityImpact: >-
+    An idShortPath that contains "/" after decoding deliberately stays
+    unaddressable. ABAC matches ROUTE objects against the decoded request
+    path, in which such an idShort looks like further path segments, so a rule
+    for the attachment route of elements would otherwise grant reading an
+    element named, for example, "x/attachment" to users who may only read
+    attachments.

@@ -1567,7 +1567,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1614,7 +1614,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelElementB
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1675,7 +1675,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElement
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1739,7 +1739,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelEleme
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1775,7 +1775,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElemen
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1841,7 +1841,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1884,7 +1884,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElemen
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1946,7 +1946,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1999,7 +1999,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElemen
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2058,7 +2058,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2099,7 +2099,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2138,7 +2138,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetFileByPathAasRep
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2171,7 +2171,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2214,7 +2214,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteFileByPathAas
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2244,7 +2244,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAasR
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2289,7 +2289,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationValu
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2334,7 +2334,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyn
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2380,7 +2380,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyn
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2430,7 +2430,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncSt
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2473,7 +2473,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncRe
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2515,7 +2515,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncRe
 		return
 	}
 
-	idShortPathParam := chi.URLParam(r, "idShortPath")
+	idShortPathParam := common.URLIDShortPathParam(r)
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
