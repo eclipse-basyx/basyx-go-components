@@ -172,37 +172,6 @@ func submodelValueToAnyMap(value gen.SubmodelValue) map[string]any {
 	return result
 }
 
-func applyNullMetadataClearsToSubmodelElement(element types.ISubmodelElement, rawPatch map[string]any) {
-	if element == nil {
-		return
-	}
-
-	for field, value := range rawPatch {
-		if value != nil {
-			continue
-		}
-
-		switch field {
-		case "description":
-			element.SetDescription([]types.ILangStringTextType{})
-		case "displayName":
-			element.SetDisplayName([]types.ILangStringNameType{})
-		case "embeddedDataSpecifications":
-			element.SetEmbeddedDataSpecifications([]types.IEmbeddedDataSpecification{})
-		case "supplementalSemanticIds":
-			element.SetSupplementalSemanticIDs([]types.IReference{})
-		case "qualifiers":
-			element.SetQualifiers([]types.IQualifier{})
-		case "extensions":
-			element.SetExtensions([]types.IExtension{})
-		case "semanticId":
-			element.SetSemanticID(&types.Reference{})
-		case "category":
-			element.SetCategory(nil)
-		}
-	}
-}
-
 func buildLimitPtr(limit int32) *int {
 	if limit <= 0 {
 		return nil
@@ -210,32 +179,6 @@ func buildLimitPtr(limit int32) *int {
 
 	parsedLimit := int(limit)
 	return &parsedLimit
-}
-
-func mergeJSONObjects(base map[string]any, patch map[string]any) map[string]any {
-	merged := make(map[string]any, len(base))
-	for key, value := range base {
-		merged[key] = value
-	}
-
-	for key, patchValue := range patch {
-		if patchValue == nil {
-			delete(merged, key)
-			continue
-		}
-
-		baseValue, baseExists := merged[key]
-		baseMap, baseIsMap := baseValue.(map[string]any)
-		patchMap, patchIsMap := patchValue.(map[string]any)
-		if baseExists && baseIsMap && patchIsMap {
-			merged[key] = mergeJSONObjects(baseMap, patchMap)
-			continue
-		}
-
-		merged[key] = patchValue
-	}
-
-	return merged
 }
 
 // mergeSubmodelElementPatch merges patch into base and keeps the value only
@@ -269,7 +212,7 @@ func storedOnlyUnlessPatchedFields(element map[string]any) []string {
 // elements and operation variables only when the patch sets them, so that
 // unpatched stored values are neither validated again nor rewritten.
 func mergeSubmodelElementMetadataPatch(base map[string]any, patch map[string]any) map[string]any {
-	merged := mergeJSONObjects(base, patch)
+	merged := common.MergeMetadataPatch(base, patch)
 	for _, field := range storedOnlyUnlessPatchedFields(merged) {
 		if _, patched := patch[field]; !patched {
 			delete(merged, field)
@@ -1330,7 +1273,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 
 	patchJSON["id"] = decodedIdentifier
 
-	mergedJSON := mergeJSONObjects(existingJSON, patchJSON)
+	mergedJSON := common.MergeMetadataPatch(existingJSON, patchJSON)
 
 	mergedSubmodel, mergedErr := jsonization.SubmodelFromJsonable(mergedJSON)
 	if mergedErr != nil {
@@ -1432,7 +1375,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.
 		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), nil
 	}
 
-	mergedJSON := mergeJSONObjects(existingJSON, patchJSON)
+	mergedJSON := common.MergeMetadataPatch(existingJSON, patchJSON)
 	delete(mergedJSON, "submodelElements")
 	mergedSubmodel, mergedErr := jsonization.SubmodelFromJsonable(mergedJSON)
 	if mergedErr != nil {
@@ -2136,23 +2079,6 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	mergeCtx, filterErr := auth.ContextWithoutFragmentFilters(ctx)
-	if filterErr != nil {
-		return newAPIErrorResponse(filterErr, http.StatusInternalServerError, operation, "CloneMergeContext"), nil
-	}
-	existingElement, getErr := s.submodelBackend.GetSubmodelElement(mergeCtx, decodedSubmodelIdentifier, idShortPath, true, "")
-	if getErr != nil {
-		if errors.Is(getErr, sql.ErrNoRows) || common.IsErrNotFound(getErr) {
-			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
-		}
-		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
-	}
-
-	existingJSON, existingJSONErr := jsonization.ToJsonable(existingElement)
-	if existingJSONErr != nil {
-		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodelElement"), nil
-	}
-
 	patchJSON, patchJSONErr := submodelElementMetadataToJSONPatch(submodelElementMetadata)
 	if patchJSONErr != nil {
 		return newAPIErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelElementMetadata"), nil
@@ -2161,25 +2087,15 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		patchJSON = rawPatchJSON
 	}
 
-	if validationErr := validateSubmodelElementMetadataModelType(existingJSON, patchJSON); validationErr != nil {
-		return newAPIErrorResponse(validationErr, http.StatusBadRequest, operation, "InvalidSubmodelElementMetadata"), nil
-	}
-
-	mergedJSON := mergeSubmodelElementMetadataPatch(existingJSON, patchJSON)
-	mergedElement, mergedErr := jsonization.SubmodelElementFromJsonable(mergedJSON)
-	if mergedErr != nil {
-		return newAPIErrorResponse(mergedErr, http.StatusBadRequest, operation, "InvalidPatchedSubmodelElement"), nil
-	}
-	if rawPatchJSON, hasRawPatch := common.GetSubmodelElementMetadataPatch(ctx); hasRawPatch {
-		applyNullMetadataClearsToSubmodelElement(mergedElement, rawPatchJSON)
-	}
-
-	if err := s.submodelBackend.UpdateSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, mergedElement, false); err != nil {
+	if err := s.submodelBackend.PatchSubmodelElementMetadata(ctx, decodedSubmodelIdentifier, idShortPath, patchJSON); err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
 		}
 		if common.IsErrConflict(err) {
 			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
@@ -2188,14 +2104,6 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
-}
-
-func validateSubmodelElementMetadataModelType(existingJSON map[string]any, patchJSON map[string]any) error {
-	existingModelType, _ := existingJSON["modelType"].(string)
-	if patchModelType, ok := patchJSON["modelType"].(string); ok && patchModelType != existingModelType {
-		return errors.New("SMREPO-PATCHSMEMETA-MODELTYPEMISMATCH metadata modelType must match existing submodel element modelType")
-	}
-	return nil
 }
 
 // GetSubmodelElementByPathValueOnlySubmodelRepo - Returns a specific submodel element from the Submodel at a specified path in the ValueOnly representation

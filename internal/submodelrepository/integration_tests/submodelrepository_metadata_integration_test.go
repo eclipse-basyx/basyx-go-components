@@ -27,6 +27,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -35,6 +36,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
@@ -348,6 +350,44 @@ func TestPatchSubmodelElementMetadataTypeSpecificFields(t *testing.T) {
 
 		require.Equal(t, "motor/alerts", getJSONMap(t, eventURL+"/$metadata")["messageTopic"])
 	})
+}
+
+func TestMetadataDescriptionPatchLeavesValueRowsUntouched(t *testing.T) {
+	submodelID, elementsURL := createMetadataTestSubmodel(t, submodelRepositoryBaseURL, "metadata-value-rows", metadataTestSubmodelPayload)
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	for _, test := range []struct{ path, table string }{
+		{"Temperature", "property_element"}, {"Limits", "range_element"},
+		{"Firmware", "blob_element"}, {"Manual", "file_element"},
+		{"Link", "reference_element"}, {"Relation", "relationship_element"},
+		{"Event", "basic_event_element"}, {"Motor", "entity_element"},
+		{"Readings", "submodel_element_list"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			endpoint := elementsURL + "/" + test.path
+			expected := getJSONMap(t, endpoint)
+			before := metadataValueRowVersion(t, db, submodelID, test.path, test.table)
+			description := []any{map[string]any{"language": "en", "text": "Metadata update"}}
+			patchMetadata(t, endpoint, map[string]any{"modelType": expected["modelType"], "description": description}, http.StatusNoContent)
+			expected["description"] = description
+			require.Equal(t, expected, getJSONMap(t, endpoint))
+			require.Equal(t, before, metadataValueRowVersion(t, db, submodelID, test.path, test.table))
+		})
+	}
+}
+
+func metadataValueRowVersion(t *testing.T, db *sql.DB, submodelID, path, table string) string {
+	t.Helper()
+	submodel := goqu.From("submodel").Select("id").Where(goqu.C("submodel_identifier").Eq(submodelID))
+	element := goqu.From("submodel_element").Select("id").
+		Where(goqu.C("submodel_id").Eq(submodel), goqu.C("idshort_path").Eq(path))
+	query, args, err := goqu.Dialect("postgres").From(table).
+		Select(goqu.L("xmin::text")).Where(goqu.C("id").Eq(element)).Prepared(true).ToSQL()
+	require.NoError(t, err)
+	var version string
+	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&version))
+	return version
 }
 
 // skipWithoutStrictVerificationService skips tests that need the strict
