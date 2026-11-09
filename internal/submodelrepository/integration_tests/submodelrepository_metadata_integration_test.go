@@ -379,14 +379,20 @@ func TestMetadataDescriptionPatchLeavesValueRowsUntouched(t *testing.T) {
 
 func metadataValueRowVersion(t *testing.T, db *sql.DB, submodelID, path, table string) string {
 	t.Helper()
-	submodel := goqu.From("submodel").Select("id").Where(goqu.C("submodel_identifier").Eq(submodelID))
-	element := goqu.From("submodel_element").Select("id").
-		Where(goqu.C("submodel_id").Eq(submodel), goqu.C("idshort_path").Eq(path))
-	query, args, err := goqu.Dialect("postgres").From(table).
-		Select(goqu.L("xmin::text")).Where(goqu.C("id").Eq(element)).Prepared(true).ToSQL()
+	query, args, err := goqu.Dialect(common.Dialect).
+		From(goqu.T(table).As("value_row")).
+		Join(goqu.T("submodel_element").As("element"),
+			goqu.On(goqu.I("value_row.id").Eq(goqu.I("element.id")))).
+		Join(goqu.T("submodel").As("submodel"),
+			goqu.On(goqu.I("element.submodel_id").Eq(goqu.I("submodel.id")))).
+		Select(goqu.Cast(goqu.I("value_row.xmin"), "text")).
+		Where(
+			goqu.I("submodel.submodel_identifier").Eq(submodelID),
+			goqu.I("element.idshort_path").Eq(path),
+		).Prepared(true).ToSQL()
 	require.NoError(t, err)
 	var version string
-	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&version))
+	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(&version), "query=%s", query)
 	return version
 }
 
