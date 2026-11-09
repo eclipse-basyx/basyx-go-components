@@ -1,7 +1,7 @@
 {
     "modelType": "Submodel",
     "id": "MarcusThisIsAOnlyReferenceElementSubmodel",
-    "idShort": "123",
+    "idShort": "A123",
     "kind":"Instance",
     "administration": {
         "revision": "1",

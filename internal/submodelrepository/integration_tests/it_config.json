@@ -178,28 +178,28 @@
     {
         "context": "Delete item in nested structure",
         "method": "DELETE",
-        "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/A1.A2.A3.A4.A5.A6[0]",
         "data": "bodies/post/postNestedStructure.json",
         "expectedStatus": 204
     },
     {
         "context": "Delete item in nested structure - Delete non-existing item",
         "method": "DELETE",
-        "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[3]",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/A1.A2.A3.A4.A5.A6[3]",
         "data": "bodies/post/postNestedStructure.json",
         "expectedStatus": 404
     },
     {
         "context": "Delete item in nested structure",
         "method": "GET",
-        "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/A1",
         "shouldMatch": "expected/expectedNestedStructureAfterDeleteListItem.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete item in nested structure",
         "method": "GET",
-        "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
+        "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/A1.A2.A3.A4.A5.A6[0]",
         "shouldMatch": "expected/expectedItemInListAfterDelete.json",
         "expectedStatus": 200
     },

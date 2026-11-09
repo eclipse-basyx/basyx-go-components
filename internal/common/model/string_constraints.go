@@ -28,6 +28,8 @@ package model
 import (
 	"errors"
 	"regexp"
+
+	"github.com/FriedJannik/aas-go-sdk/verification"
 )
 
 const (
@@ -35,7 +37,17 @@ const (
 	idShortConstraintPattern       = `^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9_]+$`
 )
 
+// MaxIDShortLength is the maximum length of the idShort of a Referable in the
+// AAS metamodel.
+const MaxIDShortLength = 128
+
 var idShortRegexp = regexp.MustCompile(idShortConstraintPattern)
+
+// IsValidIDShort reports whether idShort matches the pattern and the maximum
+// length of the idShort of a Referable in the AAS metamodel JSON schema.
+func IsValidIDShort(idShort string) bool {
+	return len(idShort) <= MaxIDShortLength && verification.MatchesIDShort(idShort)
+}
 
 func validateUnicodeStringConstraint(value string) error {
 	for _, r := range value {

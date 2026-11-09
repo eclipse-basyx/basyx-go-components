@@ -34,6 +34,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 func TestBuildAASPreservesLongIdentifierWithValidIDShort(t *testing.T) {
@@ -230,5 +231,37 @@ func assertValidSubmodel(t *testing.T, submodel types.ISubmodel) {
 	})
 	if len(verificationErrors) != 0 {
 		t.Fatalf("VerifySubmodel() errors = %#v", verificationErrors)
+	}
+}
+
+func TestBuildContentSubmodelAcceptsSectionsWithValidIDShort(t *testing.T) {
+	carbonFootprint := "https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0"
+	testCases := []struct {
+		sectionName string
+		idShort     string
+		id          string
+	}{
+		{sectionName: carbonFootprint, idShort: "CarbonFootprint", id: "urn:dpp/submodels/CarbonFootprint-" + contentSectionHash(carbonFootprint)},
+		{sectionName: "nameplate", idShort: "Nameplate", id: "urn:dpp/submodels/Nameplate"},
+		{sectionName: "carbon-footprint", idShort: "Carbonfootprint", id: "urn:dpp/submodels/Carbonfootprint-" + contentSectionHash("carbon-footprint")},
+		{sectionName: "--", idShort: "Content", id: "urn:dpp/submodels/Content-" + contentSectionHash("--")},
+	}
+	for _, testCase := range testCases {
+		submodel, err := buildContentSubmodel("urn:dpp", testCase.sectionName, "", map[string]any{})
+		if err != nil {
+			t.Fatalf("buildContentSubmodel(%q) error = %v", testCase.sectionName, err)
+		}
+		if *submodel.IDShort() != testCase.idShort || submodel.ID() != testCase.id {
+			t.Fatalf("buildContentSubmodel(%q) = idShort %q, id %q; want idShort %q, id %q", testCase.sectionName, *submodel.IDShort(), submodel.ID(), testCase.idShort, testCase.id)
+		}
+	}
+}
+
+func TestBuildContentSubmodelRejectsSectionsWithoutValidIDShort(t *testing.T) {
+	for _, sectionName := range []string{"1st section", "https://example.org/sections/7/a", "_internal", strings.Repeat("b", model.MaxIDShortLength+1)} {
+		_, err := buildContentSubmodel("urn:dpp", sectionName, "", map[string]any{})
+		if err == nil || !strings.HasPrefix(err.Error(), "DPP-BUILDSM-SECTIONIDSHORT ") {
+			t.Fatalf("buildContentSubmodel(%q) error = %v, want DPP-BUILDSM-SECTIONIDSHORT", sectionName, err)
+		}
 	}
 }

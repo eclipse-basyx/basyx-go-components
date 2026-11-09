@@ -206,8 +206,8 @@ func TestDelegationOperation(t *testing.T) {
 					},
 				},
 				"inputVariables": []any{
-					map[string]any{"value": map[string]any{"modelType": "Property", "idShort": "a", "valueType": "xs:int", "value": "0"}},
-					map[string]any{"value": map[string]any{"modelType": "Property", "idShort": "b", "valueType": "xs:int", "value": "0"}},
+					map[string]any{"value": map[string]any{"modelType": "Property", "idShort": "lhs", "valueType": "xs:int", "value": "0"}},
+					map[string]any{"value": map[string]any{"modelType": "Property", "idShort": "rhs", "valueType": "xs:int", "value": "0"}},
 				},
 				"outputVariables": []any{
 					map[string]any{"value": map[string]any{"modelType": "Property", "idShort": "sum", "valueType": "xs:int", "value": "0"}},
@@ -263,8 +263,8 @@ func TestDelegationOperation(t *testing.T) {
 	valueOnlyRequestBody, err := json.Marshal(map[string]any{
 		"clientTimeoutDuration": "PT10S",
 		"inputArguments": map[string]any{
-			"a": 5,
-			"b": 3,
+			"lhs": 5,
+			"rhs": 3,
 		},
 	})
 	require.NoError(t, err)

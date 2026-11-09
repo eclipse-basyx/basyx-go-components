@@ -119,7 +119,14 @@ func NewConceptDescriptionBackendFromPools(writer *sql.DB, reader *sql.DB, stric
 	return &ConceptDescriptionBackend{db: writer, readerDB: reader, verificationMode: verificationMode}, nil
 }
 
-func (b *ConceptDescriptionBackend) verifyConceptDescription(cd types.IConceptDescription, errorPrefix string) error {
+// verifyConceptDescription validates the idShort of a concept description in
+// every verification mode and the whole concept description when strict
+// verification is enabled.
+func (b *ConceptDescriptionBackend) verifyConceptDescription(cd types.IConceptDescription, errorScope string) error {
+	if err := common.ValidateOptionalIDShort(errorScope, "Concept Description in the request body", cd.IDShort()); err != nil {
+		return err
+	}
+	errorPrefix := errorScope + "-VERIFY"
 	return model.ValidateWithMode(
 		b.verificationMode,
 		errorPrefix,
@@ -443,7 +450,7 @@ func (b *ConceptDescriptionBackend) ensureVisibleConceptDescriptionCreateDoesNot
 
 // CreateConceptDescription inserts a new concept description into the database.
 func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context, cd types.IConceptDescription) (err error) {
-	if err = b.verifyConceptDescription(cd, "CDREPO-CRTCD-VERIFY"); err != nil {
+	if err = b.verifyConceptDescription(cd, "CDREPO-CRTCD"); err != nil {
 		return err
 	}
 	tx, cleanup, err := common.StartTransaction(b.db)
@@ -749,7 +756,7 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 	if id != cd.ID() {
 		return false, common.NewErrBadRequest("CDREPO-PUTCD-IDMISMATCH Concept Description ID in path and body do not match")
 	}
-	if err := b.verifyConceptDescription(cd, "CDREPO-PUTCD-VERIFY"); err != nil {
+	if err := b.verifyConceptDescription(cd, "CDREPO-PUTCD"); err != nil {
 		return false, err
 	}
 

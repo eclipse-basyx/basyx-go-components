@@ -1543,7 +1543,7 @@
                                     },
                                     "value": [
                                         {
-                                            "idShort": "X",
+                                            "idShort": "PosX",
                                             "modelType": "Property",
                                             "qualifiers": [
                                                 {
@@ -1574,7 +1574,7 @@
                                             "valueType": "xs:float"
                                         },
                                         {
-                                            "idShort": "Y",
+                                            "idShort": "PosY",
                                             "modelType": "Property",
                                             "qualifiers": [
                                                 {
@@ -1605,7 +1605,7 @@
                                             "valueType": "xs:float"
                                         },
                                         {
-                                            "idShort": "Z",
+                                            "idShort": "PosZ",
                                             "modelType": "Property",
                                             "qualifiers": [
                                                 {
@@ -2764,7 +2764,7 @@
                                                             "text": "X-Koordinate"
                                                         }
                                                     ],
-                                                    "idShort": "X",
+                                                    "idShort": "PosX",
                                                     "modelType": "Property",
                                                     "qualifiers": [
                                                         {
@@ -2805,7 +2805,7 @@
                                                             "text": "Y-Koordinate"
                                                         }
                                                     ],
-                                                    "idShort": "Y",
+                                                    "idShort": "PosY",
                                                     "modelType": "Property",
                                                     "qualifiers": [
                                                         {
@@ -3138,7 +3138,7 @@
                                                     "text": "X-Koordinate"
                                                 }
                                             ],
-                                            "idShort": "X",
+                                            "idShort": "PosX",
                                             "modelType": "Property",
                                             "qualifiers": [
                                                 {
@@ -3179,7 +3179,7 @@
                                                     "text": "Y-Koordinate"
                                                 }
                                             ],
-                                            "idShort": "Y",
+                                            "idShort": "PosY",
                                             "modelType": "Property",
                                             "qualifiers": [
                                                 {

@@ -278,10 +278,17 @@ func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix 
 }
 
 func (s *SubmodelDatabase) verifySubmodelWithElements(submodel types.ISubmodel, errorScope string) error {
-	if err := requireSubmodelIDShorts(submodel, errorScope+"-MISSINGIDSHORT"); err != nil {
+	if err := requireSubmodelIDShorts(submodel, errorScope); err != nil {
 		return err
 	}
 	return s.verifySubmodel(submodel, errorScope+"-VERIFY")
+}
+
+func (s *SubmodelDatabase) verifySubmodelMetadata(submodel types.ISubmodel) error {
+	if err := common.ValidateOptionalIDShort("SMREPO-PATCHSMMETA", "Submodel in the request body", submodel.IDShort()); err != nil {
+		return err
+	}
+	return s.verifySubmodel(submodel, "SMREPO-PATCHSMMETA-VERIFY")
 }
 
 func (s *SubmodelDatabase) verificationEnabled() bool {
@@ -416,7 +423,7 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(ctx context.Context, submodelID
 		return common.NewErrBadRequest("SMREPO-PATCHSMMETA-IDMISMATCH Submodel ID in path and body do not match")
 	}
 
-	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSMMETA-VERIFY"); err != nil {
+	if err := s.verifySubmodelMetadata(submodel); err != nil {
 		return err
 	}
 
@@ -455,7 +462,7 @@ func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(ctx context.Contex
 		return common.NewErrBadRequest("SMREPO-PATCHSMMETA-IDMISMATCH Submodel ID in path and body do not match")
 	}
 
-	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSMMETA-VERIFY"); err != nil {
+	if err := s.verifySubmodelMetadata(submodel); err != nil {
 		return err
 	}
 	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)

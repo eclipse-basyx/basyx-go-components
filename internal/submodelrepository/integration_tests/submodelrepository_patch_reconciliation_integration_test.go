@@ -125,29 +125,29 @@ func TestPatchSubmodelKeepsSubmodelAndUnchangedElementRows(t *testing.T) {
 func TestPutSubmodelElementReconcilesCollectionChildren(t *testing.T) {
 	fixture := newElementReconciliationFixture(t, "put-sme-collection",
 		reconciliationTestCollection("Items",
-			reconciliationTestProperty("A", "a"),
-			reconciliationTestProperty("B", "b"),
-			reconciliationTestCollection("C", reconciliationTestProperty("D", "d")),
+			reconciliationTestProperty("AA", "a"),
+			reconciliationTestProperty("BB", "b"),
+			reconciliationTestCollection("CC", reconciliationTestProperty("DD", "d")),
 		),
 	)
 	before := fixture.rows()
 
 	fixture.send(http.MethodPut, fixture.elementEndpoint("Items"), reconciliationTestCollection("Items",
-		reconciliationTestCollection("C", reconciliationTestProperty("D", "d")),
-		reconciliationTestProperty("A", "changed"),
-		reconciliationTestProperty("E", "e"),
+		reconciliationTestCollection("CC", reconciliationTestProperty("DD", "d")),
+		reconciliationTestProperty("AA", "changed"),
+		reconciliationTestProperty("EE", "e"),
 	))
 
 	after := fixture.rows()
-	for _, path := range []string{"Items", "Items.A", "Items.C", "Items.C.D"} {
+	for _, path := range []string{"Items", "Items.AA", "Items.CC", "Items.CC.DD"} {
 		require.Equal(t, before[path].id, after[path].id, "path %s was recreated", path)
 	}
-	require.NotContains(t, after, "Items.B")
-	requireConsistentElementHierarchy(t, after, "Items", "Items.A", "Items.C", "Items.C.D", "Items.E")
-	require.Equal(t, 0, after["Items.C"].position)
-	require.Equal(t, 1, after["Items.A"].position)
-	require.Equal(t, 2, after["Items.E"].position)
-	require.Equal(t, "changed", fixture.element("Items.A")["value"])
+	require.NotContains(t, after, "Items.BB")
+	requireConsistentElementHierarchy(t, after, "Items", "Items.AA", "Items.CC", "Items.CC.DD", "Items.EE")
+	require.Equal(t, 0, after["Items.CC"].position)
+	require.Equal(t, 1, after["Items.AA"].position)
+	require.Equal(t, 2, after["Items.EE"].position)
+	require.Equal(t, "changed", fixture.element("Items.AA")["value"])
 }
 
 func TestPutSubmodelElementReconcilesListItems(t *testing.T) {
@@ -206,24 +206,24 @@ func TestPutSubmodelElementClearsLargeCollection(t *testing.T) {
 
 func TestPatchSubmodelElementValueReplacesCollectionChildren(t *testing.T) {
 	fixture := newElementReconciliationFixture(t, "patch-sme-collection",
-		reconciliationTestCollection("Items", reconciliationTestProperty("A", "a"), reconciliationTestProperty("B", "b")),
+		reconciliationTestCollection("Items", reconciliationTestProperty("AA", "a"), reconciliationTestProperty("BB", "b")),
 	)
 	before := fixture.rows()
 
 	fixture.send(http.MethodPatch, fixture.elementEndpoint("Items"), map[string]any{
 		"modelType": "SubmodelElementCollection",
-		"value":     []any{reconciliationTestProperty("A", "changed"), reconciliationTestProperty("C", "c")},
+		"value":     []any{reconciliationTestProperty("AA", "changed"), reconciliationTestProperty("CC", "c")},
 	})
 
 	after := fixture.rows()
 	require.Equal(t, before["Items"].id, after["Items"].id)
-	require.Equal(t, before["Items.A"].id, after["Items.A"].id)
-	require.NotContains(t, after, "Items.B")
-	requireConsistentElementHierarchy(t, after, "Items", "Items.A", "Items.C")
+	require.Equal(t, before["Items.AA"].id, after["Items.AA"].id)
+	require.NotContains(t, after, "Items.BB")
+	requireConsistentElementHierarchy(t, after, "Items", "Items.AA", "Items.CC")
 	children := fixture.element("Items")["value"].([]any)
 	require.Len(t, children, 2)
 	require.Equal(t, "changed", children[0].(map[string]any)["value"])
-	require.Equal(t, "C", children[1].(map[string]any)["idShort"])
+	require.Equal(t, "CC", children[1].(map[string]any)["idShort"])
 
 	fixture.send(http.MethodPatch, fixture.elementEndpoint("Items"), map[string]any{
 		"modelType": "SubmodelElementCollection",
@@ -253,7 +253,7 @@ func TestPatchSubmodelElementValueReplacesListItems(t *testing.T) {
 
 func TestPatchSubmodelElementWithoutValueKeepsChildren(t *testing.T) {
 	fixture := newElementReconciliationFixture(t, "patch-sme-metadata",
-		reconciliationTestCollection("Items", reconciliationTestProperty("A", "a")),
+		reconciliationTestCollection("Items", reconciliationTestProperty("AA", "a")),
 	)
 	before := fixture.rows()
 
@@ -268,7 +268,7 @@ func TestPatchSubmodelElementWithoutValueKeepsChildren(t *testing.T) {
 
 	after := fixture.rows()
 	require.Equal(t, before["Items"].id, after["Items"].id)
-	require.Equal(t, before["Items.A"].id, after["Items.A"].id)
+	require.Equal(t, before["Items.AA"].id, after["Items.AA"].id)
 	element := fixture.element("Items")
 	require.Equal(t, "VARIABLE", element["category"])
 	require.Len(t, element["value"].([]any), 1)
@@ -277,28 +277,28 @@ func TestPatchSubmodelElementWithoutValueKeepsChildren(t *testing.T) {
 func TestPutSubmodelAfterDeletingNestedElementKeepsSiblingPositionsUnique(t *testing.T) {
 	fixture := newElementReconciliationFixture(t, "put-after-delete",
 		reconciliationTestCollection("Items",
-			reconciliationTestProperty("A", "a"),
-			reconciliationTestProperty("B", "b"),
-			reconciliationTestProperty("C", "c"),
+			reconciliationTestProperty("AA", "a"),
+			reconciliationTestProperty("BB", "b"),
+			reconciliationTestProperty("CC", "c"),
 		),
 	)
-	status, body := sendReconciliationRequest(t, http.MethodDelete, fixture.elementEndpoint("Items.B"), nil)
+	status, body := sendReconciliationRequest(t, http.MethodDelete, fixture.elementEndpoint("Items.BB"), nil)
 	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
 	before := fixture.rows()
 
 	fixture.send(http.MethodPut, fixture.endpoint, reconciliationTestSubmodel(fixture.submodelID, "Before",
 		reconciliationTestCollection("Items",
-			reconciliationTestProperty("A", "a"),
-			reconciliationTestProperty("C", "c"),
-			reconciliationTestProperty("D", "d"),
+			reconciliationTestProperty("AA", "a"),
+			reconciliationTestProperty("CC", "c"),
+			reconciliationTestProperty("DD", "d"),
 		),
 	))
 
 	after := fixture.rows()
-	require.Equal(t, before["Items.C"].id, after["Items.C"].id)
-	require.Equal(t, 0, after["Items.A"].position)
-	require.Equal(t, 1, after["Items.C"].position)
-	require.Equal(t, 2, after["Items.D"].position)
+	require.Equal(t, before["Items.CC"].id, after["Items.CC"].id)
+	require.Equal(t, 0, after["Items.AA"].position)
+	require.Equal(t, 1, after["Items.CC"].position)
+	require.Equal(t, 2, after["Items.DD"].position)
 }
 
 func requireConsistentElementHierarchy(t *testing.T, rows map[string]persistedElementHierarchy, paths ...string) {

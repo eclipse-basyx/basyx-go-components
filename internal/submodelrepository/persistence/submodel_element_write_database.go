@@ -49,7 +49,7 @@ import (
 )
 
 func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (string, error) {
-	if err := requireOwnIDShort(submodelElement, false, "SMREPO-ADDSME-MISSINGIDSHORT"); err != nil {
+	if err := requireOwnIDShort(submodelElement, false, "SMREPO-ADDSME"); err != nil {
 		return "", err
 	}
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForNoKeyUpdateContext(ctx, tx, submodelID)
@@ -265,7 +265,7 @@ func (s *SubmodelDatabase) GetSubmodelElementReferences(ctx context.Context, sub
 
 // AddSubmodelElement adds a top-level submodel element and performs an ABAC re-check before commit when ABAC is enabled.
 func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID string, submodelElement types.ISubmodelElement) (err error) {
-	if err = requireSubmodelElementIDShorts(submodelElement, false, "SMREPO-ADDSME-MISSINGIDSHORT"); err != nil {
+	if err = requireSubmodelElementIDShorts(submodelElement, false, "SMREPO-ADDSME"); err != nil {
 		return err
 	}
 	tx, cleanup, err := common.StartTransactionContext(ctx, s.db)
@@ -323,7 +323,7 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 	if !acceptsChildren {
 		return "", common.NewErrBadRequest("SMREPO-ADDSMEBYPATH-BADPARENT Parent element does not support child elements")
 	}
-	if err = requireOwnIDShort(submodelElement, isFromList, "SMREPO-ADDSMEBYPATH-MISSINGIDSHORT"); err != nil {
+	if err = requireOwnIDShort(submodelElement, isFromList, "SMREPO-ADDSMEBYPATH"); err != nil {
 		return "", err
 	}
 	idShort := ""
@@ -451,7 +451,7 @@ func newSubmodelElementParentNotFoundError(parentPath string) error {
 // AddSubmodelElementWithPath adds a submodel element under an existing container path
 // while preserving ABAC visibility checks from ctx.
 func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
-	if err := requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-ADDSMEBYPATH-MISSINGIDSHORT"); err != nil {
+	if err := requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-ADDSMEBYPATH"); err != nil {
 		return err
 	}
 	tx, cleanup, err := common.StartTransactionContext(ctx, s.db)
@@ -526,7 +526,7 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 	idShortPath string,
 	submodelElement types.ISubmodelElement,
 ) (bool, error) {
-	if err := requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-PUTSME-MISSINGIDSHORT"); err != nil {
+	if err := requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-PUTSME"); err != nil {
 		return false, err
 	}
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
@@ -657,6 +657,9 @@ func (s *SubmodelDatabase) replaceSubmodelElementForPut(
 	idShortPath string,
 	submodelElement types.ISubmodelElement,
 ) (submodelElementRootMutation, error) {
+	if err := requireTargetIDShort(idShortPath, submodelElement, true, "SMREPO-PUTSME"); err != nil {
+		return submodelElementRootMutation{}, err
+	}
 	if err := s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, submodelElement, true); err != nil {
 		return submodelElementRootMutation{}, err
 	}
@@ -674,6 +677,9 @@ func (s *SubmodelDatabase) createSubmodelElementForPut(
 	idShortPath string,
 	submodelElement types.ISubmodelElement,
 ) (submodelElementRootMutation, error) {
+	if err := requireTargetIDShort(idShortPath, submodelElement, false, "SMREPO-PUTSME"); err != nil {
+		return submodelElementRootMutation{}, err
+	}
 	parentPath, targetIDShort, err := resolvePutCreateTargetPathParts(idShortPath)
 	if err != nil {
 		return submodelElementRootMutation{}, err
@@ -797,7 +803,10 @@ func (s *SubmodelDatabase) ensureSubmodelElementCanBeDeleted(ctx context.Context
 // Before the transaction commits, the persisted element, or the enclosing list of a
 // list member, is verified according to the configured verification mode.
 func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (err error) {
-	if err = requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-UPDSME-MISSINGIDSHORT"); err != nil {
+	if err = requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-UPDSME"); err != nil {
+		return err
+	}
+	if err = requireTargetIDShort(idShortOrPath, submodelElement, isPut, "SMREPO-UPDSME"); err != nil {
 		return err
 	}
 	tx, cleanup, err := common.StartTransaction(s.db)
