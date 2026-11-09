@@ -69,6 +69,7 @@ func TestMetadataPatchChecksModelTypeUnderLock(t *testing.T) {
 			WithArgs("Temperature", 7).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "model_type"}).AddRow(42, types.ModelTypeProperty))
 		mock.ExpectRollback()
+		mock.ExpectClose()
 		tx, err := db.Begin()
 		require.NoError(t, err)
 		target, err := lockMetadataTargetTx(contextWithABACDisabled(t), tx, "sm-1", "Temperature", requested)
@@ -80,8 +81,8 @@ func TestMetadataPatchChecksModelTypeUnderLock(t *testing.T) {
 			require.ErrorContains(t, err, "MODELTYPEMISMATCH")
 		}
 		require.NoError(t, tx.Rollback())
-		require.NoError(t, mock.ExpectationsWereMet())
 		require.NoError(t, db.Close())
+		require.NoError(t, mock.ExpectationsWereMet())
 	}
 }
 

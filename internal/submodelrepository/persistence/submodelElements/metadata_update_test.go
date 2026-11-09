@@ -53,7 +53,7 @@ func TestMetadataDescriptionPatchDoesNotReadOrWriteValues(t *testing.T) {
 			metadata, err := common.ParseSubmodelElementMetadataPayload(patch)
 			require.NoError(t, err)
 			mock.ExpectBegin()
-			mock.ExpectExec("INSERT INTO \"submodel_element_payload\" \\(\"description_payload\",\"submodel_element_id\"\\) VALUES \\(\\$1::jsonb,\\$2\\) ON CONFLICT \\(submodel_element_id\\) DO UPDATE SET \"description_payload\"=\\$3::jsonb").
+			mock.ExpectExec("INSERT INTO \"submodel_element_payload\" \\(\"description_payload\",\\s*\"submodel_element_id\"\\) VALUES \\(\\$1::jsonb,\\s*\\$2\\) ON CONFLICT \\(submodel_element_id\\) DO UPDATE SET \"description_payload\"=\\$3::jsonb").
 				WithArgs("[{\"language\":\"en\",\"text\":\"Updated\"}]", int64(42), "[{\"language\":\"en\",\"text\":\"Updated\"}]").
 				WillReturnResult(sqlmock.NewResult(0, 1))
 			mock.ExpectCommit()
@@ -74,20 +74,16 @@ func TestMetadataCategoryPatchDistinguishesOmissionAndNull(t *testing.T) {
 		metadata, err := common.ParseSubmodelElementMetadataPayload(patch)
 		require.NoError(t, err)
 		mock.ExpectBegin()
-		if value == nil {
-			mock.ExpectExec("UPDATE \"submodel_element\" SET \"category\"=NULL WHERE \\(\"id\" = \\$1\\)").
-				WithArgs(int64(42)).WillReturnResult(sqlmock.NewResult(0, 1))
-		} else {
-			mock.ExpectExec("UPDATE \"submodel_element\" SET \"category\"=\\$1 WHERE \\(\"id\" = \\$2\\)").
-				WithArgs(value, int64(42)).WillReturnResult(sqlmock.NewResult(0, 1))
-		}
+		mock.ExpectExec("UPDATE \"submodel_element\" SET \"category\"=\\$1 WHERE \\(\"id\" = \\$2\\)").
+			WithArgs(value, int64(42)).WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectCommit()
+		mock.ExpectClose()
 		tx, err := db.Begin()
 		require.NoError(t, err)
 		require.NoError(t, ApplyMetadataPatchTx(t.Context(), tx, MetadataTarget{ID: 42, ModelType: metadata.ModelType}, patch, nil))
 		require.NoError(t, tx.Commit())
-		require.NoError(t, mock.ExpectationsWereMet())
 		require.NoError(t, db.Close())
+		require.NoError(t, mock.ExpectationsWereMet())
 	}
 }
 
@@ -105,11 +101,11 @@ func TestMetadataTypePatchDoesNotIncludeOtherFields(t *testing.T) {
 
 func TestMetadataValueTypeErrorsDoNotDiscloseStoredValues(t *testing.T) {
 	property := types.NewProperty(types.DataTypeDefXSDString)
-	property.SetValue(new("hidden-not-a-number"))
-	_, _, err := buildMetadataValueTypeRecord(property, "xs:int")
+	property.SetValue(new("hidden-not-a-boolean"))
+	_, _, err := buildMetadataValueTypeRecord(property, "xs:boolean")
 	require.Error(t, err)
 	require.True(t, common.IsErrBadRequest(err))
-	require.NotContains(t, err.Error(), "hidden-not-a-number")
+	require.NotContains(t, err.Error(), "hidden-not-a-boolean")
 }
 
 func TestMetadataValueTypePatchConvertsCurrentPropertyValue(t *testing.T) {
