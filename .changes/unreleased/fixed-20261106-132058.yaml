@@ -1,5 +1,5 @@
 kind: fixed
-body: Apply Submodel field filters to direct Submodel and metadata reads consistently with list and query responses. Internal metadata PATCH merges preserve fields hidden from the caller so changing another metadata field does not erase them.
+body: Apply Submodel field filters to direct Submodel and metadata reads consistently with list and query responses. Internal Submodel and element PATCH merges preserve fields hidden from the caller so changing another field does not erase them.
 time: 2026-11-06T13:20:58.2768712+01:00
 custom:
     Impact: Low

@@ -1300,7 +1300,11 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 
 	_, patchIncludesSubmodelElements := patchJSON["submodelElements"]
 
-	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodels(ctx, 1, "", decodedIdentifier, "", time.Time{}, time.Time{})
+	mergeCtx, filterErr := auth.ContextWithoutFragmentFilters(ctx)
+	if filterErr != nil {
+		return newAPIErrorResponse(filterErr, http.StatusInternalServerError, operation, "CloneMergeContext"), nil
+	}
+	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodels(mergeCtx, 1, "", decodedIdentifier, "", time.Time{}, time.Time{})
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -2042,7 +2046,11 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 		return newAPIErrorResponse(errors.New("submodel element payload is required"), http.StatusBadRequest, operation, "MissingSubmodelElementPayload"), nil
 	}
 
-	existingElement, getErr := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, true, level)
+	mergeCtx, filterErr := auth.ContextWithoutFragmentFilters(ctx)
+	if filterErr != nil {
+		return newAPIErrorResponse(filterErr, http.StatusInternalServerError, operation, "CloneMergeContext"), nil
+	}
+	existingElement, getErr := s.submodelBackend.GetSubmodelElement(mergeCtx, decodedSubmodelIdentifier, idShortPath, true, level)
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
@@ -2128,7 +2136,11 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	existingElement, getErr := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, true, "")
+	mergeCtx, filterErr := auth.ContextWithoutFragmentFilters(ctx)
+	if filterErr != nil {
+		return newAPIErrorResponse(filterErr, http.StatusInternalServerError, operation, "CloneMergeContext"), nil
+	}
+	existingElement, getErr := s.submodelBackend.GetSubmodelElement(mergeCtx, decodedSubmodelIdentifier, idShortPath, true, "")
 	if getErr != nil {
 		if errors.Is(getErr, sql.ErrNoRows) || common.IsErrNotFound(getErr) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil

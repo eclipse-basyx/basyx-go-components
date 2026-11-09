@@ -40,6 +40,57 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPatchPreservesFragmentFilteredFields(t *testing.T) {
+	bootstrapCreators(t)
+	id := "urn:rebac-it:patch-mask"
+	target := submodelURL + "/submodels/" + enc(id)
+	expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, submodelURL+"/submodels", idShortSecurityFixture(id), nil), "create fixture")
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 15*time.Second)
+		defer cancel()
+		expectStatus(t, http.StatusNoContent, callRawWithContext(ctx, t, "alice", http.MethodDelete, target, nil, "", nil), "delete fixture")
+	})
+
+	filtered := call(t, "userx", http.MethodGet, target, nil, nil)
+	expectStatus(t, http.StatusOK, filtered, "filtered read")
+	require.NotContains(t, filtered.json(t), "semanticId")
+	filteredElement := call(t, "userx", http.MethodGet, target+"/submodel-elements/outside", nil, nil)
+	expectStatus(t, http.StatusOK, filteredElement, "filtered element read")
+	require.NotContains(t, filteredElement.json(t), "semanticId")
+
+	description := []any{map[string]any{"language": "en", "text": "Patched"}}
+	for _, test := range []struct {
+		path string
+		body map[string]any
+	}{
+		{"", map[string]any{"modelType": "Submodel", "description": description}},
+		{"/submodel-elements/outside", map[string]any{"modelType": "Property", "valueType": "xs:string", "description": description}},
+		{"/submodel-elements/outside/$metadata", map[string]any{"modelType": "Property", "description": description}},
+	} {
+		expectStatus(t, http.StatusNoContent, call(t, "userx", http.MethodPatch, target+test.path, test.body, nil), "patch")
+		owner := call(t, "alice", http.MethodGet, target, nil, nil)
+		expectStatus(t, http.StatusOK, owner, "owner read")
+		model := owner.json(t)
+		require.Contains(t, model, "semanticId")
+		if test.path == "" {
+			require.Equal(t, description, model["description"])
+		}
+		elements := model["submodelElements"].([]any)
+		found := false
+		for _, raw := range elements {
+			element := raw.(map[string]any)
+			if element["idShort"] == "outside" {
+				found = true
+				require.Contains(t, element, "semanticId")
+				if test.path != "" {
+					require.Equal(t, description, element["description"])
+				}
+			}
+		}
+		require.True(t, found)
+	}
+}
+
 func TestSecurityIdentifierMasksAndReBACGrants(t *testing.T) {
 	bootstrapCreators(t)
 	for _, test := range []struct {

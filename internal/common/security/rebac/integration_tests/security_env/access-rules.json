@@ -49,6 +49,12 @@
           { "$eq": [ { "$field": "$sm#id" }, { "$strVal": "urn:rebac-it:idshort-index" } ] }
         ]
       }},
+      { "name": "patch_mask_fixture", "formula": {
+        "$and": [
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+          { "$eq": [ { "$field": "$sm#id" }, { "$strVal": "urn:rebac-it:patch-mask" } ] }
+        ]
+      }},
       { "name": "idshort_union_fixture", "formula": {
         "$and": [
           { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
@@ -59,6 +65,14 @@
     "rules": [
       { "USEACL": "admin_all", "OBJECTS": [ { "ROUTE": "*" } ], "USEFORMULA": "is_admin" },
       { "USEACL": "public_read", "USEOBJECTS": [ "description" ], "USEFORMULA": "always_true" },
+      {
+        "USEACL": "role_metadata", "USEOBJECTS": [ "submodel_read_routes" ],
+        "USEFORMULA": "patch_mask_fixture",
+        "FILTERLIST": [
+          { "FRAGMENT": "$sm#semanticId", "CONDITION": { "$boolean": false } },
+          { "FRAGMENT": "$sme.outside#semanticId", "CONDITION": { "$boolean": false } }
+        ]
+      },
       {
         "USEACL": "role_read",
         "USEOBJECTS": [ "submodel_read_routes" ],
