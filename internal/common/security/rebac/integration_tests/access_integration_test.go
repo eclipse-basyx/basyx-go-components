@@ -63,11 +63,11 @@ func TestPatchPreservesFragmentFilteredFields(t *testing.T) {
 		path string
 		body map[string]any
 	}{
-		{"", map[string]any{"modelType": "Submodel", "description": description}},
-		{"/submodel-elements/outside", map[string]any{"modelType": "Property", "valueType": "xs:string", "description": description}},
+		{"", map[string]any{"id": id, "idShort": "secured", "modelType": "Submodel", "description": description}},
+		{"/submodel-elements/outside", map[string]any{"idShort": "outside", "modelType": "Property", "valueType": "xs:string", "description": description}},
 		{"/submodel-elements/outside/$metadata", map[string]any{"modelType": "Property", "description": description}},
 	} {
-		expectStatus(t, http.StatusNoContent, call(t, "userx", http.MethodPatch, target+test.path, test.body, nil), "patch")
+		expectStatus(t, http.StatusNoContent, call(t, "userx", http.MethodPatch, target+test.path, test.body, nil), "patch "+test.path)
 		owner := call(t, "alice", http.MethodGet, target, nil, nil)
 		expectStatus(t, http.StatusOK, owner, "owner read")
 		model := owner.json(t)
