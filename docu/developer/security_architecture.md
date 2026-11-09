@@ -213,6 +213,8 @@ Outcomes:
 
 CREATE authorization is evaluated against the staged resource or created subtree inside the transaction. UPDATE and PATCH authorization must be true for both the complete current state and the complete prospective state after applying the operation's replacement or merge semantics. Checks happen before commit, and denial rolls back model, binary, history, and evidence changes.
 
+Fragment filters shape read responses. Internal mutation merge states and history snapshot reads use complete persisted state. History snapshot reads ignore response filters regardless of whether WORM evidence is enabled; write authorization and audit metadata still use the original request context.
+
 Relevant code:
 - [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go)
 - [internal/common/security/abac_engine_methods.go](../../internal/common/security/abac_engine_methods.go)

@@ -1,0 +1,7 @@
+kind: fixed
+body: Record complete persisted Submodel, Asset Administration Shell, and registry descriptor state in history snapshots after mutations even when history evidence is disabled.
+time: 2026-11-09T09:52:28.1051255+01:00
+custom:
+    Impact: Low
+    PullRequest: 855
+    SecurityImpact: Response fragment filters no longer truncate internal history snapshots. Mutation authorization and audit identity remain enforced.
