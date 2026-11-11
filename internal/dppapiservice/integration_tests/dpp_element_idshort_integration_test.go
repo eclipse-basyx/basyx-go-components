@@ -42,8 +42,7 @@ type dppInvalidElementKey struct {
 }
 
 // testDPPRejectsElementsWithoutValidIDShort covers element JSON keys, which
-// become idShorts. It expects 409 because DPP maps the 400 from persistence to
-// its fallback status.
+// become idShorts. Persistence rejects them with 400, which DPP passes through.
 func testDPPRejectsElementsWithoutValidIDShort(
 	t *testing.T,
 	client *http.Client,
@@ -60,7 +59,7 @@ func testDPPRejectsElementsWithoutValidIDShort(
 		rejectedID := "https://www.example.org/dpp/invalid-idshort/rejected/" + strconv.Itoa(index) + "/" + idSuffix
 		rejectedDocument := lifecycleDPPDocument(rejectedID, rejectedID+"/product", now)
 		lifecycleDimensions(rejectedDocument)[invalidKey.key] = 5
-		requireDPPErrorCode(t, doJSONAny(t, client, http.MethodPost, baseURL+"/v1/dpps", rejectedDocument, http.StatusConflict), invalidKey.errorCode)
+		requireDPPErrorCode(t, doJSONAny(t, client, http.MethodPost, baseURL+"/v1/dpps", rejectedDocument, http.StatusBadRequest), invalidKey.errorCode)
 		doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedPathParam(rejectedID), nil, http.StatusNotFound)
 	}
 
@@ -78,7 +77,7 @@ func testDPPRejectsElementsWithoutValidIDShort(
 		for key, value := range lifecycleDimensions(document) {
 			patch[key] = value
 		}
-		requireDPPErrorCode(t, doJSONAny(t, client, http.MethodPatch, elementURL, patch, http.StatusConflict), invalidKey.errorCode)
+		requireDPPErrorCode(t, doJSONAny(t, client, http.MethodPatch, elementURL, patch, http.StatusBadRequest), invalidKey.errorCode)
 	}
 	require.Equal(t, before, doJSONAny(t, client, http.MethodGet, elementURL, nil, http.StatusOK))
 

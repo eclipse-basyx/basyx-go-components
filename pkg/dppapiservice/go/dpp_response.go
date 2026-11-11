@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -85,16 +86,41 @@ func errorCode(err error) string {
 	return firstErrorCode(err.Error())
 }
 
+type typedPersistenceErrorStatus struct {
+	matches func(error) bool
+	status  int
+}
+
+var typedPersistenceErrorStatuses = []typedPersistenceErrorStatus{
+	{matches: common.IsErrBadRequest, status: http.StatusBadRequest},
+	{matches: common.IsErrDenied, status: http.StatusForbidden},
+	{matches: common.IsErrNotFound, status: http.StatusNotFound},
+	{matches: common.IsErrConflict, status: http.StatusConflict},
+	{matches: common.IsInternalServerError, status: http.StatusInternalServerError},
+}
+
 func mapPersistenceError(err error, fallbackStatus int) ImplResponse {
-	status := fallbackStatus
+	return errorResponse(persistenceErrorStatus(err, fallbackStatus), err)
+}
+
+func persistenceErrorStatus(err error, fallbackStatus int) int {
+	for _, typed := range typedPersistenceErrorStatuses {
+		if typed.matches(err) {
+			return typed.status
+		}
+	}
+	return untypedPersistenceErrorStatus(err, fallbackStatus)
+}
+
+func untypedPersistenceErrorStatus(err error, fallbackStatus int) int {
 	text := strings.ToLower(err.Error())
-	if strings.Contains(text, "not found") || strings.Contains(text, "no rows") {
-		status = http.StatusNotFound
-	}
 	if strings.Contains(text, "duplicate") || strings.Contains(text, "already") {
-		status = http.StatusConflict
+		return http.StatusConflict
 	}
-	return errorResponse(status, err)
+	if strings.Contains(text, "not found") || strings.Contains(text, "no rows") {
+		return http.StatusNotFound
+	}
+	return fallbackStatus
 }
 
 func firstErrorCode(text string) string {

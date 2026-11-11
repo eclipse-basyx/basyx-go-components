@@ -349,7 +349,7 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	}
 	resolved, currentContent, current, err := s.loadDPPUpdateState(ctx, dppID)
 	if err != nil {
-		return mapPersistenceError(err, http.StatusNotFound), nil
+		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
 	update, err := s.prepareDPPUpdate(ctx, dppID, patch, resolved, currentContent, current)
 	if err != nil {
@@ -752,7 +752,7 @@ func dppObjectFromAny(value any) map[string]any {
 func (s *DPPRepositoryService) ReadDPPById(ctx context.Context, dppID string, representation Representation) (ImplResponse, error) {
 	doc, err := s.composeDPP(ctx, dppID, normalizeRepresentation(representation), time.Time{})
 	if err != nil {
-		return mapPersistenceError(err, http.StatusNotFound), nil
+		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
 	return Response(http.StatusOK, doc), nil
 }
@@ -873,7 +873,7 @@ func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID
 	}
 	doc, err := s.composeLoadedDPP(ctx, resolved, normalizeRepresentation(representation), false)
 	if err != nil {
-		return mapPersistenceError(err, http.StatusNotFound), nil
+		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
 	return Response(http.StatusOK, doc), nil
 }
@@ -892,7 +892,7 @@ func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID
 func (s *DPPRepositoryService) ReadDPPVersionByIdAndDate(ctx context.Context, dppID string, date time.Time, representation Representation) (ImplResponse, error) {
 	doc, err := s.composeDPP(ctx, dppID, normalizeRepresentation(representation), date)
 	if err != nil {
-		return mapPersistenceError(err, http.StatusNotFound), nil
+		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
 	return Response(http.StatusOK, doc), nil
 }
