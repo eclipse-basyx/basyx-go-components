@@ -12,7 +12,7 @@ body: >-
 time: 2026-11-11T20:00:00+01:00
 custom:
   Impact: Low
-  PullRequest: 874
+  PullRequest: 875
   SecurityImpact: >-
     The operation handle is bound to the uploader. With security enabled,
     `/upload-async` requires authentication, only the uploader can read the

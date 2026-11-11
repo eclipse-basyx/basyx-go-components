@@ -12,7 +12,7 @@ body: >-
 time: 2026-11-11T19:00:00+01:00
 custom:
   Impact: Low
-  PullRequest: 874
+  PullRequest: 875
   SecurityImpact: >-
     An upload with a resource denied by ABAC no longer leaves the resources
     the requester was allowed to write before it, so a rejected upload has no
