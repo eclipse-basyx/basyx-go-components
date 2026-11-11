@@ -2,8 +2,9 @@ kind: fixed
 body: >-
   Return the HTTP status that the repositories report from the DPP API: invalid
   input such as an invalid idShort now answers 400 instead of 409, a denied
-  ABAC check 403 instead of 409, and an internal error 500 instead of 404 or
-  409. DPP errors without a status from storage, such as a stored DPP that
+  ABAC check 403 instead of 409, an internal error 500 instead of 404 or 409,
+  an exceeded payload limit 413, and an unavailable dependency such as the
+  object store 503. DPP errors without a status from storage, such as a stored DPP that
   cannot be composed, now answer 500 instead of 404 on reads.
 time: 2026-11-11T18:30:00+01:00
 custom:

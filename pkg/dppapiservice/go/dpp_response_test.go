@@ -81,7 +81,9 @@ func TestMapPersistenceErrorUsesTypedRepositoryErrors(t *testing.T) {
 		{name: "denied", err: common.NewErrDenied("AASREPO-NEWAAS-CHKDUP-ABACDENIED existing AAS is not accessible"), want: http.StatusForbidden},
 		{name: "not found", err: common.NewErrNotFound("AASREPO-LOCKAAS-AASNOTFOUND AAS not found"), want: http.StatusNotFound},
 		{name: "conflict", err: common.NewErrConflict("AASREPO-NEWAAS-CONFLICT AAS with given id already exists"), want: http.StatusConflict},
+		{name: "payload too large", err: common.NewErrPayloadTooLarge("SMREPO-X-LIMIT attachment exceeds configured maximum"), want: http.StatusRequestEntityTooLarge},
 		{name: "internal", err: common.NewInternalServerError("AASREPO-GETDPPASSETIDS-EXECSQL connection reset"), want: http.StatusInternalServerError},
+		{name: "service unavailable", err: common.NewErrServiceUnavailable("SMREPO-X-OBJECTSTORE object store unavailable"), want: http.StatusServiceUnavailable},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

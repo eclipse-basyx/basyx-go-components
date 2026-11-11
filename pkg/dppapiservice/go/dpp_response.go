@@ -96,7 +96,9 @@ var typedPersistenceErrorStatuses = []typedPersistenceErrorStatus{
 	{matches: common.IsErrDenied, status: http.StatusForbidden},
 	{matches: common.IsErrNotFound, status: http.StatusNotFound},
 	{matches: common.IsErrConflict, status: http.StatusConflict},
+	{matches: common.IsErrPayloadTooLarge, status: http.StatusRequestEntityTooLarge},
 	{matches: common.IsInternalServerError, status: http.StatusInternalServerError},
+	{matches: common.IsErrServiceUnavailable, status: http.StatusServiceUnavailable},
 }
 
 func mapPersistenceError(err error, fallbackStatus int) ImplResponse {
