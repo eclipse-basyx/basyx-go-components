@@ -148,7 +148,7 @@ func TestParseAASXMLInstance_AdaptsLegacyNamespace(t *testing.T) {
 	}
 }
 
-func TestValidateAASXThumbnailLimitsRejectsOversizedThumbnailBeforeImport(t *testing.T) {
+func TestDigestAASXThumbnailsRejectsOversizedThumbnailBeforeImport(t *testing.T) {
 	const thumbnailPath = "/aasx/files/thumbnail.png"
 	assetInformation := aastypes.NewAssetInformation(aastypes.AssetKindInstance)
 	thumbnail := aastypes.NewResource(thumbnailPath)
@@ -188,7 +188,7 @@ func TestValidateAASXThumbnailLimitsRejectsOversizedThumbnailBeforeImport(t *tes
 	}
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{General: common.GeneralConfig{AASXMaxThumbnailSizeBytes: 4}})
 
-	err = validateAASXThumbnailLimits(ctx, packageReader, specPart, parsedEnvironment)
+	_, err = digestAASXThumbnails(ctx, packageReader, specPart, parsedEnvironment)
 
 	if !common.IsErrPayloadTooLarge(err) {
 		t.Fatalf("expected payload-too-large error, got %v", err)

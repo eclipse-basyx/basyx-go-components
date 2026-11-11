@@ -154,3 +154,16 @@ func TestLockContentRowsUsesDeterministicOrder(t *testing.T) {
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestDigestContentMatchesStoredDigest(t *testing.T) {
+	digest, err := DigestContent(strings.NewReader("payload"))
+	require.NoError(t, err)
+	require.Equal(t, ContentDigest{Digest: "239f59ed55e737c77147cf55ad0c1b030b6d7ee748a7426952f9b852d5a935e5", Size: 7}, digest)
+}
+
+func TestOrderedContentDigestsSortsAndDeduplicates(t *testing.T) {
+	ordered := orderedContentDigests([]ContentDigest{
+		{Digest: "b", Size: 1}, {Digest: "a", Size: 2}, {Digest: "b", Size: 1}, {Digest: "a", Size: 1},
+	})
+	require.Equal(t, []ContentDigest{{Digest: "a", Size: 1}, {Digest: "a", Size: 2}, {Digest: "b", Size: 1}}, ordered)
+}

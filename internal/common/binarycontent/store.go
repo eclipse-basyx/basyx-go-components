@@ -318,6 +318,69 @@ func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Read
 	return oid, hex.EncodeToString(hash.Sum(nil)), size, nil
 }
 
+// ContentDigest identifies canonical binary content by its SHA-256 digest and size.
+type ContentDigest struct {
+	Digest string
+	Size   int64
+}
+
+// DigestContent reads reader to its end and returns the digest under which
+// StoreReferenceTx deduplicates and locks the same bytes.
+//
+// Parameters:
+//   - reader: Content to hash.
+//
+// Returns:
+//   - ContentDigest: SHA-256 digest and size of the content.
+//   - error: Read error, passed through unchanged.
+func DigestContent(reader io.Reader) (ContentDigest, error) {
+	hash := sha256.New()
+	size, err := io.Copy(hash, reader)
+	if err != nil {
+		return ContentDigest{}, err
+	}
+	return ContentDigest{Digest: hex.EncodeToString(hash.Sum(nil)), Size: size}, nil
+}
+
+// LockContentDigestsTx takes the content locks of StoreReferenceTx for all
+// digests in stable order. A transaction that stores several binaries takes
+// them before its first binary write, so concurrent transactions sharing
+// content wait for each other instead of deadlocking. Later locks of the same
+// content in the transaction are reentrant.
+//
+// Parameters:
+//   - ctx: Context used for the lock statements.
+//   - tx: Transaction that holds the locks until it ends.
+//   - digests: Content to lock; duplicates are locked once.
+//
+// Returns:
+//   - error: Lock build or execution error.
+func LockContentDigestsTx(ctx context.Context, tx *sql.Tx, digests []ContentDigest) error {
+	for _, digest := range orderedContentDigests(digests) {
+		if err := lockDigestTx(ctx, tx, digest.Digest, digest.Size); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func orderedContentDigests(digests []ContentDigest) []ContentDigest {
+	ordered := append([]ContentDigest(nil), digests...)
+	sort.Slice(ordered, func(left, right int) bool {
+		if ordered[left].Digest != ordered[right].Digest {
+			return ordered[left].Digest < ordered[right].Digest
+		}
+		return ordered[left].Size < ordered[right].Size
+	})
+	unique := make([]ContentDigest, 0, len(ordered))
+	for _, digest := range ordered {
+		if len(unique) == 0 || digest != unique[len(unique)-1] {
+			unique = append(unique, digest)
+		}
+	}
+	return unique
+}
+
 func lockDigestTx(ctx context.Context, tx *sql.Tx, digest string, size int64) error {
 	lockKey := fmt.Sprintf("binary-content:%s:%d", digest, size)
 	query, args, err := goqu.Dialect("postgres").

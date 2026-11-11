@@ -263,39 +263,55 @@ func (s *UploadAPIService) processAASXPackage(ctx context.Context, fileName stri
 	if err != nil {
 		return err
 	}
-	if err = validateAASXThumbnailLimits(ctx, packageReader, specPart, environment); err != nil {
+	binaryContent, err := digestAASXBinaryContent(ctx, packageReader, specPart, environment)
+	if err != nil {
 		return err
 	}
 
-	return s.importEnvironment(ctx, environment, func(txCtx context.Context, tx *sql.Tx) error {
-		if storeErr := s.storeAASXThumbnail(txCtx, tx, packageReader, specPart, environment); storeErr != nil {
-			return storeErr
-		}
-		return s.uploadSupplementaryFiles(txCtx, tx, packageReader, specPart, environment)
+	return s.importEnvironment(ctx, environmentImport{
+		environment:   environment,
+		binaryContent: binaryContent,
+		storePackageParts: func(txCtx context.Context, tx *sql.Tx) error {
+			if storeErr := s.storeAASXThumbnail(txCtx, tx, packageReader, specPart, environment); storeErr != nil {
+				return storeErr
+			}
+			return s.uploadSupplementaryFiles(txCtx, tx, packageReader, specPart, environment)
+		},
 	})
 }
 
 func (s *UploadAPIService) processEnvironment(ctx context.Context, _ string, _ string, environment aastypes.IEnvironment) error {
-	return s.importEnvironment(ctx, environment, nil)
+	return s.importEnvironment(ctx, environmentImport{environment: environment})
+}
+
+// environmentImport is one uploaded environment, the binary content its
+// package parts store, and the step that stores those parts.
+type environmentImport struct {
+	environment       aastypes.IEnvironment
+	binaryContent     []binarycontent.ContentDigest
+	storePackageParts func(context.Context, *sql.Tx) error
 }
 
 // importEnvironment stores every Concept Description, Submodel and Shell of the
-// environment, followed by the package parts stored by storePackageParts, in one
-// transaction. Registry descriptor sync, history and event outbox writes share
-// that transaction, so a failing step leaves nothing of the upload behind.
-func (s *UploadAPIService) importEnvironment(ctx context.Context, environment aastypes.IEnvironment, storePackageParts func(context.Context, *sql.Tx) error) error {
-	if err := s.validateEnvironmentImport(environment); err != nil {
+// environment, followed by its package parts, in one transaction. Registry
+// descriptor sync, history and event outbox writes share that transaction, so
+// a failing step leaves nothing of the upload behind.
+func (s *UploadAPIService) importEnvironment(ctx context.Context, upload environmentImport) error {
+	if err := s.validateEnvironmentImport(upload.environment); err != nil {
 		return err
 	}
 	ctx = common.WithWriterPostgresReads(ctx)
 	err := s.inUploadTransaction(func(tx *sql.Tx) error {
-		if err := s.storeEnvironmentResources(ctx, tx, environment); err != nil {
+		if err := lockEnvironmentImport(ctx, tx, upload); err != nil {
 			return err
 		}
-		if storePackageParts == nil {
+		if err := s.storeEnvironmentResources(ctx, tx, upload.environment); err != nil {
+			return err
+		}
+		if upload.storePackageParts == nil {
 			return nil
 		}
-		return storePackageParts(ctx, tx)
+		return upload.storePackageParts(ctx, tx)
 	})
 	if err != nil {
 		return fmt.Errorf("AASENV-PROCESSENV-ROLLEDBACK upload rejected, nothing from the uploaded environment was stored: %w", err)
@@ -332,9 +348,6 @@ func (s *UploadAPIService) validateEnvironmentImport(environment aastypes.IEnvir
 }
 
 func (s *UploadAPIService) storeEnvironmentResources(ctx context.Context, tx *sql.Tx, environment aastypes.IEnvironment) error {
-	if err := lockEnvironmentResources(ctx, tx, environment); err != nil {
-		return err
-	}
 	if err := s.storeEnvironmentConceptDescriptions(ctx, tx, environment.ConceptDescriptions()); err != nil {
 		return err
 	}
@@ -344,18 +357,24 @@ func (s *UploadAPIService) storeEnvironmentResources(ctx context.Context, tx *sq
 	return s.storeEnvironmentShells(ctx, tx, environment.AssetAdministrationShells())
 }
 
-// lockEnvironmentResources acquires the mutation locks of every uploaded
-// resource in a stable order before the first write, so concurrent uploads of
-// overlapping environments serialize instead of deadlocking.
-func lockEnvironmentResources(ctx context.Context, tx *sql.Tx, environment aastypes.IEnvironment) error {
-	if err := history.LockMutationsTx(ctx, tx, history.TableConcept, identifiablesIDs(environment.ConceptDescriptions())); err != nil {
+// lockEnvironmentImport takes every lock the upload needs before its first
+// write and in one global order: the resource locks of the Concept
+// Descriptions, Submodels and Shells, each sorted, then the content locks of
+// the binaries, sorted by digest. Concurrent uploads therefore wait for each
+// other instead of acquiring locks in opposite orders and deadlocking.
+func lockEnvironmentImport(ctx context.Context, tx *sql.Tx, upload environmentImport) error {
+	environment := upload.environment
+	if err := history.AcquireMutationLocksTx(ctx, tx, history.TableConcept, identifiablesIDs(environment.ConceptDescriptions())); err != nil {
 		return fmt.Errorf("AASENV-PROCESSENV-LOCKCD failed to lock the uploaded Concept Descriptions: %w", err)
 	}
-	if err := history.LockMutationsTx(ctx, tx, history.TableSubmodel, identifiablesIDs(environment.Submodels())); err != nil {
+	if err := history.AcquireMutationLocksTx(ctx, tx, history.TableSubmodel, identifiablesIDs(environment.Submodels())); err != nil {
 		return fmt.Errorf("AASENV-PROCESSENV-LOCKSM failed to lock the uploaded Submodels: %w", err)
 	}
-	if err := history.LockMutationsTx(ctx, tx, history.TableAAS, identifiablesIDs(environment.AssetAdministrationShells())); err != nil {
+	if err := history.AcquireMutationLocksTx(ctx, tx, history.TableAAS, identifiablesIDs(environment.AssetAdministrationShells())); err != nil {
 		return fmt.Errorf("AASENV-PROCESSENV-LOCKAAS failed to lock the uploaded Asset Administration Shells: %w", err)
+	}
+	if err := binarycontent.LockContentDigestsTx(ctx, tx, upload.binaryContent); err != nil {
+		return fmt.Errorf("AASENV-PROCESSENV-LOCKBINARY failed to lock the uploaded binary content: %w", err)
 	}
 	return nil
 }
@@ -896,20 +915,15 @@ func (s *UploadAPIService) uploadSupplementaryFiles(
 		return common.NewErrBadRequest("AASENV-UPLDSUPPL-NILSMREPO submodel repository backend is required")
 	}
 
-	supplementaries, err := packageReader.SupplementaryRelationships()
+	supplementaries, err := specSupplementaryRelationships(packageReader, specPart)
 	if err != nil {
-		return fmt.Errorf("AASENV-UPLDSUPPL-READREL failed to read supplementary relationships: %w", err)
+		return err
 	}
 
-	specURI := normalizePartURI(specPart.URI)
 	fileLocations := CollectAASXFileElementLocations(environment)
 	importedLocations := make(map[int]struct{}, len(fileLocations))
 
 	for _, relationship := range supplementaries {
-		if normalizePartURI(relationship.Spec.URI) != specURI {
-			continue
-		}
-
 		matched, uploadErr := s.uploadSupplementaryRelationship(ctx, tx, relationship, fileLocations, importedLocations)
 		if uploadErr != nil {
 			return uploadErr
@@ -924,6 +938,21 @@ func (s *UploadAPIService) uploadSupplementaryFiles(
 	warnFileReferencesWithoutSupplementaryRelationship(ctx, packageReader, specPart.URI, fileLocations, importedLocations)
 	slog.InfoContext(ctx, "supplementary file attachments written to the upload transaction", "attachment_count", len(importedLocations))
 	return nil
+}
+
+func specSupplementaryRelationships(packageReader *aasx.PackageRead, specPart *aasx.Part) ([]*aasx.SupplementaryRelationship, error) {
+	relationships, err := packageReader.SupplementaryRelationships()
+	if err != nil {
+		return nil, fmt.Errorf("AASENV-UPLDSUPPL-READREL failed to read supplementary relationships: %w", err)
+	}
+	specURI := normalizePartURI(specPart.URI)
+	ofSpec := make([]*aasx.SupplementaryRelationship, 0, len(relationships))
+	for _, relationship := range relationships {
+		if relationship.Spec != nil && relationship.Supplementary != nil && normalizePartURI(relationship.Spec.URI) == specURI {
+			ofSpec = append(ofSpec, relationship)
+		}
+	}
+	return ofSpec, nil
 }
 
 func (s *UploadAPIService) uploadSupplementaryRelationship(
@@ -1121,20 +1150,36 @@ func defaultThumbnailContentType(aas aastypes.IAssetAdministrationShell) string 
 	return ""
 }
 
-func validateAASXThumbnailLimits(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
+// digestAASXBinaryContent validates the size limits of the thumbnails and
+// supplementary files the upload will store and returns the digests of their
+// content, so the import can lock that content in a stable order.
+func digestAASXBinaryContent(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) ([]binarycontent.ContentDigest, error) {
+	thumbnails, err := digestAASXThumbnails(ctx, packageReader, specPart, environment)
+	if err != nil {
+		return nil, err
+	}
+	supplementaries, err := digestAASXSupplementaries(ctx, packageReader, specPart, environment)
+	if err != nil {
+		return nil, err
+	}
+	return append(thumbnails, supplementaries...), nil
+}
+
+func digestAASXThumbnails(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) ([]binarycontent.ContentDigest, error) {
 	if environment == nil {
-		return nil
+		return nil, nil
 	}
 	thumbnailPartsByURI, packageThumbnail, err := resolveAASXThumbnailParts(packageReader, specPart)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var specURI *url.URL
 	if specPart != nil {
 		specURI = specPart.URI
 	}
-	validated := make(map[string]struct{})
+	digested := make(map[string]struct{})
+	digests := make([]binarycontent.ContentDigest, 0)
 	maximum := common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes
 	for _, aas := range environment.AssetAdministrationShells() {
 		thumbnailPart, thumbnailURI := resolveAASXThumbnailPartForAAS(aas, packageReader, specURI, thumbnailPartsByURI, packageThumbnail)
@@ -1145,31 +1190,69 @@ func validateAASXThumbnailLimits(ctx context.Context, packageReader *aasx.Packag
 		if key == "" {
 			key = thumbnailURI
 		}
-		if _, exists := validated[key]; exists {
+		if _, exists := digested[key]; exists {
 			continue
 		}
-		if err = validateAASXThumbnailPart(thumbnailPart, maximum); err != nil {
-			return fmt.Errorf("AASENV-VALIDATETHUMB-LIMIT thumbnail %q for AAS %q is invalid: %w", thumbnailURI, aas.ID(), err)
+		digest, digestErr := digestAASXPart(thumbnailPart, maximum, "thumbnail")
+		if digestErr != nil {
+			return nil, fmt.Errorf("AASENV-VALIDATETHUMB-LIMIT thumbnail %q for AAS %q is invalid: %w", thumbnailURI, aas.ID(), digestErr)
 		}
-		validated[key] = struct{}{}
+		digested[key] = struct{}{}
+		digests = append(digests, digest)
 	}
-	return nil
+	return digests, nil
 }
 
-func validateAASXThumbnailPart(thumbnailPart *aasx.Part, maximum uint64) error {
-	stream, err := openLimitedAASXPart(thumbnailPart, maximum, "thumbnail")
-	if err != nil {
-		return err
+func digestAASXSupplementaries(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) ([]binarycontent.ContentDigest, error) {
+	if environment == nil || specPart == nil {
+		return nil, nil
 	}
-	_, copyErr := io.Copy(io.Discard, stream)
+	relationships, err := specSupplementaryRelationships(packageReader, specPart)
+	if err != nil {
+		return nil, err
+	}
+	fileLocations := CollectAASXFileElementLocations(environment)
+	digested := make(map[string]struct{})
+	digests := make([]binarycontent.ContentDigest, 0)
+	maximum := common.AASXLimitsFromContext(ctx).MaxPartExpandedSizeBytes
+	for _, relationship := range relationships {
+		key := normalizePartURI(relationship.Supplementary.URI)
+		if _, exists := digested[key]; exists || !matchesAnyFileLocation(relationship, fileLocations) {
+			continue
+		}
+		digest, digestErr := digestAASXPart(relationship.Supplementary, maximum, "supplementary")
+		if digestErr != nil {
+			return nil, fmt.Errorf("AASENV-DIGESTSUPPL-READ failed to read supplementary file '%s': %w", key, digestErr)
+		}
+		digested[key] = struct{}{}
+		digests = append(digests, digest)
+	}
+	return digests, nil
+}
+
+func matchesAnyFileLocation(relationship *aasx.SupplementaryRelationship, fileLocations []AASXFileElementLocation) bool {
+	for _, location := range fileLocations {
+		if matchesSupplementaryTarget(location.FileValue, relationship.Spec.URI, relationship.Supplementary.URI) {
+			return true
+		}
+	}
+	return false
+}
+
+func digestAASXPart(part *aasx.Part, maximum uint64, label string) (binarycontent.ContentDigest, error) {
+	stream, err := openLimitedAASXPart(part, maximum, label)
+	if err != nil {
+		return binarycontent.ContentDigest{}, err
+	}
+	digest, digestErr := binarycontent.DigestContent(stream)
 	closeErr := stream.Close()
-	if copyErr != nil {
-		return copyErr
+	if digestErr != nil {
+		return binarycontent.ContentDigest{}, digestErr
 	}
 	if closeErr != nil {
-		return common.NewInternalServerError("AASENV-VALIDATETHUMB-CLOSESTREAM " + closeErr.Error())
+		return binarycontent.ContentDigest{}, common.NewInternalServerError("AASENV-DIGESTPART-CLOSESTREAM " + closeErr.Error())
 	}
-	return nil
+	return digest, nil
 }
 
 func resolveAASXThumbnailParts(packageReader *aasx.PackageRead, specPart *aasx.Part) (map[string]*aasx.Part, *aasx.Part, error) {
