@@ -206,6 +206,64 @@ func TestUploadAASXRejectsSubmodelElementWithoutIDShort(t *testing.T) {
 	requireUploadNotStored(t, "/submodels/"+encodedSubmodelID, "Submodel with a nameless element must not be stored")
 }
 
+func TestUploadAASXRejectsInvalidIDShorts(t *testing.T) {
+	const shellID = "urn:basyx:integration:upload-invalid-idshort:shell"
+	const submodelID = "urn:basyx:integration:upload-invalid-idshort:submodel"
+	const descriptionID = "urn:basyx:integration:upload-invalid-idshort:description"
+	testCases := []struct {
+		name         string
+		environment  string
+		resourcePath string
+	}{
+		{
+			name: "shell",
+			environment: `"assetAdministrationShells": [{"id": "` + shellID + `", "idShort": "Shell;1", "modelType": "AssetAdministrationShell",
+				"assetInformation": {"assetKind": "Instance", "globalAssetId": "` + shellID + `:asset"}}], "submodels": [], "conceptDescriptions": []`,
+			resourcePath: "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(shellID)),
+		},
+		{
+			name: "empty shell idShort",
+			environment: `"assetAdministrationShells": [{"id": "` + shellID + `", "idShort": "", "modelType": "AssetAdministrationShell",
+				"assetInformation": {"assetKind": "Instance", "globalAssetId": "` + shellID + `:asset"}}], "submodels": [], "conceptDescriptions": []`,
+			resourcePath: "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(shellID)),
+		},
+		{
+			name: "empty submodel idShort",
+			environment: `"assetAdministrationShells": [], "submodels": [{"id": "` + submodelID + `", "idShort": "", "modelType": "Submodel"}],
+				"conceptDescriptions": []`,
+			resourcePath: "/submodels/" + base64.RawURLEncoding.EncodeToString([]byte(submodelID)),
+		},
+		{
+			name: "empty concept description idShort",
+			environment: `"assetAdministrationShells": [], "submodels": [],
+				"conceptDescriptions": [{"id": "` + descriptionID + `", "idShort": "", "modelType": "ConceptDescription"}]`,
+			resourcePath: "/concept-descriptions/" + base64.RawURLEncoding.EncodeToString([]byte(descriptionID)),
+		},
+		{
+			name: "submodel element",
+			environment: `"assetAdministrationShells": [], "submodels": [{"id": "` + submodelID + `", "idShort": "InvalidIDShortSubmodel", "modelType": "Submodel",
+				"submodelElements": [{"idShort": "Coll", "modelType": "SubmodelElementCollection",
+					"value": [{"idShort": "a b", "modelType": "Property", "valueType": "xs:string"}]}]}], "conceptDescriptions": []`,
+			resourcePath: "/submodels/" + base64.RawURLEncoding.EncodeToString([]byte(submodelID)),
+		},
+		{
+			name: "concept description",
+			environment: `"assetAdministrationShells": [], "submodels": [],
+				"conceptDescriptions": [{"id": "` + descriptionID + `", "idShort": "x", "modelType": "ConceptDescription"}]`,
+			resourcePath: "/concept-descriptions/" + base64.RawURLEncoding.EncodeToString([]byte(descriptionID)),
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			specification := []byte("{" + testCase.environment + "}")
+			status, responseBody := uploadAASXPayload(t, buildUploadAASXFixture(t, specification), "invalid-idshort.aasx")
+			require.Equal(t, http.StatusBadRequest, status, "AASX with an invalid idShort must be rejected: %s", string(responseBody))
+			require.Contains(t, string(responseBody), "-INVALIDIDSHORT")
+			requireUploadNotStored(t, testCase.resourcePath, "Resource with an invalid idShort must not be stored")
+		})
+	}
+}
+
 func requireUploadNotStored(t *testing.T, resourcePath string, message string) {
 	t.Helper()
 	response := doHTTPIntegrationRequest(t, &http.Client{Timeout: 30 * time.Second}, mustNewRequest(t, http.MethodGet, aasEnvBaseURL+resourcePath))

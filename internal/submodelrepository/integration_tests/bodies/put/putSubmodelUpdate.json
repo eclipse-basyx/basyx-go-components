@@ -19,40 +19,40 @@
             "modelType": "SubmodelElementCollection",
             "value": [
                 {
-                    "idShort": "2",
+                    "idShort": "A2",
                     "modelType": "SubmodelElementCollection",
                     "value": [
                         {
-                            "idShort": "3",
+                            "idShort": "A3",
                             "modelType": "SubmodelElementCollection",
                             "value": [
                                 {
-                                    "idShort": "4",
+                                    "idShort": "A4",
                                     "modelType": "SubmodelElementCollection",
                                     "value": [
                                         {
-                                            "idShort": "5",
+                                            "idShort": "A5",
                                             "modelType": "SubmodelElementCollection",
                                             "value": [
                                                 {
-                                                    "idShort": "6",
+                                                    "idShort": "A6",
                                                     "modelType": "SubmodelElementList",                                
                                                     "typeValueListElement": "Property",
                                                     "value": [
                                                         {
-                                                            "idShort": "2",
+                                                            "idShort": "A2",
                                                             "modelType": "Property",
                                                             "valueType": "xs:string",
                                                             "value": "122"
                                                         },
                                                         {
-                                                            "idShort": "3",
+                                                            "idShort": "A3",
                                                             "modelType": "Property",
                                                             "valueType": "xs:string",
                                                             "value": "1223"
                                                         },
                                                         {
-                                                            "idShort": "4",
+                                                            "idShort": "A4",
                                                             "modelType": "Property",
                                                             "valueType": "xs:string",
                                                             "value": "12324"

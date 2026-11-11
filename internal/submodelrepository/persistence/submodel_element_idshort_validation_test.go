@@ -36,35 +36,44 @@ import (
 func TestRequireSubmodelElementIDShorts(t *testing.T) {
 	t.Parallel()
 	testCases := []struct {
-		name            string
-		element         types.ISubmodelElement
-		isListChild     bool
-		missingLocation string
+		name        string
+		element     types.ISubmodelElement
+		isListChild bool
+		errorCode   string
+		location    string
 	}{
 		{name: "named property", element: namedTestProperty("Named")},
-		{name: "omitted root", element: namelessTestProperty(), missingLocation: "Submodel element in the request body has"},
-		{name: "empty root", element: namedTestProperty(""), missingLocation: "Submodel element in the request body has"},
+		{name: "omitted root", element: namelessTestProperty(), errorCode: "SMREPO-TEST-MISSINGIDSHORT", location: "Submodel element in the request body has"},
+		{name: "empty root", element: namedTestProperty(""), errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "Submodel element in the request body has"},
+		{name: "empty list member", element: namedTestProperty(""), isListChild: true, errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "Submodel element in the request body has"},
 		{name: "list member root", element: namelessTestProperty(), isListChild: true},
-		{name: "collection child", element: testCollection("Root", namedTestProperty("Child"), namelessTestProperty()), missingLocation: "'value[1]'"},
+		{name: "collection child", element: testCollection("Root", namedTestProperty("Child"), namelessTestProperty()), errorCode: "SMREPO-TEST-MISSINGIDSHORT", location: "'value[1]'"},
 		{name: "list members", element: testList("Root", testCollection("", namedTestProperty("Child")))},
-		{name: "child of list member", element: testList("Root", testCollection("", namelessTestProperty())), missingLocation: "'value[0].value[0]'"},
-		{name: "entity statement", element: testEntity("Root", namelessTestProperty()), missingLocation: "'statements[0]'"},
-		{name: "annotation", element: testAnnotatedRelationship("Root", namelessTestProperty()), missingLocation: "'annotations[0]'"},
-		{name: "operation variable", element: testOperation("Root", namelessTestProperty()), missingLocation: "'outputVariables[0].value'"},
+		{name: "child of list member", element: testList("Root", testCollection("", namelessTestProperty())), errorCode: "SMREPO-TEST-MISSINGIDSHORT", location: "'value[0].value[0]'"},
+		{name: "entity statement", element: testEntity("Root", namelessTestProperty()), errorCode: "SMREPO-TEST-MISSINGIDSHORT", location: "'statements[0]'"},
+		{name: "annotation", element: testAnnotatedRelationship("Root", namelessTestProperty()), errorCode: "SMREPO-TEST-MISSINGIDSHORT", location: "'annotations[0]'"},
+		{name: "operation variable", element: testOperation("Root", namelessTestProperty()), errorCode: "SMREPO-TEST-MISSINGIDSHORT", location: "'outputVariables[0].value'"},
+		{name: "invalid root", element: namedTestProperty("a;b"), errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "Submodel element in the request body has the invalid idShort 'a;b'"},
+		{name: "invalid list member root", element: namedTestProperty("a b"), isListChild: true, errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "'a b'"},
+		{name: "invalid collection child", element: testCollection("Root", namedTestProperty("Child"), namedTestProperty("x/y")), errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "'value[1]' in the request body has the invalid idShort 'x/y'"},
+		{name: "invalid named list member", element: testList("Root", testCollection("1st", namedTestProperty("Child"))), errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "'value[0]'"},
+		{name: "invalid child of list member", element: testList("Root", testCollection("", namedTestProperty("a.b"))), errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "'value[0].value[0]'"},
+		{name: "invalid entity statement", element: testEntity("Root", namedTestProperty("a%3Bb")), errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "'statements[0]'"},
+		{name: "invalid annotation", element: testAnnotatedRelationship("Root", namedTestProperty("x")), errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "'annotations[0]'"},
+		{name: "invalid operation variable", element: testOperation("Root", namedTestProperty("Out-")), errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "'outputVariables[0].value'"},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			err := requireSubmodelElementIDShorts(testCase.element, testCase.isListChild, "SMREPO-TEST-MISSINGIDSHORT")
-			if testCase.missingLocation == "" {
+			err := requireSubmodelElementIDShorts(testCase.element, testCase.isListChild, "SMREPO-TEST")
+			if testCase.errorCode == "" {
 				require.NoError(t, err)
 				return
 			}
 			require.True(t, common.IsErrBadRequest(err), "%v", err)
-			require.ErrorContains(t, err, "SMREPO-TEST-MISSINGIDSHORT")
-			require.ErrorContains(t, err, testCase.missingLocation)
-			require.ErrorContains(t, err, "AASd-117")
+			require.ErrorContains(t, err, testCase.errorCode+" ")
+			require.ErrorContains(t, err, testCase.location)
 		})
 	}
 }
@@ -72,28 +81,38 @@ func TestRequireSubmodelElementIDShorts(t *testing.T) {
 func TestRequireSubmodelIDShorts(t *testing.T) {
 	t.Parallel()
 	submodel := types.NewSubmodel("urn:test:submodel")
-	require.NoError(t, requireSubmodelIDShorts(submodel, "SMREPO-TEST-MISSINGIDSHORT"))
+	require.NoError(t, requireSubmodelIDShorts(submodel, "SMREPO-TEST"))
 
 	submodel.SetSubmodelElements([]types.ISubmodelElement{namedTestProperty("Named"), testCollection("", namedTestProperty("Child"))})
-	err := requireSubmodelIDShorts(submodel, "SMREPO-TEST-MISSINGIDSHORT")
+	err := requireSubmodelIDShorts(submodel, "SMREPO-TEST")
 	require.True(t, common.IsErrBadRequest(err), "%v", err)
 	require.ErrorContains(t, err, "'submodelElements[1]'")
 
 	submodel.SetSubmodelElements([]types.ISubmodelElement{namedTestProperty("Named"), testCollection("Coll", namelessTestProperty())})
-	require.ErrorContains(t, requireSubmodelIDShorts(submodel, "SMREPO-TEST-MISSINGIDSHORT"), "'submodelElements[1].value[0]'")
+	require.ErrorContains(t, requireSubmodelIDShorts(submodel, "SMREPO-TEST"), "'submodelElements[1].value[0]'")
+
+	submodel.SetSubmodelElements([]types.ISubmodelElement{namedTestProperty("Named"), testCollection("Coll", namedTestProperty("a b"))})
+	require.ErrorContains(t, requireSubmodelIDShorts(submodel, "SMREPO-TEST"), "SMREPO-TEST-INVALIDIDSHORT Submodel element at 'submodelElements[1].value[0]'")
+
+	invalidIDShort := "Sub:model"
+	submodel.SetIDShort(&invalidIDShort)
+	require.ErrorContains(t, requireSubmodelIDShorts(submodel, "SMREPO-TEST"), "SMREPO-TEST-INVALIDIDSHORT Submodel in the request body has the invalid idShort 'Sub:model'")
 }
 
 func TestRequireChildSubmodelElementIDShortsIgnoresRoot(t *testing.T) {
 	t.Parallel()
-	require.NoError(t, requireChildSubmodelElementIDShorts(testCollection("", namedTestProperty("Child")), "SMREPO-TEST-MISSINGIDSHORT"))
-	require.Error(t, requireChildSubmodelElementIDShorts(testCollection("", namelessTestProperty()), "SMREPO-TEST-MISSINGIDSHORT"))
+	require.NoError(t, requireChildSubmodelElementIDShorts(testCollection("", namedTestProperty("Child")), "SMREPO-TEST"))
+	require.NoError(t, requireChildSubmodelElementIDShorts(testCollection("a;b", namedTestProperty("Child")), "SMREPO-TEST"))
+	require.Error(t, requireChildSubmodelElementIDShorts(testCollection("", namelessTestProperty()), "SMREPO-TEST"))
 }
 
 func TestRequireOwnIDShortIgnoresChildren(t *testing.T) {
 	t.Parallel()
-	require.NoError(t, requireOwnIDShort(testCollection("Root", namelessTestProperty()), false, "SMREPO-TEST-MISSINGIDSHORT"))
-	require.NoError(t, requireOwnIDShort(namelessTestProperty(), true, "SMREPO-TEST-MISSINGIDSHORT"))
-	require.ErrorContains(t, requireOwnIDShort(namelessTestProperty(), false, "SMREPO-TEST-MISSINGIDSHORT"), "Submodel element in the request body has no idShort (AASd-117)")
+	require.NoError(t, requireOwnIDShort(testCollection("Root", namelessTestProperty()), false, "SMREPO-TEST"))
+	require.NoError(t, requireOwnIDShort(namelessTestProperty(), true, "SMREPO-TEST"))
+	require.NoError(t, requireOwnIDShort(testCollection("Root", namedTestProperty("a;b")), false, "SMREPO-TEST"))
+	require.ErrorContains(t, requireOwnIDShort(namedTestProperty("a;b"), true, "SMREPO-TEST"), "SMREPO-TEST-INVALIDIDSHORT")
+	require.ErrorContains(t, requireOwnIDShort(namelessTestProperty(), false, "SMREPO-TEST"), "Submodel element in the request body has no idShort (AASd-117)")
 }
 
 func TestInsertParentChildPlacement(t *testing.T) {

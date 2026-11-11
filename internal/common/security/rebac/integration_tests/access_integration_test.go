@@ -282,7 +282,7 @@ func TestDenialsWithoutGrantsLookExactlyLikeABAC(t *testing.T) {
 }
 
 func TestCreatorOwnsAndSharesWithOptimisticConcurrency(t *testing.T) {
-	identifier := createSubmodel(t, submodelURL, "alice", "shared", property("p", "1"))
+	identifier := createSubmodel(t, submodelURL, "alice", "shared", property("Prop", "1"))
 	target := submodelURL + "/submodels/" + enc(identifier)
 	accessURL := submodelAccess(submodelURL, identifier)
 
@@ -314,7 +314,7 @@ func TestCreatorOwnsAndSharesWithOptimisticConcurrency(t *testing.T) {
 }
 
 func TestGroupGrantsUseTokenMembershipAndIssuerIsolation(t *testing.T) {
-	identifier := createSubmodel(t, submodelURL, "alice", "group-shared", property("p", "1"))
+	identifier := createSubmodel(t, submodelURL, "alice", "group-shared", property("Prop", "1"))
 	target := submodelURL + "/submodels/" + enc(identifier)
 	addGrants(t, "alice", submodelAccess(submodelURL, identifier),
 		groupGrant("editor", "engineering"),
@@ -327,22 +327,22 @@ func TestGroupGrantsUseTokenMembershipAndIssuerIsolation(t *testing.T) {
 
 func TestElementGrantsArePathScoped(t *testing.T) {
 	identifier := createSubmodel(t, submodelURL, "alice", "elements",
-		collection("a", collection("b", property("c", "deep"))),
-		property("x", "sibling"),
+		collection("Outer", collection("Middle", property("Inner", "deep"))),
+		property("Sibling", "sibling"),
 	)
 	elements := submodelURL + "/submodels/" + enc(identifier) + "/submodel-elements"
-	addGrants(t, "alice", elementAccess(submodelURL, identifier, "a"), userGrant(t, "viewer", "bob"))
+	addGrants(t, "alice", elementAccess(submodelURL, identifier, "Outer"), userGrant(t, "viewer", "bob"))
 
 	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, submodelURL+"/submodels/"+enc(identifier), nil, nil), "element grant never exposes the Submodel")
-	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, elements+"/a", nil, nil), "granted element")
-	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, elements+"/a.b.c", nil, nil), "descendant of granted element")
-	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, elements+"/a.b.c/$value", nil, nil), "descendant value")
-	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, elements+"/x", nil, nil), "sibling stays hidden")
-	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodPatch, elements+"/a.b.c/$value", "changed", nil), "viewer cannot update elements")
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, elements+"/Outer", nil, nil), "granted element")
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, elements+"/Outer.Middle.Inner", nil, nil), "descendant of granted element")
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, elements+"/Outer.Middle.Inner/$value", nil, nil), "descendant value")
+	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, elements+"/Sibling", nil, nil), "sibling stays hidden")
+	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodPatch, elements+"/Outer.Middle.Inner/$value", "changed", nil), "viewer cannot update elements")
 
 	list := call(t, "bob", http.MethodGet, elements, nil, nil)
 	expectStatus(t, http.StatusOK, list, "element-only list")
-	require.ElementsMatch(t, []string{"a"}, resultIDShorts(t, list))
+	require.ElementsMatch(t, []string{"Outer"}, resultIDShorts(t, list))
 
 	listed := createSubmodel(t, submodelURL, "alice", "listed", map[string]any{
 		"modelType": "SubmodelElementList", "idShort": "items", "typeValueListElement": "Property", "valueTypeListElement": "xs:string",
@@ -352,37 +352,37 @@ func TestElementGrantsArePathScoped(t *testing.T) {
 	addGrants(t, "alice", elementAccess(submodelURL, listed, neturl.PathEscape("items[0]")), userGrant(t, "viewer", "bob"))
 	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, listElements+"/"+neturl.PathEscape("items[0]"), nil, nil), "escaped list item paths address the granted item")
 
-	addGrants(t, "alice", elementAccess(submodelURL, identifier, "x"), userGrant(t, "editor", "carol"))
-	expectStatus(t, http.StatusNoContent, call(t, "carol", http.MethodPatch, elements+"/x/$value", "edited", nil), "element editor updates")
-	expectStatus(t, http.StatusForbidden, call(t, "carol", http.MethodPatch, elements+"/a.b.c/$value", "edited", nil), "element grant does not reach siblings")
+	addGrants(t, "alice", elementAccess(submodelURL, identifier, "Sibling"), userGrant(t, "editor", "carol"))
+	expectStatus(t, http.StatusNoContent, call(t, "carol", http.MethodPatch, elements+"/Sibling/$value", "edited", nil), "element editor updates")
+	expectStatus(t, http.StatusForbidden, call(t, "carol", http.MethodPatch, elements+"/Outer.Middle.Inner/$value", "edited", nil), "element grant does not reach siblings")
 }
 
 func TestGrantsSurviveSubmodelPatchAndElementReplacement(t *testing.T) {
 	identifier := createSubmodel(t, submodelURL, "alice", "reconciled",
-		collection("a", property("b", "before"), property("removed", "gone")),
-		property("x", "sibling"),
+		collection("Outer", property("Middle", "before"), property("removed", "gone")),
+		property("Sibling", "sibling"),
 	)
 	target := submodelURL + "/submodels/" + enc(identifier)
 	elements := target + "/submodel-elements"
 	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "carol"))
-	addGrants(t, "alice", elementAccess(submodelURL, identifier, "a.b"), userGrant(t, "viewer", "bob"))
+	addGrants(t, "alice", elementAccess(submodelURL, identifier, "Outer.Middle"), userGrant(t, "viewer", "bob"))
 
-	patched := submodel(identifier, "patched", collection("a", property("b", "patched")), property("x", "sibling"))
+	patched := submodel(identifier, "patched", collection("Outer", property("Middle", "patched")), property("Sibling", "sibling"))
 	expectStatus(t, http.StatusNoContent, call(t, "alice", http.MethodPatch, target, patched, nil), "owner patches the Submodel")
 	expectStatus(t, http.StatusOK, call(t, "carol", http.MethodGet, target, nil, nil), "Submodel grant survives the PATCH")
-	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, elements+"/a.b", nil, nil), "element grant survives the PATCH")
+	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, elements+"/Outer.Middle", nil, nil), "element grant survives the PATCH")
 
-	expectStatus(t, http.StatusNoContent, call(t, "alice", http.MethodPut, elements+"/a", collection("a", property("b", "replaced")), nil), "owner replaces the container")
+	expectStatus(t, http.StatusNoContent, call(t, "alice", http.MethodPut, elements+"/Outer", collection("Outer", property("Middle", "replaced")), nil), "owner replaces the container")
 	expectStatus(t, http.StatusOK, call(t, "carol", http.MethodGet, target, nil, nil), "Submodel grant survives the element PUT")
-	replaced := call(t, "bob", http.MethodGet, elements+"/a.b", nil, nil)
+	replaced := call(t, "bob", http.MethodGet, elements+"/Outer.Middle", nil, nil)
 	expectStatus(t, http.StatusOK, replaced, "element grant survives the element PUT")
 	require.Equal(t, "replaced", replaced.json(t)["value"])
-	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, elements+"/x", nil, nil), "element grant still does not reach siblings")
+	expectStatus(t, http.StatusForbidden, call(t, "bob", http.MethodGet, elements+"/Sibling", nil, nil), "element grant still does not reach siblings")
 }
 
 func TestApprovedAASLinkCarriesAccessUntilReferenceRemoval(t *testing.T) {
 	bootstrapCreators(t)
-	submodelID := createSubmodel(t, environmentURL, "alice", "linked", property("p", "1"))
+	submodelID := createSubmodel(t, environmentURL, "alice", "linked", property("Prop", "1"))
 	shellID := unique("aas")
 	expectStatus(t, http.StatusCreated, call(t, "alice", http.MethodPost, environmentURL+"/shells", shell(shellID, submodelID), nil), "create shell")
 	addGrants(t, "alice", environmentURL+"/shells/"+enc(shellID)+"/$access", userGrant(t, "viewer", "eve"))
@@ -399,7 +399,7 @@ func TestApprovedAASLinkCarriesAccessUntilReferenceRemoval(t *testing.T) {
 
 	expectStatus(t, http.StatusOK, call(t, "eve", http.MethodGet, target, nil, nil), "AAS viewer reads linked Submodel")
 	expectStatus(t, http.StatusOK, call(t, "eve", http.MethodGet, environmentURL+"/shells/"+enc(shellID)+"/submodels/"+enc(submodelID), nil, nil), "superpath read")
-	expectStatus(t, http.StatusForbidden, call(t, "eve", http.MethodPatch, target, submodel(submodelID, "x"), nil), "link carries only the AAS relation")
+	expectStatus(t, http.StatusForbidden, call(t, "eve", http.MethodPatch, target, submodel(submodelID, "Changed"), nil), "link carries only the AAS relation")
 	expectStatus(t, http.StatusNotFound, call(t, "eve", http.MethodGet, accessURL, nil, nil), "links never carry management")
 
 	removed := call(t, "alice", http.MethodDelete, environmentURL+"/shells/"+enc(shellID)+"/submodel-refs/"+enc(submodelID), nil, nil)

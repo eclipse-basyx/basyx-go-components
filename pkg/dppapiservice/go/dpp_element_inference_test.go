@@ -15,9 +15,11 @@ package dppapi
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 func TestInferElementMapsCompactShapes(t *testing.T) {
@@ -133,5 +135,40 @@ func TestBuildAASMapsGranularityToAssetKind(t *testing.T) {
 				t.Fatalf("asset kind = %v, want %v", aas.AssetInformation().AssetKind(), test.assetKind)
 			}
 		})
+	}
+}
+
+func TestListItemIDShortsStayValidAndUnique(t *testing.T) {
+	listIDShort := "L" + strings.Repeat("x", model.MaxIDShortLength-1)
+	values := make([]any, 11)
+	for index := range values {
+		values[index] = map[string]any{"name": "item"}
+	}
+	element, err := inferElement(listIDShort, values)
+	if err != nil {
+		t.Fatalf("inferElement() error = %v", err)
+	}
+	seen := make(map[string]struct{}, len(values))
+	for _, item := range element.(*types.SubmodelElementList).Value() {
+		idShort := *item.IDShort()
+		if !model.IsValidIDShort(idShort) {
+			t.Fatalf("list item idShort %q is not a valid idShort", idShort)
+		}
+		if _, duplicate := seen[idShort]; duplicate {
+			t.Fatalf("list item idShort %q is not unique", idShort)
+		}
+		seen[idShort] = struct{}{}
+	}
+}
+
+func TestScalarListItemsHaveNoIDShort(t *testing.T) {
+	element, err := inferElement("voltages", []any{"110", "220"})
+	if err != nil {
+		t.Fatalf("inferElement() error = %v", err)
+	}
+	for _, item := range element.(*types.SubmodelElementList).Value() {
+		if item.IDShort() != nil {
+			t.Fatalf("scalar list item idShort = %q, want none", *item.IDShort())
+		}
 	}
 }

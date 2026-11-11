@@ -32,6 +32,7 @@ import (
 	"strconv"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 const (
@@ -110,40 +111,50 @@ func listElement(idShort string, values []any) (types.ISubmodelElement, error) {
 	}
 
 	elements := make([]types.ISubmodelElement, 0, len(values))
+	itemIDShortPrefix := listItemIDShortPrefix(idShort, len(values))
 	for index, value := range values {
-		element, err := inferListElement(idShort, index, value, classification)
+		element, err := inferListElement(value, classification)
 		if err != nil {
 			return nil, err
 		}
-		if idShorter, ok := element.(interface{ SetIDShort(*string) }); ok {
-			if listType == types.AASSubmodelElementsSubmodelElementCollection {
-				itemIDShort := fmt.Sprintf("%s%d", idShort, index)
-				idShorter.SetIDShort(&itemIDShort)
-			} else {
-				idShorter.SetIDShort(nil)
-			}
-		}
+		setListItemIDShort(element, listType, itemIDShortPrefix, index)
 		elements = append(elements, element)
 	}
 	list.SetValue(elements)
 	return list, nil
 }
 
-func inferListElement(idShort string, index int, value any, classification compactArrayClassification) (types.ISubmodelElement, error) {
+// listItemIDShortPrefix shortens the list idShort so that the idShorts of all
+// itemCount items, the prefix followed by the item index, stay within the
+// maximum idShort length. Using one prefix for all items keeps them unique.
+func listItemIDShortPrefix(listIDShort string, itemCount int) string {
+	maxPrefixLength := model.MaxIDShortLength - len(strconv.Itoa(itemCount-1))
+	if len(listIDShort) > maxPrefixLength {
+		return listIDShort[:maxPrefixLength]
+	}
+	return listIDShort
+}
+
+// setListItemIDShort names the items of a list of collections after the list
+// and their index; the items of other lists have no idShort.
+func setListItemIDShort(element types.ISubmodelElement, listType types.AASSubmodelElements, itemIDShortPrefix string, index int) {
+	idShorter, ok := element.(interface{ SetIDShort(*string) })
+	if !ok {
+		return
+	}
+	if listType != types.AASSubmodelElementsSubmodelElementCollection {
+		idShorter.SetIDShort(nil)
+		return
+	}
+	itemIDShort := itemIDShortPrefix + strconv.Itoa(index)
+	idShorter.SetIDShort(&itemIDShort)
+}
+
+func inferListElement(value any, classification compactArrayClassification) (types.ISubmodelElement, error) {
 	if classification.kind == compactArrayScalar {
 		return scalarListProperty(value, classification.valueType)
 	}
-	element, err := inferElement("", value)
-	if err != nil {
-		return nil, err
-	}
-	if classification.kind == compactArrayCollection {
-		if idShorter, ok := element.(interface{ SetIDShort(*string) }); ok {
-			itemIDShort := fmt.Sprintf("%s%d", idShort, index)
-			idShorter.SetIDShort(&itemIDShort)
-		}
-	}
-	return element, nil
+	return inferElement("", value)
 }
 
 func listElementType(classification compactArrayClassification) types.AASSubmodelElements {

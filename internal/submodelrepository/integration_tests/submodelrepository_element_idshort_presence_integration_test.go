@@ -104,7 +104,6 @@ func (h *idShortHarness) rejectedIDShortWrites(id string) []elementIDShortCase {
 	elements := h.path(id) + "/submodel-elements"
 	return append([]elementIDShortCase{
 		{name: "top-level omitted", method: http.MethodPost, path: elements, body: namelessProperty()},
-		{name: "top-level empty", method: http.MethodPost, path: elements, body: namedProperty("")},
 		{name: "collection child", method: http.MethodPost, path: elements + "/Coll", body: namelessProperty()},
 		{name: "entity statement", method: http.MethodPost, path: elements + "/Ent", body: namelessProperty()},
 		{name: "annotation", method: http.MethodPost, path: elements + "/Rel", body: namelessProperty()},
@@ -128,6 +127,13 @@ func (h *idShortHarness) testNamelessListItemIsAccepted(t *testing.T) {
 	h.json(t, http.MethodPost, h.path(id)+"/submodel-elements/List", collection("", namedProperty("Child")), http.StatusCreated)
 	item := h.json(t, http.MethodGet, h.path(id)+"/submodel-elements/List[0].Child", nil, http.StatusOK)
 	require.Equal(t, "Child", item["idShort"])
+
+	updatedChild := namedProperty("Child")
+	updatedChild["value"] = "updated"
+	listItemPath := h.path(id) + "/submodel-elements/List[0]"
+	h.json(t, http.MethodPut, listItemPath, collection("", updatedChild), http.StatusNoContent)
+	require.NotContains(t, h.json(t, http.MethodGet, listItemPath, nil, http.StatusOK), "idShort")
+	require.Equal(t, "updated", h.json(t, http.MethodGet, listItemPath+".Child", nil, http.StatusOK)["value"])
 }
 
 // testPatchKeepsStoredNamelessOperationVariable covers Operations stored before

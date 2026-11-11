@@ -36,9 +36,9 @@ import (
 // view of a resource changes does not get 304 for the old view, although the
 // resource revision did not change.
 func TestAccessChangesInvalidateRepresentationETags(t *testing.T) {
-	identifier := createSubmodel(t, submodelURL, "alice", "etag-view", property("a", "first"), property("b", "second"))
+	identifier := createSubmodel(t, submodelURL, "alice", "etag-view", property("First", "first"), property("Second", "second"))
 	elements := submodelURL + "/submodels/" + enc(identifier) + "/submodel-elements"
-	addGrants(t, "alice", elementAccess(submodelURL, identifier, "a"), userGrant(t, "viewer", "bob"))
+	addGrants(t, "alice", elementAccess(submodelURL, identifier, "First"), userGrant(t, "viewer", "bob"))
 
 	narrow := call(t, "bob", http.MethodGet, elements, nil, nil)
 	expectStatus(t, http.StatusOK, narrow, "element-only list")
@@ -49,9 +49,9 @@ func TestAccessChangesInvalidateRepresentationETags(t *testing.T) {
 	full := call(t, "alice", http.MethodGet, elements, nil, nil)
 	require.NotEqual(t, narrowTag, full.header.Get("ETag"), "different views have different entity tags")
 
-	addGrants(t, "alice", elementAccess(submodelURL, identifier, "b"), userGrant(t, "viewer", "bob"))
+	addGrants(t, "alice", elementAccess(submodelURL, identifier, "Second"), userGrant(t, "viewer", "bob"))
 	widened := call(t, "bob", http.MethodGet, elements, nil, map[string]string{"If-None-Match": narrowTag})
 	expectStatus(t, http.StatusOK, widened, "a changed view is never answered with 304")
-	require.ElementsMatch(t, []string{"a", "b"}, resultIDShorts(t, widened))
+	require.ElementsMatch(t, []string{"First", "Second"}, resultIDShorts(t, widened))
 	require.NotEqual(t, narrowTag, widened.header.Get("ETag"))
 }

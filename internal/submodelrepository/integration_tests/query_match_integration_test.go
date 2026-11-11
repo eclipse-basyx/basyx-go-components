@@ -95,8 +95,8 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 		fragment string
 	}{
 		{name: "TopLevelProperty", fragment: "$sme.guard#idShort"},
-		{name: "TopLevelList", fragment: "$sme.a#idShort"},
-		{name: "NamedElementInsideListEntry", fragment: "$sme.a[].b#idShort"},
+		{name: "TopLevelList", fragment: "$sme.listA#idShort"},
+		{name: "NamedElementInsideListEntry", fragment: "$sme.listA[].listB#idShort"},
 		{name: "MandatorySubmodelID", fragment: "$sm#id"},
 	} {
 		t.Run("RejectFilteringMandatoryIDShort/"+test.name, func(t *testing.T) {
@@ -113,13 +113,13 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 	}
 
 	t.Run("FilteringListEntryIDShortIsAllowed", func(t *testing.T) {
-		result := queryNestedMatchSubmodel(t, nestedMatchFilter("$sme.a[].b[]#idShort", false, map[string]any{"$boolean": false}))
+		result := queryNestedMatchSubmodel(t, nestedMatchFilter("$sme.listA[].listB[]#idShort", false, map[string]any{"$boolean": false}))
 
 		assert.Equal(t, "NestedMatch", result["idShort"])
 		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}, {"a1-b0", "a1-b1"}}, nestedBValues(t, result))
-		a := elementByIDShort(t, arrayValue(t, result["submodelElements"]), "a")
+		a := elementByIDShort(t, arrayValue(t, result["submodelElements"]), "listA")
 		for _, entry := range arrayValue(t, a["value"]) {
-			b := elementByIDShort(t, arrayValue(t, objectValue(t, entry)["value"]), "b")
+			b := elementByIDShort(t, arrayValue(t, objectValue(t, entry)["value"]), "listB")
 			for _, property := range arrayValue(t, b["value"]) {
 				assert.NotContains(t, objectValue(t, property), "idShort")
 			}
@@ -128,9 +128,9 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 
 	t.Run("OmittedMatchKeepsExistentialBehavior", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
-			"$sme.a[].b[]",
+			"$sme.listA[].listB[]",
 			false,
-			equalsCondition("$sme.a[].b[]#value", "a0-b1"),
+			equalsCondition("$sme.listA[].listB[]#value", "a0-b1"),
 		))
 
 		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}, {"a1-b0", "a1-b1"}}, nestedBValues(t, result))
@@ -164,9 +164,9 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 
 	t.Run("SamePathMatchesCurrentNestedListEntry", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
-			"$sme.a[].b[]",
+			"$sme.listA[].listB[]",
 			true,
-			equalsCondition("$sme.a[].b[]#value", "a0-b1"),
+			equalsCondition("$sme.listA[].listB[]#value", "a0-b1"),
 		))
 
 		assert.Equal(t, [][]string{{"a0-b1"}, {}}, nestedBValues(t, result))
@@ -174,9 +174,9 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 
 	t.Run("ExplicitFirstParentIndexOnlyFiltersThatParent", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
-			"$sme.a[0].b[]",
+			"$sme.listA[0].listB[]",
 			true,
-			equalsCondition("$sme.a[].b[]#value", "a0-b1"),
+			equalsCondition("$sme.listA[].listB[]#value", "a0-b1"),
 		))
 
 		assert.Equal(t, [][]string{{"a0-b1"}, {"a1-b0", "a1-b1"}}, nestedBValues(t, result))
@@ -184,11 +184,11 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 
 	t.Run("ExplicitSecondParentIndexOnlyFiltersThatParent", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
-			"$sme.a[1].b[]",
+			"$sme.listA[1].listB[]",
 			true,
 			map[string]any{
 				"$contains": []any{
-					map[string]any{"$field": "$sme.a[].b[]#value"},
+					map[string]any{"$field": "$sme.listA[].listB[]#value"},
 					map[string]any{"$strVal": "-b0"},
 				},
 			},
@@ -199,9 +199,9 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 
 	t.Run("DescendantPathMatchesSharedParentListIndex", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
-			"$sme.a[]",
+			"$sme.listA[]",
 			true,
-			equalsCondition("$sme.a[].b[]#value", "a0-b1"),
+			equalsCondition("$sme.listA[].listB[]#value", "a0-b1"),
 		))
 
 		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}}, nestedBValues(t, result))
@@ -209,9 +209,9 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 
 	t.Run("DescendantPathCannotMatchAnotherSubmodel", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
-			"$sme.a[]",
+			"$sme.listA[]",
 			true,
-			equalsCondition("$sme.a[].b[]#value", "foreign-b0"),
+			equalsCondition("$sme.listA[].listB[]#value", "foreign-b0"),
 		))
 
 		assert.Empty(t, nestedBValues(t, result))
@@ -219,9 +219,9 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 
 	t.Run("ConditionMayContinueThroughMoreArrays", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
-			"$sme.a[].b[]",
+			"$sme.listA[].listB[]",
 			true,
-			equalsCondition("$sme.a[].b[]#semanticId.keys[].value", "semantic-a1-b0-allowed"),
+			equalsCondition("$sme.listA[].listB[]#semanticId.keys[].value", "semantic-a1-b0-allowed"),
 		))
 
 		assert.Equal(t, [][]string{{}, {"a1-b0"}}, nestedBValues(t, result))
@@ -229,9 +229,9 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 
 	t.Run("NestedSemanticKeyFragmentMatchesItsCurrentKey", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
-			"$sme.a[].b[]#semanticId.keys[]",
+			"$sme.listA[].listB[]#semanticId.keys[]",
 			true,
-			equalsCondition("$sme.a[].b[]#semanticId.keys[].value", "semantic-a0-b0-allowed"),
+			equalsCondition("$sme.listA[].listB[]#semanticId.keys[].value", "semantic-a0-b0-allowed"),
 		))
 
 		assert.Equal(t, []string{"semantic-a0-b0-allowed"}, nestedSemanticKeyValues(t, result))
@@ -240,7 +240,7 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 
 	t.Run("DifferentPathActsAsSubmodelGuard", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
-			"$sme.a[].b[]",
+			"$sme.listA[].listB[]",
 			true,
 			equalsCondition("$sme.guard#value", "enabled"),
 		))
@@ -251,12 +251,12 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 	t.Run("MixedSameDescendantAndDifferentPaths", func(t *testing.T) {
 		condition := map[string]any{
 			"$and": []any{
-				equalsCondition("$sme.a[].b[]#value", "a0-b0"),
-				equalsCondition("$sme.a[].b[]#semanticId.keys[].value", "semantic-a0-b0-allowed"),
+				equalsCondition("$sme.listA[].listB[]#value", "a0-b0"),
+				equalsCondition("$sme.listA[].listB[]#semanticId.keys[].value", "semantic-a0-b0-allowed"),
 				equalsCondition("$sme.guard#value", "enabled"),
 			},
 		}
-		result := queryNestedMatchSubmodel(t, nestedMatchFilter("$sme.a[].b[]", true, condition))
+		result := queryNestedMatchSubmodel(t, nestedMatchFilter("$sme.listA[].listB[]", true, condition))
 
 		assert.Equal(t, [][]string{{"a0-b0"}, {}}, nestedBValues(t, result))
 	})
@@ -264,21 +264,21 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 	t.Run("MultipleFragmentsMatchIndependently", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t,
 			nestedMatchFilter(
-				"$sme.a[].b[]",
+				"$sme.listA[].listB[]",
 				true,
 				map[string]any{
 					"$contains": []any{
-						map[string]any{"$field": "$sme.a[].b[]#value"},
+						map[string]any{"$field": "$sme.listA[].listB[]#value"},
 						map[string]any{"$strVal": "-b0"},
 					},
 				},
 			),
 			nestedMatchFilter(
-				"$sme.a[].b[]#semanticId.keys[]",
+				"$sme.listA[].listB[]#semanticId.keys[]",
 				true,
 				map[string]any{
 					"$ends-with": []any{
-						map[string]any{"$field": "$sme.a[].b[]#semanticId.keys[].value"},
+						map[string]any{"$field": "$sme.listA[].listB[]#semanticId.keys[].value"},
 						map[string]any{"$strVal": "-allowed"},
 					},
 				},
@@ -339,11 +339,11 @@ func equalsCondition(field string, value string) map[string]any {
 func nestedBValues(t *testing.T, submodel map[string]any) [][]string {
 	t.Helper()
 
-	a := elementByIDShort(t, arrayValue(t, submodel["submodelElements"]), "a")
+	a := elementByIDShort(t, arrayValue(t, submodel["submodelElements"]), "listA")
 	result := make([][]string, 0)
 	for _, aEntry := range optionalArrayValue(t, a["value"]) {
 		collection := objectValue(t, aEntry)
-		b := elementByIDShort(t, arrayValue(t, collection["value"]), "b")
+		b := elementByIDShort(t, arrayValue(t, collection["value"]), "listB")
 		values := make([]string, 0)
 		for _, bEntry := range optionalArrayValue(t, b["value"]) {
 			property := objectValue(t, bEntry)
@@ -359,11 +359,11 @@ func nestedBValues(t *testing.T, submodel map[string]any) [][]string {
 func nestedSemanticKeyValues(t *testing.T, submodel map[string]any) []string {
 	t.Helper()
 
-	a := elementByIDShort(t, arrayValue(t, submodel["submodelElements"]), "a")
+	a := elementByIDShort(t, arrayValue(t, submodel["submodelElements"]), "listA")
 	result := make([]string, 0)
 	for _, aEntry := range arrayValue(t, a["value"]) {
 		collection := objectValue(t, aEntry)
-		b := elementByIDShort(t, arrayValue(t, collection["value"]), "b")
+		b := elementByIDShort(t, arrayValue(t, collection["value"]), "listB")
 		for _, bEntry := range arrayValue(t, b["value"]) {
 			property := objectValue(t, bEntry)
 			semanticID, exists := property["semanticId"]
@@ -443,7 +443,7 @@ func nestedMatchSubmodel() map[string]any {
 		"submodelElements": []any{
 			property("guard", "enabled", nil),
 			map[string]any{
-				"idShort":              "a",
+				"idShort":              "listA",
 				"modelType":            "SubmodelElementList",
 				"orderRelevant":        true,
 				"typeValueListElement": "SubmodelElementCollection",
@@ -463,7 +463,7 @@ func foreignNestedMatchSubmodel() map[string]any {
 		"modelType": "Submodel",
 		"submodelElements": []any{
 			map[string]any{
-				"idShort":              "a",
+				"idShort":              "listA",
 				"modelType":            "SubmodelElementList",
 				"orderRelevant":        true,
 				"typeValueListElement": "SubmodelElementCollection",
@@ -480,7 +480,7 @@ func nestedMatchAEntry(prefix string) map[string]any {
 		"modelType": "SubmodelElementCollection",
 		"value": []any{
 			map[string]any{
-				"idShort":              "b",
+				"idShort":              "listB",
 				"modelType":            "SubmodelElementList",
 				"orderRelevant":        true,
 				"typeValueListElement": "Property",

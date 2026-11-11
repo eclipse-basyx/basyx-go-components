@@ -35,7 +35,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
@@ -249,21 +248,18 @@ func (h *idShortHarness) create(t *testing.T, payload map[string]any, status int
 func (h *idShortHarness) seed(t *testing.T, idShort *string) string {
 	t.Helper()
 	id := "urn:idshort:submodel:" + uuid.NewString()
-	payload := idShortPayload(id, idShort)
-	if h.mode != "strict" || idShort == nil || *idShort != "" {
-		h.create(t, payload, http.StatusCreated)
-		return id
+	payloadIDShort := idShort
+	if idShort != nil && *idShort == "" {
+		payloadIDShort = nil
 	}
-	backend, err := smdb.NewSubmodelDatabaseFromDB(h.db, nil, "off")
-	require.NoError(t, err)
-	submodel, err := jsonization.SubmodelFromJsonable(payload)
-	require.NoError(t, err)
-	require.NoError(t, backend.CreateSubmodel(h.ctx, submodel))
-	h.track(t, id)
-	if h.service.nested {
-		h.json(t, http.MethodPost, "/shells/"+common.EncodeString(h.shellID)+"/submodel-refs", map[string]any{
-			"type": "ModelReference", "keys": []any{map[string]any{"type": "Submodel", "value": id}},
-		}, http.StatusCreated)
+	h.create(t, idShortPayload(id, payloadIDShort), http.StatusCreated)
+	if idShort != nil && *idShort == "" {
+		query, args, err := goqu.Dialect(common.Dialect).Update("submodel").
+			Set(goqu.Record{"id_short": ""}).
+			Where(goqu.Ex{"submodel_identifier": id}).ToSQL()
+		require.NoError(t, err)
+		_, err = h.db.ExecContext(h.ctx, query, args...)
+		require.NoError(t, err)
 	}
 	return id
 }
@@ -323,7 +319,7 @@ func (h *idShortHarness) testCreation(t *testing.T) {
 				payload["idShort"] = nil
 			}
 			status := http.StatusCreated
-			if h.mode == "strict" && testCase.idShort != nil && *testCase.idShort == "" {
+			if testCase.idShort != nil && *testCase.idShort == "" {
 				status = http.StatusBadRequest
 			}
 			result := h.create(t, payload, status)
@@ -369,7 +365,7 @@ func (h *idShortHarness) testReplacement(t *testing.T) {
 			}
 			status := http.StatusNoContent
 			expected := testCase.target
-			if (testCase.null && !h.service.nested) || (h.mode == "strict" && testCase.target != nil && *testCase.target == "") {
+			if (testCase.null && !h.service.nested) || (testCase.target != nil && *testCase.target == "") {
 				status = http.StatusBadRequest
 				expected = testCase.previous
 			}
@@ -425,7 +421,7 @@ func (h *idShortHarness) checkPatch(t *testing.T, testCase idShortPatchCase) {
 		expected = testCase.value
 	}
 	status := http.StatusNoContent
-	if h.mode == "strict" && testCase.value != nil && *testCase.value == "" {
+	if testCase.value != nil && *testCase.value == "" {
 		status = http.StatusBadRequest
 		expected = testCase.previous
 	}

@@ -170,7 +170,7 @@ func TestReenableReconciliationRemovesStateOfResourcesDeletedMeanwhile(t *testin
 }
 
 func TestGrantsAreSharedAcrossServicesOfOneScope(t *testing.T) {
-	identifier := createSubmodel(t, environmentURL, "alice", "cross-service", property("p", "1"))
+	identifier := createSubmodel(t, environmentURL, "alice", "cross-service", property("Prop", "1"))
 	addGrants(t, "alice", submodelAccess(submodelURL, identifier), userGrant(t, "viewer", "bob"))
 	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, environmentURL+"/submodels/"+enc(identifier), nil, nil), "AAS Environment")
 	expectStatus(t, http.StatusOK, call(t, "bob", http.MethodGet, submodelURL+"/submodels/"+enc(identifier), nil, nil), "Submodel repository")

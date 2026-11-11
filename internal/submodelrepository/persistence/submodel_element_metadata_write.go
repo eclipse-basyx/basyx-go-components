@@ -52,6 +52,9 @@ func (s *SubmodelDatabase) PatchSubmodelElementMetadata(ctx context.Context, sub
 	if err != nil {
 		return common.NewErrBadRequest("SMREPO-PATCHSMEMETA-PAYLOAD " + err.Error())
 	}
+	if err = validateMetadataPatchIDShort(patch); err != nil {
+		return err
+	}
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMEMETA-STARTTX " + err.Error())
@@ -81,6 +84,16 @@ func (s *SubmodelDatabase) PatchSubmodelElementMetadata(ctx context.Context, sub
 		return err
 	}
 	return common.CommitTransaction(tx)
+}
+
+// validateMetadataPatchIDShort rejects an invalid idShort in a metadata patch.
+// A metadata PATCH never renames the element.
+func validateMetadataPatchIDShort(patch map[string]any) error {
+	idShort, present := patch["idShort"].(string)
+	if !present {
+		return nil
+	}
+	return common.ValidateOptionalIDShort("SMREPO-PATCHSMEMETA", "Submodel element in the request body", &idShort)
 }
 
 func (s *SubmodelDatabase) patchSubmodelElementMetadataTx(ctx context.Context, tx *sql.Tx, submodelID, path string, patch map[string]any, metadata gen.SubmodelElementMetadata, shouldEnforce bool) error {

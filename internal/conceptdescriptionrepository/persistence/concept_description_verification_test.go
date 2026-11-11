@@ -36,7 +36,7 @@ import (
 )
 
 func TestConceptDescriptionStrictVerificationRejectsBeforeTransaction(t *testing.T) {
-	for _, violation := range []string{"ID-short", "AASd-005"} {
+	for _, violation := range []string{"INVALIDIDSHORT", "AASd-005"} {
 		t.Run(violation, func(t *testing.T) {
 			for _, operation := range []string{"create", "put"} {
 				t.Run(operation, func(t *testing.T) {
@@ -59,7 +59,7 @@ func testConceptDescriptionRejectsBeforeTransaction(t *testing.T, violation, ope
 	backend, err := NewConceptDescriptionBackendFromDB(db, "strict")
 	require.NoError(t, err)
 	cd := types.NewConceptDescription("urn:example:description")
-	if violation == "ID-short" {
+	if violation == "INVALIDIDSHORT" {
 		idShort := "1Invalid"
 		cd.SetIDShort(&idShort)
 	} else {

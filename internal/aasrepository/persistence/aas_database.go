@@ -156,8 +156,13 @@ func (s *AssetAdministrationShellDatabase) readDB(ctx context.Context) *sql.DB {
 	return common.PostgresReadPool(ctx, s.db, s.readerDB)
 }
 
-// verifyAssetAdministrationShell validates an AAS when strict verification is enabled.
-func (s *AssetAdministrationShellDatabase) verifyAssetAdministrationShell(aas types.IAssetAdministrationShell, errorPrefix string) error {
+// verifyAssetAdministrationShell validates the idShort of an AAS in every
+// verification mode and the whole AAS when strict verification is enabled.
+func (s *AssetAdministrationShellDatabase) verifyAssetAdministrationShell(aas types.IAssetAdministrationShell, errorScope string) error {
+	if err := common.ValidateOptionalIDShort(errorScope, "Asset Administration Shell in the request body", aas.IDShort()); err != nil {
+		return err
+	}
+	errorPrefix := errorScope + "-VERIFY"
 	return commonmodel.ValidateWithMode(
 		s.verificationMode,
 		errorPrefix,
@@ -492,7 +497,7 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 		return common.NewInternalServerError("AASREPO-NEWAAS-NILTX transaction must not be nil")
 	}
 
-	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-NEWAAS-VERIFY"); err != nil {
+	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-NEWAAS"); err != nil {
 		return err
 	}
 	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aas.ID()); err != nil {
@@ -1288,7 +1293,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		return false, common.NewErrBadRequest("AASREPO-PUTAAS-IDMISMATCH Asset Administration Shell ID in path and body do not match")
 	}
 
-	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-PUTAAS-VERIFY"); err != nil {
+	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-PUTAAS"); err != nil {
 		return false, err
 	}
 
@@ -1331,7 +1336,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDInTran
 	if aasIdentifier != aas.ID() {
 		return PutAssetAdministrationShellResult{}, common.NewErrBadRequest("AASREPO-PUTAAS-IDMISMATCH Asset Administration Shell ID in path and body do not match")
 	}
-	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-PUTAAS-VERIFY"); err != nil {
+	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-PUTAAS"); err != nil {
 		return PutAssetAdministrationShellResult{}, err
 	}
 

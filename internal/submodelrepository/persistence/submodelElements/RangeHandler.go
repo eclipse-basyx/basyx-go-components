@@ -33,13 +33,11 @@ package submodelelements
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 // PostgreSQLRangeHandler handles persistence operations for Range submodel elements.
@@ -93,18 +91,7 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 		return err
 	}
 	defer cu(&err)
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
-	if err != nil {
-		return err
-	}
-	effectivePath := resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
-
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
-	if err != nil {
-		slog.Error("submodel database ID lookup failed", "error.code", "SMREPO-SMEUPDATE-GETSMDBID", "error", err)
-		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
-	}
-	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, effectivePath)
+	elementID, err := p.decorated.UpdateElement(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {
 		return err
 	}

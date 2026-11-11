@@ -55,16 +55,18 @@ import (
 )
 
 type conceptDescriptionVerificationFixture struct {
-	name      string
-	fields    map[string]any
-	violation string
+	name              string
+	fields            map[string]any
+	violation         string
+	rejectedInAnyMode bool
 }
 
 func conceptDescriptionVerificationFixtures() []conceptDescriptionVerificationFixture {
 	return []conceptDescriptionVerificationFixture{
 		{name: "valid-idShort", fields: map[string]any{"idShort": "Valid-name_01"}},
 		{name: "omitted-idShort"},
-		{name: "invalid-idShort", fields: map[string]any{"idShort": "1Invalid"}, violation: "ID-short"},
+		{name: "empty-idShort", fields: map[string]any{"idShort": ""}, violation: "INVALIDIDSHORT", rejectedInAnyMode: true},
+		{name: "invalid-idShort", fields: map[string]any{"idShort": "1Invalid"}, violation: "INVALIDIDSHORT", rejectedInAnyMode: true},
 		{
 			name: "revision-without-version",
 			fields: map[string]any{
@@ -201,7 +203,7 @@ func testConceptDescriptionVerificationWrite(t *testing.T, db *sql.DB, router ch
 	logs := captureConceptDescriptionVerificationLogs(t)
 	payload := fixture.payload(id)
 	response := writeConceptDescriptionVerification(t, router, id, payload, operation)
-	rejected := fixture.violation != "" && mode == model.VerificationModeStrict
+	rejected := fixture.rejectedInAnyMode || (fixture.violation != "" && mode == model.VerificationModeStrict)
 	assert.Equal(t, conceptDescriptionVerificationStatus(operation, rejected), response.Code, "response=%s", response.Body.String())
 	assertConceptDescriptionVerificationLogs(t, logs.String(), mode, fixture)
 	if rejected {
@@ -301,7 +303,7 @@ func captureConceptDescriptionVerificationLogs(t *testing.T) *bytes.Buffer {
 
 func assertConceptDescriptionVerificationLogs(t *testing.T, logs string, mode model.VerificationMode, fixture conceptDescriptionVerificationFixture) {
 	t.Helper()
-	if mode == model.VerificationModePermissive && fixture.violation != "" {
+	if mode == model.VerificationModePermissive && fixture.violation != "" && !fixture.rejectedInAnyMode {
 		assert.Contains(t, logs, "semantic verification warning")
 		assert.Contains(t, logs, "MODEL-VALIDATEWITHMODE-WARN")
 		assert.Contains(t, logs, fixture.violation)

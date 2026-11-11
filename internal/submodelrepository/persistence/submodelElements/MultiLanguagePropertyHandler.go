@@ -34,14 +34,12 @@ package submodelelements
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 // PostgreSQLMultiLanguagePropertyHandler handles persistence operations for MultiLanguageProperty submodel elements.
@@ -95,23 +93,11 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 		return err
 	}
 	defer cu(&err)
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	elementID, err := p.decorated.UpdateElement(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {
 		return err
 	}
-	effectivePath := resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
-
 	dialect := goqu.Dialect("postgres")
-
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
-	if err != nil {
-		slog.Error("submodel database ID lookup failed", "error.code", "SMREPO-SMEUPDATE-GETSMDBID", "error", err)
-		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
-	}
-	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, effectivePath)
-	if err != nil {
-		return err
-	}
 
 	valueIDPayload := "[]"
 	if isPut || mlp.ValueID() != nil {

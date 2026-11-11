@@ -1,0 +1,25 @@
+kind: changed
+body: >-
+  Writes reject an idShort that does not match the idShort type of the AAS
+  metamodel, in every verification mode: 2 to 128 characters, only letters,
+  digits, "-" and "_", starting with a letter and not ending with "-".
+  Explicit empty idShorts are invalid; an optional idShort may be omitted. This
+  applies to Asset Administration Shells, Submodels, Concept Descriptions,
+  and Submodel elements written with POST, PUT, or PATCH (including
+  $metadata) in the AAS Repository, Submodel Repository, Concept Description
+  Repository, and AAS Environment, including environment uploads, and in the
+  DPP API. Rejected writes answer with 400 and an error code ending in
+  -INVALIDIDSHORT; the DPP API answers with 409 for invalid element keys and
+  with 400 for a content section whose name does not give a valid idShort,
+  for example "1a". Previously, idShorts such as "a;b" or "a b" were stored
+  in off and permissive mode, and on some write paths also in strict mode;
+  clients that URL-encode the idShortPath, as AAS Part 2 requires, then
+  received 404 for these elements (#848). Single-letter idShorts such as
+  "X", which some IDTA Submodel Templates use, are rejected as well.
+  Resources stored earlier with invalid idShorts are not migrated or
+  repaired; delete them and create them again with valid idShorts.
+time: 2026-11-09T12:00:00+01:00
+custom:
+  Impact: High
+  PullRequest: 863
+  SecurityImpact: None.

@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 const dppAASIDShort = "DPP"
@@ -104,8 +106,11 @@ func setNewDPPSubmodelAdministration(submodel types.ISubmodel, timestamp time.Ti
 }
 
 func buildContentSubmodel(dppID string, sectionName string, semanticID string, value any) (types.ISubmodel, error) {
-	submodel := types.NewSubmodel(contentSubmodelID(dppID, sectionName))
 	idShort := contentSectionIDShort(sectionName)
+	if !model.IsValidIDShort(idShort) {
+		return nil, fmt.Errorf("DPP-BUILDSM-SECTIONIDSHORT content section %s does not give its content submodel a valid idShort: %s", sectionName, common.IDShortRequirement)
+	}
+	submodel := types.NewSubmodel(contentSubmodelID(dppID, sectionName))
 	submodel.SetIDShort(&idShort)
 	if semanticID != "" {
 		submodel.SetSemanticID(globalReference(semanticID))

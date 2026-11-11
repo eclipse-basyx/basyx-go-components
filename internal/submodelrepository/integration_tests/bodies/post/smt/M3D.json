@@ -2153,7 +2153,7 @@
                                       "valueType": "xs:string"
                                     }
                                   ],
-                                  "idShort": "X"
+                                  "idShort": "PosX"
                                 },
                                 {
                                   "modelType": "Property",
@@ -2175,7 +2175,7 @@
                                       "valueType": "xs:string"
                                     }
                                   ],
-                                  "idShort": "Y"
+                                  "idShort": "PosY"
                                 },
                                 {
                                   "modelType": "Property",
@@ -2197,7 +2197,7 @@
                                       "valueType": "xs:string"
                                     }
                                   ],
-                                  "idShort": "Z"
+                                  "idShort": "PosZ"
                                 }
                               ]
                             },
@@ -2264,7 +2264,7 @@
                                           "valueType": "xs:string"
                                         }
                                       ],
-                                      "idShort": "X"
+                                      "idShort": "PosX"
                                     },
                                     {
                                       "modelType": "Property",
@@ -2286,7 +2286,7 @@
                                           "valueType": "xs:string"
                                         }
                                       ],
-                                      "idShort": "Y"
+                                      "idShort": "PosY"
                                     },
                                     {
                                       "modelType": "Property",
@@ -2308,7 +2308,7 @@
                                           "valueType": "xs:string"
                                         }
                                       ],
-                                      "idShort": "Z"
+                                      "idShort": "PosZ"
                                     }
                                   ]
                                 }
@@ -2357,7 +2357,7 @@
                                   "valueType": "xs:string"
                                 }
                               ],
-                              "idShort": "X"
+                              "idShort": "PosX"
                             },
                             {
                               "modelType": "Property",
@@ -2379,7 +2379,7 @@
                                   "valueType": "xs:string"
                                 }
                               ],
-                              "idShort": "Y"
+                              "idShort": "PosY"
                             },
                             {
                               "modelType": "Property",
@@ -2401,7 +2401,7 @@
                                   "valueType": "xs:string"
                                 }
                               ],
-                              "idShort": "Z"
+                              "idShort": "PosZ"
                             }
                           ]
                         }
@@ -2493,7 +2493,7 @@
                                   "valueType": "xs:string"
                                 }
                               ],
-                              "idShort": "X"
+                              "idShort": "PosX"
                             },
                             {
                               "modelType": "Property",
@@ -2515,7 +2515,7 @@
                                   "valueType": "xs:string"
                                 }
                               ],
-                              "idShort": "Y"
+                              "idShort": "PosY"
                             },
                             {
                               "modelType": "Property",
@@ -2537,7 +2537,7 @@
                                   "valueType": "xs:string"
                                 }
                               ],
-                              "idShort": "Z"
+                              "idShort": "PosZ"
                             }
                           ]
                         },
@@ -2604,7 +2604,7 @@
                                       "valueType": "xs:string"
                                     }
                                   ],
-                                  "idShort": "X"
+                                  "idShort": "PosX"
                                 },
                                 {
                                   "modelType": "Property",
@@ -2626,7 +2626,7 @@
                                       "valueType": "xs:string"
                                     }
                                   ],
-                                  "idShort": "Y"
+                                  "idShort": "PosY"
                                 },
                                 {
                                   "modelType": "Property",
@@ -2648,7 +2648,7 @@
                                       "valueType": "xs:string"
                                     }
                                   ],
-                                  "idShort": "Z"
+                                  "idShort": "PosZ"
                                 }
                               ]
                             }

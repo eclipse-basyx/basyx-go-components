@@ -15,44 +15,44 @@
   },
   "submodelElements": [
     {
-      "idShort": "1",
+      "idShort": "A1",
       "modelType": "SubmodelElementCollection",
       "value": [
         {
-          "idShort": "2",
+          "idShort": "A2",
           "modelType": "SubmodelElementCollection",
           "value": [
             {
-              "idShort": "3",
+              "idShort": "A3",
               "modelType": "SubmodelElementCollection",
               "value": [
                 {
-                  "idShort": "4",
+                  "idShort": "A4",
                   "modelType": "SubmodelElementCollection",
                   "value": [
                     {
-                      "idShort": "5",
+                      "idShort": "A5",
                       "modelType": "SubmodelElementCollection",
                       "value": [
                         {
-                          "idShort": "6",
+                          "idShort": "A6",
                           "modelType": "SubmodelElementList",
                           "typeValueListElement": "Property",
                           "value": [
                             {
-                              "idShort": "2",
+                              "idShort": "A2",
                               "modelType": "Property",
                               "value": "12",
                               "valueType": "xs:string"
                             },
                             {
-                              "idShort": "3",
+                              "idShort": "A3",
                               "modelType": "Property",
                               "value": "123",
                               "valueType": "xs:string"
                             },
                             {
-                              "idShort": "4",
+                              "idShort": "A4",
                               "modelType": "Property",
                               "value": "1234",
                               "valueType": "xs:string"
