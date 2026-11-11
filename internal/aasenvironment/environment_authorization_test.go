@@ -27,45 +27,37 @@ package aasenvironment
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"testing"
 
 	aastypes "github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/stretchr/testify/require"
 )
 
-func TestUploadRepositoryStatusIsPreserved(t *testing.T) {
-	for _, status := range []int{200, 201, 204, 400, 403, 404, 405, 409, 413, 500} {
-		err := checkUploadRepositoryResponse("PUTSM", "id", model.Response(status, model.Result{Messages: []model.Message{{Text: "detail"}}}))
-		if status < 300 {
-			require.NoError(t, err)
-			continue
-		}
-		require.Error(t, err)
-		require.Equal(t, status, uploadProcessingStatus(err))
-		require.Contains(t, err.Error(), "detail")
-	}
-}
-
 type deniedEnvironmentWriter struct{}
 
-func (deniedEnvironmentWriter) PutSubmodelByID(context.Context, string, aastypes.ISubmodel) (model.ImplResponse, error) {
-	return model.Response(http.StatusForbidden, nil), nil
+func (deniedEnvironmentWriter) UpsertSubmodelInTransaction(context.Context, *sql.Tx, aastypes.ISubmodel) error {
+	return common.NewErrDenied("denied")
 }
 
-func (deniedEnvironmentWriter) PutAssetAdministrationShellById(context.Context, string, aastypes.IAssetAdministrationShell) (model.ImplResponse, error) {
-	return model.Response(http.StatusForbidden, nil), nil
+func (deniedEnvironmentWriter) UpsertAssetAdministrationShellInTransaction(context.Context, *sql.Tx, aastypes.IAssetAdministrationShell) error {
+	return common.NewErrDenied("denied")
 }
 
 func TestUploadWrapperDenialRemainsForbidden(t *testing.T) {
 	service := &uploadAPIService{submodelRepositoryService: deniedEnvironmentWriter{}, aasRepositoryService: deniedEnvironmentWriter{}}
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
-	err := service.storeEnvironmentSubmodel(ctx, aastypes.NewSubmodel("id"))
+	err := service.storeEnvironmentSubmodels(ctx, nil, []aastypes.ISubmodel{aastypes.NewSubmodel("submodel-id")})
 	require.True(t, common.IsErrDenied(err))
-	err = service.storeEnvironmentShell(ctx, aastypes.NewAssetAdministrationShell("id", aastypes.NewAssetInformation(aastypes.AssetKindInstance)))
+	require.Equal(t, http.StatusForbidden, uploadProcessingStatus(err))
+	require.Contains(t, err.Error(), `"submodel-id"`)
+	shell := aastypes.NewAssetAdministrationShell("shell-id", aastypes.NewAssetInformation(aastypes.AssetKindInstance))
+	err = service.storeEnvironmentShells(ctx, nil, []aastypes.IAssetAdministrationShell{shell})
 	require.True(t, common.IsErrDenied(err))
+	require.Equal(t, http.StatusForbidden, uploadProcessingStatus(err))
+	require.Contains(t, err.Error(), `"shell-id"`)
 }
 
 func TestSerializationThumbnailsRequireVisibleShellAndReference(t *testing.T) {

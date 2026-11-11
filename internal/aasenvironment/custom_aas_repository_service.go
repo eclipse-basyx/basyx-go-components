@@ -36,6 +36,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	aasrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
+	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -154,25 +155,9 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 
 	isUpdate := false
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-		putResult, putErr := s.persistence.AASRepository.PutAssetAdministrationShellByIDInTransactionWithResult(ctx, tx, decodedIdentifier, assetAdministrationShell)
-		if putErr != nil {
-			return putErr
-		}
+		putResult, putErr := s.putAASAndSyncDescriptorInTransaction(ctx, tx, decodedIdentifier, assetAdministrationShell)
 		isUpdate = putResult.IsUpdate
-		if !putResult.Changed {
-			return nil
-		}
-
-		descriptor, descriptorChanged, descriptorErr := s.syncConfig.ChangedAASDescriptor(putResult.Previous, assetAdministrationShell)
-		if descriptorErr != nil {
-			return descriptorErr
-		}
-		if !descriptorChanged {
-			return nil
-		}
-		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
-			aasRegistrySyncContext(ctx, aasRegistrySyncUpsertOperation), tx, descriptor,
-		)
+		return putErr
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -196,6 +181,46 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 		return newAASRepoErrorResponse(jsonErr, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
 	}
 	return commonmodel.Response(http.StatusCreated, aasJSON), nil
+}
+
+// UpsertAssetAdministrationShellInTransaction creates or replaces an AAS within a
+// caller-owned transaction and synchronizes its registry descriptor in that
+// transaction when AAS registry integration is enabled.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization, history, and cancellation data.
+//   - tx: Caller-owned transaction shared with the other writes of the operation.
+//   - shell: Asset Administration Shell to store.
+//
+// Returns:
+//   - error: Dependency, validation, authorization, or persistence error.
+func (s *CustomAASRepositoryService) UpsertAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, shell types.IAssetAdministrationShell) error {
+	syncEnabled := s != nil && s.syncConfig.AASRegistryIntegration
+	if dependencyErr := s.validateSyncDependencies(syncEnabled, false, false); dependencyErr != nil {
+		return dependencyErr
+	}
+	_, err := s.putAASAndSyncDescriptorInTransaction(common.WithWriterPostgresReads(ctx), tx, shell.ID(), shell)
+	return err
+}
+
+func (s *CustomAASRepositoryService) putAASAndSyncDescriptorInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+	shell types.IAssetAdministrationShell,
+) (aasrepositorydb.PutAssetAdministrationShellResult, error) {
+	putResult, err := s.persistence.AASRepository.PutAssetAdministrationShellByIDInTransactionWithResult(ctx, tx, aasIdentifier, shell)
+	if err != nil || !putResult.Changed || !s.syncConfig.AASRegistryIntegration {
+		return putResult, err
+	}
+
+	descriptor, descriptorChanged, err := s.syncConfig.ChangedAASDescriptor(putResult.Previous, shell)
+	if err != nil || !descriptorChanged {
+		return putResult, err
+	}
+	return putResult, s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+		aasRegistrySyncContext(ctx, aasRegistrySyncUpsertOperation), tx, descriptor,
+	)
 }
 
 // DeleteAssetAdministrationShellById deletes an AAS and synchronizes descriptor deletion in the same transaction.

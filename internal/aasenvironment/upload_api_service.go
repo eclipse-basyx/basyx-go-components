@@ -28,6 +28,7 @@ package aasenvironment
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -48,6 +49,7 @@ import (
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
@@ -59,11 +61,11 @@ type uploadAPIService struct {
 }
 
 type aasRepositoryUploadWriter interface {
-	PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, assetAdministrationShell aastypes.IAssetAdministrationShell) (commonmodel.ImplResponse, error)
+	UpsertAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, shell aastypes.IAssetAdministrationShell) error
 }
 
 type submodelRepositoryUploadWriter interface {
-	PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel aastypes.ISubmodel) (commonmodel.ImplResponse, error)
+	UpsertSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel aastypes.ISubmodel) error
 }
 
 const (
@@ -239,18 +241,43 @@ func (s *uploadAPIService) processAASXPackage(ctx context.Context, fileName stri
 		return err
 	}
 
-	if err = s.processEnvironment(ctx, "", "", environment); err != nil {
-		return err
-	}
-
-	if err = s.storeAASXThumbnail(ctx, packageReader, specPart, environment); err != nil {
-		return err
-	}
-
-	return s.uploadSupplementaryFiles(ctx, packageReader, specPart, environment)
+	return s.importEnvironment(ctx, environment, func(txCtx context.Context, tx *sql.Tx) error {
+		if storeErr := s.storeAASXThumbnail(txCtx, tx, packageReader, specPart, environment); storeErr != nil {
+			return storeErr
+		}
+		return s.uploadSupplementaryFiles(txCtx, tx, packageReader, specPart, environment)
+	})
 }
 
 func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ string, environment aastypes.IEnvironment) error {
+	return s.importEnvironment(ctx, environment, nil)
+}
+
+// importEnvironment stores every Concept Description, Submodel and Shell of the
+// environment, followed by the package parts stored by storePackageParts, in one
+// transaction. Registry descriptor sync, history and event outbox writes share
+// that transaction, so a failing step leaves nothing of the upload behind.
+func (s *uploadAPIService) importEnvironment(ctx context.Context, environment aastypes.IEnvironment, storePackageParts func(context.Context, *sql.Tx) error) error {
+	if err := s.validateEnvironmentImport(environment); err != nil {
+		return err
+	}
+	ctx = common.WithWriterPostgresReads(ctx)
+	err := s.persistence.ExecuteInTransaction("AASENV-PROCESSENV-STARTTX", "AASENV-PROCESSENV-COMMITTX", func(tx *sql.Tx) error {
+		if err := s.storeEnvironmentResources(ctx, tx, environment); err != nil {
+			return err
+		}
+		if storePackageParts == nil {
+			return nil
+		}
+		return storePackageParts(ctx, tx)
+	})
+	if err != nil {
+		return fmt.Errorf("AASENV-PROCESSENV-ROLLEDBACK upload rejected, nothing from the uploaded environment was stored: %w", err)
+	}
+	return nil
+}
+
+func (s *uploadAPIService) validateEnvironmentImport(environment aastypes.IEnvironment) error {
 	if s == nil || s.persistence == nil {
 		return common.NewErrBadRequest("AASENV-PROCESSENV-NILPERSISTENCE persistence is required for environment import")
 	}
@@ -260,82 +287,99 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 	if environment == nil {
 		return common.NewErrBadRequest("AASENV-PROCESSENV-NILENV environment is required")
 	}
-	if err := s.storeEnvironmentConceptDescriptions(ctx, environment.ConceptDescriptions()); err != nil {
-		return err
-	}
-	if err := s.storeEnvironmentSubmodels(ctx, environment.Submodels()); err != nil {
-		return err
-	}
-	return s.storeEnvironmentShells(ctx, environment.AssetAdministrationShells())
+	return nil
 }
 
-func (s *uploadAPIService) storeEnvironmentConceptDescriptions(ctx context.Context, descriptions []aastypes.IConceptDescription) error {
+func (s *uploadAPIService) storeEnvironmentResources(ctx context.Context, tx *sql.Tx, environment aastypes.IEnvironment) error {
+	if err := lockEnvironmentResources(ctx, tx, environment); err != nil {
+		return err
+	}
+	if err := s.storeEnvironmentConceptDescriptions(ctx, tx, environment.ConceptDescriptions()); err != nil {
+		return err
+	}
+	if err := s.storeEnvironmentSubmodels(ctx, tx, environment.Submodels()); err != nil {
+		return err
+	}
+	return s.storeEnvironmentShells(ctx, tx, environment.AssetAdministrationShells())
+}
+
+// lockEnvironmentResources acquires the mutation locks of every uploaded
+// resource in a stable order before the first write, so concurrent uploads of
+// overlapping environments serialize instead of deadlocking.
+func lockEnvironmentResources(ctx context.Context, tx *sql.Tx, environment aastypes.IEnvironment) error {
+	if err := history.LockMutationsTx(ctx, tx, history.TableConcept, identifiablesIDs(environment.ConceptDescriptions())); err != nil {
+		return fmt.Errorf("AASENV-PROCESSENV-LOCKCD failed to lock the uploaded Concept Descriptions: %w", err)
+	}
+	if err := history.LockMutationsTx(ctx, tx, history.TableSubmodel, identifiablesIDs(environment.Submodels())); err != nil {
+		return fmt.Errorf("AASENV-PROCESSENV-LOCKSM failed to lock the uploaded Submodels: %w", err)
+	}
+	if err := history.LockMutationsTx(ctx, tx, history.TableAAS, identifiablesIDs(environment.AssetAdministrationShells())); err != nil {
+		return fmt.Errorf("AASENV-PROCESSENV-LOCKAAS failed to lock the uploaded Asset Administration Shells: %w", err)
+	}
+	return nil
+}
+
+func identifiablesIDs[T interface{ ID() string }](identifiables []T) []string {
+	identifiers := make([]string, 0, len(identifiables))
+	for _, identifiable := range identifiables {
+		identifiers = append(identifiers, identifiable.ID())
+	}
+	return identifiers
+}
+
+func (s *uploadAPIService) storeEnvironmentConceptDescriptions(ctx context.Context, tx *sql.Tx, descriptions []aastypes.IConceptDescription) error {
 	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceCD)
 	if err != nil {
 		return err
 	}
 	for _, description := range descriptions {
-		if _, err := s.persistence.ConceptDescriptionRepository.PutConceptDescription(ctx, description.ID(), description); err != nil {
-			return fmt.Errorf("AASENV-PROCESSENV-PUTCD failed to store concept description %q: %w", description.ID(), err)
+		if _, err := s.persistence.ConceptDescriptionRepository.PutConceptDescriptionInTransaction(ctx, tx, description.ID(), description); err != nil {
+			return fmt.Errorf("AASENV-PROCESSENV-PUTCD failed to store Concept Description %q: %w", description.ID(), err)
 		}
 	}
 	return nil
 }
 
-func (s *uploadAPIService) storeEnvironmentSubmodels(ctx context.Context, submodels []aastypes.ISubmodel) error {
+func (s *uploadAPIService) storeEnvironmentSubmodels(ctx context.Context, tx *sql.Tx, submodels []aastypes.ISubmodel) error {
 	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceSM)
 	if err != nil {
 		return err
 	}
 	for _, submodel := range submodels {
-		if err := s.storeEnvironmentSubmodel(ctx, submodel); err != nil {
-			return err
+		if err := s.storeEnvironmentSubmodel(ctx, tx, submodel); err != nil {
+			return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store Submodel %q: %w", submodel.ID(), err)
 		}
 	}
 	return nil
 }
 
-func (s *uploadAPIService) storeEnvironmentSubmodel(ctx context.Context, submodel aastypes.ISubmodel) error {
+func (s *uploadAPIService) storeEnvironmentSubmodel(ctx context.Context, tx *sql.Tx, submodel aastypes.ISubmodel) error {
 	if s.submodelRepositoryService == nil {
-		_, err := s.persistence.SubmodelRepository.PutSubmodel(ctx, submodel.ID(), submodel)
-		if err != nil {
-			return fmt.Errorf("AASENV-PROCESSENV-PUTSM submodel %q: %w", submodel.ID(), err)
-		}
-		return nil
+		_, err := s.persistence.SubmodelRepository.PutSubmodelInTransaction(ctx, tx, submodel.ID(), submodel)
+		return err
 	}
-	response, err := s.submodelRepositoryService.PutSubmodelByID(ctx, common.EncodeString(submodel.ID()), submodel)
-	if err != nil {
-		return fmt.Errorf("AASENV-PROCESSENV-PUTSM submodel %q: %w", submodel.ID(), err)
-	}
-	return checkUploadRepositoryResponse("PUTSM", submodel.ID(), response)
+	return s.submodelRepositoryService.UpsertSubmodelInTransaction(ctx, tx, submodel)
 }
 
-func (s *uploadAPIService) storeEnvironmentShells(ctx context.Context, shells []aastypes.IAssetAdministrationShell) error {
+func (s *uploadAPIService) storeEnvironmentShells(ctx context.Context, tx *sql.Tx, shells []aastypes.IAssetAdministrationShell) error {
 	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceAAS)
 	if err != nil {
 		return err
 	}
 	for _, shell := range shells {
-		if err := s.storeEnvironmentShell(ctx, shell); err != nil {
-			return err
+		if err := s.storeEnvironmentShell(ctx, tx, shell); err != nil {
+			return fmt.Errorf("AASENV-PROCESSENV-PUTAAS failed to store Asset Administration Shell %q: %w", shell.ID(), err)
 		}
 	}
 	return nil
 }
 
-func (s *uploadAPIService) storeEnvironmentShell(ctx context.Context, shell aastypes.IAssetAdministrationShell) error {
+func (s *uploadAPIService) storeEnvironmentShell(ctx context.Context, tx *sql.Tx, shell aastypes.IAssetAdministrationShell) error {
 	if s.aasRepositoryService == nil {
-		_, err := s.persistence.AASRepository.PutAssetAdministrationShellByID(ctx, shell.ID(), shell)
-		if err != nil {
-			return fmt.Errorf("AASENV-PROCESSENV-PUTAAS shell %q: %w", shell.ID(), err)
-		}
-		return nil
+		_, err := s.persistence.AASRepository.PutAssetAdministrationShellByIDInTransaction(ctx, tx, shell.ID(), shell)
+		return err
 	}
-	response, err := s.aasRepositoryService.PutAssetAdministrationShellById(ctx, common.EncodeString(shell.ID()), shell)
-	if err != nil {
-		return fmt.Errorf("AASENV-PROCESSENV-PUTAAS shell %q: %w", shell.ID(), err)
-	}
-	return checkUploadRepositoryResponse("PUTAAS", shell.ID(), response)
+	return s.aasRepositoryService.UpsertAssetAdministrationShellInTransaction(ctx, tx, shell)
 }
 
 // ReadEnvironmentFromAASXSpec parses the single supported XML or JSON spec in
@@ -798,6 +842,7 @@ func openLimitedAASXPart(part *aasx.Part, maximum uint64, label string) (io.Read
 
 func (s *uploadAPIService) uploadSupplementaryFiles(
 	ctx context.Context,
+	tx *sql.Tx,
 	packageReader *aasx.PackageRead,
 	specPart *aasx.Part,
 	environment aastypes.IEnvironment,
@@ -824,7 +869,7 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 			continue
 		}
 
-		matched, uploadErr := s.uploadSupplementaryRelationship(ctx, relationship, fileLocations, importedLocations)
+		matched, uploadErr := s.uploadSupplementaryRelationship(ctx, tx, relationship, fileLocations, importedLocations)
 		if uploadErr != nil {
 			return uploadErr
 		}
@@ -836,12 +881,13 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 	}
 
 	warnFileReferencesWithoutSupplementaryRelationship(ctx, packageReader, specPart.URI, fileLocations, importedLocations)
-	slog.InfoContext(ctx, "supplementary file attachments uploaded", "attachment_count", len(importedLocations))
+	slog.InfoContext(ctx, "supplementary file attachments written to the upload transaction", "attachment_count", len(importedLocations))
 	return nil
 }
 
 func (s *uploadAPIService) uploadSupplementaryRelationship(
 	ctx context.Context,
+	tx *sql.Tx,
 	relationship *aasx.SupplementaryRelationship,
 	fileLocations []AASXFileElementLocation,
 	importedLocations map[int]struct{},
@@ -851,7 +897,7 @@ func (s *uploadAPIService) uploadSupplementaryRelationship(
 		if !matchesSupplementaryTarget(location.FileValue, relationship.Spec.URI, relationship.Supplementary.URI) {
 			continue
 		}
-		if err := s.uploadSupplementaryToFileElement(ctx, relationship.Supplementary, location); err != nil {
+		if err := s.uploadSupplementaryToFileElement(ctx, tx, relationship.Supplementary, location); err != nil {
 			return false, err
 		}
 		matched = true
@@ -860,7 +906,7 @@ func (s *uploadAPIService) uploadSupplementaryRelationship(
 	return matched, nil
 }
 
-func (s *uploadAPIService) uploadSupplementaryToFileElement(ctx context.Context, supplementary *aasx.Part, location AASXFileElementLocation) error {
+func (s *uploadAPIService) uploadSupplementaryToFileElement(ctx context.Context, tx *sql.Tx, supplementary *aasx.Part, location AASXFileElementLocation) error {
 	uploadName := supplementaryUploadName(supplementary, location)
 	partStream, streamErr := openLimitedAASXPart(supplementary, common.AASXLimitsFromContext(ctx).MaxPartExpandedSizeBytes, "supplementary")
 	if streamErr != nil {
@@ -870,8 +916,9 @@ func (s *uploadAPIService) uploadSupplementaryToFileElement(ctx context.Context,
 	if contentType := location.FileElement.ContentType(); contentType != nil {
 		fileElementContentType = *contentType
 	}
-	uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistory(
+	uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistoryInTransaction(
 		ctx,
+		tx,
 		location.SubmodelID,
 		location.IDShortPath,
 		partStream,
@@ -882,7 +929,7 @@ func (s *uploadAPIService) uploadSupplementaryToFileElement(ctx context.Context,
 	closeErr := partStream.Close()
 	if uploadErr != nil {
 		return fmt.Errorf(
-			"AASENV-UPLDSUPPL-UPLOAD failed to upload supplementary '%s' for submodel '%s' at path '%s': %w",
+			"AASENV-UPLDSUPPL-UPLOAD failed to store supplementary file '%s' for Submodel '%s' at path '%s': %w",
 			uploadName,
 			location.SubmodelID,
 			location.IDShortPath,
@@ -955,7 +1002,7 @@ func unrelatedPackagePartURI(packageReader *aasx.PackageRead, fileValue string, 
 	return partURI
 }
 
-func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
+func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, tx *sql.Tx, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
 	ctx, bindErr := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceAAS)
 	if bindErr != nil {
 		return bindErr
@@ -986,32 +1033,43 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 		if thumbnailPart == nil {
 			continue
 		}
-
-		thumbnailName := filepath.Base(resolvedThumbnailURI)
-		if strings.TrimSpace(thumbnailName) == "" || thumbnailName == "." || thumbnailName == "/" {
-			thumbnailName = "thumbnail.bin"
+		if err = s.storeAASXThumbnailForShell(ctx, tx, aas, thumbnailPart, resolvedThumbnailURI); err != nil {
+			return err
 		}
-
-		partStream, streamErr := openLimitedAASXPart(thumbnailPart, common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes, "thumbnail")
-		if streamErr != nil {
-			return fmt.Errorf("AASENV-UPLDTHUMB-OPENSTREAM failed to open thumbnail for AAS '%s': %w", aas.ID(), streamErr)
-		}
-		uploadErr := s.persistence.AASRepository.PutThumbnailByAASIDReader(ctx, aas.ID(), partStream, binarycontent.UploadDeclaration{
-			FileName:     thumbnailName,
-			ContentTypes: []string{defaultThumbnailContentType(aas), thumbnailPart.ContentType},
-		})
-		closeErr := partStream.Close()
-		if uploadErr != nil {
-			return fmt.Errorf("AASENV-UPLDTHUMB-UPLOAD failed to store thumbnail for AAS '%s': %w", aas.ID(), uploadErr)
-		}
-		if closeErr != nil {
-			return fmt.Errorf("AASENV-UPLDTHUMB-CLOSESTREAM failed to close thumbnail for AAS '%s': %w", aas.ID(), closeErr)
-		}
-
 		uploaded++
 	}
 
-	slog.InfoContext(ctx, "AAS thumbnails stored", "aas_count", uploaded)
+	slog.InfoContext(ctx, "AAS thumbnails written to the upload transaction", "aas_count", uploaded)
+	return nil
+}
+
+func (s *uploadAPIService) storeAASXThumbnailForShell(
+	ctx context.Context,
+	tx *sql.Tx,
+	aas aastypes.IAssetAdministrationShell,
+	thumbnailPart *aasx.Part,
+	resolvedThumbnailURI string,
+) error {
+	thumbnailName := filepath.Base(resolvedThumbnailURI)
+	if strings.TrimSpace(thumbnailName) == "" || thumbnailName == "." || thumbnailName == "/" {
+		thumbnailName = "thumbnail.bin"
+	}
+
+	partStream, err := openLimitedAASXPart(thumbnailPart, common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes, "thumbnail")
+	if err != nil {
+		return fmt.Errorf("AASENV-UPLDTHUMB-OPENSTREAM failed to open thumbnail for Asset Administration Shell '%s': %w", aas.ID(), err)
+	}
+	uploadErr := s.persistence.AASRepository.PutThumbnailByAASIDReaderInTransaction(ctx, tx, aas.ID(), partStream, binarycontent.UploadDeclaration{
+		FileName:     thumbnailName,
+		ContentTypes: []string{defaultThumbnailContentType(aas), thumbnailPart.ContentType},
+	})
+	closeErr := partStream.Close()
+	if uploadErr != nil {
+		return fmt.Errorf("AASENV-UPLDTHUMB-UPLOAD failed to store thumbnail for Asset Administration Shell '%s': %w", aas.ID(), uploadErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("AASENV-UPLDTHUMB-CLOSESTREAM failed to close thumbnail for Asset Administration Shell '%s': %w", aas.ID(), closeErr)
+	}
 	return nil
 }
 
@@ -1302,32 +1360,6 @@ func normalizeUploadContentType(contentType string) string {
 	}
 
 	return normalized
-}
-
-func checkUploadRepositoryResponse(step, id string, response commonmodel.ImplResponse) error {
-	if response.Code >= http.StatusOK && response.Code < http.StatusMultipleChoices {
-		return nil
-	}
-	detail := fmt.Sprintf("AASENV-PROCESSENV-%s resource %q: repository returned HTTP %d", step, id, response.Code)
-	if text := commonmodel.ErrorText(response.Body); text != "" {
-		detail += ": " + text
-	}
-	switch response.Code {
-	case http.StatusForbidden:
-		return common.NewErrDenied(detail)
-	case http.StatusBadRequest:
-		return common.NewErrBadRequest(detail)
-	case http.StatusNotFound:
-		return common.NewErrNotFound(detail)
-	case http.StatusConflict:
-		return common.NewErrConflict(detail)
-	case http.StatusMethodNotAllowed:
-		return common.NewErrMethodNotAllowed(detail)
-	case http.StatusRequestEntityTooLarge:
-		return common.NewErrPayloadTooLarge(detail)
-	default:
-		return common.NewInternalServerError(detail)
-	}
 }
 
 func uploadProcessingStatus(err error) int {
