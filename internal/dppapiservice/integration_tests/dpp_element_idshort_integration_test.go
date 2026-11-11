@@ -52,7 +52,7 @@ func testDPPRejectsElementsWithoutValidIDShort(
 ) {
 	t.Helper()
 	invalidKeys := []dppInvalidElementKey{
-		{key: "", errorCode: "-MISSINGIDSHORT"},
+		{key: "", errorCode: "-INVALIDIDSHORT"},
 		{key: "outer width", errorCode: "-INVALIDIDSHORT"},
 		{key: "w", errorCode: "-INVALIDIDSHORT"},
 	}

@@ -41,12 +41,15 @@ func TestAssetAdministrationShellRejectsInvalidIDShort(t *testing.T) {
 	t.Cleanup(func() { deleteAASForLargeObjectCleanupTest(t, createdEndpoint) })
 	requireAASIDShortRejected(t, http.MethodPost, aasRepositoryBaseURL+"/shells", shellWithIDShort(createdID, "Shell;1"))
 	requireAASIDShortRejected(t, http.MethodPut, createdEndpoint, shellWithIDShort(createdID, "S"))
+	requireAASIDShortRejected(t, http.MethodPost, aasRepositoryBaseURL+"/shells", shellWithIDShort(createdID, ""))
+	requireAASIDShortRejected(t, http.MethodPut, createdEndpoint, shellWithIDShort(createdID, ""))
 	requireAASStatus(t, createdEndpoint, http.StatusNotFound)
 
 	_, status, _, err := postJSONResponse(aasRepositoryBaseURL+"/shells", mustMarshalShell(t, shellWithIDShort(createdID, "ValidShell")))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, status)
 	requireAASIDShortRejected(t, http.MethodPut, createdEndpoint, shellWithIDShort(createdID, "Shell Name"))
+	requireAASIDShortRejected(t, http.MethodPut, createdEndpoint, shellWithIDShort(createdID, ""))
 	stored := requireAASStatus(t, createdEndpoint, http.StatusOK)
 	require.Equal(t, "ValidShell", stored["idShort"])
 }

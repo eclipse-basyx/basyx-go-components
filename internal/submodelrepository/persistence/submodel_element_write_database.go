@@ -657,9 +657,6 @@ func (s *SubmodelDatabase) replaceSubmodelElementForPut(
 	idShortPath string,
 	submodelElement types.ISubmodelElement,
 ) (submodelElementRootMutation, error) {
-	if err := requireTargetIDShort(idShortPath, submodelElement, true, "SMREPO-PUTSME"); err != nil {
-		return submodelElementRootMutation{}, err
-	}
 	if err := s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, submodelElement, true); err != nil {
 		return submodelElementRootMutation{}, err
 	}
@@ -677,9 +674,6 @@ func (s *SubmodelDatabase) createSubmodelElementForPut(
 	idShortPath string,
 	submodelElement types.ISubmodelElement,
 ) (submodelElementRootMutation, error) {
-	if err := requireTargetIDShort(idShortPath, submodelElement, false, "SMREPO-PUTSME"); err != nil {
-		return submodelElementRootMutation{}, err
-	}
 	parentPath, targetIDShort, err := resolvePutCreateTargetPathParts(idShortPath)
 	if err != nil {
 		return submodelElementRootMutation{}, err
@@ -714,8 +708,10 @@ func ensurePayloadIDShortMatchesTargetPath(submodelElement types.ISubmodelElemen
 		return nil
 	}
 
-	payloadIDShort := strings.TrimSpace(*submodelElement.IDShort())
-	if payloadIDShort != "" && payloadIDShort != targetIDShort {
+	if err := common.ValidateOptionalIDShort("SMREPO-PUTSME", "Submodel element in the request body", submodelElement.IDShort()); err != nil {
+		return err
+	}
+	if *submodelElement.IDShort() != targetIDShort {
 		return common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Payload idShort must match path idShort when creating")
 	}
 	return nil
@@ -804,9 +800,6 @@ func (s *SubmodelDatabase) ensureSubmodelElementCanBeDeleted(ctx context.Context
 // list member, is verified according to the configured verification mode.
 func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (err error) {
 	if err = requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-UPDSME"); err != nil {
-		return err
-	}
-	if err = requireTargetIDShort(idShortOrPath, submodelElement, isPut, "SMREPO-UPDSME"); err != nil {
 		return err
 	}
 	tx, cleanup, err := common.StartTransaction(s.db)

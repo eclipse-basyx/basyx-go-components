@@ -37,10 +37,10 @@ const IDShortRequirement = "an idShort must have 2 to 128 characters, contain on
 
 // ValidateOptionalIDShort enforces the idShort type of the AAS metamodel in
 // every verification mode, because idShorts are stored as segments of
-// idShortPaths and must stay addressable in URLs. Like everywhere else in the
-// repositories, an empty idShort counts as omitted, and an omitted one is valid.
+// idShortPaths and must stay addressable in URLs. A nil idShort is omitted and
+// valid; every supplied string must satisfy the metamodel constraints.
 func ValidateOptionalIDShort(errorScope string, subject string, idShort *string) error {
-	if idShort == nil || *idShort == "" || model.IsValidIDShort(*idShort) {
+	if idShort == nil || model.IsValidIDShort(*idShort) {
 		return nil
 	}
 	return NewErrInvalidIDShort(errorScope, subject, *idShort)

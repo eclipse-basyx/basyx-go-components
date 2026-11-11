@@ -44,7 +44,8 @@ func TestRequireSubmodelElementIDShorts(t *testing.T) {
 	}{
 		{name: "named property", element: namedTestProperty("Named")},
 		{name: "omitted root", element: namelessTestProperty(), errorCode: "SMREPO-TEST-MISSINGIDSHORT", location: "Submodel element in the request body has"},
-		{name: "empty root", element: namedTestProperty(""), errorCode: "SMREPO-TEST-MISSINGIDSHORT", location: "Submodel element in the request body has"},
+		{name: "empty root", element: namedTestProperty(""), errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "Submodel element in the request body has"},
+		{name: "empty list member", element: namedTestProperty(""), isListChild: true, errorCode: "SMREPO-TEST-INVALIDIDSHORT", location: "Submodel element in the request body has"},
 		{name: "list member root", element: namelessTestProperty(), isListChild: true},
 		{name: "collection child", element: testCollection("Root", namedTestProperty("Child"), namelessTestProperty()), errorCode: "SMREPO-TEST-MISSINGIDSHORT", location: "'value[1]'"},
 		{name: "list members", element: testList("Root", testCollection("", namedTestProperty("Child")))},
@@ -73,41 +74,6 @@ func TestRequireSubmodelElementIDShorts(t *testing.T) {
 			require.True(t, common.IsErrBadRequest(err), "%v", err)
 			require.ErrorContains(t, err, testCase.errorCode+" ")
 			require.ErrorContains(t, err, testCase.location)
-		})
-	}
-}
-
-func TestRequireTargetIDShort(t *testing.T) {
-	t.Parallel()
-	testCases := []struct {
-		name                 string
-		idShortPath          string
-		element              types.ISubmodelElement
-		payloadRenamesTarget bool
-		invalidIDShort       string
-	}{
-		{name: "valid stored idShort", idShortPath: "Coll.Valid", element: namelessTestProperty()},
-		{name: "invalid stored idShort", idShortPath: "Coll.a;b", element: namelessTestProperty(), invalidIDShort: "a;b"},
-		{name: "invalid stored idShort kept by PATCH", idShortPath: "Coll.a;b", element: namedTestProperty("Valid"), invalidIDShort: "a;b"},
-		{name: "encoded stored idShort", idShortPath: "Coll.a%3Bb", element: namelessTestProperty(), invalidIDShort: "a%3Bb"},
-		{name: "invalid stored idShort renamed by PUT", idShortPath: "Coll.a;b", element: namedTestProperty("Valid"), payloadRenamesTarget: true},
-		{name: "invalid payload idShort", idShortPath: "Coll.Valid", element: namedTestProperty("x"), payloadRenamesTarget: true, invalidIDShort: "x"},
-		{name: "invalid payload idShort not renaming", idShortPath: "Coll.Valid", element: namedTestProperty("x"), invalidIDShort: "x"},
-		{name: "list member", idShortPath: "Coll.List[0]", element: namelessTestProperty()},
-		{name: "invalid parent only", idShortPath: "a;b.Valid", element: namelessTestProperty()},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-			err := requireTargetIDShort(testCase.idShortPath, testCase.element, testCase.payloadRenamesTarget, "SMREPO-TEST")
-			if testCase.invalidIDShort == "" {
-				require.NoError(t, err)
-				return
-			}
-			require.True(t, common.IsErrBadRequest(err), "%v", err)
-			require.ErrorContains(t, err, "SMREPO-TEST-INVALIDIDSHORT ")
-			require.ErrorContains(t, err, "invalid idShort '"+testCase.invalidIDShort+"'")
 		})
 	}
 }

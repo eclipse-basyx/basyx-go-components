@@ -65,6 +65,7 @@ func conceptDescriptionVerificationFixtures() []conceptDescriptionVerificationFi
 	return []conceptDescriptionVerificationFixture{
 		{name: "valid-idShort", fields: map[string]any{"idShort": "Valid-name_01"}},
 		{name: "omitted-idShort"},
+		{name: "empty-idShort", fields: map[string]any{"idShort": ""}, violation: "INVALIDIDSHORT", rejectedInAnyMode: true},
 		{name: "invalid-idShort", fields: map[string]any{"idShort": "1Invalid"}, violation: "INVALIDIDSHORT", rejectedInAnyMode: true},
 		{
 			name: "revision-without-version",

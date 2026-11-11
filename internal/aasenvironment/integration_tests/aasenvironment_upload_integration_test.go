@@ -222,6 +222,24 @@ func TestUploadAASXRejectsInvalidIDShorts(t *testing.T) {
 			resourcePath: "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(shellID)),
 		},
 		{
+			name: "empty shell idShort",
+			environment: `"assetAdministrationShells": [{"id": "` + shellID + `", "idShort": "", "modelType": "AssetAdministrationShell",
+				"assetInformation": {"assetKind": "Instance", "globalAssetId": "` + shellID + `:asset"}}], "submodels": [], "conceptDescriptions": []`,
+			resourcePath: "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(shellID)),
+		},
+		{
+			name: "empty submodel idShort",
+			environment: `"assetAdministrationShells": [], "submodels": [{"id": "` + submodelID + `", "idShort": "", "modelType": "Submodel"}],
+				"conceptDescriptions": []`,
+			resourcePath: "/submodels/" + base64.RawURLEncoding.EncodeToString([]byte(submodelID)),
+		},
+		{
+			name: "empty concept description idShort",
+			environment: `"assetAdministrationShells": [], "submodels": [],
+				"conceptDescriptions": [{"id": "` + descriptionID + `", "idShort": "", "modelType": "ConceptDescription"}]`,
+			resourcePath: "/concept-descriptions/" + base64.RawURLEncoding.EncodeToString([]byte(descriptionID)),
+		},
+		{
 			name: "submodel element",
 			environment: `"assetAdministrationShells": [], "submodels": [{"id": "` + submodelID + `", "idShort": "InvalidIDShortSubmodel", "modelType": "Submodel",
 				"submodelElements": [{"idShort": "Coll", "modelType": "SubmodelElementCollection",

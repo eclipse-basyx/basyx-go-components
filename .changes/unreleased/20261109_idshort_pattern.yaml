@@ -2,7 +2,8 @@ kind: changed
 body: >-
   Writes reject an idShort that does not match the idShort type of the AAS
   metamodel, in every verification mode: 2 to 128 characters, only letters,
-  digits, "-" and "_", starting with a letter and not ending with "-". This
+  digits, "-" and "_", starting with a letter and not ending with "-".
+  Explicit empty idShorts are invalid; an optional idShort may be omitted. This
   applies to Asset Administration Shells, Submodels, Concept Descriptions,
   and Submodel elements written with POST, PUT, or PATCH (including
   $metadata) in the AAS Repository, Submodel Repository, Concept Description

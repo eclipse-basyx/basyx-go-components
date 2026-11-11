@@ -209,7 +209,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 			goqu.C("submodel_id").Eq(submodelDatabaseID),
 		)
 
-	selectSQL, selectArgs, err := selectQuery.ToSQL()
+	selectSQL, selectArgs, err := selectQuery.ForUpdate(goqu.Wait).ToSQL()
 	if err != nil {
 		return err
 	}
@@ -222,9 +222,13 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
+	if err = validateUpdatedIDShort(submodelElement.IDShort(), existingIDShort, isPut); err != nil {
+		return err
+	}
+
 	if isPut && submodelElement.IDShort() != nil {
-		newIDShort := strings.TrimSpace(*submodelElement.IDShort())
-		if newIDShort != "" && (!existingIDShort.Valid || existingIDShort.String != newIDShort) {
+		newIDShort := *submodelElement.IDShort()
+		if !existingIDShort.Valid || existingIDShort.String != newIDShort {
 			_, updatePathErr := p.UpdateIdShortPaths(localTx, submodelID, idShortOrPath, newIDShort)
 			if updatePathErr != nil {
 				return updatePathErr
@@ -730,5 +734,19 @@ func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseI
 		return common.NewInternalServerError("SMREPO-UPDPATH-CHILDREN-EXEC " + err.Error())
 	}
 
+	return nil
+}
+
+func validateUpdatedIDShort(requestedIDShort *string, existingIDShort sql.NullString, isPut bool) error {
+	if err := common.ValidateOptionalIDShort("SMREPO-UPDSME", "Submodel element in the request body", requestedIDShort); err != nil {
+		return err
+	}
+	if isPut && requestedIDShort != nil {
+		return nil
+	}
+	// SME persistence stores omitted idShorts as empty strings; the builder omits them on read.
+	if existingIDShort.Valid && existingIDShort.String != "" {
+		return common.ValidateOptionalIDShort("SMREPO-UPDSME", "Stored submodel element", &existingIDShort.String)
+	}
 	return nil
 }

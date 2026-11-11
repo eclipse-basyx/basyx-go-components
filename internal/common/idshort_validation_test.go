@@ -41,14 +41,12 @@ func TestValidateOptionalIDShortAcceptsMetamodelIDShorts(t *testing.T) {
 
 func TestValidateOptionalIDShortAcceptsOmittedIDShort(t *testing.T) {
 	t.Parallel()
-	empty := ""
 	require.NoError(t, ValidateOptionalIDShort("TEST-SCOPE", "Element", nil))
-	require.NoError(t, ValidateOptionalIDShort("TEST-SCOPE", "Element", &empty))
 }
 
 func TestValidateOptionalIDShortRejectsOtherIDShorts(t *testing.T) {
 	t.Parallel()
-	invalidIDShorts := []string{"a", "1a", "_a", "-a", "a-", "a;b", "a b", " ab", "a.b", "a/b", "a%3Bb", "a[0]", "a:b", "äb"}
+	invalidIDShorts := []string{"", "a", "1a", "_a", "-a", "a-", "a;b", "a b", " ab", "a.b", "a/b", "a%3Bb", "a[0]", "a:b", "äb"}
 	for _, idShort := range invalidIDShorts {
 		err := ValidateOptionalIDShort("TEST-SCOPE", "Element", &idShort)
 		require.True(t, IsErrBadRequest(err), "%q: %v", idShort, err)

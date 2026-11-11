@@ -33,7 +33,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 )
 
@@ -73,28 +72,6 @@ func requireOwnIDShort(element types.ISubmodelElement, isListChild bool, errorSc
 	return idShortViolationError(errorScope, ownIDShortViolation(element, isListChild))
 }
 
-// requireTargetIDShort checks the idShort that the element at idShortPath has
-// after a PUT or PATCH: the idShort of the payload when payloadRenamesTarget
-// and the payload has one, otherwise the last segment of idShortPath. Elements
-// stored before the idShort type was enforced therefore cannot be updated
-// without a rename to a valid idShort.
-func requireTargetIDShort(idShortPath string, element types.ISubmodelElement, payloadRenamesTarget bool, errorScope string) error {
-	if hasIDShort(element) {
-		if err := requireOwnIDShort(element, false, errorScope); err != nil || payloadRenamesTarget {
-			return err
-		}
-	}
-	segments, err := submodelpath.ParseIDShortPathSegments(idShortPath)
-	if err != nil {
-		return nil
-	}
-	target := segments[len(segments)-1]
-	if target.IsIndex || model.IsValidIDShort(target.Value) {
-		return nil
-	}
-	return common.NewErrInvalidIDShort(errorScope, "Submodel element at the requested idShortPath", target.Value)
-}
-
 func insertParentChildPlacement(parentModelType types.ModelType) (isFromList bool, acceptsChildren bool) {
 	_, acceptsChildren = submodelelements.ChildElementField(parentModelType)
 	return parentModelType == types.ModelTypeSubmodelElementList, acceptsChildren
@@ -123,7 +100,7 @@ func idShortViolationInTree(element types.ISubmodelElement, isListChild bool) *i
 }
 
 func ownIDShortViolation(element types.ISubmodelElement, isListChild bool) *idShortViolation {
-	if !hasIDShort(element) {
+	if element == nil || element.IDShort() == nil {
 		if isListChild {
 			return nil
 		}
@@ -184,12 +161,4 @@ func idShortViolationInVariables(field string, variables []types.IOperationVaria
 
 func indexedLocationSegment(field string, index int) string {
 	return field + "[" + strconv.Itoa(index) + "]"
-}
-
-func hasIDShort(element types.ISubmodelElement) bool {
-	if element == nil {
-		return false
-	}
-	idShort := element.IDShort()
-	return idShort != nil && *idShort != ""
 }
