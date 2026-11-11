@@ -107,41 +107,36 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.C
 	return *submodelElement.IDShort(), nil
 }
 
-// updateSubmodelElementInTransaction updates the element at idShortOrPath and returns
-// its idShortPath after the update, which differs when a PUT renames the element.
-func (s *SubmodelDatabase) updateSubmodelElementInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (string, error) {
+func (s *SubmodelDatabase) updateSubmodelElementInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
 	modelType, err := getSMEModelTypeByPathInTx(tx, submodelID, idShortOrPath)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	if modelType == nil {
-		return "", common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+		return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
 	}
 
 	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, s.db)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	updatedPath, err := submodelelements.ResolveUpdatedPathTx(tx, submodelID, idShortOrPath, submodelElement, isPut)
-	if err != nil {
-		return "", err
-	}
 	children, reconcileChildren := submodelElementChildrenToReconcile(*modelType, submodelElement, isPut)
 	submodelDatabaseID := 0
 	if reconcileChildren {
 		if submodelDatabaseID, err = lockSubmodelForChildReconciliationTx(ctx, tx, submodelID); err != nil {
-			return "", err
+			return err
 		}
 	}
 	if err = handler.Update(submodelID, idShortOrPath, submodelElement, tx, isPut); err != nil {
-		return "", err
+		return err
 	}
 	if !reconcileChildren {
-		return updatedPath, nil
+		return nil
 	}
-	return updatedPath, s.reconcileSubmodelElementChildrenTx(ctx, tx, submodelID, submodelDatabaseID, updatedPath, children)
+	updatedPath := submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut)
+	return s.reconcileSubmodelElementChildrenTx(ctx, tx, submodelID, submodelDatabaseID, updatedPath, children)
 }
 
 // GetSubmodelElement retrieves a submodel element by path and applies optional ABAC formula filters from ctx.
@@ -662,14 +657,13 @@ func (s *SubmodelDatabase) replaceSubmodelElementForPut(
 	idShortPath string,
 	submodelElement types.ISubmodelElement,
 ) (submodelElementRootMutation, error) {
-	updatedPath, err := s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, submodelElement, true)
-	if err != nil {
+	if err := s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, submodelElement, true); err != nil {
 		return submodelElementRootMutation{}, err
 	}
 
 	return submodelElementRootMutation{
 		previousPath: idShortPath,
-		currentPath:  updatedPath,
+		currentPath:  submodelelements.ResolveUpdatedPath(idShortPath, submodelElement, true),
 	}, nil
 }
 
@@ -832,7 +826,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 	if err = s.lockSubmodelForListVerificationTx(ctx, tx, submodelID, idShortOrPath, submodelElement); err != nil {
 		return err
 	}
-	updatedPath, err := s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortOrPath, submodelElement, isPut)
+	err = s.updateSubmodelElementInTransaction(ctx, tx, submodelID, idShortOrPath, submodelElement, isPut)
 	if err != nil {
 		return err
 	}
@@ -843,6 +837,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		}
 	}
 
+	updatedPath := submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut)
 	if err = s.verifyUpdatedSubmodelElementTx(ctx, tx, submodelID, updatedPath, submodelElement); err != nil {
 		return err
 	}

@@ -28,11 +28,8 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"testing"
 
-	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,9 +47,6 @@ func TestSubmodelElementIDShortPattern(t *testing.T) {
 		t.Run(run.mode+"/"+run.service.name, func(t *testing.T) {
 			h := newIDShortHarness(t, run.mode, run.service)
 			t.Run("rejected writes", h.testRejectedInvalidIDShortWrites)
-			t.Run("stored invalid idShort", h.testStoredInvalidIDShort)
-			t.Run("nameless PUT retains invalid idShort", h.testPutRetainsStoredInvalidIDShort)
-			t.Run("PUT renames dotted idShort", h.testPutRenamesStoredDottedIDShort)
 		})
 	}
 }
@@ -117,113 +111,4 @@ func (h *idShortHarness) invalidIDShortWrites(id string) []elementIDShortCase {
 		{name: "put replacement child", method: http.MethodPut, path: elements + "/Coll", body: collection("Coll", namedProperty("x"))},
 		{name: "patch child", method: http.MethodPatch, path: elements + "/Coll", body: collection("Coll", namedProperty("Child"), namedProperty("é1"))},
 	}, submodelWrites...)
-}
-
-// testStoredInvalidIDShort covers elements stored before the idShort pattern
-// was enforced: they stay readable and deletable by their raw idShortPath, a
-// percent-encoded path still addresses no element, and they can only be
-// updated by a PUT that renames them to a valid idShort. ValueOnly PATCH
-// requests are rejected as well, also through an enclosing element or Submodel.
-func (h *idShortHarness) testStoredInvalidIDShort(t *testing.T) {
-	id := h.seedElementIDShortSubmodel(t)
-	h.renameStoredElement(t, id, "Coll.Child", "a;b")
-	elements := h.path(id) + "/submodel-elements"
-
-	require.Equal(t, "a;b", h.json(t, http.MethodGet, elements+"/Coll.a;b", nil, http.StatusOK)["idShort"])
-	h.json(t, http.MethodGet, elements+"/Coll.a%3Bb", nil, http.StatusNotFound)
-	if h.service.environment {
-		return
-	}
-
-	description := map[string]any{"modelType": "Property", "valueType": "xs:string", "description": []any{map[string]any{"language": "en", "text": "patched"}}}
-	h.requireInvalidIDShortRejection(t, h.json(t, http.MethodPatch, elements+"/Coll.a;b", description, http.StatusBadRequest))
-	h.requireInvalidIDShortRejection(t, h.json(t, http.MethodPatch, elements+"/Coll.a;b/$metadata", description, http.StatusBadRequest))
-	h.requireInvalidIDShortRejection(t, h.json(t, http.MethodPut, elements+"/Coll.a;b", namedProperty("a;b"), http.StatusBadRequest))
-	h.requireInvalidIDShortRejection(t, h.json(t, http.MethodPut, elements+"/Coll.a;b", namelessProperty(), http.StatusBadRequest))
-	for path, body := range map[string]any{
-		elements + "/Coll.a;b/$value": "patched",
-		elements + "/Coll/$value":     map[string]any{"a;b": "patched"},
-		h.path(id) + "/$value":        map[string]any{"Coll": map[string]any{"a;b": "patched"}},
-	} {
-		h.requireInvalidIDShortRejection(t, h.json(t, http.MethodPatch, path, body, http.StatusBadRequest))
-	}
-
-	h.json(t, http.MethodPut, elements+"/Coll.a;b", namedProperty("Renamed"), http.StatusNoContent)
-	h.json(t, http.MethodGet, elements+"/Coll.a;b", nil, http.StatusNotFound)
-	require.Equal(t, "Renamed", h.json(t, http.MethodGet, elements+"/Coll.Renamed", nil, http.StatusOK)["idShort"])
-
-	h.renameStoredElement(t, id, "Coll.Renamed", "x y")
-	h.json(t, http.MethodDelete, elements+"/Coll.x%20y", nil, http.StatusNoContent)
-	h.json(t, http.MethodGet, elements+"/Coll.x%20y", nil, http.StatusNotFound)
-}
-
-func (h *idShortHarness) testPutRetainsStoredInvalidIDShort(t *testing.T) {
-	for _, testCase := range []struct {
-		name     string
-		idShort  string
-		listItem bool
-	}{
-		{name: "dot in name", idShort: "Old.Name"},
-		{name: "unmatched bracket in name", idShort: "a[broken"},
-		{name: "list item name", idShort: "a;b", listItem: true},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			id := h.seedElementIDShortSubmodel(t)
-			path := "Coll." + testCase.idShort
-			payload := namelessProperty()
-			if testCase.listItem {
-				path = "List[0]"
-				h.json(t, http.MethodPost, h.path(id)+"/submodel-elements/List", collection("Item", namedProperty("Child")), http.StatusCreated)
-				h.storeElementIDShort(t, id, path, testCase.idShort, path)
-				payload = collection("", namedProperty("Child"))
-			} else {
-				h.renameStoredElement(t, id, "Coll.Child", testCase.idShort)
-			}
-			before := h.json(t, http.MethodGet, h.path(id), nil, http.StatusOK)
-			response := h.json(t, http.MethodPut, h.path(id)+"/submodel-elements/"+path, payload, http.StatusBadRequest)
-			h.requireInvalidIDShortRejection(t, response)
-			require.Equal(t, before, h.json(t, http.MethodGet, h.path(id), nil, http.StatusOK))
-		})
-	}
-}
-
-// testPutRenamesStoredDottedIDShort repairs elements whose stored idShort
-// contains a dot. The renamed idShortPath is derived from the stored parent,
-// not from the last dot of the old idShortPath, also for the descendants.
-func (h *idShortHarness) testPutRenamesStoredDottedIDShort(t *testing.T) {
-	id := h.seedElementIDShortSubmodel(t)
-	elements := h.path(id) + "/submodel-elements"
-
-	h.renameStoredElement(t, id, "Coll.Child", "Old.Name")
-	h.json(t, http.MethodPut, elements+"/Coll.Old.Name", namedProperty("Renamed"), http.StatusNoContent)
-	h.json(t, http.MethodGet, elements+"/Coll.Old.Name", nil, http.StatusNotFound)
-	require.Equal(t, "Renamed", h.json(t, http.MethodGet, elements+"/Coll.Renamed", nil, http.StatusOK)["idShort"])
-
-	h.storeElementIDShort(t, id, "Coll", "Old.Coll", "Old.Coll")
-	h.storeElementIDShort(t, id, "Coll.Renamed", "Renamed", "Old.Coll.Renamed")
-	h.json(t, http.MethodPut, elements+"/Old.Coll", collection("Repaired", namedProperty("Child")), http.StatusNoContent)
-	h.json(t, http.MethodGet, elements+"/Old.Coll", nil, http.StatusNotFound)
-	require.Equal(t, "Child", h.json(t, http.MethodGet, elements+"/Repaired.Child", nil, http.StatusOK)["idShort"])
-}
-
-func (h *idShortHarness) renameStoredElement(t *testing.T, submodelID string, idShortPath string, idShort string) {
-	t.Helper()
-	parentPath := idShortPath[:strings.LastIndex(idShortPath, ".")+1]
-	h.storeElementIDShort(t, submodelID, idShortPath, idShort, parentPath+idShort)
-}
-
-func (h *idShortHarness) storeElementIDShort(t *testing.T, submodelID, idShortPath, idShort, updatedPath string) {
-	t.Helper()
-	dialect := goqu.Dialect(common.Dialect)
-	submodelDatabaseID := dialect.From("submodel").Select("id").Where(goqu.Ex{"submodel_identifier": submodelID})
-	query, args, err := dialect.Update("submodel_element").
-		Set(goqu.Record{"id_short": idShort, "idshort_path": updatedPath}).
-		Where(goqu.C("submodel_id").Eq(submodelDatabaseID), goqu.Ex{"idshort_path": idShortPath}).
-		ToSQL()
-	require.NoError(t, err)
-	result, err := h.db.ExecContext(h.ctx, query, args...)
-	require.NoError(t, err)
-	updated, err := result.RowsAffected()
-	require.NoError(t, err)
-	require.EqualValues(t, 1, updated)
 }

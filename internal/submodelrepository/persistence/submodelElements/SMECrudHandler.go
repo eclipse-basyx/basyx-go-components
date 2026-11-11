@@ -33,10 +33,10 @@ package submodelelements
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -130,8 +130,8 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 // and returns its database ID, which a PUT that renames the element leaves unchanged.
 //
 // This method updates the mutable properties of an existing submodel element within
-// a transaction context. It preserves the element's parent, position, and model type
-// while allowing updates to metadata fields.
+// a transaction context. It preserves the element's identity (idShort, path, parent,
+// position, model type) while allowing updates to metadata fields.
 //
 // Updated fields include:
 //   - category: Element category classification
@@ -143,10 +143,9 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 //   - supplementalSemanticIds: Additional semantic references
 //   - extensions: Custom extensions
 //
-// A PUT with a different idShort renames the element and moves the idShortPaths
-// of the element and its descendants.
-//
 // Immutable fields (not updated):
+//   - idShort: Element identifier
+//   - idShortPath: Hierarchical path
 //   - parent_sme_id: Parent element reference
 //   - position: Position in parent
 //   - model_type: Element type
@@ -164,6 +163,10 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 //
 //nolint:revive // cyclomatic-complexity is acceptable here due to the multiple update steps
 func (p *PostgreSQLSMECrudHandler) UpdateElement(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) (int, error) {
+	if err := common.ValidateOptionalIDShort("SMREPO-UPDSME", "Submodel element in the request body", submodelElement.IDShort()); err != nil {
+		return 0, err
+	}
+
 	// Handle transaction creation if tx is nil
 	var localTx *sql.Tx
 	var err error
@@ -197,22 +200,37 @@ func (p *PostgreSQLSMECrudHandler) UpdateElement(submodelID string, idShortOrPat
 		return 0, common.NewInternalServerError("Failed to resolve Submodel database id - see console for details")
 	}
 
-	location, err := readStoredElementLocationTx(localTx, elementLocationQuery(submodelDatabaseID, idShortOrPath).ForUpdate(goqu.Wait, goqu.T("sme")))
+	// First, get the existing element ID and verify it exists in the correct submodel
+	var existingID int
+	var existingIDShort sql.NullString
+
+	selectQuery := dialect.From(goqu.T("submodel_element")).
+		Select(goqu.C("id"), goqu.C("id_short")).
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+		)
+
+	selectSQL, selectArgs, err := selectQuery.ToSQL()
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+
+	err = localTx.QueryRow(selectSQL, selectArgs...).Scan(&existingID, &existingIDShort)
+	if err != nil {
+		if err == sql.ErrNoRows {
 			return 0, common.NewErrNotFound("SubmodelElement with path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
 		}
 		return 0, err
 	}
-	existingID := location.id
-
-	if err = validateUpdatedIDShort("SMREPO-UPDSME", submodelElement.IDShort(), location.idShort, isPut); err != nil {
-		return 0, err
-	}
 
 	if isPut && submodelElement.IDShort() != nil {
-		if err = renameElementTx(localTx, submodelDatabaseID, submodelID, idShortOrPath, location, *submodelElement.IDShort()); err != nil {
-			return 0, err
+		newIDShort := *submodelElement.IDShort()
+		if !existingIDShort.Valid || existingIDShort.String != newIDShort {
+			_, updatePathErr := p.UpdateIdShortPaths(localTx, submodelID, idShortOrPath, newIDShort)
+			if updatePathErr != nil {
+				return 0, updatePathErr
+			}
 		}
 	}
 
@@ -529,115 +547,161 @@ func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (*
 	return &modelTypeInstance, nil
 }
 
-// storedElementLocation is the persisted identity of a submodel element and of its parent.
-type storedElementLocation struct {
-	id              int
-	idShort         sql.NullString
-	parentPath      sql.NullString
-	parentModelType sql.NullInt64
-}
-
-// elementLocationQuery selects the storedElementLocation of the element at path.
-// submodelDatabaseID is the database ID of the submodel or a subquery for it.
-func elementLocationQuery(submodelDatabaseID any, path string) *goqu.SelectDataset {
-	return goqu.Dialect("postgres").
-		From(goqu.T("submodel_element").As("sme")).
-		LeftJoin(goqu.T("submodel_element").As("parent"), goqu.On(goqu.I("parent.id").Eq(goqu.I("sme.parent_sme_id")))).
-		Select(goqu.I("sme.id"), goqu.I("sme.id_short"), goqu.I("parent.idshort_path"), goqu.I("parent.model_type")).
-		Where(goqu.I("sme.submodel_id").Eq(submodelDatabaseID), goqu.I("sme.idshort_path").Eq(path))
-}
-
-func readStoredElementLocationTx(tx *sql.Tx, query *goqu.SelectDataset) (storedElementLocation, error) {
-	var location storedElementLocation
-	sqlQuery, args, err := query.ToSQL()
+// UpdateIdShortPaths updates the idShort and idShortPath of a submodel element and all its descendants
+// when the element's idShort changes during a PUT operation.
+//
+// This method computes the new path by replacing the last segment of the old path with the new idShort,
+// then cascades the path change to all child elements. It uses three precise LIKE patterns
+// (exact match, dot-children, bracket-children) to avoid accidentally updating elements
+// whose idShort merely starts with the same prefix.
+//
+// Parameters:
+//   - tx: Active transaction for atomic operations
+//   - submodelID: ID of the parent submodel
+//   - oldPath: The current full idShortPath of the element being updated
+//   - newIDShort: The new idShort value from the PUT body
+//
+// Returns:
+//   - string: The new full idShortPath after the update
+//   - error: An error if a conflict is detected or the update fails
+func (p *PostgreSQLSMECrudHandler) UpdateIdShortPaths(tx *sql.Tx, submodelID string, oldPath string, newIDShort string) (string, error) {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
-		return location, common.NewInternalServerError("SMREPO-READSMELOC-BUILDQ " + err.Error())
-	}
-	err = tx.QueryRow(sqlQuery, args...).Scan(&location.id, &location.idShort, &location.parentPath, &location.parentModelType)
-	return location, err
-}
-
-// renamedPath returns the idShortPath of the element at path after renaming it to newIDShort.
-// It is derived from the persisted parent instead of the stored idShort, because an idShort
-// stored before the idShort pattern was enforced may contain '.' or brackets.
-// A list item keeps its index path.
-func (location storedElementLocation) renamedPath(path string, newIDShort string) string {
-	switch {
-	case location.parentModelType.Valid && types.ModelType(location.parentModelType.Int64) == types.ModelTypeSubmodelElementList:
-		return path
-	case location.parentPath.Valid:
-		return location.parentPath.String + "." + newIDShort
-	default:
-		return newIDShort
-	}
-}
-
-// renameElementTx sets the idShort of the element at oldPath and moves the idShortPaths of the
-// element and its descendants to the renamed path. A sibling at the renamed path is a conflict.
-func renameElementTx(tx *sql.Tx, submodelDatabaseID int, submodelID string, oldPath string, location storedElementLocation, newIDShort string) error {
-	if location.idShort.Valid && location.idShort.String == newIDShort {
-		return nil
-	}
-	newPath := location.renamedPath(oldPath, newIDShort)
-	dialect := goqu.Dialect("postgres")
-	if newPath != oldPath {
-		if err := ensureRenamedPathIsFree(tx, dialect, submodelDatabaseID, submodelID, newPath); err != nil {
-			return err
+		if err == sql.ErrNoRows {
+			return "", common.NewErrNotFound("SMREPO-UPDPATH-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
 		}
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-GETSMDATABASEID " + err.Error())
 	}
-	updateSelfQuery, updateSelfArgs, err := dialect.Update("submodel_element").
-		Set(goqu.Record{"id_short": newIDShort, "idshort_path": newPath}).
-		Where(goqu.C("id").Eq(location.id)).
-		ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-UPDPATH-SELF-TOSQL " + err.Error())
-	}
-	if _, err = tx.Exec(updateSelfQuery, updateSelfArgs...); err != nil {
-		return common.NewInternalServerError("SMREPO-UPDPATH-SELF-EXEC " + err.Error())
-	}
-	if newPath == oldPath {
-		return nil
-	}
-	if err = updateChildPaths(tx, dialect, submodelDatabaseID, oldPath, newPath, "."); err != nil {
-		return err
-	}
-	return updateChildPaths(tx, dialect, submodelDatabaseID, oldPath, newPath, "[")
-}
 
-func ensureRenamedPathIsFree(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseID int, submodelID string, newPath string) error {
+	if strings.HasSuffix(oldPath, "]") {
+		dialect := goqu.Dialect("postgres")
+		updateListItemQuery, updateListItemArgs, err := dialect.Update("submodel_element").
+			Set(goqu.Record{
+				"id_short": newIDShort,
+			}).
+			Where(
+				goqu.C("submodel_id").Eq(submodelDatabaseID),
+				goqu.C("idshort_path").Eq(oldPath),
+			).
+			ToSQL()
+		if err != nil {
+			return "", common.NewInternalServerError("SMREPO-UPDPATH-LIST-TOSQL " + err.Error())
+		}
+
+		_, err = tx.Exec(updateListItemQuery, updateListItemArgs...)
+		if err != nil {
+			return "", common.NewInternalServerError("SMREPO-UPDPATH-LIST-EXEC " + err.Error())
+		}
+
+		return oldPath, nil
+	}
+
+	// Compute the new path by replacing the last segment of oldPath
+	newPath := computeNewPath(oldPath, newIDShort)
+
+	if newPath == oldPath {
+		return oldPath, nil
+	}
+
+	// Check for idShort conflict: does an element with the new path already exist?
+	dialect := goqu.Dialect("postgres")
+
 	conflictQuery, conflictArgs, err := dialect.From("submodel_element").
 		Select(goqu.COUNT("id")).
-		Where(goqu.C("submodel_id").Eq(submodelDatabaseID), goqu.C("idshort_path").Eq(newPath)).
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("idshort_path").Eq(newPath),
+		).
 		ToSQL()
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-UPDPATH-CONFLICT-TOSQL " + err.Error())
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-CONFLICT-TOSQL " + err.Error())
 	}
-	var count int
-	if err = tx.QueryRow(conflictQuery, conflictArgs...).Scan(&count); err != nil {
-		return common.NewInternalServerError("SMREPO-UPDPATH-CONFLICT-EXEC " + err.Error())
-	}
-	if count > 0 {
-		return common.NewErrConflict("SMREPO-UPDPATH-CONFLICT SubmodelElement with idShortPath '" + newPath + "' already exists in submodel '" + submodelID + "'")
-	}
-	return nil
-}
 
-// ResolveUpdatedPathTx returns the idShortPath that the element at path has after an update
-// with submodelElement. Only a PUT with an idShort can rename the element. It must be called
-// before the update, while the element is still stored at path.
-func ResolveUpdatedPathTx(tx *sql.Tx, submodelID string, path string, submodelElement types.ISubmodelElement, isPut bool) (string, error) {
-	if !isPut || submodelElement == nil || submodelElement.IDShort() == nil {
-		return path, nil
+	var count int
+	err = tx.QueryRow(conflictQuery, conflictArgs...).Scan(&count)
+	if err != nil {
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-CONFLICT-EXEC " + err.Error())
 	}
-	submodelDatabaseID := goqu.Dialect("postgres").From("submodel").Select("id").Where(goqu.C("submodel_identifier").Eq(submodelID))
-	location, err := readStoredElementLocationTx(tx, elementLocationQuery(submodelDatabaseID, path))
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", common.NewErrNotFound("SMREPO-RESOLVEUPDPATH-NOTFOUND Submodel-Element ID-Short: " + path)
+
+	if count > 0 {
+		return "", common.NewErrConflict("SMREPO-UPDPATH-CONFLICT SubmodelElement with idShortPath '" + newPath + "' already exists in submodel '" + submodelID + "'")
 	}
+
+	// Update the element itself: set both id_short and idshort_path
+	updateSelfQuery, updateSelfArgs, err := dialect.Update("submodel_element").
+		Set(goqu.Record{
+			"id_short":     newIDShort,
+			"idshort_path": newPath,
+		}).
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("idshort_path").Eq(oldPath),
+		).
+		ToSQL()
+	if err != nil {
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-SELF-TOSQL " + err.Error())
+	}
+
+	_, err = tx.Exec(updateSelfQuery, updateSelfArgs...)
+	if err != nil {
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-SELF-EXEC " + err.Error())
+	}
+
+	// Update children whose path starts with oldPath followed by "." (collection/entity children)
+	err = updateChildPaths(tx, dialect, submodelDatabaseID, oldPath, newPath, ".")
 	if err != nil {
 		return "", err
 	}
-	return location.renamedPath(path, *submodelElement.IDShort()), nil
+
+	// Update children whose path starts with oldPath followed by "[" (list children)
+	err = updateChildPaths(tx, dialect, submodelDatabaseID, oldPath, newPath, "[")
+	if err != nil {
+		return "", err
+	}
+
+	return newPath, nil
+}
+
+// computeNewPath replaces the last segment of an idShortPath with a new idShort.
+//
+// Path patterns:
+//   - "propName"          → last segment is "propName" (top-level)
+//   - "parent.child"      → last segment is "child" (dot-separated)
+//   - "parent[0].child"   → last segment is "child" (dot-separated after bracket)
+//
+// Note: If the path ends with a bracket index (e.g., "list[2]"), the path is
+// position-based and the idShort replacement changes the part before the bracket suffix.
+func computeNewPath(oldPath string, newIDShort string) string {
+	// Find the last dot separator
+	lastDot := strings.LastIndex(oldPath, ".")
+	if lastDot >= 0 {
+		return oldPath[:lastDot+1] + newIDShort
+	}
+
+	// No dot found — this is a top-level element
+	return newIDShort
+}
+
+func resolveUpdatedPath(idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) string {
+	if !isPut || submodelElement == nil || submodelElement.IDShort() == nil {
+		return idShortOrPath
+	}
+
+	if strings.HasSuffix(idShortOrPath, "]") {
+		return idShortOrPath
+	}
+
+	newIDShort := strings.TrimSpace(*submodelElement.IDShort())
+	if newIDShort == "" {
+		return idShortOrPath
+	}
+
+	return computeNewPath(idShortOrPath, newIDShort)
+}
+
+// ResolveUpdatedPath returns the persisted path after a submodel-element update.
+func ResolveUpdatedPath(idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) string {
+	return resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
 }
 
 // updateChildPaths updates the idshort_path of child elements whose paths start with
@@ -675,24 +739,4 @@ func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseI
 	}
 
 	return nil
-}
-
-func validateUpdatedIDShort(errorScope string, requestedIDShort *string, existingIDShort sql.NullString, isPut bool) error {
-	if err := common.ValidateOptionalIDShort(errorScope, "Submodel element in the request body", requestedIDShort); err != nil {
-		return err
-	}
-	if isPut && requestedIDShort != nil {
-		return nil
-	}
-	return validateStoredIDShort(errorScope, existingIDShort)
-}
-
-// validateStoredIDShort rejects a write that keeps an idShort stored before the idShort
-// pattern was enforced. SME persistence stores omitted idShorts of list items as empty
-// strings; the builder omits them on read.
-func validateStoredIDShort(errorScope string, storedIDShort sql.NullString) error {
-	if !storedIDShort.Valid || storedIDShort.String == "" {
-		return nil
-	}
-	return common.ValidateOptionalIDShort(errorScope, "Stored submodel element", &storedIDShort.String)
 }

@@ -16,10 +16,8 @@ body: >-
   clients that URL-encode the idShortPath, as AAS Part 2 requires, then
   received 404 for these elements (#848). Single-letter idShorts such as
   "X", which some IDTA Submodel Templates use, are rejected as well.
-  Elements stored earlier with such idShorts stay readable and deletable by
-  their unencoded idShortPath. A PUT or PATCH that keeps such an idShort,
-  also through an enclosing Submodel or container element, is rejected
-  until a PUT renames the element to a valid idShort.
+  Resources stored earlier with invalid idShorts are not migrated or
+  repaired; delete them and create them again with valid idShorts.
 time: 2026-11-09T12:00:00+01:00
 custom:
   Impact: High

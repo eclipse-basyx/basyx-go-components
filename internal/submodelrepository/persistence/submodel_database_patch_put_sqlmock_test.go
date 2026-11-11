@@ -37,7 +37,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
@@ -66,9 +65,9 @@ func TestMetadataPatchChecksModelTypeUnderLock(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectQuery("SELECT .*FROM \"submodel\".*FOR NO KEY UPDATE").
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
-		mock.ExpectQuery("SELECT \"id\", \"model_type\", \"id_short\" FROM \"submodel_element\".*FOR UPDATE").
+		mock.ExpectQuery("SELECT \"id\", \"model_type\" FROM \"submodel_element\".*FOR UPDATE").
 			WithArgs("Temperature", 7).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "model_type", "id_short"}).AddRow(42, types.ModelTypeProperty, "Temperature"))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "model_type"}).AddRow(42, types.ModelTypeProperty))
 		mock.ExpectRollback()
 		mock.ExpectClose()
 		tx, err := db.Begin()
@@ -664,7 +663,7 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
 	mock.ExpectQuery(`SELECT .*id.*,.*id_short.*FROM .*submodel_element`).
-		WillReturnRows(storedElementLocationRows(200, "oldIdShort"))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "id_short"}).AddRow(200, "oldIdShort"))
 	mock.ExpectExec(`UPDATE .*submodel_element`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`INSERT INTO .*submodel_element_payload`).
@@ -679,45 +678,4 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 	err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm-1", "oldIdShort", patchElement, false)
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestUpdateSubmodelElementRejectsRetainedInvalidIDShort(t *testing.T) {
-	for _, testCase := range []struct {
-		path    string
-		idShort string
-	}{
-		{path: "Old.Name", idShort: "Old.Name"},
-		{path: "a[broken", idShort: "a[broken"},
-		{path: "List[0]", idShort: "a;b"},
-	} {
-		for _, method := range []struct {
-			name  string
-			isPut bool
-		}{{name: "PATCH"}, {name: "PUT", isPut: true}} {
-			t.Run(testCase.path+"/"+testCase.idShort+"/"+method.name, func(t *testing.T) {
-				db, mock, err := sqlmock.New()
-				require.NoError(t, err)
-				t.Cleanup(func() { _ = db.Close() })
-				sut := &SubmodelDatabase{db: db, verificationMode: model.VerificationModeOff}
-
-				mock.ExpectBegin()
-				expectSubmodelDatabaseIDLoad(mock)
-				mock.ExpectQuery(`SELECT .*model_type.*FROM .*submodel_element`).
-					WillReturnRows(sqlmock.NewRows([]string{"model_type"}).AddRow(types.ModelTypeCapability))
-				expectSubmodelDatabaseIDLoad(mock)
-				mock.ExpectQuery(`SELECT .*id.*,.*id_short.*FROM .*submodel_element.*FOR UPDATE`).
-					WillReturnRows(storedElementLocationRows(200, testCase.idShort))
-				mock.ExpectRollback()
-
-				err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm-1", testCase.path, types.NewCapability(), method.isPut)
-				require.True(t, common.IsErrBadRequest(err), "%v", err)
-				require.ErrorContains(t, err, "-INVALIDIDSHORT")
-				require.NoError(t, mock.ExpectationsWereMet())
-			})
-		}
-	}
-}
-
-func storedElementLocationRows(id int, idShort string) *sqlmock.Rows {
-	return sqlmock.NewRows([]string{"id", "id_short", "idshort_path", "model_type"}).AddRow(id, idShort, nil, nil)
 }
