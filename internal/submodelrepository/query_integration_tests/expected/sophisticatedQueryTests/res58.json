@@ -21,6 +21,7 @@
             "submodelElements": [
                 {
                     "category": "VARIABLE",
+                    "idShort": "InstanceId",
                     "modelType": "Property",
                     "semanticId": {
                         "keys": [
@@ -79,6 +80,7 @@
                             "text": "Manufacturer Name"
                         }
                     ],
+                    "idShort": "ManufacturerName",
                     "modelType": "Property",
                     "qualifiers": [
                         {
@@ -126,6 +128,7 @@
                             "text": "Neue Test Sammlung"
                         }
                     ],
+                    "idShort": "NewTestCollection",
                     "modelType": "SubmodelElementCollection",
                     "semanticId": {
                         "keys": [
@@ -149,6 +152,7 @@
                             "text": "Neue Test Liste"
                         }
                     ],
+                    "idShort": "NewTestList",
                     "modelType": "SubmodelElementList",
                     "orderRelevant": true,
                     "semanticId": {

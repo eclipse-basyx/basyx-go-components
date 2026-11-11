@@ -61,6 +61,9 @@ func (j *SubFilter) UnmarshalJSON(value []byte) error {
 	if plain.Fragment == nil {
 		return fmt.Errorf("SubFilter: $fragment is required")
 	}
+	if err := plain.Fragment.ValidateFilterTarget(); err != nil {
+		return err
+	}
 	*j = SubFilter(plain)
 	return nil
 }

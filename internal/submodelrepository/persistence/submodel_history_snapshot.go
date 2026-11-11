@@ -111,10 +111,7 @@ func (s *SubmodelDatabase) appendMutatedSubmodelHistoryTx(ctx context.Context, t
 }
 
 func loadSubmodelElementRootSnapshotTx(ctx context.Context, tx *sql.Tx, submodelID string, rootPath string) (map[string]any, error) {
-	stateReadCtx := ctx
-	if history.ActiveConfig().EvidenceEnabled {
-		stateReadCtx = auth.ContextWithoutQueryFilter(ctx)
-	}
+	stateReadCtx := auth.ContextWithoutQueryFilter(ctx)
 	rootElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(stateReadCtx, tx, submodelID, rootPath, true, "deep")
 	if err != nil {
 		return nil, err

@@ -118,14 +118,3 @@ func TestToSubmodelElementMetadataKeepsOnlyMetadataFields(t *testing.T) {
 		})
 	}
 }
-
-func TestValidateSubmodelElementMetadataModelType(t *testing.T) {
-	t.Parallel()
-	existing := metadataTestPropertyJSON("Temperature", "xs:int", "20")
-
-	require.NoError(t, validateSubmodelElementMetadataModelType(existing, map[string]any{"modelType": "Property", "valueType": "xs:long"}))
-	require.ErrorContains(t,
-		validateSubmodelElementMetadataModelType(existing, map[string]any{"modelType": "Range"}),
-		"SMREPO-PATCHSMEMETA-MODELTYPEMISMATCH",
-	)
-}

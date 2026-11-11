@@ -353,6 +353,7 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - Environment upload and serialization support ABAC `IDENTIFIABLE` grants for AAS, Submodels, and ConceptDescriptions. Grants stay within their object type; exports include only visible objects and filtered elements. See [environment authorization](docu/developer/security_architecture.md#environment-upload-and-serialization) for selection, binary content, and partial-import behavior.
 - Supported upload media types: `application/aasx+xml`, `application/aasx+json`, `application/asset-administration-shell+xml`, `application/asset-administration-shell+json`, `application/json`, `application/xml`, `text/xml`
 - Query fragment filters use existential parent-level evaluation by default. Set `"$match": true` explicitly when a request filter must be evaluated against the current fragment row. See the [query language guide](docu/developer/query_language/architecture.md#explicit-row-local-fragment-matching).
+- Query and security fragment filters cannot target the mandatory `$sm#id` or the `idShort` of a named submodel element. Explicit element `idShort` filters are permitted for direct list members; the general `$sme#idShort` filter applies only to those members. Update existing security policies containing prohibited fragments before loading them.
 - AAS v3.2 history and recent changes: [user guide](docu/user/aas_api_v3_2.md) and [runtime notes](docu/developer/aas_v3_2_runtime.md)
 - See [structure_cmd.md](docu/developer/structure_cmd.md) for details
 

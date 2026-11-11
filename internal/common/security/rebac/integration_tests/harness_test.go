@@ -173,7 +173,12 @@ func call(t *testing.T, user string, method string, url string, body any, header
 // callRaw sends body with contentType, e.g. a multipart upload.
 func callRaw(t *testing.T, user string, method string, url string, body io.Reader, contentType string, headers map[string]string) response {
 	t.Helper()
-	request, err := http.NewRequestWithContext(t.Context(), method, url, body)
+	return callRawWithContext(t.Context(), t, user, method, url, body, contentType, headers)
+}
+
+func callRawWithContext(ctx context.Context, t *testing.T, user string, method string, url string, body io.Reader, contentType string, headers map[string]string) response {
+	t.Helper()
+	request, err := http.NewRequestWithContext(ctx, method, url, body)
 	require.NoError(t, err)
 	if contentType != "" {
 		request.Header.Set("Content-Type", contentType)

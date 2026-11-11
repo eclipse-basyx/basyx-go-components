@@ -239,6 +239,26 @@ func cloneAnyMap(input map[string]any) map[string]any {
 	return cloned
 }
 
+// MergeMetadataPatch merges object fields recursively, replaces arrays, and
+// removes fields explicitly set to null without changing either input.
+func MergeMetadataPatch(base, patch map[string]any) map[string]any {
+	merged := cloneAnyMap(base)
+	for key, value := range patch {
+		if value == nil {
+			delete(merged, key)
+			continue
+		}
+		previous, hasPrevious := merged[key].(map[string]any)
+		object, isObject := value.(map[string]any)
+		if hasPrevious && isObject {
+			merged[key] = MergeMetadataPatch(previous, object)
+		} else {
+			merged[key] = value
+		}
+	}
+	return merged
+}
+
 // WithSubmodelMetadataPatch stores raw metadata PATCH payload in the context.
 func WithSubmodelMetadataPatch(ctx context.Context, payload map[string]any) context.Context {
 	return context.WithValue(ctx, submodelMetadataPatchContextKey, cloneAnyMap(payload))

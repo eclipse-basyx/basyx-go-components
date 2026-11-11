@@ -239,10 +239,7 @@ func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context
 		return common.NewInternalServerError("AASREPO-HISTORY-GETAASDBID " + err.Error())
 	}
 
-	stateReadCtx := ctx
-	if history.ActiveConfig().EvidenceEnabled {
-		stateReadCtx = auth.ContextWithoutQueryFilter(ctx)
-	}
+	stateReadCtx := auth.ContextWithoutQueryFilter(ctx)
 	aas, err := s.getAssetAdministrationShellMapByDBIDInTransaction(stateReadCtx, tx, aasDBID)
 	if err != nil {
 		return err

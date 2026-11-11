@@ -760,7 +760,7 @@ func (s *SubmodelDatabase) readPutSubmodelStateWithElementsTx(
 	submodelID string,
 	readElements func(context.Context, *sql.Tx, int) ([]types.ISubmodelElement, error),
 ) (types.ISubmodel, error) {
-	metadataCtx, err := contextWithoutFragmentFilters(ctx)
+	metadataCtx, err := auth.ContextWithoutFragmentFilters(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -786,19 +786,6 @@ func readPutSubmodelElementsWithGenericPlanTx(ctx context.Context, tx *sql.Tx, s
 	return common.WithPostgreSQLGenericPlanTx(ctx, tx, func() ([]types.ISubmodelElement, error) {
 		return readPutSubmodelElementsTx(ctx, tx, submodelDatabaseID)
 	})
-}
-
-func contextWithoutFragmentFilters(ctx context.Context) (context.Context, error) {
-	queryFilter := auth.GetQueryFilter(ctx)
-	if queryFilter == nil {
-		return ctx, nil
-	}
-	cloned, err := auth.CloneQueryFilter(queryFilter)
-	if err != nil {
-		return nil, common.NewInternalServerError("SMREPO-PUTSM-CLONEFILTER " + err.Error())
-	}
-	cloned.Filters = nil
-	return auth.WithQueryFilter(ctx, cloned), nil
 }
 
 func mapPutReadbackError(err error, shouldEnforce bool, existingState bool) error {

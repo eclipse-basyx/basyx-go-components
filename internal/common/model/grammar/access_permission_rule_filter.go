@@ -114,6 +114,9 @@ func (j *AccessPermissionRuleFILTER) UnmarshalJSON(value []byte) error {
 	if plain.FRAGMENT == nil {
 		return fmt.Errorf("AccessPermissionRuleFILTER: FRAGMENT is required")
 	}
+	if err := plain.FRAGMENT.ValidateFilterTarget(); err != nil {
+		return err
+	}
 	if hasCondition == hasUseFormula {
 		if hasCondition {
 			return fmt.Errorf("AccessPermissionRuleFILTER: only one of CONDITION or USEFORMULA may be defined, not both")

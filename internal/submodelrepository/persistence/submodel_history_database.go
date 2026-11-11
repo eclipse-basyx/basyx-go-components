@@ -64,10 +64,7 @@ func (s *SubmodelDatabase) appendCurrentSubmodelHistoryTx(ctx context.Context, t
 	if !history.MutationRecordingEnabled() {
 		return nil
 	}
-	stateReadCtx := ctx
-	if history.ActiveConfig().EvidenceEnabled {
-		stateReadCtx = auth.ContextWithoutQueryFilter(ctx)
-	}
+	stateReadCtx := auth.ContextWithoutQueryFilter(ctx)
 	submodel, err := s.getSubmodelByIDInTransaction(stateReadCtx, tx, submodelIdentifier, "deep", false, true)
 	if err != nil {
 		return err

@@ -28,10 +28,37 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
+
+func TestMandatoryFragmentValidationForRequestsAndPolicies(t *testing.T) {
+	tests := []struct {
+		fragment string
+		allowed  bool
+	}{
+		{"$sm#id", false}, {"$sm#idShort", true},
+		{"$sme#idShort", true}, {"$sme.items#idShort", false},
+		{"$sme.items[].name#idShort", false}, {"$sme.items[]#idShort", true},
+		{"$sme.items[0]#idShort", true}, {"$sme.items[].nested[0]#idShort", true},
+		{"$sme.items#value", true},
+	}
+	for _, test := range tests {
+		t.Run(test.fragment, func(t *testing.T) {
+			request := fmt.Sprintf(`{"$fragment":%q,"$condition":{"$boolean":false}}`, test.fragment)
+			policy := fmt.Sprintf(`{"FRAGMENT":%q,"CONDITION":{"$boolean":false}}`, test.fragment)
+			var subfilter grammar.SubFilter
+			var ruleFilter grammar.AccessPermissionRuleFILTER
+			requestErr := json.Unmarshal([]byte(request), &subfilter)
+			policyErr := json.Unmarshal([]byte(policy), &ruleFilter)
+			if (requestErr == nil) != test.allowed || (policyErr == nil) != test.allowed {
+				t.Fatalf("request error: %v; policy error: %v; allowed: %v", requestErr, policyErr, test.allowed)
+			}
+		})
+	}
+}
 
 func TestQueryFilter_FilterExpressionsFor_ExactMatch(t *testing.T) {
 	b := true
@@ -68,6 +95,20 @@ func TestQueryFilter_FilterExpressionEntriesFor_DoesNotMatchDifferentRoots(t *te
 	}
 	if entries[0].Fragment != "$sm#idShort" {
 		t.Fatalf("expected $sm fragment, got %q", entries[0].Fragment)
+	}
+}
+
+func TestMaterializeRuleRejectsMandatoryFragmentFilters(t *testing.T) {
+	for _, fragment := range []grammar.FragmentStringPattern{"$sm#id", "$sme.items#idShort", "$sme.items[].name#idShort"} {
+		t.Run(string(fragment), func(t *testing.T) {
+			condition := grammar.LogicalExpression{}
+			_, err := materializeRule(definitionIndex{}, grammar.AccessPermissionRule{
+				FILTER: &grammar.AccessPermissionRuleFILTER{FRAGMENT: &fragment, CONDITION: &condition},
+			})
+			if err == nil {
+				t.Fatal("expected mandatory fragment rejection")
+			}
+		})
 	}
 }
 

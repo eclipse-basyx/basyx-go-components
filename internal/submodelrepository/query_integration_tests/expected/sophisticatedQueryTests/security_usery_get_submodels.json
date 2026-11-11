@@ -215,6 +215,15 @@
                                                     "category":  "VARIABLE",
                                                     "idShort":  "InstanceId",
                                                     "modelType":  "Property",
+                                                    "semanticId":  {
+                                                        "keys": [
+                                                            {
+                                                                "type": "GlobalReference",
+                                                                "value": "http://opcfoundation.org/UA/DI/1.1/DeviceType/Serialnumber"
+                                                            }
+                                                        ],
+                                                        "type": "ExternalReference"
+                                                    },
                                                     "supplementalSemanticIds":  [
                                                                                     {
                                                                                         "keys":  [
@@ -266,6 +275,15 @@
                                                                     ],
                                                     "idShort":  "ManufacturerName",
                                                     "modelType":  "Property",
+                                                    "semanticId":  {
+                                                        "keys": [
+                                                            {
+                                                                "type": "GlobalReference",
+                                                                "value": "0173-1#02-AAO677#002"
+                                                            }
+                                                        ],
+                                                        "type": "ExternalReference"
+                                                    },
                                                     "qualifiers":  [
                                                                        {
                                                                            "kind":  "ConceptQualifier",
@@ -306,6 +324,15 @@
                                                                     ],
                                                     "idShort":  "NewTestCollection",
                                                     "modelType":  "SubmodelElementCollection",
+                                                    "semanticId":  {
+                                                        "keys": [
+                                                            {
+                                                                "type": "GlobalReference",
+                                                                "value": "http://acplt.org/SubmodelElementCollections/NewTestCollection"
+                                                            }
+                                                        ],
+                                                        "type": "ExternalReference"
+                                                    },
                                                     "value":  [
                                                                   {
                                                                       "category":  "CONSTANT",
@@ -337,6 +364,15 @@
                                                                     ],
                                                     "idShort":  "NewTestList",
                                                     "modelType":  "SubmodelElementList",
+                                                    "semanticId":  {
+                                                        "keys": [
+                                                            {
+                                                                "type": "GlobalReference",
+                                                                "value": "http://acplt.org/SubmodelElementLists/NewTestList"
+                                                            }
+                                                        ],
+                                                        "type": "ExternalReference"
+                                                    },
                                                     "orderRelevant":  true,
                                                     "typeValueListElement":  "SubmodelElement",
                                                     "value":  [

@@ -65,6 +65,67 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 		}
 	})
 
+	t.Run("FilteringSubmodelIDShortPreservesElementIDShorts", func(t *testing.T) {
+		result := queryNestedMatchSubmodel(t, nestedMatchFilter("$sm#idShort", false, map[string]any{"$boolean": false}))
+
+		assert.NotContains(t, result, "idShort")
+		elements := arrayValue(t, result["submodelElements"])
+		assert.Equal(t, "enabled", elementByIDShort(t, elements, "guard")["value"])
+		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}, {"a1-b0", "a1-b1"}}, nestedBValues(t, result))
+	})
+
+	t.Run("SubmodelFragmentsPreserveElements", func(t *testing.T) {
+		baseline := queryNestedMatchSubmodel(t)
+		for _, fragment := range []string{
+			"$sm#idShort", "$sm#semanticId", "$sm#semanticId.keys[]", "$sm#semanticId.keys[0]",
+			"$sm#supplementalSemanticIds", "$sm#supplementalSemanticIds[]", "$sm#supplementalSemanticIds[0]",
+			"$sm#supplementalSemanticIds[].keys[]", "$sm#supplementalSemanticIds[0].keys[0]",
+		} {
+			for _, allow := range []bool{true, false} {
+				t.Run(fmt.Sprintf("%s/%t", fragment, allow), func(t *testing.T) {
+					result := queryNestedMatchSubmodel(t, nestedMatchFilter(fragment, false, map[string]any{"$boolean": allow}))
+					assert.Equal(t, baseline["submodelElements"], result["submodelElements"])
+				})
+			}
+		}
+	})
+
+	for _, test := range []struct {
+		name     string
+		fragment string
+	}{
+		{name: "TopLevelProperty", fragment: "$sme.guard#idShort"},
+		{name: "TopLevelList", fragment: "$sme.a#idShort"},
+		{name: "NamedElementInsideListEntry", fragment: "$sme.a[].b#idShort"},
+		{name: "MandatorySubmodelID", fragment: "$sm#id"},
+	} {
+		t.Run("RejectFilteringMandatoryIDShort/"+test.name, func(t *testing.T) {
+			payload := map[string]any{
+				"$condition": equalsCondition("$sm#id", nestedMatchSubmodelID),
+				"$filters": []map[string]any{
+					nestedMatchFilter(test.fragment, false, map[string]any{"$boolean": false}),
+				},
+			}
+			statusCode, body, err := requestJSON(http.MethodPost, submodelRepositoryBaseURL+"/query/submodels", payload)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusBadRequest, statusCode, "response=%s", string(body))
+		})
+	}
+
+	t.Run("FilteringListEntryIDShortIsAllowed", func(t *testing.T) {
+		result := queryNestedMatchSubmodel(t, nestedMatchFilter("$sme.a[].b[]#idShort", false, map[string]any{"$boolean": false}))
+
+		assert.Equal(t, "NestedMatch", result["idShort"])
+		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}, {"a1-b0", "a1-b1"}}, nestedBValues(t, result))
+		a := elementByIDShort(t, arrayValue(t, result["submodelElements"]), "a")
+		for _, entry := range arrayValue(t, a["value"]) {
+			b := elementByIDShort(t, arrayValue(t, objectValue(t, entry)["value"]), "b")
+			for _, property := range arrayValue(t, b["value"]) {
+				assert.NotContains(t, objectValue(t, property), "idShort")
+			}
+		}
+	})
+
 	t.Run("OmittedMatchKeepsExistentialBehavior", func(t *testing.T) {
 		result := queryNestedMatchSubmodel(t, nestedMatchFilter(
 			"$sme.listA[].listB[]",
