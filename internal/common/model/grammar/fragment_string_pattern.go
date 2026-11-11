@@ -29,6 +29,7 @@ package grammar
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
@@ -70,6 +71,21 @@ var fragmentPatternRegex = regexp.MustCompile(filterpattern)
 //   - "$sme.property1#value"
 //   - "$aasdesc#endpoints[0].interface"
 type FragmentStringPattern string
+
+// ValidateFilterTarget rejects filters that can remove mandatory identifiers.
+func (j FragmentStringPattern) ValidateFilterTarget() error {
+	fragment := string(j)
+	if fragment == "$sm#id" {
+		return fmt.Errorf("QUERY-FILTER-MANDATORY: %s targets a mandatory identifier", fragment)
+	}
+	if strings.HasPrefix(fragment, "$sme.") && strings.HasSuffix(fragment, "#idShort") {
+		path := strings.TrimSuffix(fragment, "#idShort")
+		if !strings.HasSuffix(path, "]") {
+			return fmt.Errorf("QUERY-FILTER-MANDATORY: %s targets a mandatory idShort", fragment)
+		}
+	}
+	return nil
+}
 
 // UnmarshalJSON implements the json.Unmarshaler interface for FragmentStringPattern.
 //

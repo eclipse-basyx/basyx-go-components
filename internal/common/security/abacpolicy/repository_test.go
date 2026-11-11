@@ -68,6 +68,50 @@ func TestRefreshActiveModelFailsClosedWithoutActivePolicy(t *testing.T) {
 	}
 }
 
+func TestPolicyValidationAndActivationRejectMandatoryFragments(t *testing.T) {
+	for _, fragment := range []string{"$sm#id", "$sme.items#idShort", "$sme.items[].name#idShort"} {
+		t.Run(fragment, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = db.Close() }()
+			router := chi.NewRouter()
+			router.Get("/description", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+			repo, err := NewRepository(db, "test-service", router, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			version := testPolicyVersion(11, StatusStaged, testMaterializedPolicy(t))
+			filter := `"FILTER": {"FRAGMENT": "` + fragment + `", "CONDITION": {"$boolean": false}}, "FORMULA":`
+			version.ConfiguredPolicyJSON = json.RawMessage(strings.Replace(string(testPolicyRaw(t)), `"FORMULA":`, filter, 1))
+
+			mock.ExpectBegin()
+			mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_versions"`).WillReturnRows(policyVersionRows(version))
+			mock.ExpectExec(`INSERT INTO "abac_policy_events"`).WillReturnResult(sqlmock.NewResult(0, 1))
+			mock.ExpectCommit()
+			result, err := repo.ValidatePolicy(t.Context(), 11)
+			if err != nil || result.Valid || !strings.Contains(result.Error, "QUERY-FILTER-MANDATORY") {
+				t.Fatalf("validation result=%+v error=%v", result, err)
+			}
+
+			mock.ExpectBegin()
+			mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_versions"`).WillReturnRows(policyVersionRows(version))
+			mock.ExpectRollback()
+			_, err = repo.ActivatePolicy(t.Context(), 11)
+			if !common.IsErrBadRequest(err) || !strings.Contains(err.Error(), "QUERY-FILTER-MANDATORY") {
+				t.Fatalf("activation error=%v", err)
+			}
+			if repo.ActiveAccessModel() != nil {
+				t.Fatal("invalid policy must not become active")
+			}
+			if err = mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestRefreshActiveModelClearsStaleCacheOnFailure(t *testing.T) {
 	t.Parallel()
 

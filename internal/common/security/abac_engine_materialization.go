@@ -383,6 +383,9 @@ func materializeRule(index definitionIndex, r grammar.AccessPermissionRule) (mat
 		if filter.FRAGMENT == nil {
 			return materializedRule{}, fmt.Errorf("FILTERLIST[%d]: FRAGMENT is required", i+1)
 		}
+		if err := filter.FRAGMENT.ValidateFilterTarget(); err != nil {
+			return materializedRule{}, fmt.Errorf("FILTERLIST[%d]: %w", i+1, err)
+		}
 
 		useFormulaName := ""
 		if filter.USEFORMULA != nil {

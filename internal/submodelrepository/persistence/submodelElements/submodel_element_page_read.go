@@ -417,6 +417,7 @@ func buildSubmodelElementPageQuery(
 	if err != nil {
 		return "", nil, common.NewInternalServerError("SMREPO-GETSMEPAGE-IDSHORTMASK " + err.Error())
 	}
+	idShortVisible = listMemberIDShortVisibility(dialect, dataAlias, idShortVisible)
 	semanticVisible, err := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.semantic)
 	if err != nil {
 		return "", nil, common.NewInternalServerError("SMREPO-GETSMEPAGE-SEMANTICMASK " + err.Error())

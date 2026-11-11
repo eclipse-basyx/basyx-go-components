@@ -380,7 +380,7 @@ func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx 
 		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-NILTX transaction must not be nil")
 	}
 
-	submodel, err := s.getSubmodelMetadataByIDInTransaction(ctx, tx, submodelIdentifier)
+	submodel, err := s.getVisibleSubmodelMetadataByIDInTransaction(ctx, tx, submodelIdentifier)
 	if err != nil {
 		return nil, err
 	}
@@ -407,6 +407,25 @@ func getSubmodelElementsForLevelInTransaction(ctx context.Context, tx *sql.Tx, s
 	}
 	submodelElements, _, err := submodelelements.GetSubmodelElementsBySubmodelIDTx(ctx, tx, submodelIdentifier, &unlimited, "", includeBlobValue, level)
 	return submodelElements, err
+}
+
+func (s *SubmodelDatabase) getVisibleSubmodelMetadataByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (types.ISubmodel, error) {
+	if !hasFragmentFilterPrefix(ctx, "$sm#") {
+		return s.getSubmodelMetadataByIDInTransaction(ctx, tx, submodelIdentifier)
+	}
+	if submodelIdentifier == "" {
+		return nil, common.NewErrNotFound(submodelIdentifier)
+	}
+	submodels, _, err := s.getSubmodelsWithOptionalFiltersWithQueryer(
+		ctx, tx, 1, "", submodelIdentifier, "", "", time.Time{}, time.Time{}, nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(submodels) == 0 {
+		return nil, common.NewErrNotFound(submodelIdentifier)
+	}
+	return submodels[0], nil
 }
 
 func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (types.ISubmodel, error) {

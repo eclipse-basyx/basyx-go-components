@@ -174,6 +174,26 @@ func TestMaterializeABACPolicyBuildsCanonicalRowsAndReloadableModel(t *testing.T
 	}
 }
 
+func TestMaterializeABACPolicyValidatesMandatoryFragments(t *testing.T) {
+	for _, test := range []struct {
+		fragment string
+		allowed  bool
+	}{
+		{"$sm#id", false}, {"$sme.item#idShort", false},
+		{"$sme.items[].name#idShort", false}, {"$sme.items[]#idShort", true},
+		{"$sme#idShort", true}, {"$sm#idShort", true},
+	} {
+		t.Run(test.fragment, func(t *testing.T) {
+			filter := `"FILTER": {"FRAGMENT": "` + test.fragment + `", "CONDITION": {"$boolean": false}}, `
+			policy := strings.Replace(matchedRuleModelJSON, `"USEACL": "read"`, filter+`"USEACL": "read"`, 1)
+			_, err := MaterializeABACPolicy([]byte(policy), aasRegistryRouter(), "")
+			if (err == nil) != test.allowed {
+				t.Fatalf("fragment %s: allowed=%t, error=%v", test.fragment, test.allowed, err)
+			}
+		})
+	}
+}
+
 func TestMaterializedPolicyHashChangesWhenReferencedDefinitionChanges(t *testing.T) {
 	t.Parallel()
 

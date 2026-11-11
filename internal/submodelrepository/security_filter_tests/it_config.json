@@ -38,11 +38,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "Anonymous query retains structurally visible SME when idShort is masked",
+    "context": "Anonymous query preserves mandatory SME idShort under a general idShort filter",
     "method": "POST",
     "endpoint": "{{BASYX_IT_API_URL}}/query/submodels",
     "data": "bodies/query_mask_sme_idshort.json",
-    "shouldMatch": "expected/nameplate_list_idshort_masked.json",
+    "shouldMatch": "expected/nameplate_list_filtered.json",
     "expectedStatus": 200
   },
   {

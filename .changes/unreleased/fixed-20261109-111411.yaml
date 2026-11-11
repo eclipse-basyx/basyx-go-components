@@ -1,0 +1,7 @@
+kind: fixed
+body: Apply Submodel element metadata PATCH requests as selective metadata updates. Omitted values, children, and metadata stay untouched, avoiding stale value overwrites and unnecessary blob rewrites during concurrent updates. Property and Range valueType changes still validate and convert the stored value inside the writer transaction.
+time: 2026-11-09T11:14:11.7647447+01:00
+custom:
+    Impact: Low
+    PullRequest: 855
+    SecurityImpact: Metadata updates retain current and prospective write authorization checks and atomic history recording. Validation errors for incompatible valueType changes do not disclose hidden stored values.

@@ -55,7 +55,7 @@ func (p *PostgreSQLAASRegistryDatabase) appendMutatedDescriptorHistoryTx(ctx con
 		return err
 	}
 
-	parent, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
+	parent, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ContextWithoutQueryFilter(ctx), tx, aasID)
 	if err != nil {
 		return err
 	}

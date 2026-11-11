@@ -58,6 +58,34 @@ func TestPatchSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestMetadataPatchChecksModelTypeUnderLock(t *testing.T) {
+	for _, requested := range []types.ModelType{types.ModelTypeProperty, types.ModelTypeRange} {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT .*FROM \"submodel\".*FOR NO KEY UPDATE").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
+		mock.ExpectQuery("SELECT \"id\", \"model_type\" FROM \"submodel_element\".*FOR UPDATE").
+			WithArgs("Temperature", 7).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "model_type"}).AddRow(42, types.ModelTypeProperty))
+		mock.ExpectRollback()
+		mock.ExpectClose()
+		tx, err := db.Begin()
+		require.NoError(t, err)
+		target, err := lockMetadataTargetTx(contextWithABACDisabled(t), tx, "sm-1", "Temperature", requested)
+		if requested == types.ModelTypeProperty {
+			require.NoError(t, err)
+			require.Equal(t, int64(42), target.ID)
+		} else {
+			require.True(t, common.IsErrBadRequest(err))
+			require.ErrorContains(t, err, "MODELTYPEMISMATCH")
+		}
+		require.NoError(t, tx.Rollback())
+		require.NoError(t, db.Close())
+		require.NoError(t, mock.ExpectationsWereMet())
+	}
+}
+
 func TestPatchSubmodelNotFoundRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
