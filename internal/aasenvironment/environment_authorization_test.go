@@ -47,7 +47,7 @@ func (deniedEnvironmentWriter) UpsertAssetAdministrationShellInTransaction(conte
 }
 
 func TestUploadWrapperDenialRemainsForbidden(t *testing.T) {
-	service := &uploadAPIService{submodelRepositoryService: deniedEnvironmentWriter{}, aasRepositoryService: deniedEnvironmentWriter{}}
+	service := &UploadAPIService{submodelRepositoryService: deniedEnvironmentWriter{}, aasRepositoryService: deniedEnvironmentWriter{}}
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
 	err := service.storeEnvironmentSubmodels(ctx, nil, []aastypes.ISubmodel{aastypes.NewSubmodel("submodel-id")})
 	require.True(t, common.IsErrDenied(err))

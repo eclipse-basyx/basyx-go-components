@@ -23,7 +23,9 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package persistence
+// Package asyncupload transfers request-scoped staged uploads into the durable
+// ownership of an asynchronous job.
+package asyncupload
 
 import (
 	"context"
@@ -41,30 +43,30 @@ import (
 
 const asyncUploadTable = "aasx_async_upload"
 
-// AsyncUploadStore transfers request-scoped staged uploads into durable async ownership.
-type AsyncUploadStore struct {
+// Store transfers request-scoped staged uploads into durable async ownership.
+type Store struct {
 	db *sql.DB
 }
 
-// NewAsyncUploadStore creates durable staging backed by PostgreSQL Large Objects.
-func NewAsyncUploadStore(db *sql.DB) (*AsyncUploadStore, error) {
+// NewStore creates durable staging backed by PostgreSQL Large Objects.
+func NewStore(db *sql.DB) (*Store, error) {
 	if db == nil {
-		return nil, common.NewErrBadRequest("AASXFS-ASYNCSTAGE-NILDB database handle must not be nil")
+		return nil, common.NewErrBadRequest("ASYNCUPLOAD-STAGE-NILDB database handle must not be nil")
 	}
-	return &AsyncUploadStore{db: db}, nil
+	return &Store{db: db}, nil
 }
 
 // Accept atomically creates the persistent handle and its staging ownership.
-func (s *AsyncUploadStore) Accept(
+func (s *Store) Accept(
 	ctx context.Context,
 	manager *asyncjob.Manager,
 	upload common.StagedUpload,
 	ownerKey string,
 	options asyncjob.StartOptions,
 	successPayload any,
-) (string, common.StagedUpload, error) {
+) (string, *DurableUpload, error) {
 	if manager == nil || upload == nil {
-		return "", nil, common.NewInternalServerError("AASXFS-ASYNCSTAGE-INVALID manager and upload are required")
+		return "", nil, common.NewInternalServerError("ASYNCUPLOAD-STAGE-INVALID manager and upload are required")
 	}
 
 	var handleID string
@@ -84,10 +86,10 @@ func (s *AsyncUploadStore) Accept(
 			"size_bytes": stagedSize,
 		}).ToSQL()
 		if buildErr != nil {
-			return common.NewInternalServerError("AASXFS-ASYNCSTAGE-BUILDINSERT " + buildErr.Error())
+			return common.NewInternalServerError("ASYNCUPLOAD-STAGE-BUILDINSERT " + buildErr.Error())
 		}
 		if _, execErr := tx.ExecContext(ctx, query, args...); execErr != nil {
-			return common.NewInternalServerError("AASXFS-ASYNCSTAGE-INSERT " + execErr.Error())
+			return common.NewInternalServerError("ASYNCUPLOAD-STAGE-INSERT " + execErr.Error())
 		}
 		return nil
 	})
@@ -95,13 +97,15 @@ func (s *AsyncUploadStore) Accept(
 		return "", nil, err
 	}
 
-	return handleID, &durableAsyncUpload{
+	return handleID, &DurableUpload{
 		ctx: ctx, db: s.db, manager: manager,
 		handleID: handleID, oid: oid, size: size, successPayload: successPayload,
 	}, nil
 }
 
-type durableAsyncUpload struct {
+// DurableUpload is a staged upload owned by a running asynchronous job. Its
+// staging row and Large Object are removed when the job reaches a terminal state.
+type DurableUpload struct {
 	ctx            context.Context
 	db             *sql.DB
 	manager        *asyncjob.Manager
@@ -115,14 +119,16 @@ type durableAsyncUpload struct {
 	mu             sync.Mutex
 }
 
-func (upload *durableAsyncUpload) Size() int64 {
+// Size returns the number of staged bytes.
+func (upload *DurableUpload) Size() int64 {
 	if upload == nil {
 		return 0
 	}
 	return upload.size
 }
 
-func (upload *durableAsyncUpload) Read(destination []byte) (int, error) {
+// Read reads staged bytes through a reader that owns its own transaction.
+func (upload *DurableUpload) Read(destination []byte) (int, error) {
 	upload.mu.Lock()
 	defer upload.mu.Unlock()
 	if err := upload.ensureReaderLocked(); err != nil {
@@ -131,7 +137,8 @@ func (upload *durableAsyncUpload) Read(destination []byte) (int, error) {
 	return upload.reader.Read(destination)
 }
 
-func (upload *durableAsyncUpload) Seek(offset int64, whence int) (int64, error) {
+// Seek moves the read position of the staged bytes.
+func (upload *DurableUpload) Seek(offset int64, whence int) (int64, error) {
 	upload.mu.Lock()
 	defer upload.mu.Unlock()
 	if err := upload.ensureReaderLocked(); err != nil {
@@ -140,14 +147,16 @@ func (upload *durableAsyncUpload) Seek(offset int64, whence int) (int64, error) 
 	return upload.reader.Seek(offset, whence)
 }
 
-func (upload *durableAsyncUpload) Promote(ctx context.Context, persist func(context.Context, *sql.Tx, int64, int64) error) error {
+// Promote transfers the staged Large Object to persist and completes the job
+// with the payload given to Accept in the same transaction.
+func (upload *DurableUpload) Promote(ctx context.Context, persist func(context.Context, *sql.Tx, int64, int64) error) error {
 	if upload == nil || persist == nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-PROMOTEINVALID upload and callback are required")
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-PROMOTEINVALID upload and callback are required")
 	}
 	upload.mu.Lock()
 	defer upload.mu.Unlock()
 	if upload.closed {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-PROMOTECLOSED staged upload is closed")
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-PROMOTECLOSED staged upload is closed")
 	}
 	if err := upload.closeReaderLocked(); err != nil {
 		return err
@@ -155,7 +164,7 @@ func (upload *durableAsyncUpload) Promote(ctx context.Context, persist func(cont
 
 	tx, err := upload.db.BeginTx(ctx, nil)
 	if err != nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-PROMOTESTARTTX " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-PROMOTESTARTTX " + err.Error())
 	}
 	committed := false
 	defer func() {
@@ -177,7 +186,7 @@ func (upload *durableAsyncUpload) Promote(ctx context.Context, persist func(cont
 		return err
 	}
 	if err = common.CommitTransaction(tx); err != nil {
-		return common.CommitError("AASXFS-ASYNCSTAGE-PROMOTECOMMIT", err)
+		return common.CommitError("ASYNCUPLOAD-STAGE-PROMOTECOMMIT", err)
 	}
 	committed = true
 	upload.promoted = true
@@ -185,7 +194,8 @@ func (upload *durableAsyncUpload) Promote(ctx context.Context, persist func(cont
 	return nil
 }
 
-func (upload *durableAsyncUpload) Close() error {
+// Close discards the staging ownership unless it was promoted or consumed.
+func (upload *DurableUpload) Close() error {
 	if upload == nil {
 		return nil
 	}
@@ -206,26 +216,105 @@ func (upload *durableAsyncUpload) Close() error {
 	defer cancel()
 	tx, err := upload.db.BeginTx(ctx, nil)
 	if err != nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-CLOSESTARTTX " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-CLOSESTARTTX " + err.Error())
 	}
 	query, args, err := goqu.Dialect("postgres").Delete(asyncUploadTable).
 		Where(goqu.C("handle_id").Eq(upload.handleID)).ToSQL()
 	if err != nil {
 		_ = tx.Rollback()
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-CLOSEBUILDDELETE " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-CLOSEBUILDDELETE " + err.Error())
 	}
 	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 		_ = tx.Rollback()
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-CLOSEDELETE " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-CLOSEDELETE " + err.Error())
 	}
 	if err = common.CommitTransaction(tx); err != nil {
-		return common.CommitError("AASXFS-ASYNCSTAGE-CLOSECOMMIT", err)
+		return common.CommitError("ASYNCUPLOAD-STAGE-CLOSECOMMIT", err)
 	}
 	upload.closed = true
 	return nil
 }
 
-func (upload *durableAsyncUpload) ensureReaderLocked() error {
+// Consume reads the staged bytes and completes the job in one transaction.
+//
+// consume receives that transaction and a seekable reader of the staged bytes,
+// writes its results in the transaction, and returns the job's success payload.
+// Completing the job removes the staging row and its Large Object in the same
+// transaction, so either the results, the Completed job state and the staging
+// removal are committed together, or none of them is.
+//
+// Parameters:
+//   - ctx: Execution context bounding the transaction.
+//   - consume: Callback writing the upload's results in the given transaction.
+//
+// Returns:
+//   - error: The callback's error, or a staging, job transition, or commit error.
+func (upload *DurableUpload) Consume(
+	ctx context.Context,
+	consume func(context.Context, *sql.Tx, io.ReadSeeker) (any, error),
+) error {
+	if upload == nil || consume == nil {
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-CONSUMEINVALID upload and callback are required")
+	}
+	upload.mu.Lock()
+	defer upload.mu.Unlock()
+	if upload.closed {
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-CONSUMECLOSED staged upload is closed")
+	}
+	if err := upload.closeReaderLocked(); err != nil {
+		return err
+	}
+
+	tx, err := upload.db.BeginTx(ctx, nil)
+	if err != nil {
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-CONSUMESTARTTX " + err.Error())
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	payload, err := upload.consumeInTx(ctx, tx, consume)
+	if err != nil {
+		return err
+	}
+	if err = upload.manager.CompletePayloadTx(ctx, tx, upload.handleID, payload); err != nil {
+		return err
+	}
+	if err = common.CommitTransaction(tx); err != nil {
+		return common.CommitError("ASYNCUPLOAD-STAGE-CONSUMECOMMIT", err)
+	}
+	committed = true
+	upload.closed = true
+	return nil
+}
+
+func (upload *DurableUpload) consumeInTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	consume func(context.Context, *sql.Tx, io.ReadSeeker) (any, error),
+) (any, error) {
+	if err := upload.lockOwnership(ctx, tx); err != nil {
+		return nil, err
+	}
+	reader, err := binarycontent.OpenSeekableOIDInTransaction(ctx, tx, upload.oid)
+	if err != nil {
+		return nil, err
+	}
+	payload, consumeErr := consume(ctx, tx, reader)
+	closeErr := reader.Close()
+	if consumeErr != nil {
+		return nil, consumeErr
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	return payload, nil
+}
+
+func (upload *DurableUpload) ensureReaderLocked() error {
 	if upload.closed {
 		return io.ErrClosedPipe
 	}
@@ -240,7 +329,7 @@ func (upload *durableAsyncUpload) ensureReaderLocked() error {
 	return nil
 }
 
-func (upload *durableAsyncUpload) closeReaderLocked() error {
+func (upload *DurableUpload) closeReaderLocked() error {
 	if upload.reader == nil {
 		return nil
 	}
@@ -249,46 +338,46 @@ func (upload *durableAsyncUpload) closeReaderLocked() error {
 	return err
 }
 
-func (upload *durableAsyncUpload) lockOwnership(ctx context.Context, tx *sql.Tx) error {
+func (upload *DurableUpload) lockOwnership(ctx context.Context, tx *sql.Tx) error {
 	query, args, err := goqu.Dialect("postgres").From(asyncUploadTable).
 		Select("file_oid", "size_bytes").
 		Where(goqu.C("handle_id").Eq(upload.handleID)).
 		ForUpdate(exp.Wait).ToSQL()
 	if err != nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-BUILDLOCK " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-BUILDLOCK " + err.Error())
 	}
 	var oid int64
 	var size int64
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(&oid, &size); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return common.NewErrNotFound("AASXFS-ASYNCSTAGE-NOTFOUND durable staging ownership no longer exists")
+			return common.NewErrNotFound("ASYNCUPLOAD-STAGE-NOTFOUND durable staging ownership no longer exists")
 		}
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-LOCK " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-LOCK " + err.Error())
 	}
 	if oid != upload.oid || size != upload.size {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-MISMATCH durable staging metadata changed unexpectedly")
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-MISMATCH durable staging metadata changed unexpectedly")
 	}
 	return nil
 }
 
-func (upload *durableAsyncUpload) releaseOwnership(ctx context.Context, tx *sql.Tx) error {
+func (upload *DurableUpload) releaseOwnership(ctx context.Context, tx *sql.Tx) error {
 	dialect := goqu.Dialect("postgres")
 	updateQuery, updateArgs, err := dialect.Update(asyncUploadTable).
 		Set(goqu.Record{"promoted": true}).
 		Where(goqu.C("handle_id").Eq(upload.handleID)).ToSQL()
 	if err != nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-BUILDTRANSFER " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-BUILDTRANSFER " + err.Error())
 	}
 	if _, err = tx.ExecContext(ctx, updateQuery, updateArgs...); err != nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-TRANSFER " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-TRANSFER " + err.Error())
 	}
 	deleteQuery, deleteArgs, err := dialect.Delete(asyncUploadTable).
 		Where(goqu.C("handle_id").Eq(upload.handleID)).ToSQL()
 	if err != nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-BUILDRELEASE " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-BUILDRELEASE " + err.Error())
 	}
 	if _, err = tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
-		return common.NewInternalServerError("AASXFS-ASYNCSTAGE-RELEASE " + err.Error())
+		return common.NewInternalServerError("ASYNCUPLOAD-STAGE-RELEASE " + err.Error())
 	}
 	return nil
 }

@@ -50,6 +50,8 @@ func serveEnvironment(t *testing.T, method, path, base string, resolver ReBACRes
 	router := chi.NewRouter()
 	router.Get("/serialization", func(http.ResponseWriter, *http.Request) {})
 	router.Post("/upload", func(http.ResponseWriter, *http.Request) {})
+	router.Post("/upload-async", func(http.ResponseWriter, *http.Request) {})
+	router.Get("/upload-async/status/{handleId}", func(http.ResponseWriter, *http.Request) {})
 	payload, err := json.Marshal(map[string]any{"AllAccessPermissionRules": map[string]any{"rules": rules}})
 	require.NoError(t, err)
 	model, err := ParseAccessModel(payload, router, base)
@@ -217,6 +219,8 @@ func TestEnvironmentAdapterOnlyPreparesRegisteredAggregateRoutes(t *testing.T) {
 	router := chi.NewRouter()
 	router.Get("/serialization", func(http.ResponseWriter, *http.Request) {})
 	router.Post("/upload", func(http.ResponseWriter, *http.Request) {})
+	router.Post("/upload-async", func(http.ResponseWriter, *http.Request) {})
+	router.Get("/upload-async/status/{handleId}", func(http.ResponseWriter, *http.Request) {})
 	router.Get("/submodels", func(http.ResponseWriter, *http.Request) {})
 	model := &AccessModel{apiRouter: router, basePath: "/api"}
 	session := newAuthorizationSession(model, nil, nil, grammar.DefaultSimplifyOptions())
@@ -240,4 +244,24 @@ func TestEnvironmentAdapterOnlyPreparesRegisteredAggregateRoutes(t *testing.T) {
 	}
 	model.apiRouter = chi.NewRouter()
 	require.Nil(t, session.evaluateEnvironment(http.MethodGet, "/api/serialization", "/api/serialization"))
+}
+
+func TestEnvironmentAsyncUploadBindsUploadAuthorization(t *testing.T) {
+	create := environmentRule(map[string]string{"IDENTIFIABLE": `$sm("created")`}, "CREATE")
+	ctx, status := serveEnvironment(t, "POST", "/upload-async", "", nil, create)
+	require.Equal(t, http.StatusOK, status)
+	smCtx, err := EnvironmentResourceContext(ctx, SemanticResourceSM)
+	require.NoError(t, err)
+	created := SelectFormulaForRight(smCtx, grammar.RightsEnumCREATE)
+	require.Contains(t, formulaSQLForRoot(created, t, grammar.CollectorRootSM, "submodel", "submodel"), "created")
+	aasCtx, err := EnvironmentResourceContext(ctx, SemanticResourceAAS)
+	require.NoError(t, err)
+	require.True(t, isFalseFormula(GetQueryFilter(SelectFormulaForRight(aasCtx, grammar.RightsEnumCREATE)).Formula))
+
+	_, status = serveEnvironment(t, "POST", "/upload-async", "", nil, environmentRule(map[string]string{"IDENTIFIABLE": `$sm("*")`}, "READ"))
+	require.Equal(t, http.StatusForbidden, status)
+	_, status = serveEnvironment(t, "GET", "/upload-async/status/handle", "", nil, environmentRule(map[string]string{"ROUTE": "/upload-async/*"}, "READ"))
+	require.Equal(t, http.StatusOK, status)
+	_, status = serveEnvironment(t, "GET", "/upload-async/status/handle", "", nil, environmentRule(map[string]string{"ROUTE": "/upload-async/*"}, "CREATE"))
+	require.Equal(t, http.StatusForbidden, status)
 }

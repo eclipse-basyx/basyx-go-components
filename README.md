@@ -270,6 +270,7 @@ The Submodel Repository's `general.delegatedOperationResponseMaxSizeBytes` limit
 AASX request bodies and generated specification parts use transaction-scoped PostgreSQL large objects for seekable staging; no writable local temporary directory is required. Package parts, attachments, thumbnails, and generated AASX output are streamed. The parsed AAS object model remains in memory because the current AAS SDK requires an in-memory model representation.
 
 - `POST /upload`
+- `POST /upload-async`
 - `PUT /shells/{aasIdentifier}/asset-information/thumbnail`
 - `PUT /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
 - `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
@@ -349,8 +350,9 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - OpenAPI specs are in `cmd/<service>/openapi.yaml`
 - Use generated server stubs and reusable API packages in `pkg/`
 - Example endpoint: `/submodels/{id}/submodel-elements/{idShort}/attachment`
-- AAS environment import endpoint: `/upload` (multipart/form-data with file part `file`)
-- Environment upload and serialization support ABAC `IDENTIFIABLE` grants for AAS, Submodels, and ConceptDescriptions. Grants stay within their object type; exports include only visible objects and filtered elements. See [environment authorization](docu/developer/security_architecture.md#environment-upload-and-serialization) for selection, binary content, and partial-import behavior.
+- AAS environment import endpoint: `/upload` (multipart/form-data with file part `file`). The import is all-or-nothing: every resource of the file is stored, or none is.
+- Asynchronous AAS environment import: `/upload-async` accepts the same payload and returns an operation handle; poll `/upload-async/status/{handleId}` and read `/upload-async/result/{handleId}`, as for the AASX File Server's `/packages-async`.
+- Environment upload and serialization support ABAC `IDENTIFIABLE` grants for AAS, Submodels, and ConceptDescriptions. Grants stay within their object type; exports include only visible objects and filtered elements. See [environment authorization](docu/developer/security_architecture.md#environment-upload-and-serialization) for selection, binary content, and import behavior.
 - Supported upload media types: `application/aasx+xml`, `application/aasx+json`, `application/asset-administration-shell+xml`, `application/asset-administration-shell+json`, `application/json`, `application/xml`, `text/xml`
 - Query fragment filters use existential parent-level evaluation by default. Set `"$match": true` explicitly when a request filter must be evaluated against the current fragment row. See the [query language guide](docu/developer/query_language/architecture.md#explicit-row-local-fragment-matching).
 - Query and security fragment filters cannot target the mandatory `$sm#id` or the `idShort` of a named submodel element. Explicit element `idShort` filters are permitted for direct list members; the general `$sme#idShort` filter applies only to those members. Update existing security policies containing prohibited fragments before loading them.

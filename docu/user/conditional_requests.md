@@ -25,7 +25,7 @@ additional `ETag` header.
 | AAS Environment | every resource it bundles, with the same revision as the standalone service |
 
 Collections, queries, bulk operations, `/description`, `/serialization`,
-`/upload`, `$signed`, `$history`, `$recent-changes`, operation status and
+`/upload`, `/upload-async`, `$signed`, `$history`, `$recent-changes`, operation status and
 results, and `dppsByIdAndDate` carry no entity tag.
 
 ## Entity tags

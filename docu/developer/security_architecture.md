@@ -479,14 +479,22 @@ from stored binary metadata. The supported filter paths remain unchanged;
 this feature does not add thumbnail-specific filter syntax.
 
 Upload enforces `CREATE` or `UPDATE` according to actual object existence in
-each repository transaction. Existing and prospective states must satisfy the
+the upload transaction. Existing and prospective states must satisfy the
 selected formula. Read filters do not turn an uploaded replacement into a
 partial update. Attachments and thumbnails also select their write right by
 the existence of their binary content and retain their transaction checks.
 Denied writes return 403, including denials returned by registry-sync wrappers.
-Import remains sequential: ConceptDescriptions, Submodels, shells, then AASX
-binary parts. Earlier permitted commits can survive a later denial; uploading
-an environment is not an atomic package transaction.
+Import runs in one transaction, in this order: ConceptDescriptions, Submodels,
+shells, then AASX binary parts. A denial rolls back everything written before
+it, so a rejected upload stores nothing.
+
+`POST /upload-async` uses the same grants: the request is authorized like
+`POST /upload`, and the background import runs with that authorization.
+Reading `GET /upload-async/status/{handleId}` and
+`GET /upload-async/result/{handleId}` needs `READ` on those routes, and the
+handle is bound to the uploader, so another principal receives 404. With
+security enabled, unauthenticated requests to `/upload-async` are rejected
+with 401.
 
 ReBAC remains an alternative to ABAC for each resource, including when ABAC
 only allows a different type. Security-disabled requests and trusted startup

@@ -1333,6 +1333,150 @@ paths:
                   - code: AASENV-HANDLEUPLOAD-PROCESSAASX
                     messageType: Error
                     text: failed to persist uploaded environment
+  /upload-async:
+    post:
+      tags:
+        - Upload Async API
+      summary: Upload a file asynchronously
+      description: |-
+        Accepts the same multipart/form-data payload as `POST /upload` and imports it as an
+        asynchronous operation, following the semantics of `POST /packages-async` of the
+        AASX File Server API.
+
+        The format is checked before the request is accepted; an unsupported format is
+        rejected with `415 Unsupported Media Type` and no operation is created. An accepted
+        upload is staged durably and imported in the background with the same all-or-nothing
+        semantics as `POST /upload`: either every Concept Description, Submodel and Asset
+        Administration Shell, the AASX thumbnails and supplementary files and their registry
+        descriptors are stored, or nothing is. A failed operation stores nothing, and its
+        result carries the same messages the synchronous upload would return.
+
+        The operation handle is bound to the uploader. With security enabled, the request must
+        be authenticated, and only the uploader can read the status and result.
+      operationId: UploadFileAsync
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                fileName:
+                  type: string
+                  description: Optional logical file name used for format fallback.
+                  example: environment.json
+              required:
+                - file
+            encoding:
+              file:
+                contentType: application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml
+      responses:
+        '202':
+          description: The server has accepted the upload.
+          headers:
+            Location:
+              description: The URL where the client can request the current status of the operation.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationHandle
+        '400':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request
+        '401':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/unauthorized
+        '403':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
+        '413':
+          description: Request entity too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '429':
+          description: Asynchronous execution capacity is exhausted; retry later.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '500':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+  /upload-async/status/{handleId}:
+    get:
+      tags:
+        - Upload Async Status API
+      summary: Returns the status of an asynchronous upload
+      operationId: GetUploadAsyncStatus
+      parameters:
+        - name: handleId
+          in: path
+          description: The operation handle (BASE64-URL-encoded)
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The upload is still running.
+          content:
+            application/json:
+              schema:
+                $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/BaseOperationResult
+        '302':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/found
+        '400':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request
+        '401':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/unauthorized
+        '403':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
+        '404':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
+        '500':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+  /upload-async/result/{handleId}:
+    get:
+      tags:
+        - Upload Async Result API
+      summary: Returns the result of an asynchronous upload
+      description: |-
+        A completed upload returns `executionState` `Completed` and `success` `true`. A failed
+        upload returns `executionState` `Failed`, `success` `false`, and the messages the
+        synchronous upload returns for the same failure; nothing from it was stored.
+      operationId: GetUploadAsyncResult
+      parameters:
+        - name: handleId
+          in: path
+          description: The operation handle (BASE64-URL-encoded)
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The operation result.
+          content:
+            application/json:
+              schema:
+                $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/BaseOperationResult
+        '400':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request
+        '401':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/unauthorized
+        '403':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
+        '404':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
+        '500':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
   /description:
     get:
       tags:

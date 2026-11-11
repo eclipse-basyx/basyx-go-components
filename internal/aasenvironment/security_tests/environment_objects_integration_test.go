@@ -72,6 +72,9 @@ func TestEnvironmentIdentifiableAuthorization(t *testing.T) {
 	t.Run("create and update rights use actual state for every type", func(t *testing.T) { checkEnvironmentWriteRights(t, admin, editor, id) })
 	t.Run("update formula checks both states and returns 403 through wrapper", func(t *testing.T) { checkEnvironmentUpdateStates(t, admin, editor, id) })
 	t.Run("a later denial rolls back earlier objects", func(t *testing.T) { checkEnvironmentDeniedImportStoresNothing(t, admin, editor, id) })
+	t.Run("asynchronous upload rolls back denials and binds its handle to the uploader", func(t *testing.T) {
+		checkEnvironmentAsyncUploadAuthorization(t, admin, editor, id)
+	})
 	t.Run("AASX binaries follow visible owners and references", func(t *testing.T) { checkEnvironmentBinaryVisibility(t, admin, editor, id) })
 	t.Run("AASX attachment writes use binary existence", func(t *testing.T) { checkEnvironmentAttachmentWriteRights(t, admin, editor, id) })
 	t.Run("explicit selection retains every permitted submodel", func(t *testing.T) { checkEnvironmentSelection(t, admin, editor, id) })

@@ -48,16 +48,35 @@ import (
 	aasxmlization "github.com/FriedJannik/aas-go-sdk/xmlization"
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncupload"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-type uploadAPIService struct {
+// UploadAPIService imports uploaded AAS Environments synchronously and as
+// asynchronous jobs, each in one database transaction.
+type UploadAPIService struct {
 	persistence               *Persistence
 	aasRepositoryService      aasRepositoryUploadWriter
 	submodelRepositoryService submodelRepositoryUploadWriter
+	asyncJobs                 *asyncjob.Manager
+	asyncUploads              *asyncupload.Store
+	transaction               *sql.Tx
+}
+
+// UploadServiceOption configures an UploadAPIService.
+type UploadServiceOption func(*UploadAPIService)
+
+// WithAsyncUploads enables asynchronous uploads backed by the given job
+// manager and durable staging store.
+func WithAsyncUploads(manager *asyncjob.Manager, uploads *asyncupload.Store) UploadServiceOption {
+	return func(service *UploadAPIService) {
+		service.asyncJobs = manager
+		service.asyncUploads = uploads
+	}
 }
 
 type aasRepositoryUploadWriter interface {
@@ -81,15 +100,22 @@ func NewUploadAPIService(
 	persistence *Persistence,
 	aasRepositoryService aasRepositoryUploadWriter,
 	submodelRepositoryService submodelRepositoryUploadWriter,
-) UploadService {
-	return &uploadAPIService{
+	options ...UploadServiceOption,
+) *UploadAPIService {
+	service := &UploadAPIService{
 		persistence:               persistence,
 		aasRepositoryService:      aasRepositoryService,
 		submodelRepositoryService: submodelRepositoryService,
 	}
+	for _, option := range options {
+		option(service)
+	}
+	return service
 }
 
-func (s *uploadAPIService) HandleUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
+// HandleUpload imports an uploaded environment in one transaction: its own, or
+// the transaction the service is bound to.
+func (s *UploadAPIService) HandleUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
 	if file == nil {
 		return newUploadErrorResponse(http.StatusBadRequest, "AASENV-HANDLEUPLOAD-MISSINGFILE", fmt.Errorf("uploaded file is required"))
 	}
@@ -122,7 +148,7 @@ func (s *uploadAPIService) HandleUpload(ctx context.Context, fileName string, co
 	}
 }
 
-func (s *uploadAPIService) handleAASXUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
+func (s *UploadAPIService) handleAASXUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
 	if _, err := file.Seek(0, 0); err != nil {
 		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-SEEKAASXFILE", err)
 	}
@@ -164,7 +190,7 @@ func (s *uploadAPIService) handleAASXUpload(ctx context.Context, fileName string
 	}), nil
 }
 
-func (s *uploadAPIService) handleJSONUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
+func (s *UploadAPIService) handleJSONUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
 	if _, err := file.Seek(0, 0); err != nil {
 		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-SEEKJSONFILE", err)
 	}
@@ -194,7 +220,7 @@ func (s *uploadAPIService) handleJSONUpload(ctx context.Context, fileName string
 	}), nil
 }
 
-func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
+func (s *UploadAPIService) handleXMLUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
 	if _, err := file.Seek(0, 0); err != nil {
 		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-SEEKXMLFILE", err)
 	}
@@ -232,7 +258,7 @@ func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string,
 	}), nil
 }
 
-func (s *uploadAPIService) processAASXPackage(ctx context.Context, fileName string, _ string, packageReader *aasx.PackageRead) error {
+func (s *UploadAPIService) processAASXPackage(ctx context.Context, fileName string, _ string, packageReader *aasx.PackageRead) error {
 	specPart, environment, err := ReadEnvironmentFromAASXSpec(packageReader, fileName)
 	if err != nil {
 		return err
@@ -249,7 +275,7 @@ func (s *uploadAPIService) processAASXPackage(ctx context.Context, fileName stri
 	})
 }
 
-func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ string, environment aastypes.IEnvironment) error {
+func (s *UploadAPIService) processEnvironment(ctx context.Context, _ string, _ string, environment aastypes.IEnvironment) error {
 	return s.importEnvironment(ctx, environment, nil)
 }
 
@@ -257,12 +283,12 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 // environment, followed by the package parts stored by storePackageParts, in one
 // transaction. Registry descriptor sync, history and event outbox writes share
 // that transaction, so a failing step leaves nothing of the upload behind.
-func (s *uploadAPIService) importEnvironment(ctx context.Context, environment aastypes.IEnvironment, storePackageParts func(context.Context, *sql.Tx) error) error {
+func (s *UploadAPIService) importEnvironment(ctx context.Context, environment aastypes.IEnvironment, storePackageParts func(context.Context, *sql.Tx) error) error {
 	if err := s.validateEnvironmentImport(environment); err != nil {
 		return err
 	}
 	ctx = common.WithWriterPostgresReads(ctx)
-	err := s.persistence.ExecuteInTransaction("AASENV-PROCESSENV-STARTTX", "AASENV-PROCESSENV-COMMITTX", func(tx *sql.Tx) error {
+	err := s.inUploadTransaction(func(tx *sql.Tx) error {
 		if err := s.storeEnvironmentResources(ctx, tx, environment); err != nil {
 			return err
 		}
@@ -277,7 +303,22 @@ func (s *uploadAPIService) importEnvironment(ctx context.Context, environment aa
 	return nil
 }
 
-func (s *uploadAPIService) validateEnvironmentImport(environment aastypes.IEnvironment) error {
+func (s *UploadAPIService) inUploadTransaction(fn func(*sql.Tx) error) error {
+	if s.transaction != nil {
+		return fn(s.transaction)
+	}
+	return s.persistence.ExecuteInTransaction("AASENV-PROCESSENV-STARTTX", "AASENV-PROCESSENV-COMMITTX", fn)
+}
+
+// boundTo returns a copy of the service whose imports write into tx instead of
+// opening their own transaction.
+func (s *UploadAPIService) boundTo(tx *sql.Tx) *UploadAPIService {
+	bound := *s
+	bound.transaction = tx
+	return &bound
+}
+
+func (s *UploadAPIService) validateEnvironmentImport(environment aastypes.IEnvironment) error {
 	if s == nil || s.persistence == nil {
 		return common.NewErrBadRequest("AASENV-PROCESSENV-NILPERSISTENCE persistence is required for environment import")
 	}
@@ -290,7 +331,7 @@ func (s *uploadAPIService) validateEnvironmentImport(environment aastypes.IEnvir
 	return nil
 }
 
-func (s *uploadAPIService) storeEnvironmentResources(ctx context.Context, tx *sql.Tx, environment aastypes.IEnvironment) error {
+func (s *UploadAPIService) storeEnvironmentResources(ctx context.Context, tx *sql.Tx, environment aastypes.IEnvironment) error {
 	if err := lockEnvironmentResources(ctx, tx, environment); err != nil {
 		return err
 	}
@@ -327,7 +368,7 @@ func identifiablesIDs[T interface{ ID() string }](identifiables []T) []string {
 	return identifiers
 }
 
-func (s *uploadAPIService) storeEnvironmentConceptDescriptions(ctx context.Context, tx *sql.Tx, descriptions []aastypes.IConceptDescription) error {
+func (s *UploadAPIService) storeEnvironmentConceptDescriptions(ctx context.Context, tx *sql.Tx, descriptions []aastypes.IConceptDescription) error {
 	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceCD)
 	if err != nil {
 		return err
@@ -340,7 +381,7 @@ func (s *uploadAPIService) storeEnvironmentConceptDescriptions(ctx context.Conte
 	return nil
 }
 
-func (s *uploadAPIService) storeEnvironmentSubmodels(ctx context.Context, tx *sql.Tx, submodels []aastypes.ISubmodel) error {
+func (s *UploadAPIService) storeEnvironmentSubmodels(ctx context.Context, tx *sql.Tx, submodels []aastypes.ISubmodel) error {
 	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceSM)
 	if err != nil {
 		return err
@@ -353,7 +394,7 @@ func (s *uploadAPIService) storeEnvironmentSubmodels(ctx context.Context, tx *sq
 	return nil
 }
 
-func (s *uploadAPIService) storeEnvironmentSubmodel(ctx context.Context, tx *sql.Tx, submodel aastypes.ISubmodel) error {
+func (s *UploadAPIService) storeEnvironmentSubmodel(ctx context.Context, tx *sql.Tx, submodel aastypes.ISubmodel) error {
 	if s.submodelRepositoryService == nil {
 		_, err := s.persistence.SubmodelRepository.PutSubmodelInTransaction(ctx, tx, submodel.ID(), submodel)
 		return err
@@ -361,7 +402,7 @@ func (s *uploadAPIService) storeEnvironmentSubmodel(ctx context.Context, tx *sql
 	return s.submodelRepositoryService.UpsertSubmodelInTransaction(ctx, tx, submodel)
 }
 
-func (s *uploadAPIService) storeEnvironmentShells(ctx context.Context, tx *sql.Tx, shells []aastypes.IAssetAdministrationShell) error {
+func (s *UploadAPIService) storeEnvironmentShells(ctx context.Context, tx *sql.Tx, shells []aastypes.IAssetAdministrationShell) error {
 	ctx, err := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceAAS)
 	if err != nil {
 		return err
@@ -374,7 +415,7 @@ func (s *uploadAPIService) storeEnvironmentShells(ctx context.Context, tx *sql.T
 	return nil
 }
 
-func (s *uploadAPIService) storeEnvironmentShell(ctx context.Context, tx *sql.Tx, shell aastypes.IAssetAdministrationShell) error {
+func (s *UploadAPIService) storeEnvironmentShell(ctx context.Context, tx *sql.Tx, shell aastypes.IAssetAdministrationShell) error {
 	if s.aasRepositoryService == nil {
 		_, err := s.persistence.AASRepository.PutAssetAdministrationShellByIDInTransaction(ctx, tx, shell.ID(), shell)
 		return err
@@ -840,7 +881,7 @@ func openLimitedAASXPart(part *aasx.Part, maximum uint64, label string) (io.Read
 	}, nil
 }
 
-func (s *uploadAPIService) uploadSupplementaryFiles(
+func (s *UploadAPIService) uploadSupplementaryFiles(
 	ctx context.Context,
 	tx *sql.Tx,
 	packageReader *aasx.PackageRead,
@@ -885,7 +926,7 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 	return nil
 }
 
-func (s *uploadAPIService) uploadSupplementaryRelationship(
+func (s *UploadAPIService) uploadSupplementaryRelationship(
 	ctx context.Context,
 	tx *sql.Tx,
 	relationship *aasx.SupplementaryRelationship,
@@ -906,7 +947,7 @@ func (s *uploadAPIService) uploadSupplementaryRelationship(
 	return matched, nil
 }
 
-func (s *uploadAPIService) uploadSupplementaryToFileElement(ctx context.Context, tx *sql.Tx, supplementary *aasx.Part, location AASXFileElementLocation) error {
+func (s *UploadAPIService) uploadSupplementaryToFileElement(ctx context.Context, tx *sql.Tx, supplementary *aasx.Part, location AASXFileElementLocation) error {
 	uploadName := supplementaryUploadName(supplementary, location)
 	partStream, streamErr := openLimitedAASXPart(supplementary, common.AASXLimitsFromContext(ctx).MaxPartExpandedSizeBytes, "supplementary")
 	if streamErr != nil {
@@ -1002,7 +1043,7 @@ func unrelatedPackagePartURI(packageReader *aasx.PackageRead, fileValue string, 
 	return partURI
 }
 
-func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, tx *sql.Tx, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
+func (s *UploadAPIService) storeAASXThumbnail(ctx context.Context, tx *sql.Tx, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
 	ctx, bindErr := auth.EnvironmentResourceContext(ctx, auth.SemanticResourceAAS)
 	if bindErr != nil {
 		return bindErr
@@ -1043,7 +1084,7 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, tx *sql.Tx, p
 	return nil
 }
 
-func (s *uploadAPIService) storeAASXThumbnailForShell(
+func (s *UploadAPIService) storeAASXThumbnailForShell(
 	ctx context.Context,
 	tx *sql.Tx,
 	aas aastypes.IAssetAdministrationShell,

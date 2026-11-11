@@ -1,0 +1,20 @@
+kind: added
+body: >-
+  The AAS Environment offers `POST /upload-async`, an asynchronous variant of
+  `POST /upload` with `GET /upload-async/status/{handleId}` and
+  `GET /upload-async/result/{handleId}`, following the semantics of the AASX
+  File Server's asynchronous package upload. The accepted file is staged
+  durably and imported in the background with the same all-or-nothing
+  semantics as `POST /upload`: a failed operation stores nothing, and its
+  result carries the messages the synchronous upload returns. An unsupported
+  format is rejected with 415 before an operation is created, and exhausted
+  execution capacity with 429.
+time: 2026-11-11T20:00:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 874
+  SecurityImpact: >-
+    The operation handle is bound to the uploader. With security enabled,
+    `/upload-async` requires authentication, only the uploader can read the
+    status and result, and the background import is authorized with the
+    uploader's ABAC and ReBAC permissions exactly like `POST /upload`.

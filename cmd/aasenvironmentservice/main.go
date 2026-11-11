@@ -51,6 +51,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/rebac"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
@@ -254,7 +255,9 @@ func runServer(ctx context.Context, configPath string) error {
 	conditionalGuard := common.NewConditionalGuard(cfg)
 	common.ConfigureAPIRouter(apiRouter, "AASEnvironmentService")
 
-	abacRepo, rebacRuntime, err := rebac.SetupSecurity(ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice")
+	abacRepo, rebacRuntime, err := rebac.SetupSecurity(
+		ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice", auth.RequireAuthenticationForPathSegment("/upload-async"),
+	)
 	if err != nil {
 		return err
 	}
@@ -312,9 +315,15 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Mount(base, apiRouter)
 
 	// Register /upload endpoint
-	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository)
+	asyncUploads, asyncUploadAdmission, err := aasenvironment.NewAsyncUploads(ctx, sharedDB)
+	if err != nil {
+		return err
+	}
+	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository, asyncUploads)
 	versioningGuard.Cover(http.MethodPost, "/upload")
+	versioningGuard.Cover(http.MethodPost, "/upload-async")
 	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes, environmentStager)
+	aasenvironment.RegisterAsyncUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes, environmentStager, asyncUploadAdmission)
 	aasenvironment.RegisterSerializationAPI(apiRouter, serializationService)
 
 	addr := common.ServerAddress(cfg.Server)

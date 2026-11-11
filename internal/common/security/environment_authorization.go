@@ -45,7 +45,8 @@ type environmentAuthorization struct {
 
 func isEnvironmentRequest(method, requestPath, basePath string) bool {
 	return method == http.MethodGet && requestPath == joinBasePath(basePath, "/serialization") ||
-		method == http.MethodPost && requestPath == joinBasePath(basePath, "/upload")
+		method == http.MethodPost && requestPath == joinBasePath(basePath, "/upload") ||
+		method == http.MethodPost && requestPath == joinBasePath(basePath, "/upload-async")
 }
 
 func (s *AuthorizationSession) evaluateEnvironment(method, requestPath, routePath string) *environmentAuthorization {

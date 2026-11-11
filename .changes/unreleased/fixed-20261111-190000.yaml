@@ -11,7 +11,7 @@ body: >-
   descriptors. The HTTP status codes of failed uploads are unchanged.
 time: 2026-11-11T19:00:00+01:00
 custom:
-  Impact: Medium
+  Impact: Low
   PullRequest: 874
   SecurityImpact: >-
     An upload with a resource denied by ABAC no longer leaves the resources

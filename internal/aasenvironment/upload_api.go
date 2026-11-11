@@ -75,15 +75,7 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = upload.Close() }()
 
-	contentType := upload.FileContentType
-
-	fileName := strings.TrimSpace(upload.FirstField("fileName"))
-	if fileName == "" {
-		fileName = upload.MultipartFileName
-	}
-	fileName = sanitizeUploadFileName(fileName)
-
-	result, err := a.service.HandleUpload(r.Context(), fileName, contentType, upload.File)
+	result, err := a.service.HandleUpload(r.Context(), uploadFileName(upload), upload.FileContentType, upload.File)
 	if err != nil {
 		writeUploadError(w, http.StatusInternalServerError, err, "AASENV-UPLOAD-HANDLER")
 		return
@@ -92,6 +84,14 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if encErr := commonmodel.EncodeJSONResponse(result.Body, &result.Code, w); encErr != nil {
 		writeUploadError(w, http.StatusInternalServerError, encErr, "AASENV-UPLOAD-ENCODERESPONSE")
 	}
+}
+
+func uploadFileName(upload *common.MultipartUpload) string {
+	fileName := strings.TrimSpace(upload.FirstField("fileName"))
+	if fileName == "" {
+		fileName = upload.MultipartFileName
+	}
+	return sanitizeUploadFileName(fileName)
 }
 
 func uploadErrorStatus(err error) int {

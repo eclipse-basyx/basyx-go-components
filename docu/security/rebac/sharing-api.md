@@ -192,11 +192,13 @@ the Submodel.
 - **Deletion** needs delete on the resource. Deleting SubmodelElements,
   thumbnails or Submodel references edits the parent and needs update on
   it.
-- **`/serialization`** returns only readable resources. **`/upload`**
-  creates resources for creators and updates resources the caller may
-  update; items are processed one by one.
+- **`/serialization`** returns only readable resources. **`/upload`** and
+  **`/upload-async`** create resources for creators and update resources the
+  caller may update. Items are checked one by one, and a denied item rolls
+  back the whole upload.
 - The **registry bulk API** uses the same rights as the single-item API.
-  Bulk jobs and asynchronous package uploads stay bound to their caller.
+  Bulk jobs, asynchronous package uploads and asynchronous environment
+  uploads stay bound to their caller.
 - **AASX packages** belong to their uploader. The AAS identifiers stored
   with a package grant nothing.
 - **Passports** are authorized through their shell. Submodels created with a
