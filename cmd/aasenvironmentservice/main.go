@@ -256,7 +256,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "AASEnvironmentService")
 
 	abacRepo, rebacRuntime, err := rebac.SetupSecurity(
-		ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice", auth.RequireAuthenticationForPathSegment("/upload-async"),
+		ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice", auth.RequireAuthenticationForAsyncRoutes(cfg.Server.ContextPath, "/upload-async"),
 	)
 	if err != nil {
 		return err

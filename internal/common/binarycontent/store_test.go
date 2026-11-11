@@ -167,3 +167,44 @@ func TestOrderedContentDigestsSortsAndDeduplicates(t *testing.T) {
 	})
 	require.Equal(t, []ContentDigest{{Digest: "a", Size: 1}, {Digest: "a", Size: 2}, {Digest: "b", Size: 1}}, ordered)
 }
+
+func TestLockAffectedContentRowsLocksReferencedAndIncomingContentInIDOrder(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "binary_content" WHERE \(\("id" IN \(SELECT "reference"\."binary_content_id" FROM "file_binary_reference" AS "reference" `+
+		`INNER JOIN "submodel_element" AS "element" ON \("element"\."id" = "reference"\."file_element_id"\) `+
+		`INNER JOIN "submodel" AS "submodel" ON \("submodel"\."id" = "element"\."submodel_id"\) WHERE \("submodel"\."submodel_identifier" IN \(\$1\)\)\)\) `+
+		`OR \("id" IN \(SELECT "reference"\."binary_content_id" FROM "thumbnail_binary_reference" AS "reference" `+
+		`INNER JOIN "aas" AS "aas" ON \("aas"\."id" = "reference"\."thumbnail_element_id"\) WHERE \("aas"\."aas_id" IN \(\$2\)\)\)\) `+
+		`OR \(\("sha256" = \$3\) AND \("size_bytes" = \$4\)\) OR \(\("sha256" = \$5\) AND \("size_bytes" = \$6\)\)\) ORDER BY "id" ASC FOR UPDATE`).
+		WithArgs("urn:sm", "urn:aas", "a", int64(1), "b", int64(2)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).AddRow(2))
+	mock.ExpectRollback()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, LockAffectedContentRowsTx(t.Context(), tx,
+		ContentOwners{SubmodelIdentifiers: []string{"urn:sm"}, AASIdentifiers: []string{"urn:aas"}},
+		[]ContentDigest{{Digest: "b", Size: 2}, {Digest: "a", Size: 1}, {Digest: "b", Size: 2}},
+	))
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestLockAffectedContentRowsSkipsTheQueryWithoutOwnersOrDigests(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	mock.ExpectRollback()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, LockAffectedContentRowsTx(t.Context(), tx, ContentOwners{}, nil))
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}

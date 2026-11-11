@@ -32,6 +32,7 @@ import (
 	"embed"
 	"flag"
 	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
@@ -139,7 +140,7 @@ func runServer(ctx context.Context, configPath string) error {
 		apiRouter,
 		sharedDB,
 		"aasxfileserverservice",
-		requireAsyncAuthentication,
+		requireAsyncAuthentication(cfg.Server.ContextPath),
 	)
 	if err != nil {
 		return err
@@ -231,7 +232,9 @@ func (profile aasxAsyncProfile) controllers(service *aasxapi.AASXFileServerAPIAP
 	}
 }
 
-var requireAsyncAuthentication = auth.RequireAuthenticationForPathSegment("/packages-async")
+func requireAsyncAuthentication(contextPath string) func(http.Handler) http.Handler {
+	return auth.RequireAuthenticationForAsyncRoutes(contextPath, "/packages-async")
+}
 
 func main() {
 	ctx, stop := common.SignalContext()

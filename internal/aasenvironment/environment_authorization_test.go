@@ -46,6 +46,14 @@ func (deniedEnvironmentWriter) UpsertAssetAdministrationShellInTransaction(conte
 	return common.NewErrDenied("denied")
 }
 
+func (deniedEnvironmentWriter) DescriptorSyncAASIdentifiersInTransaction(context.Context, *sql.Tx, []string) ([]string, error) {
+	return nil, nil
+}
+
+func (deniedEnvironmentWriter) DescriptorSyncAASIdentifiers([]string) []string {
+	return nil
+}
+
 func TestUploadWrapperDenialRemainsForbidden(t *testing.T) {
 	service := &UploadAPIService{submodelRepositoryService: deniedEnvironmentWriter{}, aasRepositoryService: deniedEnvironmentWriter{}}
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{})

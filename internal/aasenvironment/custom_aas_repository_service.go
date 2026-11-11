@@ -203,6 +203,22 @@ func (s *CustomAASRepositoryService) UpsertAssetAdministrationShellInTransaction
 	return err
 }
 
+// DescriptorSyncAASIdentifiers returns the identifiers of the given Shells
+// whose descriptors an upsert of the Shells may update. It returns none when
+// AAS registry synchronization is disabled.
+//
+// Parameters:
+//   - shellIdentifiers: Identifiers of the Shells to upsert.
+//
+// Returns:
+//   - []string: Identifiers of the descriptors the upsert may update.
+func (s *CustomAASRepositoryService) DescriptorSyncAASIdentifiers(shellIdentifiers []string) []string {
+	if s == nil || !s.syncConfig.AASRegistryIntegration {
+		return nil
+	}
+	return shellIdentifiers
+}
+
 func (s *CustomAASRepositoryService) putAASAndSyncDescriptorInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,

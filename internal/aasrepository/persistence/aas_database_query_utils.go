@@ -511,14 +511,14 @@ func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aas
 	return ds.Prepared(true).ToSQL()
 }
 
-func buildListAASIdentifiersBySubmodelIdentifierQuery(dialect *goqu.DialectWrapper, submodelIdentifier string) (string, []any, error) {
+func buildListAASIdentifiersBySubmodelIdentifierQuery(dialect *goqu.DialectWrapper, submodelIdentifiers []string) (string, []any, error) {
 	return dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).
 		InnerJoin(goqu.T("aas_submodel_reference_key").As("k"), goqu.On(goqu.I("k.reference_id").Eq(goqu.I("r.id")))).
 		InnerJoin(goqu.T("aas").As("a"), goqu.On(goqu.I("a.id").Eq(goqu.I("r.aas_id")))).
 		Select(goqu.I("a.aas_id")).
 		Distinct().
-		Where(goqu.I("k.value").Eq(submodelIdentifier)).
+		Where(goqu.I("k.value").In(submodelIdentifiers)).
 		Order(goqu.I("a.aas_id").Asc()).
 		Prepared(true).
 		ToSQL()

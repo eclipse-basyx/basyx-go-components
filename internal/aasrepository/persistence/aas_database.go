@@ -2253,46 +2253,48 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 
 // ListAASIdentifiersBySubmodelID returns all AAS identifiers that reference the given submodel ID.
 func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelID(ctx context.Context, submodelIdentifier string) ([]string, error) {
-	dialect := goqu.Dialect("postgres")
-	sqlQuery, args, buildErr := buildListAASIdentifiersBySubmodelIdentifierQuery(&dialect, submodelIdentifier)
-	if buildErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-BUILDSQL " + buildErr.Error())
-	}
-
-	rows, queryErr := s.readDB(ctx).QueryContext(ctx, sqlQuery, args...)
-	if queryErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-EXECSQL " + queryErr.Error())
-	}
-	defer func() { _ = rows.Close() }()
-
-	aasIDs := make([]string, 0, 16)
-	for rows.Next() {
-		var aasID string
-		if scanErr := rows.Scan(&aasID); scanErr != nil {
-			return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-SCANROW " + scanErr.Error())
-		}
-		aasIDs = append(aasIDs, aasID)
-	}
-	if rowsErr := rows.Err(); rowsErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-ITERROWS " + rowsErr.Error())
-	}
-
-	return aasIDs, nil
+	return listAASIdentifiersBySubmodelIDs(ctx, s.readDB(ctx), []string{submodelIdentifier})
 }
 
 // ListAASIdentifiersBySubmodelIDInTransaction returns all AAS identifiers that reference the given submodel ID using the provided transaction.
 func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) ([]string, error) {
+	return s.ListAASIdentifiersBySubmodelIDsInTransaction(ctx, tx, []string{submodelIdentifier})
+}
+
+// ListAASIdentifiersBySubmodelIDsInTransaction returns the identifiers of all
+// AAS that reference any of the given submodel IDs, sorted and without
+// duplicates, using the provided transaction.
+//
+// Parameters:
+//   - ctx: Request context.
+//   - tx: Transaction the lookup runs in.
+//   - submodelIdentifiers: Submodel identifiers to look up.
+//
+// Returns:
+//   - []string: Sorted unique identifiers of the referencing AAS.
+//   - error: Missing transaction, query build, or execution error.
+func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelIDsInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifiers []string) ([]string, error) {
 	if tx == nil {
 		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-NILTX transaction must not be nil")
 	}
+	return listAASIdentifiersBySubmodelIDs(ctx, tx, submodelIdentifiers)
+}
 
+type aasIdentifierQueryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+func listAASIdentifiersBySubmodelIDs(ctx context.Context, queryer aasIdentifierQueryer, submodelIdentifiers []string) ([]string, error) {
+	if len(submodelIdentifiers) == 0 {
+		return nil, nil
+	}
 	dialect := goqu.Dialect("postgres")
-	sqlQuery, args, buildErr := buildListAASIdentifiersBySubmodelIdentifierQuery(&dialect, submodelIdentifier)
+	sqlQuery, args, buildErr := buildListAASIdentifiersBySubmodelIdentifierQuery(&dialect, submodelIdentifiers)
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-BUILDSQL " + buildErr.Error())
 	}
 
-	rows, queryErr := tx.QueryContext(ctx, sqlQuery, args...)
+	rows, queryErr := queryer.QueryContext(ctx, sqlQuery, args...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-EXECSQL " + queryErr.Error())
 	}

@@ -81,10 +81,12 @@ func WithAsyncUploads(manager *asyncjob.Manager, uploads *asyncupload.Store) Upl
 
 type aasRepositoryUploadWriter interface {
 	UpsertAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, shell aastypes.IAssetAdministrationShell) error
+	DescriptorSyncAASIdentifiers(shellIdentifiers []string) []string
 }
 
 type submodelRepositoryUploadWriter interface {
 	UpsertSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel aastypes.ISubmodel) error
+	DescriptorSyncAASIdentifiersInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifiers []string) ([]string, error)
 }
 
 const (
@@ -302,7 +304,7 @@ func (s *UploadAPIService) importEnvironment(ctx context.Context, upload environ
 	}
 	ctx = common.WithWriterPostgresReads(ctx)
 	err := s.inUploadTransaction(func(tx *sql.Tx) error {
-		if err := lockEnvironmentImport(ctx, tx, upload); err != nil {
+		if err := s.lockEnvironmentImport(ctx, tx, upload); err != nil {
 			return err
 		}
 		if err := s.storeEnvironmentResources(ctx, tx, upload.environment); err != nil {
@@ -359,24 +361,62 @@ func (s *UploadAPIService) storeEnvironmentResources(ctx context.Context, tx *sq
 
 // lockEnvironmentImport takes every lock the upload needs before its first
 // write and in one global order: the resource locks of the Concept
-// Descriptions, Submodels and Shells, each sorted, then the content locks of
-// the binaries, sorted by digest. Concurrent uploads therefore wait for each
-// other instead of acquiring locks in opposite orders and deadlocking.
-func lockEnvironmentImport(ctx context.Context, tx *sql.Tx, upload environmentImport) error {
+// Descriptions, Submodels and Shells, each sorted; then the locks of every AAS
+// descriptor that registry synchronization may update, sorted; then the
+// advisory content locks of the incoming binaries, sorted by digest; then the
+// canonical content rows the upload may reference or release, sorted by id.
+// Concurrent uploads therefore wait for each other instead of acquiring locks
+// in opposite orders and deadlocking.
+func (s *UploadAPIService) lockEnvironmentImport(ctx context.Context, tx *sql.Tx, upload environmentImport) error {
 	environment := upload.environment
+	submodelIDs := identifiablesIDs(environment.Submodels())
+	shellIDs := identifiablesIDs(environment.AssetAdministrationShells())
 	if err := history.AcquireMutationLocksTx(ctx, tx, history.TableConcept, identifiablesIDs(environment.ConceptDescriptions())); err != nil {
 		return fmt.Errorf("AASENV-PROCESSENV-LOCKCD failed to lock the uploaded Concept Descriptions: %w", err)
 	}
-	if err := history.AcquireMutationLocksTx(ctx, tx, history.TableSubmodel, identifiablesIDs(environment.Submodels())); err != nil {
+	if err := history.AcquireMutationLocksTx(ctx, tx, history.TableSubmodel, submodelIDs); err != nil {
 		return fmt.Errorf("AASENV-PROCESSENV-LOCKSM failed to lock the uploaded Submodels: %w", err)
 	}
-	if err := history.AcquireMutationLocksTx(ctx, tx, history.TableAAS, identifiablesIDs(environment.AssetAdministrationShells())); err != nil {
+	if err := history.AcquireMutationLocksTx(ctx, tx, history.TableAAS, shellIDs); err != nil {
 		return fmt.Errorf("AASENV-PROCESSENV-LOCKAAS failed to lock the uploaded Asset Administration Shells: %w", err)
+	}
+	if err := s.lockDescriptorSync(ctx, tx, submodelIDs, shellIDs); err != nil {
+		return fmt.Errorf("AASENV-PROCESSENV-LOCKDESC failed to lock the synchronized Asset Administration Shell descriptors: %w", err)
 	}
 	if err := binarycontent.LockContentDigestsTx(ctx, tx, upload.binaryContent); err != nil {
 		return fmt.Errorf("AASENV-PROCESSENV-LOCKBINARY failed to lock the uploaded binary content: %w", err)
 	}
+	owners := binarycontent.ContentOwners{SubmodelIdentifiers: submodelIDs, AASIdentifiers: shellIDs}
+	if err := binarycontent.LockAffectedContentRowsTx(ctx, tx, owners, upload.binaryContent); err != nil {
+		return fmt.Errorf("AASENV-PROCESSENV-LOCKCONTENT failed to lock the binary content referenced by the upload: %w", err)
+	}
 	return nil
+}
+
+func (s *UploadAPIService) lockDescriptorSync(ctx context.Context, tx *sql.Tx, submodelIDs []string, shellIDs []string) error {
+	descriptorIDs, err := s.descriptorSyncAASIdentifiers(ctx, tx, submodelIDs, shellIDs)
+	if err != nil || len(descriptorIDs) == 0 {
+		return err
+	}
+	if s.persistence.AASRegistry == nil {
+		return common.NewInternalServerError("AASENV-PROCESSENV-NILAASREGISTRY AAS registry backend must not be nil")
+	}
+	return s.persistence.AASRegistry.LockAdministrationShellDescriptorUpsertsInTransaction(ctx, tx, descriptorIDs)
+}
+
+func (s *UploadAPIService) descriptorSyncAASIdentifiers(ctx context.Context, tx *sql.Tx, submodelIDs []string, shellIDs []string) ([]string, error) {
+	var descriptorIDs []string
+	if s.submodelRepositoryService != nil {
+		referencing, err := s.submodelRepositoryService.DescriptorSyncAASIdentifiersInTransaction(ctx, tx, submodelIDs)
+		if err != nil {
+			return nil, err
+		}
+		descriptorIDs = append(descriptorIDs, referencing...)
+	}
+	if s.aasRepositoryService != nil {
+		descriptorIDs = append(descriptorIDs, s.aasRepositoryService.DescriptorSyncAASIdentifiers(shellIDs)...)
+	}
+	return descriptorIDs, nil
 }
 
 func identifiablesIDs[T interface{ ID() string }](identifiables []T) []string {

@@ -35,6 +35,7 @@ package aasregistrydatabase
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -662,6 +663,36 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	return result, nil
+}
+
+// LockAdministrationShellDescriptorUpsertsInTransaction takes, for each AAS
+// descriptor in sorted order, the locks an upsert of that descriptor takes, in
+// the order the upsert takes them. A transaction that upserts several
+// descriptors takes them before its first write, so concurrent transactions
+// over overlapping descriptors wait for each other instead of deadlocking.
+//
+// Parameters:
+//   - ctx: Context used for the lock statements.
+//   - tx: Transaction that holds the locks until it ends.
+//   - aasIDs: Identifiers of the AAS descriptors; duplicates are locked once.
+//
+// Returns:
+//   - error: Missing transaction or lock execution error.
+func (p *PostgreSQLAASRegistryDatabase) LockAdministrationShellDescriptorUpsertsInTransaction(ctx context.Context, tx *sql.Tx, aasIDs []string) error {
+	if tx == nil {
+		return common.NewInternalServerError("AASREG-LOCKAASDESCUPSERTS-NILTX transaction must not be nil")
+	}
+	ordered := slices.Clone(aasIDs)
+	slices.Sort(ordered)
+	for _, aasID := range slices.Compact(ordered) {
+		if err := history.LockMutationTx(ctx, tx, history.TableDescriptor, aasID); err != nil {
+			return err
+		}
+		if err := descriptors.LockAdministrationShellDescriptorUpsertTx(ctx, tx, aasID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UpsertAdministrationShellDescriptorInTransaction replaces an existing AAS

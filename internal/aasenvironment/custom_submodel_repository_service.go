@@ -228,6 +228,29 @@ func (s *CustomSubmodelRepositoryService) UpsertSubmodelInTransaction(ctx contex
 	return err
 }
 
+// DescriptorSyncAASIdentifiersInTransaction returns the identifiers of the
+// stored Asset Administration Shells whose descriptors an upsert of the given
+// Submodels may update to embed their descriptors. It returns none when that
+// synchronization is disabled.
+//
+// Parameters:
+//   - ctx: Request context.
+//   - tx: Transaction the lookup runs in.
+//   - submodelIdentifiers: Identifiers of the Submodels to upsert.
+//
+// Returns:
+//   - []string: Sorted unique identifiers of the referencing Shells.
+//   - error: Dependency or lookup error.
+func (s *CustomSubmodelRepositoryService) DescriptorSyncAASIdentifiersInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifiers []string) ([]string, error) {
+	if s == nil || !s.syncConfig.SubmodelRegistryIntegration || !s.enableReferencingAASDescriptorEmbeddingSync {
+		return nil, nil
+	}
+	if dependencyErr := s.validateSyncDependencies(true, true); dependencyErr != nil {
+		return nil, dependencyErr
+	}
+	return s.persistence.AASRepository.ListAASIdentifiersBySubmodelIDsInTransaction(ctx, tx, submodelIdentifiers)
+}
+
 func (s *CustomSubmodelRepositoryService) validateUpsertDependencies() error {
 	if s != nil && s.syncConfig.SubmodelRegistryIntegration {
 		return s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync)

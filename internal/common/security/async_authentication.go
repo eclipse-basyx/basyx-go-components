@@ -33,23 +33,31 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-// RequireAuthenticationForPathSegment rejects unauthenticated requests whose
-// path contains pathSegment with 401, so every asynchronous job handle on
-// those paths belongs to an authenticated principal.
+// RequireAuthenticationForAsyncRoutes rejects unauthenticated requests to an
+// asynchronous route root and its descendants with 401, so every asynchronous
+// job handle on those routes belongs to an authenticated principal. Only the
+// route root below the context path matches, at a path segment boundary; other
+// routes are left to the authorization chain.
 //
 // Parameters:
-//   - pathSegment: Path fragment identifying the asynchronous routes, such as "/packages-async".
+//   - contextPath: Configured context path the API router is mounted at.
+//   - routeRoot: Asynchronous route root relative to the context path, such as "/packages-async".
 //
 // Returns:
 //   - func(http.Handler) http.Handler: Middleware for the security claims chain.
-func RequireAuthenticationForPathSegment(pathSegment string) func(http.Handler) http.Handler {
+func RequireAuthenticationForAsyncRoutes(contextPath string, routeRoot string) func(http.Handler) http.Handler {
+	root := joinBasePath(contextPath, routeRoot)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			if strings.Contains(request.URL.Path, pathSegment) && !IsAuthenticated(request.Context()) {
+			if isRouteOrDescendant(request.URL.Path, root) && !IsAuthenticated(request.Context()) {
 				_ = common.WriteErrorResponse(writer, errors.New("access denied"), http.StatusUnauthorized, "Middleware", "Rules", "Denied")
 				return
 			}
 			next.ServeHTTP(writer, request)
 		})
 	}
+}
+
+func isRouteOrDescendant(requestPath string, root string) bool {
+	return requestPath == root || strings.HasPrefix(requestPath, root+"/")
 }

@@ -89,6 +89,113 @@ func TestConcurrentUploadsSharingAttachmentContentInOppositeOrderSucceed(t *test
 	}
 }
 
+// Shell A references Submodels 1 and 4, Shell B references 2 and 3. Uploading
+// [1, 2] and [3, 4] at once updates the descriptors A then B and B then A,
+// although neither upload contains a Shell or shares a Submodel.
+func TestConcurrentUploadsOfSubmodelsEmbeddedInTheSameShellDescriptorsInOppositeOrderSucceed(t *testing.T) {
+	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
+	submodelIDs := concurrentIdentifiers("urn:basyx:integration:concurrent-descriptor:submodel", 4)
+	shellA := concurrentShell("urn:basyx:integration:concurrent-descriptor:shell:a", submodelIDs[0], submodelIDs[3])
+	shellB := concurrentShell("urn:basyx:integration:concurrent-descriptor:shell:b", submodelIDs[1], submodelIDs[2])
+	initial := concurrentEnvironment(t, []any{shellA, shellB}, concurrentSubmodels(submodelIDs, "Initial", nil))
+	status, body := uploadAASXPayload(t, initial, "concurrent-descriptor-initial.json")
+	require.Equal(t, http.StatusOK, status, string(body))
+
+	for round := range concurrentUploadRounds {
+		idShort := fmt.Sprintf("Round%d", round)
+		requireConcurrentUploadsSucceed(t,
+			concurrentUpload{content: concurrentEnvironment(t, nil, concurrentSubmodels(submodelIDs[:2], idShort, nil)), fileName: "concurrent-descriptor-forward.json"},
+			concurrentUpload{content: concurrentEnvironment(t, nil, concurrentSubmodels(submodelIDs[2:], idShort, nil)), fileName: "concurrent-descriptor-reverse.json"},
+		)
+	}
+	for _, shellID := range []string{"urn:basyx:integration:concurrent-descriptor:shell:a", "urn:basyx:integration:concurrent-descriptor:shell:b"} {
+		descriptor := readAtomicUploadResource(t, "/shell-descriptors/"+encodeAtomicUploadID(shellID))
+		require.Contains(t, descriptor, fmt.Sprintf("Round%d", concurrentUploadRounds-1))
+	}
+}
+
+// Submodels 1 and 4 reference content X, Submodels 2 and 3 content Y.
+// Replacing [1, 2] and [3, 4] at once without their File elements releases
+// X then Y and Y then X, although the uploads share no Submodel or binary.
+func TestConcurrentUploadsReleasingSharedAttachmentContentInOppositeOrderSucceed(t *testing.T) {
+	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
+	first := fixtureEmbeddedFile{FileName: "x.txt", ContentType: "text/plain", Content: []byte("released shared content x")}
+	second := fixtureEmbeddedFile{FileName: "y.txt", ContentType: "text/plain", Content: []byte("released shared content y")}
+	attachments := []string{first.FileName, second.FileName, second.FileName, first.FileName}
+
+	for round := range concurrentUploadRounds {
+		submodelIDs := concurrentIdentifiers(fmt.Sprintf("urn:basyx:integration:concurrent-release:%d:submodel", round), 4)
+		initial := concurrentEnvironment(t, nil, concurrentSubmodels(submodelIDs, "Attached", attachments))
+		status, body := uploadAASXPayload(t, buildUploadAASXFixture(t, initial, first, second), "concurrent-release-initial.aasx")
+		require.Equal(t, http.StatusOK, status, string(body))
+
+		requireConcurrentUploadsSucceed(t,
+			concurrentUpload{content: concurrentEnvironment(t, nil, concurrentSubmodels(submodelIDs[:2], "Released", nil)), fileName: "concurrent-release-forward.json"},
+			concurrentUpload{content: concurrentEnvironment(t, nil, concurrentSubmodels(submodelIDs[2:], "Released", nil)), fileName: "concurrent-release-reverse.json"},
+		)
+		for _, submodelID := range submodelIDs {
+			requireUploadStatus(t, "/submodels/"+encodeAtomicUploadID(submodelID)+"/submodel-elements/Attachment", http.StatusNotFound)
+		}
+	}
+	require.Zero(t, readAtomicUploadPersistedState(t).BinaryContents)
+}
+
+func concurrentIdentifiers(prefix string, count int) []string {
+	identifiers := make([]string, 0, count)
+	for index := range count {
+		identifiers = append(identifiers, fmt.Sprintf("%s:%d", prefix, index+1))
+	}
+	return identifiers
+}
+
+func concurrentShell(identifier string, submodelIDs ...string) map[string]any {
+	references := make([]any, 0, len(submodelIDs))
+	for _, submodelID := range submodelIDs {
+		references = append(references, map[string]any{
+			"type": "ModelReference", "keys": []any{map[string]any{"type": "Submodel", "value": submodelID}},
+		})
+	}
+	return map[string]any{
+		"modelType": "AssetAdministrationShell", "id": identifier,
+		"assetInformation": map[string]any{"assetKind": "Instance", "globalAssetId": identifier + ":asset"},
+		"submodels":        references,
+	}
+}
+
+// concurrentSubmodels builds Submodels with 20 Properties each; attachments,
+// when given, adds a File element referencing the package part of the same
+// index.
+func concurrentSubmodels(identifiers []string, idShort string, attachments []string) []any {
+	submodels := make([]any, 0, len(identifiers))
+	for index, identifier := range identifiers {
+		elements := make([]any, 0, 21)
+		for property := range 20 {
+			elements = append(elements, map[string]any{
+				"modelType": "Property", "idShort": fmt.Sprintf("Property%d", property), "valueType": "xs:string", "value": idShort,
+			})
+		}
+		if index < len(attachments) {
+			elements = append(elements, map[string]any{
+				"modelType": "File", "idShort": "Attachment", "contentType": "text/plain", "value": "/aasx/files/" + attachments[index],
+			})
+		}
+		submodels = append(submodels, map[string]any{
+			"modelType": "Submodel", "id": identifier, "idShort": idShort, "submodelElements": elements,
+		})
+	}
+	return submodels
+}
+
+func concurrentEnvironment(t *testing.T, shells []any, submodels []any) []byte {
+	t.Helper()
+	if shells == nil {
+		shells = []any{}
+	}
+	specification, err := json.Marshal(map[string]any{"assetAdministrationShells": shells, "submodels": submodels, "conceptDescriptions": []any{}})
+	require.NoError(t, err)
+	return specification
+}
+
 type concurrentUpload struct {
 	content  []byte
 	fileName string

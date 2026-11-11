@@ -76,6 +76,13 @@ func (p descriptorPayloadUpdatePlan) changed() bool {
 	return p.description || p.displayName || p.administration || p.extensions
 }
 
+// LockAdministrationShellDescriptorUpsertTx takes the lock that serializes
+// upserts of the AAS descriptor aasID, whether or not the descriptor exists.
+// Later locks of the same descriptor in the transaction are reentrant.
+func LockAdministrationShellDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, aasID string) error {
+	return lockAASDescriptorUpsertTx(ctx, tx, aasID)
+}
+
 // LockAdministrationShellDescriptorForUpdateTx locks an existing AAS
 // descriptor and returns its stable internal descriptor id.
 func LockAdministrationShellDescriptorForUpdateTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {
