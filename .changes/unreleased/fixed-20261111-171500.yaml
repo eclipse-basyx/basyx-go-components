@@ -1,0 +1,12 @@
+kind: fixed
+body: >-
+  A PUT that renames a File or Operation Submodel element in the Submodel
+  Repository and AAS Environment now stores the File's value and content type
+  and the Operation's variables at the new idShortPath. Previously, renaming a
+  File answered with 404 and renaming an Operation discarded the variables of
+  the request.
+time: 2026-11-11T17:15:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 863
+  SecurityImpact: None.

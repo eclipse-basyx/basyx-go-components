@@ -38,7 +38,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -93,19 +92,12 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 		return err
 	}
 	defer cu(&err)
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	elementID, err := p.decorated.UpdateElement(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {
 		return err
 	}
 
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return err
-	}
 
 	// Build update record based on isPut flag
 	// For PUT: always update all fields (even if nil/empty, which clears them)
@@ -121,14 +113,7 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 		dialect := goqu.Dialect("postgres")
 		updateQuery, updateArgs, err := dialect.Update("operation_element").
 			Set(updateRecord).
-			Where(goqu.C("id").In(
-				dialect.From("submodel_element").
-					Select("id").
-					Where(goqu.Ex{
-						"idshort_path": idShortOrPath,
-						"submodel_id":  smDbID,
-					}),
-			)).
+			Where(goqu.C("id").Eq(elementID)).
 			ToSQL()
 		if err != nil {
 			return err

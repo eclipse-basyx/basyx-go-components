@@ -96,38 +96,24 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return err
 	}
 	defer cu(&err)
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	databaseID, err := p.decorated.UpdateElement(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {
 		return err
 	}
-
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
-		}
-		return fmt.Errorf("failed to get submodel database ID: %w", err)
-	}
+	elementID := int64(databaseID)
 
 	dialect := goqu.Dialect("postgres")
 
-	// Get the current file element ID and value
-	var elementID int64
 	var currentValue sql.NullString
-	query, args, err := dialect.From("submodel_element").
-		InnerJoin(
-			goqu.T("file_element"),
-			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id"))),
-		).
-		Select("submodel_element.id", "file_element.value").
-		Where(goqu.C("idshort_path").Eq(idShortOrPath)).
-		Where(goqu.C("submodel_id").Eq(submodelDatabaseID)).
+	query, args, err := dialect.From("file_element").
+		Select("value").
+		Where(goqu.C("id").Eq(elementID)).
 		ToSQL()
 	if err != nil {
 		return fmt.Errorf("failed to build query: %w", err)
 	}
 
-	err = localTx.QueryRow(query, args...).Scan(&elementID, &currentValue)
+	err = localTx.QueryRow(query, args...).Scan(&currentValue)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("file element not found")

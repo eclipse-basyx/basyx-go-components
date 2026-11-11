@@ -74,7 +74,21 @@ func LoadValueOnlySchemaTx(ctx context.Context, tx *sql.Tx, request ValueOnlySch
 	if err != nil {
 		return nil, err
 	}
+	if err = validateValueOnlyStoredIDShorts(schemaRows); err != nil {
+		return nil, err
+	}
 	return linkValueOnlySchemaRows(schemaRows, request), nil
+}
+
+// validateValueOnlyStoredIDShorts rejects a ValueOnly update that addresses an element whose
+// idShort was stored before the idShort pattern was enforced, as for every other update.
+func validateValueOnlyStoredIDShorts(rows []valueOnlySchemaRow) error {
+	for _, row := range rows {
+		if err := validateStoredIDShort("SMREPO-UPDVALONLY", row.idShort); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func buildValueOnlySchemaQuery(request ValueOnlySchemaRequest) (string, []any, error) {

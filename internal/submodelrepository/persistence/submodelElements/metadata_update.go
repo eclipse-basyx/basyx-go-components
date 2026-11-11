@@ -43,19 +43,20 @@ import (
 type MetadataTarget struct {
 	ID        int64
 	ModelType types.ModelType
+	IDShort   sql.NullString
 }
 
 // LockMetadataTargetTx locks the element before authorization and metadata updates.
 func LockMetadataTargetTx(ctx context.Context, tx *sql.Tx, submodelDatabaseID int, path string) (MetadataTarget, error) {
 	query, args, err := goqu.Dialect("postgres").From("submodel_element").
-		Select("id", "model_type").
+		Select("id", "model_type", "id_short").
 		Where(goqu.Ex{"submodel_id": submodelDatabaseID, "idshort_path": path}).
 		ForUpdate(goqu.Wait).Prepared(true).ToSQL()
 	if err != nil {
 		return MetadataTarget{}, common.NewInternalServerError("SMREPO-METATARGET-BUILDQ " + err.Error())
 	}
 	var target MetadataTarget
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&target.ID, &target.ModelType); err != nil {
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&target.ID, &target.ModelType, &target.IDShort); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return MetadataTarget{}, common.NewErrNotFound("SMREPO-METATARGET-NOTFOUND " + path)
 		}
@@ -98,6 +99,9 @@ var metadataReferenceColumns = map[string]metadataReferenceColumn{
 // ApplyMetadataPatchTx writes only fields present in a validated metadata patch.
 // current is needed only when a Property or Range valueType changes.
 func ApplyMetadataPatchTx(ctx context.Context, tx *sql.Tx, target MetadataTarget, patch map[string]any, current types.ISubmodelElement) error {
+	if err := validateMetadataIDShorts(target, patch); err != nil {
+		return err
+	}
 	patch, err := mergeMetadataReferencePatchesTx(ctx, tx, target.ID, patch)
 	if err != nil {
 		return err
@@ -110,6 +114,16 @@ func ApplyMetadataPatchTx(ctx context.Context, tx *sql.Tx, target MetadataTarget
 		return common.NewErrBadRequest("SMREPO-METADATA-MODELTYPEMISMATCH metadata modelType must match stored modelType")
 	}
 	return applyMetadataFieldsTx(ctx, tx, target, patch, metadata, current)
+}
+
+// validateMetadataIDShorts rejects an invalid idShort in the patch and a patch of an element
+// whose stored idShort is invalid. A metadata PATCH never renames the element.
+func validateMetadataIDShorts(target MetadataTarget, patch map[string]any) error {
+	var requestedIDShort *string
+	if idShort, present := patch["idShort"].(string); present {
+		requestedIDShort = &idShort
+	}
+	return validateUpdatedIDShort("SMREPO-PATCHSMEMETA", requestedIDShort, target.IDShort, false)
 }
 
 func applyMetadataFieldsTx(ctx context.Context, tx *sql.Tx, target MetadataTarget, patch map[string]any, metadata gen.SubmodelElementMetadata, current types.ISubmodelElement) error {

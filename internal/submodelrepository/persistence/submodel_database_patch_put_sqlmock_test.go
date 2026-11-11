@@ -66,9 +66,9 @@ func TestMetadataPatchChecksModelTypeUnderLock(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectQuery("SELECT .*FROM \"submodel\".*FOR NO KEY UPDATE").
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
-		mock.ExpectQuery("SELECT \"id\", \"model_type\" FROM \"submodel_element\".*FOR UPDATE").
+		mock.ExpectQuery("SELECT \"id\", \"model_type\", \"id_short\" FROM \"submodel_element\".*FOR UPDATE").
 			WithArgs("Temperature", 7).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "model_type"}).AddRow(42, types.ModelTypeProperty))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "model_type", "id_short"}).AddRow(42, types.ModelTypeProperty, "Temperature"))
 		mock.ExpectRollback()
 		mock.ExpectClose()
 		tx, err := db.Begin()
@@ -664,7 +664,7 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
 	mock.ExpectQuery(`SELECT .*id.*,.*id_short.*FROM .*submodel_element`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "id_short"}).AddRow(200, "oldIdShort"))
+		WillReturnRows(storedElementLocationRows(200, "oldIdShort"))
 	mock.ExpectExec(`UPDATE .*submodel_element`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`INSERT INTO .*submodel_element_payload`).
@@ -706,7 +706,7 @@ func TestUpdateSubmodelElementRejectsRetainedInvalidIDShort(t *testing.T) {
 					WillReturnRows(sqlmock.NewRows([]string{"model_type"}).AddRow(types.ModelTypeCapability))
 				expectSubmodelDatabaseIDLoad(mock)
 				mock.ExpectQuery(`SELECT .*id.*,.*id_short.*FROM .*submodel_element.*FOR UPDATE`).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "id_short"}).AddRow(200, testCase.idShort))
+					WillReturnRows(storedElementLocationRows(200, testCase.idShort))
 				mock.ExpectRollback()
 
 				err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm-1", testCase.path, types.NewCapability(), method.isPut)
@@ -716,4 +716,8 @@ func TestUpdateSubmodelElementRejectsRetainedInvalidIDShort(t *testing.T) {
 			})
 		}
 	}
+}
+
+func storedElementLocationRows(id int, idShort string) *sqlmock.Rows {
+	return sqlmock.NewRows([]string{"id", "id_short", "idshort_path", "model_type"}).AddRow(id, idShort, nil, nil)
 }

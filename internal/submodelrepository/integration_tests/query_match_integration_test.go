@@ -95,8 +95,8 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 		fragment string
 	}{
 		{name: "TopLevelProperty", fragment: "$sme.guard#idShort"},
-		{name: "TopLevelList", fragment: "$sme.a#idShort"},
-		{name: "NamedElementInsideListEntry", fragment: "$sme.a[].b#idShort"},
+		{name: "TopLevelList", fragment: "$sme.listA#idShort"},
+		{name: "NamedElementInsideListEntry", fragment: "$sme.listA[].listB#idShort"},
 		{name: "MandatorySubmodelID", fragment: "$sm#id"},
 	} {
 		t.Run("RejectFilteringMandatoryIDShort/"+test.name, func(t *testing.T) {
@@ -113,13 +113,13 @@ func TestQueryMatchFiltersNestedFragmentResults(t *testing.T) {
 	}
 
 	t.Run("FilteringListEntryIDShortIsAllowed", func(t *testing.T) {
-		result := queryNestedMatchSubmodel(t, nestedMatchFilter("$sme.a[].b[]#idShort", false, map[string]any{"$boolean": false}))
+		result := queryNestedMatchSubmodel(t, nestedMatchFilter("$sme.listA[].listB[]#idShort", false, map[string]any{"$boolean": false}))
 
 		assert.Equal(t, "NestedMatch", result["idShort"])
 		assert.Equal(t, [][]string{{"a0-b0", "a0-b1"}, {"a1-b0", "a1-b1"}}, nestedBValues(t, result))
-		a := elementByIDShort(t, arrayValue(t, result["submodelElements"]), "a")
+		a := elementByIDShort(t, arrayValue(t, result["submodelElements"]), "listA")
 		for _, entry := range arrayValue(t, a["value"]) {
-			b := elementByIDShort(t, arrayValue(t, objectValue(t, entry)["value"]), "b")
+			b := elementByIDShort(t, arrayValue(t, objectValue(t, entry)["value"]), "listB")
 			for _, property := range arrayValue(t, b["value"]) {
 				assert.NotContains(t, objectValue(t, property), "idShort")
 			}
