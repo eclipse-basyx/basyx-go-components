@@ -136,6 +136,10 @@ func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 	return out, nil
 }
 
+// submodelOwnerAlias must match the submodel table qualifier emitted by the
+// grammar for $sm root fields such as $sm#id and $sm#idShort.
+const submodelOwnerAlias = "submodel"
+
 // ReadSubmodelSemanticReferencesBySubmodelIDs loads filtered semantic
 // references keyed by submodel database ID.
 func ReadSubmodelSemanticReferencesBySubmodelIDs(
@@ -147,8 +151,8 @@ func ReadSubmodelSemanticReferencesBySubmodelIDs(
 	if err != nil {
 		return nil, fmt.Errorf("REFREAD-SEMSM-COLLECTOR: %w", err)
 	}
-	collector.AllowInlineAliases("s", "semantic_id_reference", "semantic_id_reference_key")
-	collector.SetRootJoinKey("s", common.ColID)
+	collector.AllowInlineAliases(submodelOwnerAlias, "semantic_id_reference", "semantic_id_reference_key")
+	collector.SetRootJoinKey(submodelOwnerAlias, common.ColID)
 
 	return queryReferenceRowsByOwnerIDs(
 		ctx,
@@ -159,7 +163,7 @@ func ReadSubmodelSemanticReferencesBySubmodelIDs(
 			ownerIDColumn:     common.ColID,
 			referenceTable:    "submodel_semantic_id_reference",
 			referenceKeyTable: "submodel_semantic_id_reference_key",
-			ownerAlias:        "s",
+			ownerAlias:        submodelOwnerAlias,
 			referenceAlias:    "semantic_id_reference",
 			referenceKeyAlias: "semantic_id_reference_key",
 			filterSpecs: []referenceFilterSpec{
@@ -379,11 +383,11 @@ func ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 		return nil, fmt.Errorf("REFREAD-SUPPSM-COLLECTOR: %w", err)
 	}
 	collector.AllowInlineAliases(
-		"s",
+		submodelOwnerAlias,
 		"sm_supplemental_semantic_id_reference",
 		"sm_supplemental_semantic_id_reference_key",
 	)
-	collector.SetRootJoinKey("s", common.ColID)
+	collector.SetRootJoinKey(submodelOwnerAlias, common.ColID)
 	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sm#", collector)
 
 	return readContextReferences1ToManyByOwnerIDs(
@@ -395,7 +399,7 @@ func ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 			ownerJoinColumn:   common.ColID,
 			ownerIDColumn:     common.ColSubmodelID,
 			referenceTable:    common.TblSubmodelSuppSemantic,
-			ownerAlias:        "s",
+			ownerAlias:        submodelOwnerAlias,
 			referenceAlias:    "sm_supplemental_semantic_id_reference",
 			referenceKeyAlias: "sm_supplemental_semantic_id_reference_key",
 			filterSpecs:       filterSpecs,
