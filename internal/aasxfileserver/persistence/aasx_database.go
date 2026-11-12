@@ -239,7 +239,7 @@ func (p *AASXFileServerDatabase) putPackage(ctx context.Context, packageID strin
 	}
 
 	normalizedAASIDs := normalizeAASIDs(aasIDs)
-	resolvedFileName := normalizeFileName(fileName, "")
+	resolvedFileName := normalizeFileName(fileName)
 	if err := validatePackageForUpload(file, common.AASXLimitsFromContext(ctx)); err != nil {
 		return nil, false, err
 	}
@@ -698,12 +698,13 @@ func normalizeAASIDs(aasIDs []string) []string {
 	return result
 }
 
-func normalizeFileName(providedFileName string, fallbackFileName string) string {
-	trimmed := strings.TrimSpace(providedFileName)
-	if trimmed != "" {
-		return filepath.Base(trimmed)
+func normalizeFileName(providedFileName string) string {
+	baseName := filepath.Base(strings.TrimSpace(providedFileName))
+	switch baseName {
+	case ".", "..", string(filepath.Separator):
+		return ""
 	}
-	return strings.TrimSpace(filepath.Base(fallbackFileName))
+	return baseName
 }
 
 func isUniqueViolation(err error) bool {

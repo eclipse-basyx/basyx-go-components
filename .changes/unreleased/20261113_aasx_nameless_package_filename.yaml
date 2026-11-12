@@ -1,0 +1,12 @@
+kind: fixed
+body: >-
+  The AASX File Server stores a package uploaded through `POST /packages`,
+  `PUT /packages/{packageId}`, or `POST /packages-async` without a file name
+  in the `Content-Disposition` header of its `file` part under its previously
+  stored file name, or else as `<packageId>.aasx`. Previously, such a package
+  was stored and downloaded with the file name `.`.
+time: 2026-11-13T12:00:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 884
+  SecurityImpact: None.

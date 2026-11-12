@@ -162,8 +162,17 @@ func TestNormalizeAASIDs(t *testing.T) {
 func TestNormalizeFileName(t *testing.T) {
 	t.Parallel()
 
-	require.Equal(t, "provided.aasx", normalizeFileName("  provided.aasx ", "upload-file.aasx"))
-	require.Equal(t, "upload-file.aasx", normalizeFileName("", "upload-file.aasx"))
+	for provided, expected := range map[string]string{
+		"  provided.aasx ":      "provided.aasx",
+		"uploads/provided.aasx": "provided.aasx",
+		"":                      "",
+		"   ":                   "",
+		".":                     "",
+		"..":                    "",
+		"/":                     "",
+	} {
+		require.Equalf(t, expected, normalizeFileName(provided), "provided file name %q", provided)
+	}
 }
 
 func TestValidatePackageForUploadAcceptsXMLAndJSONEnvironments(t *testing.T) {
