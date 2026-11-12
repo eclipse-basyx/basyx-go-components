@@ -127,6 +127,7 @@ func ReadEndpointsByDescriptorIDs(
 			submodelDescriptorEndpointAlias,
 			goqu.On(submodelDescriptorEndpointAlias.Col(common.ColDescriptorID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		)
+		ds = joinSubmodelDescriptorOwningAASDescriptor(ds)
 	case "company":
 		joinOn = companyDescriptorEndpointAlias
 		ds = ds.InnerJoin(

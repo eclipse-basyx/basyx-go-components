@@ -107,6 +107,7 @@ func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 			ownerAlias:        common.AliasSubmodelDescriptor,
 			referenceAlias:    common.AliasSubmodelDescriptorSemanticIDReference,
 			referenceKeyAlias: common.AliasSubmodelDescriptorSemanticIDReferenceKey,
+			joinOwnerContext:  joinSubmodelDescriptorOwningAASDescriptor,
 			filterSpecs: []referenceFilterSpec{
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].semanticId.keys[]",
@@ -342,6 +343,7 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 			ownerAlias:        common.AliasSubmodelDescriptor,
 			referenceAlias:    "aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
 			referenceKeyAlias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+			joinOwnerContext:  joinSubmodelDescriptorOwningAASDescriptor,
 			filterSpecs: []referenceFilterSpec{
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
@@ -487,6 +489,17 @@ type referenceFilterSpec struct {
 	collector *grammar.ResolvedFieldPathCollector
 }
 
+// ownerContextJoin adds tables that fragment conditions may reference next to
+// the owner row of a reference query.
+type ownerContextJoin func(*goqu.SelectDataset) *goqu.SelectDataset
+
+func (join ownerContextJoin) apply(ds *goqu.SelectDataset) *goqu.SelectDataset {
+	if join == nil {
+		return ds
+	}
+	return join(ds)
+}
+
 type referenceQuerySpec struct {
 	ownerTable        string
 	ownerIDColumn     string
@@ -495,6 +508,7 @@ type referenceQuerySpec struct {
 	ownerAlias        string
 	referenceAlias    string
 	referenceKeyAlias string
+	joinOwnerContext  ownerContextJoin
 	filterSpecs       []referenceFilterSpec
 }
 
@@ -507,6 +521,7 @@ type contextReferences1ToManyQuerySpec struct {
 	referenceAlias               string
 	referenceKeyAlias            string
 	payloadContainsFullReference bool
+	joinOwnerContext             ownerContextJoin
 	filterSpecs                  []referenceFilterSpec
 	errPrefix                    string
 }
@@ -546,6 +561,7 @@ func queryReferenceRowsByOwnerIDs(
 			rkt.Col(common.ColPosition).Asc(),
 			rkt.Col(common.ColID).Asc(),
 		)
+	ds = spec.joinOwnerContext.apply(ds)
 
 	var err error
 	for _, filterSpec := range spec.filterSpecs {
@@ -663,6 +679,7 @@ func readContextReferences1ToManyByOwnerIDs(
 			ot,
 			goqu.On(ot.Col(ownerJoinColumn).Eq(rt.Col(spec.ownerIDColumn))),
 		)
+		ds = spec.joinOwnerContext.apply(ds)
 	}
 
 	var err error

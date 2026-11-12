@@ -28,6 +28,7 @@ package descriptors
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -332,6 +333,85 @@ func TestSubmodelDescriptorReferenceFilterCorrelation(t *testing.T) {
 	}
 }
 
+func TestSubmodelDescriptorChildReadersBindOwningAASDescriptor(t *testing.T) {
+	referenceColumns := []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"}
+	readers := []struct {
+		name     string
+		fragment grammar.FragmentStringPattern
+		columns  []string
+		read     func(context.Context, DBQueryer, []int64) error
+	}{
+		{
+			name:     "semanticId keys",
+			fragment: "$aasdesc#submodelDescriptors[].semanticId.keys[]",
+			columns:  referenceColumns,
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+		{
+			name:     "supplementalSemanticIds",
+			fragment: "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+			columns:  append([]string{"owner_id", "ref_id"}, referenceColumns[1:]...),
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, ids)
+				return err
+			},
+		},
+		{
+			name:     "endpoints",
+			fragment: "$aasdesc#submodelDescriptors[].endpoints[]",
+			columns: []string{
+				"descriptor_id", "id", "href", "endpoint_protocol", "sub_protocol", "sub_protocol_body",
+				"sub_protocol_body_encoding", "interface", "versions", "sec_attrs",
+			},
+			read: func(ctx context.Context, db DBQueryer, ids []int64) error {
+				_, err := ReadEndpointsByDescriptorIDs(ctx, db, ids, "submodel")
+				return err
+			},
+		},
+	}
+
+	field := grammar.ModelStringPattern("$aasdesc#id")
+	value := grammar.StandardString("urn:example:aas:visible")
+	condition := grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}}
+	const ownerJoin = `LEFT JOIN "aas_descriptor" ON ("aas_descriptor"."descriptor_id" = "submodel_descriptor"."aas_descriptor_id")`
+
+	for _, reader := range readers {
+		for _, match := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/match=%t", reader.name, match), func(t *testing.T) {
+				ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+					Filters: auth.FragmentFilters{reader.fragment: auth.NewFragmentFilterPredicate(condition, match)},
+				})
+				db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+					if !strings.Contains(actual, ownerJoin) {
+						return fmt.Errorf("expected owning AAS descriptor join, got: %s", actual)
+					}
+					if !strings.Contains(actual, `"aas_descriptor"."id" = $`) {
+						return fmt.Errorf("expected $aasdesc#id predicate on aas_descriptor, got: %s", actual)
+					}
+					return undeclaredSQLQualifierError(actual)
+				})))
+				if err != nil {
+					t.Fatalf("sqlmock.New failed: %v", err)
+				}
+				defer func() { _ = db.Close() }()
+
+				mock.ExpectQuery("submodel descriptor child $aasdesc#id filter").
+					WillReturnRows(sqlmock.NewRows(reader.columns))
+
+				if err := reader.read(ctx, db, []int64{12}); err != nil {
+					t.Fatalf("reader returned error: %v", err)
+				}
+				if err := mock.ExpectationsWereMet(); err != nil {
+					t.Fatalf("unmet sqlmock expectations: %v", err)
+				}
+			})
+		}
+	}
+}
+
 func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -501,6 +581,27 @@ func TestReadSubmodelSupplementalSemanticReferencesCorrelatesNonMatchFilterToOwn
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sqlmock expectations: %v", err)
 	}
+}
+
+var (
+	sqlDeclaredAliasPattern   = regexp.MustCompile(`AS "([A-Za-z0-9_]+)"`)
+	sqlUnaliasedTablePattern  = regexp.MustCompile(`(?:FROM|JOIN) "([A-Za-z0-9_]+)" (?:[^A]|$)`)
+	sqlColumnQualifierPattern = regexp.MustCompile(`"([A-Za-z0-9_]+)"\."`)
+)
+
+func undeclaredSQLQualifierError(sql string) error {
+	declared := map[string]struct{}{}
+	for _, pattern := range []*regexp.Regexp{sqlDeclaredAliasPattern, sqlUnaliasedTablePattern} {
+		for _, match := range pattern.FindAllStringSubmatch(sql, -1) {
+			declared[match[1]] = struct{}{}
+		}
+	}
+	for _, match := range sqlColumnQualifierPattern.FindAllStringSubmatch(sql, -1) {
+		if _, ok := declared[match[1]]; !ok {
+			return fmt.Errorf("query references undeclared table alias %q: %s", match[1], sql)
+		}
+	}
+	return nil
 }
 
 func boolPointer(value bool) *bool {
