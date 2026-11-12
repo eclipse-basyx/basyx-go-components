@@ -28,6 +28,7 @@ package descriptors
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -126,13 +127,10 @@ func TestReadSubmodelSemanticReferencesCorrelatesNonMatchFilterToOwnerAlias(t *t
 		if !strings.Contains(actual, `EXISTS`) {
 			return fmt.Errorf("expected non-MATCH filter to use EXISTS, got: %s", actual)
 		}
-		if !strings.Contains(actual, `"s"."id"`) {
-			return fmt.Errorf("expected correlation to outer owner alias s, got: %s", actual)
+		if !strings.Contains(actual, `= "submodel"."id"`) {
+			return fmt.Errorf("expected correlation to outer owner alias submodel, got: %s", actual)
 		}
-		if strings.Contains(actual, `"submodel"."id"`) {
-			return fmt.Errorf("unexpected unbound submodel alias, got: %s", actual)
-		}
-		return nil
+		return undeclaredSQLQualifierError(actual)
 	})))
 	if err != nil {
 		t.Fatalf("sqlmock.New failed: %v", err)
@@ -471,13 +469,10 @@ func TestReadSubmodelSupplementalSemanticReferencesCorrelatesNonMatchFilterToOwn
 		if !strings.Contains(actual, `EXISTS`) {
 			return fmt.Errorf("expected non-MATCH filter to use EXISTS, got: %s", actual)
 		}
-		if !strings.Contains(actual, `"s"."id"`) {
-			return fmt.Errorf("expected correlation to outer owner alias s, got: %s", actual)
+		if !strings.Contains(actual, `= "submodel"."id"`) {
+			return fmt.Errorf("expected correlation to outer owner alias submodel, got: %s", actual)
 		}
-		if strings.Contains(actual, `"submodel"."id"`) {
-			return fmt.Errorf("unexpected unbound submodel alias, got: %s", actual)
-		}
-		return nil
+		return undeclaredSQLQualifierError(actual)
 	})))
 	if err != nil {
 		t.Fatalf("sqlmock.New failed: %v", err)
@@ -501,6 +496,93 @@ func TestReadSubmodelSupplementalSemanticReferencesCorrelatesNonMatchFilterToOwn
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sqlmock expectations: %v", err)
 	}
+}
+
+func TestReadSubmodelReferencesBindSubmodelIDFilterToOwnerAlias(t *testing.T) {
+	type reader func(context.Context, DBQueryer, []int64) error
+	readSemantic := func(ctx context.Context, db DBQueryer, ids []int64) error {
+		_, err := ReadSubmodelSemanticReferencesBySubmodelIDs(ctx, db, ids)
+		return err
+	}
+	readSupplemental := func(ctx context.Context, db DBQueryer, ids []int64) error {
+		_, err := ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(ctx, db, ids)
+		return err
+	}
+	readers := []struct {
+		name     string
+		fragment grammar.FragmentStringPattern
+		read     reader
+		columns  []string
+	}{
+		{
+			name:     "semanticId",
+			fragment: "$sm#semanticId.keys[]",
+			read:     readSemantic,
+			columns:  []string{"owner_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+		},
+		{
+			name:     "supplementalSemanticIds",
+			fragment: "$sm#supplementalSemanticIds[]",
+			read:     readSupplemental,
+			columns:  []string{"owner_id", "ref_id", "ref_type", "key_id", "key_type", "key_value", "parent_reference_payload"},
+		},
+	}
+
+	field := grammar.ModelStringPattern("$sm#id")
+	value := grammar.StandardString("urn:example:submodel:visible")
+	condition := grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}}
+
+	for _, tc := range readers {
+		for _, match := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/match=%t", tc.name, match), func(t *testing.T) {
+				ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+					Filters: auth.FragmentFilters{tc.fragment: auth.NewFragmentFilterPredicate(condition, match)},
+				})
+				db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+					if !strings.Contains(actual, `"submodel"."submodel_identifier" = $`) {
+						return fmt.Errorf("expected $sm#id predicate on submodel alias, got: %s", actual)
+					}
+					return undeclaredSQLQualifierError(actual)
+				})))
+				if err != nil {
+					t.Fatalf("sqlmock.New failed: %v", err)
+				}
+				defer func() { _ = db.Close() }()
+
+				mock.ExpectQuery("submodel reference $sm#id filter").
+					WithArgs(sqlmock.AnyArg(), string(value)).
+					WillReturnRows(sqlmock.NewRows(tc.columns))
+
+				if err := tc.read(ctx, db, []int64{12}); err != nil {
+					t.Fatalf("reader returned error: %v", err)
+				}
+				if err := mock.ExpectationsWereMet(); err != nil {
+					t.Fatalf("unmet sqlmock expectations: %v", err)
+				}
+			})
+		}
+	}
+}
+
+var (
+	sqlDeclaredAliasPattern   = regexp.MustCompile(`AS "([A-Za-z0-9_]+)"`)
+	sqlUnaliasedTablePattern  = regexp.MustCompile(`(?:FROM|JOIN) "([A-Za-z0-9_]+)" (?:[^A]|$)`)
+	sqlColumnQualifierPattern = regexp.MustCompile(`"([A-Za-z0-9_]+)"\."`)
+)
+
+func undeclaredSQLQualifierError(sql string) error {
+	declared := map[string]struct{}{}
+	for _, pattern := range []*regexp.Regexp{sqlDeclaredAliasPattern, sqlUnaliasedTablePattern} {
+		for _, match := range pattern.FindAllStringSubmatch(sql, -1) {
+			declared[match[1]] = struct{}{}
+		}
+	}
+	for _, match := range sqlColumnQualifierPattern.FindAllStringSubmatch(sql, -1) {
+		if _, ok := declared[match[1]]; !ok {
+			return fmt.Errorf("query references undeclared table alias %q: %s", match[1], sql)
+		}
+	}
+	return nil
 }
 
 func boolPointer(value bool) *bool {

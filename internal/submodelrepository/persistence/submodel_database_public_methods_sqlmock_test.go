@@ -373,7 +373,7 @@ func TestGetSubmodelsSemanticKeyFilterDoesNotRestoreMaskedParent(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*"semantic_id_visible".*FROM .*"submodel"`).
 		WillReturnRows(mainRows).
 		RowsWillBeClosed()
-	mock.ExpectQuery(`SELECT .*FROM "submodel" AS "s".*"s"\."id" = ANY`).
+	mock.ExpectQuery(`SELECT .*FROM "submodel" AS "submodel".*"submodel"\."id" = ANY`).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"owner_id",
 			"ref_type",
