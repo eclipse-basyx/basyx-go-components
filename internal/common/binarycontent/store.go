@@ -318,6 +318,148 @@ func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Read
 	return oid, hex.EncodeToString(hash.Sum(nil)), size, nil
 }
 
+// ContentDigest identifies canonical binary content by its SHA-256 digest and size.
+type ContentDigest struct {
+	Digest string
+	Size   int64
+}
+
+// DigestContent reads reader to its end and returns the digest under which
+// StoreReferenceTx deduplicates and locks the same bytes.
+//
+// Parameters:
+//   - reader: Content to hash.
+//
+// Returns:
+//   - ContentDigest: SHA-256 digest and size of the content.
+//   - error: Read error, passed through unchanged.
+func DigestContent(reader io.Reader) (ContentDigest, error) {
+	hash := sha256.New()
+	size, err := io.Copy(hash, reader)
+	if err != nil {
+		return ContentDigest{}, err
+	}
+	return ContentDigest{Digest: hex.EncodeToString(hash.Sum(nil)), Size: size}, nil
+}
+
+// LockContentDigestsTx takes the content locks of StoreReferenceTx for all
+// digests in stable order. A transaction that stores several binaries takes
+// them before its first binary write, so concurrent transactions sharing
+// content wait for each other instead of deadlocking. Later locks of the same
+// content in the transaction are reentrant.
+//
+// Parameters:
+//   - ctx: Context used for the lock statements.
+//   - tx: Transaction that holds the locks until it ends.
+//   - digests: Content to lock; duplicates are locked once.
+//
+// Returns:
+//   - error: Lock build or execution error.
+func LockContentDigestsTx(ctx context.Context, tx *sql.Tx, digests []ContentDigest) error {
+	for _, digest := range orderedContentDigests(digests) {
+		if err := lockDigestTx(ctx, tx, digest.Digest, digest.Size); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ContentOwners identifies Submodels and Asset Administration Shells whose
+// managed binary references a transaction may replace or remove.
+type ContentOwners struct {
+	SubmodelIdentifiers []string
+	AASIdentifiers      []string
+}
+
+// LockAffectedContentRowsTx locks, in ascending id order, the canonical content rows a
+// transaction may change: the content referenced by File elements of the
+// owner Submodels, the content referenced by thumbnails of the owner Shells,
+// and existing content matching the incoming digests. The reference-count
+// triggers lock these rows again when references change; taking them first in
+// one order lets concurrent transactions over shared content wait for each
+// other instead of deadlocking. Call it after LockContentDigestsTx.
+//
+// Parameters:
+//   - ctx: Context used for the lock statement.
+//   - tx: Transaction that holds the row locks until it ends.
+//   - owners: Owners whose current references may be replaced or removed.
+//   - digests: Incoming content that may reuse existing canonical rows.
+//
+// Returns:
+//   - error: Query build or execution error.
+func LockAffectedContentRowsTx(ctx context.Context, tx *sql.Tx, owners ContentOwners, digests []ContentDigest) error {
+	conditions := contentRowLockConditions(owners, digests)
+	if len(conditions) == 0 {
+		return nil
+	}
+	query, args, err := goqu.Dialect("postgres").From(TableContent).Select("id").
+		Where(goqu.Or(conditions...)).Order(goqu.C("id").Asc()).ForUpdate(exp.Wait).Prepared(true).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("BINARYCONTENT-LOCKROWS-BUILD " + err.Error())
+	}
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return common.NewInternalServerError("BINARYCONTENT-LOCKROWS-EXEC " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var ignored int64
+		if err = rows.Scan(&ignored); err != nil {
+			return common.NewInternalServerError("BINARYCONTENT-LOCKROWS-SCAN " + err.Error())
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return common.NewInternalServerError("BINARYCONTENT-LOCKROWS-ROWS " + err.Error())
+	}
+	return nil
+}
+
+func contentRowLockConditions(owners ContentOwners, digests []ContentDigest) []exp.Expression {
+	conditions := make([]exp.Expression, 0, 2+len(digests))
+	if len(owners.SubmodelIdentifiers) > 0 {
+		conditions = append(conditions, goqu.C("id").In(submodelFileContentIDs(owners.SubmodelIdentifiers)))
+	}
+	if len(owners.AASIdentifiers) > 0 {
+		conditions = append(conditions, goqu.C("id").In(shellThumbnailContentIDs(owners.AASIdentifiers)))
+	}
+	for _, digest := range orderedContentDigests(digests) {
+		conditions = append(conditions, goqu.Ex{"sha256": digest.Digest, "size_bytes": digest.Size})
+	}
+	return conditions
+}
+
+func submodelFileContentIDs(submodelIdentifiers []string) *goqu.SelectDataset {
+	return goqu.From(goqu.T(TableFileReference).As("reference")).
+		InnerJoin(goqu.T("submodel_element").As("element"), goqu.On(goqu.I("element.id").Eq(goqu.I("reference.file_element_id")))).
+		InnerJoin(goqu.T("submodel").As("submodel"), goqu.On(goqu.I("submodel.id").Eq(goqu.I("element.submodel_id")))).
+		Select(goqu.I("reference.binary_content_id")).
+		Where(goqu.I("submodel.submodel_identifier").In(submodelIdentifiers))
+}
+
+func shellThumbnailContentIDs(aasIdentifiers []string) *goqu.SelectDataset {
+	return goqu.From(goqu.T(TableThumbnailReference).As("reference")).
+		InnerJoin(goqu.T("aas").As("aas"), goqu.On(goqu.I("aas.id").Eq(goqu.I("reference.thumbnail_element_id")))).
+		Select(goqu.I("reference.binary_content_id")).
+		Where(goqu.I("aas.aas_id").In(aasIdentifiers))
+}
+
+func orderedContentDigests(digests []ContentDigest) []ContentDigest {
+	ordered := append([]ContentDigest(nil), digests...)
+	sort.Slice(ordered, func(left, right int) bool {
+		if ordered[left].Digest != ordered[right].Digest {
+			return ordered[left].Digest < ordered[right].Digest
+		}
+		return ordered[left].Size < ordered[right].Size
+	})
+	unique := make([]ContentDigest, 0, len(ordered))
+	for _, digest := range ordered {
+		if len(unique) == 0 || digest != unique[len(unique)-1] {
+			unique = append(unique, digest)
+		}
+	}
+	return unique
+}
+
 func lockDigestTx(ctx context.Context, tx *sql.Tx, digest string, size int64) error {
 	lockKey := fmt.Sprintf("binary-content:%s:%d", digest, size)
 	query, args, err := goqu.Dialect("postgres").

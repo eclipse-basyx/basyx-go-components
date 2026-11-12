@@ -1215,8 +1215,11 @@ paths:
         Duplicate content behavior is replace-on-upload: if an uploaded AAS, Submodel,
         or ConceptDescription identifier already exists, the existing entry is overwritten.
 
-        Upload processing is intentionally non-transactional. Partial success can occur if
-        some resources are persisted before a later processing step fails.
+        Upload processing is atomic. Every Concept Description, Submodel and Asset
+        Administration Shell of the environment, the AASX thumbnails and supplementary
+        files, and the registry descriptors synchronized for them are stored in one
+        transaction. If any of them is rejected, nothing from the upload is stored and
+        the error message names the rejected resource or package part.
       operationId: UploadFile
       requestBody:
         required: true
@@ -1259,11 +1262,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Result'
+              examples:
+                malformedPayload:
+                  summary: The payload could not be parsed
+                  value:
+                    messages:
+                      - code: AASENV-HANDLEUPLOAD-PARSEJSON
+                        messageType: Error
+                        text: invalid character '}' looking for beginning of object key string
+                rejectedResource:
+                  summary: A resource was rejected; nothing from the upload was stored
+                  value:
+                    messages:
+                      - code: AASENV-HANDLEUPLOAD-PROCESSAASX
+                        messageType: Error
+                        text: 'AASENV-PROCESSENV-ROLLEDBACK upload rejected, nothing from the uploaded environment was stored: AASENV-PROCESSENV-PUTAAS failed to store Asset Administration Shell "urn:example:shell": 400 Bad Request: AASREPO-PUTAAS-INVALIDIDSHORT Asset Administration Shell in the request body has the invalid idShort ''Shell;1'': an idShort must have 2 to 128 characters, contain only letters, digits, ''-'' and ''_'', start with a letter and not end with ''-'''
+        '403':
+          description: Forbidden; nothing from the upload was stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
               example:
                 messages:
-                  - code: AASENV-HANDLEUPLOAD-PARSEJSON
+                  - code: AASENV-HANDLEUPLOAD-PROCESSJSONENVIRONMENT
                     messageType: Error
-                    text: invalid character '}' looking for beginning of object key string
+                    text: 'AASENV-PROCESSENV-ROLLEDBACK upload rejected, nothing from the uploaded environment was stored: AASENV-PROCESSENV-PUTSM failed to store Submodel "urn:example:submodel": 403 Denied: SMREPO-PUTSM-ABACDENIED Written submodel is not accessible under ABAC constraints'
+        '404':
+          description: Not found; nothing from the upload was stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '409':
+          description: Conflict; nothing from the upload was stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
         '413':
           description: Request entity too large
           content:
@@ -1297,6 +1333,150 @@ paths:
                   - code: AASENV-HANDLEUPLOAD-PROCESSAASX
                     messageType: Error
                     text: failed to persist uploaded environment
+  /upload-async:
+    post:
+      tags:
+        - Upload Async API
+      summary: Upload a file asynchronously
+      description: |-
+        Accepts the same multipart/form-data payload as `POST /upload` and imports it as an
+        asynchronous operation, following the semantics of `POST /packages-async` of the
+        AASX File Server API.
+
+        The format is checked before the request is accepted; an unsupported format is
+        rejected with `415 Unsupported Media Type` and no operation is created. An accepted
+        upload is staged durably and imported in the background with the same all-or-nothing
+        semantics as `POST /upload`: either every Concept Description, Submodel and Asset
+        Administration Shell, the AASX thumbnails and supplementary files and their registry
+        descriptors are stored, or nothing is. A failed operation stores nothing, and its
+        result carries the same messages the synchronous upload would return.
+
+        The operation handle is bound to the uploader. With security enabled, the request must
+        be authenticated, and only the uploader can read the status and result.
+      operationId: UploadFileAsync
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                fileName:
+                  type: string
+                  description: Optional logical file name used for format fallback.
+                  example: environment.json
+              required:
+                - file
+            encoding:
+              file:
+                contentType: application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml
+      responses:
+        '202':
+          description: The server has accepted the upload.
+          headers:
+            Location:
+              description: The URL where the client can request the current status of the operation.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationHandle
+        '400':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request
+        '401':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/unauthorized
+        '403':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
+        '413':
+          description: Request entity too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '429':
+          description: Asynchronous execution capacity is exhausted; retry later.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '500':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+  /upload-async/status/{handleId}:
+    get:
+      tags:
+        - Upload Async Status API
+      summary: Returns the status of an asynchronous upload
+      operationId: GetUploadAsyncStatus
+      parameters:
+        - name: handleId
+          in: path
+          description: The operation handle (BASE64-URL-encoded)
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The upload is still running.
+          content:
+            application/json:
+              schema:
+                $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/BaseOperationResult
+        '302':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/found
+        '400':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request
+        '401':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/unauthorized
+        '403':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
+        '404':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
+        '500':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
+  /upload-async/result/{handleId}:
+    get:
+      tags:
+        - Upload Async Result API
+      summary: Returns the result of an asynchronous upload
+      description: |-
+        A completed upload returns `executionState` `Completed` and `success` `true`. A failed
+        upload returns `executionState` `Failed`, `success` `false`, and the messages the
+        synchronous upload returns for the same failure; nothing from it was stored.
+      operationId: GetUploadAsyncResult
+      parameters:
+        - name: handleId
+          in: path
+          description: The operation handle (BASE64-URL-encoded)
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The operation result.
+          content:
+            application/json:
+              schema:
+                $ref: ../Part2-API-Schemas/openapi.yaml#/components/schemas/BaseOperationResult
+        '400':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request
+        '401':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/unauthorized
+        '403':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden
+        '404':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/not-found
+        '500':
+          $ref: ../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error
   /description:
     get:
       tags:

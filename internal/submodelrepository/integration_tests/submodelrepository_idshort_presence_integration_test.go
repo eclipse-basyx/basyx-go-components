@@ -146,6 +146,8 @@ func newIDShortHarness(t *testing.T, mode string, service idShortService) *idSho
 	baseAAS := aasapi.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, shells, backend, false)
 	var submodels smgen.SubmodelRepositoryAPIAPIServicer = baseSubmodels
 	var aas aasgen.AssetAdministrationShellRepositoryAPIAPIServicer = baseAAS
+	var environmentSubmodels *aasenvironment.CustomSubmodelRepositoryService
+	var environmentAAS *aasenvironment.CustomAASRepositoryService
 	if service.environment {
 		persistence.ConceptDescriptionRepository, err = cddb.NewConceptDescriptionBackendFromDB(db, mode)
 		require.NoError(t, err)
@@ -155,8 +157,10 @@ func newIDShortHarness(t *testing.T, mode string, service idShortService) *idSho
 		require.NoError(t, err)
 		syncConfig, syncErr := aasenvironment.NewRegistrySyncConfig(service.sync, service.sync, "http://idshort.example")
 		require.NoError(t, syncErr)
-		submodels = aasenvironment.NewCustomSubmodelRepositoryService(baseSubmodels, persistence, syncConfig)
-		aas = aasenvironment.NewCustomAASRepositoryService(baseAAS, persistence, syncConfig)
+		environmentSubmodels = aasenvironment.NewCustomSubmodelRepositoryService(baseSubmodels, persistence, syncConfig)
+		environmentAAS = aasenvironment.NewCustomAASRepositoryService(baseAAS, persistence, syncConfig)
+		submodels = environmentSubmodels
+		aas = environmentAAS
 	}
 	router := chi.NewRouter()
 	router.Use(common.ConfigMiddleware(cfg))
@@ -169,7 +173,7 @@ func newIDShortHarness(t *testing.T, mode string, service idShortService) *idSho
 	if service.environment {
 		stager := binarycontent.NewStager(db)
 		aasenvironment.RegisterSerializationAPI(router, aasenvironment.NewSerializationAPIService(persistence, stager))
-		aasenvironment.RegisterUploadAPI(router, aasenvironment.NewUploadAPIService(persistence, aas, submodels), 1<<20, stager)
+		aasenvironment.RegisterUploadAPI(router, aasenvironment.NewUploadAPIService(persistence, environmentAAS, environmentSubmodels), 1<<20, stager)
 	}
 	h := &idShortHarness{db: db, ctx: ctx, backend: backend, handler: router, mode: mode, service: service}
 	if service.nested {

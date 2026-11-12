@@ -1946,64 +1946,30 @@ func (s *AssetAdministrationShellDatabase) StreamThumbnailByAASID(ctx context.Co
 // Returns:
 //   - error: Visibility, validation, transaction, or persistence error.
 func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context.Context, aasIdentifier string, file io.Reader, declaration binarycontent.UploadDeclaration) error {
-	tx, cleanup, err := common.StartTransaction(s.db)
+	return common.ExecuteInTransaction(s.db, "AASREPO-PUTTHUMBNAIL-STARTTX", "AASREPO-PUTTHUMBNAIL-COMMIT", func(tx *sql.Tx) error {
+		return s.PutThumbnailByAASIDReaderInTransaction(ctx, tx, aasIdentifier, file, declaration)
+	})
+}
+
+// PutThumbnailByAASIDReaderInTransaction streams a thumbnail into persistence
+// within an existing transaction after checking the request's ABAC visibility.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization and cancellation.
+//   - tx: Caller-owned transaction that receives the content, history, and evidence writes.
+//   - aasIdentifier: Identifier of the thumbnail's Asset Administration Shell.
+//   - file: Thumbnail source consumed before the method returns.
+//   - declaration: File name and content types the upload source declares.
+//
+// Returns:
+//   - error: Visibility, validation, or persistence error.
+func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReaderInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, file io.Reader, declaration binarycontent.UploadDeclaration) error {
+	if tx == nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-NILTX transaction must not be nil")
+	}
+	ctx, shouldEnforce, err := s.authorizeThumbnailPutInTx(ctx, tx, aasIdentifier)
 	if err != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
-
-	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTTHUMBNAIL-SHOULDENFORCE")
-	if enforceErr != nil {
-		return enforceErr
-	}
-	if shouldEnforce {
-		aasDBID, dbIDErr := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
-		if dbIDErr != nil {
-			if dbIDErr == sql.ErrNoRows {
-				return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-			}
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-GETAASDBID " + dbIDErr.Error())
-		}
-
-		dialect := goqu.Dialect("postgres")
-		fileQuery, fileArgs, fileBuildErr := dialect.
-			From(goqu.T("thumbnail_file_element").As("element")).
-			LeftJoin(goqu.T("thumbnail_file_data").As("legacy"), goqu.On(goqu.I("legacy.id").Eq(goqu.I("element.id")))).
-			LeftJoin(goqu.T(binarycontent.TableThumbnailReference).As("reference"), goqu.On(goqu.I("reference.thumbnail_element_id").Eq(goqu.I("element.id")))).
-			Select(goqu.Case().When(
-				goqu.Or(goqu.I("legacy.file_oid").IsNotNull(), goqu.I("reference.binary_content_id").IsNotNull()), 1,
-			)).
-			Where(goqu.I("element.id").Eq(aasDBID)).
-			Limit(1).
-			ToSQL()
-		if fileBuildErr != nil {
-			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDEXISTSQL " + fileBuildErr.Error())
-		}
-
-		thumbnailExists := false
-		var attachmentMarker sql.NullInt64
-		if scanErr := tx.QueryRow(fileQuery, fileArgs...).Scan(&attachmentMarker); scanErr != nil {
-			if scanErr != sql.ErrNoRows {
-				return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECEXISTSQL " + scanErr.Error())
-			}
-			thumbnailExists = false
-		} else {
-			thumbnailExists = attachmentMarker.Valid
-		}
-
-		ctx = auth.SelectPutFormulaByExistence(ctx, thumbnailExists)
-		if thumbnailExists {
-			exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
-			if visErr != nil {
-				return visErr
-			}
-			if !exists {
-				return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-			}
-			if !visible {
-				return common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED updating this AAS is not allowed")
-			}
-		}
+		return err
 	}
 	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
 	if err != nil {
@@ -2015,9 +1981,9 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
 
-	reference, contentType, uploadErr := thumbnailHandler.uploadManagedThumbnailTx(ctx, tx, aasIdentifier, file, declaration)
-	if uploadErr != nil {
-		return uploadErr
+	reference, contentType, err := thumbnailHandler.uploadManagedThumbnailTx(ctx, tx, aasIdentifier, file, declaration)
+	if err != nil {
+		return err
 	}
 	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
@@ -2028,6 +1994,76 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 			return common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED prospective AAS is not accessible under ABAC constraints")
 		}
 	}
+	return s.recordUploadedThumbnailTx(ctx, tx, aasIdentifier, previousSnapshot, reference, contentType)
+}
+
+func (s *AssetAdministrationShellDatabase) authorizeThumbnailPutInTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (context.Context, bool, error) {
+	shouldEnforce, err := shouldEnforceFormula(ctx, "AASREPO-PUTTHUMBNAIL-SHOULDENFORCE")
+	if err != nil || !shouldEnforce {
+		return ctx, false, err
+	}
+	thumbnailExists, err := managedThumbnailExistsInTx(tx, aasIdentifier)
+	if err != nil {
+		return ctx, true, err
+	}
+	ctx = auth.SelectPutFormulaByExistence(ctx, thumbnailExists)
+	if !thumbnailExists {
+		return ctx, true, nil
+	}
+	exists, visible, err := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return ctx, true, err
+	}
+	if !exists {
+		return ctx, true, common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+	}
+	if !visible {
+		return ctx, true, common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED updating this AAS is not allowed")
+	}
+	return ctx, true, nil
+}
+
+func managedThumbnailExistsInTx(tx *sql.Tx, aasIdentifier string) (bool, error) {
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		return false, common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-GETAASDBID " + err.Error())
+	}
+
+	fileQuery, fileArgs, err := goqu.Dialect("postgres").
+		From(goqu.T("thumbnail_file_element").As("element")).
+		LeftJoin(goqu.T("thumbnail_file_data").As("legacy"), goqu.On(goqu.I("legacy.id").Eq(goqu.I("element.id")))).
+		LeftJoin(goqu.T(binarycontent.TableThumbnailReference).As("reference"), goqu.On(goqu.I("reference.thumbnail_element_id").Eq(goqu.I("element.id")))).
+		Select(goqu.Case().When(
+			goqu.Or(goqu.I("legacy.file_oid").IsNotNull(), goqu.I("reference.binary_content_id").IsNotNull()), 1,
+		)).
+		Where(goqu.I("element.id").Eq(aasDBID)).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return false, common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDEXISTSQL " + err.Error())
+	}
+
+	var attachmentMarker sql.NullInt64
+	if err = tx.QueryRow(fileQuery, fileArgs...).Scan(&attachmentMarker); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECEXISTSQL " + err.Error())
+	}
+	return attachmentMarker.Valid, nil
+}
+
+func (s *AssetAdministrationShellDatabase) recordUploadedThumbnailTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+	previousSnapshot map[string]any,
+	reference binarycontent.Reference,
+	contentType string,
+) error {
 	binaryReceipt, err := history.EnsureBinaryEvidenceTx(ctx, tx, reference.Content, contentType)
 	if err != nil {
 		return err
@@ -2043,18 +2079,9 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 	if err = s.appendUploadedThumbnailHistoryTx(mutationCtx, tx, aasIdentifier, previousSnapshot); err != nil {
 		return err
 	}
-	if err = history.RecordBinaryReferenceEvidenceTx(
+	return history.RecordBinaryReferenceEvidenceTx(
 		mutationCtx, tx, history.TableAAS, aasIdentifier, expectation,
-	); err != nil {
-		return err
-	}
-
-	err = common.CommitTransaction(tx)
-	if err != nil {
-		return common.CommitError("AASREPO-PUTTHUMBNAIL-COMMIT", err)
-	}
-
-	return nil
+	)
 }
 
 // DeleteThumbnailByAASID removes the thumbnail and checks ABAC visibility.
@@ -2226,46 +2253,48 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 
 // ListAASIdentifiersBySubmodelID returns all AAS identifiers that reference the given submodel ID.
 func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelID(ctx context.Context, submodelIdentifier string) ([]string, error) {
-	dialect := goqu.Dialect("postgres")
-	sqlQuery, args, buildErr := buildListAASIdentifiersBySubmodelIdentifierQuery(&dialect, submodelIdentifier)
-	if buildErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-BUILDSQL " + buildErr.Error())
-	}
-
-	rows, queryErr := s.readDB(ctx).QueryContext(ctx, sqlQuery, args...)
-	if queryErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-EXECSQL " + queryErr.Error())
-	}
-	defer func() { _ = rows.Close() }()
-
-	aasIDs := make([]string, 0, 16)
-	for rows.Next() {
-		var aasID string
-		if scanErr := rows.Scan(&aasID); scanErr != nil {
-			return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-SCANROW " + scanErr.Error())
-		}
-		aasIDs = append(aasIDs, aasID)
-	}
-	if rowsErr := rows.Err(); rowsErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-ITERROWS " + rowsErr.Error())
-	}
-
-	return aasIDs, nil
+	return listAASIdentifiersBySubmodelIDs(ctx, s.readDB(ctx), []string{submodelIdentifier})
 }
 
 // ListAASIdentifiersBySubmodelIDInTransaction returns all AAS identifiers that reference the given submodel ID using the provided transaction.
 func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) ([]string, error) {
+	return s.ListAASIdentifiersBySubmodelIDsInTransaction(ctx, tx, []string{submodelIdentifier})
+}
+
+// ListAASIdentifiersBySubmodelIDsInTransaction returns the identifiers of all
+// AAS that reference any of the given submodel IDs, sorted and without
+// duplicates, using the provided transaction.
+//
+// Parameters:
+//   - ctx: Request context.
+//   - tx: Transaction the lookup runs in.
+//   - submodelIdentifiers: Submodel identifiers to look up.
+//
+// Returns:
+//   - []string: Sorted unique identifiers of the referencing AAS.
+//   - error: Missing transaction, query build, or execution error.
+func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelIDsInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifiers []string) ([]string, error) {
 	if tx == nil {
 		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-NILTX transaction must not be nil")
 	}
+	return listAASIdentifiersBySubmodelIDs(ctx, tx, submodelIdentifiers)
+}
 
+type aasIdentifierQueryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+func listAASIdentifiersBySubmodelIDs(ctx context.Context, queryer aasIdentifierQueryer, submodelIdentifiers []string) ([]string, error) {
+	if len(submodelIdentifiers) == 0 {
+		return nil, nil
+	}
 	dialect := goqu.Dialect("postgres")
-	sqlQuery, args, buildErr := buildListAASIdentifiersBySubmodelIdentifierQuery(&dialect, submodelIdentifier)
+	sqlQuery, args, buildErr := buildListAASIdentifiersBySubmodelIdentifierQuery(&dialect, submodelIdentifiers)
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-BUILDSQL " + buildErr.Error())
 	}
 
-	rows, queryErr := tx.QueryContext(ctx, sqlQuery, args...)
+	rows, queryErr := queryer.QueryContext(ctx, sqlQuery, args...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-EXECSQL " + queryErr.Error())
 	}

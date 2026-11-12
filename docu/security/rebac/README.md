@@ -129,7 +129,7 @@ Therefore:
 | AAS Registry, Submodel Registry | Shell descriptors including embedded Submodel descriptors, standalone Submodel descriptors, bulk API |
 | Discovery | Discovery entries (the asset links of one shell) and lookups |
 | AASX File Server | AASX packages, asynchronous uploads |
-| AAS Environment | All of the above except AASX packages, plus `/upload` and `/serialization` |
+| AAS Environment | All of the above except AASX packages, plus `/upload`, `/upload-async` and `/serialization` |
 | DPP API | Current state of Digital Product Passports |
 
 The following stay **ABAC-only**; a ReBAC grant never gives access to them:

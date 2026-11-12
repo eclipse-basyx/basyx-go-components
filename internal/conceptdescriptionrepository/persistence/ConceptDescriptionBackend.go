@@ -753,42 +753,62 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 
 // PutConceptDescription creates or replaces the concept description with the given identifier and reports whether an existing row was replaced.
 func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, id string, cd types.IConceptDescription) (bool, error) {
-	if id != cd.ID() {
-		return false, common.NewErrBadRequest("CDREPO-PUTCD-IDMISMATCH Concept Description ID in path and body do not match")
-	}
-	if err := b.verifyConceptDescription(cd, "CDREPO-PUTCD"); err != nil {
+	if err := b.validateConceptDescriptionPut(id, cd); err != nil {
 		return false, err
 	}
-
-	tx, cleanup, err := common.StartTransaction(b.db)
+	isUpdate := false
+	err := common.ExecuteInTransaction(b.db, "CDREPO-PUTCD-STARTTX", "CDREPO-PUTCD-COMMIT", func(tx *sql.Tx) error {
+		var putErr error
+		isUpdate, putErr = b.putConceptDescriptionInTx(ctx, tx, id, cd)
+		return putErr
+	})
 	if err != nil {
-		return false, common.NewInternalServerError("CDREPO-PUTCD-STARTTX " + err.Error())
+		return false, err
 	}
-	defer cleanup(&err)
-	if err = history.LockMutationTx(ctx, tx, history.TableConcept, id); err != nil {
+	return isUpdate, nil
+}
+
+// PutConceptDescriptionInTransaction creates or replaces a concept description within an existing transaction.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization, history, and cancellation data.
+//   - tx: Caller-owned transaction that receives every write, history entry, and ABAC check.
+//   - id: Identifier addressed by the write; it must match the concept description identifier.
+//   - cd: Concept description to store.
+//
+// Returns:
+//   - bool: Whether an existing concept description was replaced.
+//   - error: Validation, authorization, or persistence error.
+func (b *ConceptDescriptionBackend) PutConceptDescriptionInTransaction(ctx context.Context, tx *sql.Tx, id string, cd types.IConceptDescription) (bool, error) {
+	if tx == nil {
+		return false, common.NewInternalServerError("CDREPO-PUTCD-NILTX transaction must not be nil")
+	}
+	if err := b.validateConceptDescriptionPut(id, cd); err != nil {
+		return false, err
+	}
+	return b.putConceptDescriptionInTx(ctx, tx, id, cd)
+}
+
+func (b *ConceptDescriptionBackend) validateConceptDescriptionPut(id string, cd types.IConceptDescription) error {
+	if id != cd.ID() {
+		return common.NewErrBadRequest("CDREPO-PUTCD-IDMISMATCH Concept Description ID in path and body do not match")
+	}
+	return b.verifyConceptDescription(cd, "CDREPO-PUTCD")
+}
+
+func (b *ConceptDescriptionBackend) putConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, id string, cd types.IConceptDescription) (bool, error) {
+	if err := history.LockMutationTx(ctx, tx, history.TableConcept, id); err != nil {
 		return false, err
 	}
 
-	existingExists, existsErr := lockConceptDescriptionForUpdateInTx(ctx, tx, id)
-	if existsErr != nil {
-		return false, existsErr
+	existingExists, err := lockConceptDescriptionForUpdateInTx(ctx, tx, id)
+	if err != nil {
+		return false, err
 	}
 
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return false, common.NewInternalServerError("CDREPO-PUTCD-SHOULDENFORCE " + enforceErr.Error())
-	}
-	if shouldEnforceFormula {
-		ctx = auth.SelectPutFormulaByExistence(ctx, existingExists)
-		if existingExists {
-			_, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, id)
-			if visErr != nil {
-				return false, visErr
-			}
-			if !visible {
-				return false, common.NewErrDenied("CDREPO-PUTCD-ABACDENIED existing concept description is not accessible under ABAC constraints")
-			}
-		}
+	ctx, shouldEnforceFormula, err := b.authorizeExistingConceptDescriptionPutInTx(ctx, tx, id, existingExists)
+	if err != nil {
+		return false, err
 	}
 	var previousSnapshot map[string]any
 	if existingExists {
@@ -798,43 +818,63 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		}
 	}
 
-	isUpdate := existingExists
-	if isUpdate {
-		if err = b.updateConceptDescriptionInTx(ctx, tx, id, cd); err != nil {
-			return false, err
-		}
-	} else {
-		if err = b.createConceptDescriptionInTx(ctx, tx, cd); err != nil {
-			return false, err
-		}
-	}
-
-	if shouldEnforceFormula {
-		exists, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, cd.ID())
-		if visErr != nil {
-			return false, visErr
-		}
-		if !exists {
-			return false, common.NewInternalServerError("CDREPO-PUTCD-ABACCHECKMISSING written concept description not found before commit")
-		}
-		if !visible {
-			return false, common.NewErrDenied("CDREPO-PUTCD-ABACDENIED written concept description is not accessible under ABAC constraints")
-		}
-	}
-
 	changeType := history.ChangeCreated
-	if isUpdate {
+	if existingExists {
 		changeType = history.ChangeUpdated
+		err = b.updateConceptDescriptionInTx(ctx, tx, id, cd)
+	} else {
+		err = b.createConceptDescriptionInTx(ctx, tx, cd)
 	}
-	if err = b.appendConceptDescriptionHistoryTx(ctx, tx, cd, previousSnapshot, changeType, false); err != nil {
+	if err != nil {
 		return false, err
 	}
 
-	if err = common.CommitTransaction(tx); err != nil {
-		return false, common.CommitError("CDREPO-PUTCD-COMMIT", err)
+	if shouldEnforceFormula {
+		if err = b.ensureWrittenConceptDescriptionVisibleInTx(ctx, tx, cd.ID()); err != nil {
+			return false, err
+		}
 	}
 
-	return isUpdate, nil
+	if err = b.appendConceptDescriptionHistoryTx(ctx, tx, cd, previousSnapshot, changeType, false); err != nil {
+		return false, err
+	}
+	return existingExists, nil
+}
+
+func (b *ConceptDescriptionBackend) authorizeExistingConceptDescriptionPutInTx(ctx context.Context, tx *sql.Tx, id string, existingExists bool) (context.Context, bool, error) {
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return ctx, false, common.NewInternalServerError("CDREPO-PUTCD-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if !shouldEnforceFormula {
+		return ctx, false, nil
+	}
+	ctx = auth.SelectPutFormulaByExistence(ctx, existingExists)
+	if !existingExists {
+		return ctx, true, nil
+	}
+	_, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, id)
+	if visErr != nil {
+		return ctx, true, visErr
+	}
+	if !visible {
+		return ctx, true, common.NewErrDenied("CDREPO-PUTCD-ABACDENIED existing concept description is not accessible under ABAC constraints")
+	}
+	return ctx, true, nil
+}
+
+func (b *ConceptDescriptionBackend) ensureWrittenConceptDescriptionVisibleInTx(ctx context.Context, tx *sql.Tx, id string) error {
+	exists, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, id)
+	if visErr != nil {
+		return visErr
+	}
+	if !exists {
+		return common.NewInternalServerError("CDREPO-PUTCD-ABACCHECKMISSING written concept description not found before commit")
+	}
+	if !visible {
+		return common.NewErrDenied("CDREPO-PUTCD-ABACDENIED written concept description is not accessible under ABAC constraints")
+	}
+	return nil
 }
 
 // DeleteConceptDescription removes a concept description by its identifier.

@@ -38,6 +38,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
+	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
 
 // CustomSubmodelRepositoryService is a pass-through stub for future combined logic.
@@ -177,29 +178,9 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 
 	isUpdate := false
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-		putResult, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransactionWithResult(ctx, tx, decodedIdentifier, submodel)
-		if putErr != nil {
-			return putErr
-		}
+		putResult, putErr := s.putSubmodelAndSyncDescriptorsInTransaction(ctx, tx, decodedIdentifier, submodel)
 		isUpdate = putResult.IsUpdate
-		if !putResult.Changed {
-			return nil
-		}
-
-		descriptor, descriptorChanged, descriptorErr := s.syncConfig.ChangedSubmodelDescriptor(putResult.Previous, submodel)
-		if descriptorErr != nil {
-			return descriptorErr
-		}
-		if !descriptorChanged {
-			return nil
-		}
-		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
-		); upsertErr != nil {
-			return upsertErr
-		}
-
-		return s.syncReferencingAASDescriptorsInTransaction(ctx, tx, descriptor, nil, false)
+		return putErr
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -226,6 +207,82 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 		return newSubmodelRepoErrorResponse(jsonErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
 	}
 	return commonmodel.Response(http.StatusCreated, jsonSubmodel), nil
+}
+
+// UpsertSubmodelInTransaction creates or replaces a submodel within a caller-owned
+// transaction and synchronizes its registry descriptors in that transaction when
+// submodel registry integration is enabled.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization, history, and cancellation data.
+//   - tx: Caller-owned transaction shared with the other writes of the operation.
+//   - submodel: Submodel to store.
+//
+// Returns:
+//   - error: Dependency, validation, authorization, or persistence error.
+func (s *CustomSubmodelRepositoryService) UpsertSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	if dependencyErr := s.validateUpsertDependencies(); dependencyErr != nil {
+		return dependencyErr
+	}
+	_, err := s.putSubmodelAndSyncDescriptorsInTransaction(common.WithWriterPostgresReads(ctx), tx, submodel.ID(), submodel)
+	return err
+}
+
+// DescriptorSyncAASIdentifiersInTransaction returns the identifiers of the
+// stored Asset Administration Shells whose descriptors an upsert of the given
+// Submodels may update to embed their descriptors. It returns none when that
+// synchronization is disabled.
+//
+// Parameters:
+//   - ctx: Request context.
+//   - tx: Transaction the lookup runs in.
+//   - submodelIdentifiers: Identifiers of the Submodels to upsert.
+//
+// Returns:
+//   - []string: Sorted unique identifiers of the referencing Shells.
+//   - error: Dependency or lookup error.
+func (s *CustomSubmodelRepositoryService) DescriptorSyncAASIdentifiersInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifiers []string) ([]string, error) {
+	if s == nil || !s.syncConfig.SubmodelRegistryIntegration || !s.enableReferencingAASDescriptorEmbeddingSync {
+		return nil, nil
+	}
+	if dependencyErr := s.validateSyncDependencies(true, true); dependencyErr != nil {
+		return nil, dependencyErr
+	}
+	return s.persistence.AASRepository.ListAASIdentifiersBySubmodelIDsInTransaction(ctx, tx, submodelIdentifiers)
+}
+
+func (s *CustomSubmodelRepositoryService) validateUpsertDependencies() error {
+	if s != nil && s.syncConfig.SubmodelRegistryIntegration {
+		return s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync)
+	}
+	if s == nil || s.persistence == nil || s.persistence.SubmodelRepository == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-UPSERTTX-NILSMREPO Submodel repository backend must not be nil")
+	}
+	return nil
+}
+
+func (s *CustomSubmodelRepositoryService) putSubmodelAndSyncDescriptorsInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelIdentifier string,
+	submodel types.ISubmodel,
+) (submodelrepositorydb.PutSubmodelResult, error) {
+	putResult, err := s.persistence.SubmodelRepository.PutSubmodelInTransactionWithResult(ctx, tx, submodelIdentifier, submodel)
+	if err != nil || !putResult.Changed || !s.syncConfig.SubmodelRegistryIntegration {
+		return putResult, err
+	}
+
+	descriptor, descriptorChanged, err := s.syncConfig.ChangedSubmodelDescriptor(putResult.Previous, submodel)
+	if err != nil || !descriptorChanged {
+		return putResult, err
+	}
+	if err = s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
+		submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+	); err != nil {
+		return putResult, err
+	}
+
+	return putResult, s.syncReferencingAASDescriptorsInTransaction(ctx, tx, descriptor, nil, false)
 }
 
 // DeleteSubmodelByID deletes a submodel and synchronizes descriptor deletion in the same transaction.

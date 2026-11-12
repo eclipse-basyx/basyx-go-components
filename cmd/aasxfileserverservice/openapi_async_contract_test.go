@@ -74,7 +74,7 @@ func TestRequireAsyncAuthenticationRejectsUnverifiedTokenThroughSecurityChain(t 
 	handlerCalled := false
 	router.Use(
 		oidc.Middleware,
-		requireAsyncAuthentication,
+		requireAsyncAuthentication(""),
 		auth.ABACMiddleware(auth.ABACSettings{Enabled: true, Model: accessModel}),
 	)
 	router.Post("/packages-async", func(writer http.ResponseWriter, _ *http.Request) {

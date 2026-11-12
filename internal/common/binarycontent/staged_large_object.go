@@ -343,6 +343,52 @@ func (reader *transactionLargeObjectReader) Close() error {
 	return nil
 }
 
+// OpenSeekableOIDInTransaction opens a large object for seekable reads inside
+// a transaction the caller keeps owning.
+//
+// Parameters:
+//   - ctx: Context used for reads and cancellation.
+//   - tx: Caller-owned transaction; closing the reader leaves it open.
+//   - oid: PostgreSQL large-object identifier.
+//
+// Returns:
+//   - ReadSeekCloser: Reader whose Close releases only the large-object descriptor.
+//   - error: Coded validation or large-object open error.
+func OpenSeekableOIDInTransaction(ctx context.Context, tx *sql.Tx, oid int64) (ReadSeekCloser, error) {
+	reader, err := OpenOIDTx(ctx, tx, oid)
+	if err != nil {
+		return nil, err
+	}
+	opened, ok := reader.(*transactionLargeObjectReader)
+	if !ok {
+		return nil, common.NewInternalServerError("BINARYCONTENT-OPENOIDINTX-READERTYPE unexpected large-object reader")
+	}
+	return &borrowedTransactionLargeObjectReader{reader: opened}, nil
+}
+
+type borrowedTransactionLargeObjectReader struct {
+	reader *transactionLargeObjectReader
+}
+
+func (borrowed *borrowedTransactionLargeObjectReader) Read(destination []byte) (int, error) {
+	return borrowed.reader.Read(destination)
+}
+
+func (borrowed *borrowedTransactionLargeObjectReader) Seek(offset int64, whence int) (int64, error) {
+	return borrowed.reader.Seek(offset, whence)
+}
+
+func (borrowed *borrowedTransactionLargeObjectReader) Close() error {
+	reader := borrowed.reader
+	reader.mu.Lock()
+	defer reader.mu.Unlock()
+	if reader.closed {
+		return nil
+	}
+	reader.closed = true
+	return closeLargeObjectTx(reader.ctx, reader.tx, reader.descriptor)
+}
+
 // UnlinkOIDTx deletes a PostgreSQL large object in the caller's transaction.
 //
 // Parameters:

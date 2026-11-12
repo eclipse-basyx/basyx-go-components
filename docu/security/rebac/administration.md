@@ -321,8 +321,9 @@ prerequisite; `CONFIG-REBAC-*` codes name an invalid setting.
 - Query conditions on related resources (for example `$sm` fields in a
   shell query) only see ABAC-visible related rows. Conditions on the fields
   and elements of a shared resource itself match as for a direct read.
-- Items of `/upload` and of bulk requests are authorized one by one, so an
-  upload can be applied partially, as with ABAC.
+- Items of `/upload`, `/upload-async` and of bulk requests are authorized one
+  by one. A denied item rejects the whole request, so nothing of it is stored,
+  as with ABAC.
 
 ## Upgrade notes
 

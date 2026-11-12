@@ -30,12 +30,10 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"errors"
 	"flag"
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -44,6 +42,7 @@ import (
 	aasxpersistence "github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncupload"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -63,7 +62,7 @@ const (
 
 type aasxAsyncProfile struct {
 	manager *asyncjob.Manager
-	uploads *aasxpersistence.AsyncUploadStore
+	uploads *asyncupload.Store
 }
 
 func runServer(ctx context.Context, configPath string) error {
@@ -141,7 +140,7 @@ func runServer(ctx context.Context, configPath string) error {
 		apiRouter,
 		sharedDB,
 		"aasxfileserverservice",
-		requireAsyncAuthentication,
+		requireAsyncAuthentication(cfg.Server.ContextPath),
 	)
 	if err != nil {
 		return err
@@ -199,7 +198,7 @@ func newAASXAsyncProfile(ctx context.Context, db *sql.DB) (aasxAsyncProfile, err
 	if err != nil {
 		return aasxAsyncProfile{}, err
 	}
-	uploads, err := aasxpersistence.NewAsyncUploadStore(db)
+	uploads, err := asyncupload.NewStore(db)
 	if err != nil {
 		return aasxAsyncProfile{}, err
 	}
@@ -233,14 +232,8 @@ func (profile aasxAsyncProfile) controllers(service *aasxapi.AASXFileServerAPIAP
 	}
 }
 
-func requireAsyncAuthentication(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if strings.Contains(request.URL.Path, "/packages-async") && !auth.IsAuthenticated(request.Context()) {
-			_ = common.WriteErrorResponse(writer, errors.New("access denied"), http.StatusUnauthorized, "Middleware", "Rules", "Denied")
-			return
-		}
-		next.ServeHTTP(writer, request)
-	})
+func requireAsyncAuthentication(contextPath string) func(http.Handler) http.Handler {
+	return auth.RequireAuthenticationForAsyncRoutes(contextPath, "/packages-async")
 }
 
 func main() {

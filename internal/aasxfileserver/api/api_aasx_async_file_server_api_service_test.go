@@ -44,6 +44,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncupload"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 	"github.com/stretchr/testify/require"
 )
@@ -286,7 +287,7 @@ func TestPostAsyncAASXPackageRejectsExhaustedExecutionCapacity(t *testing.T) {
 	manager := asyncjob.NewManager("AASXFS-TEST", time.Minute)
 	releases := reserveAllExecutionSlots(manager)
 	defer releaseExecutionSlots(releases)
-	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
+	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &asyncupload.Store{}))
 
 	upload := newWorkerReadTrackingUpload()
 	defer func() { require.NoError(t, upload.Close()) }()
@@ -298,7 +299,7 @@ func TestPostAsyncAASXPackageRejectsExhaustedExecutionCapacity(t *testing.T) {
 func TestPostAsyncAASXPackageReleasesCapacityAfterAcceptanceFailure(t *testing.T) {
 	manager, err := asyncjob.NewManagerWithExecutionCapacity("AASXFS-TEST", time.Minute, 1)
 	require.NoError(t, err)
-	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
+	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &asyncupload.Store{}))
 	executionSlot, acquired := manager.TryAcquireExecutionSlotLease()
 	require.True(t, acquired)
 	requestContext := asyncjob.WithExecutionSlotLease(t.Context(), executionSlot)
@@ -359,7 +360,7 @@ func TestGetAasxAsyncResultPreservesTypedFailure(t *testing.T) {
 			handleID, err := manager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: asyncPackageJobKind})
 			require.NoError(t, err)
 			require.NoError(t, manager.Fail(t.Context(), handleID, http.StatusInternalServerError, test.payload))
-			service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
+			service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &asyncupload.Store{}))
 
 			response, err := service.GetAasxAsyncResult(t.Context(), common.EncodeString(handleID))
 
@@ -375,7 +376,7 @@ func TestGetAasxAsyncStatusReturnsEncodedResultLocation(t *testing.T) {
 	handleID, err := manager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: asyncPackageJobKind})
 	require.NoError(t, err)
 	require.NoError(t, manager.Fail(t.Context(), handleID, http.StatusInternalServerError, failedOperationResult("failed")))
-	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &persistence.AsyncUploadStore{}))
+	service := NewAASXFileServerAPIAPIService(nil, WithAsyncPackageUploads(manager, &asyncupload.Store{}))
 
 	response, err := service.GetAasxAsyncStatus(t.Context(), common.EncodeString(handleID))
 

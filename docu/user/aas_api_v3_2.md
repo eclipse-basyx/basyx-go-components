@@ -37,7 +37,7 @@ Known v3.2 OpenAPI gaps in standalone services:
 - Standalone AAS Repository `/serialization` is present in generated code but is not wired by the service entrypoint.
 - Standalone Concept Description Repository `/serialization` is present in the OpenAPI file but is not currently exposed by a generated controller/service.
 - Standalone Submodel Repository `/serialization` is routed but returns `501 Not Implemented`.
-- AAS Environment `/serialization` and `/upload` are implemented and should be used for environment import/export; see [Environment Serialization](#environment-serialization).
+- AAS Environment `/serialization`, `/upload` and `/upload-async` are implemented and should be used for environment import/export; see [Environment Serialization](#environment-serialization) and [Environment Upload](#environment-upload).
 
 ## History Configuration
 
@@ -207,6 +207,17 @@ The expected pair of terminal evidence sequence and event hash is a trust anchor
 - `includeConceptDescriptions` (default `true`) adds the Concept Descriptions that the serialized Submodels reference directly or indirectly. Every reference in a serialized Submodel or in an included Concept Description counts when its first key is a `ConceptDescription` or `GlobalReference` key, for example `semanticId`, `supplementalSemanticIds`, the `semanticIdListElement` inherited by list children, `valueId`, `isCaseOf`, and IEC 61360 `unitId` and `valueList` entries. Referenced Concept Descriptions that do not exist or that the caller may not read are omitted.
 
 The response is generated one identifiable at a time into bounded staging storage before it is sent. Memory use therefore depends on the largest single identifiable, not on the number of requested identifiables or the database size. The staged JSON, XML, or AASX specification part is limited by `general.aasxMaxPartExpandedSizeBytes`, and AASX packages are additionally limited by the other AASX limits; larger serializations are rejected with `413`. The identifiers of referenced Concept Descriptions are tracked for deduplication until the serialization ends and are limited to an estimated 16 MiB per request, which allows well over 100,000 distinct references; requests that reference more are also rejected with `413`.
+
+## Environment Upload
+
+`POST /upload` on the AAS Environment imports an AASX, JSON or XML environment in one transaction. Every Concept Description, Submodel and Asset Administration Shell, the AASX thumbnails and supplementary files, and the registry descriptors synchronized for them are stored, or none of them is. A rejected upload returns the status of the failure, and its message names the rejected resource or package part and states that nothing was stored.
+
+`POST /upload-async` accepts the same multipart payload and imports it as an asynchronous operation with the semantics of the AASX File Server's `POST /packages-async`:
+
+- An unsupported format is rejected with `415` and exhausted execution capacity with `429`, before an operation is created. Otherwise the response is `202` with an operation handle and a `Location` header pointing to the status.
+- `GET /upload-async/status/{handleId}` returns `200` with `executionState` `Running` while the import runs, and `302` to the result afterwards.
+- `GET /upload-async/result/{handleId}` returns the `BaseOperationResult`: `Completed` with `success` `true`, or `Failed` with `success` `false` and the messages the synchronous upload returns for the same failure. Nothing from a failed upload is stored.
+- The handle is bound to the uploader. With security enabled, the request must be authenticated, and only the uploader can read the status and result. Results are retained for 15 minutes after the operation ends, and an import must finish within 15 minutes.
 
 ## Internal Attachments And Thumbnails
 

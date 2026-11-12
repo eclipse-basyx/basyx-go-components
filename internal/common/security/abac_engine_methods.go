@@ -240,6 +240,9 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 
 	// aas environment
 	{"POST", "/upload", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
+	{"POST", "/upload-async", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
+	{"GET", "/upload-async/status/{handleId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"GET", "/upload-async/result/{handleId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/serialization", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	// extend mapping for endpoints that are not yet implemented.
 

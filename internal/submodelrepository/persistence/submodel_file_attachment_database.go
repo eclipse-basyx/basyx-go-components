@@ -205,41 +205,71 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(
 	contentType string,
 	fallbackContentType string,
 ) error {
+	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		return s.UploadFileAttachmentReaderWithHistoryInTransaction(ctx, tx, submodelID, idShortPath, file, fileName, contentType, fallbackContentType)
+	})
+}
+
+// UploadFileAttachmentReaderWithHistoryInTransaction streams attachment content
+// and appends the current Submodel snapshot within an existing transaction.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization, history, and cancellation data.
+//   - tx: Caller-owned transaction that receives the content, history, and evidence writes.
+//   - submodelID: Identifier of the attachment's parent submodel.
+//   - idShortPath: Path of the target File submodel element.
+//   - file: Attachment source consumed before the method returns.
+//   - fileName: Original attachment filename.
+//   - contentType: Primary content type declared by the upload source.
+//   - fallbackContentType: Secondary content type declaration used after the primary source.
+//
+// Returns:
+//   - error: Visibility, history, validation, or persistence error.
+func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistoryInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	idShortPath string,
+	file io.Reader,
+	fileName string,
+	contentType string,
+	fallbackContentType string,
+) error {
+	if tx == nil {
+		return common.NewInternalServerError("SMREPO-UPLOADFILEHIST-NILTX transaction must not be nil")
+	}
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
 	if err != nil {
 		return err
 	}
-
-	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		ctx, err := attachmentPutContext(ctx, tx, submodelID, idShortPath)
-		if err != nil {
-			return err
-		}
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
-			return visibilityErr
-		}
-		previousSnapshot, snapshotErr := s.beginSubmodelMutationTx(ctx, tx, submodelID)
-		if snapshotErr != nil {
-			return snapshotErr
-		}
-		reference, resolvedContentType, uploadErr := fileHandler.UploadManagedFileAttachmentReaderTx(
-			ctx,
-			tx,
-			submodelID,
-			idShortPath,
-			file,
-			fileName,
-			contentType,
-			fallbackContentType,
-		)
-		if uploadErr != nil {
-			return uploadErr
-		}
-		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST-PROSPECTIVE", true); visibilityErr != nil {
-			return visibilityErr
-		}
-		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, resolvedContentType)
-	})
+	ctx, err = attachmentPutContext(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST", false); visibilityErr != nil {
+		return visibilityErr
+	}
+	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
+	reference, resolvedContentType, err := fileHandler.UploadManagedFileAttachmentReaderTx(
+		ctx,
+		tx,
+		submodelID,
+		idShortPath,
+		file,
+		fileName,
+		contentType,
+		fallbackContentType,
+	)
+	if err != nil {
+		return err
+	}
+	if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST-PROSPECTIVE", true); visibilityErr != nil {
+		return visibilityErr
+	}
+	return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, resolvedContentType)
 }
 
 func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, previousSnapshot map[string]any, reference binarycontent.Reference, contentType string) error {

@@ -440,3 +440,28 @@ func nullableStringValue(value string) driver.Value {
 	}
 	return value
 }
+
+func TestAcquireMutationLocksTxLocksSortedUniqueIdentifiersWithoutHistory(t *testing.T) {
+	previous := ActiveConfig()
+	Configure(Config{Mode: ModeOff})
+	t.Cleanup(func() { Configure(previous) })
+	require.False(t, LiveSnapshotRequired())
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	for _, identifier := range []string{"a", "b"} {
+		mock.ExpectExec(`SELECT pg_advisory_xact_lock\(hashtextextended\(\$1, \$2\)\)`).
+			WithArgs(TableSubmodel+":"+identifier, int64(0)).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+	}
+	tx, err := db.Begin()
+	require.NoError(t, err)
+
+	require.NoError(t, AcquireMutationLocksTx(t.Context(), tx, TableSubmodel, []string{"b", "a", "b"}))
+	require.NoError(t, mock.ExpectationsWereMet())
+
+	err = AcquireMutationLocksTx(t.Context(), tx, TableSubmodel, []string{"a", " "})
+	require.Error(t, err)
+}

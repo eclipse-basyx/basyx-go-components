@@ -1,0 +1,19 @@
+kind: fixed
+body: >-
+  The AAS Environment upload (`POST /upload`) of AASX, JSON and XML files is now
+  all-or-nothing. All Concept Descriptions, Submodels and Asset Administration
+  Shells, the AASX thumbnails and supplementary files, and the registry
+  descriptors synchronized for them are stored in one transaction, together
+  with their history and event outbox entries. If any of them is rejected,
+  nothing from the upload is stored, and the error response names the rejected
+  resource or package part and states that the upload was rolled back. Previously,
+  resources stored before the failing one remained, together with their
+  descriptors. The HTTP status codes of failed uploads are unchanged.
+time: 2026-11-11T19:00:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 875
+  SecurityImpact: >-
+    An upload with a resource denied by ABAC no longer leaves the resources
+    the requester was allowed to write before it, so a rejected upload has no
+    persistent effect.

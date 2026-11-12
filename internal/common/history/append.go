@@ -411,6 +411,42 @@ func LockMutationsTx(ctx context.Context, tx *sql.Tx, table string, identifiers 
 	return nil
 }
 
+// AcquireMutationLocksTx takes the entity locks of identifiers in stable order
+// whether or not history is recorded. A transaction that writes several
+// entities takes them before its first write, so concurrent transactions over
+// overlapping entities wait for each other instead of deadlocking on row locks.
+// The locks use the keys of LockMutationTx, so later per-entity locks in the
+// same transaction are reentrant.
+//
+// Parameters:
+//   - ctx: Context used for the lock statements.
+//   - tx: Transaction that holds the locks until it ends.
+//   - table: History table identifying the entity kind.
+//   - identifiers: Entity identifiers; duplicates are locked once.
+//
+// Returns:
+//   - error: Validation or lock execution error.
+func AcquireMutationLocksTx(ctx context.Context, tx *sql.Tx, table string, identifiers []string) error {
+	ordered := make([]string, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		validated, err := validateAppendInputs(tx, identifier)
+		if err != nil {
+			return err
+		}
+		ordered = append(ordered, validated)
+	}
+	sort.Strings(ordered)
+	for index, identifier := range ordered {
+		if index > 0 && identifier == ordered[index-1] {
+			continue
+		}
+		if err := lockIdentifierTx(ctx, tx, table, identifier); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func appendVersionWithLatestTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, latest *latestVersion, cfg Config) error {
 	payload, err := buildHistoryPayload(snapshot, latest, cfg)
 	if err != nil {

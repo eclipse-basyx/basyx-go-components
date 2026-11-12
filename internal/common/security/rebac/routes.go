@@ -145,6 +145,10 @@ func addAggregateRoutes(matrix routeMatrix) {
 	repositories := []ResourceKind{KindAAS, KindSubmodel, KindConceptDescription}
 	matrix.add(http.MethodGet, "/serialization", routeSpec{target: targetAggregate, kinds: repositories, relation: PermissionRead})
 	matrix.add(http.MethodPost, "/upload", routeSpec{target: targetAggregate, kinds: repositories, action: actionUpsert})
+	matrix.add(http.MethodPost, "/upload-async", routeSpec{target: targetAggregate, kinds: repositories, action: actionUpsert})
+	uploadJob := routeSpec{target: targetJob, kinds: repositories}
+	matrix.add(http.MethodGet, "/upload-async/status/{handleId}", uploadJob)
+	matrix.add(http.MethodGet, "/upload-async/result/{handleId}", uploadJob)
 	for _, kind := range []ResourceKind{KindAASDescriptor, KindSubmodelDescriptor} {
 		bulk := "/bulk" + kind.Prefix
 		matrix.add(http.MethodPost, bulk, routeSpec{target: targetAggregate, kinds: []ResourceKind{kind}, action: actionCreate})

@@ -41,7 +41,7 @@ Implemented history, recent-change, and signing runtime areas from the v3.2 Open
 - Concept Description Repository: `/concept-descriptions/$recent-changes`.
 - AAS Registry and Digital Twin Registry: `createdFrom` and `updatedFrom` filters on `/shell-descriptors`.
 - Submodel Registry: `createdFrom` and `updatedFrom` filters on `/submodel-descriptors`.
-- AAS Environment: `/serialization`, `/upload`, descriptor list timestamp filters, `/shells/$recent-changes`, `/shells/{aasIdentifier}/$history`, `/shells/{aasIdentifier}/$signed`, `/submodels/$recent-changes`, `/submodels/{submodelIdentifier}/$history`, `/submodels/{submodelIdentifier}/$signed`, `/submodels/{submodelIdentifier}/$value/$signed`, `/concept-descriptions/$recent-changes`, and the composed asynchronous operation result/status endpoints.
+- AAS Environment: `/serialization`, `/upload`, `/upload-async` with its status and result endpoints, descriptor list timestamp filters, `/shells/$recent-changes`, `/shells/{aasIdentifier}/$history`, `/shells/{aasIdentifier}/$signed`, `/submodels/$recent-changes`, `/submodels/{submodelIdentifier}/$history`, `/submodels/{submodelIdentifier}/$signed`, `/submodels/{submodelIdentifier}/$value/$signed`, `/concept-descriptions/$recent-changes`, and the composed asynchronous operation result/status endpoints.
 - Migration `1_1_0.sql`: adds v3.2 timestamp columns and the enum migration for `Batch`.
 - Migration `1_1_1.sql`: adds history metadata and payload tables, indexes, and PostgreSQL mutation guards.
 - Migration `1_1_2.sql`: adds snapshot-checkpoint indexes for diff-backed restore.
@@ -56,7 +56,7 @@ The current v3.2 Submodel Repository OpenAPI also defines `PUT`, `PATCH`, and `D
 OpenAPI endpoints checked outside the history/recent/signing scope:
 
 - AAS Repository, Submodel Repository, Concept Description Repository, and AAS Environment OpenAPI files contain `/serialization`.
-- The AAS Environment `/serialization` and `/upload` endpoints are custom implemented and covered by integration tests.
+- The AAS Environment `/serialization`, `/upload` and `/upload-async` endpoints are custom implemented and covered by integration tests.
 - The Submodel Repository `/serialization` route is wired and currently returns `501 Not Implemented`.
 - The standalone AAS Repository generated serialization handler is present in `pkg/aasrepositoryapi`, but it is not wired by `cmd/aasrepositoryservice`.
 - The standalone Concept Description Repository OpenAPI contains `/serialization`, but the current generated Go package only contains the interface, not a registered controller/service implementation.
@@ -208,7 +208,7 @@ The table lists direct write endpoints. The AAS Environment exposes the correspo
 | `/submodel-descriptors/{submodelIdentifier}` | `DELETE` | `submodel_descriptor_history` | `Deleted` |
 | `/bulk/submodel-descriptors` | `POST`, `PUT`, `DELETE` | `submodel_descriptor_history` | One corresponding event per descriptor after asynchronous processing succeeds |
 
-The environment import portion of AAS Environment `/upload` invokes the corresponding identifiable `PUT` paths. One upload can therefore append multiple rows across the Concept Description, Submodel, and AAS streams rather than one special upload event.
+The environment import portion of AAS Environment `/upload` and `/upload-async` invokes the corresponding identifiable `PUT` paths in one transaction. One upload can therefore append multiple rows across the Concept Description, Submodel, and AAS streams rather than one special upload event; a failed upload appends none.
 
 Read endpoints and operation invocation endpoints do not append history rows.
 

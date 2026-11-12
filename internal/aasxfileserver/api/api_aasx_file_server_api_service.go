@@ -42,6 +42,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncupload"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 )
@@ -61,14 +62,14 @@ type AASXFileServerAPIAPIService struct {
 	backend        *persistence.AASXFileServerDatabase
 	packageCreator aasxPackageCreator
 	asyncJobs      *asyncjob.Manager
-	asyncUploads   *persistence.AsyncUploadStore
+	asyncUploads   *asyncupload.Store
 }
 
 // AASXFileServerServiceOption configures optional service capabilities.
 type AASXFileServerServiceOption func(*AASXFileServerAPIAPIService)
 
 // WithAsyncPackageUploads enables PostgreSQL-backed SSP-002 processing.
-func WithAsyncPackageUploads(manager *asyncjob.Manager, uploads *persistence.AsyncUploadStore) AASXFileServerServiceOption {
+func WithAsyncPackageUploads(manager *asyncjob.Manager, uploads *asyncupload.Store) AASXFileServerServiceOption {
 	return func(service *AASXFileServerAPIAPIService) {
 		service.asyncJobs = manager
 		service.asyncUploads = uploads
@@ -194,7 +195,7 @@ func (s *AASXFileServerAPIAPIService) PostAsyncAASXPackage(ctx context.Context, 
 	if s.asyncJobs == nil || s.asyncUploads == nil {
 		return newAPIErrorResponse(errors.New("asynchronous package persistence is not configured"), http.StatusInternalServerError, operation, "NotConfigured"), nil
 	}
-	releaseExecutionSlot, acquired := acquireAsyncExecutionSlot(ctx, s.asyncJobs)
+	releaseExecutionSlot, acquired := s.asyncJobs.AcquireExecutionSlot(ctx)
 	if !acquired {
 		capacityErr := errors.New("AASXFS-ASYNC-CAPACITY asynchronous execution capacity is exhausted")
 		return newAPIErrorResponse(capacityErr, http.StatusTooManyRequests, operation, "ExecutionCapacityExhausted"), nil
@@ -221,13 +222,6 @@ func (s *AASXFileServerAPIAPIService) PostAsyncAASXPackage(ctx context.Context, 
 
 	go s.processAsyncPackage(executionCtx, s.asyncJobs, handleID, durableUpload, aasIDs, fileName, cancelExecution, releaseExecutionSlot)
 	return openapi.Response(http.StatusAccepted, openapi.OperationHandle{HandleId: handleID}), nil
-}
-
-func acquireAsyncExecutionSlot(ctx context.Context, manager *asyncjob.Manager) (func(), bool) {
-	if executionSlot, found := asyncjob.ExecutionSlotLeaseFromContext(ctx); found {
-		return executionSlot.Claim()
-	}
-	return manager.TryAcquireExecutionSlot()
 }
 
 // GetAasxAsyncStatus returns a running result or redirects terminal operations.

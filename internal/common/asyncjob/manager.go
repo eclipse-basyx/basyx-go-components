@@ -317,6 +317,16 @@ func NewPersistenceContext(executionContext context.Context) (context.Context, c
 	return context.WithTimeout(context.WithoutCancel(executionContext), defaultPersistenceTimeout)
 }
 
+// AcquireExecutionSlot claims the execution slot reserved for the request
+// before staging, or reserves a new one when the request carries none.
+// The returned release function is safe to call more than once.
+func (m *Manager) AcquireExecutionSlot(ctx context.Context) (func(), bool) {
+	if executionSlot, found := ExecutionSlotLeaseFromContext(ctx); found {
+		return executionSlot.Claim()
+	}
+	return m.TryAcquireExecutionSlot()
+}
+
 // TryAcquireExecutionSlot reserves bounded local execution capacity.
 // The returned release function is safe to call more than once.
 func (m *Manager) TryAcquireExecutionSlot() (func(), bool) {

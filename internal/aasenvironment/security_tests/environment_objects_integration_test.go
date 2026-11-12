@@ -71,7 +71,10 @@ func TestEnvironmentIdentifiableAuthorization(t *testing.T) {
 	t.Run("formula and rule-bound element filters apply to all formats", func(t *testing.T) { checkEnvironmentFormulaAndFilters(t, admin, editor, id) })
 	t.Run("create and update rights use actual state for every type", func(t *testing.T) { checkEnvironmentWriteRights(t, admin, editor, id) })
 	t.Run("update formula checks both states and returns 403 through wrapper", func(t *testing.T) { checkEnvironmentUpdateStates(t, admin, editor, id) })
-	t.Run("allowed earlier objects survive a later denial", func(t *testing.T) { checkEnvironmentPartialImport(t, admin, editor, id) })
+	t.Run("a later denial rolls back earlier objects", func(t *testing.T) { checkEnvironmentDeniedImportStoresNothing(t, admin, editor, id) })
+	t.Run("asynchronous upload rolls back denials and binds its handle to the uploader", func(t *testing.T) {
+		checkEnvironmentAsyncUploadAuthorization(t, admin, editor, id)
+	})
 	t.Run("AASX binaries follow visible owners and references", func(t *testing.T) { checkEnvironmentBinaryVisibility(t, admin, editor, id) })
 	t.Run("AASX attachment writes use binary existence", func(t *testing.T) { checkEnvironmentAttachmentWriteRights(t, admin, editor, id) })
 	t.Run("explicit selection retains every permitted submodel", func(t *testing.T) { checkEnvironmentSelection(t, admin, editor, id) })
@@ -262,15 +265,20 @@ func checkEnvironmentUpdateStates(t *testing.T, admin, editor, id string) {
 	require.Contains(t, stored, "secret-value", "read projection must not truncate a replacement upload")
 }
 
-func checkEnvironmentPartialImport(t *testing.T, admin, editor, id string) {
+func checkEnvironmentDeniedImportStoresNothing(t *testing.T, admin, editor, id string) {
 	t.Helper()
-	partialID := id + ":partial"
-	installEnvironmentRules(t, admin, environmentObjectRule("cd", partialID, "CREATE"))
-	requireEnvironmentUpload(t, editor, environmentFixture(partialID, "Visible"), http.StatusForbidden)
-	status, _ := doAuthorizedRequest(t, http.MethodGet, testBaseURL+"/concept-descriptions/"+common.EncodeString(partialID), "", admin)
-	require.Equal(t, http.StatusOK, status)
-	status, _ = doAuthorizedRequest(t, http.MethodGet, testBaseURL+"/submodels/"+common.EncodeString(partialID), "", admin)
-	require.Equal(t, http.StatusNotFound, status)
+	deniedID := id + ":partial"
+	installEnvironmentRules(t, admin, environmentObjectRule("cd", deniedID, "CREATE"))
+	payload, err := json.Marshal(environmentFixture(deniedID, "Visible"))
+	require.NoError(t, err)
+	status, body := postEnvironmentFile(t, editor, "environment.json", payload)
+	require.Equal(t, http.StatusForbidden, status, string(body))
+	require.Contains(t, string(body), "AASENV-PROCESSENV-ROLLEDBACK")
+	require.Contains(t, string(body), deniedID)
+	for _, path := range []string{"/concept-descriptions/", "/submodels/", "/shells/"} {
+		status, _ = doAuthorizedRequest(t, http.MethodGet, testBaseURL+path+common.EncodeString(deniedID), "", admin)
+		require.Equal(t, http.StatusNotFound, status, "denied upload must not leave %s behind", path)
+	}
 }
 
 func checkEnvironmentBinaryVisibility(t *testing.T, admin, editor, id string) {
