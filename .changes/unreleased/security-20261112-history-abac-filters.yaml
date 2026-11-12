@@ -1,0 +1,19 @@
+kind: security
+body: >-
+  With ABAC enabled, `GET /submodels/{submodelIdentifier}/$history` and
+  `GET /shells/{aasIdentifier}/$history` in the Submodel Repository, AAS
+  Repository and AAS Environment now answer 404 when the caller's access rules
+  restrict the resource with a formula filter or a `FILTER`/`FILTERLIST`
+  fragment filter. Stored versions cannot be filtered, so only callers allowed
+  to read the complete resource receive them.
+time: 2026-11-12T16:30:00+01:00
+custom:
+  Impact: High
+  PullRequest: 883
+  SecurityImpact: >-
+    Previously, `$history` returned the complete stored version to every caller
+    whose rules granted READ on the route, ignoring formula conditions and
+    fragment filters. A caller could read Submodels and AAS that the direct read
+    hides from them, and fields such as `supplementalSemanticIds` that a
+    FILTERLIST removes. Deployments with `history.mode` set to `api` or `audit`
+    were affected.

@@ -478,7 +478,12 @@ func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Cont
 }
 
 // GetSubmodelByIDAndDate returns the Submodel version valid at the requested instant.
+// Snapshots cannot be filtered by ABAC formulas or fragment filters, so the
+// version is hidden from callers whose access those filters restrict.
 func (s *SubmodelDatabase) GetSubmodelByIDAndDate(ctx context.Context, submodelIdentifier string, at time.Time) (types.ISubmodel, error) {
+	if auth.HistoricalReadRequiresBackendFilter(ctx) {
+		return nil, common.NewErrNotFound("SMREPO-HISTORY-FILTERED Submodel version is not visible with the active ABAC filter")
+	}
 	snapshot, err := history.SnapshotByDate(ctx, s.readDB(ctx), history.TableSubmodel, submodelIdentifier, at)
 	if err != nil {
 		return nil, err

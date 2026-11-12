@@ -351,6 +351,43 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET annotated submodel history - usera hidden because the formula cannot filter snapshots",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/$history",
+    "expectedStatus": 404
+  },
+  {
+    "context": "GET relationship submodel history - usera filtered out",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/$history",
+    "expectedStatus": 404
+  },
+  {
+    "context": "GET annotated submodel history - userb hidden because the FILTERLIST cannot filter snapshots",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/$history",
+    "expectedStatus": 404
+  },
+  {
+    "context": "GET relationship submodel history - userb unrestricted IDENTIFIABLE access",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/$history",
+    "shouldMatch": "bodies/postSubmodelWithRelationshipElementRecent.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET annotated submodel history - admin full access",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/$history",
+    "shouldMatch": "bodies/postSubmodelWithAnnotatedRelationshipElementRecent.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "POST submodel - userx allowed only for matching body condition",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",

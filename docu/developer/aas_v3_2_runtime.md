@@ -531,9 +531,9 @@ Current behavior:
 Intentional scope boundary for this release:
 
 - Historical snapshots are stored as JSON and are not re-querying the normalized current tables.
-- `$history` does not apply current-table ABAC formula filters or logical-expression redaction to stored snapshots.
+- `$history` cannot apply current-table ABAC formula filters or fragment filters to stored snapshots. It returns `404 Not Found` whenever the caller's ABAC decision leaves such a filter, so only callers allowed to read the complete resource receive historical versions. Historical DPP reads follow the same rule.
 - `$recent-changes` applies current-table ABAC formula filters for current visible rows but does not redact fields inside returned snapshot JSON.
-- Route assignments for these endpoints must only be granted to principals allowed to read the complete resource returned by the endpoint.
+- Route assignments for `$recent-changes` must only be granted to principals allowed to read the complete resource returned by the endpoint.
 
 Recommended follow-up:
 

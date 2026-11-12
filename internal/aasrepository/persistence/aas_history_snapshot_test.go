@@ -27,7 +27,12 @@ package persistence
 
 import (
 	"testing"
+	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,4 +45,30 @@ func TestSnapshotReferenceContainsKeyValue(t *testing.T) {
 
 	require.True(t, snapshotReferenceContainsKeyValue(reference, "sm-1"))
 	require.False(t, snapshotReferenceContainsKeyValue(reference, "sm-2"))
+}
+
+func TestGetAssetAdministrationShellByIDAndDateHidesVersionFromRestrictedReaders(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	_, err = (&AssetAdministrationShellDatabase{db: db}).GetAssetAdministrationShellByIDAndDate(restrictedReadAASContext(t), "urn:aas", time.Now())
+
+	require.True(t, common.IsErrNotFound(err), "error=%v", err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetAssetAdministrationShellByIDAndDateReadsHistoryForUnrestrictedReaders(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	allowed := true
+	ctx := auth.WithQueryFilter(aasSigningTestContext(t), &auth.QueryFilter{Formula: &grammar.LogicalExpression{Boolean: &allowed}})
+	mock.ExpectQuery(`SELECT "history"."history_id" FROM "aas_history" AS "history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}))
+
+	_, err = (&AssetAdministrationShellDatabase{db: db}).GetAssetAdministrationShellByIDAndDate(ctx, "urn:aas", time.Now())
+
+	require.True(t, common.IsErrNotFound(err), "error=%v", err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

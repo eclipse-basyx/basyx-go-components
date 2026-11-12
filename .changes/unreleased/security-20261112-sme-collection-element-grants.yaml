@@ -1,0 +1,14 @@
+kind: security
+body: >-
+  With ABAC, the Submodel Element collection reads of the Submodel Repository
+  and AAS Environment (`GET /submodels/{submodelIdentifier}/submodel-elements`
+  and its `$value`, `$metadata`, `$reference` and `$path` variants) now return
+  only the elements that the caller's `$sme` `REFERABLE` grants cover, as the
+  single-element reads do.
+time: 2026-11-12T19:00:00+01:00
+custom:
+  Impact: Medium
+  PullRequest: 883
+  SecurityImpact: >-
+    Previously a READ grant on one Submodel Element made these reads return
+    every element of the Submodel, including values.
