@@ -1,0 +1,13 @@
+kind: fixed
+body: >-
+  Submodel Repository reads no longer fail with HTTP 500 when an ABAC rule
+  combines a FILTERLIST fragment on `$sm#supplementalSemanticIds[]` or
+  `$sm#semanticId.keys[]` with a formula or fragment condition on `$sm#id` or
+  `$sm#idShort`; the filtered references are now returned as the rule
+  describes.
+time: 2026-11-12T12:00:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 881
+  SecurityImpact: >-
+    None. Affected reads failed closed with HTTP 500 and disclosed no data.
