@@ -330,8 +330,8 @@ func buildAuthorizedSubmodelDescriptorListQuery(
 	if err != nil {
 		return nil, err
 	}
-	return dialect.From(page.As(pageAlias)).
-		With(authorizedAlias, authorized).
+	query := dialect.From(page.As(pageAlias)).With(authorizedAlias, authorized)
+	return joinAASDescriptor(query, pageTable.Col(common.ColAASDescriptorID)).
 		Select(
 			pageTable.Col(common.ColAASID),
 			descriptorJSON,
