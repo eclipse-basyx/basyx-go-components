@@ -234,6 +234,36 @@
     "expectedStatus": 403
   },
   {
+    "context": "GET viewer-visible aas history - viewer hidden because the formula cannot filter snapshots",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk/$history",
+    "expectedStatus": 404
+  },
+  {
+    "context": "GET viewer-hidden aas history - viewer receives hidden 404",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4/$history",
+    "expectedStatus": 404
+  },
+  {
+    "context": "GET viewer-visible aas history - editor allowed by unrestricted IDENTIFIABLE object",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk/$history",
+    "shouldMatch": "bodies/post/viewerAllowed.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET viewer-hidden aas history - admin full access",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4/$history",
+    "shouldMatch": "bodies/post/viewerHidden.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "POST editor-allowed aas - editor",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",

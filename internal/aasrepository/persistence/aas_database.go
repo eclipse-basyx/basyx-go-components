@@ -313,7 +313,12 @@ func (s *AssetAdministrationShellDatabase) GetSignedAssetAdministrationShell(ctx
 }
 
 // GetAssetAdministrationShellByIDAndDate returns the AAS version valid at the requested instant.
+// Snapshots cannot be filtered by ABAC formulas or fragment filters, so the
+// version is hidden from callers whose access those filters restrict.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDAndDate(ctx context.Context, aasIdentifier string, at time.Time) (types.IAssetAdministrationShell, error) {
+	if auth.HistoricalReadRequiresBackendFilter(ctx) {
+		return nil, common.NewErrNotFound("AASREPO-HISTORY-FILTERED AAS version is not visible with the active ABAC filter")
+	}
 	snapshot, err := history.SnapshotByDate(ctx, s.readDB(ctx), history.TableAAS, aasIdentifier, at)
 	if err != nil {
 		return nil, err

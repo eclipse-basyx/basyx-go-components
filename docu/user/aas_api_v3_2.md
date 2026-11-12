@@ -312,6 +312,7 @@ Behavior:
 - A date before deletion can still resolve the historical version.
 - A date after deletion returns not found.
 - If the requested date is exactly on an update boundary, the newer version is returned.
+- With ABAC enabled, callers whose access rules leave a formula or fragment filter receive not found; see [Security](#security).
 
 Submodel element changes are tracked as part of the owning Submodel. If a Submodel Element is added, changed, deleted, or has an attachment update, the next Submodel history version reconstructs to a full Submodel snapshot even when the stored payload row is a diff.
 
@@ -533,7 +534,7 @@ The new history, recent-change, and signed endpoints are protected as read endpo
 
 Important operational note:
 
-- `$history` is route-authorized in this release. It does not apply current-table ABAC filters or logical-expression redaction to stored snapshots. `$recent-changes` applies current identifiable ABAC filters.
+- `$history` cannot apply ABAC formula filters or `FILTER`/`FILTERLIST` fragment filters to stored snapshots. It returns `404 Not Found` when the caller's access rules restrict the resource with such a filter, so only callers allowed to read the complete resource receive historical versions. `$recent-changes` applies current identifiable ABAC filters.
 - Fine-grained snapshot field filtering is intentionally out of scope for history responses.
 
 ## Operational Considerations

@@ -213,7 +213,7 @@ Outcomes:
 
 CREATE authorization is evaluated against the staged resource or created subtree inside the transaction. UPDATE and PATCH authorization must be true for both the complete current state and the complete prospective state after applying the operation's replacement or merge semantics. Checks happen before commit, and denial rolls back model, binary, history, and evidence changes.
 
-Fragment filters shape read responses. Internal mutation merge states and history snapshot reads use complete persisted state. History snapshot reads ignore response filters regardless of whether WORM evidence is enabled; write authorization and audit metadata still use the original request context.
+Fragment filters shape read responses. Internal mutation merge states and recorded history snapshots use complete persisted state, regardless of whether WORM evidence is enabled; write authorization and audit metadata still use the original request context. Because stored snapshots cannot be filtered, `$history` and historical DPP reads return `404 Not Found` when the caller's ABAC decision leaves a formula or fragment filter.
 
 Submodel element metadata PATCH writes only the supplied metadata fields. It does not copy stored values or children into the write payload. Property and Range valueType changes read and convert the current value under transaction locks; authorization and metamodel checks run before commit.
 

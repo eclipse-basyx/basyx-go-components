@@ -1430,9 +1430,6 @@ func submodelDPPIDMatches(submodel types.ISubmodel, dppID string) bool {
 
 func (s *DPPRepositoryService) resolveAASByID(ctx context.Context, aasID string, at time.Time) (types.IAssetAdministrationShell, error) {
 	if !at.IsZero() {
-		if auth.HistoricalReadRequiresBackendFilter(ctx) {
-			return nil, common.NewErrNotFound("DPP-RESOLVE-HISTORYFILTERED historical DPP is not visible with the active query filter")
-		}
 		return s.aasRepo.GetAssetAdministrationShellByIDAndDate(ctx, aasID, at)
 	}
 	return s.aasRepo.GetAssetAdministrationShellByID(ctx, aasID)

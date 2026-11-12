@@ -190,7 +190,10 @@
       { "USEACL": "read_role", "USEOBJECTS": [ "all_submodel_read_routes" ], "USEFORMULA": "viewer_formula_annotated_only",
         "FILTERLIST": [ { "FRAGMENT": "$sm#supplementalSemanticIds[]", "CONDITION": { "$boolean": false } } ] },
 
-      { "USEACL": "read_member", "USEOBJECTS": [ "annotated_identifiable", "annotated_referable" ], "USEFORMULA": "viewer_member" },
+      {
+        "USEACL": "read_member", "USEOBJECTS": [ "annotated_identifiable", "annotated_referable" ], "USEFORMULA": "viewer_member",
+        "FILTERLIST": [ { "FRAGMENT": "$sm#semanticId", "CONDITION": { "$boolean": false } } ]
+      },
       { "USEACL": "read_member", "USEOBJECTS": [ "relationship_identifiable", "relationship_referable" ], "USEFORMULA": "viewer_member" },
       { "USEACL": "read_role", "USEOBJECTS": [ "annotated_referable", "relationship_referable" ], "USEFORMULA": "editor_only" },
 
