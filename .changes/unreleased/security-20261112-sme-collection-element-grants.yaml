@@ -8,7 +8,7 @@ body: >-
 time: 2026-11-12T19:00:00+01:00
 custom:
   Impact: Medium
-  PullRequest: 881
+  PullRequest: 883
   SecurityImpact: >-
     Previously a READ grant on one Submodel Element made these reads return
     every element of the Submodel, including values.

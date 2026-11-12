@@ -9,7 +9,7 @@ body: >-
 time: 2026-11-12T16:30:00+01:00
 custom:
   Impact: High
-  PullRequest: 881
+  PullRequest: 883
   SecurityImpact: >-
     Previously, `$history` returned the complete stored version to every caller
     whose rules granted READ on the route, ignoring formula conditions and
