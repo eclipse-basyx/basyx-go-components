@@ -1,0 +1,6 @@
+[
+  {
+    "issuer": "http://keycloak:8080/realms/element-access-filtering",
+    "audience": "element-access-filtering"
+  }
+]

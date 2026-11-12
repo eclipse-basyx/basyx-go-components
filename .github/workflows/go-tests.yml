@@ -69,6 +69,11 @@ jobs:
           cd internal/submodelrepository/integration_tests
           go test -v .
 
+      - name: Run submodel element access integration tests
+        run: |
+          cd internal/submodelrepository/integration_tests/element_access_filtering
+          go test -v .
+
   submodel-repository-query-tests:
     name: Submodel Repository Query Tests
     runs-on: ubuntu-latest

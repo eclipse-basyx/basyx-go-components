@@ -1,0 +1,97 @@
+x-postgres-connection: &postgres-connection
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: admin
+  POSTGRES_PASSWORD: admin123
+  POSTGRES_DBNAME: basyxTestDB
+
+x-repository-environment: &repository-environment
+  <<: *postgres-connection
+  SERVER_PORT: "5004"
+  SERVER_STRICTVERIFICATION: "off"
+  ABAC_ENABLED: "true"
+  ABAC_MODELPATH: /security_env/access-rules.json
+  ABAC_POLICY_FILE_IMPORT: if_missing
+  OIDC_TRUSTLISTPATH: /security_env/trustlist.json
+
+x-repository-service: &repository-service
+  depends_on:
+    basyx_configuration:
+      condition: service_completed_successfully
+    keycloak-healthcheck:
+      condition: service_completed_successfully
+  volumes:
+    - ../security_env:/security_env:ro
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  basyx_configuration:
+    build:
+      context: ../../../../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment: *postgres-connection
+    depends_on:
+      db:
+        condition: service_healthy
+
+  submodel-repository:
+    <<: *repository-service
+    build:
+      context: ../../../../..
+      dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    environment:
+      <<: *repository-environment
+      SERVER_CONTEXTPATH: /submodel-repo
+    ports:
+      - "127.0.0.1:${BASYX_IT_API_PORT:-6004}:5004"
+
+  aas-environment:
+    <<: *repository-service
+    build:
+      context: ../../../../..
+      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    environment:
+      <<: *repository-environment
+      SERVER_CONTEXTPATH: /aas-environment
+    ports:
+      - "127.0.0.1:${BASYX_IT_ENVIRONMENT_API_PORT:-6014}:5004"
+
+  keycloak:
+    image: keycloak/keycloak:26.7.4
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: http://keycloak:8080
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HEALTH_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - "127.0.0.1:${BASYX_IT_KEYCLOAK_PORT:-18080}:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
+  keycloak-healthcheck:
+    image: curlimages/curl:8.15.0
+    command:
+      - sh
+      - -c
+      - "until curl -sf http://keycloak:9000/health/ready; do sleep 2; done"
+    depends_on:
+      - keycloak

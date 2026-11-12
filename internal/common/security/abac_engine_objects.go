@@ -546,8 +546,9 @@ func buildStringEqFilter(fieldPath string, value string) *grammar.LogicalExpress
 // can be used to further constrain the result set (e.g. as an additional
 // backend filter).
 type AccessWithLE struct {
-	access bool
-	le     *grammar.LogicalExpression
+	access    bool
+	le        *grammar.LogicalExpression
+	coverages []semanticObjectCoverage
 }
 
 type objectMatchContext struct {
@@ -592,34 +593,25 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string, basePat
 
 func matchRouteObjectsWithIdentifiablePath(objs []grammar.ObjectItem, reqPath, identifiablePath, basePath string) AccessWithLE {
 	var logicalExpressions []grammar.LogicalExpression
+	var coverages []semanticObjectCoverage
 	access := false
-	for _, oi := range objs {
-		switch oi.Kind {
-		case grammar.Route:
-			if matchRouteACL(joinBasePath(basePath, oi.Route.Route), reqPath) {
+	for _, object := range objs {
+		if object.Kind == grammar.Route {
+			if matchRouteACL(joinBasePath(basePath, object.Route.Route), reqPath) {
 				return AccessWithLE{access: true}
 			}
-		case grammar.Descriptor:
-			desc := oi.Descriptor
-			if desc != nil {
-				if appendMatchedMappedRoutes(mapDescriptorValueToRoute(*desc, basePath), reqPath, &access, &logicalExpressions) {
-					return AccessWithLE{access: true}
-				}
-			}
-		case grammar.Identifiable:
-			identifiable := oi.Identifiable
-			if identifiable != nil {
-				if appendMatchedMappedRoutes(mapIdentifiableValueToRoute(*identifiable, basePath), identifiablePath, &access, &logicalExpressions) {
-					return AccessWithLE{access: true}
-				}
-			}
-		case grammar.Referable:
-			referable := oi.Referable
-			if referable != nil {
-				if appendMatchedMappedRoutes(mapReferableValueToRoute(*referable, basePath), reqPath, &access, &logicalExpressions) {
-					return AccessWithLE{access: true}
-				}
-			}
+			continue
+		}
+		objectPath := reqPath
+		if object.Kind == grammar.Identifiable {
+			objectPath = identifiablePath
+		}
+		previousFilters := len(logicalExpressions)
+		if appendMatchedMappedRoutes(mappedObjectRoutes(object, basePath), objectPath, &access, &logicalExpressions) {
+			return AccessWithLE{access: true}
+		}
+		if object.Kind == grammar.Referable && len(logicalExpressions) > previousFilters {
+			coverages = append(coverages, semanticCoveragesForObject(object, SemanticResourceSME, basePath)...)
 		}
 	}
 
@@ -629,7 +621,25 @@ func matchRouteObjectsWithIdentifiablePath(objs []grammar.ObjectItem, reqPath, i
 			Or: logicalExpressions,
 		}
 	}
-	return AccessWithLE{access: access, le: objectLogicalExpression}
+	return AccessWithLE{access: access, le: objectLogicalExpression, coverages: coverages}
+}
+
+func mappedObjectRoutes(object grammar.ObjectItem, basePath string) []RouteWithFilter {
+	switch object.Kind {
+	case grammar.Descriptor:
+		if object.Descriptor != nil {
+			return mapDescriptorValueToRoute(*object.Descriptor, basePath)
+		}
+	case grammar.Identifiable:
+		if object.Identifiable != nil {
+			return mapIdentifiableValueToRoute(*object.Identifiable, basePath)
+		}
+	case grammar.Referable:
+		if object.Referable != nil {
+			return mapReferableValueToRoute(*object.Referable, basePath)
+		}
+	}
+	return nil
 }
 
 func appendMatchedMappedRoutes(routes []RouteWithFilter, reqPath string, access *bool, logicalExpressions *[]grammar.LogicalExpression) bool {

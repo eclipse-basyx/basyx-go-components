@@ -1162,6 +1162,10 @@ func addSMERowFilterQueries(ctx context.Context, query *goqu.SelectDataset) (*go
 }
 
 func addSMERowFilterQueriesForAlias(ctx context.Context, query *goqu.SelectDataset, alias string) (*goqu.SelectDataset, error) {
+	query, err := auth.AddSMECollectionCoverageFromContext(ctx, query, alias)
+	if err != nil {
+		return nil, err
+	}
 	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
 	if err != nil || len(fragments) == 0 {
 		return query, err
@@ -1230,6 +1234,10 @@ func addSMEVisibleTreeQueryFromPath(
 	submodelDatabaseID int64,
 	targetPath string,
 ) (*goqu.SelectDataset, error) {
+	query, err := auth.AddSMECollectionCoverageFromContext(ctx, query, "sme")
+	if err != nil {
+		return nil, err
+	}
 	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
 	if err != nil || len(fragments) == 0 {
 		return query, err

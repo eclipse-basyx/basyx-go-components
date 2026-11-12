@@ -30,3 +30,6 @@
 **/.DS_Store
 **/node_modules/
 **/npm-debug.log
+# Local caches
+.gocache/
+.cache/

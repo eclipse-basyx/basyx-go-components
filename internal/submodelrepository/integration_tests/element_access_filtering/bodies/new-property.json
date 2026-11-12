@@ -1,0 +1,6 @@
+{
+  "modelType": "Property",
+  "idShort": "Injected",
+  "valueType": "xs:string",
+  "value": "unauthorized-write"
+}
