@@ -8,6 +8,23 @@ Each entry states whether users need to take action and records the security
 consequence separately. High-impact entries require an API, configuration,
 policy, or deployment update. Low-impact entries do not require migration.
 
+## v1.1.4 (2026-11-13)
+
+Changes since [v1.1.3](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.1.3...v1.1.4).
+
+### Changed
+
+* **High impact** — ABAC matches ROUTE rules against a canonical form of the request path: "/" is always a path separator, and a slash or percent sign inside a path value is written "%2F" or "%25". Before upgrading, review all ROUTE rules in policy files and in the policy repository, including older policy versions that may be activated again: a rule that names a value containing "/" must write it as "%2F" (for example "/v1/dpps/urn:x/p1" becomes "/v1/dpps/urn:x%2Fp1"), a "%" inside a value is written "%25", and an existing "%2F" or "%25" now means a slash or percent sign instead of the literal text (the literal text "%2F" is written "%252F"). Policies with ROUTE rules that contain any other "%", "." or ".." segments or empty segments, or that start or end with whitespace, no longer load. If the active policy stored in the policy repository contains such a rule, the service does not start; correct the policy file and start the service once with "abac.policyFileImport" set to "always". With ABAC enabled, requests whose path contains "." or ".." segments (also when encoded), empty segments or control characters are rejected with 400. Submodel and AAS element endpoints decode the idShortPath once and reject it with 400 unless it is a valid idShortPath (idShorts joined by "." with numeric list indices such as "[0]"; each idShort starts with a letter and contains only letters, digits, "_" and "-"); the ReBAC access management endpoints for elements answer such an idShortPath with 404. Percent-encoded list brackets such as "List%5b0%5d" are now accepted. Elements stored with an invalid idShort (for example one containing spaces, "%", "/" or non-ASCII letters, or starting with a digit) can no longer be addressed by idShortPath, but remain visible in their parent element and Submodel. Correct them by replacing the parent element or the Submodel with PUT, using a valid idShort for the element. Query authorization derives Submodel and element coverage only from ROUTE segments that are valid identifiers and idShortPaths exactly as written. ([#888](https://github.com/eclipse-basyx/basyx-go-components/pull/888))
+  * **Security:** ROUTE rules are validated when a policy loads and use a defined notation for slashes and percent signs inside path values, and query authorization interprets ROUTE rules only in documented shapes. Existing rules containing "%2F" or "%25" change meaning and can grant access to a different identifier unless they are reviewed before upgrading.
+
+
+### Fixed
+
+* **Low impact** — The AASX File Server stores a package uploaded through `POST /packages`, `PUT /packages/{packageId}`, or `POST /packages-async` without a file name in the `Content-Disposition` header of its `file` part under its previously stored file name, or else as `<packageId>.aasx`. Previously, such a package was stored and downloaded with the file name `.`. ([#884](https://github.com/eclipse-basyx/basyx-go-components/pull/884))
+  * **Security:** None.
+
+* **Low impact** — Correction to the v1.1.3 release notes: the DPP API answers 400, not 409, when a DPP creation or data element update contains an element key that is not a valid idShort, including an empty key that would create an element without idShort. The entries for #863 and #842 stated 409; the DPP API behaves as described in the entry for #874, which maps invalid input to 400. The behavior itself did not change. ([#885](https://github.com/eclipse-basyx/basyx-go-components/pull/885))
+  * **Security:** None.
 ## v1.1.3 (2026-11-12)
 
 Changes since [v1.1.2](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.1.2...v1.1.3).
