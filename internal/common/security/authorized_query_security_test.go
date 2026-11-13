@@ -744,16 +744,6 @@ func TestSemanticPolicyRoutesAgreeWithDirectAuthorizationUnderBasePath(t *testin
 		{"/api", "/api/submodels/*", false},
 		{"/sub", "/sub/submodels/*", false},
 		{"/sub", "/*", true},
-		{"/api", "/../submodels/*", false},
-		{"/api", "../submodels/*", false},
-		{"/api", "/./../submodels/*", false},
-		{"/api/v1", "/../submodels/*", false},
-		{"/api", "/../api2/submodels/*", false},
-		{"/api", "/../api/submodels/*", true},
-		{"/api/v1", "/../v1/submodels/*", true},
-		{"/api", "/temporary/../submodels/*", true},
-		{"", "/../submodels/*", true},
-		{"/", "../submodels/*", true},
 	} {
 		t.Run(test.basePath+test.route, func(t *testing.T) {
 			t.Parallel()
@@ -775,24 +765,57 @@ func TestSemanticPolicyRoutesAgreeWithDirectAuthorizationUnderBasePath(t *testin
 	}
 }
 
+func TestRoutesWithDotSegmentsAreRejectedForBothConsumers(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		basePath string
+		route    string
+	}{
+		{"/api", "/../submodels/*"},
+		{"/api", "../submodels/*"},
+		{"/api", "/./../submodels/*"},
+		{"/api/v1", "/../submodels/*"},
+		{"/api", "/../api/submodels/*"},
+		{"/api", "/temporary/../submodels/*"},
+		{"", "/../submodels/*"},
+		{"/", "../submodels/*"},
+		{"", "/submodels/./*"},
+	} {
+		t.Run(test.basePath+test.route, func(t *testing.T) {
+			t.Parallel()
+			if _, err := parseSemanticRouteTestModel(test.route, test.basePath); err == nil {
+				t.Fatalf("route %q with dot segments was accepted", test.route)
+			}
+		})
+	}
+}
+
 func semanticRouteTestSessionWithBasePath(t *testing.T, route string, basePath string) *AuthorizationSession {
 	t.Helper()
 
+	model, err := parseSemanticRouteTestModel(route, basePath)
+	if err != nil {
+		t.Fatalf("parse semantic route policy: %v", err)
+	}
+	return newAuthorizationSession(model, Claims{"role": "viewer"}, nil, grammar.DefaultSimplifyOptions())
+}
+
+func parseSemanticRouteTestModel(route string, basePath string) (*AccessModel, error) {
 	router := chi.NewRouter()
 	router.Get("/submodels/{submodelIdentifier}", func(http.ResponseWriter, *http.Request) {})
-	model, err := ParseAccessModel([]byte(`{
+	routeJSON, err := json.Marshal(route)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAccessModel([]byte(`{
 		"AllAccessPermissionRules": {
 			"DEFATTRIBUTES": [{"name":"role","attributes":[{"CLAIM":"role"}]}],
-			"DEFOBJECTS": [{"name":"route","objects":[{"ROUTE":"`+route+`"}]}],
+			"DEFOBJECTS": [{"name":"route","objects":[{"ROUTE":`+string(routeJSON)+`}]}],
 			"DEFACLS": [{"name":"read","acl":{"USEATTRIBUTES":"role","RIGHTS":["READ"],"ACCESS":"ALLOW"}}],
 			"DEFFORMULAS": [{"name":"viewer","formula":{"$eq":[{"$attribute":{"CLAIM":"role"}},{"$strVal":"viewer"}]}}],
 			"rules": [{"USEACL":"read","USEOBJECTS":["route"],"USEFORMULA":"viewer"}]
 		}
 	}`), router, basePath)
-	if err != nil {
-		t.Fatalf("parse semantic route policy: %v", err)
-	}
-	return newAuthorizationSession(model, Claims{"role": "viewer"}, nil, grammar.DefaultSimplifyOptions())
 }
 
 func TestAuthorizationSessionPinsClaimsGlobalsAndPolicy(t *testing.T) {

@@ -435,6 +435,68 @@ Object coverage follows these BaSyx rules:
 - A `FRAGMENT` object covers only its named element path and field fragment;
   it does not inherit the Referable subtree behavior.
 
+### ROUTE matching
+
+ABAC matches `ROUTE` objects against a canonical form of the request path. The
+path is split at the separators the router sees, each segment is decoded once,
+and only `%` and `/` inside a segment are encoded again, as `%25` and `%2F`.
+Every request therefore has exactly one spelling, and a slash inside a value
+never acts as a separator.
+
+| Client sends | ABAC matches |
+| --- | --- |
+| `/v1/dpps/urn:x%2Fp1/elements/a` | `/v1/dpps/urn:x%2Fp1/elements/a` |
+| `/submodels/abc/submodel-elements/List%5B0%5D` | `/submodels/abc/submodel-elements/List[0]` |
+| `/v1/dpps/a%25b` | `/v1/dpps/a%25b` |
+
+Write `ROUTE` values in the same notation:
+
+- `/` is always a path separator.
+- A slash inside a value is written `%2F`, a percent sign inside a value `%25`.
+  Every other character is written as plain text. `%` is not allowed in any
+  other form.
+- `*` matches any characters, including separators. It never stops inside
+  `%2F` or `%25`. In routes mapped from `IDENTIFIABLE`, `REFERABLE` and
+  `DESCRIPTOR` objects, `**` matches any characters and `*` the characters of
+  one segment.
+- `.` and `..` segments and empty segments are not allowed. A trailing `/` is
+  ignored.
+- A route must not start or end with whitespace. Both JSON forms,
+  `{"ROUTE": "..."}` and `{"ROUTE": {"Route": "..."}}`, keep the route exactly
+  as written.
+
+| Target | `ROUTE` |
+| --- | --- |
+| Passport `urn:x/p1` | `/v1/dpps/urn:x%2Fp1` |
+| Identifier `a%b` | `/v1/dpps/a%25b` |
+| Identifier containing the text `%2F` | `/v1/dpps/a%252Fb` |
+
+Routes are validated and compiled when a policy is loaded, from a file or from
+the policy repository. A policy with an invalid route does not load. ABAC
+rejects requests whose path contains `.` or `..` segments (also when encoded),
+empty segments or control characters with `400` before authorization and
+routing. Submodel and AAS element endpoints decode the `idShortPath` once and
+reject it with `400` unless it is a valid idShortPath: idShorts joined by `.`
+with numeric list indices, each idShort starting with a letter and containing
+only letters, digits, `_` and `-`. A valid idShortPath contains neither `/` nor
+`%`, so the element the endpoint reads is exactly the one ABAC checks.
+
+Query authorization derives Submodel and element coverage from `ROUTE` values
+only for these shapes, relative to the base path; any other shape grants no
+coverage in queries:
+
+```text
+*   /*   /query/submodels   /submodels   /submodels/{REP}
+/submodels/{SM}[/**]   /submodels/{SM}/{REP}
+/submodels/{SM}/submodel-elements[/{REP}]
+/submodels/{SM}/submodel-elements/{EP}[/**]
+/shells/{AAS}/submodels/{SM}...   (same suffixes, limited to that AAS)
+
+SM, AAS  base64url identifier, as written, or * or **
+EP       idShorts joined by "." with numeric list indices, as written, or * or **
+REP      $metadata | $value | $reference | $path
+```
+
 ### Environment upload and serialization
 
 The AAS Environment's `POST /upload` and `GET /serialization` accept existing

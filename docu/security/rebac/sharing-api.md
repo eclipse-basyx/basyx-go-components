@@ -65,8 +65,10 @@ Every managed resource has an `$access` sub-resource:
 | Discovery entry | `/lookup/shells/{id}/$access` |
 | AASX package | `/packages/{packageId}/$access` |
 
-Identifiers are base64url encoded as in the AAS API. The idShort path may be
-URL encoded, for example `Markings%5B0%5D` for `Markings[0]`.
+Identifiers are base64url encoded as in the AAS API. The idShort path is
+decoded once and may be percent-encoded, for example `Markings%5B0%5D` for
+`Markings[0]`. An idShort path that is not a valid idShortPath after decoding
+(idShorts joined by `.` with numeric list indices) is answered with `404`.
 
 | Operation | Contract |
 | --- | --- |

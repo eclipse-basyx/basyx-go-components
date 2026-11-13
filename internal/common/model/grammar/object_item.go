@@ -350,8 +350,9 @@ func identifierText(id Identifier) string {
 
 // ROUTE <ws> <RouteLiteral>
 // For JSON, we expect just the <RouteLiteral> (no leading "ROUTE" token in the string).
+// The literal is kept exactly as written, so both JSON forms of a ROUTE carry
+// the same value through serialization and restoration.
 func parseRoute(s string) (*RouteValue, error) {
-	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil, errors.New("empty route")
 	}

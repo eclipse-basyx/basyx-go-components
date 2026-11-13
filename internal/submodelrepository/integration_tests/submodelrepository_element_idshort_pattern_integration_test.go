@@ -56,23 +56,32 @@ func (h *idShortHarness) testRejectedInvalidIDShortWrites(t *testing.T) {
 	before := h.json(t, http.MethodGet, h.path(id), nil, http.StatusOK)
 	for _, testCase := range h.invalidIDShortWrites(id) {
 		t.Run(testCase.name, func(t *testing.T) {
-			h.requireInvalidIDShortRejection(t, h.json(t, testCase.method, testCase.path, testCase.body, http.StatusBadRequest))
+			response := h.json(t, testCase.method, testCase.path, testCase.body, http.StatusBadRequest)
+			h.requireInvalidIDShortRejection(t, response, testCase.errorCode)
 		})
 	}
 	require.Equal(t, before, h.json(t, http.MethodGet, h.path(id), nil, http.StatusOK))
 }
 
-// requireInvalidIDShortRejection checks that persistence rejected the write.
-// Strict semantic verification may reject it first with its own error code.
-func (h *idShortHarness) requireInvalidIDShortRejection(t *testing.T, response map[string]any) {
+// requireInvalidIDShortRejection checks the error code of a rejected write.
+// Without an explicit code, persistence must have rejected it; strict semantic
+// verification may reject it first with its own error code.
+func (h *idShortHarness) requireInvalidIDShortRejection(t *testing.T, response map[string]any, errorCode string) {
 	t.Helper()
-	if h.mode == "strict" {
-		return
+	if errorCode == "" {
+		if h.mode == "strict" {
+			return
+		}
+		errorCode = "-INVALIDIDSHORT"
 	}
 	body, err := json.Marshal(response)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "-INVALIDIDSHORT")
+	require.Contains(t, string(body), errorCode)
 }
+
+// invalidIDShortPathCode is returned for an idShortPath parameter that does
+// not match the idShortPath grammar, before the request reaches persistence.
+const invalidIDShortPathCode = "COMMON-IDSHORTPATHPARAM-GRAMMAR"
 
 // invalidIDShortWrites leaves out element writes for the environment, which
 // routes them through the unchanged submodel repository service.
@@ -105,8 +114,9 @@ func (h *idShortHarness) invalidIDShortWrites(id string) []elementIDShortCase {
 		{name: "named list item", method: http.MethodPost, path: elements + "/List", body: collection("1st", namedProperty("Child"))},
 		{name: "child of list item", method: http.MethodPost, path: elements + "/List", body: collection("", namedProperty("a.b"))},
 		{name: "operation variable", method: http.MethodPost, path: elements, body: operationWithInput(namedProperty("In-"))},
-		{name: "put creation from path", method: http.MethodPut, path: elements + "/Coll.a;b", body: namelessProperty()},
-		{name: "put creation from encoded path", method: http.MethodPut, path: elements + "/Coll.a%3Bb", body: namelessProperty()},
+		{name: "put creation from path", method: http.MethodPut, path: elements + "/Coll.a;b", body: namelessProperty(), errorCode: invalidIDShortPathCode},
+		{name: "put creation from encoded path", method: http.MethodPut, path: elements + "/Coll.a%3Bb", body: namelessProperty(), errorCode: invalidIDShortPathCode},
+		{name: "put creation from path with a one-letter idShort", method: http.MethodPut, path: elements + "/Coll.X", body: namelessProperty()},
 		{name: "put replacement idShort", method: http.MethodPut, path: elements + "/Coll", body: collection("C/oll", namedProperty("Child"))},
 		{name: "put replacement child", method: http.MethodPut, path: elements + "/Coll", body: collection("Coll", namedProperty("x"))},
 		{name: "patch child", method: http.MethodPatch, path: elements + "/Coll", body: collection("Coll", namedProperty("Child"), namedProperty("é1"))},

@@ -30,7 +30,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -68,10 +67,7 @@ func elementIdPathParam(req *http.Request) string {
 }
 
 func decodePathParam(req *http.Request, value string) string {
-	if req.URL.RawPath == "" {
-		return value
-	}
-	decoded, err := url.PathUnescape(value)
+	decoded, err := common.DecodeRoutedPathParam(req.URL, value)
 	if err != nil {
 		return value
 	}

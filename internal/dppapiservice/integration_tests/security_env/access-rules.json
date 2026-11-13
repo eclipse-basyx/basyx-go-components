@@ -29,6 +29,14 @@
         ]
       },
       {
+        "name": "dpp_element_routes",
+        "objects": [
+          {
+            "ROUTE": "/v1/dpps/*/elements/*"
+          }
+        ]
+      },
+      {
         "name": "dpp_write_routes",
         "objects": [
           {
@@ -77,6 +85,21 @@
     ],
     "DEFFORMULAS": [
       {
+        "name": "is_element_reader",
+        "formula": {
+          "$eq": [
+            {
+              "$attribute": {
+                "CLAIM": "role"
+              }
+            },
+            {
+              "$strVal": "elementreader"
+            }
+          ]
+        }
+      },
+      {
         "name": "is_viewer",
         "formula": {
           "$eq": [
@@ -123,6 +146,13 @@
       }
     ],
     "rules": [
+      {
+        "USEACL": "viewer_read",
+        "USEOBJECTS": [
+          "dpp_element_routes"
+        ],
+        "USEFORMULA": "is_element_reader"
+      },
       {
         "USEACL": "viewer_read",
         "USEOBJECTS": [

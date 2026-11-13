@@ -33,7 +33,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -131,11 +130,11 @@ func (c *Coordinator) accessBases(kinds []ResourceKind) []accessBase {
 				pattern: prefix + "/submodel-elements/{" + paramPath + "}" + accessSuffix,
 				element: true,
 				target: func(r *http.Request) (accessTarget, bool) {
-					path, err := url.PathUnescape(chi.URLParam(r, paramPath))
+					path, err := common.ParseRoutedIDShortPath(r, chi.URLParam(r, paramPath))
 					if err != nil {
 						return accessTarget{}, false
 					}
-					return c.resolveTarget(r, kind, param, strings.TrimSpace(path))
+					return c.resolveTarget(r, kind, param, path)
 				},
 			})
 		}

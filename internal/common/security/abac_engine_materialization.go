@@ -171,13 +171,15 @@ func AccessModelFromMaterializedRules(policyID string, rules []MaterializedABACR
 			filterList: doc.Filters,
 		})
 	}
-	model := &AccessModel{
+	model, err := compileAccessModel(&AccessModel{
 		apiRouter: apiRouter,
 		rules:     materialized,
 		basePath:  basePath,
 		policyID:  policyID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("materialized policy %s: %w", policyID, err)
 	}
-	model.semanticReadRules = buildSemanticReadRules(materialized, basePath)
 	return model, nil
 }
 

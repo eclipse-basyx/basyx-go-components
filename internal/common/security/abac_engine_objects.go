@@ -28,8 +28,6 @@ package auth
 
 import (
 	"fmt"
-	"path"
-	"regexp"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -509,6 +507,7 @@ func mapScopedIdentifierValueToRoute(scope string, identifier grammar.Identifier
 				route: joinBasePath(basePath, mapping.route),
 				le:    extraFilter,
 			})
+			continue
 		}
 
 		routes = append(routes, RouteWithFilter{
@@ -597,7 +596,7 @@ func matchRouteObjectsWithIdentifiablePath(objs []grammar.ObjectItem, reqPath, i
 	access := false
 	for _, object := range objs {
 		if object.Kind == grammar.Route {
-			if matchRouteACL(joinBasePath(basePath, object.Route.Route), reqPath) {
+			if object.Route != nil && matchRouteACL(joinBasePath(basePath, object.Route.Route), reqPath) {
 				return AccessWithLE{access: true}
 			}
 			continue
@@ -657,56 +656,4 @@ func appendMatchedMappedRoutes(routes []RouteWithFilter, reqPath string, access 
 	}
 
 	return false
-}
-
-// --- HELPER ---
-
-// normalize cleans route patterns and request paths into a consistent absolute
-// form suitable for matching. "*" and "/*" are treated as wildcards.
-func normalize(p string) string {
-	if p == "" {
-		return "/"
-	}
-	if p != "*" && !strings.HasPrefix(p, "/") {
-		p = "/" + p
-	}
-	p = path.Clean(p)
-	return p
-}
-
-func matchRouteACL(pattern, userPath string) bool {
-	pat := normalize(pattern)
-	userPathNorm := normalize(userPath)
-
-	// Escape regex special chars, keep '*' for later
-	regex := regexp.QuoteMeta(pat)
-
-	// Simple ACL rule: * = .*
-	regex = strings.ReplaceAll(regex, `\*`, `.*`)
-
-	// Anchor
-	regex = "^" + regex + "$"
-
-	matched, _ := regexp.MatchString(regex, userPathNorm)
-	return matched
-}
-
-func matchRouteANT(route string, userPath string) bool {
-	userPathNorm := normalize(userPath)
-	pat := normalize(route)
-
-	// Escape regex chars first, keeping '*' as literal "\*"
-	regexPattern := regexp.QuoteMeta(pat)
-
-	// Replace ** before * (so we don't double-handle)
-	// ** -> .*
-	regexPattern = strings.ReplaceAll(regexPattern, `\*\*`, `.*`)
-	// *  -> [^/]+  (one segment, no slash)
-	regexPattern = strings.ReplaceAll(regexPattern, `\*`, `[^/]+`)
-
-	// Anchor the pattern
-	regexPattern = "^" + regexPattern + "$"
-
-	matched, _ := regexp.MatchString(regexPattern, userPathNorm)
-	return matched
 }
