@@ -1,0 +1,6 @@
+{
+  "modelType": "Property",
+  "idShort": "GearRatio",
+  "valueType": "xs:string",
+  "value": "public-gear-ratio"
+}

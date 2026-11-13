@@ -323,9 +323,10 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			Filters: fragments,
 		})
 		grantAlternatives = append(grantAlternatives, CompiledGrantAlternative{
-			ruleID:  r.id,
-			formula: adapted,
-			filters: fragments,
+			ruleID:    r.id,
+			formula:   adapted,
+			filters:   fragments,
+			coverages: accessWithOptinalFilter.coverages,
 		})
 	}
 

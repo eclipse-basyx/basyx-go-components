@@ -1,7 +1,0 @@
-kind: fixed
-body: Apply Submodel field filters to direct Submodel and metadata reads consistently with list and query responses. Internal Submodel and element PATCH merges preserve fields hidden from the caller so changing another field does not erase them.
-time: 2026-11-06T13:20:58.2768712+01:00
-custom:
-    Impact: Low
-    PullRequest: 855
-    SecurityImpact: With ABAC enabled direct Submodel reads previously returned idShort and semantic references even when an applicable fragment filter hid them. Direct reads now enforce those filters including when ReBAC is enabled and preserve the configured ReBAC grant semantics.

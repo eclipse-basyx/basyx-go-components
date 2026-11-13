@@ -1,0 +1,73 @@
+{
+  "modelType": "Submodel",
+  "id": "urn:uuid:design-example-001",
+  "idShort": "DesignExample",
+  "submodelElements": [
+    {
+      "modelType": "Property",
+      "idShort": "GearRatio",
+      "valueType": "xs:string",
+      "value": "public-gear-ratio"
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "idShort": "Group",
+      "value": [
+        {
+          "modelType": "Property",
+          "idShort": "Allowed",
+          "valueType": "xs:string",
+          "value": "public-nested-value"
+        },
+        {
+          "modelType": "Property",
+          "idShort": "Secret",
+          "valueType": "xs:string",
+          "value": "private-nested-value"
+        },
+        {
+          "modelType": "Property",
+          "idShort": "AllowedExtra",
+          "valueType": "xs:string",
+          "value": "private-prefix-value"
+        }
+      ]
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "idShort": "GroupSimilar",
+      "value": [
+        {
+          "modelType": "Property",
+          "idShort": "Allowed",
+          "valueType": "xs:string",
+          "value": "private-similar-value"
+        }
+      ]
+    },
+    {
+      "modelType": "Property",
+      "idShort": "MagnetGrade",
+      "valueType": "xs:string",
+      "value": "private-magnet-grade"
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "idShort": "OtherGroup",
+      "value": [
+        {
+          "modelType": "Property",
+          "idShort": "Allowed",
+          "valueType": "xs:string",
+          "value": "private-other-branch"
+        },
+        {
+          "modelType": "Property",
+          "idShort": "Second",
+          "valueType": "xs:string",
+          "value": "public-second-value"
+        }
+      ]
+    }
+  ]
+}

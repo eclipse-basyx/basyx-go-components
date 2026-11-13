@@ -120,6 +120,42 @@ func TestListAssetAdministrationShellDescriptorsUsesOneQueryWithRestrictiveFragm
 	assertFilteredAASDescriptorListUsesOneQuery(ctx, t)
 }
 
+func TestMaskedAASDescriptorListBindsAASDescriptorForChildFilters(t *testing.T) {
+	t.Parallel()
+
+	field := grammar.ModelStringPattern("$aasdesc#id")
+	value := grammar.StandardString("urn:example:aas:visible")
+	condition := grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}}
+	ctx := auth.WithQueryFilter(common.ContextWithConfig(t.Context(), &common.Config{}), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$aasdesc#idShort":                           auth.NewFragmentFilterPredicate(condition, false),
+			"$aasdesc#endpoints[]":                       auth.NewFragmentFilterPredicate(condition, false),
+			"$aasdesc#submodelDescriptors[].endpoints[]": auth.NewFragmentFilterPredicate(condition, false),
+		},
+	})
+	dataset, err := buildSingleStatementAASDescriptorListQuery(
+		ctx,
+		101,
+		"",
+		model.AssetKind(""),
+		"",
+		"",
+		time.Time{},
+		time.Time{},
+	)
+	require.NoError(t, err)
+	query, _, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+
+	outerQuery := query[strings.LastIndex(query, `) AS "aas_descriptor_json_data"`):]
+	require.Contains(
+		t,
+		outerQuery,
+		`LEFT JOIN "aas_descriptor" ON ("aas_descriptor"."descriptor_id" = "aas_descriptor_json_data"."descriptor_id")`,
+	)
+	require.Contains(t, query, `"aas_descriptor"."id" = $`)
+}
+
 func assertFilteredAASDescriptorListUsesOneQuery(ctx context.Context, t *testing.T) {
 	t.Helper()
 	db, mock, err := sqlmock.New()
@@ -329,6 +365,46 @@ func TestNestedSubmodelDescriptorListDoesNotPromoteFieldMaskToRowFilter(t *testi
 	}
 	require.Equal(t, 1, falseArguments)
 	require.Contains(t, args, "WRITTEN_BY_X")
+}
+
+func TestNestedSubmodelDescriptorListBindsOwningAASDescriptorForChildFilters(t *testing.T) {
+	t.Parallel()
+
+	field := grammar.ModelStringPattern("$aasdesc#id")
+	value := grammar.StandardString("urn:example:aas:visible")
+	condition := grammar.LogicalExpression{Eq: grammar.ComparisonItems{{Field: &field}, {StrVal: &value}}}
+	ctx := auth.WithQueryFilter(common.ContextWithConfig(t.Context(), &common.Config{}), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$aasdesc#submodelDescriptors[].semanticId.keys[]":         auth.NewFragmentFilterPredicate(condition, false),
+			"$aasdesc#submodelDescriptors[].supplementalSemanticIds[]": auth.NewFragmentFilterPredicate(condition, true),
+			"$aasdesc#submodelDescriptors[].endpoints[]":               auth.NewFragmentFilterPredicate(condition, false),
+		},
+	})
+	aasDescriptorID := int64(42)
+	dataset, err := buildSubmodelDescriptorListQuery(
+		ctx,
+		101,
+		"",
+		time.Time{},
+		time.Time{},
+		submodelDescriptorListScope{
+			collectorRoot:   grammar.CollectorRootAASDesc,
+			fragmentPrefix:  "$aasdesc#submodelDescriptors[]",
+			aasDescriptorID: &aasDescriptorID,
+		},
+	)
+	require.NoError(t, err)
+	query, args, err := dataset.Prepared(true).ToSQL()
+	require.NoError(t, err)
+
+	outerQuery := query[strings.LastIndex(query, `) AS "submodel_descriptor_page"`):]
+	require.Contains(
+		t,
+		outerQuery,
+		`LEFT JOIN "aas_descriptor" ON ("aas_descriptor"."descriptor_id" = "submodel_descriptor_page"."aas_descriptor_id")`,
+	)
+	require.Contains(t, query, `"aas_descriptor"."id" = $`)
+	require.Contains(t, args, string(value))
 }
 
 func TestCallerMatchOnVisibleNestedFieldStaysCorrelatedToCurrentReference(t *testing.T) {

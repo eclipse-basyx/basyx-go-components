@@ -1,0 +1,13 @@
+kind: fixed
+body: >-
+  Correction to the v1.1.3 release notes: the DPP API answers 400, not 409,
+  when a DPP creation or data element update contains an element key that is
+  not a valid idShort, including an empty key that would create an element
+  without idShort. The entries for #863 and #842 stated 409; the DPP API
+  behaves as described in the entry for #874, which maps invalid input to 400.
+  The behavior itself did not change.
+time: 2026-11-13T12:30:00+01:00
+custom:
+  Impact: Low
+  PullRequest: 885
+  SecurityImpact: None.

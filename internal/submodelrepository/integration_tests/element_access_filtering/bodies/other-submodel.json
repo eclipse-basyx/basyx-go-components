@@ -1,0 +1,25 @@
+{
+  "modelType": "Submodel",
+  "id": "urn:uuid:design-example-001:other",
+  "idShort": "OtherDesignExample",
+  "submodelElements": [
+    {
+      "modelType": "Property",
+      "idShort": "GearRatio",
+      "valueType": "xs:string",
+      "value": "other-private-gear-ratio"
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "idShort": "Group",
+      "value": [
+        {
+          "modelType": "Property",
+          "idShort": "Allowed",
+          "valueType": "xs:string",
+          "value": "other-private-nested"
+        }
+      ]
+    }
+  ]
+}

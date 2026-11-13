@@ -1,0 +1,6 @@
+{
+  "modelType": "Property",
+  "idShort": "MagnetGrade",
+  "valueType": "xs:string",
+  "value": "unauthorized-write"
+}

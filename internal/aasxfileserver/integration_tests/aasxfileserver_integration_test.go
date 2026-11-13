@@ -32,6 +32,7 @@ import (
 	"maps"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -184,6 +185,51 @@ func TestPackageDescriptionsFollowOpenAPI(t *testing.T) {
 	var listed openapi.GetPackageDescriptionsResult
 	require.NoError(t, json.Unmarshal(listBody, &listed))
 	require.ElementsMatch(t, []string{posted.PackageId, putPackageID}, collectPackageIDs(listed.Result))
+}
+
+func TestPackageUploadWithoutFileName(t *testing.T) {
+	const packagePath = "../../aasenvironment/integration_tests/testdata/IESEDriveMotorDM3000.aasx"
+
+	namelessPayload, namelessContentType := namelessPackagePayload(t, packagePath)
+	postResp, postBody := request(t, http.MethodPost, baseURL+"/packages", bytes.NewReader(namelessPayload), namelessContentType)
+	require.Equalf(t, http.StatusCreated, postResp.StatusCode, "post response: %s", postBody)
+	created := decodePackageDescription(t, postBody)
+	t.Cleanup(func() { request(t, http.MethodDelete, packageURL(baseURL, created.PackageId), nil, "") })
+	require.Equal(t, created.PackageId+".aasx", downloadedFileName(t, created.PackageId))
+
+	payload, contentType := multipartFilePayload(t, packagePath, nil)
+	putResp, putBody := request(t, http.MethodPut, packageURL(baseURL, created.PackageId), bytes.NewReader(payload), contentType)
+	require.Equalf(t, http.StatusNoContent, putResp.StatusCode, "put response: %s", putBody)
+	require.Equal(t, filepath.Base(packagePath), downloadedFileName(t, created.PackageId))
+
+	putResp, putBody = request(t, http.MethodPut, packageURL(baseURL, created.PackageId), bytes.NewReader(namelessPayload), namelessContentType)
+	require.Equalf(t, http.StatusNoContent, putResp.StatusCode, "put response: %s", putBody)
+	require.Equal(t, filepath.Base(packagePath), downloadedFileName(t, created.PackageId))
+}
+
+func namelessPackagePayload(t *testing.T, path string) ([]byte, string) {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Clean(path))
+	require.NoError(t, err)
+
+	var payload bytes.Buffer
+	writer := multipart.NewWriter(&payload)
+	part, err := writer.CreatePart(textproto.MIMEHeader{
+		"Content-Disposition": {`form-data; name="file"`},
+		"Content-Type":        {aasxPackageContentType},
+	})
+	require.NoError(t, err)
+	_, err = part.Write(content)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	return payload.Bytes(), writer.FormDataContentType()
+}
+
+func downloadedFileName(t *testing.T, packageID string) string {
+	t.Helper()
+	resp, body := request(t, http.MethodGet, packageURL(baseURL, packageID), nil, "")
+	require.Equalf(t, http.StatusOK, resp.StatusCode, "download response: %s", body)
+	return resp.Header.Get("X-FileName")
 }
 
 func requirePackageDescriptionBody(t *testing.T, body []byte, expectedAASIDs []string) openapi.PackageDescription {

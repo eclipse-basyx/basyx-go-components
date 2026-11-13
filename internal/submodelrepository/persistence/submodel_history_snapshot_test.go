@@ -27,7 +27,12 @@ package persistence
 
 import (
 	"testing"
+	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
@@ -69,4 +74,41 @@ func TestReplaceSubmodelElementRootSnapshotDeletesLastRoot(t *testing.T) {
 	require.NoError(t, err)
 	_, exists := snapshot[submodelElementsSnapshotField]
 	require.False(t, exists)
+}
+
+func TestGetSubmodelByIDAndDateHidesVersionFromRestrictedReaders(t *testing.T) {
+	denied := false
+	for name, filter := range map[string]*auth.QueryFilter{
+		"backend formula": {Formula: &grammar.LogicalExpression{}},
+		"fragment filter": {Filters: auth.FragmentFilters{
+			"$sm#supplementalSemanticIds[]": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &denied}, true),
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+
+			ctx := auth.WithQueryFilter(contextWithABACDisabled(t), filter)
+			_, err = (&SubmodelDatabase{db: db}).GetSubmodelByIDAndDate(ctx, "urn:sm", time.Now())
+
+			require.True(t, common.IsErrNotFound(err), "error=%v", err)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestGetSubmodelByIDAndDateReadsHistoryForUnrestrictedReaders(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	allowed := true
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{Formula: &grammar.LogicalExpression{Boolean: &allowed}})
+	mock.ExpectQuery(`SELECT "history"."history_id" FROM "submodel_history" AS "history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}))
+
+	_, err = (&SubmodelDatabase{db: db}).GetSubmodelByIDAndDate(ctx, "urn:sm", time.Now())
+
+	require.True(t, common.IsErrNotFound(err), "error=%v", err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

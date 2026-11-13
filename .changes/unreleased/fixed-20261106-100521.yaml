@@ -1,7 +1,0 @@
-kind: fixed
-body: Omit empty submodelElements in Submodel Repository list and query responses, including when filtering removes all elements.
-time: 2026-11-06T10:05:21.0974742+01:00
-custom:
-    Impact: Low
-    PullRequest: 854
-    SecurityImpact: None.

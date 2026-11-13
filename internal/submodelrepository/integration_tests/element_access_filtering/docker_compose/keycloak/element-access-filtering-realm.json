@@ -1,0 +1,228 @@
+{
+  "realm": "element-access-filtering",
+  "enabled": true,
+  "sslRequired": "none",
+  "clients": [
+    {
+      "clientId": "element-access-filtering",
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "role",
+            "claim.name": "role",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "Edc-Bpn",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "Edc-Bpn",
+            "claim.name": "Edc-Bpn",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "element-access-filtering",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "provider",
+      "firstName": "Test",
+      "lastName": "Provider",
+      "email": "provider@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "role": [
+          "add_digital_twin"
+        ]
+      }
+    },
+    {
+      "username": "reader",
+      "firstName": "Test",
+      "lastName": "Reader",
+      "email": "reader@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "role": [
+          "view_digital_twin"
+        ],
+        "Edc-Bpn": [
+          "BPNL00000003AZQP"
+        ]
+      }
+    },
+    {
+      "username": "wrong-bpn",
+      "firstName": "Test",
+      "lastName": "WrongBPN",
+      "email": "wrong-bpn@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "role": [
+          "view_digital_twin"
+        ],
+        "Edc-Bpn": [
+          "BPNL00000003OTHER"
+        ]
+      }
+    },
+    {
+      "username": "wrong-role",
+      "firstName": "Test",
+      "lastName": "WrongRole",
+      "email": "wrong-role@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "role": [
+          "unrelated_role"
+        ],
+        "Edc-Bpn": [
+          "BPNL00000003AZQP"
+        ]
+      }
+    },
+    {
+      "username": "missing-bpn",
+      "firstName": "Test",
+      "lastName": "MissingBPN",
+      "email": "missing-bpn@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "role": [
+          "view_digital_twin"
+        ]
+      }
+    },
+    {
+      "username": "nested-first",
+      "firstName": "Test",
+      "lastName": "nested-first",
+      "email": "nested-first@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "role": [
+          "view_digital_twin"
+        ],
+        "Edc-Bpn": [
+          "NESTED_FIRST"
+        ]
+      }
+    },
+    {
+      "username": "nested-second",
+      "firstName": "Test",
+      "lastName": "nested-second",
+      "email": "nested-second@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "role": [
+          "view_digital_twin"
+        ],
+        "Edc-Bpn": [
+          "NESTED_SECOND"
+        ]
+      }
+    },
+    {
+      "username": "nested-both",
+      "firstName": "Test",
+      "lastName": "nested-both",
+      "email": "nested-both@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "role": [
+          "view_digital_twin"
+        ],
+        "Edc-Bpn": [
+          "NESTED_BOTH"
+        ]
+      }
+    }
+  ]
+}

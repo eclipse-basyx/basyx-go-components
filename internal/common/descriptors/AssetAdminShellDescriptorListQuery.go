@@ -235,7 +235,7 @@ func buildSingleStatementAASDescriptorListQuery(
 		return nil, err
 	}
 
-	return dialect.From(dataDS.As(dataAlias)).
+	return joinAASDescriptor(dialect.From(dataDS.As(dataAlias)), data.Col(common.ColDescriptorID)).
 		Select(descriptorJSON).
 		Order(data.Col("sort_aas_id").Asc()), nil
 }

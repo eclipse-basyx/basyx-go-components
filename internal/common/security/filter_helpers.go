@@ -660,6 +660,61 @@ func GetColumnSelectStatement(ctx context.Context, columns []FilterColumnSpec, c
 	return result, nil
 }
 
+// AddSMECollectionCoverageFromContext binds REFERABLE collection grants to the
+// selected element rows. Policy formulas retain their submodel-wide semantics.
+func AddSMECollectionCoverageFromContext(ctx context.Context, ds *goqu.SelectDataset, alias string) (*goqu.SelectDataset, error) {
+	session := AuthorizationSessionFromContext(ctx)
+	if session == nil || GetQueryFilter(ctx) == nil {
+		return ds, nil
+	}
+	alternatives := session.outerAccess.alternatives
+	hasCoverage := false
+	for _, alternative := range alternatives {
+		hasCoverage = hasCoverage || len(alternative.coverages) > 0
+	}
+	if !hasCoverage {
+		return ds, nil
+	}
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if err != nil {
+		return nil, err
+	}
+	collector.SetRootJoinKey(alias, "submodel_id")
+	conditions := make([]exp.Expression, 0, len(alternatives))
+	for _, alternative := range alternatives {
+		formula, _, err := alternative.formula.EvaluateToExpression(collector)
+		if err != nil {
+			return nil, fmt.Errorf("AUTH-SMECOVERAGE-FORMULA: %w", err)
+		}
+		coverage := smeCollectionCoverageCondition(alternative.coverages, alias)
+		conditions = append(conditions, goqu.And(formula, coverage))
+	}
+	condition := goqu.Or(conditions...)
+	rowCollector, err := grammar.NewResolvedFieldPathCollectorForSMERow(alias)
+	if err != nil {
+		return nil, err
+	}
+	grant, hasGrant := reBACGrantPredicate(ctx, rowCollector)
+	return ds.Where(orReBACGrant(condition, false, grant, hasGrant)), nil
+}
+
+func smeCollectionCoverageCondition(coverages []semanticObjectCoverage, alias string) exp.Expression {
+	if len(coverages) == 0 {
+		return goqu.L("TRUE")
+	}
+	conditions := make([]exp.Expression, 0, len(coverages))
+	for _, coverage := range coverages {
+		path := submodelElementPathSubtreeCondition(goqu.I(alias+".idshort_path"), coverage.submodelElementPath)
+		if !coverage.allSubmodelIDs {
+			submodels := goqu.Dialect("postgres").From("submodel").Select("id").
+				Where(goqu.C("submodel_identifier").Eq(coverage.submodelID))
+			path = goqu.And(path, goqu.I(alias+".submodel_id").In(submodels))
+		}
+		conditions = append(conditions, path)
+	}
+	return goqu.Or(conditions...)
+}
+
 // AddFormulaQueryFromContext appends the formula-based WHERE clause stored in
 // ctx to ds.
 //

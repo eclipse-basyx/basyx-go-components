@@ -1,7 +1,0 @@
-kind: added
-body: Add an optional MCP endpoint to the AAS Environment. MCP clients such as Claude Code and Codex can list, read and query shells, submodels, submodel elements and concept descriptions, and, when writes are enabled, create, change and delete them. Tool calls go through the REST API with the caller's token, return ETags for conditional changes, and carry read-only or destructive annotations so clients ask before changing data.
-time: 2026-10-22T12:34:30Z
-custom:
-  Impact: Low
-  PullRequest: 774
-  SecurityImpact: The endpoint and its write tools are disabled by default. With ABAC enabled it requires a bearer token that the OIDC trustlist accepts for a configured audience, publishes OAuth protected resource metadata for client sign-in, and applies the caller's ABAC and ReBAC permissions to every call. Without ABAC it is unauthenticated, like the REST API.

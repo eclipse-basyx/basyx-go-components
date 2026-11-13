@@ -1,0 +1,6 @@
+{
+  "modelType": "Property",
+  "idShort": "Allowed",
+  "valueType": "xs:string",
+  "value": "public-nested-value"
+}

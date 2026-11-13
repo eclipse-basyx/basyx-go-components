@@ -28,6 +28,7 @@ package descriptors
 
 import (
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
@@ -55,6 +56,7 @@ func newSubmodelDescriptorChildFilterCollectors(
 	}
 	aasCollector.SetNonMatchRootJoinKey(common.AliasSubmodelDescriptor, common.ColAASDescriptorID)
 	aasCollector.AllowInlineAliases(inlineAliases...)
+	aasCollector.AllowInlineAliases(common.TblAASDescriptor)
 
 	standaloneCollector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
 	if err != nil {
@@ -66,4 +68,23 @@ func newSubmodelDescriptorChildFilterCollectors(
 		aas:        aasCollector,
 		standalone: standaloneCollector,
 	}, nil
+}
+
+// joinAASDescriptor brings the shell descriptor identified by aasDescriptorID
+// into scope. Shell-level fields of $aasdesc# fragment conditions, such as
+// $aasdesc#id, render as aas_descriptor columns, so every query that applies
+// such a condition to rows of a derived table or of a submodel descriptor needs
+// this join.
+func joinAASDescriptor(
+	ds *goqu.SelectDataset,
+	aasDescriptorID exp.IdentifierExpression,
+) *goqu.SelectDataset {
+	return ds.LeftJoin(
+		common.TAASDescriptor,
+		goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(aasDescriptorID)),
+	)
+}
+
+func joinSubmodelDescriptorOwningAASDescriptor(ds *goqu.SelectDataset) *goqu.SelectDataset {
+	return joinAASDescriptor(ds, submodelDescriptorAlias.Col(common.ColAASDescriptorID))
 }

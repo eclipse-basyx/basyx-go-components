@@ -85,7 +85,7 @@
           },
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
-            "CONDITION": 
+            "CONDITION":
             {
               "$eq": [
                 {
@@ -96,6 +96,30 @@
                 }
               ]
             }
+          },
+          {
+            "FRAGMENT": "$aasdesc#idShort",
+            "CONDITION": { "$starts-with": [ {"$field": "$aasdesc#id"}, {"$strVal": "https://example.org/"} ] }
+          },
+          {
+            "FRAGMENT": "$aasdesc#endpoints[]",
+            "CONDITION": { "$starts-with": [ {"$field": "$aasdesc#id"}, {"$strVal": "https://example.org/"} ] }
+          },
+          {
+            "FRAGMENT": "$aasdesc#submodelDescriptors[]",
+            "CONDITION": { "$starts-with": [ {"$field": "$aasdesc#id"}, {"$strVal": "https://example.org/"} ] }
+          },
+          {
+            "FRAGMENT": "$aasdesc#submodelDescriptors[].semanticId.keys[]",
+            "CONDITION": { "$starts-with": [ {"$field": "$aasdesc#id"}, {"$strVal": "https://example.org/"} ] }
+          },
+          {
+            "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+            "CONDITION": { "$starts-with": [ {"$field": "$aasdesc#id"}, {"$strVal": "https://example.org/"} ] }
+          },
+          {
+            "FRAGMENT": "$aasdesc#submodelDescriptors[].endpoints[]",
+            "CONDITION": { "$starts-with": [ {"$field": "$aasdesc#id"}, {"$strVal": "https://example.org/"} ] }
           }
         ]
       },
@@ -124,12 +148,36 @@
             }
           },
           {
+            "FRAGMENT": "$aasdesc#submodelDescriptors[].semanticId.keys[]",
+            "CONDITION": {
+              "$eq": [
+                {"$field": "$aasdesc#id"},
+                {"$strVal": "https://example.org/ICHMAGPIZZASOGERNE"}
+              ]
+            }
+          },
+          {
             "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
             "MATCH": true,
             "CONDITION": {
+              "$and": [
+                {"$eq": [
+                  {"$field": "$aasdesc#id"},
+                  {"$strVal": "https://example.org/ICHMAGPIZZASOGERNE"}
+                ]},
+                {"$eq": [
+                  {"$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"},
+                  {"$strVal": "WRITTEN_BY_X"}
+                ]}
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$aasdesc#submodelDescriptors[].endpoints[]",
+            "CONDITION": {
               "$eq": [
-                {"$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"},
-                {"$strVal": "WRITTEN_BY_X"}
+                {"$field": "$aasdesc#id"},
+                {"$strVal": "https://example.org/ICHMAGPIZZASOGERNE"}
               ]
             }
           }

@@ -1,0 +1,1207 @@
+[
+  {
+    "context": "Provider POSTs the policy's target submodel",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "POST",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels",
+    "data": "bodies/submodel.json",
+    "shouldMatch": "bodies/submodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Provider reads back the complete seeded submodel",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}",
+    "shouldMatch": "bodies/submodel.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Provider POSTs another submodel with the same element name",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "POST",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels",
+    "data": "bodies/other-submodel.json",
+    "shouldMatch": "bodies/other-submodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Provider confirms the other submodel exists",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_OTHER_ID}}",
+    "shouldMatch": "bodies/other-submodel.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-first: /Group.Allowed returns 200",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed",
+    "expectedStatus": 200,
+    "shouldMatch": "bodies/nested-allowed.json"
+  },
+  {
+    "context": "nested-first: /Group.Allowed returns 200 /$value",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed/$value",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-first: /Group.Allowed returns 200 /$metadata",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed/$metadata",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-first: /Group.Allowed returns 200 /$reference",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed/$reference",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-first: /Group.Allowed returns 200 /$path",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed/$path",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-first: /OtherGroup.Second returns 403",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-first: /Group.Secret returns 403",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Secret",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-first: /Group.AllowedExtra returns 403",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.AllowedExtra",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-first: /GroupSimilar.Allowed returns 403",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GroupSimilar.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-first: /OtherGroup.Allowed returns 403",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-first: /Group returns 403",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-first: /OtherGroup returns 403",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-first:  returns 200",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-first: /$value returns 200",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$value",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-first: /$metadata returns 200",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$metadata",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-first: /$reference returns 200",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$reference",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-first: /$path returns 200",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$path",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-first: ?level=deep returns 200",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?level=deep",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-first: ?limit=1 returns 200",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-first: ?limit=1 returns 200 /$value",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$value?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-first: ?limit=1 returns 200 /$metadata",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$metadata?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-first: ?limit=1 returns 200 /$reference",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$reference?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-first: ?limit=1 returns 200 /$path",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$path?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-first cannot access another submodel",
+    "token": {
+      "user": "nested-first",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_OTHER_ID}}/submodel-elements/Group.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-second: /Group.Allowed returns 403",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-second: /OtherGroup.Second returns 200",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second",
+    "expectedStatus": 200,
+    "shouldMatch": "bodies/nested-second.json"
+  },
+  {
+    "context": "nested-second: /OtherGroup.Second returns 200 /$value",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second/$value",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-second: /OtherGroup.Second returns 200 /$metadata",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second/$metadata",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-second: /OtherGroup.Second returns 200 /$reference",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second/$reference",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-second: /OtherGroup.Second returns 200 /$path",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second/$path",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-second: /Group.Secret returns 403",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Secret",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-second: /Group.AllowedExtra returns 403",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.AllowedExtra",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-second: /GroupSimilar.Allowed returns 403",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GroupSimilar.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-second: /OtherGroup.Allowed returns 403",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-second: /Group returns 403",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-second: /OtherGroup returns 403",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-second:  returns 200",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-second: /$value returns 200",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$value",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-second: /$metadata returns 200",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$metadata",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-second: /$reference returns 200",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$reference",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-second: /$path returns 200",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$path",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-second: ?level=deep returns 200",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?level=deep",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-second: ?limit=1 returns 200",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-second: ?limit=1 returns 200 /$value",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$value?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-second: ?limit=1 returns 200 /$metadata",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$metadata?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-second: ?limit=1 returns 200 /$reference",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$reference?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-second: ?limit=1 returns 200 /$path",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$path?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-second cannot access another submodel",
+    "token": {
+      "user": "nested-second",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_OTHER_ID}}/submodel-elements/Group.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-both: /Group.Allowed returns 200",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed",
+    "expectedStatus": 200,
+    "shouldMatch": "bodies/nested-allowed.json"
+  },
+  {
+    "context": "nested-both: /Group.Allowed returns 200 /$value",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed/$value",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-both: /Group.Allowed returns 200 /$metadata",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed/$metadata",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-both: /Group.Allowed returns 200 /$reference",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed/$reference",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-both: /Group.Allowed returns 200 /$path",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Allowed/$path",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-both: /OtherGroup.Second returns 200",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second",
+    "expectedStatus": 200,
+    "shouldMatch": "bodies/nested-second.json"
+  },
+  {
+    "context": "nested-both: /OtherGroup.Second returns 200 /$value",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second/$value",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-both: /OtherGroup.Second returns 200 /$metadata",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second/$metadata",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-both: /OtherGroup.Second returns 200 /$reference",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second/$reference",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-both: /OtherGroup.Second returns 200 /$path",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Second/$path",
+    "expectedStatus": 200
+  },
+  {
+    "context": "nested-both: /Group.Secret returns 403",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Secret",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-both: /Group.AllowedExtra returns 403",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.AllowedExtra",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-both: /GroupSimilar.Allowed returns 403",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GroupSimilar.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-both: /OtherGroup.Allowed returns 403",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-both: /Group returns 403",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-both: /OtherGroup returns 403",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/OtherGroup",
+    "expectedStatus": 403
+  },
+  {
+    "context": "nested-both:  returns 200",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-both: /$value returns 200",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$value",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-both: /$metadata returns 200",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$metadata",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-both: /$reference returns 200",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$reference",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-both: /$path returns 200",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$path",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-both: ?level=deep returns 200",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?level=deep",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE"
+  },
+  {
+    "context": "nested-both: ?limit=1 returns 200",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-both: ?limit=1 returns 200 /$value",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$value?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-both: ?limit=1 returns 200 /$metadata",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$metadata?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-both: ?limit=1 returns 200 /$reference",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$reference?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-both: ?limit=1 returns 200 /$path",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$path?limit=1",
+    "expectedStatus": 200,
+    "action": "ASSERT_NESTED_SAFE_PAGINATION"
+  },
+  {
+    "context": "nested-both cannot access another submodel",
+    "token": {
+      "user": "nested-both",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_OTHER_ID}}/submodel-elements/Group.Allowed",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Reader with matching role and BPN can read GearRatio",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GearRatio",
+    "shouldMatch": "bodies/gear-ratio.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Reader cannot directly read the sibling MagnetGrade",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/MagnetGrade",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Reader cannot directly read the nested sibling Group.Secret",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/Group.Secret",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Element grant does not authorize the complete submodel",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Element grant does not authorize the complete submodel value",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/$value",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Matching element name in another submodel does not grant access",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_OTHER_ID}}/submodel-elements",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Wrong BPN denies the granted element",
+    "token": {
+      "user": "wrong-bpn",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GearRatio",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Wrong role denies the granted element despite a matching BPN",
+    "token": {
+      "user": "wrong-role",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GearRatio",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Missing BPN denies the granted element",
+    "token": {
+      "user": "missing-bpn",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GearRatio",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Anonymous request cannot read the granted element",
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GearRatio",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Wrong BPN denies the element collection",
+    "token": {
+      "user": "wrong-bpn",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Wrong role denies the element collection",
+    "token": {
+      "user": "wrong-role",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Missing BPN receives an empty element collection",
+    "token": {
+      "user": "missing-bpn",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "shouldMatch": "expected/empty.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous request cannot read the element collection",
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Authorized elements only in the collection",
+    "action": "ASSERT_AUTHORIZED_COLLECTION",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Authorized elements only in value representation",
+    "action": "ASSERT_AUTHORIZED_COLLECTION",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$value",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Authorized metadata only",
+    "action": "ASSERT_AUTHORIZED_COLLECTION",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$metadata",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Authorized references only",
+    "action": "ASSERT_AUTHORIZED_COLLECTION",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$reference",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Authorized paths only",
+    "action": "ASSERT_AUTHORIZED_COLLECTION",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/$path",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Authorized elements only with level core",
+    "action": "ASSERT_AUTHORIZED_COLLECTION",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?level=core",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Authorized elements only with level deep",
+    "action": "ASSERT_AUTHORIZED_COLLECTION",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?level=deep",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Authorized elements only with extent withBlobValue",
+    "action": "ASSERT_AUTHORIZED_COLLECTION",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?extent=withBlobValue",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Authorized elements only across collection pages",
+    "action": "ASSERT_AUTHORIZED_PAGINATION",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements?limit=1",
+    "expectedStatus": 200
+  },
+  {
+    "context": "READ grant does not authorize POST",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "POST",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "data": "bodies/new-property.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "READ grant does not authorize PUT",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "PUT",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/MagnetGrade",
+    "data": "bodies/changed-property.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "READ grant does not authorize PATCH",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "PATCH",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/MagnetGrade/$value",
+    "data": "bodies/changed-value.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "READ grant does not authorize DELETE even for GearRatio",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "DELETE",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GearRatio",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Provider verifies denied writes left the submodel unchanged",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}",
+    "shouldMatch": "bodies/submodel.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Provider removes the only granted element",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "DELETE",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GearRatio",
+    "expectedStatus": 204
+  },
+  {
+    "context": "Absent granted element yields an empty collection",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "shouldMatch": "expected/empty.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Provider restores GearRatio",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "POST",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements",
+    "data": "bodies/gear-ratio.json",
+    "shouldMatch": "bodies/gear-ratio.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Reader can read the restored GearRatio",
+    "token": {
+      "user": "reader",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}/submodel-elements/GearRatio",
+    "shouldMatch": "bodies/gear-ratio.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Provider deletes the target fixture",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "DELETE",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_ID}}",
+    "expectedStatus": 204
+  },
+  {
+    "context": "Provider deletes the other fixture",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "DELETE",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels/{{BASYX_ELEMENT_ACCESS_OTHER_ID}}",
+    "expectedStatus": 204
+  },
+  {
+    "context": "Provider confirms all fixture submodels were removed",
+    "token": {
+      "user": "provider",
+      "password": "pwd"
+    },
+    "method": "GET",
+    "endpoint": "{{BASYX_ELEMENT_ACCESS_BASE_URL}}/submodels",
+    "shouldMatch": "expected/empty.json",
+    "expectedStatus": 200
+  }
+]

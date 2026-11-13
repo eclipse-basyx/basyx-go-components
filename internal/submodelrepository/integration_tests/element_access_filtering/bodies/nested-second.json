@@ -1,0 +1,6 @@
+{
+  "modelType": "Property",
+  "idShort": "Second",
+  "valueType": "xs:string",
+  "value": "public-second-value"
+}

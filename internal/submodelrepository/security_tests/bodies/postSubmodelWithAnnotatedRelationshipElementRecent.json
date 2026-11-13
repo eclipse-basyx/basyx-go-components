@@ -3,6 +3,17 @@
     "id": "MarcusThisIsAOnlyAnnotatedRelationshipElementSubmodel",
     "idShort": "AnnotatedRelationshipElementSubmodel",
     "kind": "Instance",
+    "supplementalSemanticIds": [
+        {
+            "type": "ExternalReference",
+            "keys": [
+                {
+                    "type": "GlobalReference",
+                    "value": "urn:example:supplemental-semantic-id:hidden-for-usera"
+                }
+            ]
+        }
+    ],
     "administration": {
         "revision": "1",
         "version": "3",

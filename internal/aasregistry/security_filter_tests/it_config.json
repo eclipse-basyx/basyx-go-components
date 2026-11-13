@@ -48,7 +48,7 @@
     "expectedStatus": 200
   },
   {
-    "context": "GET ALL Descriptor - User A - FILTERED",
+    "context": "GET ALL Descriptor - User A - FILTERED, nested $aasdesc#id FILTERLIST with idShort mask",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
@@ -64,7 +64,7 @@
     "expectedStatus": 201
   },
   {
-    "context": "GET ALL Descriptor - User X - FILTERED",
+    "context": "GET ALL Descriptor - User X - FILTERED, $aasdesc#id FILTERLIST on nested semanticId keys, supplementalSemanticIds and endpoints",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
