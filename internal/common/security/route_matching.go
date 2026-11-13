@@ -239,16 +239,3 @@ func validateRouteObject(route string, basePath string) error {
 	_, err := compileRoutePattern(joinBasePath(basePath, route), false)
 	return err
 }
-
-func mappedObjectRoutes(object grammar.ObjectItem, basePath string) []RouteWithFilter {
-	switch {
-	case object.Kind == grammar.Descriptor && object.Descriptor != nil:
-		return mapDescriptorValueToRoute(*object.Descriptor, basePath)
-	case object.Kind == grammar.Identifiable && object.Identifiable != nil:
-		return mapIdentifiableValueToRoute(*object.Identifiable, basePath)
-	case object.Kind == grammar.Referable && object.Referable != nil:
-		return mapReferableValueToRoute(*object.Referable, basePath)
-	default:
-		return nil
-	}
-}
