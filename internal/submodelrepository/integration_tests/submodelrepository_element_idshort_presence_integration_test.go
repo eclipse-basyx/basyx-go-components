@@ -41,6 +41,9 @@ type elementIDShortCase struct {
 	method string
 	path   string
 	body   map[string]any
+	// errorCode is the expected error code when it differs from the default
+	// of the test.
+	errorCode string
 }
 
 func TestSubmodelElementIDShortPresence(t *testing.T) {
