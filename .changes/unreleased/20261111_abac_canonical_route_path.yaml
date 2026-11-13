@@ -33,7 +33,8 @@ custom:
   Impact: High
   PullRequest: 1
   SecurityImpact: >-
-    ROUTE rules match the path structure the router uses, and query
+    ROUTE rules are validated when a policy loads and use a defined notation
+    for slashes and percent signs inside path values, and query
     authorization interprets ROUTE rules only in documented shapes. Existing
     rules containing "%2F" or "%25" change meaning and can grant access to a
     different identifier unless they are reviewed before upgrading.
