@@ -100,13 +100,26 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessMod
 		return nil, fmt.Errorf("parse access model: %w", err)
 	}
 
-	model := &AccessModel{
+	model, err := compileAccessModel(&AccessModel{
 		gen:       m,
 		apiRouter: apiRouter,
 		rules:     rules,
 		basePath:  basePath,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("parse access model: %w", err)
 	}
-	model.semanticReadRules = buildSemanticReadRules(rules, basePath)
+	return model, nil
+}
+
+// compileAccessModel validates and precompiles the routes of all rules and
+// derives the semantic read rules. Every load path must use it, so stored
+// policies are checked like configured ones.
+func compileAccessModel(model *AccessModel) (*AccessModel, error) {
+	if err := prepareRuleRoutes(model.rules, model.basePath); err != nil {
+		return nil, err
+	}
+	model.semanticReadRules = buildSemanticReadRules(model.rules, model.basePath)
 	return model, nil
 }
 

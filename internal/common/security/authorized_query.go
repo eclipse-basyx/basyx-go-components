@@ -454,8 +454,8 @@ func parseSemanticSubmodelRoute(route string, basePath string) (semanticRouteSco
 }
 
 func semanticRouteWithinBasePath(route string, basePath string) (string, bool) {
-	mountedRoute := normalize(joinBasePath(basePath, route))
-	base := normalize(common.NormalizeBasePath(basePath))
+	mountedRoute := normalizeRoutePath(joinBasePath(basePath, route))
+	base := normalizeRoutePath(common.NormalizeBasePath(basePath))
 	if base == "/" {
 		return mountedRoute, true
 	}
@@ -597,27 +597,27 @@ func semanticRouteCoversResource(scope semanticRouteScope, resource SemanticReso
 	}
 }
 
+// decodeSemanticIdentifierSegment accepts "*", "**" or an identifier the API
+// accepts, exactly as written. Any other spelling grants no coverage.
 func decodeSemanticIdentifierSegment(segment string) (string, bool, bool) {
-	segment = strings.TrimSpace(segment)
 	if segment == "*" || segment == "**" {
 		return "", true, true
 	}
-	if segment == "" || strings.HasPrefix(segment, "$") || strings.ContainsAny(segment, "*{}") {
-		return "", false, false
-	}
-	decoded, err := common.DecodeString(segment)
+	decoded, err := common.DecodeAPIIdentifier(segment)
 	if err != nil || strings.TrimSpace(decoded) == "" {
 		return "", false, false
 	}
 	return decoded, false, true
 }
 
+// semanticElementPathSegment accepts "*", "**" or an idShortPath that
+// addresses exactly one element, exactly as written. Any other spelling grants
+// no coverage.
 func semanticElementPathSegment(segment string) (string, bool, bool) {
-	segment = strings.TrimSpace(segment)
 	if segment == "*" || segment == "**" {
 		return "", true, true
 	}
-	if segment == "" || strings.HasPrefix(segment, "$") || strings.ContainsAny(segment, "*{}") {
+	if !common.IsConcreteIDShortPath(segment) {
 		return "", false, false
 	}
 	return segment, false, true

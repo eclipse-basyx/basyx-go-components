@@ -29,10 +29,12 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 const arrayIndexPattern = `\[(?:0|[1-9][0-9]*)?\]`
-const idShortSegmentPattern = `[A-Za-z](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?`
+const idShortSegmentPattern = common.IDShortSegmentPattern
 const idShortPathPattern = idShortSegmentPattern + `(?:` + arrayIndexPattern + `)*(?:\.` + idShortSegmentPattern + `(?:` + arrayIndexPattern + `)*)*`
 
 const referencePartValuePattern = `(?:type|keys` + arrayIndexPattern + `\.(?:type|value))`

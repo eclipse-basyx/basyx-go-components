@@ -49,6 +49,7 @@ const actionUploadMultipart = "UPLOAD_MULTIPART"
 const securityUploadMaxSizeBytes = 4 << 20
 
 var testBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_API_PORT", 6004)
+var testDatabaseURL = testenv.PostgresURLFromEnv("BASYX_IT_DB_PORT", 5432, "basyxTestDB")
 var testKeycloakTokenURL = testenv.LocalhostURLFromEnv("BASYX_IT_KEYCLOAK_PORT", 18080) + "/realms/basyx/protocol/openid-connect/token"
 
 func TestIntegration(t *testing.T) {
@@ -950,6 +951,7 @@ func TestMain(m *testing.M) {
 		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
 	})
 	testBaseURL = runtime.LocalhostURL("api")
+	testDatabaseURL = runtime.PostgresURL("db", "basyxTestDB")
 	testKeycloakTokenURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
 	securityEnv := testenv.PrepareSecurityEnvOrExit("security_env", map[string]string{
 		"http://localhost:18080": runtime.LocalhostURL("keycloak"),

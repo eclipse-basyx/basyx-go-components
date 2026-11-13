@@ -17,6 +17,7 @@ import (
 	"net/url"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/go-chi/chi/v5"
 )
 
 func encodeIdentifierForPath(identifier string) string {
@@ -105,4 +106,18 @@ func joinIDShortPath(parentPath string, childIDShort string) string {
 	}
 
 	return parentPath + "." + childIDShort
+}
+
+// routedIDShortPath returns the decoded idShortPath path parameter. It rejects
+// a missing value and a value that is not a concrete idShortPath.
+func routedIDShortPath(r *http.Request) (string, error) {
+	routed := chi.URLParam(r, "idShortPath")
+	if routed == "" {
+		return "", &RequiredError{"idShortPath"}
+	}
+	idShortPath, err := common.ParseRoutedIDShortPath(r, routed)
+	if err != nil {
+		return "", &ParsingError{Param: "idShortPath", Err: err}
+	}
+	return idShortPath, nil
 }

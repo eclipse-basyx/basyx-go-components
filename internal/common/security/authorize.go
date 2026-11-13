@@ -109,6 +109,12 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				return
 			}
 
+			policyPath, err := canonicalAuthorizationPath(r.URL)
+			if err != nil {
+				_ = common.WriteErrorResponse(w, err, http.StatusBadRequest, "Middleware", "ABACMiddleware", "InvalidPath")
+				return
+			}
+
 			claims := FromContext(r)
 			if claims == nil {
 				_ = common.WriteErrorResponse(
@@ -134,11 +140,14 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				)
 				return
 			}
-			serveAuthorizedRequest(w, r, next, settings, model, claims)
+			serveAuthorizedRequest(w, r, next, settings, model, claims, policyPath)
 		})
 	}
 }
 
+// serveAuthorizedRequest evaluates the request. policyPath is the canonical
+// authorization path matched against ROUTE patterns; routePath is the path the
+// router matches and is used to map the request to rights.
 func serveAuthorizedRequest(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -146,8 +155,8 @@ func serveAuthorizedRequest(
 	settings ABACSettings,
 	model *AccessModel,
 	claims Claims,
+	policyPath string,
 ) {
-	policyPath := r.URL.Path
 	routePath := r.URL.Path
 	if r.URL.RawPath != "" {
 		routePath = r.URL.RawPath

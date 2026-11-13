@@ -32,6 +32,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -42,7 +43,11 @@ import (
 	"time"
 )
 
-const dppSecurityRealm = "basyx"
+const (
+	dppSecurityRealm      = "basyx"
+	dppSecurityIssuerHost = "keycloak.localhost"
+	dppElementReaderUser  = "elementreader"
+)
 
 func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	if testing.Short() {
@@ -77,7 +82,7 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	baseURL := "http://127.0.0.1:" + strconv.Itoa(port)
 	waitForDPPAPI(t, ctx, baseURL)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := dppSecurityHTTPClient()
 	tokenEndpoint := issuerURL + "/protocol/openid-connect/token"
 	viewerToken := passwordGrantToken(t, client, tokenEndpoint, "usera", "pwd")
 	restrictedViewerToken := passwordGrantToken(t, client, tokenEndpoint, "userb", "pwd")
@@ -114,6 +119,7 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	energyClassPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "energyClass"))
 	elementBody := doJSONAnyAuth(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+energyClassPath, editorToken, "B", http.StatusOK)
 	assertScalarEquals(t, elementBody, "B")
+	assertDPPElementRouteGrantsOnlyElements(t, client, baseURL, tokenEndpoint, editorToken, dppID, energyClassPath)
 	historicalDate := time.Now().UTC()
 
 	hiddenDPPID := assertSecuredDPPIDSearch(t, client, baseURL, editorToken, restrictedViewerToken)
@@ -198,8 +204,51 @@ func assertDPPIDSearchPage(t *testing.T, body map[string]any, expectedItems []st
 	}
 }
 
+// assertDPPElementRouteGrantsOnlyElements checks that a ROUTE for passport
+// elements grants neither a whole passport nor a passport whose identifier
+// contains "/elements/".
+func assertDPPElementRouteGrantsOnlyElements(
+	t *testing.T,
+	client *http.Client,
+	baseURL string,
+	tokenEndpoint string,
+	editorToken string,
+	dppID string,
+	encodedElementPath string,
+) {
+	t.Helper()
+
+	elementReaderToken := passwordGrantToken(t, client, tokenEndpoint, dppElementReaderUser, "pwd")
+	dppIDWithElementsSegment := dppID + "/elements/x"
+	document := lifecycleDPPDocument(dppIDWithElementsSegment, dppIDWithElementsSegment+"/product", time.Now().UTC())
+	doJSONAuth(t, client, http.MethodPost, baseURL+"/v1/dpps", editorToken, document, http.StatusCreated)
+
+	passportURL := baseURL + "/v1/dpps/" + encodedPathParam(dppID)
+	doJSONAnyAuth(t, client, http.MethodGet, passportURL+"/elements/"+encodedElementPath, elementReaderToken, nil, http.StatusOK)
+	doJSONAnyAuth(t, client, http.MethodGet, passportURL, elementReaderToken, nil, http.StatusForbidden)
+	doJSONAnyAuth(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedPathParam(dppIDWithElementsSegment), elementReaderToken, nil, http.StatusForbidden)
+}
+
+// dppSecurityHTTPClient resolves the issuer host keycloak.localhost to the
+// loopback interface, also on hosts whose resolver does not.
+func dppSecurityHTTPClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	return &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
+				host, port, err := net.SplitHostPort(address)
+				if err == nil && host == dppSecurityIssuerHost {
+					address = net.JoinHostPort("127.0.0.1", port)
+				}
+				return dialer.DialContext(ctx, network, address)
+			},
+		},
+	}
+}
+
 func dppSecurityIssuerURL(keycloakPort int) string {
-	return fmt.Sprintf("http://keycloak.localhost:%d/realms/%s", keycloakPort, dppSecurityRealm)
+	return fmt.Sprintf("http://%s:%d/realms/%s", dppSecurityIssuerHost, keycloakPort, dppSecurityRealm)
 }
 
 func writeDPPSecurityEnvironment(t *testing.T, issuerURL string) string {
@@ -283,6 +332,7 @@ func writeDPPSecurityKeycloakRealm(t *testing.T) string {
 		t.Fatalf("read DPP Keycloak realm: %v", err)
 	}
 	realm["sslRequired"] = "none"
+	addDPPElementReaderUser(realm)
 	data, err := json.MarshalIndent(realm, "", "  ")
 	if err != nil {
 		t.Fatalf("encode DPP Keycloak realm: %v", err)
@@ -292,6 +342,23 @@ func writeDPPSecurityKeycloakRealm(t *testing.T) string {
 		t.Fatalf("write DPP Keycloak realm: %v", err)
 	}
 	return directory
+}
+
+// addDPPElementReaderUser adds a user whose role is only granted the
+// elements of passports.
+func addDPPElementReaderUser(realm map[string]any) {
+	users, _ := realm["users"].([]any)
+	realm["users"] = append(users, map[string]any{
+		"username":      dppElementReaderUser,
+		"email":         dppElementReaderUser + "@mail.com",
+		"emailVerified": true,
+		"firstName":     "Element",
+		"lastName":      "Reader",
+		"enabled":       true,
+		"attributes":    map[string]any{"role": []string{dppElementReaderUser}},
+		"credentials":   []map[string]any{{"type": "password", "value": "pwd", "temporary": false}},
+		"realmRoles":    []string{"default-roles-basyx"},
+	})
 }
 
 func readDPPSecurityKeycloakRealm() (map[string]any, error) {
