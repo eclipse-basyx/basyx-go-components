@@ -33,6 +33,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -192,13 +193,13 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 	switch {
 	case createdFrom != nil && updatedFrom != nil:
 		ds = ds.Where(goqu.Or(
-			goqu.I("aas.administration_created_at").Gte(aasTimestampLowerBound(*createdFrom)),
-			goqu.I("aas.administration_updated_at").Gte(aasTimestampLowerBound(*updatedFrom)),
+			buildAASAdministrationTimeFilter(dialect, "administration_created_at", "createdAt", *createdFrom),
+			buildAASAdministrationTimeFilter(dialect, "administration_updated_at", "updatedAt", *updatedFrom),
 		))
 	case createdFrom != nil:
-		ds = ds.Where(goqu.I("aas.administration_created_at").Gte(aasTimestampLowerBound(*createdFrom)))
+		ds = ds.Where(buildAASAdministrationTimeFilter(dialect, "administration_created_at", "createdAt", *createdFrom))
 	case updatedFrom != nil:
-		ds = ds.Where(goqu.I("aas.administration_updated_at").Gte(aasTimestampLowerBound(*updatedFrom)))
+		ds = ds.Where(buildAASAdministrationTimeFilter(dialect, "administration_updated_at", "updatedAt", *updatedFrom))
 	}
 
 	for _, specificAssetID := range uniqueSpecificAssetIDs(specificAssetIDs) {
@@ -208,13 +209,28 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 	return ds, nil
 }
 
-// aasTimestampLowerBound rounds up to the first PostgreSQL timestamp at or after the cutoff.
-func aasTimestampLowerBound(cutoff time.Time) time.Time {
-	bound := cutoff.UTC().Truncate(time.Microsecond)
-	if bound.Before(cutoff) {
-		return bound.Add(time.Microsecond)
-	}
-	return bound
+func buildAASAdministrationTimeFilter(dialect *goqu.DialectWrapper, column, field string, cutoff time.Time) exp.Expression {
+	cutoff = cutoff.UTC()
+	scalar := goqu.T("aas").Col(column)
+	floor := cutoff.Truncate(time.Microsecond)
+	// PostgreSQL rounds the scalar during writes. Only the two ticks around the cutoff need the payload.
+	return goqu.And(
+		scalar.Gte(floor),
+		goqu.Case().When(scalar.Gt(floor.Add(time.Microsecond)), goqu.L("TRUE")).
+			When(scalar.Gte(floor), goqu.L("(?)", buildAASPreciseTimestampMatch(dialect, field, cutoff))).
+			Else(goqu.L("FALSE")),
+	)
+}
+
+func buildAASPreciseTimestampMatch(dialect *goqu.DialectWrapper, field string, cutoff time.Time) *goqu.SelectDataset {
+	payload := goqu.T("aas_payload").As("time_payload")
+	value := goqu.Func("jsonb_extract_path_text", payload.Col(common.ColAdministrativeInfoPayload), field)
+	const wholeSeconds = `[Tt ][0-9]{2}:[0-9]{2}:[0-9]{2}`
+	seconds := goqu.Cast(goqu.Func("regexp_replace", value, `(`+wholeSeconds+`)[.,][0-9]+`, `\1`), "timestamptz")
+	digits := goqu.Func("substring", value, wholeSeconds+`[.,]([0-9]+)`)
+	nanoseconds := goqu.Func("coalesce", goqu.Cast(goqu.Func("rpad", digits, 9, "0"), "integer"), goqu.L("0"))
+	match := goqu.L("(?, ?) >= (?, ?)", seconds, nanoseconds, cutoff.Truncate(time.Second), cutoff.Nanosecond())
+	return dialect.From(payload).Select(match).Where(payload.Col("aas_id").Eq(goqu.I("aas.id")))
 }
 
 func buildGetAssetAdministrationShellIdentifiersDataset(

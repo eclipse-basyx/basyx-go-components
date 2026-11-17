@@ -86,6 +86,31 @@ func RunAASReferenceTimeConformance(t *testing.T, baseURL string) {
 			conformanceRequest(t, http.MethodGet, baseURL+"/shells/$reference?"+query.Encode(), nil, http.StatusBadRequest)
 		})
 	}
+	t.Run("fractional_payload_timestamps", func(t *testing.T) {
+		runAASFractionalTimestampConformance(t, baseURL, idShort+"Fractional", prefix+":fractional", assetID)
+	})
+}
+
+func runAASFractionalTimestampConformance(t *testing.T, baseURL, idShort, id, assetID string) {
+	t.Helper()
+	createAASTimeFixture(t, baseURL, id, idShort, assetID, "2026-01-03T00:00:00.0000001Z", "2026-01-03T00:00:00.9999999Z")
+	for _, endpoint := range []string{"/shells", "/shells/$reference"} {
+		for _, test := range []struct {
+			name, parameter, cutoff string
+			count                   int
+		}{
+			{name: "created_equal", parameter: "createdFrom", cutoff: "2026-01-03T02:00:00.000000100+02:00", count: 1},
+			{name: "created_one_nanosecond_later", parameter: "createdFrom", cutoff: "2026-01-03T00:00:00.000000101Z"},
+			{name: "updated_equal", parameter: "updatedFrom", cutoff: "2026-01-03T00:00:00.9999999Z", count: 1},
+			{name: "updated_next_second", parameter: "updatedFrom", cutoff: "2026-01-03T00:00:01Z"},
+		} {
+			t.Run(endpoint+"/"+test.name, func(t *testing.T) {
+				query := url.Values{"idShort": {idShort}, "limit": {"1"}, test.parameter: {test.cutoff}}
+				page := conformanceRequest(t, http.MethodGet, baseURL+endpoint+"?"+query.Encode(), nil, http.StatusOK)
+				require.Len(t, page["result"], test.count)
+			})
+		}
+	}
 }
 
 func createAASTimeFixture(t *testing.T, baseURL, id, idShort, assetID, createdAt, updatedAt string) {

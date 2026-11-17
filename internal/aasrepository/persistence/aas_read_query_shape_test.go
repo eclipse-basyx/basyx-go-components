@@ -305,11 +305,11 @@ func TestAASReferenceListUsesOneIdentifierOnlyQuery(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	mock.ExpectQuery(`SELECT "aas"\."aas_id".*"aas"\."administration_created_at".* OR .*"aas"\."administration_updated_at"`).
-		WithArgs(createdFrom, updatedFrom, int64(2)).WillReturnRows(
-		sqlmock.NewRows([]string{"aas_id"}).
-			AddRow("aas-1").
-			AddRow("aas-2"),
-	)
+		WillReturnRows(
+			sqlmock.NewRows([]string{"aas_id"}).
+				AddRow("aas-1").
+				AddRow("aas-2"),
+		)
 
 	backend := &AssetAdministrationShellDatabase{db: db}
 	references, cursor, err := backend.GetAssetAdministrationShellReferences(
