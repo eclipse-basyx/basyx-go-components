@@ -27,6 +27,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -156,8 +157,12 @@ func (h *idShortHarness) assertEmptyContainerValueOnly(t *testing.T, id, level s
 func (h *idShortHarness) assertEmptyContainerPages(t *testing.T, path, level string) {
 	t.Helper()
 	cursor := ""
+	query := url.Values{"limit": {"1"}, "level": {level}}
 	for _, expected := range []string{"EmptyCollection", "EmptyList", "NestedCollection", "NestedList"} {
-		page := h.json(t, http.MethodGet, path+"/submodel-elements/$value?limit=1&level="+level+"&cursor="+cursor, nil, http.StatusOK)
+		if cursor != "" {
+			query.Set("cursor", cursor)
+		}
+		page := h.json(t, http.MethodGet, path+"/submodel-elements/$value?"+query.Encode(), nil, http.StatusOK)
 		results := page["result"].([]any)
 		require.Len(t, results, 1)
 		require.Contains(t, results[0].(map[string]any), expected)
