@@ -1,0 +1,7 @@
+kind: fixed
+body: Make PutAssetInformation replace asset information, including assetKind Type, and clear omitted optional fields. Replacements must include a global asset ID or at least one specific asset ID. Resubmitting the shell's current thumbnail path preserves its uploaded file.
+time: 2026-11-17T12:00:54.0347816+01:00
+custom:
+    Impact: High
+    PullRequest: 896
+    SecurityImpact: None.

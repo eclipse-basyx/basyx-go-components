@@ -146,27 +146,23 @@ func (b *aasReconciliationQueryBuilder) addThumbnailCTEs(metadata exp.Expression
 	thumbnailChanged := aasMetadataChange(metadata, "thumbnailChanged")
 	targetThumbnail := goqu.L("? -> 'thumbnail'", metadata)
 	targetPath := goqu.L("? ->> 'path'", targetThumbnail)
-	changedOwner := b.dialect.From(goqu.T("target_aas").As("target"), goqu.T("aas_reconciliation_plan").As("p"), goqu.T("thumbnail_file_element").As("element")).
-		Select(goqu.L("1")).Where(
+	b.add("replaced_thumbnail", b.dialect.From(goqu.T("target_aas").As("target"), goqu.T("aas_reconciliation_plan").As("p"), goqu.T("thumbnail_file_element").As("element")).
+		Select(goqu.I("target.id")).Where(
 		goqu.I("element.id").Eq(goqu.I("target.id")),
-		goqu.I("thumbnail_binary_reference.thumbnail_element_id").Eq(goqu.I("target.id")),
 		thumbnailChanged,
-		goqu.Or(goqu.L("? IS NULL", targetThumbnail), goqu.L("? = 'null'::jsonb", targetThumbnail), goqu.L("? IS DISTINCT FROM ?", goqu.I("element.value"), targetPath)),
-	)
+		goqu.L("? IS DISTINCT FROM ?", goqu.I("element.value"), targetPath),
+	))
+	replacedThumbnailIDs := b.dialect.From("replaced_thumbnail").Select("id")
 	b.add("deleted_thumbnail_binary_reference", b.dialect.Delete(binarycontent.TableThumbnailReference).
-		Where(goqu.Exists(changedOwner)).Returning("thumbnail_element_id"))
+		Where(goqu.C("thumbnail_element_id").In(replacedThumbnailIDs)).Returning("thumbnail_element_id"))
 
-	unlinkedSource := b.dialect.From(
-		goqu.T("target_aas").As("target"), goqu.T("aas_reconciliation_plan").As("p"), goqu.T("thumbnail_file_data").As("data"),
-	).Select(goqu.Func("lo_unlink", goqu.I("data.file_oid")).As("unlinked")).Where(
-		goqu.I("data.id").Eq(goqu.I("target.id")), goqu.I("data.file_oid").IsNotNull(), thumbnailChanged,
+	unlinkedSource := b.dialect.From("thumbnail_file_data").Select(goqu.Func("lo_unlink", goqu.C("file_oid")).As("unlinked")).Where(
+		goqu.C("id").In(replacedThumbnailIDs), goqu.C("file_oid").IsNotNull(),
 		goqu.L("(SELECT COUNT(*) FROM deleted_thumbnail_binary_reference) >= 0"),
 	)
 	b.add("unlinked_thumbnail_large_objects", unlinkedSource)
 	b.add("deleted_thumbnail_file_data", b.dialect.Delete("thumbnail_file_data").Where(
-		goqu.Exists(b.dialect.From(goqu.T("target_aas").As("target"), goqu.T("aas_reconciliation_plan").As("p")).
-			Select(goqu.L("1")).Where(goqu.I("thumbnail_file_data.id").Eq(goqu.I("target.id")), thumbnailChanged)),
-
+		goqu.C("id").In(replacedThumbnailIDs),
 		goqu.L("(SELECT COUNT(*) FROM unlinked_thumbnail_large_objects) >= 0"),
 	).Returning("id"))
 	b.add("deleted_thumbnail_element", b.dialect.Delete("thumbnail_file_element").Where(
@@ -187,7 +183,7 @@ func (b *aasReconciliationQueryBuilder) addThumbnailCTEs(metadata exp.Expression
 		Cols("id", "content_type", "file_name", "value").FromQuery(thumbnailSource).
 		OnConflict(goqu.DoUpdate("id", goqu.Record{
 			"content_type": goqu.I("excluded.content_type"),
-			"file_name":    goqu.L("CASE WHEN thumbnail_file_element.value IS NOT DISTINCT FROM excluded.value AND EXISTS (SELECT 1 FROM thumbnail_binary_reference AS reference WHERE reference.thumbnail_element_id = thumbnail_file_element.id) THEN thumbnail_file_element.file_name ELSE NULL END"),
+			"file_name":    goqu.Case().When(goqu.L("? IS NOT DISTINCT FROM ?", goqu.I("thumbnail_file_element.value"), goqu.I("excluded.value")), goqu.I("thumbnail_file_element.file_name")),
 			"value":        goqu.I("excluded.value"),
 		})).Returning("id"))
 }

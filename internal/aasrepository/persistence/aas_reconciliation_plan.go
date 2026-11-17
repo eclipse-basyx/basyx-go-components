@@ -33,6 +33,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 )
 
@@ -135,6 +136,7 @@ type aasReconciliationPlanJSON struct {
 
 type aasReconciliationOptions struct {
 	PreserveExistingManagedThumbnail bool
+	ReplaceThumbnailMetadata         bool
 }
 
 func (p aasReconciliationPlan) hasLiveMutation() bool {
@@ -212,20 +214,17 @@ func buildAASReconciliationMetadata(
 	target types.IAssetAdministrationShell,
 	options aasReconciliationOptions,
 ) (aasReconciliationMetadata, error) {
-	previousValues, err := aasReconciliationMetadataValues(previous, true, options)
+	previousValues, err := aasReconciliationMetadataValues(previous)
 	if err != nil {
 		return aasReconciliationMetadata{}, err
 	}
-	targetValues, err := aasReconciliationMetadataValues(target, false, options)
+	targetValues, err := aasReconciliationMetadataValues(target)
 	if err != nil {
 		return aasReconciliationMetadata{}, err
 	}
-	if options.PreserveExistingManagedThumbnail && targetValues.Thumbnail != nil && !isExternalThumbnailPath(targetValues.Thumbnail.Path) {
-		if previousValues.Thumbnail == nil || targetValues.Thumbnail.Path != previousValues.Thumbnail.Path {
-			targetValues.Thumbnail = nil
-		} else if targetValues.Thumbnail.ContentType == nil {
-			targetValues.Thumbnail.ContentType = previousValues.Thumbnail.ContentType
-		}
+	targetValues.Thumbnail, err = reconcileAASThumbnail(previousValues.Thumbnail, targetValues.Thumbnail, options)
+	if err != nil {
+		return aasReconciliationMetadata{}, err
 	}
 	targetValues.CoreChanged = !reflect.DeepEqual(previousValues.IDShort, targetValues.IDShort) ||
 		!reflect.DeepEqual(previousValues.Category, targetValues.Category)
@@ -242,20 +241,32 @@ func buildAASReconciliationMetadata(
 	return targetValues, nil
 }
 
-func aasReconciliationMetadataValues(
-	aas types.IAssetAdministrationShell,
-	previous bool,
-	options aasReconciliationOptions,
-) (aasReconciliationMetadata, error) {
+func reconcileAASThumbnail(previous, target *aasReconciliationThumbnail, options aasReconciliationOptions) (*aasReconciliationThumbnail, error) {
+	if target == nil || isExternalThumbnailPath(target.Path) {
+		return target, nil
+	}
+	samePath := previous != nil && previous.Path == target.Path
+	if options.ReplaceThumbnailMetadata {
+		if binarycontent.IsManagedPath(target.Path) && !samePath {
+			return nil, common.NewErrBadRequest("AASREPO-PUTASSETINFORMATION-THUMBNAILPATH managed thumbnail path must match the shell's current thumbnail")
+		}
+		return target, nil
+	}
+	if !options.PreserveExistingManagedThumbnail || !samePath {
+		return nil, nil
+	}
+	if target.ContentType == nil {
+		target.ContentType = previous.ContentType
+	}
+	return target, nil
+}
+
+func aasReconciliationMetadataValues(aas types.IAssetAdministrationShell) (aasReconciliationMetadata, error) {
 	payload, err := jsonizeAssetAdministrationShellPayload(aas)
 	if err != nil {
 		return aasReconciliationMetadata{}, err
 	}
 	assetInformation := aas.AssetInformation()
-	thumbnail := normalizeAASThumbnail(assetInformation.DefaultThumbnail())
-	if !previous && thumbnail != nil && !isExternalThumbnailPath(thumbnail.Path) && !options.PreserveExistingManagedThumbnail {
-		thumbnail = nil
-	}
 	return aasReconciliationMetadata{
 		IDShort:           aas.IDShort(),
 		Category:          aas.Category(),
@@ -268,7 +279,7 @@ func aasReconciliationMetadataValues(
 		AssetKind:         int(assetInformation.AssetKind()),
 		GlobalAssetID:     assetInformation.GlobalAssetID(),
 		AssetType:         assetInformation.AssetType(),
-		Thumbnail:         thumbnail,
+		Thumbnail:         normalizeAASThumbnail(assetInformation.DefaultThumbnail()),
 	}, nil
 }
 
@@ -549,52 +560,6 @@ func buildAssetInformationReconciliationPlan(
 	submitted types.IAssetInformation,
 ) (aasReconciliationPlan, error) {
 	previous := types.NewAssetAdministrationShell(aasIdentifier, current)
-	target := types.NewAssetAdministrationShell(aasIdentifier, buildEffectiveAssetInformation(current, submitted))
-	return buildAASReconciliationPlan(previous, target, aasReconciliationOptions{})
-}
-
-func assetInformationReconciliationView(current types.IAssetInformation, includeSpecificAssetIDs bool) types.IAssetInformation {
-	view := types.NewAssetInformation(current.AssetKind())
-	view.SetGlobalAssetID(current.GlobalAssetID())
-	view.SetAssetType(current.AssetType())
-	view.SetDefaultThumbnail(current.DefaultThumbnail())
-	if includeSpecificAssetIDs {
-		view.SetSpecificAssetIDs(current.SpecificAssetIDs())
-	}
-	return view
-}
-
-func buildEffectiveAssetInformation(current types.IAssetInformation, submitted types.IAssetInformation) types.IAssetInformation {
-	assetKind := submitted.AssetKind()
-	if assetKind == 0 {
-		assetKind = current.AssetKind()
-	}
-	effective := types.NewAssetInformation(assetKind)
-	effective.SetGlobalAssetID(submitted.GlobalAssetID())
-	if submitted.GlobalAssetID() == nil {
-		effective.SetGlobalAssetID(current.GlobalAssetID())
-	}
-	effective.SetAssetType(submitted.AssetType())
-	if submitted.AssetType() == nil {
-		effective.SetAssetType(current.AssetType())
-	}
-	effective.SetSpecificAssetIDs(submitted.SpecificAssetIDs())
-	if submitted.SpecificAssetIDs() == nil {
-		effective.SetSpecificAssetIDs(current.SpecificAssetIDs())
-	}
-	effective.SetDefaultThumbnail(effectiveAssetInformationThumbnail(current.DefaultThumbnail(), submitted.DefaultThumbnail()))
-	return effective
-}
-
-func effectiveAssetInformationThumbnail(current types.IResource, submitted types.IResource) types.IResource {
-	if submitted == nil || !isExternalThumbnailPath(submitted.Path()) {
-		return nil
-	}
-	contentType := submitted.ContentType()
-	if contentType == nil && current != nil {
-		contentType = current.ContentType()
-	}
-	thumbnail := types.NewResource(submitted.Path())
-	thumbnail.SetContentType(contentType)
-	return thumbnail
+	target := types.NewAssetAdministrationShell(aasIdentifier, submitted)
+	return buildAASReconciliationPlan(previous, target, aasReconciliationOptions{ReplaceThumbnailMetadata: true})
 }

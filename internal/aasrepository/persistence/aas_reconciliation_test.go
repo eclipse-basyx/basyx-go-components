@@ -293,40 +293,75 @@ func TestAASReconciliationPreservesUnchangedManagedThumbnail(t *testing.T) {
 	require.Equal(t, &contentType, plan.Metadata.Thumbnail.ContentType)
 }
 
-func TestEffectiveAssetInformationPutPreservesOmittedPartialFields(t *testing.T) {
+func TestAssetInformationPutReplacesAssetKind(t *testing.T) {
+	for _, assetKind := range []types.AssetKind{
+		types.AssetKindType, types.AssetKindInstance, types.AssetKindNotApplicable,
+		types.AssetKindRole, types.AssetKindBatch,
+	} {
+		t.Run(strconv.Itoa(int(assetKind)), func(t *testing.T) {
+			current := types.NewAssetInformation(assetKind)
+			submitted := types.NewAssetInformation(types.AssetKindType)
+			plan, err := buildAssetInformationReconciliationPlan("aas", current, submitted)
+			require.NoError(t, err)
+			require.Equal(t, int(types.AssetKindType), plan.Metadata.AssetKind)
+			require.Equal(t, assetKind != types.AssetKindType, plan.Metadata.AssetInformationChanged)
+		})
+	}
+}
+
+func TestAssetInformationPutClearsOmittedOptionalFields(t *testing.T) {
+	for _, specificAssetIDs := range [][]types.ISpecificAssetID{nil, {}} {
+		t.Run("specificAssetIDs="+strconv.FormatBool(specificAssetIDs != nil), func(t *testing.T) {
+			assetType := "current-type"
+			previous := reconciliationAAS("aas", "global")
+			previous.AssetInformation().SetAssetType(&assetType)
+			previous.AssetInformation().SetSpecificAssetIDs([]types.ISpecificAssetID{types.NewSpecificAssetID("serial", "one")})
+			previous.AssetInformation().SetDefaultThumbnail(types.NewResource("https://example.com/thumbnail.png"))
+			submitted := types.NewAssetInformation(types.AssetKindInstance)
+			submitted.SetSpecificAssetIDs(specificAssetIDs)
+
+			plan, err := buildAssetInformationReconciliationPlan(previous.ID(), previous.AssetInformation(), submitted)
+			require.NoError(t, err)
+			require.True(t, plan.Metadata.AssetInformationChanged)
+			require.Nil(t, plan.Metadata.GlobalAssetID)
+			require.Nil(t, plan.Metadata.AssetType)
+			require.True(t, plan.Metadata.ThumbnailChanged)
+			require.Nil(t, plan.Metadata.Thumbnail)
+			require.Equal(t, []aasSpecificAssetIDDelete{{MatchPosition: 0}}, plan.SpecificDeletes)
+			require.Empty(t, plan.SpecificUpdates)
+			require.Empty(t, plan.SpecificInserts)
+		})
+	}
+}
+
+func TestAssetInformationPutReplacesThumbnailContentType(t *testing.T) {
 	contentType := "image/png"
-	assetType := "current-type"
 	previous := reconciliationAAS("aas", "global")
-	previous.AssetInformation().SetAssetType(&assetType)
-	previous.AssetInformation().SetSpecificAssetIDs([]types.ISpecificAssetID{types.NewSpecificAssetID("serial", "one")})
 	currentThumbnail := types.NewResource("https://example.com/thumbnail.png")
 	currentThumbnail.SetContentType(&contentType)
 	previous.AssetInformation().SetDefaultThumbnail(currentThumbnail)
-	submitted := types.NewAssetInformation(0)
+	submitted := types.NewAssetInformation(types.AssetKindInstance)
+	submitted.SetGlobalAssetID(previous.AssetInformation().GlobalAssetID())
 	submitted.SetDefaultThumbnail(types.NewResource(currentThumbnail.Path()))
 
-	target := buildEffectiveAssetInformation(previous.AssetInformation(), submitted)
 	plan, err := buildAssetInformationReconciliationPlan(previous.ID(), previous.AssetInformation(), submitted)
 	require.NoError(t, err)
-	require.False(t, plan.hasLiveMutation())
-	require.Equal(t, previous.AssetInformation().AssetKind(), target.AssetKind())
-	require.Equal(t, previous.AssetInformation().GlobalAssetID(), target.GlobalAssetID())
-	require.Equal(t, previous.AssetInformation().AssetType(), target.AssetType())
-	require.Len(t, target.SpecificAssetIDs(), 1)
-	require.Equal(t, &contentType, target.DefaultThumbnail().ContentType())
+	require.True(t, plan.Metadata.ThumbnailChanged)
+	require.NotNil(t, plan.Metadata.Thumbnail)
+	require.Equal(t, currentThumbnail.Path(), plan.Metadata.Thumbnail.Path)
+	require.Nil(t, plan.Metadata.Thumbnail.ContentType)
 }
 
-func TestEffectiveAssetInformationPutClearsOmittedThumbnailOnly(t *testing.T) {
+func TestAssetInformationPutClearsOmittedThumbnail(t *testing.T) {
 	previous := reconciliationAAS("aas", "global")
 	previous.AssetInformation().SetDefaultThumbnail(types.NewResource("https://example.com/thumbnail.png"))
 
-	submitted := types.NewAssetInformation(0)
-	target := buildEffectiveAssetInformation(previous.AssetInformation(), submitted)
+	submitted := types.NewAssetInformation(types.AssetKindInstance)
+	submitted.SetGlobalAssetID(previous.AssetInformation().GlobalAssetID())
 	plan, err := buildAssetInformationReconciliationPlan(previous.ID(), previous.AssetInformation(), submitted)
 	require.NoError(t, err)
 	require.True(t, plan.Metadata.ThumbnailChanged)
 	require.Nil(t, plan.Metadata.Thumbnail)
-	require.Nil(t, target.DefaultThumbnail())
 	require.False(t, plan.Metadata.AssetInformationChanged)
 	require.Empty(t, plan.SpecificUpdates)
 	require.Empty(t, plan.SpecificInserts)
@@ -525,6 +560,8 @@ func expectFocusedAssetInformationRead(mock sqlmock.Sqlmock, globalAssetID strin
 		WillReturnRows(sqlmock.NewRows([]string{
 			"asset_kind", "global_asset_id", "asset_type", "thumbnail_value", "thumbnail_content_type",
 		}).AddRow(int(types.AssetKindInstance), globalAssetID, nil, nil, nil))
+	mock.ExpectQuery(`SELECT .*FROM "specific_asset_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "value", "semantic_id_payload"}))
 }
 
 func reconciliationAAS(id string, globalAssetID string) types.IAssetAdministrationShell {

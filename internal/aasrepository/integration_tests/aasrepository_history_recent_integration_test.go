@@ -112,7 +112,12 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, "type-v2", current["assetInformation"].(map[string]any)["assetType"])
 
-	childUpdateBody := fmt.Sprintf(`{"assetKind":"Batch","assetType":"type-v3-child","globalAssetId":%q}`, globalAssetID)
+	childUpdateBody := fmt.Sprintf(`{
+		"assetKind":"Batch",
+		"assetType":"type-v3-child",
+		"globalAssetId":%q,
+		"specificAssetIds":[{"name":%q,"value":%q}]
+	}`, globalAssetID, specificAssetIDName, specificAssetIDValue)
 	_, status, _, err = putJSONResponse(baseURL+"/shells/"+encodedAASID+"/asset-information", childUpdateBody)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, status)
