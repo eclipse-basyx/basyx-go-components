@@ -1,0 +1,7 @@
+kind: fixed
+body: Apply and document createdFrom and updatedFrom on AAS reference listings. Shell and reference listings reject blank filters and honor inclusive timestamp bounds without truncating fractional seconds. Custom Go implementations of the AAS repository service interface must add two *AASListTimeCutoff arguments to GetAllAssetAdministrationShellsReference and use nil for omitted filters.
+time: 2026-11-17T13:52:31.2863554+01:00
+custom:
+    Impact: High
+    PullRequest: 897
+    SecurityImpact: None.

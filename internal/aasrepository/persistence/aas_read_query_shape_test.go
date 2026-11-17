@@ -101,7 +101,7 @@ func TestAASListCombinedQueryUsesOneSetBasedStatement(t *testing.T) {
 	t.Parallel()
 
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
-	query, args, err := buildAASListCombinedQuery(ctx, 100, "", "", nil, time.Time{}, time.Time{})
+	query, args, err := buildAASListCombinedQuery(ctx, 100, "", "", nil, nil, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, args)
 	require.NotContains(t, query, ";")
@@ -118,7 +118,7 @@ func TestAASListCombinedQueryReusesSQLShape(t *testing.T) {
 
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
 	build := func(cursor string, idShort string, createdFrom time.Time) string {
-		query, _, err := buildAASListCombinedQuery(ctx, 100, cursor, idShort, nil, createdFrom, time.Time{})
+		query, _, err := buildAASListCombinedQuery(ctx, 100, cursor, idShort, nil, new(common.PreciseDateTimeFromTime(createdFrom)), nil)
 		require.NoError(t, err)
 		return query
 	}
@@ -146,7 +146,7 @@ func TestAASListCombinedQueryPreservesFormulaAndFragmentFilters(t *testing.T) {
 			"$aas#assetInformation.specificAssetIds[]": auth.NewFragmentFilterPredicate(grammar.LogicalExpression{Boolean: &deny}, false),
 		},
 	})
-	query, args, err := buildAASListCombinedQuery(ctx, 100, "", "", nil, time.Time{}, time.Time{})
+	query, args, err := buildAASListCombinedQuery(ctx, 100, "", "", nil, nil, nil)
 	require.NoError(t, err)
 	require.Contains(t, query, `WITH aas_list_selected AS`)
 	require.Contains(t, query, `INNER JOIN "aas_list_page" AS "page"`)
@@ -286,7 +286,7 @@ func TestAASIdentifierPageEmbedsInclusiveCursorValidation(t *testing.T) {
 	t.Parallel()
 
 	dialect := goqu.Dialect("postgres")
-	dataset, err := buildGetAssetAdministrationShellIdentifiersDataset(&dialect, 100, "urn:example:aas", "", nil)
+	dataset, err := buildGetAssetAdministrationShellIdentifiersDataset(&dialect, 100, "urn:example:aas", "", nil, nil, nil)
 	require.NoError(t, err)
 	query, _, err := dataset.Prepared(true).ToSQL()
 	require.NoError(t, err)
@@ -299,14 +299,17 @@ func TestAASIdentifierPageEmbedsInclusiveCursorValidation(t *testing.T) {
 func TestAASReferenceListUsesOneIdentifierOnlyQuery(t *testing.T) {
 	t.Parallel()
 
+	createdFrom := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	updatedFrom := createdFrom.Add(time.Hour)
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	mock.ExpectQuery(`SELECT "aas"\."aas_id"`).WillReturnRows(
-		sqlmock.NewRows([]string{"aas_id"}).
-			AddRow("aas-1").
-			AddRow("aas-2"),
-	)
+	mock.ExpectQuery(`SELECT "aas"\."aas_id".*"aas"\."administration_created_at".* OR .*"aas"\."administration_updated_at"`).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"aas_id"}).
+				AddRow("aas-1").
+				AddRow("aas-2"),
+		)
 
 	backend := &AssetAdministrationShellDatabase{db: db}
 	references, cursor, err := backend.GetAssetAdministrationShellReferences(
@@ -315,12 +318,45 @@ func TestAASReferenceListUsesOneIdentifierOnlyQuery(t *testing.T) {
 		"",
 		"",
 		nil,
+		new(common.PreciseDateTimeFromTime(createdFrom)),
+		new(common.PreciseDateTimeFromTime(updatedFrom)),
 	)
 	require.NoError(t, err)
 	require.Len(t, references, 1)
 	require.Equal(t, "aas-2", cursor)
 	require.Equal(t, "aas-1", references[0].Keys()[0].Value())
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAASIdentifierListUsesShellListFilters(t *testing.T) {
+	t.Parallel()
+
+	boundary := common.PreciseDateTimeFromTime(time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("offset", 7200)))
+	for _, test := range []struct {
+		name        string
+		createdFrom *common.PreciseDateTime
+		updatedFrom *common.PreciseDateTime
+	}{
+		{name: "absent"},
+		{name: "created", createdFrom: &boundary},
+		{name: "updated", updatedFrom: &boundary},
+		{name: "both", createdFrom: &boundary, updatedFrom: new(common.PreciseDateTimeFromTime(boundary.Time().Add(time.Hour)))},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dialect := goqu.Dialect("postgres")
+			assetIDs := []types.ISpecificAssetID{types.NewSpecificAssetID("serial", "4711")}
+			shells, err := buildGetAssetAdministrationShellsDataset(&dialect, 1, "urn:example:aas", "Shell", assetIDs, test.createdFrom, test.updatedFrom)
+			require.NoError(t, err)
+			identifiers, err := buildGetAssetAdministrationShellIdentifiersDataset(&dialect, 1, "urn:example:aas", "Shell", assetIDs, test.createdFrom, test.updatedFrom)
+			require.NoError(t, err)
+			shellQuery, shellArgs, err := shells.Prepared(true).ToSQL()
+			require.NoError(t, err)
+			identifierQuery, identifierArgs, err := identifiers.Prepared(true).ToSQL()
+			require.NoError(t, err)
+			require.Equal(t, strings.Replace(shellQuery, `SELECT "aas"."id"`, `SELECT "aas"."aas_id"`, 1), identifierQuery)
+			require.Equal(t, shellArgs, identifierArgs)
+		})
+	}
 }
 
 func TestAASListSequentialFallbackUsesSharedThreeQueryMaterializer(t *testing.T) {
@@ -381,8 +417,8 @@ func TestAASListSequentialFallbackUsesSharedThreeQueryMaterializer(t *testing.T)
 		"",
 		"",
 		nil,
-		time.Time{},
-		time.Time{},
+		nil,
+		nil,
 	)
 	require.NoError(t, err)
 	require.Empty(t, cursor)

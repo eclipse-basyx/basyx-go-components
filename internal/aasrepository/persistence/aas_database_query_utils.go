@@ -33,6 +33,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -160,7 +161,7 @@ func buildDeleteSubmodelReferenceByIDQuery(dialect *goqu.DialectWrapper, submode
 	return dialect.Delete("aas_submodel_reference").Where(goqu.I("id").Eq(submodelReferenceDBID)).ToSQL()
 }
 
-func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) (*goqu.SelectDataset, error) {
+func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom, updatedFrom *common.PreciseDateTime) (*goqu.SelectDataset, error) {
 	ds := dialect.
 		From(goqu.T("aas").As("aas")).
 		LeftJoin(goqu.T("asset_information").As("asset_information"), goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id")))).
@@ -190,15 +191,15 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
 	}
 	switch {
-	case !createdFrom.IsZero() && !updatedFrom.IsZero():
+	case createdFrom != nil && updatedFrom != nil:
 		ds = ds.Where(goqu.Or(
-			goqu.I("aas.administration_created_at").Gte(createdFrom.UTC()),
-			goqu.I("aas.administration_updated_at").Gte(updatedFrom.UTC()),
+			buildAASAdministrationTimeFilter(dialect, "administration_created_at", "createdAt", *createdFrom),
+			buildAASAdministrationTimeFilter(dialect, "administration_updated_at", "updatedAt", *updatedFrom),
 		))
-	case !createdFrom.IsZero():
-		ds = ds.Where(goqu.I("aas.administration_created_at").Gte(createdFrom.UTC()))
-	case !updatedFrom.IsZero():
-		ds = ds.Where(goqu.I("aas.administration_updated_at").Gte(updatedFrom.UTC()))
+	case createdFrom != nil:
+		ds = ds.Where(buildAASAdministrationTimeFilter(dialect, "administration_created_at", "createdAt", *createdFrom))
+	case updatedFrom != nil:
+		ds = ds.Where(buildAASAdministrationTimeFilter(dialect, "administration_updated_at", "updatedAt", *updatedFrom))
 	}
 
 	for _, specificAssetID := range uniqueSpecificAssetIDs(specificAssetIDs) {
@@ -208,44 +209,45 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 	return ds, nil
 }
 
+func buildAASAdministrationTimeFilter(dialect *goqu.DialectWrapper, column, field string, cutoff common.PreciseDateTime) exp.Expression {
+	scalar := goqu.T("aas").Col(column)
+	floor := cutoff.Time().UTC().Truncate(time.Microsecond)
+	// PostgreSQL rounds the scalar during writes. Only the two ticks around the cutoff need the payload.
+	return goqu.And(
+		scalar.Gte(floor),
+		goqu.Case().When(scalar.Gt(floor.Add(time.Microsecond)), goqu.L("TRUE")).
+			When(scalar.Gte(floor), goqu.L("(?)", buildAASPreciseTimestampMatch(dialect, field, cutoff))).
+			Else(goqu.L("FALSE")),
+	)
+}
+
+func buildAASPreciseTimestampMatch(dialect *goqu.DialectWrapper, field string, cutoff common.PreciseDateTime) *goqu.SelectDataset {
+	payload := goqu.T("aas_payload").As("time_payload")
+	value := goqu.Func("jsonb_extract_path_text", payload.Col(common.ColAdministrativeInfoPayload), field)
+	const wholeSeconds = `[Tt ][0-9]{2}:[0-9]{2}:[0-9]{2}`
+	seconds := goqu.Cast(goqu.Func("regexp_replace", value, `(`+wholeSeconds+`)[.,][0-9]+`, `\1`), "timestamptz")
+	digits := goqu.Func("substring", value, wholeSeconds+`[.,]([0-9]+)`)
+	fraction := goqu.Func("rtrim", goqu.Func("coalesce", digits, ""), "0")
+	// Decimal fractions without trailing zeros sort numerically under the bytewise collation.
+	match := goqu.L(`(?, ? COLLATE "C") >= (?, ?::text)`, seconds, fraction,
+		cutoff.Time().UTC().Truncate(time.Second), cutoff.FractionalSecondDigits())
+	return dialect.From(payload).Select(match).Where(payload.Col("aas_id").Eq(goqu.I("aas.id")))
+}
+
 func buildGetAssetAdministrationShellIdentifiersDataset(
 	dialect *goqu.DialectWrapper,
 	limit int32,
 	cursor string,
 	idShort string,
 	specificAssetIDs []types.ISpecificAssetID,
+	createdFrom *common.PreciseDateTime,
+	updatedFrom *common.PreciseDateTime,
 ) (*goqu.SelectDataset, error) {
-	ds := dialect.
-		From(goqu.T("aas").As("aas")).
-		LeftJoin(
-			goqu.T("asset_information").As("asset_information"),
-			goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id"))),
-		).
-		Select(goqu.I("aas.aas_id")).
-		Order(goqu.I("aas.aas_id").Asc())
-	if limit > 0 {
-		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
-		if err != nil {
-			return nil, err
-		}
-		ds = ds.Limit(pageLimitPlusOne)
+	ds, err := buildGetAssetAdministrationShellsDataset(dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
+	if err != nil {
+		return nil, err
 	}
-	if cursor != "" {
-		cursorExists := dialect.From(goqu.T("aas").As("cursor_aas")).
-			Select(goqu.L("1")).
-			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
-		ds = ds.Where(
-			goqu.Exists(cursorExists),
-			goqu.I("aas.aas_id").Gte(cursor),
-		)
-	}
-	if idShort != "" {
-		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
-	}
-	for _, specificAssetID := range uniqueSpecificAssetIDs(specificAssetIDs) {
-		ds = ds.Where(buildSpecificAssetIDFilterExpression(dialect, specificAssetID))
-	}
-	return ds, nil
+	return ds.Select(goqu.I("aas.aas_id")), nil
 }
 
 func buildGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsDataset(

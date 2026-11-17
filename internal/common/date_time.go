@@ -36,6 +36,45 @@ var iso8601DateTimeLayouts = []string{
 	"2006-01-02T15:04:05.999999999Z0700",
 }
 
+// PreciseDateTime preserves the fractional second beyond the resolution of time.Time.
+type PreciseDateTime struct {
+	instant                time.Time
+	fractionalSecondDigits string
+}
+
+// PreciseDateTimeFromTime converts a Go timestamp using its nanosecond precision.
+func PreciseDateTimeFromTime(instant time.Time) PreciseDateTime {
+	return PreciseDateTime{instant: instant, fractionalSecondDigits: strings.TrimPrefix(instant.Format(".999999999"), ".")}
+}
+
+// Time returns the instant truncated to nanosecond precision.
+func (value PreciseDateTime) Time() time.Time {
+	return value.instant
+}
+
+// FractionalSecondDigits returns the digits after the decimal separator, with trailing zeros removed.
+func (value PreciseDateTime) FractionalSecondDigits() string {
+	return value.fractionalSecondDigits
+}
+
+// ParsePreciseISO8601DateTime parses an API timestamp and retains every significant fractional digit.
+func ParsePreciseISO8601DateTime(param string) (PreciseDateTime, error) {
+	instant, err := ParseISO8601DateTime(param)
+	if err != nil {
+		return PreciseDateTime{}, err
+	}
+	value := PreciseDateTime{instant: instant}
+	if separator := strings.IndexAny(param, ".,"); separator >= 0 {
+		digits := param[separator+1:]
+		end := strings.IndexFunc(digits, func(r rune) bool { return r < '0' || r > '9' })
+		if end >= 0 {
+			digits = digits[:end]
+		}
+		value.fractionalSecondDigits = strings.TrimRight(digits, "0")
+	}
+	return value, nil
+}
+
 // ParseISO8601DateTime parses API date-time parameters including RFC3339Nano
 // values and ISO 8601 offsets without a colon.
 func ParseISO8601DateTime(param string) (time.Time, error) {

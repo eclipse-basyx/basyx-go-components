@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	model "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
@@ -34,6 +35,9 @@ type (
 	OperationRequest          = model.OperationRequest
 	OperationRequestValueOnly = model.OperationRequestValueOnly
 )
+
+// AASListTimeCutoff represents an inclusive shell-list timestamp filter, including its full fractional second.
+type AASListTimeCutoff = common.PreciseDateTime
 
 // AssetAdministrationShellRepositoryAPIAPIRouter defines the required methods for binding the api requests to a responses for the AssetAdministrationShellRepositoryAPIAPI
 // The AssetAdministrationShellRepositoryAPIAPIRouter implementation should parse necessary information from the http request,
@@ -119,7 +123,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	QueryAssetAdministrationShells(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
 	GetAllAssetAdministrationShells(context.Context, []string, string, int32, string, time.Time, time.Time) (model.ImplResponse, error)
 	PostAssetAdministrationShell(context.Context, AssetAdministrationShell) (model.ImplResponse, error)
-	GetAllAssetAdministrationShellsReference(context.Context, []string, string, int32, string) (model.ImplResponse, error)
+	GetAllAssetAdministrationShellsReference(context.Context, []string, string, int32, string, *AASListTimeCutoff, *AASListTimeCutoff) (model.ImplResponse, error)
 	GetAssetAdministrationShellById(context.Context, string) (model.ImplResponse, error)
 	PutAssetAdministrationShellById(context.Context, string, AssetAdministrationShell) (model.ImplResponse, error)
 	DeleteAssetAdministrationShellById(context.Context, string) (model.ImplResponse, error)

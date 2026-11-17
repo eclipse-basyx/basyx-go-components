@@ -953,7 +953,7 @@ func submodelReferenceExistsInAssetAdministrationShellInTransaction(
 }
 
 // GetAssetAdministrationShells returns a paginated list of AAS objects and the next cursor.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) ([]types.IAssetAdministrationShell, string, error) {
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom, updatedFrom *common.PreciseDateTime) ([]types.IAssetAdministrationShell, string, error) {
 	readDB := s.readDB(ctx)
 	if common.SupportsPostgreSQLBatch(readDB) {
 		return s.getAssetAdministrationShellsPostgreSQLCombined(
@@ -977,7 +977,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 	return result, nextCursor, err
 }
 
-func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsInTransaction(ctx context.Context, tx *sql.Tx, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) ([]types.IAssetAdministrationShell, string, error) {
+func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsInTransaction(ctx context.Context, tx *sql.Tx, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom, updatedFrom *common.PreciseDateTime) ([]types.IAssetAdministrationShell, string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	if limit < 0 {
@@ -1570,8 +1570,8 @@ func cleanupAndDeleteAASByIdentifier(ctx context.Context, tx *sql.Tx, dialect *g
 }
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]types.IReference, string, error) {
-	identifiers, nextCursor, err := s.GetAssetAdministrationShellIdentifiers(ctx, limit, cursor, idShort, specificAssetIDs)
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom, updatedFrom *common.PreciseDateTime) ([]types.IReference, string, error) {
+	identifiers, nextCursor, err := s.GetAssetAdministrationShellIdentifiers(ctx, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1584,12 +1584,12 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences
 }
 
 // GetAssetAdministrationShellIdentifiers returns paginated AAS identifiers while preserving ABAC filters from ctx.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIdentifiers(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]string, string, error) {
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIdentifiers(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom, updatedFrom *common.PreciseDateTime) ([]string, string, error) {
 	if limit < 0 {
 		return nil, "", common.NewErrBadRequest("AASREPO-GETAASIDS-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
 	}
 	dialect := goqu.Dialect(common.Dialect)
-	queryDS, err := buildGetAssetAdministrationShellIdentifiersDataset(&dialect, limit, cursor, idShort, specificAssetIDs)
+	queryDS, err := buildGetAssetAdministrationShellIdentifiersDataset(&dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDS-BUILDSQL " + err.Error())
 	}

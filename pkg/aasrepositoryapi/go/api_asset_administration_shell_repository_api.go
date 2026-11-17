@@ -12,11 +12,13 @@
 package openapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -430,27 +432,13 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		return
 	}
 
-	var createdFromParam time.Time
-	if query.Has("createdFrom") {
-		parsed, err := parseTime(query.Get("createdFrom"))
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "createdFrom", Err: err}, nil)
-			return
-		}
-		createdFromParam = parsed
+	createdFromParam, updatedFromParam, timeErr := parseAASListTimes(query)
+	if timeErr != nil {
+		c.errorHandler(w, r, timeErr, nil)
+		return
 	}
 
-	var updatedFromParam time.Time
-	if query.Has("updatedFrom") {
-		parsed, err := parseTime(query.Get("updatedFrom"))
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "updatedFrom", Err: err}, nil)
-			return
-		}
-		updatedFromParam = parsed
-	}
-
-	result, err := c.service.GetAllAssetAdministrationShells(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam, createdFromParam, updatedFromParam)
+	result, err := c.listShells(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam, createdFromParam, updatedFromParam)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
@@ -519,13 +507,56 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		return
 	}
 
-	result, err := c.service.GetAllAssetAdministrationShellsReference(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam)
+	createdFromParam, updatedFromParam, timeErr := parseAASListTimes(query)
+	if timeErr != nil {
+		c.errorHandler(w, r, timeErr, nil)
+		return
+	}
+
+	result, err := c.service.GetAllAssetAdministrationShellsReference(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam, createdFromParam, updatedFromParam)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
 	}
 
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+type aasListTimeFilterServicer interface {
+	GetAllAssetAdministrationShellsWithTimeFilters(context.Context, []string, string, int32, string, *AASListTimeCutoff, *AASListTimeCutoff) (model.ImplResponse, error)
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) listShells(ctx context.Context, assetIDs []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *AASListTimeCutoff) (model.ImplResponse, error) {
+	if service, ok := c.service.(aasListTimeFilterServicer); ok {
+		return service.GetAllAssetAdministrationShellsWithTimeFilters(ctx, assetIDs, idShort, limit, cursor, createdFrom, updatedFrom)
+	}
+	return c.service.GetAllAssetAdministrationShells(ctx, assetIDs, idShort, limit, cursor, timeFilterValue(createdFrom), timeFilterValue(updatedFrom))
+}
+
+func timeFilterValue(value *AASListTimeCutoff) time.Time {
+	if value == nil {
+		return time.Time{}
+	}
+	return value.Time()
+}
+
+func parseAASListTimes(query url.Values) (*AASListTimeCutoff, *AASListTimeCutoff, error) {
+	var timestamps [2]*AASListTimeCutoff
+	for index, name := range []string{"createdFrom", "updatedFrom"} {
+		if !query.Has(name) {
+			continue
+		}
+		value := query.Get(name)
+		if strings.TrimSpace(value) == "" {
+			return nil, nil, &ParsingError{Param: name, Err: errors.New("expected a date-time value")}
+		}
+		parsed, err := common.ParsePreciseISO8601DateTime(value)
+		if err != nil {
+			return nil, nil, &ParsingError{Param: name, Err: err}
+		}
+		timestamps[index] = &parsed
+	}
+	return timestamps[0], timestamps[1], nil
 }
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell

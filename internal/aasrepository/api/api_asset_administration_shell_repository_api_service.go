@@ -141,7 +141,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 	if query.SelectsIdentifiers() {
 		return s.queryAssetAdministrationShellIdentifiers(queryCtx, limit, decodedCursor)
 	}
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(queryCtx, limit, decodedCursor, "", nil, time.Time{}, time.Time{})
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(queryCtx, limit, decodedCursor, "", nil, nil, nil)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -171,7 +171,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 
 func (s *AssetAdministrationShellRepositoryAPIAPIService) queryAssetAdministrationShellIdentifiers(ctx context.Context, limit int32, cursor string) (gen.ImplResponse, error) {
 	const operation = "QueryAssetAdministrationShells"
-	identifiers, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellIdentifiers(ctx, limit, cursor, "", nil)
+	identifiers, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellIdentifiers(ctx, limit, cursor, "", nil, nil, nil)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -206,8 +206,21 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) validateAASHierarchyQu
 	)
 }
 
-// GetAllAssetAdministrationShells - Returns all Asset Administration Shells
+// GetAllAssetAdministrationShells returns a page of shells. A zero cutoff omits the corresponding filter.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (gen.ImplResponse, error) {
+	return s.GetAllAssetAdministrationShellsWithTimeFilters(ctx, assetIds, idShort, limit, cursor, optionalAASListCutoff(createdFrom), optionalAASListCutoff(updatedFrom))
+}
+
+func optionalAASListCutoff(cutoff time.Time) *common.PreciseDateTime {
+	if cutoff.IsZero() {
+		return nil
+	}
+	return new(common.PreciseDateTimeFromTime(cutoff))
+}
+
+// GetAllAssetAdministrationShellsWithTimeFilters returns a page of shells with optional inclusive timestamp cutoffs.
+// A nil cutoff omits the corresponding filter. If both cutoffs are supplied, either one can match.
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsWithTimeFilters(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *common.PreciseDateTime) (gen.ImplResponse, error) {
 	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
 	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShells", detail), nil
@@ -281,8 +294,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 	return gen.Response(http.StatusCreated, aasJsonable), nil
 }
 
-// GetAllAssetAdministrationShellsReference - Returns References to all Asset Administration Shells
-func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
+// GetAllAssetAdministrationShellsReference returns a page of shell references with optional inclusive timestamp cutoffs.
+// A nil cutoff omits the corresponding filter. If both cutoffs are supplied, either one can match.
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *common.PreciseDateTime) (gen.ImplResponse, error) {
 	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
 	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellsReference", detail), nil
@@ -299,7 +313,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
 	}
 
-	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, "", nil)
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, "", nil, createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -390,7 +404,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 	}
 
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, normalizedLimit, decodedCursor, "", nil, createdFrom, updatedFrom)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, normalizedLimit, decodedCursor, "", nil, optionalAASListCutoff(createdFrom), optionalAASListCutoff(updatedFrom))
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
