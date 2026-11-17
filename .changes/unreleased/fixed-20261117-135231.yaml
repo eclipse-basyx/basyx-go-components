@@ -1,0 +1,7 @@
+kind: fixed
+body: Apply createdFrom and updatedFrom consistently to AAS reference listings, reject malformed timestamps, and document both parameters. Custom Go implementations of the AAS repository service interface must accept both timestamp arguments.
+time: 2026-11-17T13:52:31.2863554+01:00
+custom:
+    Impact: High
+    PullRequest: 897
+    SecurityImpact: None.
