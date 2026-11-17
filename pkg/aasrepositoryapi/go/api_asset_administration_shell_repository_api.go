@@ -12,6 +12,7 @@
 package openapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -437,7 +438,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		return
 	}
 
-	result, err := c.service.GetAllAssetAdministrationShells(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam, createdFromParam, updatedFromParam)
+	result, err := c.listShells(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam, createdFromParam, updatedFromParam)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
@@ -521,17 +522,39 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-func parseAASListTimes(query url.Values) (time.Time, time.Time, error) {
-	var timestamps [2]time.Time
+type aasListTimeFilterServicer interface {
+	GetAllAssetAdministrationShellsWithTimeFilters(context.Context, []string, string, int32, string, *time.Time, *time.Time) (model.ImplResponse, error)
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) listShells(ctx context.Context, assetIDs []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *time.Time) (model.ImplResponse, error) {
+	if service, ok := c.service.(aasListTimeFilterServicer); ok {
+		return service.GetAllAssetAdministrationShellsWithTimeFilters(ctx, assetIDs, idShort, limit, cursor, createdFrom, updatedFrom)
+	}
+	return c.service.GetAllAssetAdministrationShells(ctx, assetIDs, idShort, limit, cursor, timeFilterValue(createdFrom), timeFilterValue(updatedFrom))
+}
+
+func timeFilterValue(value *time.Time) time.Time {
+	if value == nil {
+		return time.Time{}
+	}
+	return *value
+}
+
+func parseAASListTimes(query url.Values) (*time.Time, *time.Time, error) {
+	var timestamps [2]*time.Time
 	for index, name := range []string{"createdFrom", "updatedFrom"} {
 		if !query.Has(name) {
 			continue
 		}
-		parsed, err := parseTime(query.Get(name))
-		if err != nil {
-			return time.Time{}, time.Time{}, &ParsingError{Param: name, Err: err}
+		value := query.Get(name)
+		if strings.TrimSpace(value) == "" {
+			return nil, nil, &ParsingError{Param: name, Err: errors.New("expected a date-time value")}
 		}
-		timestamps[index] = parsed
+		parsed, err := parseTime(value)
+		if err != nil {
+			return nil, nil, &ParsingError{Param: name, Err: err}
+		}
+		timestamps[index] = &parsed
 	}
 	return timestamps[0], timestamps[1], nil
 }

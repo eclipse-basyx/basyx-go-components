@@ -160,7 +160,7 @@ func buildDeleteSubmodelReferenceByIDQuery(dialect *goqu.DialectWrapper, submode
 	return dialect.Delete("aas_submodel_reference").Where(goqu.I("id").Eq(submodelReferenceDBID)).ToSQL()
 }
 
-func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) (*goqu.SelectDataset, error) {
+func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom, updatedFrom *time.Time) (*goqu.SelectDataset, error) {
 	ds := dialect.
 		From(goqu.T("aas").As("aas")).
 		LeftJoin(goqu.T("asset_information").As("asset_information"), goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id")))).
@@ -190,15 +190,15 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
 	}
 	switch {
-	case !createdFrom.IsZero() && !updatedFrom.IsZero():
+	case createdFrom != nil && updatedFrom != nil:
 		ds = ds.Where(goqu.Or(
-			goqu.I("aas.administration_created_at").Gte(createdFrom.UTC()),
-			goqu.I("aas.administration_updated_at").Gte(updatedFrom.UTC()),
+			goqu.I("aas.administration_created_at").Gte(aasTimestampLowerBound(*createdFrom)),
+			goqu.I("aas.administration_updated_at").Gte(aasTimestampLowerBound(*updatedFrom)),
 		))
-	case !createdFrom.IsZero():
-		ds = ds.Where(goqu.I("aas.administration_created_at").Gte(createdFrom.UTC()))
-	case !updatedFrom.IsZero():
-		ds = ds.Where(goqu.I("aas.administration_updated_at").Gte(updatedFrom.UTC()))
+	case createdFrom != nil:
+		ds = ds.Where(goqu.I("aas.administration_created_at").Gte(aasTimestampLowerBound(*createdFrom)))
+	case updatedFrom != nil:
+		ds = ds.Where(goqu.I("aas.administration_updated_at").Gte(aasTimestampLowerBound(*updatedFrom)))
 	}
 
 	for _, specificAssetID := range uniqueSpecificAssetIDs(specificAssetIDs) {
@@ -208,14 +208,23 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 	return ds, nil
 }
 
+// aasTimestampLowerBound rounds up to the first PostgreSQL timestamp at or after the cutoff.
+func aasTimestampLowerBound(cutoff time.Time) time.Time {
+	bound := cutoff.UTC().Truncate(time.Microsecond)
+	if bound.Before(cutoff) {
+		return bound.Add(time.Microsecond)
+	}
+	return bound
+}
+
 func buildGetAssetAdministrationShellIdentifiersDataset(
 	dialect *goqu.DialectWrapper,
 	limit int32,
 	cursor string,
 	idShort string,
 	specificAssetIDs []types.ISpecificAssetID,
-	createdFrom time.Time,
-	updatedFrom time.Time,
+	createdFrom *time.Time,
+	updatedFrom *time.Time,
 ) (*goqu.SelectDataset, error) {
 	ds, err := buildGetAssetAdministrationShellsDataset(dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {

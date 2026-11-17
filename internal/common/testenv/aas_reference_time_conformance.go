@@ -61,9 +61,12 @@ func RunAASReferenceTimeConformance(t *testing.T, baseURL string) {
 		{name: "unfiltered", want: ids},
 		{name: "created_inclusive", createdFrom: "2026-01-03T00:00:00Z", want: ids[1:2]},
 		{name: "updated_inclusive", updatedFrom: "2026-01-04T00:00:00Z", want: ids[2:]},
+		{name: "created_one_nanosecond_later", createdFrom: "2026-01-03T00:00:00.000000001Z", want: []string{}},
+		{name: "updated_one_nanosecond_later", updatedFrom: "2026-01-04T00:00:00.000000001Z", want: []string{}},
 		{name: "created_excluded", createdFrom: "2100-01-01T00:00:00Z", want: []string{}},
 		{name: "updated_excluded", updatedFrom: "2100-01-01T00:00:00Z", want: []string{}},
 		{name: "or_filters", createdFrom: "2026-01-03T00:00:00Z", updatedFrom: "2026-01-04T00:00:00Z", want: ids[1:]},
+		{name: "year_one_or_future", createdFrom: "0001-01-01T00:00:00Z", updatedFrom: "2100-01-01T00:00:00Z", want: ids},
 		{name: "utc_offset", createdFrom: "2026-01-03T02:00:00+02:00", want: ids[1:2]},
 	} {
 		t.Run(test.name, func(t *testing.T) {

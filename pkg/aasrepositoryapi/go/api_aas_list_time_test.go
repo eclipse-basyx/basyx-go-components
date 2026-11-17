@@ -40,17 +40,17 @@ import (
 type aasListTimeService struct {
 	AssetAdministrationShellRepositoryAPIAPIServicer
 	called      bool
-	createdFrom time.Time
-	updatedFrom time.Time
+	createdFrom *time.Time
+	updatedFrom *time.Time
 }
 
-func (s *aasListTimeService) GetAllAssetAdministrationShells(_ context.Context, _ []string, _ string, _ int32, _ string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
+func (s *aasListTimeService) GetAllAssetAdministrationShellsWithTimeFilters(_ context.Context, _ []string, _ string, _ int32, _ string, createdFrom, updatedFrom *time.Time) (model.ImplResponse, error) {
 	s.called, s.createdFrom, s.updatedFrom = true, createdFrom, updatedFrom
 	return model.Response(http.StatusOK, nil), nil
 }
 
-func (s *aasListTimeService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIDs []string, idShort string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
-	return s.GetAllAssetAdministrationShells(ctx, assetIDs, idShort, limit, cursor, createdFrom, updatedFrom)
+func (s *aasListTimeService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIDs []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *time.Time) (model.ImplResponse, error) {
+	return s.GetAllAssetAdministrationShellsWithTimeFilters(ctx, assetIDs, idShort, limit, cursor, createdFrom, updatedFrom)
 }
 
 func TestAASListHandlersForwardTimeFilters(t *testing.T) {
@@ -62,25 +62,35 @@ func TestAASListHandlersForwardTimeFilters(t *testing.T) {
 		for _, test := range []struct {
 			name        string
 			query       url.Values
-			wantCreated time.Time
-			wantUpdated time.Time
+			wantCreated *time.Time
+			wantUpdated *time.Time
 		}{
 			{name: "absent"},
-			{name: "empty", query: url.Values{"createdFrom": {""}, "updatedFrom": {""}}},
-			{name: "created", query: url.Values{"createdFrom": {created.Format(time.RFC3339)}}, wantCreated: created},
-			{name: "updated", query: url.Values{"updatedFrom": {updated.Format(time.RFC3339)}}, wantUpdated: updated},
-			{name: "both", query: url.Values{"createdFrom": {"2026-01-02T05:04:05+02:00"}, "updatedFrom": {updated.Format(time.RFC3339)}}, wantCreated: created, wantUpdated: updated},
+			{name: "created", query: url.Values{"createdFrom": {created.Format(time.RFC3339)}}, wantCreated: &created},
+			{name: "updated", query: url.Values{"updatedFrom": {updated.Format(time.RFC3339)}}, wantUpdated: &updated},
+			{name: "both", query: url.Values{"createdFrom": {"2026-01-02T05:04:05+02:00"}, "updatedFrom": {updated.Format(time.RFC3339)}}, wantCreated: &created, wantUpdated: &updated},
+			{name: "year_one", query: url.Values{"createdFrom": {"0001-01-01T00:00:00Z"}}, wantCreated: new(time.Time)},
 		} {
 			t.Run(endpoint+"/"+test.name, func(t *testing.T) {
 				service := &aasListTimeService{}
 				response := serveAASListTimeRequest(endpoint, test.query, service)
 				require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 				require.True(t, service.called)
-				require.True(t, test.wantCreated.Equal(service.createdFrom))
-				require.True(t, test.wantUpdated.Equal(service.updatedFrom))
+				requireOptionalAASListTime(t, test.wantCreated, service.createdFrom)
+				requireOptionalAASListTime(t, test.wantUpdated, service.updatedFrom)
 			})
 		}
 	}
+}
+
+func requireOptionalAASListTime(t *testing.T, expected, actual *time.Time) {
+	t.Helper()
+	if expected == nil {
+		require.Nil(t, actual)
+		return
+	}
+	require.NotNil(t, actual)
+	require.True(t, expected.Equal(*actual))
 }
 
 func TestAASListHandlersRejectInvalidTimeFilters(t *testing.T) {
@@ -88,7 +98,7 @@ func TestAASListHandlersRejectInvalidTimeFilters(t *testing.T) {
 
 	for _, endpoint := range []string{"/shells", "/shells/$reference"} {
 		for _, parameter := range []string{"createdFrom", "updatedFrom"} {
-			for _, value := range []string{"not-a-date", "2026-99-01T00:00:00Z"} {
+			for _, value := range []string{"", "  ", "not-a-date", "2026-99-01T00:00:00Z"} {
 				t.Run(endpoint+"/"+parameter+"/"+value, func(t *testing.T) {
 					service := &aasListTimeService{}
 					response := serveAASListTimeRequest(endpoint, url.Values{parameter: {value}}, service)

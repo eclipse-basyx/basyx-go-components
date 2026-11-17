@@ -162,8 +162,8 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellsPostgreSQ
 	cursor string,
 	idShort string,
 	specificAssetIDs []types.ISpecificAssetID,
-	createdFrom time.Time,
-	updatedFrom time.Time,
+	createdFrom *time.Time,
+	updatedFrom *time.Time,
 ) ([]types.IAssetAdministrationShell, string, error) {
 	if limit < 0 {
 		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
@@ -201,8 +201,8 @@ func buildAASListCombinedQuery(
 	cursor string,
 	idShort string,
 	specificAssetIDs []types.ISpecificAssetID,
-	createdFrom time.Time,
-	updatedFrom time.Time,
+	createdFrom *time.Time,
+	updatedFrom *time.Time,
 ) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
 	selected, err := buildAASListSelectedDataset(ctx, dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
@@ -252,8 +252,8 @@ func buildAASListSelectedDataset(
 	cursor string,
 	idShort string,
 	specificAssetIDs []types.ISpecificAssetID,
-	createdFrom time.Time,
-	updatedFrom time.Time,
+	createdFrom *time.Time,
+	updatedFrom *time.Time,
 ) (*goqu.SelectDataset, error) {
 	dataset, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {

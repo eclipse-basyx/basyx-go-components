@@ -119,7 +119,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	QueryAssetAdministrationShells(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
 	GetAllAssetAdministrationShells(context.Context, []string, string, int32, string, time.Time, time.Time) (model.ImplResponse, error)
 	PostAssetAdministrationShell(context.Context, AssetAdministrationShell) (model.ImplResponse, error)
-	GetAllAssetAdministrationShellsReference(context.Context, []string, string, int32, string, time.Time, time.Time) (model.ImplResponse, error)
+	GetAllAssetAdministrationShellsReference(context.Context, []string, string, int32, string, *time.Time, *time.Time) (model.ImplResponse, error)
 	GetAssetAdministrationShellById(context.Context, string) (model.ImplResponse, error)
 	PutAssetAdministrationShellById(context.Context, string, AssetAdministrationShell) (model.ImplResponse, error)
 	DeleteAssetAdministrationShellById(context.Context, string) (model.ImplResponse, error)
