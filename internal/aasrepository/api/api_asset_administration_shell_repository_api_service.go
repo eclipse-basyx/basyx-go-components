@@ -211,16 +211,16 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	return s.GetAllAssetAdministrationShellsWithTimeFilters(ctx, assetIds, idShort, limit, cursor, optionalAASListCutoff(createdFrom), optionalAASListCutoff(updatedFrom))
 }
 
-func optionalAASListCutoff(cutoff time.Time) *time.Time {
+func optionalAASListCutoff(cutoff time.Time) *common.PreciseDateTime {
 	if cutoff.IsZero() {
 		return nil
 	}
-	return &cutoff
+	return new(common.PreciseDateTimeFromTime(cutoff))
 }
 
 // GetAllAssetAdministrationShellsWithTimeFilters returns a page of shells with optional inclusive timestamp cutoffs.
 // A nil cutoff omits the corresponding filter. If both cutoffs are supplied, either one can match.
-func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsWithTimeFilters(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *time.Time) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsWithTimeFilters(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *common.PreciseDateTime) (gen.ImplResponse, error) {
 	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
 	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShells", detail), nil
@@ -296,7 +296,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 
 // GetAllAssetAdministrationShellsReference returns a page of shell references with optional inclusive timestamp cutoffs.
 // A nil cutoff omits the corresponding filter. If both cutoffs are supplied, either one can match.
-func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *time.Time) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *common.PreciseDateTime) (gen.ImplResponse, error) {
 	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
 	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellsReference", detail), nil

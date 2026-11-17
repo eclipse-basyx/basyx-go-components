@@ -93,15 +93,18 @@ func RunAASReferenceTimeConformance(t *testing.T, baseURL string) {
 
 func runAASFractionalTimestampConformance(t *testing.T, baseURL, idShort, id, assetID string) {
 	t.Helper()
-	createAASTimeFixture(t, baseURL, id, idShort, assetID, "2026-01-03T00:00:00.0000001Z", "2026-01-03T00:00:00.9999999Z")
+	createAASTimeFixture(t, baseURL, id, idShort, assetID, "2026-01-03T00:00:00.0000001001Z", "2026-01-03T00:00:00.999999900100Z")
 	for _, endpoint := range []string{"/shells", "/shells/$reference"} {
 		for _, test := range []struct {
 			name, parameter, cutoff string
 			count                   int
 		}{
-			{name: "created_equal", parameter: "createdFrom", cutoff: "2026-01-03T02:00:00.000000100+02:00", count: 1},
+			{name: "created_equal", parameter: "createdFrom", cutoff: "2026-01-03T02:00:00.000000100100+02:00", count: 1},
+			{name: "created_earlier_subnanosecond", parameter: "createdFrom", cutoff: "2026-01-03T00:00:00.00000010001Z", count: 1},
+			{name: "created_later_subnanosecond", parameter: "createdFrom", cutoff: "2026-01-03T00:00:00.0000001002Z"},
 			{name: "created_one_nanosecond_later", parameter: "createdFrom", cutoff: "2026-01-03T00:00:00.000000101Z"},
-			{name: "updated_equal", parameter: "updatedFrom", cutoff: "2026-01-03T00:00:00.9999999Z", count: 1},
+			{name: "updated_equal", parameter: "updatedFrom", cutoff: "2026-01-03T00:00:00.9999999001Z", count: 1},
+			{name: "updated_later_subnanosecond", parameter: "updatedFrom", cutoff: "2026-01-03T00:00:00.9999999002Z"},
 			{name: "updated_next_second", parameter: "updatedFrom", cutoff: "2026-01-03T00:00:01Z"},
 		} {
 			t.Run(endpoint+"/"+test.name, func(t *testing.T) {

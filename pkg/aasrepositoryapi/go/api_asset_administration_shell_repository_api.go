@@ -523,25 +523,25 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 }
 
 type aasListTimeFilterServicer interface {
-	GetAllAssetAdministrationShellsWithTimeFilters(context.Context, []string, string, int32, string, *time.Time, *time.Time) (model.ImplResponse, error)
+	GetAllAssetAdministrationShellsWithTimeFilters(context.Context, []string, string, int32, string, *AASListTimeCutoff, *AASListTimeCutoff) (model.ImplResponse, error)
 }
 
-func (c *AssetAdministrationShellRepositoryAPIAPIController) listShells(ctx context.Context, assetIDs []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *time.Time) (model.ImplResponse, error) {
+func (c *AssetAdministrationShellRepositoryAPIAPIController) listShells(ctx context.Context, assetIDs []string, idShort string, limit int32, cursor string, createdFrom, updatedFrom *AASListTimeCutoff) (model.ImplResponse, error) {
 	if service, ok := c.service.(aasListTimeFilterServicer); ok {
 		return service.GetAllAssetAdministrationShellsWithTimeFilters(ctx, assetIDs, idShort, limit, cursor, createdFrom, updatedFrom)
 	}
 	return c.service.GetAllAssetAdministrationShells(ctx, assetIDs, idShort, limit, cursor, timeFilterValue(createdFrom), timeFilterValue(updatedFrom))
 }
 
-func timeFilterValue(value *time.Time) time.Time {
+func timeFilterValue(value *AASListTimeCutoff) time.Time {
 	if value == nil {
 		return time.Time{}
 	}
-	return *value
+	return value.Time()
 }
 
-func parseAASListTimes(query url.Values) (*time.Time, *time.Time, error) {
-	var timestamps [2]*time.Time
+func parseAASListTimes(query url.Values) (*AASListTimeCutoff, *AASListTimeCutoff, error) {
+	var timestamps [2]*AASListTimeCutoff
 	for index, name := range []string{"createdFrom", "updatedFrom"} {
 		if !query.Has(name) {
 			continue
@@ -550,7 +550,7 @@ func parseAASListTimes(query url.Values) (*time.Time, *time.Time, error) {
 		if strings.TrimSpace(value) == "" {
 			return nil, nil, &ParsingError{Param: name, Err: errors.New("expected a date-time value")}
 		}
-		parsed, err := parseTime(value)
+		parsed, err := common.ParsePreciseISO8601DateTime(value)
 		if err != nil {
 			return nil, nil, &ParsingError{Param: name, Err: err}
 		}

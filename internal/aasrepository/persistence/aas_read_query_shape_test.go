@@ -118,7 +118,7 @@ func TestAASListCombinedQueryReusesSQLShape(t *testing.T) {
 
 	ctx := common.ContextWithConfig(t.Context(), &common.Config{})
 	build := func(cursor string, idShort string, createdFrom time.Time) string {
-		query, _, err := buildAASListCombinedQuery(ctx, 100, cursor, idShort, nil, &createdFrom, nil)
+		query, _, err := buildAASListCombinedQuery(ctx, 100, cursor, idShort, nil, new(common.PreciseDateTimeFromTime(createdFrom)), nil)
 		require.NoError(t, err)
 		return query
 	}
@@ -318,8 +318,8 @@ func TestAASReferenceListUsesOneIdentifierOnlyQuery(t *testing.T) {
 		"",
 		"",
 		nil,
-		&createdFrom,
-		&updatedFrom,
+		new(common.PreciseDateTimeFromTime(createdFrom)),
+		new(common.PreciseDateTimeFromTime(updatedFrom)),
 	)
 	require.NoError(t, err)
 	require.Len(t, references, 1)
@@ -331,16 +331,16 @@ func TestAASReferenceListUsesOneIdentifierOnlyQuery(t *testing.T) {
 func TestAASIdentifierListUsesShellListFilters(t *testing.T) {
 	t.Parallel()
 
-	boundary := time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("offset", 7200))
+	boundary := common.PreciseDateTimeFromTime(time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("offset", 7200)))
 	for _, test := range []struct {
 		name        string
-		createdFrom *time.Time
-		updatedFrom *time.Time
+		createdFrom *common.PreciseDateTime
+		updatedFrom *common.PreciseDateTime
 	}{
 		{name: "absent"},
 		{name: "created", createdFrom: &boundary},
 		{name: "updated", updatedFrom: &boundary},
-		{name: "both", createdFrom: &boundary, updatedFrom: new(boundary.Add(time.Hour))},
+		{name: "both", createdFrom: &boundary, updatedFrom: new(common.PreciseDateTimeFromTime(boundary.Time().Add(time.Hour)))},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			dialect := goqu.Dialect("postgres")
