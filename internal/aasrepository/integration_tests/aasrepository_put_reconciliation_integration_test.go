@@ -57,6 +57,108 @@ type persistedAASReconciliationPositionedReferenceKey struct {
 	value             string
 }
 
+func TestPutAssetInformationReplacesAssetKindWithType(t *testing.T) {
+	for _, assetKind := range []string{"Instance", "NotApplicable", "Role", "Batch", "Type"} {
+		t.Run(assetKind, func(t *testing.T) {
+			initial := map[string]any{"assetKind": assetKind, "globalAssetId": "urn:example:asset:1"}
+			replacement := map[string]any{"assetKind": "Type", "globalAssetId": "urn:example:asset:1"}
+			assertAssetInformationReplacement(t, initial, replacement, replacement)
+		})
+	}
+}
+
+func TestPutAssetInformationReplacesOptionalFields(t *testing.T) {
+	testCases := []struct {
+		name        string
+		replacement map[string]any
+	}{
+		{
+			name: "omit asset type and specific asset IDs",
+			replacement: map[string]any{
+				"assetKind": "Instance", "globalAssetId": "urn:example:asset:replacement",
+			},
+		},
+		{
+			name: "omit global asset ID",
+			replacement: map[string]any{
+				"assetKind":        "Instance",
+				"specificAssetIds": []any{map[string]any{"name": "serial", "value": "replacement"}},
+			},
+		},
+		{
+			name: "omit all optional fields",
+			replacement: map[string]any{
+				"assetKind": "Instance",
+			},
+		},
+		{
+			name: "replace thumbnail without content type",
+			replacement: map[string]any{
+				"assetKind": "Type", "globalAssetId": "urn:example:asset:replacement",
+				"assetType":        "replacement-type",
+				"specificAssetIds": []any{map[string]any{"name": "serial", "value": "replacement"}},
+				"defaultThumbnail": map[string]any{"path": "https://example.com/thumbnail.png"},
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			initial := map[string]any{
+				"assetKind": "Instance", "globalAssetId": "urn:example:asset:original", "assetType": "original-type",
+				"specificAssetIds": []any{map[string]any{"name": "serial", "value": "original"}},
+				"defaultThumbnail": map[string]any{"path": "https://example.com/thumbnail.png", "contentType": "image/png"},
+			}
+			assertAssetInformationReplacement(t, initial, testCase.replacement, testCase.replacement)
+		})
+	}
+}
+
+func TestPutAssetInformationClearsExplicitlyEmptySpecificAssetIDs(t *testing.T) {
+	initial := map[string]any{
+		"assetKind": "Instance", "globalAssetId": "urn:example:asset:1",
+		"specificAssetIds": []any{map[string]any{"name": "serial", "value": "original"}},
+	}
+	replacement := map[string]any{
+		"assetKind": "Instance", "globalAssetId": "urn:example:asset:1", "specificAssetIds": []any{},
+	}
+	expected := map[string]any{"assetKind": "Instance", "globalAssetId": "urn:example:asset:1"}
+	assertAssetInformationReplacement(t, initial, replacement, expected)
+}
+
+func assertAssetInformationReplacement(t *testing.T, initial, replacement, expected map[string]any) {
+	t.Helper()
+	aasID := fmt.Sprintf("urn:basyx:integration:asset-information-put-%d", time.Now().UnixNano())
+	endpoint := aasRepositoryBaseURL + "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	reference := aasReconciliationReference(aasID + ":submodel")
+	payload := map[string]any{
+		"id": aasID, "idShort": "Replacement", "modelType": "AssetAdministrationShell",
+		"assetInformation": initial, "submodels": []any{reference},
+	}
+	encoded, err := json.Marshal(payload)
+	require.NoError(t, err)
+	_, status, _, err := postJSONResponse(aasRepositoryBaseURL+"/shells", string(encoded))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status)
+	t.Cleanup(func() { deleteAASForLargeObjectCleanupTest(t, endpoint) })
+	encoded, err = json.Marshal(replacement)
+	require.NoError(t, err)
+	for range 2 {
+		_, status, _, err = putJSONResponse(endpoint+"/asset-information", string(encoded))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, status)
+		actual, getStatus, getErr := getJSONResponse(endpoint + "/asset-information")
+		require.NoError(t, getErr)
+		require.Equal(t, http.StatusOK, getStatus)
+		require.Equal(t, expected, actual)
+		shell, getStatus, getErr := getJSONResponse(endpoint)
+		require.NoError(t, getErr)
+		require.Equal(t, http.StatusOK, getStatus)
+		require.Equal(t, expected, shell["assetInformation"])
+		require.Equal(t, "Replacement", shell["idShort"])
+		require.Equal(t, []any{reference}, shell["submodels"])
+	}
+}
+
 func TestPutAssetAdministrationShellReconcilesRowsInPlace(t *testing.T) {
 	aasID := fmt.Sprintf("urn:basyx:integration:aas-reconciliation-%d", time.Now().UnixNano())
 	endpoint := aasRepositoryBaseURL + "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(aasID))

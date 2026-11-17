@@ -1665,7 +1665,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetInformationByAASID(ctx contex
 	return jsonAssetInformation, nil
 }
 
-// PutAssetInformationByAASID updates the assetInformation section and applies ABAC write checks.
+// PutAssetInformationByAASID replaces the assetInformation section and applies ABAC write checks.
 // nolint:revive // cyclomatic complexity (31) is acceptable due to the multiple steps and checks involved in this operation.
 func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(ctx context.Context, aasIdentifier string, assetInformation types.IAssetInformation) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
@@ -1686,7 +1686,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(ctx contex
 	return nil
 }
 
-// PutAssetInformationByAASIDInTransaction updates AAS asset information in an existing transaction.
+// PutAssetInformationByAASIDInTransaction replaces AAS asset information in an existing transaction.
 func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -1717,9 +1717,8 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 		return err
 	}
 
-	includeSpecificAssetIDs := assetInformation.SpecificAssetIDs() != nil
 	currentAssetInformation, previousSnapshot, err := s.loadAssetInformationReconciliationStateTx(
-		ctx, tx, aasDBID, aasIdentifier, includeSpecificAssetIDs,
+		ctx, tx, aasDBID, aasIdentifier,
 	)
 	if err != nil {
 		return err
@@ -1751,12 +1750,11 @@ func (s *AssetAdministrationShellDatabase) loadAssetInformationReconciliationSta
 	tx *sql.Tx,
 	aasDBID int64,
 	aasIdentifier string,
-	includeSpecificAssetIDs bool,
 ) (types.IAssetInformation, map[string]any, error) {
 	unfilteredContext := auth.ContextWithoutQueryFilter(ctx)
 	if !history.ActiveConfig().EvidenceEnabled {
 		current, err := s.loadAssetInformationForReconciliationTx(
-			unfilteredContext, tx, aasDBID, aasIdentifier, includeSpecificAssetIDs,
+			unfilteredContext, tx, aasDBID, aasIdentifier,
 		)
 		return current, nil, err
 	}
@@ -1769,7 +1767,7 @@ func (s *AssetAdministrationShellDatabase) loadAssetInformationReconciliationSta
 	if err != nil {
 		return nil, nil, err
 	}
-	return assetInformationReconciliationView(previous.AssetInformation(), includeSpecificAssetIDs), previousSnapshot, nil
+	return previous.AssetInformation(), previousSnapshot, nil
 }
 
 func (s *AssetAdministrationShellDatabase) ensureAASWritableForAssetInformationUpdate(
@@ -1811,7 +1809,6 @@ func (s *AssetAdministrationShellDatabase) loadAssetInformationForReconciliation
 	tx *sql.Tx,
 	aasDBID int64,
 	aasIdentifier string,
-	includeSpecificAssetIDs bool,
 ) (types.IAssetInformation, error) {
 	dialect := goqu.Dialect("postgres")
 	query, args, err := buildGetAssetInformationReconciliationStateQuery(&dialect, aasDBID)
@@ -1832,12 +1829,9 @@ func (s *AssetAdministrationShellDatabase) loadAssetInformationForReconciliation
 		return nil, common.NewInternalServerError("AASREPO-PUTASSETINFO-EXECSTATE " + err.Error())
 	}
 
-	var specificAssetIDs []types.ISpecificAssetID
-	if includeSpecificAssetIDs {
-		specificAssetIDs, err = s.readSpecificAssetIDsByAssetInformationID(ctx, tx, aasDBID)
-		if err != nil {
-			return nil, err
-		}
+	specificAssetIDs, err := s.readSpecificAssetIDsByAssetInformationID(ctx, tx, aasDBID)
+	if err != nil {
+		return nil, err
 	}
 	return buildAssetInformationFromCoreRow(row, specificAssetIDs), nil
 }

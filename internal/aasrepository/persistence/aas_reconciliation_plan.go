@@ -549,52 +549,6 @@ func buildAssetInformationReconciliationPlan(
 	submitted types.IAssetInformation,
 ) (aasReconciliationPlan, error) {
 	previous := types.NewAssetAdministrationShell(aasIdentifier, current)
-	target := types.NewAssetAdministrationShell(aasIdentifier, buildEffectiveAssetInformation(current, submitted))
+	target := types.NewAssetAdministrationShell(aasIdentifier, submitted)
 	return buildAASReconciliationPlan(previous, target, aasReconciliationOptions{})
-}
-
-func assetInformationReconciliationView(current types.IAssetInformation, includeSpecificAssetIDs bool) types.IAssetInformation {
-	view := types.NewAssetInformation(current.AssetKind())
-	view.SetGlobalAssetID(current.GlobalAssetID())
-	view.SetAssetType(current.AssetType())
-	view.SetDefaultThumbnail(current.DefaultThumbnail())
-	if includeSpecificAssetIDs {
-		view.SetSpecificAssetIDs(current.SpecificAssetIDs())
-	}
-	return view
-}
-
-func buildEffectiveAssetInformation(current types.IAssetInformation, submitted types.IAssetInformation) types.IAssetInformation {
-	assetKind := submitted.AssetKind()
-	if assetKind == 0 {
-		assetKind = current.AssetKind()
-	}
-	effective := types.NewAssetInformation(assetKind)
-	effective.SetGlobalAssetID(submitted.GlobalAssetID())
-	if submitted.GlobalAssetID() == nil {
-		effective.SetGlobalAssetID(current.GlobalAssetID())
-	}
-	effective.SetAssetType(submitted.AssetType())
-	if submitted.AssetType() == nil {
-		effective.SetAssetType(current.AssetType())
-	}
-	effective.SetSpecificAssetIDs(submitted.SpecificAssetIDs())
-	if submitted.SpecificAssetIDs() == nil {
-		effective.SetSpecificAssetIDs(current.SpecificAssetIDs())
-	}
-	effective.SetDefaultThumbnail(effectiveAssetInformationThumbnail(current.DefaultThumbnail(), submitted.DefaultThumbnail()))
-	return effective
-}
-
-func effectiveAssetInformationThumbnail(current types.IResource, submitted types.IResource) types.IResource {
-	if submitted == nil || !isExternalThumbnailPath(submitted.Path()) {
-		return nil
-	}
-	contentType := submitted.ContentType()
-	if contentType == nil && current != nil {
-		contentType = current.ContentType()
-	}
-	thumbnail := types.NewResource(submitted.Path())
-	thumbnail.SetContentType(contentType)
-	return thumbnail
 }
