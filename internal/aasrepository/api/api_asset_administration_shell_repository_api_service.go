@@ -171,7 +171,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 
 func (s *AssetAdministrationShellRepositoryAPIAPIService) queryAssetAdministrationShellIdentifiers(ctx context.Context, limit int32, cursor string) (gen.ImplResponse, error) {
 	const operation = "QueryAssetAdministrationShells"
-	identifiers, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellIdentifiers(ctx, limit, cursor, "", nil)
+	identifiers, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellIdentifiers(ctx, limit, cursor, "", nil, time.Time{}, time.Time{})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -282,7 +282,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 }
 
 // GetAllAssetAdministrationShellsReference - Returns References to all Asset Administration Shells
-func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (gen.ImplResponse, error) {
 	decodedCursor, detail, paginationErr := common.DecodeAPIPagination(limit, cursor)
 	if paginationErr != nil {
 		return common.NewErrorResponse(paginationErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellsReference", detail), nil
@@ -299,7 +299,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(selectorErr, http.StatusInternalServerError, operation, "BuildAuthorizedSelectors"), selectorErr
 	}
 
-	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, "", nil)
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, "", nil, createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil

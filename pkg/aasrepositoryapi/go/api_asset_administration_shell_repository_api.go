@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -430,24 +431,10 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		return
 	}
 
-	var createdFromParam time.Time
-	if query.Has("createdFrom") {
-		parsed, err := parseTime(query.Get("createdFrom"))
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "createdFrom", Err: err}, nil)
-			return
-		}
-		createdFromParam = parsed
-	}
-
-	var updatedFromParam time.Time
-	if query.Has("updatedFrom") {
-		parsed, err := parseTime(query.Get("updatedFrom"))
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "updatedFrom", Err: err}, nil)
-			return
-		}
-		updatedFromParam = parsed
+	createdFromParam, updatedFromParam, timeErr := parseAASListTimes(query)
+	if timeErr != nil {
+		c.errorHandler(w, r, timeErr, nil)
+		return
 	}
 
 	result, err := c.service.GetAllAssetAdministrationShells(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam, createdFromParam, updatedFromParam)
@@ -519,13 +506,34 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		return
 	}
 
-	result, err := c.service.GetAllAssetAdministrationShellsReference(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam)
+	createdFromParam, updatedFromParam, timeErr := parseAASListTimes(query)
+	if timeErr != nil {
+		c.errorHandler(w, r, timeErr, nil)
+		return
+	}
+
+	result, err := c.service.GetAllAssetAdministrationShellsReference(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam, createdFromParam, updatedFromParam)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
 	}
 
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+func parseAASListTimes(query url.Values) (time.Time, time.Time, error) {
+	var timestamps [2]time.Time
+	for index, name := range []string{"createdFrom", "updatedFrom"} {
+		if !query.Has(name) {
+			continue
+		}
+		parsed, err := parseTime(query.Get(name))
+		if err != nil {
+			return time.Time{}, time.Time{}, &ParsingError{Param: name, Err: err}
+		}
+		timestamps[index] = parsed
+	}
+	return timestamps[0], timestamps[1], nil
 }
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell

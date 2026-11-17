@@ -48,6 +48,10 @@ func TestAPIParameterConformance(t *testing.T) {
 	})
 }
 
+func TestAASReferenceTimeConformance(t *testing.T) {
+	testenv.RunAASReferenceTimeConformance(t, aasEnvBaseURL)
+}
+
 func TestExactSubmodelReferenceConformance(t *testing.T) {
 	testenv.RunSubmodelReferenceConformance(t, aasEnvBaseURL)
 }

@@ -42,6 +42,10 @@ func TestAPIParameterConformance(t *testing.T) {
 	})
 }
 
+func TestAASReferenceTimeConformance(t *testing.T) {
+	testenv.RunAASReferenceTimeConformance(t, aasRepositoryBaseURL)
+}
+
 func TestAssetPairConformance(t *testing.T) {
 	testenv.RunAssetPairConformance(t, aasRepositoryBaseURL, "/shells", false)
 }

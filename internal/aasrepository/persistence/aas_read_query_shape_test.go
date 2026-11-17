@@ -286,7 +286,7 @@ func TestAASIdentifierPageEmbedsInclusiveCursorValidation(t *testing.T) {
 	t.Parallel()
 
 	dialect := goqu.Dialect("postgres")
-	dataset, err := buildGetAssetAdministrationShellIdentifiersDataset(&dialect, 100, "urn:example:aas", "", nil)
+	dataset, err := buildGetAssetAdministrationShellIdentifiersDataset(&dialect, 100, "urn:example:aas", "", nil, time.Time{}, time.Time{})
 	require.NoError(t, err)
 	query, _, err := dataset.Prepared(true).ToSQL()
 	require.NoError(t, err)
@@ -299,10 +299,13 @@ func TestAASIdentifierPageEmbedsInclusiveCursorValidation(t *testing.T) {
 func TestAASReferenceListUsesOneIdentifierOnlyQuery(t *testing.T) {
 	t.Parallel()
 
+	createdFrom := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	updatedFrom := createdFrom.Add(time.Hour)
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	mock.ExpectQuery(`SELECT "aas"\."aas_id"`).WillReturnRows(
+	mock.ExpectQuery(`SELECT "aas"\."aas_id".*"aas"\."administration_created_at".* OR .*"aas"\."administration_updated_at"`).
+		WithArgs(createdFrom, updatedFrom, int64(2)).WillReturnRows(
 		sqlmock.NewRows([]string{"aas_id"}).
 			AddRow("aas-1").
 			AddRow("aas-2"),
@@ -315,12 +318,45 @@ func TestAASReferenceListUsesOneIdentifierOnlyQuery(t *testing.T) {
 		"",
 		"",
 		nil,
+		createdFrom,
+		updatedFrom,
 	)
 	require.NoError(t, err)
 	require.Len(t, references, 1)
 	require.Equal(t, "aas-2", cursor)
 	require.Equal(t, "aas-1", references[0].Keys()[0].Value())
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAASIdentifierListUsesShellListFilters(t *testing.T) {
+	t.Parallel()
+
+	boundary := time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("offset", 7200))
+	for _, test := range []struct {
+		name        string
+		createdFrom time.Time
+		updatedFrom time.Time
+	}{
+		{name: "absent"},
+		{name: "created", createdFrom: boundary},
+		{name: "updated", updatedFrom: boundary},
+		{name: "both", createdFrom: boundary, updatedFrom: boundary.Add(time.Hour)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dialect := goqu.Dialect("postgres")
+			assetIDs := []types.ISpecificAssetID{types.NewSpecificAssetID("serial", "4711")}
+			shells, err := buildGetAssetAdministrationShellsDataset(&dialect, 1, "urn:example:aas", "Shell", assetIDs, test.createdFrom, test.updatedFrom)
+			require.NoError(t, err)
+			identifiers, err := buildGetAssetAdministrationShellIdentifiersDataset(&dialect, 1, "urn:example:aas", "Shell", assetIDs, test.createdFrom, test.updatedFrom)
+			require.NoError(t, err)
+			shellQuery, shellArgs, err := shells.Prepared(true).ToSQL()
+			require.NoError(t, err)
+			identifierQuery, identifierArgs, err := identifiers.Prepared(true).ToSQL()
+			require.NoError(t, err)
+			require.Equal(t, strings.Replace(shellQuery, `SELECT "aas"."id"`, `SELECT "aas"."aas_id"`, 1), identifierQuery)
+			require.Equal(t, shellArgs, identifierArgs)
+		})
+	}
 }
 
 func TestAASListSequentialFallbackUsesSharedThreeQueryMaterializer(t *testing.T) {

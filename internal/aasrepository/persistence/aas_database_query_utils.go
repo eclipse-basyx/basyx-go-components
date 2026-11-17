@@ -214,38 +214,14 @@ func buildGetAssetAdministrationShellIdentifiersDataset(
 	cursor string,
 	idShort string,
 	specificAssetIDs []types.ISpecificAssetID,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) (*goqu.SelectDataset, error) {
-	ds := dialect.
-		From(goqu.T("aas").As("aas")).
-		LeftJoin(
-			goqu.T("asset_information").As("asset_information"),
-			goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id"))),
-		).
-		Select(goqu.I("aas.aas_id")).
-		Order(goqu.I("aas.aas_id").Asc())
-	if limit > 0 {
-		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
-		if err != nil {
-			return nil, err
-		}
-		ds = ds.Limit(pageLimitPlusOne)
+	ds, err := buildGetAssetAdministrationShellsDataset(dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
+	if err != nil {
+		return nil, err
 	}
-	if cursor != "" {
-		cursorExists := dialect.From(goqu.T("aas").As("cursor_aas")).
-			Select(goqu.L("1")).
-			Where(goqu.I("cursor_aas.aas_id").Eq(cursor))
-		ds = ds.Where(
-			goqu.Exists(cursorExists),
-			goqu.I("aas.aas_id").Gte(cursor),
-		)
-	}
-	if idShort != "" {
-		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
-	}
-	for _, specificAssetID := range uniqueSpecificAssetIDs(specificAssetIDs) {
-		ds = ds.Where(buildSpecificAssetIDFilterExpression(dialect, specificAssetID))
-	}
-	return ds, nil
+	return ds.Select(goqu.I("aas.aas_id")), nil
 }
 
 func buildGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsDataset(
