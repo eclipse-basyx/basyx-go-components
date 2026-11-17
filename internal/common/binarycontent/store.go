@@ -84,6 +84,11 @@ func (reference Reference) ManagedPath() string {
 	return path.Join(managedPathPrefix, reference.PathToken, url.PathEscape(reference.SafeFileName))
 }
 
+// IsManagedPath reports whether a locator uses the repository's reserved binary path namespace.
+func IsManagedPath(locator string) bool {
+	return strings.HasPrefix(locator, managedPathPrefix+"/")
+}
+
 // NewReference creates a fresh high-entropy path for one successful upload.
 func NewReference(ownerID int64, content Content, fileName string) (Reference, error) {
 	safeFileName, err := SafeFileName(fileName)

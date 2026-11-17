@@ -1,5 +1,5 @@
 kind: fixed
-body: Make AAS Repository PutAssetInformation replace the complete asset information, including assetKind Type, and clear omitted optional fields. Clients must include every field they want to retain.
+body: Make PutAssetInformation replace asset information, including assetKind Type, and clear omitted optional fields. Replacements must include a global asset ID or at least one specific asset ID. Resubmitting the shell's current thumbnail path preserves its uploaded file.
 time: 2026-11-17T12:00:54.0347816+01:00
 custom:
     Impact: High

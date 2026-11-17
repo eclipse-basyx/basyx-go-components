@@ -175,13 +175,20 @@ func (s *AssetAdministrationShellDatabase) verifyAssetAdministrationShell(aas ty
 	)
 }
 
-// verifyAssetInformation validates an AssetInformation when strict verification is enabled.
-func (s *AssetAdministrationShellDatabase) verifyAssetInformation(asset_information types.IAssetInformation, errorPrefix string) error {
+func (s *AssetAdministrationShellDatabase) verifyAssetInformationReplacement(assetInformation types.IAssetInformation) error {
+	const errorPrefix = "AASREPO-PUTASSETINFORMATION-VERIFY"
+	if assetInformation == nil {
+		return common.NewErrBadRequest(errorPrefix + " asset information is required")
+	}
+	globalAssetID := assetInformation.GlobalAssetID()
+	if (globalAssetID == nil || strings.TrimSpace(*globalAssetID) == "") && len(assetInformation.SpecificAssetIDs()) == 0 {
+		return common.NewErrBadRequest(errorPrefix + " AASd-131 requires globalAssetId or at least one specificAssetId")
+	}
 	return commonmodel.ValidateWithMode(
 		s.verificationMode,
 		errorPrefix,
 		func(collector func(*verification.VerificationError) bool) {
-			verification.VerifyAssetInformation(asset_information, collector)
+			verification.VerifyAssetInformation(assetInformation, collector)
 		},
 		func(message string) error {
 			return common.NewErrBadRequest(errorPrefix + " " + message)
@@ -1697,7 +1704,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 		return common.NewInternalServerError("AASREPO-PUTASSETINFO-NILTX transaction must not be nil")
 	}
 
-	if err := s.verifyAssetInformation(assetInformation, "AASREPO-PUTASSETINFORMATION-VERIFY"); err != nil {
+	if err := s.verifyAssetInformationReplacement(assetInformation); err != nil {
 		return err
 	}
 	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {

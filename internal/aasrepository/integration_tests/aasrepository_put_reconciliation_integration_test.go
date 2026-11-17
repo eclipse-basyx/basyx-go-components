@@ -86,18 +86,19 @@ func TestPutAssetInformationReplacesOptionalFields(t *testing.T) {
 			},
 		},
 		{
-			name: "omit all optional fields",
-			replacement: map[string]any{
-				"assetKind": "Instance",
-			},
-		},
-		{
 			name: "replace thumbnail without content type",
 			replacement: map[string]any{
 				"assetKind": "Type", "globalAssetId": "urn:example:asset:replacement",
 				"assetType":        "replacement-type",
 				"specificAssetIds": []any{map[string]any{"name": "serial", "value": "replacement"}},
 				"defaultThumbnail": map[string]any{"path": "https://example.com/thumbnail.png"},
+			},
+		},
+		{
+			name: "replace thumbnail with a relative resource locator",
+			replacement: map[string]any{
+				"assetKind": "Instance", "globalAssetId": "urn:example:asset:replacement",
+				"defaultThumbnail": map[string]any{"path": "images/thumbnail.png", "contentType": "image/png"},
 			},
 		},
 	}
@@ -113,7 +114,7 @@ func TestPutAssetInformationReplacesOptionalFields(t *testing.T) {
 	}
 }
 
-func TestPutAssetInformationClearsExplicitlyEmptySpecificAssetIDs(t *testing.T) {
+func TestPutAssetInformationWithVerificationOffAcceptsEmptySpecificAssetIDs(t *testing.T) {
 	initial := map[string]any{
 		"assetKind": "Instance", "globalAssetId": "urn:example:asset:1",
 		"specificAssetIds": []any{map[string]any{"name": "serial", "value": "original"}},
@@ -123,6 +124,121 @@ func TestPutAssetInformationClearsExplicitlyEmptySpecificAssetIDs(t *testing.T) 
 	}
 	expected := map[string]any{"assetKind": "Instance", "globalAssetId": "urn:example:asset:1"}
 	assertAssetInformationReplacement(t, initial, replacement, expected)
+}
+
+func TestPutAssetInformationRejectsReplacementWithoutAssetIdentifiers(t *testing.T) {
+	aasID := fmt.Sprintf("urn:basyx:integration:asset-information-identifiers-%d", time.Now().UnixNano())
+	shellEndpoint := aasRepositoryBaseURL + "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	createAASForLargeObjectCleanupTest(t, aasRepositoryBaseURL, aasID)
+	t.Cleanup(func() { deleteAASForLargeObjectCleanupTest(t, shellEndpoint) })
+
+	endpoint := shellEndpoint + "/asset-information"
+	original, status, err := getJSONResponse(endpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	for _, payload := range []string{
+		`{"assetKind":"Type"}`,
+		`{"assetKind":"Type","specificAssetIds":[]}`,
+		`{"assetKind":"Type","globalAssetId":" "}`,
+	} {
+		_, status, _, err := putJSONResponse(endpoint, payload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, status, "payload: %s", payload)
+	}
+	current, status, err := getJSONResponse(endpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	require.Equal(t, original, current)
+}
+
+func TestPutAssetInformationPreservesOwnedThumbnail(t *testing.T) {
+	aasID := fmt.Sprintf("urn:basyx:integration:asset-information-thumbnail-%d", time.Now().UnixNano())
+	shellEndpoint := aasRepositoryBaseURL + "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	createAASForLargeObjectCleanupTest(t, aasRepositoryBaseURL, aasID)
+	t.Cleanup(func() { deleteAASForLargeObjectCleanupTest(t, shellEndpoint) })
+
+	endpoint := shellEndpoint + "/asset-information"
+	thumbnailEndpoint := endpoint + "/thumbnail"
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR")
+	require.Equal(t, http.StatusNoContent, putRawThumbnail(t, thumbnailEndpoint, `form-data; name="file"; filename="photo.png"`, "image/png", png))
+
+	managedPath := assertAssetInformationThumbnailRoundTrip(t, endpoint, png)
+
+	foreignShellID := aasID + "-other"
+	foreignShellEndpoint := aasRepositoryBaseURL + "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(foreignShellID))
+	createAASForLargeObjectCleanupTest(t, aasRepositoryBaseURL, foreignShellID)
+	t.Cleanup(func() { deleteAASForLargeObjectCleanupTest(t, foreignShellEndpoint) })
+	foreignReplacement := fmt.Sprintf(`{"assetKind":"Type","globalAssetId":"urn:example:asset","defaultThumbnail":{"path":%q}}`, managedPath)
+	_, status, _, err := putJSONResponse(foreignShellEndpoint+"/asset-information", foreignReplacement)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, status)
+
+	_, status, _, err = putJSONResponse(endpoint, `{"assetKind":"Type","globalAssetId":"urn:example:asset"}`)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status)
+	_, _, status, err = downloadThumbnail(thumbnailEndpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, status)
+}
+
+func TestPutAssetInformationPreservesLegacyThumbnail(t *testing.T) {
+	aasID := fmt.Sprintf("urn:basyx:integration:asset-information-legacy-thumbnail-%d", time.Now().UnixNano())
+	shellEndpoint := aasRepositoryBaseURL + "/shells/" + base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	createAASForLargeObjectCleanupTest(t, aasRepositoryBaseURL, aasID)
+	t.Cleanup(func() { deleteAASForLargeObjectCleanupTest(t, shellEndpoint) })
+
+	content := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR")
+	db, err := sql.Open("pgx", integrationTestDSN)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	aasDBID, err := getAASDatabaseID(db, aasID)
+	require.NoError(t, err)
+	tx, err := goqu.New("postgres", db).BeginTx(t.Context(), nil)
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+
+	_, err = tx.Insert("thumbnail_file_element").Rows(goqu.Record{
+		"id": aasDBID, "value": "/legacy/photo.png", "content_type": "image/png", "file_name": "photo.png",
+	}).Executor().ExecContext(t.Context())
+	require.NoError(t, err)
+	_, err = tx.Insert("thumbnail_file_data").Rows(goqu.Record{
+		"id": aasDBID, "file_oid": goqu.Func("lo_from_bytea", 0, content),
+	}).Prepared(true).Executor().ExecContext(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	require.Equal(t, "/legacy/photo.png", assertAssetInformationThumbnailRoundTrip(t, shellEndpoint+"/asset-information", content))
+}
+
+func assertAssetInformationThumbnailRoundTrip(t *testing.T, endpoint string, expectedContent []byte) string {
+	t.Helper()
+	assetInformation, status, err := getJSONResponse(endpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	thumbnail, ok := assetInformation["defaultThumbnail"].(map[string]any)
+	require.True(t, ok)
+	path, ok := thumbnail["path"].(string)
+	require.True(t, ok)
+
+	for _, omitContentType := range []bool{false, true} {
+		if omitContentType {
+			delete(thumbnail, "contentType")
+		}
+		payload, err := json.Marshal(assetInformation)
+		require.NoError(t, err)
+		_, status, _, err := putJSONResponse(endpoint, string(payload))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, status)
+		current, status, err := getJSONResponse(endpoint)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status)
+		require.Equal(t, assetInformation, current)
+		content, _, status, err := downloadThumbnail(endpoint + "/thumbnail")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status)
+		require.Equal(t, expectedContent, content)
+	}
+	return path
 }
 
 func assertAssetInformationReplacement(t *testing.T, initial, replacement, expected map[string]any) {
