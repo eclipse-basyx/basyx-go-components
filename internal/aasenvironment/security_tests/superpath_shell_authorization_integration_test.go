@@ -61,6 +61,8 @@ func TestSuperpathAuthorizesShellAndSubmodelSeparately(t *testing.T) {
 	requireEnvironmentUpload(t, admin, environmentFixture(id, "Product"), http.StatusOK)
 	submodelRule := superpathFormulaRule("sm", map[string]any{"$regex": []any{map[string]string{"$field": "$sm#id"}, map[string]string{"$strVal": "^" + prefix}}}, "READ")
 	openShells := environmentObjectRule("aas", "*", "READ")
+	shellRoute := superpathRouteRule("/shells/*", map[string]any{"$regex": []any{map[string]string{"$field": "$aas#id"}, map[string]string{"$strVal": "^" + prefix}}})
+	mixedRoute := superpathRouteRule("/shells/*", map[string]any{"$or": []any{superpathIDFormula("aas", id), superpathIDFormula("sm", id)}})
 
 	for _, test := range []superpathShellCase{
 		{"open shell and Submodel formula", []map[string]any{openShells, submodelRule}, http.StatusOK, http.StatusOK},
@@ -69,6 +71,14 @@ func TestSuperpathAuthorizesShellAndSubmodelSeparately(t *testing.T) {
 		{"shell hidden by formula", []map[string]any{superpathIDRule("aas", "urn:other", "READ"), submodelRule}, http.StatusNotFound, http.StatusNotFound},
 		{"no shell rule", []map[string]any{submodelRule}, http.StatusForbidden, http.StatusForbidden},
 		{"Submodel hidden by formula", []map[string]any{openShells, superpathIDRule("sm", "urn:other", "READ")}, http.StatusNotFound, http.StatusOK},
+		{"shell ROUTE formula and Submodel formula", []map[string]any{openShells, shellRoute, submodelRule}, http.StatusOK, http.StatusOK},
+		{"shell ROUTE supplies the shell grant", []map[string]any{shellRoute, submodelRule}, http.StatusOK, http.StatusOK},
+		{"shell ROUTE does not grant Submodel access", []map[string]any{openShells, shellRoute}, http.StatusForbidden, http.StatusOK},
+		{"shell ROUTE does not widen hidden Submodel", []map[string]any{openShells, shellRoute, superpathIDRule("sm", "urn:other", "READ")}, http.StatusNotFound, http.StatusOK},
+		{"shell excluded by ROUTE formula", []map[string]any{superpathRouteRule("/shells/*", superpathIDFormula("aas", "urn:other")), submodelRule}, http.StatusNotFound, http.StatusNotFound},
+		{"mixed-resource route is no Submodel grant", []map[string]any{openShells, mixedRoute}, http.StatusForbidden, http.StatusOK},
+		{"mixed-resource route preserves independent grants", []map[string]any{openShells, mixedRoute, submodelRule}, http.StatusOK, http.StatusOK},
+		{"explicit Superpath ROUTE grant", []map[string]any{openShells, superpathRouteRule(superpathPath(id)+"*", map[string]bool{"$boolean": true})}, http.StatusOK, http.StatusOK},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			installEnvironmentRules(t, admin, test.rules...)
@@ -77,6 +87,35 @@ func TestSuperpathAuthorizesShellAndSubmodelSeparately(t *testing.T) {
 			for _, path := range []string{superpathPath(id), superpathPath(id) + "/submodel-elements/Public"} {
 				status, body = runSuperpathRequest(t, http.MethodGet, path, "", "", editor)
 				require.Equal(t, test.superpathStatus, status, "GET %s: %s", path, body)
+			}
+		})
+	}
+
+	t.Run("shell ROUTE formula does not widen element masks", func(t *testing.T) {
+		maskedSubmodels := superpathIDRule("sm", id, "READ")
+		maskedSubmodels["FILTER"] = map[string]any{"FRAGMENT": "$sme.Secret#value", "CONDITION": map[string]bool{"$boolean": false}}
+		installEnvironmentRules(t, admin, openShells, shellRoute, maskedSubmodels)
+		status, body := runSuperpathRequest(t, http.MethodGet, superpathPath(id), "", "", editor)
+		require.Equal(t, http.StatusOK, status, body)
+		require.Contains(t, body, "public-value")
+		require.NotContains(t, body, "secret-value")
+	})
+
+	for _, scope := range []string{"aas", "sm"} {
+		t.Run("neutral ROUTE preserves "+scope+" mask", func(t *testing.T) {
+			route := superpathRouteRule("/shells/*", map[string]bool{"$boolean": true})
+			route["FILTER"] = map[string]any{"FRAGMENT": "$" + scope + "#idShort", "CONDITION": superpathIDFormula(scope, "urn:other")}
+			installEnvironmentRules(t, admin, route)
+			shellStatus, shellBody := runSuperpathRequest(t, http.MethodGet, "/shells/"+common.EncodeString(id), "", "", editor)
+			require.Equal(t, http.StatusOK, shellStatus, shellBody)
+			status, body := runSuperpathRequest(t, http.MethodGet, superpathPath(id), "", "", editor)
+			require.Equal(t, http.StatusOK, status, body)
+			if scope == "aas" {
+				require.NotContains(t, shellBody, "Product")
+				require.Contains(t, body, "Product")
+			} else {
+				require.Contains(t, shellBody, "Product")
+				require.NotContains(t, body, "Product")
 			}
 		})
 	}
@@ -106,7 +145,18 @@ func superpathPath(id string) string {
 }
 
 func superpathIDRule(scope, id string, rights ...string) map[string]any {
-	return superpathFormulaRule(scope, map[string]any{"$eq": []any{map[string]string{"$field": "$" + scope + "#id"}, map[string]string{"$strVal": id}}}, rights...)
+	return superpathFormulaRule(scope, superpathIDFormula(scope, id), rights...)
+}
+
+func superpathIDFormula(scope, id string) map[string]any {
+	return map[string]any{"$eq": []any{map[string]string{"$field": "$" + scope + "#id"}, map[string]string{"$strVal": id}}}
+}
+
+func superpathRouteRule(route string, formula any) map[string]any {
+	rule := environmentObjectRule("aas", "*", "READ")
+	rule["OBJECTS"] = []any{map[string]string{"ROUTE": route}}
+	rule["FORMULA"] = formula
+	return rule
 }
 
 func superpathFormulaRule(scope string, formula map[string]any, rights ...string) map[string]any {
