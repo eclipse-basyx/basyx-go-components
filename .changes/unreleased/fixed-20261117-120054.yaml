@@ -1,0 +1,7 @@
+kind: fixed
+body: Make AAS Repository PutAssetInformation replace the complete asset information, including assetKind Type, and clear omitted optional fields. Clients must include every field they want to retain.
+time: 2026-11-17T12:00:54.0347816+01:00
+custom:
+    Impact: High
+    PullRequest: 896
+    SecurityImpact: None.
