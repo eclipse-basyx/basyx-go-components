@@ -164,6 +164,7 @@ func serveAuthorizedRequest(
 	opts := grammar.DefaultSimplifyOptions()
 	opts.EnableImplicitCasts = settings.EnableImplicitCasts
 	session := newAuthorizationSession(model, claims, nil, opts)
+	session.omitResponseFilters = r.Method == http.MethodDelete
 	evaluation := session.evaluate(r.Method, policyPath)
 	if policyPath != routePath {
 		evaluation = model.AuthorizeWithFilterWithOptions(EvalInput{

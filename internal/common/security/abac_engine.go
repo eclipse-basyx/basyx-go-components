@@ -28,6 +28,7 @@ package auth
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -295,7 +296,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		if decision == grammar.SimplifyFalse || decision == grammar.SimplifyIndeterminate {
 			continue
 		}
-		fragments := simplifyRuleFragmentFilters(r.filterList, resolver, opts)
+		fragments := simplifyRuleFragmentFilters(r.filterList, resolver, opts, in.Method == http.MethodDelete || in.omitResponseFilters)
 		if !superpathGrantSupported(adapted, fragments, formulaResource) {
 			continue
 		}

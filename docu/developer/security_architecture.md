@@ -434,6 +434,10 @@ Object coverage follows these BaSyx rules:
   Mixed-resource formulas are not split or weakened. Formula-free and
   caller-attribute-only `ROUTE` grants continue to match the original
   superpath. This scoping does not change query endpoint authorization.
+- `FILTER` and `FILTERLIST` restrict response data and do not affect DELETE
+  operations. DELETE ignores response masks in the initial authorization and
+  in derived checks, including the shell UPDATE check of a superpath. The
+  required rights, `FORMULA` conditions, and ReBAC resource grants still apply.
 - An `IDENTIFIABLE` `$sm` object covers the Submodel and its Submodel Elements.
 - A `$sme` `REFERABLE` covers the named element and all descendants at segment
   boundaries. For example, `Metrics` covers `Metrics.Temperature`, but not

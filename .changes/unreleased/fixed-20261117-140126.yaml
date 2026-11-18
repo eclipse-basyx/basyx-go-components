@@ -1,7 +1,7 @@
 kind: fixed
-body: Prevent AAS ROUTE formulas from entering Submodel SQL queries on superpaths while preserving independent resource grants and applicable field masks.
+body: Prevent AAS ROUTE formulas from entering Submodel SQL queries on superpaths and ignore response FILTER/FILTERLIST masks throughout DELETE operations.
 time: 2026-11-17T14:01:26.644236+01:00
 custom:
     Impact: Low
     PullRequest: 899
-    SecurityImpact: Keeps ABAC formulas and ReBAC grants scoped to their resources and prevents internal SQL errors on authorized superpath reads.
+    SecurityImpact: Preserves resource-scoped FORMULA checks and ReBAC grants while preventing internal SQL errors and keeping response masks from blocking otherwise authorized deletions.

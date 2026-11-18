@@ -26,6 +26,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
@@ -44,17 +45,7 @@ type superpathShellCase struct {
 }
 
 func TestSuperpathAuthorizesShellAndSubmodelSeparately(t *testing.T) {
-	provider := testenv.NewPasswordGrantTokenProvider(testKeycloakTokenURL, "basyx-ui", 10*time.Second)
-	admin, err := provider.GetAccessToken(&testenv.TokenCredentials{User: "admin", Password: "pwd"})
-	require.NoError(t, err)
-	editor, err := provider.GetAccessToken(&testenv.TokenCredentials{User: "userx", Password: "pwd"})
-	require.NoError(t, err)
-	original := activePolicyVersionID(t, admin)
-	t.Cleanup(func() {
-		restored := clonePolicyVersion(t, original, admin)
-		validatePolicyVersion(t, restored, admin)
-		activatePolicyVersion(t, restored, admin)
-	})
+	admin, editor := superpathTestTokens(t)
 	prefix := fmt.Sprintf("urn:test:superpath:%d:", time.Now().UnixNano())
 	id := prefix + "product"
 	installEnvironmentRules(t, admin)
@@ -138,6 +129,133 @@ func TestSuperpathAuthorizesShellAndSubmodelSeparately(t *testing.T) {
 		status, response = runSuperpathRequest(t, http.MethodGet, "/submodels/"+common.EncodeString(id), "", "", admin)
 		require.Equal(t, http.StatusNotFound, status, response)
 	})
+}
+
+func TestDeleteIgnoresResponseMasks(t *testing.T) {
+	admin, editor := superpathTestTokens(t)
+	for _, test := range []struct {
+		name, target, mask, denial string
+	}{
+		{name: "unmasked control", target: "superpath"},
+		{name: "cross-resource mask", target: "superpath", mask: "foreign"},
+		{name: "false mask", target: "superpath", mask: "false"},
+		{name: "multiple masks", target: "superpath", mask: "list"},
+		{name: "direct Submodel", target: "submodel", mask: "foreign"},
+		{name: "direct element", target: "element", mask: "list"},
+		{name: "superpath element", target: "superpath-element", mask: "foreign"},
+		{name: "direct shell", target: "shell", mask: "foreign"},
+		{name: "Submodel reference", target: "reference", mask: "list"},
+		{name: "formula still required", target: "superpath", mask: "foreign", denial: "formula"},
+		{name: "DELETE still required", target: "superpath", mask: "foreign", denial: "delete"},
+		{name: "shell UPDATE still required", target: "superpath", mask: "foreign", denial: "shell"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			id := fmt.Sprintf("urn:test:delete-mask:%d", time.Now().UnixNano())
+			installEnvironmentRules(t, admin)
+			requireEnvironmentUpload(t, admin, environmentFixture(id, "Product"), http.StatusOK)
+			installEnvironmentRules(t, admin, deleteResponseMaskRules(id, test.mask, test.denial)...)
+			if test.mask == "false" {
+				status, body := runSuperpathRequest(t, http.MethodGet, superpathPath(id), "", "", editor)
+				require.Equal(t, http.StatusOK, status, body)
+				require.NotContains(t, body, "Product")
+			}
+			status, body := runSuperpathRequest(t, http.MethodDelete, deleteResponseMaskPath(id, test.target), "", "", editor)
+			if test.denial != "" {
+				require.Equal(t, http.StatusForbidden, status, body)
+				status, body = runSuperpathRequest(t, http.MethodGet, "/submodels/"+common.EncodeString(id), "", "", admin)
+				require.Equal(t, http.StatusOK, status, body)
+				return
+			}
+			require.Equal(t, http.StatusNoContent, status, body)
+			require.Empty(t, body)
+			assertResponseMaskDeletion(t, id, test.target, admin)
+		})
+	}
+}
+
+func superpathTestTokens(t *testing.T) (string, string) {
+	t.Helper()
+	provider := testenv.NewPasswordGrantTokenProvider(testKeycloakTokenURL, "basyx-ui", 10*time.Second)
+	admin, err := provider.GetAccessToken(&testenv.TokenCredentials{User: "admin", Password: "pwd"})
+	require.NoError(t, err)
+	editor, err := provider.GetAccessToken(&testenv.TokenCredentials{User: "userx", Password: "pwd"})
+	require.NoError(t, err)
+	original := activePolicyVersionID(t, admin)
+	t.Cleanup(func() {
+		restored := clonePolicyVersion(t, original, admin)
+		validatePolicyVersion(t, restored, admin)
+		activatePolicyVersion(t, restored, admin)
+	})
+	return admin, editor
+}
+
+func deleteResponseMaskRules(id, mask, denial string) []map[string]any {
+	shellRights := []string{"READ", "UPDATE", "DELETE"}
+	submodelRights := []string{"READ", "DELETE"}
+	if denial == "shell" {
+		shellRights = []string{"READ"}
+	}
+	if denial == "delete" {
+		submodelRights = []string{"READ"}
+	}
+	shell := superpathIDRule("aas", id, shellRights...)
+	submodel := superpathIDRule("sm", id, submodelRights...)
+	if denial == "formula" {
+		submodel["FORMULA"] = map[string]bool{"$boolean": false}
+	}
+	addDeleteResponseMask(shell, "aas", "sm", id, mask)
+	addDeleteResponseMask(submodel, "sm", "aas", id, mask)
+	return []map[string]any{shell, submodel}
+}
+
+func addDeleteResponseMask(rule map[string]any, scope, other, id, mask string) {
+	filter := map[string]any{"FRAGMENT": "$" + scope + "#idShort", "CONDITION": superpathIDFormula(other, id)}
+	switch mask {
+	case "foreign":
+		rule["FILTER"] = filter
+	case "false":
+		filter["CONDITION"] = map[string]bool{"$boolean": false}
+		rule["FILTER"] = filter
+	case "list":
+		rule["FILTERLIST"] = []any{filter, map[string]any{
+			"FRAGMENT": "$sme.Public#value", "CONDITION": map[string]bool{"$boolean": false},
+		}}
+	}
+}
+
+func deleteResponseMaskPath(id, target string) string {
+	encoded := common.EncodeString(id)
+	switch target {
+	case "superpath":
+		return superpathPath(id)
+	case "superpath-element":
+		return superpathPath(id) + "/submodel-elements/Public"
+	case "element":
+		return "/submodels/" + encoded + "/submodel-elements/Public"
+	case "shell":
+		return "/shells/" + encoded
+	case "reference":
+		return "/shells/" + encoded + "/submodel-refs/" + encoded
+	default:
+		return "/submodels/" + encoded
+	}
+}
+
+func assertResponseMaskDeletion(t *testing.T, id, target, admin string) {
+	t.Helper()
+	if target == "reference" {
+		status, body := runSuperpathRequest(t, http.MethodGet, "/shells/"+common.EncodeString(id), "", "", admin)
+		require.Equal(t, http.StatusOK, status, body)
+		var shell map[string]any
+		require.NoError(t, json.Unmarshal([]byte(body), &shell))
+		require.Empty(t, shell["submodels"])
+		return
+	}
+	if target == "superpath" {
+		target = "submodel"
+	}
+	status, body := runSuperpathRequest(t, http.MethodGet, deleteResponseMaskPath(id, target), "", "", admin)
+	require.Equal(t, http.StatusNotFound, status, body)
 }
 
 func superpathPath(id string) string {
