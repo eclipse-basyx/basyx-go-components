@@ -156,12 +156,13 @@ func (v SemanticAccessView) Resource() SemanticResourceKind {
 // AuthorizationSession pins the model, claims, globals, and simplification
 // settings used for every authorization view in one request.
 type AuthorizationSession struct {
-	model       *AccessModel
-	claims      Claims
-	globals     GlobalAttributes
-	options     grammar.SimplifyOptions
-	policyID    string
-	outerAccess SemanticAccessView
+	model               *AccessModel
+	claims              Claims
+	globals             GlobalAttributes
+	options             grammar.SimplifyOptions
+	policyID            string
+	outerAccess         SemanticAccessView
+	omitResponseFilters bool
 }
 
 func newAuthorizationSession(
@@ -211,24 +212,27 @@ func (s *AuthorizationSession) evaluate(method string, requestPath string) Autho
 		return AuthorizationEvaluation{Reason: DecisionNoMatch}
 	}
 	return s.model.AuthorizeWithFilterWithOptions(EvalInput{
-		Method:    method,
-		Path:      requestPath,
-		RoutePath: requestPath,
-		Claims:    s.claims,
-		Globals:   s.globals,
+		Method:              method,
+		Path:                requestPath,
+		RoutePath:           requestPath,
+		Claims:              s.claims,
+		Globals:             s.globals,
+		omitResponseFilters: s.omitResponseFilters,
 	}, s.options)
 }
 
-func (s *AuthorizationSession) evaluateRight(right grammar.RightsEnum, requestPath string) AuthorizationEvaluation {
+func (s *AuthorizationSession) evaluateShellRight(right grammar.RightsEnum, requestPath string) AuthorizationEvaluation {
 	if s == nil || s.model == nil {
 		return AuthorizationEvaluation{Reason: DecisionNoMatch}
 	}
 	return s.model.AuthorizeWithFilterWithOptions(EvalInput{
-		Path:      requestPath,
-		RoutePath: requestPath,
-		Claims:    s.claims,
-		Globals:   s.globals,
-		rights:    []grammar.RightsEnum{right},
+		Path:                requestPath,
+		RoutePath:           requestPath,
+		Claims:              s.claims,
+		Globals:             s.globals,
+		rights:              []grammar.RightsEnum{right},
+		formulaResource:     SemanticResourceAAS,
+		omitResponseFilters: s.omitResponseFilters,
 	}, s.options)
 }
 
@@ -271,7 +275,7 @@ func (s *AuthorizationSession) semanticReadView(
 		if decision == grammar.SimplifyFalse || decision == grammar.SimplifyIndeterminate {
 			continue
 		}
-		filters := simplifyRuleFragmentFilters(rule.filterList, resolver, s.options)
+		filters := simplifyRuleFragmentFilters(rule.filterList, resolver, s.options, s.omitResponseFilters)
 		coverages := semanticCoveragesForOuter(compiledRule.coverages, outerResource)
 		if len(coverages) == 0 {
 			continue
@@ -627,7 +631,11 @@ func simplifyRuleFragmentFilters(
 	filters []grammar.AccessPermissionRuleFILTER,
 	resolver grammar.AttributeResolver,
 	options grammar.SimplifyOptions,
+	omit bool,
 ) FragmentFilters {
+	if omit {
+		return nil
+	}
 	result := make(FragmentFilters)
 	for _, filter := range filters {
 		if filter.FRAGMENT == nil || filter.CONDITION == nil {

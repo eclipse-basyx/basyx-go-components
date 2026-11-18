@@ -60,7 +60,7 @@ func (s *AuthorizationSession) superpathShellNeedsReBAC(route ReBACRoute) bool {
 		return false
 	}
 	shellPath := joinBasePath(s.model.basePath, "/shells/"+route.Params["aasIdentifier"])
-	return len(reBACPendingRights(s.evaluateRight(right, shellPath), []grammar.RightsEnum{right})) > 0
+	return len(reBACPendingRights(s.evaluateShellRight(right, shellPath), []grammar.RightsEnum{right})) > 0
 }
 
 // SuperpathShellContext binds the authorization of the enclosing Asset
@@ -76,7 +76,7 @@ func SuperpathShellContext(ctx context.Context, aasIdentifier string, right gram
 		return contextWithoutResourceAuthorization(ctx, false, "AUTH-SUPERPATHSHELL-MISSING request authorization is missing")
 	}
 	shellPath := joinBasePath(session.model.basePath, "/shells/"+common.EncodeString(aasIdentifier))
-	evaluation := session.evaluateRight(right, shellPath)
+	evaluation := session.evaluateShellRight(right, shellPath)
 	filter, err := superpathShellFilter(ctx, evaluation, right)
 	if err != nil {
 		return nil, err
@@ -104,4 +104,84 @@ func hasReBACGrantForResource(ctx context.Context, resource SemanticResourceKind
 		return false
 	}
 	return len(grants.entriesFor(resource, activeReBACRights(ctx, grants))) > 0
+}
+
+func superpathFormulaResource(in EvalInput, basePath string) SemanticResourceKind {
+	if in.formulaResource != "" {
+		return in.formulaResource
+	}
+	if isSubmodelSuperpath(basePath, routePath(in)) {
+		return SemanticResourceSM
+	}
+	return ""
+}
+
+func isSubmodelSuperpath(basePath, requestPath string) bool {
+	segments := strings.SplitN(strings.TrimPrefix(stripBasePath(basePath, requestPath), "/"), "/", 5)
+	return len(segments) >= 4 && segments[0] == "shells" && segments[2] == "submodels"
+}
+
+// Submodel superpath PATCH operations return no model fragments.
+func operationOmitsResponseFilters(method, basePath, requestPath string) bool {
+	return method == http.MethodDelete || method == http.MethodPatch && isSubmodelSuperpath(basePath, requestPath)
+}
+
+func superpathFormulaSupported(formula grammar.LogicalExpression, resource SemanticResourceKind) bool {
+	foreignRoots := []string{"$aasdesc", "$smdesc", "$cd", "$bd"}
+	switch resource {
+	case "":
+		return true
+	case SemanticResourceAAS:
+		foreignRoots = append(foreignRoots, "$sm", "$sme")
+	case SemanticResourceSM:
+		foreignRoots = append(foreignRoots, "$aas")
+	default:
+		return false
+	}
+	_, found := grammar.FindModelFieldByRoot(grammar.Query{Condition: &formula}, foreignRoots...)
+	return !found
+}
+
+func superpathGrantSupported(formula grammar.LogicalExpression, filters FragmentFilters, resource SemanticResourceKind) bool {
+	if resource == "" {
+		return true
+	}
+	if !superpathFormulaSupported(formula, resource) {
+		return false
+	}
+	for fragment, filter := range filters {
+		if superpathFilterApplies(fragment, resource) && !superpathFilterSupported(filter, resource) {
+			return false
+		}
+	}
+	return true
+}
+
+func superpathFilterApplies(fragment grammar.FragmentStringPattern, resource SemanticResourceKind) bool {
+	root := fragmentRoot(fragment)
+	switch resource {
+	case SemanticResourceAAS:
+		return root == "$aas"
+	case SemanticResourceSM:
+		return root == "$sm" || root == "$sme"
+	default:
+		return false
+	}
+}
+
+func superpathFilterSupported(filter FragmentFilterPredicate, resource SemanticResourceKind) bool {
+	if filter.Condition != nil && !superpathFormulaSupported(*filter.Condition, resource) {
+		return false
+	}
+	for _, child := range filter.And {
+		if !superpathFilterSupported(child, resource) {
+			return false
+		}
+	}
+	for _, child := range filter.Or {
+		if !superpathFilterSupported(child, resource) {
+			return false
+		}
+	}
+	return true
 }

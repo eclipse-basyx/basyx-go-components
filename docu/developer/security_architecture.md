@@ -425,6 +425,20 @@ Object coverage follows these BaSyx rules:
   elements keep the formulas of the superpath rules. Without a matching shell
   rule the request is answered with `403`, and a shell excluded by a formula
   is answered with `404`. ReBAC grants on the shell still apply.
+- Superpath checks keep each allow rule's formula and filters together. After
+  resolving caller attributes, shell checks accept `$aas` fields, while
+  Submodel and element checks accept `$sm` and `$sme` fields. A rule whose
+  remaining formula or an applicable filter condition refers to another model
+  resource is excluded from that check as a complete grant alternative.
+  Filters targeting a different resource remain irrelevant to that backend.
+  Mixed-resource formulas are not split or weakened. Formula-free and
+  caller-attribute-only `ROUTE` grants continue to match the original
+  superpath. This scoping does not change query endpoint authorization.
+- DELETE and Submodel superpath PATCH operations return no model fragments.
+  Their initial and derived authorization checks omit `FILTER` and
+  `FILTERLIST` response masks, including during the enclosing shell check.
+  The required rights, `FORMULA` conditions, and ReBAC resource grants still
+  apply.
 - An `IDENTIFIABLE` `$sm` object covers the Submodel and its Submodel Elements.
 - A `$sme` `REFERABLE` covers the named element and all descendants at segment
   boundaries. For example, `Metrics` covers `Metrics.Temperature`, but not

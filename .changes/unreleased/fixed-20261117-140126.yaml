@@ -1,0 +1,7 @@
+kind: fixed
+body: Prevent AAS ROUTE formulas from entering Submodel SQL queries on superpaths and omit response masks for DELETE and Submodel superpath PATCH.
+time: 2026-11-17T14:01:26.644236+01:00
+custom:
+    Impact: Low
+    PullRequest: 899
+    SecurityImpact: Preserves resource-scoped FORMULA checks and ReBAC grants while preventing internal SQL errors and keeping response masks from blocking authorized operations that return no model fragments.

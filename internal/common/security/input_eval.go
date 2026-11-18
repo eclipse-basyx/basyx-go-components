@@ -37,8 +37,10 @@ type EvalInput struct {
 	Claims    Claims
 	Globals   GlobalAttributes
 
-	objectContext *objectMatchContext
-	rights        []grammar.RightsEnum
+	objectContext       *objectMatchContext
+	rights              []grammar.RightsEnum
+	formulaResource     SemanticResourceKind
+	omitResponseFilters bool
 }
 
 // Claims represents token claims extracted from a verified token.

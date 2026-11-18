@@ -32,6 +32,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/go-chi/chi/v5"
@@ -65,19 +66,27 @@ func publicSubmodelsRule() map[string]any {
 
 func serveSuperpath(t *testing.T, method string, resolver ReBACResolver, rules ...map[string]any) context.Context {
 	t.Helper()
+	ctx, status := serveSuperpathRoute(t, method, superpathRequestPath(), "", resolver, rules...)
+	require.Equal(t, http.StatusOK, status)
+	return ctx
+}
+
+func serveSuperpathRoute(t *testing.T, method, requestPath, base string, resolver ReBACResolver, rules ...map[string]any) (context.Context, int) {
+	t.Helper()
 	router := chi.NewRouter()
 	noop := func(http.ResponseWriter, *http.Request) {}
 	router.Get("/shells/{aasIdentifier}", noop)
 	router.Get("/shells/{aasIdentifier}/submodels/{submodelIdentifier}", noop)
+	router.Get("/shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}", noop)
 	router.Put("/shells/{aasIdentifier}/submodels/{submodelIdentifier}", noop)
 	router.Delete("/shells/{aasIdentifier}/submodels/{submodelIdentifier}", noop)
 	payload, err := json.Marshal(map[string]any{"AllAccessPermissionRules": map[string]any{"rules": rules}})
 	require.NoError(t, err)
-	model, err := ParseAccessModel(payload, router, "")
+	model, err := ParseAccessModel(payload, router, base)
 	require.NoError(t, err)
 	cfg := &common.Config{}
 	cfg.ABAC.Enabled = true
-	req := httptest.NewRequest(method, superpathRequestPath(), nil)
+	req := httptest.NewRequest(method, base+requestPath, nil)
 	ctx := common.ContextWithConfig(req.Context(), cfg)
 	ctx = context.WithValue(ctx, ClaimsKey, Claims{"role": "test", "sub": "alice", "iss": "issuer"})
 	ctx = context.WithValue(ctx, authenticatedKey, true)
@@ -88,8 +97,7 @@ func serveSuperpath(t *testing.T, method string, resolver ReBACResolver, rules .
 	}))
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, req.WithContext(ctx))
-	require.Equal(t, http.StatusOK, response.Code)
-	return result
+	return result, response.Code
 }
 
 func aasFormulaSQL(ctx context.Context, t *testing.T) string {
@@ -213,5 +221,162 @@ func TestSuperpathShellRight(t *testing.T) {
 		right, superpath := superpathShellRight(ReBACRoute{Method: test.method, Pattern: test.pattern})
 		require.Equal(t, test.superpath, superpath, test)
 		require.Equal(t, test.right, right, test)
+	}
+}
+
+func shellRouteFormulaRule() map[string]any {
+	return superpathRule(map[string]string{"ROUTE": "/shells/*"}, fieldFormula("$regex", "$aas#id", "^urn:example:aas:.+$"), "READ", "UPDATE", "DELETE")
+}
+
+func TestSuperpathScopesShellRouteFormulaBeforeCombiningGrants(t *testing.T) {
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		for _, base := range []string{"", "/api/v3"} {
+			t.Run(method+base, func(t *testing.T) {
+				ctx, status := serveSuperpathRoute(t, method, superpathRequestPath(), base, nil, shellRouteFormulaRule(), publicSubmodelsRule())
+				require.Equal(t, http.StatusOK, status)
+				sql := formulaSQLForRoot(ctx, t, grammar.CollectorRootSM, "submodel", "submodel")
+				require.Contains(t, sql, "^urn:example:submodel:")
+				require.NotContains(t, sql, `"aas"`)
+				right := grammar.RightsEnumREAD
+				if method != http.MethodGet {
+					right = grammar.RightsEnumUPDATE
+				}
+				shellCtx, err := SuperpathShellContext(ctx, superpathAASID, right)
+				require.NoError(t, err)
+				require.Contains(t, aasFormulaSQL(shellCtx, t), "^urn:example:aas:")
+				require.NotContains(t, aasFormulaSQL(shellCtx, t), "^urn:example:submodel:")
+			})
+		}
+	}
+}
+
+func TestSuperpathRejectsForeignAndMixedFormulaGrants(t *testing.T) {
+	aasFormula := fieldFormula("$eq", "$aas#id", superpathAASID)
+	smFormula := fieldFormula("$eq", "$sm#id", superpathSubmodelID)
+	for _, test := range []struct {
+		name    string
+		formula any
+	}{
+		{"shell only", aasFormula},
+		{"mixed and", map[string]any{"$and": []any{aasFormula, smFormula}}},
+		{"mixed or", map[string]any{"$or": []any{aasFormula, smFormula}}},
+		{"negated mixed", map[string]any{"$not": map[string]any{"$or": []any{aasFormula, smFormula}}}},
+		{"nested cast", map[string]any{"$eq": []any{map[string]any{"$strCast": map[string]string{"$field": "$aas#id"}}, map[string]string{"$strVal": superpathAASID}}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			openShells := superpathRule(map[string]string{"IDENTIFIABLE": `$aas("*")`}, nil, "READ")
+			route := superpathRule(map[string]string{"ROUTE": "/shells/*"}, test.formula, "READ")
+			ctx, status := serveSuperpathRoute(t, http.MethodGet, superpathRequestPath(), "", nil, openShells, route)
+			require.Equal(t, http.StatusForbidden, status)
+			require.Nil(t, ctx)
+			ctx = serveSuperpath(t, http.MethodGet, nil, openShells, route, publicSubmodelsRule())
+			sql := formulaSQLForRoot(ctx, t, grammar.CollectorRootSM, "submodel", "submodel")
+			require.Contains(t, sql, "^urn:example:submodel:")
+			require.NotContains(t, sql, `"aas"`)
+		})
+	}
+}
+
+func TestSuperpathKeepsExplicitRouteAndElementFormulaGrants(t *testing.T) {
+	openShells := superpathRule(map[string]string{"IDENTIFIABLE": `$aas("*")`}, nil, "READ")
+	for _, test := range []struct {
+		name, path string
+		formula    any
+	}{
+		{"route only", superpathRequestPath(), nil},
+		{"submodel formula", superpathRequestPath(), fieldFormula("$eq", "$sm#id", superpathSubmodelID)},
+		{"element formula", superpathRequestPath() + "/submodel-elements/Public", fieldFormula("$eq", "$sme.Public#value", "public-value")},
+		{"constant branch", superpathRequestPath(), map[string]any{"$or": []any{map[string]bool{"$boolean": true}, fieldFormula("$eq", "$aas#id", superpathAASID)}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			route := superpathRule(map[string]string{"ROUTE": test.path}, test.formula, "READ")
+			ctx, status := serveSuperpathRoute(t, http.MethodGet, test.path, "", nil, openShells, route)
+			require.Equal(t, http.StatusOK, status)
+			require.NotContains(t, formulaSQLForRoot(ctx, t, grammar.CollectorRootSM, "submodel", "submodel"), `"aas"`)
+		})
+	}
+}
+
+func TestSuperpathForeignRouteDoesNotWidenFragmentMasks(t *testing.T) {
+	submodels := publicSubmodelsRule()
+	submodels["FILTER"] = map[string]any{"FRAGMENT": "$sm#idShort", "CONDITION": map[string]bool{"$boolean": false}}
+	ctx := serveSuperpath(t, http.MethodGet, nil, submodels, shellRouteFormulaRule())
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+	require.NoError(t, err)
+	columns, err := GetColumnSelectStatement(ctx, []FilterColumnSpec{MaskedColumn(goqu.I("submodel.id_short"), "$sm#idShort")}, collector)
+	require.NoError(t, err)
+	sql, _, err := goqu.Dialect("postgres").From("submodel").Select(columns[0]).ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, sql, "CASE")
+	require.Contains(t, sql, "WHEN")
+	require.Contains(t, sql, "FALSE")
+	require.NotContains(t, sql, `"aas"`)
+}
+
+func TestSuperpathForeignFilterConditionCannotGrantSubmodelAccess(t *testing.T) {
+	openShells := superpathRule(map[string]string{"IDENTIFIABLE": `$aas("*")`}, nil, "READ")
+	route := superpathRule(map[string]string{"ROUTE": "/shells/*"}, nil, "READ")
+	route["FILTER"] = map[string]any{"FRAGMENT": "$sm#idShort", "CONDITION": fieldFormula("$eq", "$aas#id", superpathAASID)}
+	_, status := serveSuperpathRoute(t, http.MethodGet, superpathRequestPath(), "", nil, openShells, route)
+	require.Equal(t, http.StatusForbidden, status)
+	ctx := serveSuperpath(t, http.MethodGet, nil, openShells, route, publicSubmodelsRule())
+	require.Empty(t, GetQueryFilter(ctx).Filters)
+	require.NotContains(t, formulaSQLForRoot(ctx, t, grammar.CollectorRootSM, "submodel", "submodel"), `"aas"`)
+}
+
+func TestSuperpathKeepsNeutralRouteWithResourceSpecificMasks(t *testing.T) {
+	for _, scope := range []string{"aas", "sm"} {
+		t.Run(scope, func(t *testing.T) {
+			fragment := "$" + scope + "#idShort"
+			route := superpathRule(map[string]string{"ROUTE": "/shells/*"}, nil, "READ")
+			route["FILTER"] = map[string]any{"FRAGMENT": fragment, "CONDITION": fieldFormula("$eq", "$"+scope+"#id", "urn:other")}
+			ctx := serveSuperpath(t, http.MethodGet, nil, route)
+			require.Contains(t, GetQueryFilter(ctx).Filters, grammar.FragmentStringPattern(fragment))
+			require.NotContains(t, formulaSQLForRoot(ctx, t, grammar.CollectorRootSM, "submodel", "submodel"), `"aas"`)
+			shellCtx, err := SuperpathShellContext(ctx, superpathAASID, grammar.RightsEnumREAD)
+			require.NoError(t, err)
+			require.Contains(t, GetQueryFilter(shellCtx).Filters, grammar.FragmentStringPattern(fragment))
+			require.NotContains(t, aasFormulaSQL(shellCtx, t), `"submodel"`)
+		})
+	}
+}
+
+func TestSuperpathShellScopeRejectsSubmodelAndMixedRouteGrants(t *testing.T) {
+	smFormula := fieldFormula("$eq", "$sm#id", superpathSubmodelID)
+	for _, formula := range []any{
+		smFormula,
+		map[string]any{"$or": []any{fieldFormula("$eq", "$aas#id", superpathAASID), smFormula}},
+	} {
+		route := superpathRule(map[string]string{"ROUTE": "/shells/*"}, formula, "READ")
+		ctx := serveSuperpath(t, http.MethodGet, nil, route, publicSubmodelsRule())
+		_, err := SuperpathShellContext(ctx, superpathAASID, grammar.RightsEnumREAD)
+		require.True(t, common.IsErrDenied(err))
+		aasRule := superpathRule(map[string]string{"IDENTIFIABLE": `$aas("*")`}, fieldFormula("$eq", "$aas#id", superpathAASID), "READ")
+		ctx = serveSuperpath(t, http.MethodGet, nil, route, aasRule, publicSubmodelsRule())
+		shellCtx, err := SuperpathShellContext(ctx, superpathAASID, grammar.RightsEnumREAD)
+		require.NoError(t, err)
+		sql := aasFormulaSQL(shellCtx, t)
+		require.Contains(t, sql, superpathAASID)
+		require.NotContains(t, sql, superpathSubmodelID)
+	}
+}
+
+func TestSuperpathScopedGrantsKeepReBACResourceBoundaries(t *testing.T) {
+	for _, resource := range []SemanticResourceKind{SemanticResourceAAS, SemanticResourceSM} {
+		t.Run(string(resource), func(t *testing.T) {
+			grants := NewReBACGrantSet(grammar.RightsEnumREAD)
+			require.NoError(t, grants.AllowResources(resource, []string{grantedSubmodelUUID}, grammar.RightsEnumREAD))
+			resolver := &fakeReBACResolver{covered: true, grants: grants}
+			ctx := serveSuperpath(t, http.MethodGet, resolver, shellRouteFormulaRule())
+			require.EqualValues(t, 1, resolver.calls.Load())
+			sql := formulaSQLForRoot(ctx, t, grammar.CollectorRootSM, "submodel", "submodel")
+			require.NotContains(t, sql, `"aas".`)
+			if resource == SemanticResourceSM {
+				require.Contains(t, sql, grantedSubmodelUUID)
+			} else {
+				require.NotContains(t, sql, grantedSubmodelUUID)
+				require.Contains(t, sql, "FALSE")
+			}
+		})
 	}
 }

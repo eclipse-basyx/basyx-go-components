@@ -246,6 +246,8 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	matchedRuleIDs := make([]string, 0, len(m.rules))
 	relevantRights := collectRelevantRights(rightAlternatives)
 	ruleExprsByRight := make(map[grammar.RightsEnum][]grammar.LogicalExpression, len(relevantRights))
+	formulaResource := superpathFormulaResource(in, m.basePath)
+	omitResponseFilters := in.omitResponseFilters || operationOmitsResponseFilters(in.Method, m.basePath, routePath(in))
 
 	for _, r := range m.rules {
 		acl, attrs, objs, lexpr := r.acl, r.attrs, r.objs, r.lexpr
@@ -294,20 +296,14 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		if decision == grammar.SimplifyFalse || decision == grammar.SimplifyIndeterminate {
 			continue
 		}
+		fragments := simplifyRuleFragmentFilters(r.filterList, resolver, opts, omitResponseFilters)
+		if !superpathGrantSupported(adapted, fragments, formulaResource) {
+			continue
+		}
 		if r.id != "" {
 			matchedRuleIDs = append(matchedRuleIDs, r.id)
 		}
-		fragments := make(FragmentFilters)
-		for _, filter := range r.filterList {
-			fragment := *filter.FRAGMENT
-			matchMode := filter.MATCH != nil && *filter.MATCH
-			simplifiedCondition, _ := filter.CONDITION.SimplifyForBackendFilterWithOptions(resolver, opts)
-			condition := NewFragmentFilterPredicate(simplifiedCondition, matchMode)
-			if existing, ok := fragments[fragment]; ok {
-				fragments[fragment] = AndFragmentFilterPredicates(existing, condition)
-			} else {
-				fragments[fragment] = condition
-			}
+		for fragment := range fragments {
 			allFragments[fragment] = struct{}{}
 		}
 
