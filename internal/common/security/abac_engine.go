@@ -28,7 +28,6 @@ package auth
 
 import (
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -248,6 +247,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	relevantRights := collectRelevantRights(rightAlternatives)
 	ruleExprsByRight := make(map[grammar.RightsEnum][]grammar.LogicalExpression, len(relevantRights))
 	formulaResource := superpathFormulaResource(in, m.basePath)
+	omitResponseFilters := in.omitResponseFilters || operationOmitsResponseFilters(in.Method, m.basePath, routePath(in))
 
 	for _, r := range m.rules {
 		acl, attrs, objs, lexpr := r.acl, r.attrs, r.objs, r.lexpr
@@ -296,7 +296,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		if decision == grammar.SimplifyFalse || decision == grammar.SimplifyIndeterminate {
 			continue
 		}
-		fragments := simplifyRuleFragmentFilters(r.filterList, resolver, opts, in.Method == http.MethodDelete || in.omitResponseFilters)
+		fragments := simplifyRuleFragmentFilters(r.filterList, resolver, opts, omitResponseFilters)
 		if !superpathGrantSupported(adapted, fragments, formulaResource) {
 			continue
 		}

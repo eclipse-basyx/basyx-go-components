@@ -173,6 +173,57 @@ func TestDeleteIgnoresResponseMasks(t *testing.T) {
 	}
 }
 
+func TestSuperpathValuePatchIgnoresResponseMasks(t *testing.T) {
+	admin, editor := superpathTestTokens(t)
+	for _, test := range []struct {
+		name         string
+		maskShell    bool
+		maskSubmodel bool
+		denyUpdate   bool
+	}{
+		{name: "unmasked control"},
+		{name: "cross-resource Submodel mask", maskSubmodel: true},
+		{name: "cross-resource shell mask", maskShell: true},
+		{name: "UPDATE still required", maskSubmodel: true, denyUpdate: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			id := fmt.Sprintf("urn:test:patch-mask:%d", time.Now().UnixNano())
+			installEnvironmentRules(t, admin)
+			requireEnvironmentUpload(t, admin, environmentFixture(id, "Product"), http.StatusOK)
+
+			shell := superpathIDRule("aas", id, "READ")
+			rights := []string{"READ", "UPDATE"}
+			if test.denyUpdate {
+				rights = []string{"READ"}
+			}
+			submodel := superpathIDRule("sm", id, rights...)
+			if test.maskShell {
+				addResponseMask(shell, "aas", "sm", id, "foreign")
+			}
+			if test.maskSubmodel {
+				addResponseMask(submodel, "sm", "aas", id, "foreign")
+			}
+			installEnvironmentRules(t, admin, shell, submodel)
+
+			status, body := runSuperpathRequest(t, http.MethodPatch, superpathPath(id)+"/$value", `{"Public":"updated-value"}`, "", editor)
+			if test.denyUpdate {
+				require.Equal(t, http.StatusForbidden, status, body)
+			} else {
+				require.Equal(t, http.StatusNoContent, status, body)
+				require.Empty(t, body)
+			}
+
+			status, body = runSuperpathRequest(t, http.MethodGet, "/submodels/"+common.EncodeString(id)+"/$value", "", "", admin)
+			require.Equal(t, http.StatusOK, status, body)
+			if test.denyUpdate {
+				require.Contains(t, body, "public-value")
+			} else {
+				require.Contains(t, body, "updated-value")
+			}
+		})
+	}
+}
+
 func superpathTestTokens(t *testing.T) (string, string) {
 	t.Helper()
 	provider := testenv.NewPasswordGrantTokenProvider(testKeycloakTokenURL, "basyx-ui", 10*time.Second)
@@ -203,12 +254,12 @@ func deleteResponseMaskRules(id, mask, denial string) []map[string]any {
 	if denial == "formula" {
 		submodel["FORMULA"] = map[string]bool{"$boolean": false}
 	}
-	addDeleteResponseMask(shell, "aas", "sm", id, mask)
-	addDeleteResponseMask(submodel, "sm", "aas", id, mask)
+	addResponseMask(shell, "aas", "sm", id, mask)
+	addResponseMask(submodel, "sm", "aas", id, mask)
 	return []map[string]any{shell, submodel}
 }
 
-func addDeleteResponseMask(rule map[string]any, scope, other, id, mask string) {
+func addResponseMask(rule map[string]any, scope, other, id, mask string) {
 	filter := map[string]any{"FRAGMENT": "$" + scope + "#idShort", "CONDITION": superpathIDFormula(other, id)}
 	switch mask {
 	case "foreign":

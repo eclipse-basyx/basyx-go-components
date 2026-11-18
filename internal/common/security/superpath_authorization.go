@@ -110,11 +110,20 @@ func superpathFormulaResource(in EvalInput, basePath string) SemanticResourceKin
 	if in.formulaResource != "" {
 		return in.formulaResource
 	}
-	segments := strings.SplitN(strings.TrimPrefix(stripBasePath(basePath, routePath(in)), "/"), "/", 5)
-	if len(segments) >= 4 && segments[0] == "shells" && segments[2] == "submodels" {
+	if isSubmodelSuperpath(basePath, routePath(in)) {
 		return SemanticResourceSM
 	}
 	return ""
+}
+
+func isSubmodelSuperpath(basePath, requestPath string) bool {
+	segments := strings.SplitN(strings.TrimPrefix(stripBasePath(basePath, requestPath), "/"), "/", 5)
+	return len(segments) >= 4 && segments[0] == "shells" && segments[2] == "submodels"
+}
+
+// Submodel superpath PATCH operations return no model fragments.
+func operationOmitsResponseFilters(method, basePath, requestPath string) bool {
+	return method == http.MethodDelete || method == http.MethodPatch && isSubmodelSuperpath(basePath, requestPath)
 }
 
 func superpathFormulaSupported(formula grammar.LogicalExpression, resource SemanticResourceKind) bool {
