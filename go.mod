@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.48.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.19
 	github.com/aws/aws-sdk-go-v2/credentials v1.21.1
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.10
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.115.0
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/doug-martin/goqu/v9 v9.26.0
 	github.com/eclipse/paho.golang v0.23.0
