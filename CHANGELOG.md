@@ -8,6 +8,26 @@ Each entry states whether users need to take action and records the security
 consequence separately. High-impact entries require an API, configuration,
 policy, or deployment update. Low-impact entries do not require migration.
 
+## v1.1.5 (2026-11-20)
+
+Changes since [v1.1.4](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.1.4...v1.1.5).
+
+### Fixed
+
+* **High impact** — Make PutAssetInformation replace asset information, including assetKind Type, and clear omitted optional fields. Replacements must include a global asset ID or at least one specific asset ID. Resubmitting the shell's current thumbnail path preserves its uploaded file. ([#896](https://github.com/eclipse-basyx/basyx-go-components/pull/896))
+  * **Security:** None.
+
+* **High impact** — Apply and document createdFrom and updatedFrom on AAS reference listings. Shell and reference listings reject blank filters and honor inclusive timestamp bounds without truncating fractional seconds. Custom Go implementations of the AAS repository service interface must add two *AASListTimeCutoff arguments to GetAllAssetAdministrationShellsReference and use nil for omitted filters. ([#897](https://github.com/eclipse-basyx/basyx-go-components/pull/897))
+  * **Security:** None.
+
+* **Low impact** — Preserve empty collections and lists as {} and [] in Value-Only responses at every level, including nested containers and delegated operation results. ([#898](https://github.com/eclipse-basyx/basyx-go-components/pull/898))
+  * **Security:** None.
+
+* **Low impact** — Prevent AAS ROUTE formulas from entering Submodel SQL queries on superpaths and omit response masks for DELETE and Submodel superpath PATCH. ([#899](https://github.com/eclipse-basyx/basyx-go-components/pull/899))
+  * **Security:** Preserves resource-scoped FORMULA checks and ReBAC grants while preventing internal SQL errors and keeping response masks from blocking authorized operations that return no model fragments.
+
+* **Low impact** — Return Location headers for newly created SubmodelElementList members using their committed indices, including nested lists, concurrent appends, and AAS superpaths. ([#907](https://github.com/eclipse-basyx/basyx-go-components/pull/907))
+  * **Security:** None.
 ## v1.1.4 (2026-11-13)
 
 Changes since [v1.1.3](https://github.com/eclipse-basyx/basyx-go-components/compare/v1.1.3...v1.1.4).

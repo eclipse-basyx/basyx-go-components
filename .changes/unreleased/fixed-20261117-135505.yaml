@@ -1,7 +1,0 @@
-kind: fixed
-body: Preserve empty collections and lists as {} and [] in Value-Only responses at every level, including nested containers and delegated operation results.
-time: 2026-11-17T13:55:05.5160307+01:00
-custom:
-    Impact: Low
-    PullRequest: 898
-    SecurityImpact: None.
