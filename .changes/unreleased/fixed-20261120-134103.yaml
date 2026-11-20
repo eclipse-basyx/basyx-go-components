@@ -1,0 +1,7 @@
+kind: fixed
+body: Return Location headers for newly created SubmodelElementList members using their committed indices, including nested lists, concurrent appends, and AAS superpaths.
+time: 2026-11-20T13:41:03.9633943+01:00
+custom:
+    Impact: Low
+    PullRequest: 907
+    SecurityImpact: None.
