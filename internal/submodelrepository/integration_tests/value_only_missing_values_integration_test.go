@@ -27,6 +27,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -63,6 +64,7 @@ const missingValuesElementsJSON = `[
 ]`
 
 const missingValuesExpectedValueOnly = `{
+	"emptyColl": {},
 	"rngmin": {"min": 1},
 	"file": {"contentType": "text/plain"},
 	"coll": {},
@@ -91,6 +93,87 @@ func TestValueOnlyOmitsMissingValues(t *testing.T) {
 	}
 }
 
+const emptyContainerElementsJSON = `[
+	{"modelType":"SubmodelElementCollection","idShort":"EmptyCollection"},
+	{"modelType":"SubmodelElementList","idShort":"EmptyList","typeValueListElement":"Property","valueTypeListElement":"xs:int"},
+	{"modelType":"SubmodelElementCollection","idShort":"NestedCollection","value":[
+		{"modelType":"SubmodelElementCollection","idShort":"collection"},
+		{"modelType":"SubmodelElementList","idShort":"list","typeValueListElement":"Property","valueTypeListElement":"xs:int"},
+		{"modelType":"Property","idShort":"unset","valueType":"xs:int"}
+	]},
+	{"modelType":"SubmodelElementList","idShort":"NestedList","typeValueListElement":"SubmodelElementList","value":[
+		{"modelType":"SubmodelElementList","typeValueListElement":"Property","valueTypeListElement":"xs:int"},
+		{"modelType":"SubmodelElementList","typeValueListElement":"Property","valueTypeListElement":"xs:int","value":[{"modelType":"Property","valueType":"xs:int","value":"1"}]},
+		{"modelType":"SubmodelElementList","typeValueListElement":"Property","valueTypeListElement":"xs:int"}
+	]}
+]`
+
+func TestValueOnlyKeepsEmptyContainersAtEveryLevel(t *testing.T) {
+	for _, service := range []idShortService{
+		{name: "submodel-repository"},
+		{name: "aas-repository", nested: true},
+	} {
+		t.Run(service.name, func(t *testing.T) {
+			h := newIDShortHarness(t, "strict", service)
+			id := "urn:valueonly:empty-containers:" + uuid.NewString()
+			h.create(t, valueOnlyTestSubmodel(t, id, emptyContainerElementsJSON), http.StatusCreated)
+			for _, level := range []string{"", "deep", "core"} {
+				t.Run("level="+level, func(t *testing.T) {
+					h.assertEmptyContainerValueOnly(t, id, level)
+				})
+			}
+			h.assertValueOnlyRoundTrip(t, h.path(id))
+		})
+	}
+}
+
+func (h *idShortHarness) assertEmptyContainerValueOnly(t *testing.T, id, level string) {
+	t.Helper()
+	path := h.path(id)
+	query := valueOnlyQuery(level, url.Values{})
+	deep := `{"EmptyCollection":{},"EmptyList":[],"NestedCollection":{"collection":{},"list":[]},"NestedList":[[],[1],[]]}`
+	expected := deep
+	elements := deep
+	if level == "core" {
+		expected = `{"EmptyCollection":{},"EmptyList":[],"NestedCollection":{},"NestedList":[]}`
+		elements = `{"EmptyCollection":{},"EmptyList":[],"NestedCollection":{"collection":{},"list":[]},"NestedList":[[],[],[]]}`
+	}
+	require.JSONEq(t, expected, h.valueOnly(t, path+"/$value"+query, http.StatusOK))
+	h.assertElementsValueOnly(t, path+"/submodel-elements/$value"+query, elements)
+	h.assertEmptyContainerPages(t, path, level)
+	require.JSONEq(t, `{}`, h.valueOnly(t, path+"/submodel-elements/EmptyCollection/$value"+query, http.StatusOK))
+	require.JSONEq(t, `[]`, h.valueOnly(t, path+"/submodel-elements/EmptyList/$value"+query, http.StatusOK))
+	require.JSONEq(t, `{"collection":{},"list":[]}`, h.valueOnly(t, path+"/submodel-elements/NestedCollection/$value"+query, http.StatusOK))
+	nestedList := `[[],[1],[]]`
+	if level == "core" {
+		nestedList = `[[],[],[]]`
+	}
+	require.JSONEq(t, nestedList, h.valueOnly(t, path+"/submodel-elements/NestedList/$value"+query, http.StatusOK))
+	if !h.service.nested {
+		h.assertSubmodelsValueOnly(t, id, level, expected)
+	}
+}
+
+func (h *idShortHarness) assertEmptyContainerPages(t *testing.T, path, level string) {
+	t.Helper()
+	cursor := ""
+	query := url.Values{"limit": {"1"}}
+	for _, expected := range []string{"EmptyCollection", "EmptyList", "NestedCollection", "NestedList"} {
+		if cursor != "" {
+			query.Set("cursor", cursor)
+		}
+		page := h.json(t, http.MethodGet, path+"/submodel-elements/$value"+valueOnlyQuery(level, query), nil, http.StatusOK)
+		results := page["result"].([]any)
+		require.Len(t, results, 1)
+		require.Contains(t, results[0].(map[string]any), expected)
+		cursor, _ = page["paging_metadata"].(map[string]any)["cursor"].(string)
+		if expected != "NestedList" {
+			require.NotEmpty(t, cursor)
+		}
+	}
+	require.Empty(t, cursor)
+}
+
 func TestValueOnlyCoreLevelSerializesNestedContainers(t *testing.T) {
 	for _, service := range []idShortService{
 		{name: "submodel-repository"},
@@ -111,7 +194,7 @@ func TestValueOnlyCoreLevelSerializesNestedContainers(t *testing.T) {
 			require.JSONEq(t, `{"collection": {"inner": 1}, "list": [2], "prop": 3}`,
 				h.valueOnly(t, path+"/submodel-elements/RootCollection/$value", http.StatusOK))
 			if !service.nested {
-				h.assertSubmodelsValueOnly(t, id, "&level=core", rootCore)
+				h.assertSubmodelsValueOnly(t, id, "core", rootCore)
 				page := h.json(t, http.MethodGet, "/submodels?cursor="+common.EncodeString(id)+"&limit=1&level=core", nil, http.StatusOK)
 				h.assertCoreSubmodelOmitsGrandchildren(t, page["result"].([]any)[0].(map[string]any))
 			}
@@ -196,9 +279,20 @@ func (h *idShortHarness) assertElementsByPathValueOnly(t *testing.T, path string
 	h.valueOnly(t, path+"/submodel-elements/withOperation/$value", http.StatusNotFound)
 }
 
-func (h *idShortHarness) assertSubmodelsValueOnly(t *testing.T, id string, query string, expected string) {
+func valueOnlyQuery(level string, params url.Values) string {
+	if level != "" {
+		params.Set("level", level)
+	}
+	if len(params) == 0 {
+		return ""
+	}
+	return "?" + params.Encode()
+}
+
+func (h *idShortHarness) assertSubmodelsValueOnly(t *testing.T, id, level, expected string) {
 	t.Helper()
-	page := h.json(t, http.MethodGet, "/submodels/$value?cursor="+common.EncodeString(id)+"&limit=1"+query, nil, http.StatusOK)
+	query := valueOnlyQuery(level, url.Values{"cursor": {common.EncodeString(id)}, "limit": {"1"}})
+	page := h.json(t, http.MethodGet, "/submodels/$value"+query, nil, http.StatusOK)
 	results := page["result"].([]any)
 	require.Len(t, results, 1)
 	actual, err := json.Marshal(results[0])

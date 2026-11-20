@@ -27,6 +27,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -91,6 +92,8 @@ func TestSubmodelToValueOnlyOmitsElementsWithoutValue(t *testing.T) {
 	actual, err := json.Marshal(valueOnly)
 	require.NoError(t, err)
 	require.JSONEq(t, `{
+		"emptyColl": {},
+		"emptyList": [],
 		"rngmin": {"min": 1},
 		"file": {"contentType": "text/plain"},
 		"blob": {"value": "aGVsbG8="},
@@ -139,7 +142,7 @@ func TestSubmodelElementToNamedValueOnlySkipsElementsWithoutValue(t *testing.T) 
 	t.Parallel()
 
 	elements := missingValuesTestElements(t)
-	for _, idShort := range []string{"prop", "mlp", "rngnone", "fileNone", "blobNone", "ref", "entity", "emptyColl", "emptyList", "withOperation"} {
+	for _, idShort := range []string{"prop", "mlp", "rngnone", "fileNone", "blobNone", "ref", "entity", "withOperation"} {
 		valueOnly, err := SubmodelElementToNamedValueOnly(elements[idShort], "")
 		require.NoError(t, err, idShort)
 		require.Nil(t, valueOnly, idShort)
@@ -168,26 +171,55 @@ func missingValuesTestElements(t *testing.T) map[string]types.ISubmodelElement {
 	return elements
 }
 
-func TestSubmodelToValueOnlyKeepsExplicitlyEmptyContainers(t *testing.T) {
+func TestValueOnlyKeepsEmptyContainersAtEveryLevel(t *testing.T) {
 	t.Parallel()
 
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) {
+			assertEmptyContainersAtEveryLevel(t, explicit)
+		})
+	}
+}
+
+func assertEmptyContainersAtEveryLevel(t *testing.T, explicit bool) {
+	t.Helper()
 	collection := types.NewSubmodelElementCollection()
 	collection.SetIDShort(stringPointer("collection"))
-	collection.SetValue([]types.ISubmodelElement{})
 	list := types.NewSubmodelElementList(types.AASSubmodelElementsProperty)
 	list.SetIDShort(stringPointer("list"))
-	list.SetValue([]types.ISubmodelElement{})
+	if explicit {
+		collection.SetValue([]types.ISubmodelElement{})
+		list.SetValue([]types.ISubmodelElement{})
+	}
 	submodel := types.NewSubmodel("urn:example:empty-containers")
 	submodel.SetSubmodelElements([]types.ISubmodelElement{collection, list})
 
-	valueOnly, err := SubmodelToValueOnly(submodel)
-	require.NoError(t, err)
-	actual, err := json.Marshal(valueOnly)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"collection": {}, "list": []}`, string(actual))
+	for _, level := range []string{"", "deep", "core"} {
+		valueOnly, err := SubmodelToValueOnlyAtLevel(submodel, level)
+		require.NoError(t, err)
+		actual, err := json.Marshal(valueOnly)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"collection": {}, "list": []}`, string(actual), level)
+		assertEmptyContainerMember(t, collection, level, `{"collection": {}}`, `{}`)
+		assertEmptyContainerMember(t, list, level, `{"list": []}`, `[]`)
+	}
 }
 
-func TestValueOnlyAtCoreLevelSerializesUnloadedContainers(t *testing.T) {
+func assertEmptyContainerMember(t *testing.T, element types.ISubmodelElement, level, named, standalone string) {
+	t.Helper()
+	member, err := SubmodelElementToNamedValueOnly(element, level)
+	require.NoError(t, err)
+	actual, err := json.Marshal(member)
+	require.NoError(t, err)
+	require.JSONEq(t, named, string(actual), level)
+	value, err := SubmodelElementToValueOnlyAtLevel(element, level)
+	require.NoError(t, err)
+	actual, err = json.Marshal(value)
+	require.NoError(t, err)
+	require.JSONEq(t, standalone, string(actual), level)
+}
+
+func TestValueOnlyKeepsNestedEmptyContainersAtEveryLevel(t *testing.T) {
 	t.Parallel()
 
 	root := types.NewSubmodelElementCollection()
@@ -202,11 +234,8 @@ func TestValueOnlyAtCoreLevelSerializesUnloadedContainers(t *testing.T) {
 	submodel := types.NewSubmodel("urn:example:core")
 	submodel.SetSubmodelElements([]types.ISubmodelElement{collection, list, unset})
 
-	for level, expected := range map[string]string{
-		"core": `{"collection": {}, "list": []}`,
-		"deep": `{}`,
-		"":     `{}`,
-	} {
+	for _, level := range []string{"core", "deep", ""} {
+		expected := `{"collection": {}, "list": []}`
 		element, err := SubmodelElementToValueOnlyAtLevel(root, level)
 		require.NoError(t, err, level)
 		actual, err := json.Marshal(element)

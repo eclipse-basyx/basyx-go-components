@@ -360,12 +360,27 @@ func TestOperationValueOnlyResultOmitsArgumentsWithoutValue(t *testing.T) {
 		`{"modelType":"Range","valueType":"xs:int"}`,
 		`{"modelType":"File"}`,
 		`{"modelType":"ReferenceElement"}`,
-		`{"modelType":"SubmodelElementCollection"}`,
-		`{"modelType":"SubmodelElementList","typeValueListElement":"Property","valueTypeListElement":"xs:int"}`,
 	} {
 		result, err := operationResultToValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, declaration)})
 		require.NoError(t, err, declaration)
 		require.Equal(t, map[string]any{}, result["outputArguments"], declaration)
+	}
+}
+
+func TestOperationValueOnlyResultKeepsEmptyContainers(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct{ declaration, expected string }{
+		{`{"modelType":"SubmodelElementCollection"}`, `{}`},
+		{`{"modelType":"SubmodelElementCollection","value":[]}`, `{}`},
+		{`{"modelType":"SubmodelElementList","typeValueListElement":"Property","valueTypeListElement":"xs:int"}`, `[]`},
+		{`{"modelType":"SubmodelElementList","typeValueListElement":"Property","valueTypeListElement":"xs:int","value":[]}`, `[]`},
+		{`{"modelType":"SubmodelElementCollection","value":[{"modelType":"SubmodelElementCollection","idShort":"nested"},{"modelType":"Property","idShort":"unset","valueType":"xs:int"}]}`, `{"nested":{}}`},
+	} {
+		result, err := operationResultToValueOnly([]types.IOperationVariable{valueOnlyTestDeclaration(t, test.declaration)})
+		require.NoError(t, err, test.declaration)
+		actual, err := json.Marshal(result["outputArguments"])
+		require.NoError(t, err)
+		require.JSONEq(t, `{"arg":`+test.expected+`}`, string(actual), test.declaration)
 	}
 }
 
