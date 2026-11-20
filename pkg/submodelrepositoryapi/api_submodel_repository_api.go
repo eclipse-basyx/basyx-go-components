@@ -1621,7 +1621,7 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 	}
 
 	if result.Code == http.StatusCreated {
-		if childPath := model.CreatedSubmodelElementPath(result.Body, idShortPathParam, submodelElementParam.IDShort()); childPath != "" {
+		if childPath := result.CreatedSubmodelElementPath(idShortPathParam, submodelElementParam.IDShort()); childPath != "" {
 			location := c.buildSubmodelElementLocationFromEncodedIdentifier(r, submodelIdentifierParam, childPath)
 			if location != "" {
 				w.Header().Set("Location", location)

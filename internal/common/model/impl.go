@@ -38,4 +38,6 @@ package model
 type ImplResponse struct {
 	Code int
 	Body interface{}
+	// CreatedPath is the committed idShortPath of a newly created submodel element.
+	CreatedPath string `json:"-"`
 }

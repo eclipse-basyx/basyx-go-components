@@ -26,17 +26,18 @@
 package model
 
 import (
-	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreatedSubmodelElementKeepsMetadataOutOfJSON(t *testing.T) {
-	created := CreatedSubmodelElement{Path: "Rows[2]", Value: map[string]any{"value": "2"}}
-	data, err := json.Marshal(created)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"value":"2"}`, string(data))
+func TestCreatedSubmodelElementResponseKeepsOriginalBody(t *testing.T) {
+	value := map[string]any{"value": "2"}
+	response := CreatedSubmodelElementResponse("Rows[2]", value)
+	require.Equal(t, http.StatusCreated, response.Code)
+	require.Equal(t, value, response.Body)
+	require.Equal(t, "Rows[2]", response.CreatedPath)
 }
 
 func TestCreatedSubmodelElementPath(t *testing.T) {
@@ -46,6 +47,7 @@ func TestCreatedSubmodelElementPath(t *testing.T) {
 		idShort                           *string
 	}{
 		{"empty list", "Rows", "Rows[0]", "Rows[0]", nil},
+		{"named list member", "Rows", "Rows[0]", "Rows[0]", &idShort},
 		{"nested list", "Rows[1]", "Rows[1][2]", "Rows[1][2]", nil},
 		{"collection", "Group", "Group.Child", "Group.Child", &idShort},
 		{"legacy collection", "Group", "", "Group.Child", &idShort},
@@ -53,11 +55,8 @@ func TestCreatedSubmodelElementPath(t *testing.T) {
 		{"missing path", "Rows", "", "", nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			var body any = map[string]any{}
-			if test.committed != "" {
-				body = CreatedSubmodelElement{Path: test.committed}
-			}
-			require.Equal(t, test.expected, CreatedSubmodelElementPath(body, test.parent, test.idShort))
+			response := ImplResponse{CreatedPath: test.committed}
+			require.Equal(t, test.expected, response.CreatedSubmodelElementPath(test.parent, test.idShort))
 		})
 	}
 }

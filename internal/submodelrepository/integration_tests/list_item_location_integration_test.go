@@ -57,6 +57,7 @@ func TestListItemLocationAddressesTheCreatedElement(t *testing.T) {
 				value  map[string]any
 			}{
 				{"Empty", 0, listLocationProperty("2")},
+				{"Rows", 0, map[string]any{"modelType": "Property", "idShort": "Named", "valueType": "xs:int", "value": "3"}},
 				{"Populated", 1, listLocationProperty("2")},
 				{"Group.Rows", 0, listLocationProperty("2")},
 				{"Nested[0]", 1, listLocationProperty("2")},
@@ -96,6 +97,7 @@ func listLocationSubmodel(id string) map[string]any {
 		"modelType": "Submodel", "id": id,
 		"submodelElements": []any{
 			listLocationList("Empty"),
+			listLocationList("Rows"),
 			listLocationList("Populated", listLocationProperty("1")),
 			map[string]any{"modelType": "SubmodelElementCollection", "idShort": "Group", "value": []any{listLocationList("Rows")}},
 			map[string]any{"modelType": "SubmodelElementList", "idShort": "Nested", "typeValueListElement": "SubmodelElementList", "value": []any{listLocationList("", listLocationProperty("1"))}},

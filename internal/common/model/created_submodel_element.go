@@ -25,23 +25,19 @@
 
 package model
 
-import "encoding/json"
+import "net/http"
 
-// CreatedSubmodelElement carries the committed path without adding metadata to the response JSON.
-type CreatedSubmodelElement struct {
-	Path  string
-	Value any
+// CreatedSubmodelElementResponse returns the created element as the response body
+// and its committed idShortPath as metadata for the Location header.
+func CreatedSubmodelElementResponse(path string, value any) ImplResponse {
+	return ImplResponse{Code: http.StatusCreated, Body: value, CreatedPath: path}
 }
 
-// MarshalJSON serializes only the created element.
-func (c CreatedSubmodelElement) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.Value)
-}
-
-// CreatedSubmodelElementPath prefers the committed path and supports legacy service responses.
-func CreatedSubmodelElementPath(body any, parentPath string, idShort *string) string {
-	if created, ok := body.(CreatedSubmodelElement); ok && created.Path != "" {
-		return created.Path
+// CreatedSubmodelElementPath returns the committed idShortPath, falling back to
+// the parent path and child idShort for services that return only the element.
+func (r ImplResponse) CreatedSubmodelElementPath(parentPath string, idShort *string) string {
+	if r.CreatedPath != "" {
+		return r.CreatedPath
 	}
 	if idShort == nil || *idShort == "" {
 		return ""

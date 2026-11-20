@@ -45,10 +45,11 @@ type listItemLocationService struct {
 }
 
 func (s *listItemLocationService) PostSubmodelElementByPathAasRepository(_ context.Context, _ string, _ string, _ string, _ types.ISubmodelElement) (model.ImplResponse, error) {
-	return model.Response(s.status, model.CreatedSubmodelElement{
-		Path:  "Rows[4]",
-		Value: map[string]any{"modelType": "Property", "valueType": "xs:int", "value": "2"},
-	}), nil
+	return model.ImplResponse{
+		Code:        s.status,
+		CreatedPath: "Rows[4]",
+		Body:        map[string]any{"modelType": "Property", "idShort": "Named", "valueType": "xs:int", "value": "2"},
+	}, nil
 }
 
 func TestPostListItemUsesCommittedLocationAndPreservesBody(t *testing.T) {
@@ -56,7 +57,7 @@ func TestPostListItemUsesCommittedLocationAndPreservesBody(t *testing.T) {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			service := &listItemLocationService{status: status}
 			controller := NewAssetAdministrationShellRepositoryAPIAPIController(service, "/api/v3", "")
-			request := httptest.NewRequest(http.MethodPost, "http://internal.example/api/v3/shells/YWFz/submodels/c20/submodel-elements/Rows", strings.NewReader(`{"modelType":"Property","valueType":"xs:int","value":"2"}`))
+			request := httptest.NewRequest(http.MethodPost, "http://internal.example/api/v3/shells/YWFz/submodels/c20/submodel-elements/Rows", strings.NewReader(`{"modelType":"Property","idShort":"Named","valueType":"xs:int","value":"2"}`))
 			route := chi.NewRouteContext()
 			route.URLParams.Add("aasIdentifier", "YWFz")
 			route.URLParams.Add("submodelIdentifier", "c20")
@@ -74,7 +75,7 @@ func TestPostListItemUsesCommittedLocationAndPreservesBody(t *testing.T) {
 			} else {
 				require.Empty(t, response.Header().Get("Location"))
 			}
-			require.JSONEq(t, `{"modelType":"Property","valueType":"xs:int","value":"2"}`, response.Body.String())
+			require.JSONEq(t, `{"modelType":"Property","idShort":"Named","valueType":"xs:int","value":"2"}`, response.Body.String())
 		})
 	}
 }

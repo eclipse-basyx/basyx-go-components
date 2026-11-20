@@ -1934,7 +1934,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 		return newAPIErrorResponse(parseErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
-	return gen.Response(http.StatusCreated, gen.CreatedSubmodelElement{Path: insertedPath, Value: parsedElement}), nil
+	return gen.CreatedSubmodelElementResponse(insertedPath, parsedElement), nil
 }
 
 // DeleteSubmodelElementByPathSubmodelRepo deletes a submodel element at a specified path within the submodel elements hierarchy.
