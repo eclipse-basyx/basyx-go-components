@@ -449,47 +449,50 @@ func newSubmodelElementParentNotFoundError(parentPath string) error {
 }
 
 // AddSubmodelElementWithPath adds a submodel element under an existing container path
-// while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
+// while preserving ABAC visibility checks from ctx and returns its committed path.
+func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submodelID string, parentPath string, submodelElement types.ISubmodelElement) (insertedPath string, err error) {
 	if err := requireChildSubmodelElementIDShorts(submodelElement, "SMREPO-ADDSMEBYPATH"); err != nil {
-		return err
+		return "", err
 	}
 	tx, cleanup, err := common.StartTransactionContext(ctx, s.db)
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-ADDSMEBYPATH-STARTTX " + err.Error())
+		return "", common.NewInternalServerError("SMREPO-ADDSMEBYPATH-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
 
 	previousSnapshot, err := s.beginSubmodelMutationTx(ctx, tx, submodelID)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	insertedPath, err := s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, parentPath, submodelElement)
+	insertedPath, err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, parentPath, submodelElement)
 	if err != nil {
-		return err
+		return "", err
 	}
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-ADDSMEBYPATH-SHOULDENFORCE")
 	if enforceErr != nil {
-		return enforceErr
+		return "", enforceErr
 	}
 	if shouldEnforce {
 		if err = s.ensureCreatedSubmodelElementIsVisible(ctx, tx, submodelID, insertedPath); err != nil {
-			return err
+			return "", err
 		}
 	}
 	if err = s.verifyEnclosingListTx(ctx, tx, submodelID, insertedPath, "SMREPO-ADDSMEBYPATH-VERIFYLIST"); err != nil {
-		return err
+		return "", err
 	}
 
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 		previousPath: parentPath,
 		currentPath:  parentPath,
 	}); err != nil {
-		return err
+		return "", err
 	}
 
-	return common.CommitTransaction(tx)
+	if err = common.CommitTransaction(tx); err != nil {
+		return "", err
+	}
+	return insertedPath, nil
 }
 
 // PutSubmodelElement creates or replaces a submodel element at the requested path in a single transaction.

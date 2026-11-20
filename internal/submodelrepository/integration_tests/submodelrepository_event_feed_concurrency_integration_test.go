@@ -90,7 +90,8 @@ func TestEventFeedConcurrentPCNAdditionsUseCommittedPredecessor(t *testing.T) {
 	results := make(chan error, 2)
 	for _, id := range []string{"CN1", "CN2"} {
 		go func(id string) {
-			results <- backend.AddSubmodelElementWithPath(ctx, sm.ID(), "Records", eventFeedPCNRecord(id))
+			_, err := backend.AddSubmodelElementWithPath(ctx, sm.ID(), "Records", eventFeedPCNRecord(id))
+			results <- err
 		}(id)
 	}
 	waitForPCNMutationLocks(ctx, t, db, name)
