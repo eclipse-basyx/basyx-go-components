@@ -130,7 +130,7 @@ func TestValueOnlyKeepsEmptyContainersAtEveryLevel(t *testing.T) {
 func (h *idShortHarness) assertEmptyContainerValueOnly(t *testing.T, id, level string) {
 	t.Helper()
 	path := h.path(id)
-	query := "?level=" + level
+	query := valueOnlyQuery(level, url.Values{})
 	deep := `{"EmptyCollection":{},"EmptyList":[],"NestedCollection":{"collection":{},"list":[]},"NestedList":[[],[1],[]]}`
 	expected := deep
 	elements := deep
@@ -150,19 +150,19 @@ func (h *idShortHarness) assertEmptyContainerValueOnly(t *testing.T, id, level s
 	}
 	require.JSONEq(t, nestedList, h.valueOnly(t, path+"/submodel-elements/NestedList/$value"+query, http.StatusOK))
 	if !h.service.nested {
-		h.assertSubmodelsValueOnly(t, id, "&level="+level, expected)
+		h.assertSubmodelsValueOnly(t, id, level, expected)
 	}
 }
 
 func (h *idShortHarness) assertEmptyContainerPages(t *testing.T, path, level string) {
 	t.Helper()
 	cursor := ""
-	query := url.Values{"limit": {"1"}, "level": {level}}
+	query := url.Values{"limit": {"1"}}
 	for _, expected := range []string{"EmptyCollection", "EmptyList", "NestedCollection", "NestedList"} {
 		if cursor != "" {
 			query.Set("cursor", cursor)
 		}
-		page := h.json(t, http.MethodGet, path+"/submodel-elements/$value?"+query.Encode(), nil, http.StatusOK)
+		page := h.json(t, http.MethodGet, path+"/submodel-elements/$value"+valueOnlyQuery(level, query), nil, http.StatusOK)
 		results := page["result"].([]any)
 		require.Len(t, results, 1)
 		require.Contains(t, results[0].(map[string]any), expected)
@@ -194,7 +194,7 @@ func TestValueOnlyCoreLevelSerializesNestedContainers(t *testing.T) {
 			require.JSONEq(t, `{"collection": {"inner": 1}, "list": [2], "prop": 3}`,
 				h.valueOnly(t, path+"/submodel-elements/RootCollection/$value", http.StatusOK))
 			if !service.nested {
-				h.assertSubmodelsValueOnly(t, id, "&level=core", rootCore)
+				h.assertSubmodelsValueOnly(t, id, "core", rootCore)
 				page := h.json(t, http.MethodGet, "/submodels?cursor="+common.EncodeString(id)+"&limit=1&level=core", nil, http.StatusOK)
 				h.assertCoreSubmodelOmitsGrandchildren(t, page["result"].([]any)[0].(map[string]any))
 			}
@@ -279,9 +279,20 @@ func (h *idShortHarness) assertElementsByPathValueOnly(t *testing.T, path string
 	h.valueOnly(t, path+"/submodel-elements/withOperation/$value", http.StatusNotFound)
 }
 
-func (h *idShortHarness) assertSubmodelsValueOnly(t *testing.T, id string, query string, expected string) {
+func valueOnlyQuery(level string, params url.Values) string {
+	if level != "" {
+		params.Set("level", level)
+	}
+	if len(params) == 0 {
+		return ""
+	}
+	return "?" + params.Encode()
+}
+
+func (h *idShortHarness) assertSubmodelsValueOnly(t *testing.T, id, level, expected string) {
 	t.Helper()
-	page := h.json(t, http.MethodGet, "/submodels/$value?cursor="+common.EncodeString(id)+"&limit=1"+query, nil, http.StatusOK)
+	query := valueOnlyQuery(level, url.Values{"cursor": {common.EncodeString(id)}, "limit": {"1"}})
+	page := h.json(t, http.MethodGet, "/submodels/$value"+query, nil, http.StatusOK)
 	results := page["result"].([]any)
 	require.Len(t, results, 1)
 	actual, err := json.Marshal(results[0])
