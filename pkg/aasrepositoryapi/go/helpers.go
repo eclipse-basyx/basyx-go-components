@@ -97,17 +97,6 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) contextualizeOperat
 	return redirect
 }
 
-func joinIDShortPath(parentPath string, childIDShort string) string {
-	if parentPath == "" {
-		return childIDShort
-	}
-	if childIDShort == "" {
-		return parentPath
-	}
-
-	return parentPath + "." + childIDShort
-}
-
 // routedIDShortPath returns the decoded idShortPath path parameter. It rejects
 // a missing value and a value that is not a concrete idShortPath.
 func routedIDShortPath(r *http.Request) (string, error) {

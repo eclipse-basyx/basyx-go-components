@@ -140,7 +140,7 @@ func TestAddSubmodelElementWithPathExistingUnauthorizedElementDoesNotReturnConfl
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectRollback()
 
-	err = sut.AddSubmodelElementWithPath(contextWithRestrictedCreateSubmodel(t), "sm", "container", element)
+	_, err = sut.AddSubmodelElementWithPath(contextWithRestrictedCreateSubmodel(t), "sm", "container", element)
 	require.Error(t, err)
 	require.Truef(t, common.IsErrDenied(err), "got %v", err)
 	require.False(t, common.IsErrConflict(err))

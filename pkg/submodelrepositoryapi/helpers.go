@@ -84,19 +84,6 @@ func (c *SubmodelRepositoryAPIAPIController) contextualizeOperationRedirect(r *h
 	return redirect
 }
 
-// joinIDShortPath concatenates parent and child idShort segments using dot notation.
-func joinIDShortPath(parentPath string, childIDShort string) string {
-	if parentPath == "" {
-		return childIDShort
-	}
-
-	if childIDShort == "" {
-		return parentPath
-	}
-
-	return parentPath + "." + childIDShort
-}
-
 // IsZeroValue checks if the val is the zero-ed value.
 func IsZeroValue(val interface{}) bool {
 	return val == nil || reflect.DeepEqual(val, reflect.Zero(reflect.TypeOf(val)).Interface())

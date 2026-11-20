@@ -1924,7 +1924,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	err := s.submodelBackend.AddSubmodelElementWithPath(ctx, decodedSubmodelIdentifier, idShortPath, submodelElement)
+	insertedPath, err := s.submodelBackend.AddSubmodelElementWithPath(ctx, decodedSubmodelIdentifier, idShortPath, submodelElement)
 	if err != nil {
 		return newPostSubmodelElementByPathErrorResponse(err), nil
 	}
@@ -1934,7 +1934,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 		return newAPIErrorResponse(parseErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
-	return gen.Response(http.StatusCreated, parsedElement), nil
+	return gen.CreatedSubmodelElementResponse(insertedPath, parsedElement), nil
 }
 
 // DeleteSubmodelElementByPathSubmodelRepo deletes a submodel element at a specified path within the submodel elements hierarchy.
