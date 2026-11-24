@@ -210,3 +210,25 @@ func TestLogicalExpression_SimplifyForBackendFilter_DatePartOfLiteralIsEvaluated
 		t.Fatalf("expected the date part of a literal to be evaluated, got %#v (%v)", simplified, decision)
 	}
 }
+
+func TestLogicalExpression_SimplifyForBackendFilter_DatePartsOfLiteralsUseUTC(t *testing.T) {
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 1, 0, 30, 0, 0, time.FixedZone("+02:00", 2*60*60)))
+	for _, test := range []struct {
+		name string
+		part Value
+		want float64
+	}{
+		{"year", Value{Year: &Value{DateTimeVal: &instant}}, 2023},
+		{"month", Value{Month: &Value{DateTimeVal: &instant}}, 12},
+		{"dayOfMonth", Value{DayOfMonth: &Value{DateTimeVal: &instant}}, 31},
+		{"dayOfWeek", Value{DayOfWeek: &Value{DateTimeVal: &instant}}, float64(time.Sunday)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			expression := LogicalExpression{Eq: ComparisonItems{test.part, {NumVal: &test.want}}}
+			simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+			if decision != SimplifyTrue || simplified.Boolean == nil || !*simplified.Boolean {
+				t.Fatalf("expected the UTC %s %v, got %#v (%v)", test.name, test.want, simplified, decision)
+			}
+		})
+	}
+}

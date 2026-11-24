@@ -44,6 +44,7 @@ func TestTemporalQueriesAreIndependentOfDatabaseTimeZone(t *testing.T) {
 	elements := []temporalElement{
 		{IDShort: "Local", ModelType: "Property", ValueType: "xs:dateTime", Value: new("2024-01-01T08:00:00")},
 		{IDShort: "LateUTC", ModelType: "Property", ValueType: "xs:dateTime", Value: new("2024-01-01T23:30:00Z")},
+		{IDShort: "EarlyOffset", ModelType: "Property", ValueType: "xs:dateTime", Value: new("2024-01-01T00:30:00+02:00")},
 		{IDShort: "LocalDate", ModelType: "Property", ValueType: "xs:date", Value: new("2024-01-01")},
 		{IDShort: "OffsetTime", ModelType: "Property", ValueType: "xs:time", Value: new("10:00:00+02:00")},
 		{IDShort: "EarlyYear", ModelType: "Property", ValueType: "xs:dateTime", Value: new("-0001-01-01T00:00:00Z")},
@@ -62,6 +63,9 @@ func TestTemporalQueriesAreIndependentOfDatabaseTimeZone(t *testing.T) {
 		{"zone-less date is UTC midnight", `{"$eq":[{"$dateTimeCast":{"$field":"$sme.LocalDate#value"}},{"$dateTimeVal":"2024-01-01T00:00:00Z"}]}`, true},
 		{"day of month is extracted in UTC", `{"$eq":[{"$dayOfMonth":{"$dateTimeCast":{"$field":"$sme.LateUTC#value"}}},{"$numVal":1}]}`, true},
 		{"year of a field", `{"$eq":[{"$year":{"$dateTimeCast":{"$field":"$sme.LateUTC#value"}}},{"$numVal":2024}]}`, true},
+		{"offset year is UTC", `{"$eq":[{"$year":{"$dateTimeCast":{"$field":"$sme.EarlyOffset#value"}}},{"$numVal":2023}]}`, true},
+		{"field and literal years agree", `{"$eq":[{"$year":{"$dateTimeCast":{"$field":"$sme.EarlyOffset#value"}}},{"$year":{"$dateTimeVal":"2024-01-01T00:30:00+02:00"}}]}`, true},
+		{"field and literal weekdays agree", `{"$eq":[{"$dayOfWeek":{"$dateTimeCast":{"$field":"$sme.EarlyOffset#value"}}},{"$dayOfWeek":{"$dateTimeVal":"2024-01-01T00:30:00+02:00"}}]}`, true},
 		{"other day of month", `{"$eq":[{"$dayOfMonth":{"$dateTimeCast":{"$field":"$sme.LateUTC#value"}}},{"$numVal":2}]}`, false},
 		{"time drops its offset", `{"$eq":[{"$timeCast":{"$field":"$sme.OffsetTime#value"}},{"$timeVal":"10:00:00Z"}]}`, true},
 		{"unsupported year never matches", `{"$lt":[{"$dateTimeCast":{"$field":"$sme.EarlyYear#value"}},{"$dateTimeVal":"2024-01-01T00:00:00Z"}]}`, false},

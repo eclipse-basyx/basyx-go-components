@@ -1,7 +1,7 @@
 kind: fixed
-body: AASQL and ABAC conditions that apply $year, $month, $dayOfMonth, or $dayOfWeek to a field are evaluated against the stored values instead of never matching. The date parts are extracted in UTC.
+body: AASQL and ABAC conditions that apply $year, $month, $dayOfMonth, or $dayOfWeek to a field are evaluated against the stored values instead of never matching. Date parts of fields and of literal timestamps are both extracted in UTC, so a date part of a timestamp with an offset, such as "2024-01-01T00:30:00+02:00", yields the same UTC value in either position.
 time: 2026-11-24T17:00:00.000000+01:00
 custom:
     Impact: Medium
     PullRequest: 917
-    SecurityImpact: Access rules that apply a date part to a field previously never matched and could only deny access. They now match stored values and can grant access, so review such rules before upgrading.
+    SecurityImpact: Access rules that apply a date part to a field previously never matched and could only deny access. They now match stored values and can grant access, and rules that apply a date part to a literal with a non-UTC offset near a day, month, or year boundary can evaluate differently. Review such rules before upgrading.

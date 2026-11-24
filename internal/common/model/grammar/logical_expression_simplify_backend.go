@@ -1078,31 +1078,42 @@ func resolveDateTimeLiteral(v Value, resolve AttributeResolver) any {
 	case v.DateTimeVal != nil:
 		return time.Time(*v.DateTimeVal)
 	case v.TimeVal != nil:
-		tv := TimeLiteralPattern(*v.TimeVal)
-		return tv
-	case v.Year != nil:
-		if t, ok := resolveDateTimeValue(*v.Year, resolve); ok {
-			return float64(t.Year())
-		}
-		return nil
-	case v.Month != nil:
-		if t, ok := resolveDateTimeValue(*v.Month, resolve); ok {
-			return float64(int(t.Month()))
-		}
-		return nil
-	case v.DayOfMonth != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfMonth, resolve); ok {
-			return float64(t.Day())
-		}
-		return nil
-	case v.DayOfWeek != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfWeek, resolve); ok {
-			return float64(int(t.Weekday()))
-		}
-		return nil
-	default:
-		return nil
+		return TimeLiteralPattern(*v.TimeVal)
 	}
+	if part, ok := resolveDatePart(v, resolve); ok {
+		return part
+	}
+	return nil
+}
+
+func isDatePart(v Value) bool {
+	return v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil
+}
+
+// resolveDatePart evaluates $year, $month, $dayOfMonth, or $dayOfWeek in UTC,
+// matching the extraction PostgreSQL performs for field operands.
+func resolveDatePart(v Value, resolve AttributeResolver) (float64, bool) {
+	switch {
+	case v.Year != nil:
+		t, ok := resolveDatePartOperand(*v.Year, resolve)
+		return float64(t.Year()), ok
+	case v.Month != nil:
+		t, ok := resolveDatePartOperand(*v.Month, resolve)
+		return float64(t.Month()), ok
+	case v.DayOfMonth != nil:
+		t, ok := resolveDatePartOperand(*v.DayOfMonth, resolve)
+		return float64(t.Day()), ok
+	case v.DayOfWeek != nil:
+		t, ok := resolveDatePartOperand(*v.DayOfWeek, resolve)
+		return float64(t.Weekday()), ok
+	default:
+		return 0, false
+	}
+}
+
+func resolveDatePartOperand(v Value, resolve AttributeResolver) (time.Time, bool) {
+	t, ok := resolveDateTimeValue(v, resolve)
+	return t.UTC(), ok
 }
 
 func resolveCastValue(v Value, resolve AttributeResolver) any {
@@ -1398,26 +1409,8 @@ func resolveNumberValue(v Value, resolve AttributeResolver) (float64, bool) {
 	switch {
 	case v.NumVal != nil:
 		return *v.NumVal, true
-	case v.Year != nil:
-		if t, ok := resolveDateTimeValue(*v.Year, resolve); ok {
-			return float64(t.Year()), true
-		}
-		return 0, false
-	case v.Month != nil:
-		if t, ok := resolveDateTimeValue(*v.Month, resolve); ok {
-			return float64(int(t.Month())), true
-		}
-		return 0, false
-	case v.DayOfMonth != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfMonth, resolve); ok {
-			return float64(t.Day()), true
-		}
-		return 0, false
-	case v.DayOfWeek != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfWeek, resolve); ok {
-			return float64(int(t.Weekday())), true
-		}
-		return 0, false
+	case isDatePart(v):
+		return resolveDatePart(v, resolve)
 	case v.NumCast != nil:
 		raw := resolveValue(*v.NumCast, resolve)
 		if f, ok := toFloat(raw); ok {
@@ -1650,28 +1643,26 @@ func stringValueFromDate(v Value) string {
 	case v.TimeVal != nil:
 		return string(*v.TimeVal)
 	case v.Year != nil:
-		if t, ok := resolveDateTimeValue(*v.Year, func(AttributeValue) any { return nil }); ok {
-			return t.Format("2006")
-		}
-		return ""
+		return formatDatePartOperand(*v.Year, "2006")
 	case v.Month != nil:
-		if t, ok := resolveDateTimeValue(*v.Month, func(AttributeValue) any { return nil }); ok {
-			return t.Format("01")
-		}
-		return ""
+		return formatDatePartOperand(*v.Month, "01")
 	case v.DayOfMonth != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfMonth, func(AttributeValue) any { return nil }); ok {
-			return t.Format("02")
-		}
-		return ""
+		return formatDatePartOperand(*v.DayOfMonth, "02")
 	case v.DayOfWeek != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfWeek, func(AttributeValue) any { return nil }); ok {
+		if t, ok := resolveDatePartOperand(*v.DayOfWeek, func(AttributeValue) any { return nil }); ok {
 			return t.Weekday().String()
 		}
 		return ""
 	default:
 		return ""
 	}
+}
+
+func formatDatePartOperand(v Value, layout string) string {
+	if t, ok := resolveDatePartOperand(v, func(AttributeValue) any { return nil }); ok {
+		return t.Format(layout)
+	}
+	return ""
 }
 
 func toFloat(value interface{}) (float64, bool) {
