@@ -69,6 +69,7 @@ func TestMapTemporalValuesPreservesLexicalForms(t *testing.T) {
 		{types.DataTypeDefXSDDate, "2024-04-22+02:00"},
 		{types.DataTypeDefXSDDateTime, "2024-04-22T00:00:00"},
 		{types.DataTypeDefXSDDateTime, "2024-04-22T00:00:00.123456789Z"},
+		{types.DataTypeDefXSDDateTime, "2024-04-22T00:00:00.123456789+00:00"},
 	} {
 		t.Run(test.value, func(t *testing.T) {
 			mapped, err := MapValueByType(test.valueType, &test.value)
