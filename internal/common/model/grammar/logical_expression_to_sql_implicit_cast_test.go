@@ -110,6 +110,17 @@ func TestLogicalExpression_SimplifyForBackendFilter_EnumTypeString_ConvertsToNum
 	}
 }
 
+func TestLogicalExpression_SimplifyForBackendFilter_PropertyValueTypeRemainsText(t *testing.T) {
+	expression := LogicalExpression{Eq: ComparisonItems{field("$sme.Timestamp#valueType"), strVal("xs:dateTime")}}
+	simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+	if decision != SimplifyUndecided || len(simplified.Eq) != 2 {
+		t.Fatalf("expected an unresolved comparison, got %v (%v)", simplified, decision)
+	}
+	if value := simplified.Eq[1].StrVal; value == nil || string(*value) != "xs:dateTime" {
+		t.Fatalf("expected property valueType comparison against xs:dateTime as text, got %#v", simplified.Eq[1])
+	}
+}
+
 func TestLogicalExpression_SimplifyForBackendFilter_EnumTypeInvalidString_FallsBackToTextCast(t *testing.T) {
 	le := LogicalExpression{
 		Eq: ComparisonItems{

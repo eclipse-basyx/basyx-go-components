@@ -29,6 +29,7 @@ package grammar
 import (
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
 
@@ -48,6 +49,16 @@ type terminalColumnMapping struct {
 	//   terminal="value", arrayName="keys", arrayParentSimple="externalSubjectId"|"semanticId".
 	ByArrayParentSimple map[string]map[string]map[resolveContext]string
 }
+
+var propertyValueTypeColumn = fmt.Sprintf(
+	"(CASE WHEN property_element.id IS NULL THEN NULL "+
+		"WHEN property_element.value_bool IS NOT NULL THEN 'xs:boolean' "+
+		"WHEN property_element.value_type = %d THEN 'xs:time' "+
+		"WHEN property_element.value_type = %d THEN 'xs:date' "+
+		"WHEN property_element.value_type = %d THEN 'xs:dateTime' "+
+		"WHEN property_element.value_num IS NOT NULL THEN 'xs:double' ELSE 'xs:string' END)",
+	types.DataTypeDefXSDTime, types.DataTypeDefXSDDate, types.DataTypeDefXSDDateTime,
+)
 
 // terminalColumnMappings defines how terminal path segments map to SQL column expressions.
 //
@@ -198,7 +209,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 
 	"valueType": {
 		ByContext: map[resolveContext]string{
-			ctxSME: "(CASE WHEN property_element.id IS NULL THEN NULL WHEN property_element.value_bool IS NOT NULL THEN 'xs:boolean' WHEN property_element.value_time IS NOT NULL THEN 'xs:time' WHEN property_element.value_date IS NOT NULL THEN 'xs:date' WHEN property_element.value_datetime IS NOT NULL THEN 'xs:dateTime' WHEN property_element.value_num IS NOT NULL THEN 'xs:double' ELSE 'xs:string' END)",
+			ctxSME: propertyValueTypeColumn,
 		},
 	},
 

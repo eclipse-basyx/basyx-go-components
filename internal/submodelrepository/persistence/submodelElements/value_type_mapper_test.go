@@ -53,25 +53,34 @@ func TestMapValueByTypeRejectsInvalidDatabaseTypedValues(t *testing.T) {
 	}
 }
 
-func TestMapValueByTypeKeepsValidDatabaseTypedValuesTyped(t *testing.T) {
+func TestMapValueByTypeKeepsBooleanTyped(t *testing.T) {
 	booleanValue := "true"
 	if mapped, err := MapValueByType(types.DataTypeDefXSDBoolean, &booleanValue); err != nil || !mapped.Boolean.Valid || mapped.Text.Valid {
 		t.Fatalf("expected valid boolean to use boolean column, got %#v, error %v", mapped, err)
 	}
 
-	timeValue := "13:14:15"
-	if mapped, err := MapValueByType(types.DataTypeDefXSDTime, &timeValue); err != nil || !mapped.Time.Valid || mapped.Text.Valid {
-		t.Fatalf("expected valid time to use time column, got %#v, error %v", mapped, err)
-	}
+}
 
-	dateValue := "2024-04-22"
-	if mapped, err := MapValueByType(types.DataTypeDefXSDDate, &dateValue); err != nil || !mapped.Date.Valid || mapped.Text.Valid {
-		t.Fatalf("expected valid date to use date column, got %#v, error %v", mapped, err)
-	}
-
-	dateTimeValue := "2024-04-22T00:00:00Z"
-	if mapped, err := MapValueByType(types.DataTypeDefXSDDateTime, &dateTimeValue); err != nil || !mapped.DateTime.Valid || mapped.Text.Valid {
-		t.Fatalf("expected valid dateTime to use dateTime column, got %#v, error %v", mapped, err)
+func TestMapTemporalValuesPreservesLexicalForms(t *testing.T) {
+	for _, test := range []struct {
+		valueType types.DataTypeDefXSD
+		value     string
+	}{
+		{types.DataTypeDefXSDTime, "13:14:15.123456789+02:00"},
+		{types.DataTypeDefXSDDate, "2024-04-22+02:00"},
+		{types.DataTypeDefXSDDateTime, "2024-04-22T00:00:00"},
+		{types.DataTypeDefXSDDateTime, "2024-04-22T00:00:00.123456789Z"},
+	} {
+		t.Run(test.value, func(t *testing.T) {
+			mapped, err := MapValueByType(test.valueType, &test.value)
+			if err != nil || !mapped.Text.Valid || mapped.Text.String != test.value {
+				t.Fatalf("expected original value in text column, got %#v, error %v", mapped, err)
+			}
+			bounds, err := MapRangeValueByType(test.valueType, &test.value, nil)
+			if err != nil || !bounds.MinText.Valid || bounds.MinText.String != test.value || bounds.MaxText.Valid {
+				t.Fatalf("expected original min and missing max, got %#v, error %v", bounds, err)
+			}
+		})
 	}
 }
 

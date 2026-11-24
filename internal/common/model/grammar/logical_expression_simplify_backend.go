@@ -734,7 +734,7 @@ func convertEnumLiteralForField(field Value, lit Value) (Value, bool, bool) {
 func enumKindForResolvedColumn(column string) enumColumnKind {
 	col := strings.ToLower(strings.TrimSpace(column))
 	switch {
-	case strings.Contains(col, "value_type"):
+	case col == "value_type" || strings.HasSuffix(col, ".value_type"):
 		return enumColumnDataTypeDefXSD
 	case strings.HasSuffix(col, ".asset_kind"):
 		return enumColumnAssetKind

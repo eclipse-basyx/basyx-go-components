@@ -118,6 +118,15 @@
             "FRAGMENT": "$sme.NewTestCollection",
             "CONDITION":
                 { "$boolean": false }
+          },
+          {
+            "FRAGMENT": "$sme.TemporalGate",
+            "CONDITION": {
+              "$and": [
+                { "$eq": [{ "$field": "$sme.TemporalGate#valueType" }, { "$strVal": "xs:dateTime" }] },
+                { "$eq": [{ "$dateTimeCast": { "$field": "$sme.TemporalGate#value" } }, { "$dateTimeVal": "2024-01-01T08:00:00Z" }] }
+              ]
+            }
           }
         ]
       },

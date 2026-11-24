@@ -330,7 +330,7 @@ func buildPropertyPageValues(dialect goqu.DialectWrapper, elementIDs []int64) *g
 			goqu.Cast(element.Col("value_bool"), "text"),
 			temporalColumnAsText(element.Col("value_time")),
 			temporalColumnAsText(element.Col("value_date")),
-			temporalColumnAsText(element.Col("value_datetime")),
+			legacyDateTimeColumnAsText(element.Col("value_datetime")),
 		),
 		common.PostgreSQLTextLiteral("value_type"), element.Col("value_type"),
 		common.PostgreSQLTextLiteral("value_id"),
@@ -356,14 +356,14 @@ func buildRangePageValues(dialect goqu.DialectWrapper, elementIDs []int64) *goqu
 			goqu.Cast(source.Col("min_num"), "text"),
 			temporalColumnAsText(source.Col("min_time")),
 			temporalColumnAsText(source.Col("min_date")),
-			temporalColumnAsText(source.Col("min_datetime")),
+			legacyDateTimeColumnAsText(source.Col("min_datetime")),
 		),
 		common.PostgreSQLTextLiteral("max"), goqu.COALESCE(
 			source.Col("max_text"),
 			goqu.Cast(source.Col("max_num"), "text"),
 			temporalColumnAsText(source.Col("max_time")),
 			temporalColumnAsText(source.Col("max_date")),
-			temporalColumnAsText(source.Col("max_datetime")),
+			legacyDateTimeColumnAsText(source.Col("max_datetime")),
 		),
 	)
 	return buildSimpleSubmodelElementPageValues(dialect, "range_element", alias, elementIDs, value)

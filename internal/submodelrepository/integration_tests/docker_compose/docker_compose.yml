@@ -5,7 +5,7 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
-    command: ["postgres", "-c", "listen_addresses=*"]
+    command: ["postgres", "-c", "listen_addresses=*", "-c", "TimeZone=UTC"]
     ports:
       - "127.0.0.1:${BASYX_IT_DB_PORT:-6432}:5432"
     healthcheck:
@@ -207,6 +207,7 @@ services:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
       - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_TIMEZONE=Europe/Berlin
       - POSTGRES_MAXOPENCONNECTIONS=20
       - POSTGRES_MAXIDLECONNECTIONS=5
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
