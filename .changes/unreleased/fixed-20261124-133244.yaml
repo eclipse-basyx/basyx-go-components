@@ -1,0 +1,7 @@
+kind: fixed
+body: Preserve the submitted xs:time, xs:date, and xs:dateTime values for Submodel Element Properties and Range bounds, including offsets, omitted timezones, and fractional precision. Previously stored timestamps are returned in UTC.
+time: 2026-11-24T13:32:44.376208+01:00
+custom:
+    Impact: High
+    PullRequest: 917
+    SecurityImpact: ABAC string predicates now see the submitted temporal value for newly written or updated elements. Policies that match the old PostgreSQL-normalized representation need to use the submitted representation.

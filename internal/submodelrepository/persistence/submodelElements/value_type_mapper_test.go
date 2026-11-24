@@ -58,7 +58,6 @@ func TestMapValueByTypeKeepsBooleanTyped(t *testing.T) {
 	if mapped, err := MapValueByType(types.DataTypeDefXSDBoolean, &booleanValue); err != nil || !mapped.Boolean.Valid || mapped.Text.Valid {
 		t.Fatalf("expected valid boolean to use boolean column, got %#v, error %v", mapped, err)
 	}
-
 }
 
 func TestMapTemporalValuesPreservesLexicalForms(t *testing.T) {

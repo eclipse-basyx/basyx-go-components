@@ -28,7 +28,9 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -55,14 +57,17 @@ func TestTemporalValuesPreserveLexicalFormsAcrossDatabaseTimeZones(t *testing.T)
 		{IDShort: "Dates", ModelType: "Range", ValueType: "xs:date", Min: new("2024-01-01Z"), Max: new("2024-01-02")},
 		{IDShort: "DateTimes", ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T10:00:00Z"), Max: new("2024-01-02T10:00:00")},
 	}
-	for _, writer := range []struct{ name, url string }{
-		{"UTC", submodelRepositoryBaseURL},
-		{"Europe/Berlin", submodelRepositoryStrictBaseURL},
-	} {
-		t.Run(writer.name, func(t *testing.T) {
-			id := "urn:basyx:integration:temporal-values:" + writer.name
-			postTemporalSubmodel(t, writer.url, id, elements)
-			for _, reader := range []string{submodelRepositoryBaseURL, submodelRepositoryStrictBaseURL} {
+	primaryURL := submodelRepositoryBaseURL
+	secondaryURL := temporalSecondaryRepositoryURL()
+	readers := []string{primaryURL}
+	if secondaryURL != primaryURL {
+		readers = append(readers, secondaryURL)
+	}
+	for index, writer := range readers {
+		t.Run(writer, func(t *testing.T) {
+			id := fmt.Sprintf("urn:basyx:integration:temporal-values:%d", index)
+			postTemporalSubmodel(t, writer, id, elements)
+			for _, reader := range readers {
 				requireTemporalElements(t, temporalSubmodelEndpoint(reader, id), elements)
 			}
 		})
@@ -75,24 +80,24 @@ func TestTemporalValuesSurviveReplacementAndValueOnlyUpdates(t *testing.T) {
 		{IDShort: "Timestamp", ModelType: "Property", ValueType: "xs:dateTime", Value: new("2024-01-01T10:00:00.1234561Z")},
 		{IDShort: "Period", ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T10:00:00Z"), Max: new("2024-01-02T10:00:00")},
 	}
-	postTemporalSubmodel(t, submodelRepositoryStrictBaseURL, id, elements)
-	utcEndpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
-	berlinEndpoint := temporalSubmodelEndpoint(submodelRepositoryStrictBaseURL, id)
+	postTemporalSubmodel(t, temporalSecondaryRepositoryURL(), id, elements)
+	primaryEndpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
+	secondaryEndpoint := temporalSubmodelEndpoint(temporalSecondaryRepositoryURL(), id)
 
 	elements[0].Value = new("2024-01-01T12:00:00.1234562+02:00")
 	elements[1].Min = new("2024-01-01T12:00:00+02:00")
-	requireValueOnlyStatus(t, http.MethodPut, utcEndpoint, temporalSubmodel(id, elements), http.StatusNoContent)
-	requireTemporalElements(t, berlinEndpoint, elements)
+	requireValueOnlyStatus(t, http.MethodPut, primaryEndpoint, temporalSubmodel(id, elements), http.StatusNoContent)
+	requireTemporalElements(t, secondaryEndpoint, elements)
 
 	elements[0].Value = new("2024-01-01T10:00:00.123456789")
-	requireValueOnlyStatus(t, http.MethodPatch, berlinEndpoint+"/submodel-elements/Timestamp/$value", elements[0].Value, http.StatusNoContent)
+	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/submodel-elements/Timestamp/$value", elements[0].Value, http.StatusNoContent)
 	elements[1].Max = new("2024-01-02T10:00:00.987654321Z")
-	requireValueOnlyStatus(t, http.MethodPatch, berlinEndpoint+"/submodel-elements/Period/$value", map[string]any{"max": elements[1].Max}, http.StatusNoContent)
-	requireTemporalElements(t, utcEndpoint, elements)
+	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/submodel-elements/Period/$value", map[string]any{"max": elements[1].Max}, http.StatusNoContent)
+	requireTemporalElements(t, primaryEndpoint, elements)
 
 	elements[1].Min = new("2024-01-01T09:00:00-01:00")
-	requireValueOnlyStatus(t, http.MethodPut, utcEndpoint+"/submodel-elements/Period", elements[1], http.StatusNoContent)
-	requireTemporalElements(t, berlinEndpoint, elements)
+	requireValueOnlyStatus(t, http.MethodPut, primaryEndpoint+"/submodel-elements/Period", elements[1], http.StatusNoContent)
+	requireTemporalElements(t, secondaryEndpoint, elements)
 }
 
 func TestLegacyTemporalRowsRemainReadableAndCanBeUpdated(t *testing.T) {
@@ -109,26 +114,33 @@ func TestLegacyTemporalRowsRemainReadableAndCanBeUpdated(t *testing.T) {
 		"min_text": nil, "min_datetime": "2024-01-01T10:00:00+02:00",
 		"max_text": nil, "max_datetime": "2024-01-02T10:00:00+02:00",
 	})
-	utcEndpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
-	berlinEndpoint := temporalSubmodelEndpoint(submodelRepositoryStrictBaseURL, id)
-	requireTemporalElements(t, utcEndpoint, elements)
-	requireTemporalElements(t, berlinEndpoint, elements)
+	primaryEndpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
+	secondaryEndpoint := temporalSubmodelEndpoint(temporalSecondaryRepositoryURL(), id)
+	requireTemporalElements(t, primaryEndpoint, elements)
+	requireTemporalElements(t, secondaryEndpoint, elements)
 
 	elements[0].Value = new("2024-01-01T10:00:00+02:00")
-	requireValueOnlyStatus(t, http.MethodPut, berlinEndpoint+"/submodel-elements/Timestamp", elements[0], http.StatusNoContent)
+	requireValueOnlyStatus(t, http.MethodPut, secondaryEndpoint+"/submodel-elements/Timestamp", elements[0], http.StatusNoContent)
 	elements[1].Min = new("2024-01-01T10:00:00")
-	requireValueOnlyStatus(t, http.MethodPatch, berlinEndpoint+"/submodel-elements/Period/$value", map[string]any{"min": elements[1].Min}, http.StatusNoContent)
-	requireTemporalElements(t, utcEndpoint, elements)
+	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/submodel-elements/Period/$value", map[string]any{"min": elements[1].Min}, http.StatusNoContent)
+	requireTemporalElements(t, primaryEndpoint, elements)
 
-	requireValueOnlyStatus(t, http.MethodPatch, berlinEndpoint+"/$value", json.RawMessage(`{"Timestamp":null,"Period":{"min":null,"max":null}}`), http.StatusNoContent)
+	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/$value", json.RawMessage(`{"Timestamp":null,"Period":{"min":null,"max":null}}`), http.StatusNoContent)
 	for _, path := range []string{"Timestamp", "Period"} {
-		body := requireValueOnlyStatus(t, http.MethodGet, utcEndpoint+"/submodel-elements/"+path, nil, http.StatusOK)
+		body := requireValueOnlyStatus(t, http.MethodGet, primaryEndpoint+"/submodel-elements/"+path, nil, http.StatusOK)
 		var element temporalElement
 		require.NoError(t, json.Unmarshal(body, &element))
 		require.Nil(t, element.Value)
 		require.Nil(t, element.Min)
 		require.Nil(t, element.Max)
 	}
+}
+
+func temporalSecondaryRepositoryURL() string {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" && os.Getenv("BASYX_IT_STRICT_API_PORT") == "" {
+		return submodelRepositoryBaseURL
+	}
+	return submodelRepositoryStrictBaseURL
 }
 
 func postTemporalSubmodel(t *testing.T, baseURL, id string, elements []temporalElement) {
