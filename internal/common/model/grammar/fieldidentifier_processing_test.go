@@ -460,7 +460,7 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		Name:       "sql_scalar_sme_value",
 		Kind:       "scalar",
 		Input:      `$sme#value`,
-		WantScalar: &expectedScalar{Column: "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, property_element.value_time::text, property_element.value_date::text, property_element.value_datetime::text, multilanguage_property_value.text)", Bindings: []expectedBinding{}},
+		WantScalar: &expectedScalar{Column: propertyValueColumn, Bindings: []expectedBinding{}},
 	},
 	{
 		Name:         "sql_fragment_sme_semanticId_keys_indexed",
@@ -484,19 +484,19 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		Name:       "sme_value_scalar_nested_list_wildcards",
 		Kind:       "scalar",
 		Input:      `$sme.a[].b[]#value`,
-		WantScalar: &expectedScalar{Column: "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, property_element.value_time::text, property_element.value_date::text, property_element.value_datetime::text, multilanguage_property_value.text)", Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("a[].b[]")}}},
+		WantScalar: &expectedScalar{Column: propertyValueColumn, Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("a[].b[]")}}},
 	},
 	{
 		Name:       "sme_value_scalar_nested_list_indices",
 		Kind:       "scalar",
 		Input:      `$sme.a[1].b[2]#value`,
-		WantScalar: &expectedScalar{Column: "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, property_element.value_time::text, property_element.value_date::text, property_element.value_datetime::text, multilanguage_property_value.text)", Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("a[1].b[2]")}}},
+		WantScalar: &expectedScalar{Column: propertyValueColumn, Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("a[1].b[2]")}}},
 	},
 	{
 		Name:       "sme_value_scalar_terminal_list_index",
 		Kind:       "scalar",
 		Input:      `$sme.NewTestList[0]#value`,
-		WantScalar: &expectedScalar{Column: "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, property_element.value_time::text, property_element.value_date::text, property_element.value_datetime::text, multilanguage_property_value.text)", Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("NewTestList[0]")}}},
+		WantScalar: &expectedScalar{Column: propertyValueColumn, Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("NewTestList[0]")}}},
 	},
 	{
 		Name:       "sme_valueType_scalar_terminal_list_wildcard",

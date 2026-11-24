@@ -184,9 +184,6 @@ func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element ty
 }
 
 func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) (goqu.Record, error) {
-	if isPut && (rangeElem.Min() == nil || rangeElem.Max() == nil) {
-		panic("Both 'Min' and 'Max' values must be provided for Range element in PUT operation")
-	}
 	valueType := rangeElem.ValueType()
 	value, err := MapRangeValueByType(valueType, rangeElem.Min(), rangeElem.Max())
 	if err != nil {

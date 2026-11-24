@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
@@ -43,6 +44,8 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 		"submodelElements": [
 			{"idShort": "TemporalGate", "modelType": "Property", "valueType": "xs:dateTime", "value": "2024-01-01T10:00:00+02:00"},
 			{"idShort": "Local", "modelType": "Property", "valueType": "xs:dateTime", "value": "2024-01-01T08:00:00"},
+			{"idShort": "LocalGate", "modelType": "Property", "valueType": "xs:dateTime", "value": "2024-01-01T08:00:00"},
+			{"idShort": "LegacyGate", "modelType": "Property", "valueType": "xs:dateTime", "value": "2024-01-01T08:00:00+00:00"},
 			{"idShort": "Date", "modelType": "Property", "valueType": "xs:date", "value": "2024-01-01Z"},
 			{"idShort": "Time", "modelType": "Property", "valueType": "xs:time", "value": "10:00:00+02:00"}
 		]
@@ -54,6 +57,8 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 	t.Cleanup(func() {
 		require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodDelete, endpoint, nil, admin).Status)
 	})
+	testenv.OverwriteSubmodelElementRow(t, queryRepositoryDSN, id, "LegacyGate", "property_element",
+		goqu.Record{"value_text": nil, "value_datetime": "2024-01-01T10:00:00+02:00"})
 
 	for _, test := range []struct {
 		name, field, operand string
@@ -69,6 +74,9 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 		{"dateTimeInstant", "$sme.TemporalGate#value", `{"$dateTimeVal":"2024-01-01T08:00:00Z"}`, true},
 		{"differentInstant", "$sme.TemporalGate#value", `{"$dateTimeVal":"2024-01-01T10:00:00Z"}`, false},
 		{"localDateTimeLexicalValue", "$sme.Local#value", `{"$strVal":"2024-01-01T08:00:00"}`, true},
+		{"localDateTimeIsUTC", "$sme.Local#value", `{"$dateTimeVal":"2024-01-01T08:00:00Z"}`, true},
+		{"legacyDateTimeText", "$sme.LegacyGate#value", `{"$strVal":"2024-01-01T08:00:00+00:00"}`, true},
+		{"legacyDateTimeInstant", "$sme.LegacyGate#value", `{"$dateTimeVal":"2024-01-01T08:00:00Z"}`, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			condition := map[string]any{"$and": []any{
@@ -93,7 +101,7 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 	t.Run("access rule compares the instant", func(t *testing.T) {
 		editor := temporalQueryHeaders(t, provider, "userx")
 		elementIDs := readTemporalQueryElementIDs(t, endpoint, editor)
-		require.Contains(t, elementIDs, "TemporalGate")
+		require.Subset(t, elementIDs, []string{"TemporalGate", "LocalGate", "LegacyGate"})
 		response := testenv.DoHTTP(t, http.MethodPut, endpoint+"/submodel-elements/TemporalGate",
 			[]byte(`{"idShort":"TemporalGate","modelType":"Property","valueType":"xs:dateTime","value":"2024-01-01T10:00:00Z"}`), admin)
 		require.Equal(t, http.StatusNoContent, response.Status, "%s", response.Body)

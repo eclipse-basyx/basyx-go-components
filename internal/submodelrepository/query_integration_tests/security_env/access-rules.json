@@ -127,6 +127,18 @@
                 { "$eq": [{ "$dateTimeCast": { "$field": "$sme.TemporalGate#value" } }, { "$dateTimeVal": "2024-01-01T08:00:00Z" }] }
               ]
             }
+          },
+          {
+            "FRAGMENT": "$sme.LocalGate",
+            "CONDITION": {
+              "$eq": [{ "$dateTimeCast": { "$field": "$sme.LocalGate#value" } }, { "$dateTimeVal": "2024-01-01T08:00:00Z" }]
+            }
+          },
+          {
+            "FRAGMENT": "$sme.LegacyGate",
+            "CONDITION": {
+              "$eq": [{ "$field": "$sme.LegacyGate#value" }, { "$strVal": "2024-01-01T08:00:00+00:00" }]
+            }
           }
         ]
       },

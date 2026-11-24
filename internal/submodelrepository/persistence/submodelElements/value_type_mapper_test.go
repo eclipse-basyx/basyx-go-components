@@ -26,9 +26,12 @@
 package submodelelements
 
 import (
+	"database/sql"
+	"strconv"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
 )
 
 func TestMapValueByTypeRejectsInvalidDatabaseTypedValues(t *testing.T) {
@@ -98,5 +101,100 @@ func TestMapRangeValueByTypeRejectsInvalidTemporalBounds(t *testing.T) {
 				t.Fatal("expected invalid range bound to be rejected")
 			}
 		})
+	}
+}
+
+func TestMapTemporalValuesAcceptsXSDEdgeLexicalForms(t *testing.T) {
+	for _, test := range []struct {
+		valueType types.DataTypeDefXSD
+		value     string
+	}{
+		{types.DataTypeDefXSDTime, "24:00:00"},
+		{types.DataTypeDefXSDDate, "-0001-01-01"},
+		{types.DataTypeDefXSDDateTime, "-0001-01-01T00:00:00Z"},
+		{types.DataTypeDefXSDDateTime, "2024-01-01T08:00:00.1234567891-14:00"},
+	} {
+		t.Run(test.value, func(t *testing.T) {
+			mapped, err := MapValueByType(test.valueType, &test.value)
+			if err != nil || mapped.Text.String != test.value {
+				t.Fatalf("expected XSD-valid value to be stored verbatim, got %#v, error %v", mapped, err)
+			}
+		})
+	}
+}
+
+func TestTemporalRecordsClearLegacyTypedColumns(t *testing.T) {
+	value := "2024-01-01T10:00:00+02:00"
+	property := types.NewProperty(types.DataTypeDefXSDDateTime)
+	property.SetValue(&value)
+	rangeElement := types.NewRange(types.DataTypeDefXSDDateTime)
+	rangeElement.SetMin(&value)
+	rangeElement.SetMax(&value)
+
+	propertyInsert, err := PostgreSQLPropertyHandler{}.GetInsertQueryPart(nil, 1, property)
+	requireNoTestError(t, err)
+	rangeInsert, err := PostgreSQLRangeHandler{}.GetInsertQueryPart(nil, 1, rangeElement)
+	requireNoTestError(t, err)
+	records := map[string]goqu.Record{
+		"property insert": propertyInsert.Record,
+		"range insert":    rangeInsert.Record,
+	}
+	for _, isPut := range []bool{true, false} {
+		propertyUpdate, updateErr := buildUpdatePropertyRecordObject(property, isPut, nil)
+		requireNoTestError(t, updateErr)
+		rangeUpdate, updateErr := buildUpdateRangeRecordObject(rangeElement, isPut)
+		requireNoTestError(t, updateErr)
+		records["property update put="+strconv.FormatBool(isPut)] = propertyUpdate
+		records["range update put="+strconv.FormatBool(isPut)] = rangeUpdate
+	}
+
+	for name, record := range records {
+		t.Run(name, func(t *testing.T) {
+			for _, prefix := range temporalRecordPrefixes(record) {
+				requireTemporalBoundStoredAsText(t, record, prefix, value)
+			}
+		})
+	}
+}
+
+func TestRangePutWithSingleBoundClearsMissingBound(t *testing.T) {
+	minValue := "2024-01-01T10:00:00Z"
+	rangeElement := types.NewRange(types.DataTypeDefXSDDateTime)
+	rangeElement.SetMin(&minValue)
+
+	record, err := buildUpdateRangeRecordObject(rangeElement, true)
+	requireNoTestError(t, err)
+	requireTemporalBoundStoredAsText(t, record, "min", minValue)
+	for _, column := range []string{"max_text", "max_num"} {
+		if stored, ok := record[column].(sql.NullString); !ok || stored.Valid {
+			t.Fatalf("expected %s to be cleared, got %#v", column, record[column])
+		}
+	}
+}
+
+func temporalRecordPrefixes(record goqu.Record) []string {
+	if _, ok := record["value_text"]; ok {
+		return []string{"value"}
+	}
+	return []string{"min", "max"}
+}
+
+func requireTemporalBoundStoredAsText(t *testing.T, record goqu.Record, prefix, value string) {
+	t.Helper()
+	if stored, ok := record[prefix+"_text"].(sql.NullString); !ok || !stored.Valid || stored.String != value {
+		t.Fatalf("expected %s_text to hold %q, got %#v", prefix, value, record[prefix+"_text"])
+	}
+	for _, suffix := range []string{"_time", "_date", "_datetime"} {
+		column, ok := record[prefix+suffix]
+		if !ok || column != nil {
+			t.Fatalf("expected %s%s to be cleared, got %#v (present %t)", prefix, suffix, column, ok)
+		}
+	}
+}
+
+func requireNoTestError(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
 	}
 }

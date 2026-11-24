@@ -1,0 +1,7 @@
+kind: fixed
+body: Replacing a Range Submodel Element with PUT and only one of min or max no longer aborts the connection; the omitted bound is cleared.
+time: 2026-11-24T16:01:00.000000+01:00
+custom:
+    Impact: Low
+    PullRequest: 917
+    SecurityImpact: None.

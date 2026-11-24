@@ -28,8 +28,11 @@ package grammar
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
 
@@ -50,15 +53,22 @@ type terminalColumnMapping struct {
 	ByArrayParentSimple map[string]map[string]map[resolveContext]string
 }
 
-var propertyValueTypeColumn = fmt.Sprintf(
-	"(CASE WHEN property_element.id IS NULL THEN NULL "+
-		"WHEN property_element.value_bool IS NOT NULL THEN 'xs:boolean' "+
-		"WHEN property_element.value_type = %d THEN 'xs:time' "+
-		"WHEN property_element.value_type = %d THEN 'xs:date' "+
-		"WHEN property_element.value_type = %d THEN 'xs:dateTime' "+
-		"WHEN property_element.value_num IS NOT NULL THEN 'xs:double' ELSE 'xs:string' END)",
-	types.DataTypeDefXSDTime, types.DataTypeDefXSDDate, types.DataTypeDefXSDDateTime,
+var propertyValueTypeColumn = buildPropertyValueTypeColumn()
+
+var propertyValueColumn = fmt.Sprintf(
+	"COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, %s, %s, %s, multilanguage_property_value.text)",
+	common.PostgreSQLTemporalColumnTextSQL("property_element.value_time"),
+	common.PostgreSQLTemporalColumnTextSQL("property_element.value_date"),
+	common.PostgreSQLLegacyDateTimeColumnTextSQL("property_element.value_datetime"),
 )
+
+func buildPropertyValueTypeColumn() string {
+	branches := make([]string, 0, len(types.LiteralsOfDataTypeDefXSD))
+	for _, valueType := range types.LiteralsOfDataTypeDefXSD {
+		branches = append(branches, fmt.Sprintf("WHEN %d THEN '%s'", valueType, stringification.MustDataTypeDefXSDToString(valueType)))
+	}
+	return "(CASE property_element.value_type " + strings.Join(branches, " ") + " END)"
+}
 
 // terminalColumnMappings defines how terminal path segments map to SQL column expressions.
 //
@@ -128,7 +138,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 	"value": {
 		ByContext: map[resolveContext]string{
 			ctxSpecificAssetID: "specific_asset_id.value",
-			ctxSME:             "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, property_element.value_time::text, property_element.value_date::text, property_element.value_datetime::text, multilanguage_property_value.text)",
+			ctxSME:             propertyValueColumn,
 		},
 		ByParentSimple: map[string]map[resolveContext]string{
 			// submodelDescriptor semanticId mapping (used by $aasdesc#submodelDescriptors[].semanticId.* and $smdesc#semanticId.*).

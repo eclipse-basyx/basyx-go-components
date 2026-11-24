@@ -184,3 +184,29 @@ func TestLogicalExpression_SimplifyForBackendFilter_CreatedAfterUsesPostgresInpu
 		t.Fatalf("expected PostgreSQL timestamp input validation, got SQL %s with args %#v", sql, args)
 	}
 }
+
+func TestLogicalExpression_SimplifyForBackendFilter_DatePartOfFieldReachesSQL(t *testing.T) {
+	day := float64(1)
+	expression := LogicalExpression{Eq: ComparisonItems{
+		{DayOfMonth: &Value{DateTimeCast: fieldValue("$sme.Timestamp#value")}},
+		{NumVal: &day},
+	}}
+	simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+	if decision != SimplifyUndecided || len(simplified.Eq) != 2 || simplified.Eq[0].DayOfMonth == nil {
+		t.Fatalf("expected the date part of a field to stay unresolved, got %#v (%v)", simplified, decision)
+	}
+	sql, _ := buildSMESQL(t, simplified)
+	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', ") {
+		t.Fatalf("expected the date part to be extracted in SQL, got: %s", sql)
+	}
+}
+
+func TestLogicalExpression_SimplifyForBackendFilter_DatePartOfLiteralIsEvaluated(t *testing.T) {
+	day := float64(2)
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 2, 23, 30, 0, 0, time.UTC))
+	expression := LogicalExpression{Eq: ComparisonItems{{DayOfMonth: &Value{DateTimeVal: &instant}}, {NumVal: &day}}}
+	simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+	if decision != SimplifyTrue || simplified.Boolean == nil || !*simplified.Boolean {
+		t.Fatalf("expected the date part of a literal to be evaluated, got %#v (%v)", simplified, decision)
+	}
+}

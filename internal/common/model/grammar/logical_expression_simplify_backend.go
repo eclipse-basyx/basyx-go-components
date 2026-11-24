@@ -860,7 +860,7 @@ func valueChildren(v Value) []*Value {
 }
 
 func isLiteral(v Value) bool {
-	return v.IsValue() && !v.IsField() && v.Attribute == nil
+	return v.IsValue() && !valueContainsField(v) && v.Attribute == nil
 }
 
 func literalValueFromAny(x any) (Value, bool) {

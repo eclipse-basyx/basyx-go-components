@@ -42,8 +42,11 @@ import (
 // Each field corresponds to a different column type in the database schema,
 // allowing for type-appropriate storage and retrieval of AAS values.
 type TypedValue struct {
-	Text    sql.NullString
+	// Text holds string-like, temporal, and non-numeric lexical values verbatim.
+	Text sql.NullString
+	// Numeric holds values of numeric XSD types that PostgreSQL can store as numeric.
 	Numeric sql.NullString
+	// Boolean holds xs:boolean values.
 	Boolean sql.NullString
 }
 
@@ -137,9 +140,13 @@ func validateStoredLexical(valueType types.DataTypeDefXSD, value string) error {
 
 // TypedRangeValue represents the values stored for the two bounds of a Range.
 type TypedRangeValue struct {
-	MinText    sql.NullString
-	MaxText    sql.NullString
+	// MinText holds the lower bound verbatim when it is not stored as numeric.
+	MinText sql.NullString
+	// MaxText holds the upper bound verbatim when it is not stored as numeric.
+	MaxText sql.NullString
+	// MinNumeric holds the lower bound of a numeric Range.
 	MinNumeric sql.NullString
+	// MaxNumeric holds the upper bound of a numeric Range.
 	MaxNumeric sql.NullString
 }
 

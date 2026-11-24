@@ -33,12 +33,12 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-func temporalColumnAsText(column exp.Expression) exp.LiteralExpression {
-	return goqu.L(`trim(both '"' from to_json(?)::text)`, column)
+func temporalColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression {
+	return goqu.L(common.PostgreSQLTemporalColumnTextSQL("?"), column)
 }
 
 func legacyDateTimeColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression {
-	return goqu.L("? || '+00:00'", temporalColumnAsText(goqu.Func("timezone", "UTC", column)))
+	return goqu.L(common.PostgreSQLLegacyDateTimeColumnTextSQL("?"), column)
 }
 
 func operationValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue bool) exp.Expression {

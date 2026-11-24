@@ -26,7 +26,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -35,6 +34,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,12 +57,7 @@ func TestTemporalValuesPreserveLexicalFormsAcrossDatabaseTimeZones(t *testing.T)
 		{IDShort: "Dates", ModelType: "Range", ValueType: "xs:date", Min: new("2024-01-01Z"), Max: new("2024-01-02")},
 		{IDShort: "DateTimes", ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T10:00:00Z"), Max: new("2024-01-02T10:00:00")},
 	}
-	primaryURL := submodelRepositoryBaseURL
-	secondaryURL := temporalSecondaryRepositoryURL()
-	readers := []string{primaryURL}
-	if secondaryURL != primaryURL {
-		readers = append(readers, secondaryURL)
-	}
+	readers := requireTemporalRepositoriesInBothTimeZones(t)
 	for index, writer := range readers {
 		t.Run(writer, func(t *testing.T) {
 			id := fmt.Sprintf("urn:basyx:integration:temporal-values:%d", index)
@@ -126,14 +121,17 @@ func TestLegacyTemporalRowsRemainReadableAndCanBeUpdated(t *testing.T) {
 	requireTemporalElements(t, primaryEndpoint, elements)
 
 	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/$value", json.RawMessage(`{"Timestamp":null,"Period":{"min":null,"max":null}}`), http.StatusNoContent)
-	for _, path := range []string{"Timestamp", "Period"} {
-		body := requireValueOnlyStatus(t, http.MethodGet, primaryEndpoint+"/submodel-elements/"+path, nil, http.StatusOK)
-		var element temporalElement
-		require.NoError(t, json.Unmarshal(body, &element))
-		require.Nil(t, element.Value)
-		require.Nil(t, element.Min)
-		require.Nil(t, element.Max)
+	elements[0].Value, elements[1].Min, elements[1].Max = nil, nil, nil
+	requireTemporalElements(t, primaryEndpoint, elements)
+}
+
+func requireTemporalRepositoriesInBothTimeZones(t *testing.T) []string {
+	t.Helper()
+	secondaryURL := temporalSecondaryRepositoryURL()
+	if secondaryURL == submodelRepositoryBaseURL {
+		t.Skip("BASYX_IT_STRICT_API_PORT is not set; the Europe/Berlin repository instance is unavailable")
 	}
+	return []string{submodelRepositoryBaseURL, secondaryURL}
 }
 
 func temporalSecondaryRepositoryURL() string {
@@ -170,32 +168,28 @@ func requireTemporalElements(t *testing.T, endpoint string, expected []temporalE
 	require.ElementsMatch(t, expected, page.Result)
 
 	for _, element := range expected {
-		value := any(element.Value)
-		if element.ModelType == "Range" {
-			value = map[string]any{"min": element.Min, "max": element.Max}
-		}
-		want, err := json.Marshal(value)
+		want, err := json.Marshal(temporalValueOnly(element))
 		require.NoError(t, err)
 		body := requireValueOnlyStatus(t, http.MethodGet, endpoint+"/submodel-elements/"+element.IDShort+"/$value", nil, http.StatusOK)
 		require.JSONEq(t, string(want), string(body), "%s", element.IDShort)
 	}
 }
 
+func temporalValueOnly(element temporalElement) any {
+	if element.ModelType != "Range" {
+		return element.Value
+	}
+	bounds := map[string]*string{}
+	if element.Min != nil {
+		bounds["min"] = element.Min
+	}
+	if element.Max != nil {
+		bounds["max"] = element.Max
+	}
+	return bounds
+}
+
 func seedLegacyTemporalRow(t *testing.T, submodelID, idShort, table string, record goqu.Record) {
 	t.Helper()
-	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
-	require.NoError(t, err)
-	defer func() { require.NoError(t, db.Close()) }()
-
-	dialect := goqu.Dialect(common.Dialect)
-	elementID := dialect.From("submodel_element").Select(goqu.I("submodel_element.id")).
-		Join(goqu.T("submodel"), goqu.On(goqu.I("submodel.id").Eq(goqu.I("submodel_element.submodel_id")))).
-		Where(goqu.I("submodel.submodel_identifier").Eq(submodelID), goqu.I("submodel_element.id_short").Eq(idShort))
-	query, args, err := dialect.Update(table).Set(record).Where(goqu.C("id").Eq(elementID)).ToSQL()
-	require.NoError(t, err)
-	result, err := db.ExecContext(t.Context(), query, args...)
-	require.NoError(t, err)
-	updated, err := result.RowsAffected()
-	require.NoError(t, err)
-	require.EqualValues(t, 1, updated)
+	testenv.OverwriteSubmodelElementRow(t, submodelRepositoryIntegrationTestDSN, submodelID, idShort, table, record)
 }

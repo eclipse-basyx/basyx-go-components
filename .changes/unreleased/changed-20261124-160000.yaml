@@ -1,0 +1,7 @@
+kind: changed
+body: AASQL and ABAC evaluate temporal values independently of the PostgreSQL session TimeZone. xs:date and xs:dateTime values without a timezone are interpreted as UTC, and $sme#valueType returns the declared valueType of every Property, for example xs:int instead of xs:double and xs:boolean for a Property without a value. XSD-valid values that PostgreSQL cannot represent, such as negative years, are stored and returned unchanged but never match temporal comparisons. During a rolling upgrade, older instances report xs:string as the valueType of temporal Properties written by this version, so do not run mixed versions behind ABAC rules that check valueType.
+time: 2026-11-24T16:00:00.000000+01:00
+custom:
+    Impact: Medium
+    PullRequest: 917
+    SecurityImpact: Access rules now give the same decision on every instance regardless of the configured postgres.timezone. Rules that compare zone-less temporal values or check $sme#valueType against the previously inferred xs:double or xs:string types can match a different set of elements and should be reviewed.
