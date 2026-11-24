@@ -120,6 +120,10 @@ func TestLegacyTemporalRowsRemainReadableAndCanBeUpdated(t *testing.T) {
 	elements[1].Min = new("2024-01-01T10:00:00")
 	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/submodel-elements/Period/$value", map[string]any{"min": elements[1].Min}, http.StatusNoContent)
 	requireTemporalElements(t, primaryEndpoint, elements)
+	requireStoredTemporalColumns(t, id, "Timestamp", "property_element", map[string]any{"value_text": *elements[0].Value, "value_datetime": nil})
+	requireStoredTemporalColumns(t, id, "Period", "range_element", map[string]any{"min_text": *elements[1].Min, "min_datetime": nil, "max_text": nil})
+	untouchedBound := testenv.ReadSubmodelElementRow(t, submodelRepositoryIntegrationTestDSN, id, "Period", "range_element", "max_datetime")
+	require.NotNil(t, untouchedBound["max_datetime"], "a value-only update of the minimum must keep the legacy maximum")
 
 	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/$value", json.RawMessage(`{"Timestamp":null,"Period":{"min":null,"max":null}}`), http.StatusNoContent)
 	elements[0].Value, elements[1].Min, elements[1].Max = nil, nil, nil
@@ -188,6 +192,16 @@ func temporalValueOnly(element temporalElement) any {
 		bounds["max"] = element.Max
 	}
 	return bounds
+}
+
+func requireStoredTemporalColumns(t *testing.T, submodelID, idShort, table string, want map[string]any) {
+	t.Helper()
+	columns := make([]string, 0, len(want))
+	for column := range want {
+		columns = append(columns, column)
+	}
+	stored := testenv.ReadSubmodelElementRow(t, submodelRepositoryIntegrationTestDSN, submodelID, idShort, table, columns...)
+	require.Equal(t, want, stored)
 }
 
 func seedLegacyTemporalRow(t *testing.T, submodelID, idShort, table string, record goqu.Record) {

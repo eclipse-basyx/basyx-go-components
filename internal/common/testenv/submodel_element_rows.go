@@ -55,15 +55,65 @@ func OverwriteSubmodelElementRow(t *testing.T, dsn, submodelID, idShortPath, tab
 	require.NoError(t, err)
 	defer func() { require.NoError(t, db.Close()) }()
 
-	dialect := goqu.Dialect(common.Dialect)
-	elementID := dialect.From("submodel_element").Select(goqu.I("submodel_element.id")).
-		Join(goqu.T("submodel"), goqu.On(goqu.I("submodel.id").Eq(goqu.I("submodel_element.submodel_id")))).
-		Where(goqu.I("submodel.submodel_identifier").Eq(submodelID), goqu.I("submodel_element.idshort_path").Eq(idShortPath))
-	query, args, err := dialect.Update(table).Set(record).Where(goqu.C("id").Eq(elementID)).ToSQL()
+	query, args, err := goqu.Dialect(common.Dialect).Update(table).Set(record).
+		Where(goqu.C("id").Eq(submodelElementIDQuery(submodelID, idShortPath))).ToSQL()
 	require.NoError(t, err)
 	result, err := db.ExecContext(t.Context(), query, args...)
 	require.NoError(t, err)
 	updated, err := result.RowsAffected()
 	require.NoError(t, err)
 	require.EqualValues(t, 1, updated)
+}
+
+// ReadSubmodelElementRow reads columns of the type-specific row of one submodel element.
+// Integration tests use it to check what was stored beyond the API representation.
+//
+// Parameters:
+//   - t: test whose context bounds the query
+//   - dsn: PostgreSQL connection URL of the repository database
+//   - submodelID: identifier of the submodel that contains the element
+//   - idShortPath: idShort path of the element within the submodel
+//   - table: type-specific table, for example "property_element"
+//   - columns: columns to read
+//
+// Returns:
+//   - map[string]any: column values keyed by column name, with nil for SQL NULL
+//
+// Example:
+//
+//	row := testenv.ReadSubmodelElementRow(t, dsn, "urn:example", "Timestamp", "property_element", "value_datetime")
+func ReadSubmodelElementRow(t *testing.T, dsn, submodelID, idShortPath, table string, columns ...string) map[string]any {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, db.Close()) }()
+
+	selection := make([]any, 0, len(columns))
+	for _, column := range columns {
+		selection = append(selection, goqu.L("?::text", goqu.C(column)).As(column))
+	}
+	query, args, err := goqu.Dialect(common.Dialect).From(table).Select(selection...).
+		Where(goqu.C("id").Eq(submodelElementIDQuery(submodelID, idShortPath))).ToSQL()
+	require.NoError(t, err)
+	values := make([]sql.NullString, len(columns))
+	targets := make([]any, len(columns))
+	for index := range values {
+		targets[index] = &values[index]
+	}
+	require.NoError(t, db.QueryRowContext(t.Context(), query, args...).Scan(targets...))
+
+	row := make(map[string]any, len(columns))
+	for index, column := range columns {
+		row[column] = nil
+		if values[index].Valid {
+			row[column] = values[index].String
+		}
+	}
+	return row
+}
+
+func submodelElementIDQuery(submodelID, idShortPath string) *goqu.SelectDataset {
+	return goqu.Dialect(common.Dialect).From("submodel_element").Select(goqu.I("submodel_element.id")).
+		Join(goqu.T("submodel"), goqu.On(goqu.I("submodel.id").Eq(goqu.I("submodel_element.submodel_id")))).
+		Where(goqu.I("submodel.submodel_identifier").Eq(submodelID), goqu.I("submodel_element.idshort_path").Eq(idShortPath))
 }

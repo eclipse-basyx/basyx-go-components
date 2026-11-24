@@ -42,14 +42,24 @@ expression decoding. Query limits include all response filters together. Split
 larger requests or policies into smaller expressions when upgrading; query
 requests exceeding these limits return HTTP 400.
 
-Run the configuration service to install database schema `v1.2.4` before
-starting the updated services. Temporal comparisons use `basyx_parse_datetime`
-to interpret zone-less timestamps in UTC. Converting a date-time to a time
-extracts the UTC clock time. Direct time casts of `LOCALNOW` and `CLIENTNOW`
-retain the clock time supplied by the attribute. Calendar-part extraction discards fractional
-digits beyond PostgreSQL's microsecond precision before conversion, so rounding
-cannot move an instant into the following day. Each cast references its operand
-once to keep the generated SQL size linear in nesting depth.
+Updated services require database schema `v1.1.19`. Run the configuration service
+to install `basyx_validated_cast_input` before starting the updated services.
+The helper validates each textual cast input once; nested casts generate SQL
+whose size grows linearly with nesting depth. Its PostgreSQL function-call cost
+still needs representative workload measurement.
+
+Temporal casts do not depend on the PostgreSQL session TimeZone. The generated
+SQL normalizes the text with `regexp_replace` before `basyx_validated_cast_input`:
+dates and date-times without a timezone get an explicit `Z`, dates get an
+explicit midnight so negative offsets are not misread, fractional digits beyond
+microseconds are truncated, and anything other than an ISO 8601 date or
+date-time yields NULL. Each cast still references its operand once. Converting a
+date-time to a time and extracting calendar parts both use UTC; direct time casts
+of `LOCALNOW` and `CLIENTNOW` retain the clock time supplied by the attribute.
+Keep these patterns free of nested optional groups, which PostgreSQL evaluates
+an order of magnitude slower. Constant folding in Go accepts only temporal input
+whose PostgreSQL result it reproduces exactly and leaves everything else to the
+database.
 
 ## Quick mental model (no background required)
 

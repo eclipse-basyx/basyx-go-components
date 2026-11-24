@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 )
@@ -71,11 +72,7 @@ func TestFallibleCastsUsePostgreSQLTotalInputValidation(t *testing.T) {
 			}
 
 			sql := renderLogicalExpressionSQL(t, expression)
-			validator := "basyx_validated_cast_input"
-			if test.name == "date time" {
-				validator = "basyx_parse_datetime"
-			}
-			if !strings.Contains(sql, validator) {
+			if !strings.Contains(sql, "basyx_validated_cast_input") {
 				t.Fatalf("fallible %s cast is not total:\n%s", test.name, sql)
 			}
 		})
@@ -89,7 +86,7 @@ func TestNestedDateTimeCastsRenderEachOperandOnce(t *testing.T) {
 	outer := Value{DateTimeCast: &Value{StrCast: &inner}}
 	instant := DateTimeLiteralPattern{}
 	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{outer, {DateTimeVal: &instant}}})
-	if strings.Count(sql, "basyx_parse_datetime(") != 2 || strings.Count(sql, `"aas"."id_short"`) != 1 {
+	if strings.Count(sql, "basyx_validated_cast_input(") != 2 || strings.Count(sql, `"aas"."id_short"`) != 1 {
 		t.Fatalf("expected one call per temporal cast and one field reference:\n%s", sql)
 	}
 }
@@ -102,7 +99,7 @@ func TestDatePartExtractsInUTC(t *testing.T) {
 		{DayOfMonth: fieldValue("$aas#idShort")},
 		{NumVal: &one},
 	}})
-	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', basyx_parse_datetime(") {
+	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', basyx_validated_cast_input(substring(") {
 		t.Fatalf("date-part extraction depends on the session TimeZone:\n%s", sql)
 	}
 }
@@ -116,8 +113,51 @@ func TestDatePartUsesTotalDateTimeCast(t *testing.T) {
 		{NumVal: &one},
 	}}
 	sql := renderLogicalExpressionSQL(t, expression)
-	if !strings.Contains(sql, "basyx_parse_datetime(") || !strings.Contains(sql, "EXTRACT(YEAR") {
+	if !strings.Contains(sql, "basyx_validated_cast_input(") || !strings.Contains(sql, "EXTRACT(YEAR") {
 		t.Fatalf("date-part extraction can still throw on stored input:\n%s", sql)
+	}
+}
+
+func TestDatePartOfDateTimeLiteralCastsTheParameterDirectly(t *testing.T) {
+	t.Parallel()
+
+	instant := DateTimeLiteralPattern(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC))
+	year := float64(2024)
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{
+		{Year: &Value{DateTimeVal: &instant}},
+		{NumVal: &year},
+	}})
+	if !strings.Contains(sql, "EXTRACT(YEAR FROM timezone('UTC', $1::timestamptz))") {
+		t.Fatalf("a date-time parameter must not be converted through text:\n%s", sql)
+	}
+}
+
+func TestTemporalLiteralsAreTruncatedToMicrosecondsForSQL(t *testing.T) {
+	t.Parallel()
+
+	clock := TimeLiteralPattern("10:00:00.1234567Z")
+	instant := DateTimeLiteralPattern(time.Date(2024, 12, 31, 23, 59, 59, 999_999_900, time.UTC))
+	for _, literal := range []Value{{TimeVal: &clock}, {DateTimeVal: &instant}} {
+		sqlValue, _, err := toSQLResolvedFieldOrValue(&literal, "left", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, args, err := goqu.Dialect("postgres").Select(sqlValue).Prepared(true).ToSQL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch value := args[0].(type) {
+		case string:
+			if value != "10:00:00.123456Z" {
+				t.Errorf("time literal bound as %q", value)
+			}
+		case time.Time:
+			if value.Nanosecond() != 999_999_000 {
+				t.Errorf("date-time literal bound with %d nanoseconds", value.Nanosecond())
+			}
+		default:
+			t.Errorf("unexpected bound value %#v", value)
+		}
 	}
 }
 

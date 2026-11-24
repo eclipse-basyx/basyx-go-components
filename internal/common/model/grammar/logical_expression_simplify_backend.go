@@ -922,7 +922,7 @@ func literalValueFromAnyWithHint(x any, hint ComparisonKind) (Value, bool) {
 	case KindTime:
 		s := strings.TrimSpace(fmt.Sprint(x))
 		if s != "" {
-			if _, ok := toTimeOfDaySeconds(s); ok {
+			if _, ok := toTimeOfDayMicros(s); ok {
 				pat := TimeLiteralPattern(s)
 				return Value{TimeVal: &pat}, true
 			}
@@ -979,7 +979,7 @@ func literalClaimValueWithHint(value any, hint ComparisonKind) (Value, bool) {
 		}
 	case KindTime:
 		if text, ok := value.(string); ok {
-			if _, valid := toTimeOfDaySeconds(text); valid {
+			if _, valid := toTimeOfDayMicros(text); valid {
 				pattern := TimeLiteralPattern(text)
 				return Value{TimeVal: &pattern}, true
 			}
@@ -1096,7 +1096,7 @@ func resolveDatePart(v Value, resolve AttributeResolver) (float64, bool) {
 	switch {
 	case v.Year != nil:
 		t, ok := resolveDatePartOperand(*v.Year, resolve)
-		return float64(t.Year()), ok
+		return float64(postgreSQLYear(t)), ok
 	case v.Month != nil:
 		t, ok := resolveDatePartOperand(*v.Month, resolve)
 		return float64(t.Month()), ok
@@ -1176,15 +1176,12 @@ func resolveTimeCastOperand(v Value, resolve AttributeResolver) any {
 			if v.Attribute == nil {
 				t = t.UTC()
 			}
-			return TimeLiteralPattern(t.Format("15:04:05.999999999Z07:00"))
+			return TimeLiteralPattern(t.Format("15:04:05.999999Z07:00"))
 		}
 		return nil
 	}
 	text := strings.TrimSpace(fmt.Sprint(raw))
-	if t, err := time.Parse(time.RFC3339Nano, text); err == nil {
-		return TimeLiteralPattern(t.Format("15:04:05.999999999Z07:00"))
-	}
-	if _, ok := toTimeOfDaySeconds(text); ok {
+	if _, ok := toTimeOfDayMicros(text); ok {
 		return TimeLiteralPattern(text)
 	}
 	return nil
@@ -1445,6 +1442,11 @@ func resolveNumberValue(v Value, resolve AttributeResolver) (float64, bool) {
 }
 
 func resolveDateTimeValue(v Value, resolve AttributeResolver) (time.Time, bool) {
+	t, ok := resolveDateTimeInstant(v, resolve)
+	return truncateToMicroseconds(t), ok
+}
+
+func resolveDateTimeInstant(v Value, resolve AttributeResolver) (time.Time, bool) {
 	switch {
 	case v.DateTimeVal != nil:
 		return time.Time(*v.DateTimeVal), true
@@ -1456,7 +1458,7 @@ func resolveDateTimeValue(v Value, resolve AttributeResolver) (time.Time, bool) 
 }
 
 func resolveTimeValue(v Value, resolve AttributeResolver) (int, bool) {
-	return toTimeOfDaySeconds(resolveValue(v, resolve))
+	return toTimeOfDayMicros(resolveValue(v, resolve))
 }
 
 func resolveHexValue(v Value, resolve AttributeResolver) (string, bool) {
@@ -1645,7 +1647,10 @@ func stringValueFromDate(v Value) string {
 	case v.TimeVal != nil:
 		return string(*v.TimeVal)
 	case v.Year != nil:
-		return formatDatePartOperand(*v.Year, "2006")
+		if t, ok := resolveDatePartOperand(*v.Year, func(AttributeValue) any { return nil }); ok {
+			return strconv.Itoa(postgreSQLYear(t))
+		}
+		return ""
 	case v.Month != nil:
 		return formatDatePartOperand(*v.Month, "01")
 	case v.DayOfMonth != nil:
@@ -1687,18 +1692,6 @@ func toFloat(value interface{}) (float64, bool) {
 	}
 }
 
-func toTimeOfDaySeconds(value interface{}) (int, bool) {
-	s := strings.TrimSpace(fmt.Sprint(value))
-	if s == "" {
-		return 0, false
-	}
-	t, err := time.Parse("15:04:05.999999999Z07:00", s)
-	if err != nil {
-		return 0, false
-	}
-	return t.Hour()*3600 + t.Minute()*60 + t.Second(), true
-}
-
 func toDateTime(value interface{}) (time.Time, bool) {
 	switch v := value.(type) {
 	case time.Time:
@@ -1713,50 +1706,6 @@ func toDateTime(value interface{}) (time.Time, bool) {
 	default:
 		return parseCastDateTime(strings.TrimSpace(fmt.Sprint(value)))
 	}
-}
-
-var castDateTimePattern = regexp.MustCompile(`^([0-9]{4,})-([0-9]{2}-[0-9]{2})(?:[T ]([0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:[.,][0-9]+)?)?))?(Z|[+-][0-9]{2}:[0-9]{2})?$`)
-
-func parseCastDateTime(value string) (time.Time, bool) {
-	if t, err := time.Parse(time.RFC3339Nano, value); err == nil {
-		return t, true
-	}
-	parts := castDateTimePattern.FindStringSubmatch(value)
-	if parts == nil {
-		return time.Time{}, false
-	}
-	year, err := strconv.Atoi(parts[1])
-	if err != nil || year < 1 || year > 294276 {
-		return time.Time{}, false
-	}
-	clock, zone := parts[3], parts[4]
-	switch len(clock) {
-	case 0:
-		clock = "00:00:00"
-	case len("15:04"):
-		clock += ":00"
-	}
-	if zone == "" {
-		zone = "Z"
-	}
-	endOfDay := strings.HasPrefix(clock, "24:00:00") && strings.Trim(clock[len("24:00:00"):], "0.,") == ""
-	if endOfDay {
-		clock = "00:00:00"
-	}
-
-	// time.Parse requires a four-digit year. Years in the same Gregorian
-	// 400-year cycle have identical leap days.
-	calendarYear := 2000 + year%400
-	normalized := fmt.Sprintf("%04d-%sT%s%s", calendarYear, parts[2], clock, zone)
-	t, err := time.ParseInLocation(time.RFC3339Nano, normalized, time.UTC)
-	if err != nil {
-		return time.Time{}, false
-	}
-	t = t.AddDate(year-calendarYear, 0, 0)
-	if endOfDay {
-		t = t.Add(24 * time.Hour)
-	}
-	return t, true
 }
 
 func field(value string) Value {

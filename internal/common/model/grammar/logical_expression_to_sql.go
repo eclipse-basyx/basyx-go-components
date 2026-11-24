@@ -1738,6 +1738,8 @@ func toSQLResolvedFieldOrValue(
 		return datePartResolvedOperandToSQL(operand.DayOfWeek, position, "DOW", collector)
 	case operand.Field != nil:
 		return decoratedFieldToSQL(*operand.Field, collector)
+	case operand.TimeVal != nil:
+		return goqu.V(truncateFractionDigits(string(*operand.TimeVal))), nil, nil
 	default:
 		return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil, nil
 	}
@@ -1790,7 +1792,10 @@ func datePartResolvedOperandToSQL(inner *Value, position, part string, collector
 	if err != nil {
 		return nil, nil, err
 	}
-	instant := goqu.L("basyx_parse_datetime(?::text, TRUE)", sqlValue)
+	instant := utcTimestampSQLValue(sqlValue)
+	if isDateTimeOperand(*inner) {
+		instant = goqu.L("?::timestamptz", sqlValue)
+	}
 	return goqu.L("EXTRACT("+part+" FROM timezone('UTC', ?))", instant), resolved, nil
 }
 
@@ -2939,9 +2944,9 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 	switch targetType {
 	case "timestamptz":
-		return goqu.L("basyx_parse_datetime(?::text)", sqlValue)
+		return utcTimestampSQLValue(sqlValue)
 	case "time":
-		return totalCastSQLValue(sqlValue, targetType, "time without time zone")
+		return timeOfDaySQLValue(sqlValue)
 	case "double precision":
 		return totalCastSQLValue(sqlValue, targetType, "double precision")
 	case "boolean":
@@ -2975,7 +2980,7 @@ func normalizeLiteralForSQL(v interface{}) interface{} {
 func normalizeTime(t time.Time) time.Time {
 	// Ensure location is set to avoid goqu encoding errors.
 	if t.Location() == nil {
-		return time.Unix(0, t.UnixNano()).UTC()
+		return truncateToMicroseconds(time.Unix(0, t.UnixNano()).UTC())
 	}
-	return t.UTC()
+	return truncateToMicroseconds(t.UTC())
 }

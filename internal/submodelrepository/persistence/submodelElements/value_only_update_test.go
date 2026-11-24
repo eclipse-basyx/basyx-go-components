@@ -135,6 +135,35 @@ func TestApplyValueOnlyUpdatesWritesByElementID(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestApplyValueOnlyUpdatesStoresTemporalTextAndClearsLegacyColumns(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	timestamp := "2024-01-01T10:00:00+02:00"
+	lowerBound := "2024-01-01T10:00:00"
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "property_element" SET "value_bool"=\$1,"value_date"=\$2,"value_datetime"=\$3,"value_num"=\$4,"value_text"=\$5,"value_time"=\$6 WHERE \("id" = \$7\)`).
+		WithArgs(nil, nil, nil, nil, timestamp, nil, int64(21)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE "range_element" SET "min_date"=\$1,"min_datetime"=\$2,"min_num"=\$3,"min_text"=\$4,"min_time"=\$5 WHERE \("id" = \$6\)`).
+		WithArgs(nil, nil, nil, lowerBound, nil, int64(22)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = ApplyValueOnlyUpdates(t.Context(), tx, db, []gen.ValueOnlyUpdate{
+		{ElementID: 21, ModelType: types.ModelTypeProperty, Value: gen.PropertyValue{Value: &timestamp, ValueType: types.DataTypeDefXSDDateTime}},
+		{ElementID: 22, ModelType: types.ModelTypeRange, Value: gen.RangeValuePatch{ValueType: types.DataTypeDefXSDDateTime, Min: gen.ScalarPatch{Set: true, Value: &lowerBound}}},
+	})
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestApplyValueOnlyUpdatesSkipsEmptyPatches(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

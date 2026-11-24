@@ -177,7 +177,7 @@ func TestLogicalExpression_SimplifyForBackendFilter_CreatedAfterUsesPostgresInpu
 	}
 
 	sql, _ := toPreparedSQLForDescriptor(t, simplified)
-	if !strings.Contains(sql, "basyx_parse_datetime(") {
+	if !strings.Contains(sql, "basyx_validated_cast_input(") || !strings.Contains(sql, "::timestamptz") {
 		t.Fatalf("expected PostgreSQL timestamp input validation, got SQL %s", sql)
 	}
 }
