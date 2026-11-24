@@ -98,12 +98,12 @@ func TestTemporalValuesSurviveReplacementAndValueOnlyUpdates(t *testing.T) {
 func TestLegacyTemporalRowsRemainReadableAndCanBeUpdated(t *testing.T) {
 	const id = "urn:basyx:integration:legacy-temporal-values"
 	elements := []temporalElement{
-		{IDShort: "Timestamp", ModelType: "Property", ValueType: "xs:dateTime", Value: new("2024-01-01T08:00:00+00:00")},
+		{IDShort: "Timestamp", ModelType: "Property", ValueType: "xs:dateTime", Value: new("-0001-12-31T22:30:00.123+00:00")},
 		{IDShort: "Period", ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T08:00:00+00:00"), Max: new("2024-01-02T08:00:00+00:00")},
 	}
 	postTemporalSubmodel(t, submodelRepositoryBaseURL, id, elements)
 	seedLegacyTemporalRow(t, id, "Timestamp", "property_element", goqu.Record{
-		"value_text": nil, "value_datetime": "2024-01-01T10:00:00+02:00",
+		"value_text": nil, "value_datetime": "0001-01-01T00:30:00.123+02:00",
 	})
 	seedLegacyTemporalRow(t, id, "Period", "range_element", goqu.Record{
 		"min_text": nil, "min_datetime": "2024-01-01T10:00:00+02:00",
@@ -113,6 +113,7 @@ func TestLegacyTemporalRowsRemainReadableAndCanBeUpdated(t *testing.T) {
 	secondaryEndpoint := temporalSubmodelEndpoint(temporalSecondaryRepositoryURL(), id)
 	requireTemporalElements(t, primaryEndpoint, elements)
 	requireTemporalElements(t, secondaryEndpoint, elements)
+	requireValueOnlyStatus(t, http.MethodPut, secondaryEndpoint+"/submodel-elements/Timestamp", elements[0], http.StatusNoContent)
 
 	elements[0].Value = new("2024-01-01T10:00:00+02:00")
 	requireValueOnlyStatus(t, http.MethodPut, secondaryEndpoint+"/submodel-elements/Timestamp", elements[0], http.StatusNoContent)

@@ -1776,18 +1776,22 @@ func castResolvedOperandToSQL(inner *Value, position, targetType string, collect
 	if err != nil {
 		return nil, nil, err
 	}
+	if targetType == "time" && isDateTimeOperand(*inner) {
+		return goqu.L("timezone('UTC', ?::timestamptz)::time", sqlValue), resolved, nil
+	}
 	return safeCastSQLValue(sqlValue, targetType), resolved, nil
 }
 
 func datePartResolvedOperandToSQL(inner *Value, position, part string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	if inner.DateTimeCast != nil {
+		inner = inner.DateTimeCast
+	}
 	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
 	if err != nil {
 		return nil, nil, err
 	}
-	if inner.DateTimeCast == nil {
-		sqlValue = safeCastSQLValue(sqlValue, "timestamptz")
-	}
-	return goqu.L("EXTRACT("+part+" FROM timezone('UTC', ?))", sqlValue), resolved, nil
+	instant := goqu.L("basyx_parse_datetime(?::text, TRUE)", sqlValue)
+	return goqu.L("EXTRACT("+part+" FROM timezone('UTC', ?))", instant), resolved, nil
 }
 
 func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
@@ -2935,7 +2939,7 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 	switch targetType {
 	case "timestamptz":
-		return utcAnchoredTimestampSQLValue(sqlValue)
+		return goqu.L("basyx_parse_datetime(?::text)", sqlValue)
 	case "time":
 		return totalCastSQLValue(sqlValue, targetType, "time without time zone")
 	case "double precision":
@@ -2946,22 +2950,6 @@ func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 		// text/hex casts are always safe
 		return goqu.L("?::"+targetType, sqlValue)
 	}
-}
-
-// zonelessTimestampPattern matches date and date-time inputs without a timezone designator.
-const zonelessTimestampPattern = `^-?[0-9]{4,}-[0-9]{2}-[0-9]{2}([T ][0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?)?$`
-
-// utcAnchoredTimestampSQLValue casts the SQL value to timestamptz and interprets inputs
-// without a timezone as UTC, so the resulting instant does not depend on the session TimeZone.
-func utcAnchoredTimestampSQLValue(sqlValue interface{}) exp.Expression {
-	validated := goqu.L("basyx_validated_cast_input(?::text, ?)", sqlValue, "timestamp with time zone")
-	return goqu.L(
-		"(CASE WHEN ?::text ~ ? THEN timezone('UTC', ?::timestamp) ELSE ?::timestamptz END)",
-		sqlValue,
-		zonelessTimestampPattern,
-		validated,
-		validated,
-	)
 }
 
 func totalCastSQLValue(sqlValue interface{}, targetType string, validationType string) exp.Expression {

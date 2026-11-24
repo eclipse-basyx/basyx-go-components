@@ -176,12 +176,9 @@ func TestLogicalExpression_SimplifyForBackendFilter_CreatedAfterUsesPostgresInpu
 		t.Fatalf("expected createdAt field to be wrapped in datetime cast, got %#v", simplified.Le[1])
 	}
 
-	sql, args := toPreparedSQLForDescriptor(t, simplified)
-	if !strings.Contains(sql, "::timestamptz") {
-		t.Fatalf("expected SQL to contain timestamptz cast, got: %s", sql)
-	}
-	if !strings.Contains(sql, "basyx_validated_cast_input") || !argListContains(args, "timestamp with time zone") {
-		t.Fatalf("expected PostgreSQL timestamp input validation, got SQL %s with args %#v", sql, args)
+	sql, _ := toPreparedSQLForDescriptor(t, simplified)
+	if !strings.Contains(sql, "basyx_parse_datetime(") {
+		t.Fatalf("expected PostgreSQL timestamp input validation, got SQL %s", sql)
 	}
 }
 

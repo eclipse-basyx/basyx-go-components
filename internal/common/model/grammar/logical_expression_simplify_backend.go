@@ -1151,16 +1151,7 @@ func resolveCastValue(v Value, resolve AttributeResolver) any {
 		}
 		return value
 	case v.TimeCast != nil:
-		inner := resolveValue(*v.TimeCast, resolve)
-		if t, ok := toDateTime(inner); ok {
-			return TimeLiteralPattern(t.Format("15:04:05.999999999Z07:00"))
-		}
-		if s := fmt.Sprint(inner); s != "" {
-			if _, ok := toTimeOfDaySeconds(s); ok {
-				return TimeLiteralPattern(s)
-			}
-		}
-		return nil
+		return resolveTimeCastOperand(*v.TimeCast, resolve)
 	case v.DateTimeCast != nil:
 		inner := resolveValue(*v.DateTimeCast, resolve)
 		if t, ok := toDateTime(inner); ok {
@@ -1175,6 +1166,28 @@ func resolveCastValue(v Value, resolve AttributeResolver) any {
 	default:
 		return nil
 	}
+}
+
+func resolveTimeCastOperand(v Value, resolve AttributeResolver) any {
+	raw := resolveValue(v, resolve)
+	if isDateTimeOperand(v) {
+		if t, ok := toDateTime(raw); ok {
+			// LOCALNOW and CLIENTNOW supply the clock time of their own zone.
+			if v.Attribute == nil {
+				t = t.UTC()
+			}
+			return TimeLiteralPattern(t.Format("15:04:05.999999999Z07:00"))
+		}
+		return nil
+	}
+	text := strings.TrimSpace(fmt.Sprint(raw))
+	if t, err := time.Parse(time.RFC3339Nano, text); err == nil {
+		return TimeLiteralPattern(t.Format("15:04:05.999999999Z07:00"))
+	}
+	if _, ok := toTimeOfDaySeconds(text); ok {
+		return TimeLiteralPattern(text)
+	}
+	return nil
 }
 
 func castOperand(value Value) (ComparisonKind, *Value, bool) {
@@ -1443,18 +1456,7 @@ func resolveDateTimeValue(v Value, resolve AttributeResolver) (time.Time, bool) 
 }
 
 func resolveTimeValue(v Value, resolve AttributeResolver) (int, bool) {
-	switch {
-	case v.TimeVal != nil:
-		return toTimeOfDaySeconds(*v.TimeVal)
-	case v.TimeCast != nil:
-		raw := resolveValue(*v.TimeCast, resolve)
-		if dt, ok := toDateTime(raw); ok {
-			return dt.Hour()*3600 + dt.Minute()*60 + dt.Second(), true
-		}
-		return toTimeOfDaySeconds(raw)
-	default:
-		return toTimeOfDaySeconds(resolveValue(v, resolve))
-	}
+	return toTimeOfDaySeconds(resolveValue(v, resolve))
 }
 
 func resolveHexValue(v Value, resolve AttributeResolver) (string, bool) {
@@ -1709,16 +1711,52 @@ func toDateTime(value interface{}) (time.Time, bool) {
 		}
 		return time.Time(*v), true
 	default:
-		s := strings.TrimSpace(fmt.Sprint(value))
-		if s == "" {
-			return time.Time{}, false
-		}
-		t, err := time.Parse(time.RFC3339, s)
-		if err != nil {
-			return time.Time{}, false
-		}
+		return parseCastDateTime(strings.TrimSpace(fmt.Sprint(value)))
+	}
+}
+
+var castDateTimePattern = regexp.MustCompile(`^([0-9]{4,})-([0-9]{2}-[0-9]{2})(?:[T ]([0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:[.,][0-9]+)?)?))?(Z|[+-][0-9]{2}:[0-9]{2})?$`)
+
+func parseCastDateTime(value string) (time.Time, bool) {
+	if t, err := time.Parse(time.RFC3339Nano, value); err == nil {
 		return t, true
 	}
+	parts := castDateTimePattern.FindStringSubmatch(value)
+	if parts == nil {
+		return time.Time{}, false
+	}
+	year, err := strconv.Atoi(parts[1])
+	if err != nil || year < 1 || year > 294276 {
+		return time.Time{}, false
+	}
+	clock, zone := parts[3], parts[4]
+	switch len(clock) {
+	case 0:
+		clock = "00:00:00"
+	case len("15:04"):
+		clock += ":00"
+	}
+	if zone == "" {
+		zone = "Z"
+	}
+	endOfDay := strings.HasPrefix(clock, "24:00:00") && strings.Trim(clock[len("24:00:00"):], "0.,") == ""
+	if endOfDay {
+		clock = "00:00:00"
+	}
+
+	// time.Parse requires a four-digit year. Years in the same Gregorian
+	// 400-year cycle have identical leap days.
+	calendarYear := 2000 + year%400
+	normalized := fmt.Sprintf("%04d-%sT%s%s", calendarYear, parts[2], clock, zone)
+	t, err := time.ParseInLocation(time.RFC3339Nano, normalized, time.UTC)
+	if err != nil {
+		return time.Time{}, false
+	}
+	t = t.AddDate(year-calendarYear, 0, 0)
+	if endOfDay {
+		t = t.Add(24 * time.Hour)
+	}
+	return t, true
 }
 
 func field(value string) Value {

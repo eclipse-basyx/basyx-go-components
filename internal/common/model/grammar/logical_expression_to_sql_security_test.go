@@ -71,33 +71,26 @@ func TestFallibleCastsUsePostgreSQLTotalInputValidation(t *testing.T) {
 			}
 
 			sql := renderLogicalExpressionSQL(t, expression)
-			if !strings.Contains(sql, "basyx_validated_cast_input") {
-				t.Fatalf("fallible %s cast is not total:\n%s", test.name, sql)
+			validator := "basyx_validated_cast_input"
+			if test.name == "date time" {
+				validator = "basyx_parse_datetime"
 			}
-			if strings.Count(sql, " ~ ") != strings.Count(sql, "timezone('UTC', basyx_validated_cast_input(") {
-				t.Fatalf("fallible %s cast rejects PostgreSQL-valid lexical forms:\n%s", test.name, sql)
+			if !strings.Contains(sql, validator) {
+				t.Fatalf("fallible %s cast is not total:\n%s", test.name, sql)
 			}
 		})
 	}
 }
 
-func TestDateTimeCastInterpretsZonelessInputAsUTC(t *testing.T) {
+func TestNestedDateTimeCastsRenderEachOperandOnce(t *testing.T) {
 	t.Parallel()
 
+	inner := Value{DateTimeCast: fieldValue("$aas#idShort")}
+	outer := Value{DateTimeCast: &Value{StrCast: &inner}}
 	instant := DateTimeLiteralPattern{}
-	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{
-		{DateTimeCast: fieldValue("$aas#idShort")},
-		{DateTimeVal: &instant},
-	}})
-	for _, fragment := range []string{
-		`"aas"."id_short"::text ~ `,
-		`THEN timezone('UTC', basyx_validated_cast_input("aas"."id_short"::text, `,
-		`)::timestamp) ELSE basyx_validated_cast_input("aas"."id_short"::text, `,
-		`)::timestamptz END`,
-	} {
-		if !strings.Contains(sql, fragment) {
-			t.Fatalf("expected %q in session-independent date time cast:\n%s", fragment, sql)
-		}
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{outer, {DateTimeVal: &instant}}})
+	if strings.Count(sql, "basyx_parse_datetime(") != 2 || strings.Count(sql, `"aas"."id_short"`) != 1 {
+		t.Fatalf("expected one call per temporal cast and one field reference:\n%s", sql)
 	}
 }
 
@@ -109,7 +102,7 @@ func TestDatePartExtractsInUTC(t *testing.T) {
 		{DayOfMonth: fieldValue("$aas#idShort")},
 		{NumVal: &one},
 	}})
-	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', (CASE WHEN") {
+	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', basyx_parse_datetime(") {
 		t.Fatalf("date-part extraction depends on the session TimeZone:\n%s", sql)
 	}
 }
@@ -123,7 +116,7 @@ func TestDatePartUsesTotalDateTimeCast(t *testing.T) {
 		{NumVal: &one},
 	}}
 	sql := renderLogicalExpressionSQL(t, expression)
-	if !strings.Contains(sql, "basyx_validated_cast_input") || !strings.Contains(sql, "EXTRACT(YEAR") {
+	if !strings.Contains(sql, "basyx_parse_datetime(") || !strings.Contains(sql, "EXTRACT(YEAR") {
 		t.Fatalf("date-part extraction can still throw on stored input:\n%s", sql)
 	}
 }

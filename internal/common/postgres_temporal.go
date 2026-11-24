@@ -56,5 +56,6 @@ func PostgreSQLTemporalColumnTextSQL(column string) string {
 //
 //	goqu.L(common.PostgreSQLLegacyDateTimeColumnTextSQL("?"), goqu.I("pe.value_datetime"))
 func PostgreSQLLegacyDateTimeColumnTextSQL(column string) string {
-	return PostgreSQLTemporalColumnTextSQL(fmt.Sprintf("timezone('UTC', %s)", column)) + " || '+00:00'"
+	utcText := PostgreSQLTemporalColumnTextSQL(fmt.Sprintf("timezone('UTC', %s)", column))
+	return fmt.Sprintf(`regexp_replace(%s, '^(.+) BC$', E'-\\1') || '+00:00'`, utcText)
 }

@@ -42,11 +42,14 @@ expression decoding. Query limits include all response filters together. Split
 larger requests or policies into smaller expressions when upgrading; query
 requests exceeding these limits return HTTP 400.
 
-Updated services require database schema `v1.1.19`. Run the configuration service
-to install `basyx_validated_cast_input` before starting the updated services.
-The helper validates each textual cast input once; nested casts generate SQL
-whose size grows linearly with nesting depth. Its PostgreSQL function-call cost
-still needs representative workload measurement.
+Run the configuration service to install database schema `v1.2.4` before
+starting the updated services. Temporal comparisons use `basyx_parse_datetime`
+to interpret zone-less timestamps in UTC. Converting a date-time to a time
+extracts the UTC clock time. Direct time casts of `LOCALNOW` and `CLIENTNOW`
+retain the clock time supplied by the attribute. Calendar-part extraction discards fractional
+digits beyond PostgreSQL's microsecond precision before conversion, so rounding
+cannot move an instant into the following day. Each cast references its operand
+once to keep the generated SQL size linear in nesting depth.
 
 ## Quick mental model (no background required)
 
