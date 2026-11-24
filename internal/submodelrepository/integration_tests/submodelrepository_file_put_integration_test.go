@@ -439,6 +439,93 @@ func TestUploadFileAttachmentWithoutFileName(t *testing.T) {
 	})
 }
 
+// TestPutRenameKeepsManagedAttachment covers #772: when a PUT moves a File
+// element to another idShortPath and carries the managed file value unchanged,
+// the stored attachment follows the element to its new path under a fresh
+// managed locator.
+func TestPutRenameKeepsManagedAttachment(t *testing.T) {
+	submodelID := fmt.Sprintf("urn:basyx:integration:rename-managed-file-%d", time.Now().UnixNano())
+	encodedID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := submodelRepositoryBaseURL + "/submodels/" + encodedID
+	status, body, err := requestJSON(http.MethodPost, submodelRepositoryBaseURL+"/submodels", map[string]any{
+		"id": submodelID, "idShort": "RenameManagedFiles", "modelType": "Submodel",
+		"submodelElements": []any{
+			renameAttachmentFolder("Folder1"),
+			renameAttachmentFolder("Folder2"),
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	t.Cleanup(func() { _, _, _ = requestJSON(http.MethodDelete, endpoint, nil) })
+
+	content := []byte("attachment that follows a rename")
+	filePath := createTemporaryBinaryTestFile(t, "repro.txt", content)
+	for _, folder := range []string{"Folder1", "Folder2"} {
+		status, err = uploadFileAttachment(endpoint+"/submodel-elements/"+folder+".Doc/attachment", filePath, "repro.txt")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, status)
+	}
+
+	t.Run("ElementPutRenamesFile", func(t *testing.T) {
+		managedPath := getFileElementValue(t, endpoint+"/submodel-elements/Folder1.Doc")
+		require.Regexp(t, `^/aasx/files/[A-Za-z0-9_-]{32}/repro\.txt$`, managedPath)
+
+		status, body, err := requestJSON(http.MethodPut, endpoint+"/submodel-elements/Folder1", map[string]any{
+			"idShort": "Folder1", "modelType": "SubmodelElementCollection",
+			"value": []any{map[string]any{"idShort": "Doc2", "modelType": "File", "contentType": "text/plain", "value": managedPath}},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
+
+		status, body, err = requestJSON(http.MethodGet, endpoint+"/submodel-elements/Folder1.Doc", nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNotFound, status, "response=%s", string(body))
+
+		renamedPath := getFileElementValue(t, endpoint+"/submodel-elements/Folder1.Doc2")
+		require.Regexp(t, `^/aasx/files/[A-Za-z0-9_-]{32}/repro\.txt$`, renamedPath)
+		require.NotEqual(t, managedPath, renamedPath)
+		downloaded, _, downloadStatus, err := downloadFileAttachment(endpoint + "/submodel-elements/Folder1.Doc2/attachment")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, downloadStatus)
+		require.Equal(t, content, downloaded)
+	})
+
+	t.Run("SubmodelPutRenamesCollection", func(t *testing.T) {
+		status, body, err := requestJSON(http.MethodGet, endpoint, nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+		var storedSubmodel map[string]any
+		require.NoError(t, json.Unmarshal(body, &storedSubmodel))
+		elements := storedSubmodel["submodelElements"].([]any)
+		elements[1].(map[string]any)["idShort"] = "Folder3"
+
+		status, body, err = requestJSON(http.MethodPut, endpoint, storedSubmodel)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
+
+		status, body, err = requestJSON(http.MethodGet, endpoint+"/submodel-elements/Folder2.Doc", nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNotFound, status, "response=%s", string(body))
+
+		downloaded, _, downloadStatus, err := downloadFileAttachment(endpoint + "/submodel-elements/Folder3.Doc/attachment")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, downloadStatus)
+		require.Equal(t, content, downloaded)
+
+		downloaded, _, downloadStatus, err = downloadFileAttachment(endpoint + "/submodel-elements/Folder1.Doc2/attachment")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, downloadStatus)
+		require.Equal(t, content, downloaded)
+	})
+}
+
+func renameAttachmentFolder(idShort string) map[string]any {
+	return map[string]any{
+		"idShort": idShort, "modelType": "SubmodelElementCollection",
+		"value": []any{map[string]any{"idShort": "Doc", "modelType": "File", "contentType": "text/plain"}},
+	}
+}
+
 func assertManagedFileElement(t *testing.T, elementEndpoint string, fileName string, contentType string) {
 	t.Helper()
 	status, body, err := requestJSON(http.MethodGet, elementEndpoint, nil)
