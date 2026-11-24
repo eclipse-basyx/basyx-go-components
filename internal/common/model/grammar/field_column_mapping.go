@@ -32,6 +32,8 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
@@ -55,11 +57,35 @@ type terminalColumnMapping struct {
 
 var propertyValueTypeColumn = buildPropertyValueTypeColumn()
 
+// timestampColumns lists the TIMESTAMPTZ columns that field identifiers map to.
+var timestampColumns = map[string]struct{}{
+	"aas_descriptor.created_at":         {},
+	"submodel_descriptor.db_created_at": {},
+}
+
+// isTimestampField reports whether a field identifier resolves to a TIMESTAMPTZ column.
+func isTimestampField(v Value) bool {
+	if v.Field == nil {
+		return false
+	}
+	resolved, err := ResolveScalarFieldToSQL(v.Field)
+	if err != nil {
+		return false
+	}
+	_, ok := timestampColumns[resolved.Column]
+	return ok
+}
+
+// timestampFieldText renders a TIMESTAMPTZ field value as xs:dateTime text in UTC.
+func timestampFieldText(sqlValue interface{}) exp.Expression {
+	return goqu.L(common.PostgreSQLTimestampColumnTextSQL("?"), sqlValue)
+}
+
 var propertyValueColumn = fmt.Sprintf(
 	"COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, %s, %s, %s, multilanguage_property_value.text)",
 	common.PostgreSQLTemporalColumnTextSQL("property_element.value_time"),
 	common.PostgreSQLTemporalColumnTextSQL("property_element.value_date"),
-	common.PostgreSQLLegacyDateTimeColumnTextSQL("property_element.value_datetime"),
+	common.PostgreSQLTimestampColumnTextSQL("property_element.value_datetime"),
 )
 
 func buildPropertyValueTypeColumn() string {

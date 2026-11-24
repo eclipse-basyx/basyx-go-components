@@ -77,6 +77,9 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 		{"localDateTimeIsUTC", "$sme.Local#value", `{"$dateTimeVal":"2024-01-01T08:00:00Z"}`, true},
 		{"legacyDateTimeText", "$sme.LegacyGate#value", `{"$strVal":"2024-01-01T08:00:00+00:00"}`, true},
 		{"legacyDateTimeInstant", "$sme.LegacyGate#value", `{"$dateTimeVal":"2024-01-01T08:00:00Z"}`, true},
+		{"timeInstant", "$sme.Time#value", `{"$timeVal":"08:00Z"}`, true},
+		{"timeOffsetIsNotDropped", "$sme.Time#value", `{"$timeVal":"10:00Z"}`, false},
+		{"dateIsNotADateTime", "$sme.Date#value", `{"$dateTimeVal":"2024-01-01T00:00:00Z"}`, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			condition := map[string]any{"$and": []any{

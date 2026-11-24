@@ -30,33 +30,73 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 )
 
-// SQL patterns that normalize xs:date and xs:dateTime text before the timestamptz cast.
-// Offsets may also take the "+01" form PostgreSQL uses when it renders a timestamptz column as text.
-// The patterns stay free of nested optional groups because PostgreSQL evaluates those slowly.
+// SQL patterns that validate and normalize xs:dateTime and xs:time text. They stay free of
+// nested optional groups because PostgreSQL evaluates those an order of magnitude slower.
 const (
-	zonelessDateTimeSQLPattern = `^([0-9]{4,}-[0-9]{2}-[0-9]{2}(?:[Tt ][0-9:.]+)?)$`
-	zonedDateSQLPattern        = `^([0-9]{4,}-[0-9]{2}-[0-9]{2})([+-][0-9]{2}:[0-9]{2}|[Zz])$`
-	zonedDateTimeSQLPattern    = `^[0-9]{4,}-[0-9]{2}-[0-9]{2}[Tt ][0-9:.]+(?:[Zz]|[+-][0-9]{2}(?::?[0-9]{2}){0,2})$`
+	zonelessDateTimeSQLPattern   = `^([0-9]{4,}-[0-9]{2}-[0-9]{2}T[0-9:.]+)$`
+	xsdDateTimeSQLPattern        = `^(?:[1-9][0-9]{3,}|0[0-9]{3})-[0-9]{2}-[0-9]{2}T(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)$`
+	zonelessTimeSQLPattern       = `^([0-9:.]+)$`
+	xsdTimeSQLPattern            = `^(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)$`
+	timezoneDesignatorSQLPattern = `(?:Z|[+-][0-9]{2}:[0-9]{2})$`
+	datePrefixSQLPattern         = `^[0-9]+-[0-9]{2}-[0-9]{2}T`
+	endOfDayTimeSQLPattern       = `^24:00:00(?:\.0+)?(Z|[+-])`
+	timeReferenceDateSQLPrefix   = "1972-12-31T"
 )
 
-// utcTimestampSQLValue casts an SQL value to timestamptz independently of the session TimeZone.
+// xsdDateTimeSQLText casts an SQL value to xs:dateTime and returns it as validated text that
+// always carries a timezone, or NULL when the value is not an xs:dateTime PostgreSQL can parse.
 //
-// Text without a timezone is interpreted as UTC, dates get an explicit midnight so negative
-// offsets are not misread, digits beyond microseconds are truncated, and anything other
-// than an ISO 8601 date or date-time yields NULL. The operand is referenced once, so nested
-// casts keep the generated SQL linear in size.
-func utcTimestampSQLValue(sqlValue interface{}) exp.Expression {
-	text := truncatedFractionSQLText(goqu.Func("btrim", goqu.L("?::text", sqlValue)))
-	explicitUTC := goqu.Func("regexp_replace", text, zonelessDateTimeSQLPattern, `\1Z`)
-	explicitMidnight := goqu.Func("regexp_replace", explicitUTC, zonedDateSQLPattern, `\1T00:00:00\2`)
-	isoDateTime := goqu.L("substring(? from ?)", explicitMidnight, zonedDateTimeSQLPattern)
-	return goqu.L("basyx_validated_cast_input(?, ?)::timestamptz", isoDateTime, "timestamp with time zone")
+// Text without a timezone gets "Z", the implicit timezone, and digits beyond microseconds are
+// truncated. The operand is referenced once, so nested casts keep the generated SQL linear in size.
+func xsdDateTimeSQLText(sqlValue interface{}) exp.Expression {
+	zoned := goqu.Func("regexp_replace", goqu.Func("btrim", goqu.L("?::text", sqlValue)), zonelessDateTimeSQLPattern, `\1Z`)
+	lexical := goqu.L("substring(? from ?)", zoned, xsdDateTimeSQLPattern)
+	return goqu.Func("basyx_validated_cast_input", truncatedFractionSQLText(lexical), "timestamp with time zone")
 }
 
-// timeOfDaySQLValue casts an SQL value to time without time zone after truncating digits beyond microseconds.
-func timeOfDaySQLValue(sqlValue interface{}) exp.Expression {
-	text := truncatedFractionSQLText(goqu.L("?::text", sqlValue))
-	return goqu.L("basyx_validated_cast_input(?, ?)::time", text, "time without time zone")
+// instantSQLValue returns the instant of validated xs:dateTime text.
+func instantSQLValue(dateTimeText exp.Expression) exp.Expression {
+	return goqu.L("?::timestamptz", dateTimeText)
+}
+
+// localDateTimeSQLValue returns the local date and time of validated xs:dateTime text,
+// whose calendar parts XSD defines in the value's own timezone.
+func localDateTimeSQLValue(dateTimeText exp.Expression) exp.Expression {
+	return goqu.L("?::timestamp", goqu.Func("regexp_replace", dateTimeText, timezoneDesignatorSQLPattern, ""))
+}
+
+// timeOfDateTimeSQLValue returns the xs:time of validated xs:dateTime text: its local clock time
+// and timezone as an instant on the XPath reference date.
+func timeOfDateTimeSQLValue(dateTimeText exp.Expression) exp.Expression {
+	timeText := goqu.Func("regexp_replace", dateTimeText, datePrefixSQLPattern, "")
+	return timeOnReferenceDateSQLValue(timeText)
+}
+
+// xsdTimeSQLValue casts an SQL value to xs:time and returns it as an instant on the XPath
+// reference date, or NULL when the value is not an xs:time.
+func xsdTimeSQLValue(sqlValue interface{}) exp.Expression {
+	zoned := goqu.Func("regexp_replace", goqu.Func("btrim", goqu.L("?::text", sqlValue)), zonelessTimeSQLPattern, `\1Z`)
+	lexical := goqu.L("substring(? from ?)", zoned, xsdTimeSQLPattern)
+	return timeOnReferenceDateSQLValue(truncatedFractionSQLText(lexical))
+}
+
+// timeOnReferenceDateSQLValue maps 24:00:00 to 00:00:00, as xs:time does.
+func timeOnReferenceDateSQLValue(timeText exp.Expression) exp.Expression {
+	startOfDay := goqu.Func("regexp_replace", timeText, endOfDayTimeSQLPattern, `00:00:00\1`)
+	referenced := goqu.L("? || ?", timeReferenceDateSQLPrefix, startOfDay)
+	return goqu.L("basyx_validated_cast_input(?, ?)::timestamptz", referenced, "timestamp with time zone")
+}
+
+// canonicalDateTimeSQLText renders an instant as canonical xs:dateTime text in UTC, or NULL
+// before year 1, matching canonicalDateTimeString.
+func canonicalDateTimeSQLText(instant exp.Expression) exp.Expression {
+	utcText := goqu.L("to_json(timezone('UTC', ?)) #>> '{}'", instant)
+	return goqu.L("substring(? from ?) || 'Z'", utcText, `^[0-9]{4,}-[0-9]{2}-[0-9]{2}T[0-9:.]+$`)
+}
+
+// canonicalTimeSQLText renders a time instant as canonical xs:time text in UTC.
+func canonicalTimeSQLText(instant exp.Expression) exp.Expression {
+	return goqu.L("(to_json(timezone('UTC', ?)::time) #>> '{}') || 'Z'", instant)
 }
 
 func truncatedFractionSQLText(text exp.Expression) exp.Expression {

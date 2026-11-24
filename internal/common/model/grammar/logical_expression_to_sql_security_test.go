@@ -91,7 +91,7 @@ func TestNestedDateTimeCastsRenderEachOperandOnce(t *testing.T) {
 	}
 }
 
-func TestDatePartExtractsInUTC(t *testing.T) {
+func TestDatePartExtractsTheLocalCalendarPart(t *testing.T) {
 	t.Parallel()
 
 	one := float64(1)
@@ -99,8 +99,8 @@ func TestDatePartExtractsInUTC(t *testing.T) {
 		{DayOfMonth: fieldValue("$aas#idShort")},
 		{NumVal: &one},
 	}})
-	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', basyx_validated_cast_input(substring(") {
-		t.Fatalf("date-part extraction depends on the session TimeZone:\n%s", sql)
+	if !strings.Contains(sql, "EXTRACT(DAY FROM regexp_replace(basyx_validated_cast_input(") || strings.Contains(sql, "timezone(") {
+		t.Fatalf("date parts must come from the local date and time, not from a session-dependent instant:\n%s", sql)
 	}
 }
 
@@ -118,17 +118,26 @@ func TestDatePartUsesTotalDateTimeCast(t *testing.T) {
 	}
 }
 
-func TestDatePartOfDateTimeLiteralCastsTheParameterDirectly(t *testing.T) {
+func TestDatePartOfDateTimeLiteralIsComputedInGo(t *testing.T) {
 	t.Parallel()
 
-	instant := DateTimeLiteralPattern(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC))
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 1, 0, 30, 0, 0, time.FixedZone("+02:00", 2*60*60)))
 	year := float64(2024)
-	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{
-		{Year: &Value{DateTimeVal: &instant}},
-		{NumVal: &year},
-	}})
-	if !strings.Contains(sql, "EXTRACT(YEAR FROM timezone('UTC', $1::timestamptz))") {
-		t.Fatalf("a date-time parameter must not be converted through text:\n%s", sql)
+	collector, err := NewResolvedFieldPathCollectorForRoot(CollectorRootAAS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expression := LogicalExpression{Eq: ComparisonItems{{Year: &Value{DateTimeVal: &instant}}, {NumVal: &year}}}
+	where, _, err := expression.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql, args, err := goqu.Dialect("postgres").From("aas").Where(where).Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(sql, "EXTRACT") || !argListContains(args, float64(2024)) {
+		t.Fatalf("the local year of a literal must be bound as a number:\n%s %v", sql, args)
 	}
 }
 
@@ -137,8 +146,15 @@ func TestTemporalLiteralsAreTruncatedToMicrosecondsForSQL(t *testing.T) {
 
 	clock := TimeLiteralPattern("10:00:00.1234567Z")
 	instant := DateTimeLiteralPattern(time.Date(2024, 12, 31, 23, 59, 59, 999_999_900, time.UTC))
-	for _, literal := range []Value{{TimeVal: &clock}, {DateTimeVal: &instant}} {
-		sqlValue, _, err := toSQLResolvedFieldOrValue(&literal, "left", nil)
+	tests := []struct {
+		literal Value
+		want    time.Time
+	}{
+		{Value{TimeVal: &clock}, time.Date(1972, time.December, 31, 10, 0, 0, 123_456_000, time.UTC)},
+		{Value{DateTimeVal: &instant}, time.Date(2024, time.December, 31, 23, 59, 59, 999_999_000, time.UTC)},
+	}
+	for _, test := range tests {
+		sqlValue, _, err := toSQLResolvedFieldOrValue(&test.literal, "left", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -146,17 +162,8 @@ func TestTemporalLiteralsAreTruncatedToMicrosecondsForSQL(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		switch value := args[0].(type) {
-		case string:
-			if value != "10:00:00.123456Z" {
-				t.Errorf("time literal bound as %q", value)
-			}
-		case time.Time:
-			if value.Nanosecond() != 999_999_000 {
-				t.Errorf("date-time literal bound with %d nanoseconds", value.Nanosecond())
-			}
-		default:
-			t.Errorf("unexpected bound value %#v", value)
+		if bound, ok := args[0].(time.Time); !ok || !bound.Equal(test.want) {
+			t.Errorf("literal bound as %#v, want %s", args[0], test.want)
 		}
 	}
 }

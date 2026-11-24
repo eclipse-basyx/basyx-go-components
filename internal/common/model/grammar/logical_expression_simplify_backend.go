@@ -921,11 +921,9 @@ func literalValueFromAnyWithHint(x any, hint ComparisonKind) (Value, bool) {
 		}
 	case KindTime:
 		s := strings.TrimSpace(fmt.Sprint(x))
-		if s != "" {
-			if _, ok := toTimeOfDayMicros(s); ok {
-				pat := TimeLiteralPattern(s)
-				return Value{TimeVal: &pat}, true
-			}
+		if _, ok := parseXSDTime(s); ok {
+			pat := TimeLiteralPattern(s)
+			return Value{TimeVal: &pat}, true
 		}
 	case KindHex:
 		if hv, ok := normalizeHexAny(x); ok {
@@ -979,8 +977,8 @@ func literalClaimValueWithHint(value any, hint ComparisonKind) (Value, bool) {
 		}
 	case KindTime:
 		if text, ok := value.(string); ok {
-			if _, valid := toTimeOfDayMicros(text); valid {
-				pattern := TimeLiteralPattern(text)
+			if _, valid := parseXSDTime(text); valid {
+				pattern := TimeLiteralPattern(strings.TrimSpace(text))
 				return Value{TimeVal: &pattern}, true
 			}
 		}
@@ -1093,27 +1091,31 @@ func isDatePart(v Value) bool {
 // resolveDatePart evaluates $year, $month, $dayOfMonth, or $dayOfWeek in UTC,
 // matching the extraction PostgreSQL performs for field operands.
 func resolveDatePart(v Value, resolve AttributeResolver) (float64, bool) {
-	switch {
-	case v.Year != nil:
-		t, ok := resolveDatePartOperand(*v.Year, resolve)
-		return float64(postgreSQLYear(t)), ok
-	case v.Month != nil:
-		t, ok := resolveDatePartOperand(*v.Month, resolve)
-		return float64(t.Month()), ok
-	case v.DayOfMonth != nil:
-		t, ok := resolveDatePartOperand(*v.DayOfMonth, resolve)
-		return float64(t.Day()), ok
-	case v.DayOfWeek != nil:
-		t, ok := resolveDatePartOperand(*v.DayOfWeek, resolve)
-		return float64(t.Weekday()), ok
-	default:
+	operand, part, ok := datePartOperand(v)
+	if !ok {
 		return 0, false
 	}
+	t, ok := resolveDateTimeInstant(*operand, resolve)
+	if !ok {
+		return 0, false
+	}
+	return extractDatePart(t, part)
 }
 
-func resolveDatePartOperand(v Value, resolve AttributeResolver) (time.Time, bool) {
-	t, ok := resolveDateTimeValue(v, resolve)
-	return t.UTC(), ok
+// datePartOperand returns the operand of a date-part operator and its PostgreSQL EXTRACT field.
+func datePartOperand(v Value) (*Value, string, bool) {
+	switch {
+	case v.Year != nil:
+		return v.Year, "YEAR", true
+	case v.Month != nil:
+		return v.Month, "MONTH", true
+	case v.DayOfMonth != nil:
+		return v.DayOfMonth, "DAY", true
+	case v.DayOfWeek != nil:
+		return v.DayOfWeek, "DOW", true
+	default:
+		return nil, "", false
+	}
 }
 
 func resolveCastValue(v Value, resolve AttributeResolver) any {
@@ -1172,16 +1174,12 @@ func resolveTimeCastOperand(v Value, resolve AttributeResolver) any {
 	raw := resolveValue(v, resolve)
 	if isDateTimeOperand(v) {
 		if t, ok := toDateTime(raw); ok {
-			// LOCALNOW and CLIENTNOW supply the clock time of their own zone.
-			if v.Attribute == nil {
-				t = t.UTC()
-			}
-			return TimeLiteralPattern(t.Format("15:04:05.999999Z07:00"))
+			return TimeLiteralPattern(timeOfDateTime(t).Format("15:04:05.999999999Z07:00"))
 		}
 		return nil
 	}
 	text := strings.TrimSpace(fmt.Sprint(raw))
-	if _, ok := toTimeOfDayMicros(text); ok {
+	if _, ok := parseXSDTime(text); ok {
 		return TimeLiteralPattern(text)
 	}
 	return nil
@@ -1340,7 +1338,7 @@ func orderedCmp(left, right Value, resolve AttributeResolver, op string) (bool, 
 		if !lok || !rok {
 			return false, false
 		}
-		return compareInts(lv, rv, op), true
+		return compareTimes(lv, rv, op), true
 	case KindDateTime:
 		lv, lok := resolveDateTimeValue(left, resolve)
 		rv, rok := resolveDateTimeValue(right, resolve)
@@ -1386,7 +1384,7 @@ func eqCmp(left, right Value, resolve AttributeResolver, negate bool) (bool, boo
 		lv, lok := resolveTimeValue(left, resolve)
 		rv, rok := resolveTimeValue(right, resolve)
 		valid = lok && rok
-		equal = valid && lv == rv
+		equal = valid && lv.Equal(rv)
 	case KindHex:
 		lv, lok := resolveHexValue(left, resolve)
 		rv, rok := resolveHexValue(right, resolve)
@@ -1457,8 +1455,17 @@ func resolveDateTimeInstant(v Value, resolve AttributeResolver) (time.Time, bool
 	}
 }
 
-func resolveTimeValue(v Value, resolve AttributeResolver) (int, bool) {
-	return toTimeOfDayMicros(resolveValue(v, resolve))
+// resolveTimeValue returns an xs:time operand as an instant on the XPath reference date.
+func resolveTimeValue(v Value, resolve AttributeResolver) (time.Time, bool) {
+	var t time.Time
+	var ok bool
+	switch raw := resolveValue(v, resolve).(type) {
+	case TimeLiteralPattern:
+		t, ok = parseTimeLiteral(string(raw))
+	default:
+		t, ok = parseXSDTime(fmt.Sprint(raw))
+	}
+	return truncateToMicroseconds(t), ok
 }
 
 func resolveHexValue(v Value, resolve AttributeResolver) (string, bool) {
@@ -1528,6 +1535,18 @@ func stringArrayOperand(value Value, resolve AttributeResolver) ([]string, bool,
 }
 
 func stringOperandValue(value any) (string, bool) {
+	switch temporal := value.(type) {
+	case time.Time:
+		return canonicalDateTimeString(temporal)
+	case DateTimeLiteralPattern:
+		return canonicalDateTimeString(time.Time(temporal))
+	case TimeLiteralPattern:
+		t, ok := parseTimeLiteral(string(temporal))
+		if !ok {
+			return "", false
+		}
+		return canonicalTimeString(t), true
+	}
 	if value == nil || isStructuredValue(value) {
 		return "", false
 	}
@@ -1535,21 +1554,6 @@ func stringOperandValue(value any) (string, bool) {
 }
 
 func compareFloats(a, b float64, op string) bool {
-	switch op {
-	case "gt":
-		return a > b
-	case "ge":
-		return a >= b
-	case "lt":
-		return a < b
-	case "le":
-		return a <= b
-	default:
-		return false
-	}
-}
-
-func compareInts(a, b int, op string) bool {
 	switch op {
 	case "gt":
 		return a > b
@@ -1646,28 +1650,9 @@ func stringValueFromDate(v Value) string {
 		return time.Time(*v.DateTimeVal).Format(time.RFC3339)
 	case v.TimeVal != nil:
 		return string(*v.TimeVal)
-	case v.Year != nil:
-		if t, ok := resolveDatePartOperand(*v.Year, func(AttributeValue) any { return nil }); ok {
-			return strconv.Itoa(postgreSQLYear(t))
-		}
-		return ""
-	case v.Month != nil:
-		return formatDatePartOperand(*v.Month, "01")
-	case v.DayOfMonth != nil:
-		return formatDatePartOperand(*v.DayOfMonth, "02")
-	case v.DayOfWeek != nil:
-		if t, ok := resolveDatePartOperand(*v.DayOfWeek, func(AttributeValue) any { return nil }); ok {
-			return t.Weekday().String()
-		}
-		return ""
-	default:
-		return ""
 	}
-}
-
-func formatDatePartOperand(v Value, layout string) string {
-	if t, ok := resolveDatePartOperand(v, func(AttributeValue) any { return nil }); ok {
-		return t.Format(layout)
+	if part, ok := resolveDatePart(v, func(AttributeValue) any { return nil }); ok {
+		return strconv.FormatFloat(part, 'f', -1, 64)
 	}
 	return ""
 }
@@ -1704,7 +1689,7 @@ func toDateTime(value interface{}) (time.Time, bool) {
 		}
 		return time.Time(*v), true
 	default:
-		return parseCastDateTime(strings.TrimSpace(fmt.Sprint(value)))
+		return parseXSDDateTime(fmt.Sprint(value))
 	}
 }
 

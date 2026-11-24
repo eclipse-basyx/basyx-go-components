@@ -33,15 +33,15 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-// UnmarshalJSON parses an RFC3339 timestamp into a DateTimeLiteralPattern.
+// UnmarshalJSON parses a <DateTimeLiteral> into a DateTimeLiteralPattern.
 func (d *DateTimeLiteralPattern) UnmarshalJSON(value []byte) error {
 	var s string
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &s); err != nil {
 		return err
 	}
-	t, err := time.Parse(time.RFC3339Nano, s)
-	if err != nil {
-		return fmt.Errorf("parse $dateTimeVal: %w", err)
+	t, ok := parseDateTimeLiteral(s)
+	if !ok {
+		return fmt.Errorf("GRAMMAR-DATETIMEVAL-PARSE: %q is not a valid $dateTimeVal", s)
 	}
 	*d = DateTimeLiteralPattern(t)
 	return nil

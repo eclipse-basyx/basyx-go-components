@@ -48,18 +48,34 @@ The helper validates each textual cast input once; nested casts generate SQL
 whose size grows linearly with nesting depth. Its PostgreSQL function-call cost
 still needs representative workload measurement.
 
-Temporal casts do not depend on the PostgreSQL session TimeZone. The generated
-SQL normalizes the text with `regexp_replace` before `basyx_validated_cast_input`:
-dates and date-times without a timezone get an explicit `Z`, dates get an
-explicit midnight so negative offsets are not misread, fractional digits beyond
-microseconds are truncated, and anything other than an ISO 8601 date or
-date-time yields NULL. Each cast still references its operand once. Converting a
-date-time to a time and extracting calendar parts both use UTC; direct time casts
-of `LOCALNOW` and `CLIENTNOW` retain the clock time supplied by the attribute.
-Keep these patterns free of nested optional groups, which PostgreSQL evaluates
-an order of magnitude slower. Constant folding in Go accepts only temporal input
-whose PostgreSQL result it reproduces exactly and leaves everything else to the
-database.
+Temporal operators follow XSD and XPath and do not depend on the PostgreSQL
+session TimeZone:
+
+- `$dateTimeCast` and `$timeCast` accept only the `xs:dateTime` and `xs:time`
+  lexical spaces. Dates, timestamps without `T` or seconds, and other PostgreSQL
+  input formats yield NULL, so the candidate does not match. `$dateTimeVal` and
+  `$timeVal` accept every `<DateTimeLiteral>` and `<TimeLiteral>` form, including
+  those without `T`, seconds, or timezone.
+- UTC is the implicit timezone of values without one.
+- `$year`, `$month`, `$dayOfMonth`, and `$dayOfWeek` use the value's own timezone.
+  Casting an `xs:dateTime` to `xs:time` keeps its clock time and timezone.
+- Times are compared as instants on the XPath reference date 1972-12-31, so
+  `10:00:00+02:00` equals `08:00:00Z` and `24:00:00` equals `00:00:00`. Access
+  rules that compare `time(LOCALNOW)` with a clock time must therefore give that
+  clock time the local offset.
+- Fractional seconds beyond microseconds are truncated, never rounded.
+- `$strCast` of a date-time or time yields its canonical text in UTC.
+- TIMESTAMPTZ fields such as `$aasdesc#createdAt` are compared as instants
+  directly, so their indexes stay usable, and read as `xs:dateTime` text in UTC.
+
+The generated SQL validates and normalizes the text with `regexp_replace` and
+`substring` before `basyx_validated_cast_input` and needs no further database
+function. Each cast references its operand once, which keeps the SQL linear in
+nesting depth. Keep these patterns free of nested optional groups: PostgreSQL
+evaluates those an order of magnitude slower. A cast costs about 1.7 µs per
+evaluated row on a one-million-row scan. Constant folding in Go accepts only
+temporal input whose PostgreSQL result it reproduces exactly and leaves
+everything else to the database.
 
 ## Quick mental model (no background required)
 

@@ -26,7 +26,6 @@
 package grammar
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -40,35 +39,61 @@ const fractionBeyondMicrosecondsPattern = `(\.[0-9]{6})[0-9]+`
 const maxXSDTimezoneOffsetHours = 14
 
 var (
-	fractionBeyondMicrosecondsRegex = regexp.MustCompile(fractionBeyondMicrosecondsPattern)
-	castDateTimeRegex               = regexp.MustCompile(`^([0-9]{4,})-([0-9]{2})-([0-9]{2})(?:[T ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.([0-9]+))?)?)?(Z|[+-][0-9]{2}:[0-9]{2})?$`)
-	timeOfDayRegex                  = regexp.MustCompile(`^([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})?$`)
-	maxPostgreSQLTimestamp          = time.Date(294276, time.December, 31, 23, 59, 59, 999999000, time.UTC)
+	// xsdDateTimeRegex matches the xs:dateTime lexical space accepted by a cast from xs:string.
+	xsdDateTimeRegex = regexp.MustCompile(`^((?:[1-9][0-9]{3,}|0[0-9]{3}))-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})?$`)
+	// dateTimeLiteralRegex matches <DateTimeLiteral>: the "T", the seconds and the timezone are optional.
+	dateTimeLiteralRegex = regexp.MustCompile(`^([0-9]{4})-([0-9]{2})-([0-9]{2})T?([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})?$`)
+	// xsdTimeRegex matches the xs:time lexical space accepted by a cast from xs:string.
+	xsdTimeRegex = regexp.MustCompile(`^([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})?$`)
+	// timeLiteralRegex matches <TimeLiteral>: the seconds and the timezone are optional.
+	timeLiteralRegex = regexp.MustCompile(`^([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})?$`)
+
+	maxPostgreSQLTimestamp = time.Date(294276, time.December, 31, 23, 59, 59, 999999000, time.UTC)
 )
+
+// timeReferenceDate is the date XPath attaches to xs:time values to compare them as instants.
+var timeReferenceDate = time.Date(1972, time.December, 31, 0, 0, 0, 0, time.UTC)
 
 // truncateToMicroseconds drops sub-microsecond precision the same way SQL generation does.
 func truncateToMicroseconds(t time.Time) time.Time {
 	return t.Add(-time.Duration(t.Nanosecond() % int(time.Microsecond)))
 }
 
-// truncateFractionDigits removes fractional-second digits beyond microsecond precision.
-func truncateFractionDigits(text string) string {
-	return fractionBeyondMicrosecondsRegex.ReplaceAllString(text, "$1")
-}
-
-// postgreSQLYear numbers years like PostgreSQL EXTRACT(YEAR), which has no year 0.
-func postgreSQLYear(t time.Time) int {
-	if year := t.Year(); year > 0 {
-		return year
+// parseXSDDateTime casts a string to xs:dateTime. The result keeps the submitted timezone
+// offset, and a value without one is placed in UTC, the implicit timezone. It rejects every
+// input that is not an xs:dateTime or that PostgreSQL cannot parse, such as year 0000.
+func parseXSDDateTime(value string) (time.Time, bool) {
+	parts := xsdDateTimeRegex.FindStringSubmatch(strings.TrimSpace(value))
+	if parts != nil && parts[1] == "0000" {
+		return time.Time{}, false
 	}
-	return t.Year() - 1
+	return dateTimeFromParts(parts)
 }
 
-// parseCastDateTime parses the date and date-time forms that SQL generation accepts for
-// $dateTimeCast. It rejects every input whose PostgreSQL result it cannot reproduce, so
-// those comparisons are left to the database instead of being folded differently.
-func parseCastDateTime(value string) (time.Time, bool) {
-	parts := castDateTimeRegex.FindStringSubmatch(value)
+// parseDateTimeLiteral parses a <DateTimeLiteral> like parseXSDDateTime, but also accepts
+// the forms without "T" or seconds that the query language allows for literals.
+func parseDateTimeLiteral(value string) (time.Time, bool) {
+	return dateTimeFromParts(dateTimeLiteralRegex.FindStringSubmatch(value))
+}
+
+// parseXSDTime casts a string to xs:time and returns it as an instant on the XPath reference date.
+func parseXSDTime(value string) (time.Time, bool) {
+	return timeFromParts(xsdTimeRegex.FindStringSubmatch(strings.TrimSpace(value)))
+}
+
+// parseTimeLiteral parses a <TimeLiteral> like parseXSDTime, but also accepts the form without seconds.
+func parseTimeLiteral(value string) (time.Time, bool) {
+	return timeFromParts(timeLiteralRegex.FindStringSubmatch(value))
+}
+
+// timeOfDateTime returns the xs:time of an xs:dateTime: its local clock time and timezone on the reference date.
+func timeOfDateTime(t time.Time) time.Time {
+	hour, minute, second := t.Clock()
+	return time.Date(timeReferenceDate.Year(), timeReferenceDate.Month(), timeReferenceDate.Day(),
+		hour, minute, second, t.Nanosecond(), t.Location())
+}
+
+func dateTimeFromParts(parts []string) (time.Time, bool) {
 	if parts == nil {
 		return time.Time{}, false
 	}
@@ -77,7 +102,7 @@ func parseCastDateTime(value string) (time.Time, bool) {
 	day, _ := strconv.Atoi(parts[3])
 	clock, clockOK := parseClock(parts[4], parts[5], parts[6], parts[7])
 	zone, zoneOK := parseTimezoneOffset(parts[8])
-	if year < 1 || !clockOK || !zoneOK {
+	if !clockOK || !zoneOK {
 		return time.Time{}, false
 	}
 	midnight := time.Date(year, time.Month(month), day, 0, 0, 0, 0, zone)
@@ -91,36 +116,35 @@ func parseCastDateTime(value string) (time.Time, bool) {
 	return instant, true
 }
 
-// toTimeOfDayMicros returns the clock time of an xs:time value in microseconds since
-// midnight. Like a PostgreSQL time cast, it ignores the timezone offset.
-func toTimeOfDayMicros(value interface{}) (int, bool) {
-	parts := timeOfDayRegex.FindStringSubmatch(strings.TrimSpace(fmt.Sprint(value)))
+// timeFromParts maps 24:00:00 to 00:00:00, as xs:time does.
+func timeFromParts(parts []string) (time.Time, bool) {
 	if parts == nil {
-		return 0, false
+		return time.Time{}, false
 	}
 	clock, clockOK := parseClock(parts[1], parts[2], parts[3], parts[4])
-	_, zoneOK := parseTimezoneOffset(parts[5])
+	zone, zoneOK := parseTimezoneOffset(parts[5])
 	if !clockOK || !zoneOK {
-		return 0, false
+		return time.Time{}, false
 	}
-	return int(clock / time.Microsecond), true
+	referenceMidnight := time.Date(timeReferenceDate.Year(), timeReferenceDate.Month(), timeReferenceDate.Day(), 0, 0, 0, 0, zone)
+	return referenceMidnight.Add(clock % (24 * time.Hour)), true
 }
 
-// parseClock converts clock components to the duration since midnight, truncated to
-// microseconds. Empty components count as zero, and 24:00:00 denotes the end of the day.
+// parseClock converts clock components to the duration since midnight. An empty second
+// counts as zero, and 24:00:00 with a zero fraction denotes the end of the day.
 func parseClock(hourText, minuteText, secondText, fractionText string) (time.Duration, bool) {
 	hour, _ := strconv.Atoi(hourText)
 	minute, _ := strconv.Atoi(minuteText)
 	second, _ := strconv.Atoi(secondText)
-	micros, _ := strconv.Atoi((fractionText + "000000")[:6])
-	if minute > 59 || second > 59 || hour > 24 || hour == 24 && minute+second+micros > 0 {
+	nanos, _ := strconv.Atoi((fractionText + "000000000")[:9])
+	if minute > 59 || second > 59 || hour > 24 || hour == 24 && (minute > 0 || second > 0 || strings.Trim(fractionText, "0") != "") {
 		return 0, false
 	}
 	return time.Duration(hour)*time.Hour + time.Duration(minute)*time.Minute +
-		time.Duration(second)*time.Second + time.Duration(micros)*time.Microsecond, true
+		time.Duration(second)*time.Second + time.Duration(nanos), true
 }
 
-// parseTimezoneOffset accepts an empty designator as UTC, "Z", or an XSD offset of at most 14 hours.
+// parseTimezoneOffset accepts an empty designator as UTC, "Z", or an offset of at most 14 hours.
 func parseTimezoneOffset(designator string) (*time.Location, bool) {
 	if designator == "" || designator == "Z" {
 		return time.UTC, true
@@ -135,4 +159,37 @@ func parseTimezoneOffset(designator string) (*time.Location, bool) {
 		offset = -offset
 	}
 	return time.FixedZone(designator, offset), true
+}
+
+// extractDatePart returns a calendar part of an xs:dateTime in its own timezone, the way
+// PostgreSQL EXTRACT reports it: part is "YEAR", "MONTH", "DAY", or "DOW" (0 for Sunday).
+func extractDatePart(t time.Time, part string) (float64, bool) {
+	local := truncateToMicroseconds(t)
+	switch part {
+	case "YEAR":
+		return float64(local.Year()), true
+	case "MONTH":
+		return float64(local.Month()), true
+	case "DAY":
+		return float64(local.Day()), true
+	case "DOW":
+		return float64(local.Weekday()), true
+	default:
+		return 0, false
+	}
+}
+
+// canonicalDateTimeString renders an xs:dateTime as canonical text in UTC. It fails for
+// instants before year 1, which PostgreSQL renders in its own BC notation.
+func canonicalDateTimeString(t time.Time) (string, bool) {
+	utc := truncateToMicroseconds(t.UTC())
+	if utc.Year() < 1 {
+		return "", false
+	}
+	return utc.Format("2006-01-02T15:04:05.999999Z"), true
+}
+
+// canonicalTimeString renders an xs:time instant on the reference date as canonical text in UTC.
+func canonicalTimeString(t time.Time) string {
+	return truncateToMicroseconds(t.UTC()).Format("15:04:05.999999Z")
 }

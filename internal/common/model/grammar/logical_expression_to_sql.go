@@ -1716,6 +1716,8 @@ func toSQLResolvedFieldOrValue(
 		return nil, nil, fmt.Errorf("GRAMMAR-SQLOPERAND-ATTRIBUTE: attribute operands are not supported in SQL evaluation")
 	}
 	switch {
+	case operand.StrCast != nil && isTemporalOperand(*operand.StrCast):
+		return temporalStringCastToSQL(operand.StrCast, position, collector)
 	case operand.StrCast != nil:
 		return castResolvedOperandToSQL(operand.StrCast, position, "text", collector)
 	case operand.NumCast != nil:
@@ -1739,7 +1741,11 @@ func toSQLResolvedFieldOrValue(
 	case operand.Field != nil:
 		return decoratedFieldToSQL(*operand.Field, collector)
 	case operand.TimeVal != nil:
-		return goqu.V(truncateFractionDigits(string(*operand.TimeVal))), nil, nil
+		t, ok := parseTimeLiteral(string(*operand.TimeVal))
+		if !ok {
+			return nil, nil, fmt.Errorf("GRAMMAR-SQLOPERAND-TIMEVAL: invalid $timeVal %q", string(*operand.TimeVal))
+		}
+		return goqu.L("?::timestamptz", normalizeTime(t)), nil, nil
 	default:
 		return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil, nil
 	}
@@ -1774,17 +1780,55 @@ func decoratedFieldToSQL(f ModelStringPattern, collector *ResolvedFieldPathColle
 }
 
 func castResolvedOperandToSQL(inner *Value, position, targetType string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	if targetType == "time" && isDateTimeOperand(*inner) {
+		return timeOfDateTimeOperandToSQL(inner, position, collector)
+	}
 	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
 	if err != nil {
 		return nil, nil, err
 	}
-	if targetType == "time" && isDateTimeOperand(*inner) {
-		return goqu.L("timezone('UTC', ?::timestamptz)::time", sqlValue), resolved, nil
+	if isTimestampField(*inner) {
+		return timestampFieldCastSQLValue(sqlValue, targetType), resolved, nil
 	}
 	return safeCastSQLValue(sqlValue, targetType), resolved, nil
 }
 
+// timestampFieldCastSQLValue casts a TIMESTAMPTZ field, whose value is the xs:dateTime in UTC.
+// A date-time cast keeps the column itself, so its index stays usable.
+func timestampFieldCastSQLValue(sqlValue interface{}, targetType string) interface{} {
+	if targetType == "timestamptz" {
+		return sqlValue
+	}
+	return safeCastSQLValue(timestampFieldText(sqlValue), targetType)
+}
+
+// timeOfDateTimeOperandToSQL casts an xs:dateTime operand to xs:time, keeping its local clock time and timezone.
+func timeOfDateTimeOperandToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	if inner.DateTimeVal != nil {
+		return goqu.L("?::timestamptz", normalizeTime(timeOfDateTime(time.Time(*inner.DateTimeVal)))), nil, nil
+	}
+	dateTimeText, resolved, err := dateTimeOperandTextToSQL(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	return timeOfDateTimeSQLValue(dateTimeText), resolved, nil
+}
+
+// datePartResolvedOperandToSQL extracts a calendar part in the operand's own timezone, as XSD defines it.
 func datePartResolvedOperandToSQL(inner *Value, position, part string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	if inner.DateTimeVal != nil {
+		value, _ := extractDatePart(time.Time(*inner.DateTimeVal), part)
+		return goqu.L("?::numeric", value), nil, nil
+	}
+	dateTimeText, resolved, err := dateTimeOperandTextToSQL(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	return goqu.L("EXTRACT("+part+" FROM ?)", localDateTimeSQLValue(dateTimeText)), resolved, nil
+}
+
+// dateTimeOperandTextToSQL returns validated xs:dateTime text of a $dateTimeCast or of an operand cast implicitly.
+func dateTimeOperandTextToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if inner.DateTimeCast != nil {
 		inner = inner.DateTimeCast
 	}
@@ -1792,11 +1836,41 @@ func datePartResolvedOperandToSQL(inner *Value, position, part string, collector
 	if err != nil {
 		return nil, nil, err
 	}
-	instant := utcTimestampSQLValue(sqlValue)
-	if isDateTimeOperand(*inner) {
-		instant = goqu.L("?::timestamptz", sqlValue)
+	if isTimestampField(*inner) {
+		sqlValue = timestampFieldText(sqlValue)
 	}
-	return goqu.L("EXTRACT("+part+" FROM timezone('UTC', ?))", instant), resolved, nil
+	return xsdDateTimeSQLText(sqlValue), resolved, nil
+}
+
+// temporalStringCastToSQL renders a date-time or time operand as canonical text in UTC.
+func temporalStringCastToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	switch {
+	case inner.DateTimeVal != nil, inner.TimeVal != nil:
+		text, ok := stringOperandValue(literalTemporalValue(*inner))
+		if !ok {
+			return goqu.L("NULL::text"), nil, nil
+		}
+		return goqu.L("?::text", text), nil, nil
+	}
+	instant, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	if inner.TimeCast != nil {
+		return canonicalTimeSQLText(goqu.L("?", instant)), resolved, nil
+	}
+	return canonicalDateTimeSQLText(goqu.L("?", instant)), resolved, nil
+}
+
+func literalTemporalValue(v Value) any {
+	if v.DateTimeVal != nil {
+		return *v.DateTimeVal
+	}
+	return *v.TimeVal
+}
+
+func isTemporalOperand(v Value) bool {
+	return v.DateTimeVal != nil || v.DateTimeCast != nil || v.TimeVal != nil || v.TimeCast != nil
 }
 
 func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
@@ -2944,9 +3018,9 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 	switch targetType {
 	case "timestamptz":
-		return utcTimestampSQLValue(sqlValue)
+		return instantSQLValue(xsdDateTimeSQLText(sqlValue))
 	case "time":
-		return timeOfDaySQLValue(sqlValue)
+		return xsdTimeSQLValue(sqlValue)
 	case "double precision":
 		return totalCastSQLValue(sqlValue, targetType, "double precision")
 	case "boolean":

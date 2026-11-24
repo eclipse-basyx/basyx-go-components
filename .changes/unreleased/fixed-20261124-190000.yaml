@@ -1,0 +1,7 @@
+kind: fixed
+body: $dateTimeVal and $timeVal accept every literal form of the query-language grammar, including times without seconds such as "08:00", times and date-times without a timezone, and date-times without the "T" separator or seconds. Literals with invalid components, such as "25:00" or a 15-hour offset, are rejected with HTTP 400.
+time: 2026-11-24T19:00:00.000000+01:00
+custom:
+    Impact: Low
+    PullRequest: 917
+    SecurityImpact: Access rule files and queries that use these literal forms are now accepted instead of rejected. Rules with zone-less literals use UTC as the implicit timezone.

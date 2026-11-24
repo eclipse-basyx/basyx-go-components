@@ -31,6 +31,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 )
@@ -273,15 +274,15 @@ func TestLogicalExpression_SME_WithCasts(t *testing.T) {
 	if !strings.Contains(sql, "::double precision") {
 		t.Fatalf("expected double precision cast in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "::time") {
+	if !strings.Contains(sql, "'1972-12-31T' ||") && !strings.Contains(argsString(args), "1972-12-31T") {
 		t.Fatalf("expected time cast in SQL, got: %s", sql)
 	}
 	argsText := argsString(args)
 	if !strings.Contains(argsText, "10") {
 		t.Fatalf("expected args to contain %q, got: %v", "10", args)
 	}
-	if !strings.Contains(argsText, "12:00:00Z") {
-		t.Fatalf("expected args to contain %q, got: %v", "12:00:00Z", args)
+	if !argListContains(args, time.Date(1972, time.December, 31, 12, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected the time literal as an instant on the XPath reference date, got: %v", args)
 	}
 }
 

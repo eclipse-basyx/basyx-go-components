@@ -38,7 +38,7 @@ func temporalColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression
 }
 
 func legacyDateTimeColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression {
-	return goqu.L(common.PostgreSQLLegacyDateTimeColumnTextSQL("?"), column)
+	return goqu.L(common.PostgreSQLTimestampColumnTextSQL("?"), column)
 }
 
 func operationValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue bool) exp.Expression {

@@ -115,7 +115,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 			expr:    LogicalExpression{Lt: ComparisonItems{field("$aasdesc#idShort"), Value{TimeVal: &timeVal}}},
 			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "< ?"},
 			wantArgs: []interface{}{
-				string(timeVal),
+				time.Date(1972, time.December, 31, 12, 34, 0, 0, time.UTC),
 			},
 			noExists: true,
 		},

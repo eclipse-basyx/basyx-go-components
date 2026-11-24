@@ -43,7 +43,7 @@ func PostgreSQLTemporalColumnTextSQL(column string) string {
 	return fmt.Sprintf(`trim(both '"' from to_json(%s)::text)`, column)
 }
 
-// PostgreSQLLegacyDateTimeColumnTextSQL renders a TIMESTAMPTZ column as an xs:dateTime
+// PostgreSQLTimestampColumnTextSQL renders a TIMESTAMPTZ column as an xs:dateTime
 // in UTC with an explicit "+00:00" offset, independent of the session TimeZone.
 //
 // Parameters:
@@ -54,8 +54,8 @@ func PostgreSQLTemporalColumnTextSQL(column string) string {
 //
 // Example:
 //
-//	goqu.L(common.PostgreSQLLegacyDateTimeColumnTextSQL("?"), goqu.I("pe.value_datetime"))
-func PostgreSQLLegacyDateTimeColumnTextSQL(column string) string {
+//	goqu.L(common.PostgreSQLTimestampColumnTextSQL("?"), goqu.I("pe.value_datetime"))
+func PostgreSQLTimestampColumnTextSQL(column string) string {
 	utcText := PostgreSQLTemporalColumnTextSQL(fmt.Sprintf("timezone('UTC', %s)", column))
 	return fmt.Sprintf(`regexp_replace(%s, '^(.+) BC$', E'-\\1') || '+00:00'`, utcText)
 }

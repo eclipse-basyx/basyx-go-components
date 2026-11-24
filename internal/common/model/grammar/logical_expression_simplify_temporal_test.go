@@ -33,45 +33,59 @@ import (
 func TestSimplifyDateTimeCastOnLiteralsAndClaims(t *testing.T) {
 	for _, test := range []struct{ input, want string }{
 		{"2024-01-01T08:00:00", "2024-01-01T08:00:00Z"},
-		{"2024-01-01", "2024-01-01T00:00:00Z"},
-		{"2024-01-01Z", "2024-01-01T00:00:00Z"},
-		{"2024-01-01-05:00", "2024-01-01T05:00:00Z"},
-		{"2024-01-01+02:00", "2023-12-31T22:00:00Z"},
-		{"2024-01-01 08:00", "2024-01-01T08:00:00Z"},
-		{"2024-01-01T08:00+02:00", "2024-01-01T06:00:00Z"},
-		{"2024-12-31 23:59:59.999999999", "2024-12-31T23:59:59.999999999Z"},
+		{" 2024-01-01T08:00:00+02:00 ", "2024-01-01T06:00:00Z"},
+		{"2024-12-31T23:59:59.999999999Z", "2024-12-31T23:59:59.999999999Z"},
 		{"2024-02-29T24:00:00.000Z", "2024-03-01T00:00:00Z"},
+		{"12024-01-01T00:00:00Z", "12024-01-01T00:00:00Z"},
 	} {
 		t.Run(test.input, func(t *testing.T) {
-			want, err := time.Parse(time.RFC3339Nano, test.want)
-			if err != nil {
-				t.Fatal(err)
+			want, ok := parseXSDDateTime(test.want)
+			if !ok {
+				t.Fatalf("invalid expectation %s", test.want)
 			}
-			literal := strVal(test.input)
-			claim := Value{Attribute: map[string]string{"CLAIM": "timestamp"}}
-			resolver := func(AttributeValue) any { return ClaimValue{Value: test.input} }
-			for _, input := range []Value{literal, claim} {
-				cast := Value{DateTimeCast: &input}
+			for _, input := range dateTimeCastInputs(test.input) {
+				cast := Value{DateTimeCast: &input.value}
 				expression := LogicalExpression{Eq: ComparisonItems{cast, {DateTimeVal: new(DateTimeLiteralPattern(want))}}}
-				_, decision := expression.SimplifyForBackendFilter(resolver)
-				if decision != SimplifyTrue {
-					t.Fatalf("cast of %#v gave %v, want instant %s", input, decision, test.want)
-				}
-				datePart := LogicalExpression{Eq: ComparisonItems{{Year: &cast}, {NumVal: new(float64(want.Year()))}}}
-				if _, decision := datePart.SimplifyForBackendFilter(resolver); decision != SimplifyTrue {
-					t.Fatalf("year of %#v gave %v, want %d", input, decision, want.Year())
+				if _, decision := expression.SimplifyForBackendFilter(input.resolver); decision != SimplifyTrue {
+					t.Fatalf("cast of %#v gave %v, want instant %s", input.value, decision, test.want)
 				}
 			}
 		})
 	}
 }
 
+func TestDateTimeCastRejectsNonXSDDateTimes(t *testing.T) {
+	midnight := DateTimeLiteralPattern(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	for _, input := range []string{"2024-01-01", "2024-01-01Z", "2024-01-01 00:00:00", "2024-01-01T00:00", "2024-01-01t00:00:00z", "today"} {
+		t.Run(input, func(t *testing.T) {
+			for _, operand := range dateTimeCastInputs(input) {
+				expression := LogicalExpression{Eq: ComparisonItems{{DateTimeCast: &operand.value}, {DateTimeVal: &midnight}}}
+				if _, decision := expression.SimplifyForBackendFilter(operand.resolver); decision == SimplifyTrue {
+					t.Fatalf("%q is not an xs:dateTime, so the cast must not match", input)
+				}
+			}
+		})
+	}
+}
+
+type dateTimeCastInput struct {
+	value    Value
+	resolver AttributeResolver
+}
+
+func dateTimeCastInputs(text string) []dateTimeCastInput {
+	return []dateTimeCastInput{
+		{strVal(text), func(AttributeValue) any { return nil }},
+		{Value{Attribute: map[string]string{"CLAIM": "timestamp"}}, func(AttributeValue) any { return ClaimValue{Value: text} }},
+	}
+}
+
 func TestDateTimeCastExtendedYearAndInvalidDates(t *testing.T) {
-	if got, ok := toDateTime("10000-02-29+00:00"); !ok || got.Year() != 10000 || got.Month() != time.February || got.Day() != 29 {
+	if got, ok := toDateTime("10000-02-29T00:00:00+00:00"); !ok || got.Year() != 10000 || got.Month() != time.February || got.Day() != 29 {
 		t.Fatalf("extended year parsed as %v, valid %v", got, ok)
 	}
 	for _, invalid := range []string{
-		"", "2023-02-29", "10100-02-29", "-0001-01-01", "0000-06-01T00:00:00Z", "2024-01-01T24:01", "2024-01-01T24:00:00.001Z",
+		"", "2023-02-29T00:00:00", "10100-02-29T00:00:00", "-0001-01-01T00:00:00", "0000-06-01T00:00:00Z", "02024-01-01T00:00:00Z", "2024-01-01T23:59:60Z", "2024-01-01T24:01", "2024-01-01T24:00:00.001Z",
 		"2024-01-01T08:00:00,5Z", "2024-01-01T08:00:00+24:00", "2024-01-01T08:00:00+14:30", "294276-12-31T23:59:59-05:00",
 	} {
 		if value, ok := toDateTime(invalid); ok {
@@ -80,13 +94,22 @@ func TestDateTimeCastExtendedYearAndInvalidDates(t *testing.T) {
 	}
 }
 
-func TestSimplifyTimeCastOfDateTimeUsesUTC(t *testing.T) {
+func TestTimeCastOfDateTimeKeepsItsTimezone(t *testing.T) {
 	lexical := strVal("2024-01-01T00:30:00+02:00")
 	instant := Value{DateTimeCast: &lexical}
-	want := TimeLiteralPattern("22:30:00Z")
-	expression := LogicalExpression{Eq: ComparisonItems{{TimeCast: &instant}, {TimeVal: &want}}}
-	if _, decision := expression.SimplifyForBackendFilterNoResolver(); decision != SimplifyTrue {
-		t.Errorf("time cast of %#v gave %v, want clock time %s", instant, decision, want)
+	for _, test := range []struct {
+		clock TimeLiteralPattern
+		want  SimplifyDecision
+	}{
+		{"00:30:00+02:00", SimplifyTrue},
+		{"01:30:00+03:00", SimplifyTrue},
+		{"23:30:00+01:00", SimplifyFalse},
+		{"22:30:00Z", SimplifyFalse},
+	} {
+		expression := LogicalExpression{Eq: ComparisonItems{{TimeCast: &instant}, {TimeVal: &test.clock}}}
+		if _, decision := expression.SimplifyForBackendFilterNoResolver(); decision != test.want {
+			t.Errorf("time of %s compared with %s gave %v, want %v", *lexical.StrVal, test.clock, decision, test.want)
+		}
 	}
 }
 
@@ -119,19 +142,21 @@ func TestTemporalFoldingMatchesPostgreSQLSemantics(t *testing.T) {
 		return Value{TimeVal: &pattern}
 	}
 	halfSecond := DateTimeLiteralPattern(time.Date(2024, 1, 1, 8, 0, 0, 500_000_000, time.UTC))
-	minusOne := float64(-1)
+	one := float64(1)
 	tests := []struct {
 		name       string
 		expression LogicalExpression
 		want       SimplifyDecision
 	}{
-		{"digits beyond microseconds are truncated, not rounded", LogicalExpression{Eq: ComparisonItems{dateTimeCast("2024-12-31 23:59:59.999999999"), dateTimeCast("2025-01-01T00:00:00Z")}}, SimplifyFalse},
+		{"digits beyond microseconds are truncated, not rounded", LogicalExpression{Eq: ComparisonItems{dateTimeCast("2024-12-31T23:59:59.999999999"), dateTimeCast("2025-01-01T00:00:00Z")}}, SimplifyFalse},
 		{"instants within one microsecond are equal", LogicalExpression{Gt: ComparisonItems{dateTimeCast("2024-01-01T00:00:00.0000001Z"), dateTimeCast("2024-01-01T00:00:00Z")}}, SimplifyFalse},
 		{"times keep fractional seconds", LogicalExpression{Gt: ComparisonItems{timeCast(Value{DateTimeVal: &halfSecond}), timeCast(strVal("08:00:00Z"))}}, SimplifyTrue},
 		{"time literals are truncated to microseconds", LogicalExpression{Eq: ComparisonItems{timeVal("10:00:00.1234567Z"), timeCast(strVal("10:00:00.123456Z"))}}, SimplifyTrue},
 		{"zone-less times are accepted", LogicalExpression{Eq: ComparisonItems{timeCast(strVal("10:00:00")), timeVal("10:00:00Z")}}, SimplifyTrue},
-		{"end of day follows the last microsecond", LogicalExpression{Gt: ComparisonItems{timeCast(strVal("24:00:00")), timeVal("23:59:59.999999Z")}}, SimplifyTrue},
-		{"1 BC is year -1", LogicalExpression{Eq: ComparisonItems{{Year: new(dateTimeCast("0001-01-01T00:00:00+01:00"))}, {NumVal: &minusOne}}}, SimplifyTrue},
+		{"24:00:00 is the start of the day", LogicalExpression{Eq: ComparisonItems{timeCast(strVal("24:00:00")), timeVal("00:00Z")}}, SimplifyTrue},
+		{"times with an offset compare as instants", LogicalExpression{Eq: ComparisonItems{timeCast(strVal("10:00:00+02:00")), timeVal("08:00:00Z")}}, SimplifyTrue},
+		{"time literals may omit seconds", LogicalExpression{Lt: ComparisonItems{timeVal("23:00-02:00"), timeVal("23:30")}}, SimplifyFalse},
+		{"years are taken in the value's own timezone", LogicalExpression{Eq: ComparisonItems{{Year: new(dateTimeCast("0001-01-01T00:00:00+01:00"))}, {NumVal: &one}}}, SimplifyTrue},
 		{"comma fractions are left to PostgreSQL", LogicalExpression{Eq: ComparisonItems{dateTimeCast("2024-01-01T08:00:00,5Z"), {DateTimeVal: &halfSecond}}}, SimplifyUndecided},
 	}
 	for _, test := range tests {
@@ -140,5 +165,20 @@ func TestTemporalFoldingMatchesPostgreSQLSemantics(t *testing.T) {
 				t.Fatalf("got %v, want %v", decision, test.want)
 			}
 		})
+	}
+}
+
+func TestDatePartsOfLocalNowUseItsOwnTimezone(t *testing.T) {
+	localNow := Value{Attribute: map[string]string{"GLOBAL": "LOCALNOW"}}
+	resolver := func(AttributeValue) any { return "2024-01-01T00:30:00+02:00" }
+	monday := float64(time.Monday)
+	expression := LogicalExpression{Eq: ComparisonItems{{DayOfWeek: &localNow}, {NumVal: &monday}}}
+	if _, decision := expression.SimplifyForBackendFilter(resolver); decision != SimplifyTrue {
+		t.Fatalf("Monday 00:30 local time gave %v, want Monday", decision)
+	}
+	clock := TimeLiteralPattern("00:30+02:00")
+	timeOfDay := LogicalExpression{Eq: ComparisonItems{{TimeCast: &localNow}, {TimeVal: &clock}}}
+	if _, decision := timeOfDay.SimplifyForBackendFilter(resolver); decision != SimplifyTrue {
+		t.Fatalf("time of LOCALNOW gave %v, want its local clock time", decision)
 	}
 }

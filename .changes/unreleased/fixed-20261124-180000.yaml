@@ -1,5 +1,5 @@
 kind: fixed
-body: AASQL and ABAC conditions whose temporal operands are all literals or claims are decided like the same comparison in the database. Time comparisons keep fractional seconds, $year of a date before year 1 follows the PostgreSQL numbering in which 1 BC is -1, $timeCast no longer accepts a date-time string, and inputs that PostgreSQL rejects, such as comma-separated fractions or offsets beyond 14 hours, no longer match.
+body: AASQL and ABAC conditions whose temporal operands are all literals or claims are decided like the same comparison in the database. Time comparisons keep fractional seconds, and inputs that PostgreSQL rejects, such as comma-separated fractions or offsets beyond 14 hours, no longer match.
 time: 2026-11-24T18:00:00.000000+01:00
 custom:
     Impact: Low
