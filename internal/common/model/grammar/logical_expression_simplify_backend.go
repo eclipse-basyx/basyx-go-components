@@ -920,7 +920,7 @@ func literalValueFromAnyWithHint(x any, hint ComparisonKind) (Value, bool) {
 			return Value{DateTimeVal: &pat}, true
 		}
 	case KindTime:
-		s := strings.TrimSpace(fmt.Sprint(x))
+		s := strings.Trim(fmt.Sprint(x), xsdWhitespace)
 		if _, ok := parseXSDTime(s); ok {
 			pat := TimeLiteralPattern(s)
 			return Value{TimeVal: &pat}, true
@@ -978,7 +978,7 @@ func literalClaimValueWithHint(value any, hint ComparisonKind) (Value, bool) {
 	case KindTime:
 		if text, ok := value.(string); ok {
 			if _, valid := parseXSDTime(text); valid {
-				pattern := TimeLiteralPattern(strings.TrimSpace(text))
+				pattern := TimeLiteralPattern(strings.Trim(text, xsdWhitespace))
 				return Value{TimeVal: &pattern}, true
 			}
 		}
@@ -1129,6 +1129,16 @@ func resolveCastValue(v Value, resolve AttributeResolver) any {
 		}
 	}
 	switch {
+	case v.StrCast != nil && isDateTimeAttributeOperand(*v.StrCast):
+		instant, ok := toDateTime(resolveValue(*v.StrCast, resolve))
+		if !ok {
+			return nil
+		}
+		value, ok := canonicalDateTimeString(instant)
+		if !ok {
+			return nil
+		}
+		return value
 	case v.StrCast != nil:
 		value, ok := stringOperandValue(resolveValue(*v.StrCast, resolve))
 		if !ok {
@@ -1174,11 +1184,11 @@ func resolveTimeCastOperand(v Value, resolve AttributeResolver) any {
 	raw := resolveValue(v, resolve)
 	if isDateTimeOperand(v) {
 		if t, ok := toDateTime(raw); ok {
-			return TimeLiteralPattern(timeOfDateTime(t).Format("15:04:05.999999999Z07:00"))
+			return TimeLiteralPattern(canonicalTimeString(timeOfDateTime(t)))
 		}
 		return nil
 	}
-	text := strings.TrimSpace(fmt.Sprint(raw))
+	text := strings.Trim(fmt.Sprint(raw), xsdWhitespace)
 	if _, ok := parseXSDTime(text); ok {
 		return TimeLiteralPattern(text)
 	}

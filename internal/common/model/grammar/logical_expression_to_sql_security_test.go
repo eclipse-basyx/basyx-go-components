@@ -86,8 +86,8 @@ func TestNestedDateTimeCastsRenderEachOperandOnce(t *testing.T) {
 	outer := Value{DateTimeCast: &Value{StrCast: &inner}}
 	instant := DateTimeLiteralPattern{}
 	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{outer, {DateTimeVal: &instant}}})
-	if strings.Count(sql, "basyx_validated_cast_input(") != 2 || strings.Count(sql, `"aas"."id_short"`) != 1 {
-		t.Fatalf("expected one call per temporal cast and one field reference:\n%s", sql)
+	if strings.Count(sql, "basyx_validated_cast_input(") != 3 || strings.Count(sql, `"aas"."id_short"`) != 1 {
+		t.Fatalf("expected one validation per cast, one for the string cast, and one field reference:\n%s", sql)
 	}
 }
 
@@ -99,8 +99,8 @@ func TestDatePartExtractsTheLocalCalendarPart(t *testing.T) {
 		{DayOfMonth: fieldValue("$aas#idShort")},
 		{NumVal: &one},
 	}})
-	if !strings.Contains(sql, "EXTRACT(DAY FROM regexp_replace(basyx_validated_cast_input(") || strings.Contains(sql, "timezone(") {
-		t.Fatalf("date parts must come from the local date and time, not from a session-dependent instant:\n%s", sql)
+	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', basyx_validated_cast_input(regexp_replace(basyx_validated_cast_input(") {
+		t.Fatalf("date parts must come from the local date and time, read as UTC:\n%s", sql)
 	}
 }
 

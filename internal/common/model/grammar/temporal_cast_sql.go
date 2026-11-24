@@ -32,26 +32,34 @@ import (
 
 // SQL patterns that validate and normalize xs:dateTime and xs:time text. They stay free of
 // nested optional groups because PostgreSQL evaluates those an order of magnitude slower.
+//
+// Validated text marks a value without a timezone with a lowercase "z". PostgreSQL reads it as
+// UTC, the implicit timezone, and the lexical patterns never accept it, so the marker cannot be
+// confused with a submitted "Z" when the value is cast back to a string.
 const (
-	zonelessDateTimeSQLPattern   = `^([0-9]{4,}-[0-9]{2}-[0-9]{2}T[0-9:.]+)$`
-	xsdDateTimeSQLPattern        = `^(?:[1-9][0-9]{3,}|0[0-9]{3})-[0-9]{2}-[0-9]{2}T(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)$`
-	zonelessTimeSQLPattern       = `^([0-9:.]+)$`
-	xsdTimeSQLPattern            = `^(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)$`
-	timezoneDesignatorSQLPattern = `(?:Z|[+-][0-9]{2}:[0-9]{2})$`
-	datePrefixSQLPattern         = `^[0-9]+-[0-9]{2}-[0-9]{2}T`
-	endOfDayTimeSQLPattern       = `^24:00:00(?:\.0+)?(Z|[+-])`
-	timeReferenceDateSQLPrefix   = "1972-12-31T"
+	xsdDateTimeSQLPattern      = `^(?:[1-9][0-9]{3,}|0[0-9]{3})-[0-9]{2}-[0-9]{2}T(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?$`
+	xsdTimeSQLPattern          = `^(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?$`
+	zonelessDateTimeSQLPattern = `^([0-9]+-[0-9]{2}-[0-9]{2}T[0-9:.]+)$`
+	zonelessTimeSQLPattern     = `^([0-9:.]+)$`
+	timezoneSQLPattern         = `(?:z|Z|[+-][0-9]{2}:[0-9]{2})$`
+	datePrefixSQLPattern       = `^[0-9]+-[0-9]{2}-[0-9]{2}T`
+	endOfDaySQLPattern         = `^24:00:00(?:\.0+)?`
+	timeReferenceDateSQLText   = "1972-12-31T"
 )
 
-// xsdDateTimeSQLText casts an SQL value to xs:dateTime and returns it as validated text that
-// always carries a timezone, or NULL when the value is not an xs:dateTime PostgreSQL can parse.
-//
-// Text without a timezone gets "Z", the implicit timezone, and digits beyond microseconds are
+// xsdDateTimeSQLText casts an SQL value to xs:dateTime and returns it as validated text, or NULL
+// when the value is not an xs:dateTime PostgreSQL can represent. Digits beyond microseconds are
 // truncated. The operand is referenced once, so nested casts keep the generated SQL linear in size.
 func xsdDateTimeSQLText(sqlValue interface{}) exp.Expression {
-	zoned := goqu.Func("regexp_replace", goqu.Func("btrim", goqu.L("?::text", sqlValue)), zonelessDateTimeSQLPattern, `\1Z`)
-	lexical := goqu.L("substring(? from ?)", zoned, xsdDateTimeSQLPattern)
-	return goqu.Func("basyx_validated_cast_input", truncatedFractionSQLText(lexical), "timestamp with time zone")
+	lexical := goqu.L("substring(? from ?)", xsdTrimmedSQLText(sqlValue), xsdDateTimeSQLPattern)
+	marked := goqu.Func("regexp_replace", lexical, zonelessDateTimeSQLPattern, `\1z`)
+	return goqu.Func("basyx_validated_cast_input", truncatedFractionSQLText(marked), "timestamp with time zone")
+}
+
+// xsdTimeSQLText casts an SQL value to xs:time and returns it as validated text, or NULL.
+func xsdTimeSQLText(sqlValue interface{}) exp.Expression {
+	lexical := goqu.L("substring(? from ?)", xsdTrimmedSQLText(sqlValue), xsdTimeSQLPattern)
+	return truncatedFractionSQLText(goqu.Func("regexp_replace", lexical, zonelessTimeSQLPattern, `\1z`))
 }
 
 // instantSQLValue returns the instant of validated xs:dateTime text.
@@ -59,44 +67,57 @@ func instantSQLValue(dateTimeText exp.Expression) exp.Expression {
 	return goqu.L("?::timestamptz", dateTimeText)
 }
 
-// localDateTimeSQLValue returns the local date and time of validated xs:dateTime text,
-// whose calendar parts XSD defines in the value's own timezone.
+// localDateTimeSQLValue returns the local date and time of validated xs:dateTime text, whose
+// calendar parts XSD defines in the value's own timezone, or NULL when they exceed the
+// PostgreSQL timestamp range.
 func localDateTimeSQLValue(dateTimeText exp.Expression) exp.Expression {
-	return goqu.L("?::timestamp", goqu.Func("regexp_replace", dateTimeText, timezoneDesignatorSQLPattern, ""))
+	asUTC := goqu.Func("regexp_replace", dateTimeText, timezoneSQLPattern, "Z")
+	return goqu.L("timezone('UTC', ?::timestamptz)", goqu.Func("basyx_validated_cast_input", asUTC, "timestamp with time zone"))
 }
 
-// timeOfDateTimeSQLValue returns the xs:time of validated xs:dateTime text: its local clock time
-// and timezone as an instant on the XPath reference date.
-func timeOfDateTimeSQLValue(dateTimeText exp.Expression) exp.Expression {
-	timeText := goqu.Func("regexp_replace", dateTimeText, datePrefixSQLPattern, "")
-	return timeOnReferenceDateSQLValue(timeText)
+// timeTextOfDateTimeSQLValue returns the xs:time of validated xs:dateTime text: its local clock
+// time and timezone.
+func timeTextOfDateTimeSQLValue(dateTimeText exp.Expression) exp.Expression {
+	return goqu.Func("regexp_replace", dateTimeText, datePrefixSQLPattern, "")
 }
 
-// xsdTimeSQLValue casts an SQL value to xs:time and returns it as an instant on the XPath
-// reference date, or NULL when the value is not an xs:time.
-func xsdTimeSQLValue(sqlValue interface{}) exp.Expression {
-	zoned := goqu.Func("regexp_replace", goqu.Func("btrim", goqu.L("?::text", sqlValue)), zonelessTimeSQLPattern, `\1Z`)
-	lexical := goqu.L("substring(? from ?)", zoned, xsdTimeSQLPattern)
-	return timeOnReferenceDateSQLValue(truncatedFractionSQLText(lexical))
-}
-
-// timeOnReferenceDateSQLValue maps 24:00:00 to 00:00:00, as xs:time does.
-func timeOnReferenceDateSQLValue(timeText exp.Expression) exp.Expression {
-	startOfDay := goqu.Func("regexp_replace", timeText, endOfDayTimeSQLPattern, `00:00:00\1`)
-	referenced := goqu.L("? || ?", timeReferenceDateSQLPrefix, startOfDay)
+// timeInstantSQLValue returns validated xs:time text as an instant on the XPath reference date.
+// 24:00:00 maps to 00:00:00, as xs:time does.
+func timeInstantSQLValue(timeText exp.Expression) exp.Expression {
+	startOfDay := goqu.Func("regexp_replace", timeText, endOfDaySQLPattern, "00:00:00")
+	referenced := goqu.L("? || ?", timeReferenceDateSQLText, startOfDay)
 	return goqu.L("basyx_validated_cast_input(?, ?)::timestamptz", referenced, "timestamp with time zone")
 }
 
-// canonicalDateTimeSQLText renders an instant as canonical xs:dateTime text in UTC, or NULL
-// before year 1, matching canonicalDateTimeString.
-func canonicalDateTimeSQLText(instant exp.Expression) exp.Expression {
-	utcText := goqu.L("to_json(timezone('UTC', ?)) #>> '{}'", instant)
-	return goqu.L("substring(? from ?) || 'Z'", utcText, `^[0-9]{4,}-[0-9]{2}-[0-9]{2}T[0-9:.]+$`)
+// canonicalDateTimeSQLText casts validated xs:dateTime text to xs:string the way XPath does,
+// matching canonicalDateTimeString.
+func canonicalDateTimeSQLText(dateTimeText exp.Expression) exp.Expression {
+	value := goqu.L("value")
+	localText := goqu.L("to_json(?) #>> '{}'", localDateTimeSQLValue(value))
+	return goqu.L("(SELECT ? || ? FROM (SELECT ? AS value) AS xsd_date_time)", localText, canonicalTimezoneSQLText(value), dateTimeText)
 }
 
-// canonicalTimeSQLText renders a time instant as canonical xs:time text in UTC.
-func canonicalTimeSQLText(instant exp.Expression) exp.Expression {
-	return goqu.L("(to_json(timezone('UTC', ?)::time) #>> '{}') || 'Z'", instant)
+// canonicalTimeSQLText casts validated xs:time text to xs:string the way XPath does,
+// matching canonicalTimeString.
+func canonicalTimeSQLText(timeText exp.Expression) exp.Expression {
+	startOfDay := goqu.Func("regexp_replace", timeText, endOfDaySQLPattern, "00:00:00")
+	trailingZeros := goqu.Func("regexp_replace", startOfDay, `(\.[0-9]*[1-9])0+`, `\1`)
+	zeroFraction := goqu.Func("regexp_replace", trailingZeros, `\.0+(z|Z|[+-]|$)`, `\1`)
+	return canonicalTimezoneSQLSuffix(zeroFraction)
+}
+
+func canonicalTimezoneSQLText(temporalText exp.Expression) exp.Expression {
+	return canonicalTimezoneSQLSuffix(goqu.L("substring(? from ?)", temporalText, `(?:z|Z|[+-][0-9]{2}:[0-9]{2})$`))
+}
+
+// canonicalTimezoneSQLSuffix writes a zero offset as "Z" and drops the zone-less marker.
+func canonicalTimezoneSQLSuffix(text exp.Expression) exp.Expression {
+	utc := goqu.Func("regexp_replace", text, `(?:[+-]00:00|Z)$`, "Z")
+	return goqu.Func("regexp_replace", utc, `z$`, "")
+}
+
+func xsdTrimmedSQLText(sqlValue interface{}) exp.Expression {
+	return goqu.Func("btrim", goqu.L("?::text", sqlValue), xsdWhitespace)
 }
 
 func truncatedFractionSQLText(text exp.Expression) exp.Expression {

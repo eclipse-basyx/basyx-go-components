@@ -26,6 +26,7 @@
 package grammar
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -180,5 +181,65 @@ func TestDatePartsOfLocalNowUseItsOwnTimezone(t *testing.T) {
 	timeOfDay := LogicalExpression{Eq: ComparisonItems{{TimeCast: &localNow}, {TimeVal: &clock}}}
 	if _, decision := timeOfDay.SimplifyForBackendFilter(resolver); decision != SimplifyTrue {
 		t.Fatalf("time of LOCALNOW gave %v, want its local clock time", decision)
+	}
+}
+
+func TestStringCastOfTemporalValuesFollowsXPath(t *testing.T) {
+	localNow := Value{Attribute: map[string]string{"GLOBAL": "LOCALNOW"}}
+	resolver := func(AttributeValue) any { return "2024-01-01T00:30:00.500+02:00" }
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 1, 0, 30, 0, 0, time.FixedZone("+02:00", 2*60*60)))
+	zoneless, ok := parseDateTimeLiteral("2024-01-01T24:00")
+	if !ok {
+		t.Fatal("invalid fixture")
+	}
+	zonelessInstant := DateTimeLiteralPattern(zoneless)
+	clock := TimeLiteralPattern("10:00+00:00")
+	for _, test := range []struct {
+		operand Value
+		want    string
+	}{
+		{localNow, "2024-01-01T00:30:00.5+02:00"},
+		{Value{DateTimeVal: &instant}, "2024-01-01T00:30:00+02:00"},
+		{Value{DateTimeVal: &zonelessInstant}, "2024-01-02T00:00:00"},
+		{Value{TimeVal: &clock}, "10:00:00Z"},
+	} {
+		want := StandardString(test.want)
+		expression := LogicalExpression{Eq: ComparisonItems{{StrCast: &test.operand}, {StrVal: &want}}}
+		if _, decision := expression.SimplifyForBackendFilter(resolver); decision != SimplifyTrue {
+			t.Errorf("string cast of %#v gave %v, want %q", test.operand, decision, test.want)
+		}
+	}
+}
+
+func TestTemporalCastsTrimOnlyXSDWhitespace(t *testing.T) {
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 1, 8, 0, 0, 0, time.UTC))
+	for claim, match := range map[string]bool{"\t2024-01-01T08:00:00Z\r\n": true, "\v2024-01-01T08:00:00Z": false} {
+		input := dateTimeCastInputs(claim)[1]
+		expression := LogicalExpression{Eq: ComparisonItems{{DateTimeCast: &input.value}, {DateTimeVal: &instant}}}
+		if _, decision := expression.SimplifyForBackendFilter(input.resolver); (decision == SimplifyTrue) != match {
+			t.Errorf("claim %q gave %v, want match %t", claim, decision, match)
+		}
+	}
+	if sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{{DateTimeCast: fieldValue("$aas#idShort")}, {DateTimeVal: &instant}}}); !strings.Contains(sql, "btrim(") {
+		t.Fatalf("expected stored values to be trimmed:\n%s", sql)
+	}
+	if xsdWhitespace != " \t\n\r" {
+		t.Fatalf("SQL and Go must trim the XSD whitespace characters, got %q", xsdWhitespace)
+	}
+}
+
+func TestDateTimeRangeMatchesPostgreSQL(t *testing.T) {
+	if _, ok := parseXSDDateTime("294276-12-31T23:59:59.9999999Z"); !ok {
+		t.Error("a value that truncates to the PostgreSQL maximum must be accepted")
+	}
+	beyondLocalRange, ok := parseXSDDateTime("294277-01-01T00:00:00+14:00")
+	if !ok {
+		t.Fatal("an instant within the PostgreSQL range must be accepted")
+	}
+	if _, ok := extractDatePart(beyondLocalRange, "YEAR"); ok {
+		t.Error("a local date beyond the PostgreSQL timestamp range must not yield a date part")
+	}
+	if _, ok := canonicalDateTimeString(beyondLocalRange); ok {
+		t.Error("a local date beyond the PostgreSQL timestamp range must not yield a string")
 	}
 }

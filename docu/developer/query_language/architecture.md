@@ -64,7 +64,12 @@ session TimeZone:
   rules that compare `time(LOCALNOW)` with a clock time must therefore give that
   clock time the local offset.
 - Fractional seconds beyond microseconds are truncated, never rounded.
-- `$strCast` of a date-time or time yields its canonical text in UTC.
+- `$strCast` of a date-time or time yields its XPath canonical text: the local
+  value with redundant fractional zeros removed and its timezone kept, `Z` for a
+  zero offset, and nothing for a value without a timezone.
+- Leading and trailing XSD whitespace (space, tab, line feed, carriage return) is
+  ignored. Date parts of values whose local date and time exceed PostgreSQL's
+  timestamp range yield no match.
 - TIMESTAMPTZ fields such as `$aasdesc#createdAt` are compared as instants
   directly, so their indexes stay usable, and read as `xs:dateTime` text in UTC.
 

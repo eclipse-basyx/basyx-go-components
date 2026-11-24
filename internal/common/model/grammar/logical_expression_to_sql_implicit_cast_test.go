@@ -193,7 +193,7 @@ func TestLogicalExpression_SimplifyForBackendFilter_DatePartOfFieldReachesSQL(t 
 		t.Fatalf("expected the date part of a field to stay unresolved, got %#v (%v)", simplified, decision)
 	}
 	sql, _ := buildSMESQL(t, simplified)
-	if !strings.Contains(sql, "EXTRACT(DAY FROM regexp_replace(basyx_validated_cast_input(") {
+	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', basyx_validated_cast_input(regexp_replace(basyx_validated_cast_input(") {
 		t.Fatalf("expected the date part to be extracted in SQL, got: %s", sql)
 	}
 }
