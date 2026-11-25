@@ -92,9 +92,9 @@ session TimeZone:
 - `$numCast` and `$hexCast` of a date-time or time are type errors in XPath and
   yield no match. A `$numCast` of any other value that is not a number also
   yields no match in constant folding, as it does in SQL.
-- A cast of a missing value counts as indeterminate in ABAC rules, so a negated
-  rule over it denies. A `$regex` over a missing text or pattern is a non-match,
-  like the other string operations. A `$regex` whose operands are all literals or
+- A cast of a missing value and a `$regex` over a missing text or pattern count as
+  indeterminate in ABAC rules, so a negated rule over them denies. The other
+  string operations treat a missing text as a non-match. A `$regex` whose operands are all literals or
   claims is decided in Go with RE2, whose syntax differs slightly from
   PostgreSQL's.
 - With implicit casts disabled, a TIMESTAMPTZ field compared with a string or used

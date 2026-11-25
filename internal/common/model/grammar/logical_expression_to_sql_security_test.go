@@ -376,16 +376,6 @@ func TestFailedNumericCastsYieldNoValue(t *testing.T) {
 	}
 }
 
-func TestRegexTreatsMissingTextAndPatternAsNoMatch(t *testing.T) {
-	t.Parallel()
-
-	pattern := StandardString("^a")
-	sql := renderLogicalExpressionSQL(t, LogicalExpression{Regex: StringItems{strField("$aas#idShort"), {StrVal: &pattern}}})
-	if !strings.Contains(sql, `("aas"."id_short" IS NOT NULL AND`) || !strings.Contains(sql, "basyx_safe_regex_pattern(") {
-		t.Fatalf("a missing text or pattern must be a known non-match, not an unknown result:\n%s", sql)
-	}
-}
-
 func TestLiteralCastInputsAreBoundAsText(t *testing.T) {
 	t.Parallel()
 

@@ -3046,17 +3046,10 @@ func buildStringOperationExpression(left interface{}, right interface{}, operati
 	case "$ends-with":
 		return goqu.L("? LIKE '%' || ?", left, right), nil
 	case "$regex":
-		return regexMatchSQLExpression(left, right), nil
+		return goqu.L("? ~ basyx_safe_regex_pattern(?)", left, right), nil
 	default:
 		return nil, fmt.Errorf("unsupported string operation: %s", operation)
 	}
-}
-
-// regexMatchSQLExpression matches text against a regular expression. A missing text or pattern
-// is a known non-match, like the other string operations, so that only a pattern PostgreSQL
-// rejects leaves the result unknown, which fails closed under policy negation.
-func regexMatchSQLExpression(text interface{}, pattern interface{}) exp.Expression {
-	return goqu.L("(? IS NOT NULL AND ? IS NOT NULL AND ? ~ basyx_safe_regex_pattern(?))", text, pattern, text, pattern)
 }
 
 func cloneValueForSQL(value *Value) *Value {
