@@ -33,6 +33,7 @@ package submodelelements
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -114,11 +115,14 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 	}
 	updateQuery, updateArgs, err := update.ToSQL()
 	if err != nil {
+		err = common.NewInternalServerError("SMREPO-UPDRANGE-BUILDQ " + err.Error())
 		return err
 	}
 
 	result, err := localTx.Exec(updateQuery, updateArgs...)
 	if err != nil {
+		slog.Error("range update failed", "error.code", "SMREPO-UPDRANGE-EXECQ", "error", err)
+		err = common.NewInternalServerError("SMREPO-UPDRANGE-EXECQ failed to update range_element")
 		return err
 	}
 	if typeGuard != nil {
@@ -220,8 +224,10 @@ func setRangeBound(record goqu.Record, bound string, text, numeric sql.NullStrin
 	record[bound+"_num"] = numeric
 }
 
-// Check the declaration and omitted bounds in the same UPDATE so a stale PATCH
-// cannot apply a different valueType to a concurrently written bound.
+// rangeUpdateTypeGuard returns a WHERE condition that rejects an update which omits a bound
+// while the stored Range has a different valueType and a value for that bound. Checking it in
+// the same UPDATE prevents a stale PATCH from applying a new valueType to a concurrently
+// written bound. It returns nil when the record writes both bounds.
 func rangeUpdateTypeGuard(record goqu.Record) exp.Expression {
 	omittedBounds := goqu.Ex{}
 	for _, bound := range []string{"min", "max"} {

@@ -1750,6 +1750,8 @@ func toSQLResolvedFieldOrValue(
 		return castResolvedOperandToSQL(operand.TimeCast, position, "time", collector)
 	case operand.DateTimeCast != nil:
 		return castResolvedOperandToSQL(operand.DateTimeCast, position, "timestamptz", collector)
+	case operand.HexCast != nil && isTemporalOperand(*operand.HexCast):
+		return temporalHexCastToSQL(operand.HexCast, position, collector)
 	case operand.HexCast != nil:
 		return castResolvedOperandToSQL(operand.HexCast, position, "text", collector)
 	case operand.Year != nil:
@@ -1909,6 +1911,16 @@ func temporalStringCastToSQL(inner *Value, position string, collector *ResolvedF
 		return nil, nil, err
 	}
 	return canonicalDateTimeSQLText(dateTimeText), resolved, nil
+}
+
+// temporalHexCastToSQL renders $hexCast of a date-time or time, a type error in XPath, as NULL.
+// It still renders the operand so that its fields keep their joins and visibility decoration.
+func temporalHexCastToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	return goqu.L("(NULL::text || (?)::text)", sqlValue), resolved, nil
 }
 
 func literalTemporalValue(v Value) any {
@@ -2454,6 +2466,10 @@ func handleBinaryOperationWithoutApply(
 	if valueContainsField(*leftOperand) && valueContainsField(*rightOperand) {
 		return resolvedSQLPredicate{}, fieldToFieldErr
 	}
+	if isComparisonOperation(operation) {
+		castFieldToTemporalOperand(leftOperand, rightOperand)
+		castFieldToTemporalOperand(rightOperand, leftOperand)
+	}
 
 	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, "left", collector)
 	if err != nil {
@@ -2478,7 +2494,7 @@ func handleBinaryOperationWithoutApply(
 	return resolvedSQLPredicate{
 		expression:   opExpr,
 		fields:       collectResolvedFieldPaths(leftResolved, rightResolved),
-		mayBeUnknown: containsTemporalOperand(leftOperand) || containsTemporalOperand(rightOperand),
+		mayBeUnknown: containsFallibleCast(leftOperand) || containsFallibleCast(rightOperand),
 	}, nil
 }
 
@@ -2563,7 +2579,7 @@ func evaluateStandaloneBoolCast(
 		return nil, nil, err
 	}
 
-	predicate := resolvedSQLPredicate{expression: goqu.L("?", sqlValue), fields: resolved, mayBeUnknown: containsTemporalOperand(operand)}
+	predicate := resolvedSQLPredicate{expression: goqu.L("?", sqlValue), fields: resolved, mayBeUnknown: containsFallibleCast(&boolOperand)}
 	return predicate.apply(collector)
 }
 
@@ -3073,6 +3089,25 @@ func normalizeSemanticShorthand(operand *Value) {
 	if strings.HasPrefix(lastSegment, "supplementalSemanticIds[") && strings.HasSuffix(lastSegment, "]") {
 		suffix += ".keys[0].value"
 		*operand.Field = ModelStringPattern(prefix + "#" + suffix)
+	}
+}
+
+func isComparisonOperation(operation string) bool {
+	switch operation {
+	case "$eq", "$ne", "$gt", "$ge", "$lt", "$le":
+		return true
+	default:
+		return false
+	}
+}
+
+// castFieldToTemporalOperand casts an uncast field compared with a date-time or time operand
+// to that type, as the query language requires for FieldIdentifiers. SQL generation applies it
+// even when the simplifier's implicit casts are disabled, because PostgreSQL cannot compare
+// text with a timestamp.
+func castFieldToTemporalOperand(field *Value, other *Value) {
+	if kind := other.EffectiveTypeWithCast(); kind == KindDateTime || kind == KindTime {
+		*field = WrapCastAroundField(*field, kind)
 	}
 }
 

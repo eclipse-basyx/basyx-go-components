@@ -29,6 +29,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -104,9 +106,13 @@ func assertTemporalMigrationRejectsConflicts(t *testing.T) {
 		conflict goqu.Record
 	}{
 		{"property_element", goqu.Ex{"value_date": "2024-02-29", "value_text": nil}, goqu.Record{"value_text": "2024-02-28"}},
+		{"property_element", goqu.Ex{"value_date": "2024-02-29", "value_text": nil}, goqu.Record{"value_num": 7}},
+		{"property_element", goqu.Ex{"value_time": "24:00:00"}, goqu.Record{"value_bool": true}},
 		{"range_element", goqu.Ex{"max_date": "2024-02-29", "min_date": nil}, goqu.Record{"max_time": "08:00:00"}},
+		{"range_element", goqu.Ex{"min_date": "2024-02-28"}, goqu.Record{"min_text": "2024-01-01"}},
+		{"range_element", goqu.Ex{"min_time": "08:00:00.5"}, goqu.Record{"min_num": 1}},
 	} {
-		t.Run(test.table+" rejects conflicting storage", func(t *testing.T) {
+		t.Run(test.table+" rejects conflicting storage "+conflictColumns(test.conflict), func(t *testing.T) {
 			tx, err := db.BeginTx(t.Context(), nil)
 			require.NoError(t, err)
 			defer func() { _ = tx.Rollback() }()
@@ -122,6 +128,15 @@ func assertTemporalMigrationRejectsConflicts(t *testing.T) {
 			require.NoError(t, tx.Rollback())
 		})
 	}
+}
+
+func conflictColumns(record goqu.Record) string {
+	columns := make([]string, 0, len(record))
+	for column := range record {
+		columns = append(columns, column)
+	}
+	sort.Strings(columns)
+	return strings.Join(columns, "+")
 }
 
 func assertTemporalMigration(t *testing.T) {

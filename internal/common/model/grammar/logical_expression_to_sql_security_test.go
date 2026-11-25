@@ -216,6 +216,80 @@ func TestDateTimeLiteralsBeforeYearOneUsePostgreSQLNotation(t *testing.T) {
 	}
 }
 
+func TestTemporalComparisonsCastFieldsWithoutImplicitCasts(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{
+		`{"$eq":[{"$field":"$sm#idShort"},{"$timeVal":"10:00"}]}`,
+		`{"$eq":[{"$field":"$sm#idShort"},{"$dateTimeVal":"0000-01-01T00:00:00Z"}]}`,
+		`{"$lt":[{"$dateTimeVal":"2024-01-01T00:00:00Z"},{"$field":"$sm#idShort"}]}`,
+	} {
+		var expression LogicalExpression
+		if err := json.Unmarshal([]byte(raw), &expression); err != nil {
+			t.Fatal(err)
+		}
+		simplified, _ := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, SimplifyOptions{})
+		where, _, err := simplified.EvaluateToExpression(mustCollectorForRoot(t, "$sm"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sql, _, err := goqu.Dialect("postgres").From("submodel").Where(where).ToSQL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(sql, `substring(btrim("submodel"."id_short"::text`) {
+			t.Errorf("a field compared with a temporal operand must be cast, got:\n%s", sql)
+		}
+	}
+}
+
+func TestNegatedFallibleCastsStayUnknownInPolicies(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{
+		`{"$not":{"$gt":[{"$numCast":{"$field":"$sme.x#value"}},{"$numVal":5}]}}`,
+		`{"$not":{"$boolCast":{"$field":"$sme.x#value"}}}`,
+		`{"$not":{"$eq":[{"$field":"$sme.x#value"},{"$numVal":5}]}}`,
+	} {
+		var expression LogicalExpression
+		if err := json.Unmarshal([]byte(raw), &expression); err != nil {
+			t.Fatal(err)
+		}
+		simplified, _ := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+		where, _, err := simplified.EvaluateToExpression(mustCollectorForRoot(t, "$sm").ForAuthorizationPolicy())
+		if err != nil {
+			t.Fatal(err)
+		}
+		sql, _, err := goqu.Dialect("postgres").From("submodel").Where(where).ToSQL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(sql, "IS NULL") {
+			t.Errorf("a failed cast under policy negation must stay unknown, got:\n%s", sql)
+		}
+	}
+}
+
+func TestTemporalValuesAreNotNumbersOrHexBinary(t *testing.T) {
+	t.Parallel()
+
+	clock := TimeLiteralPattern("10:00Z")
+	ten := float64(10)
+	hex := HexLiteralPattern("16#0A")
+	for _, expression := range []LogicalExpression{
+		{Eq: ComparisonItems{{NumCast: &Value{TimeVal: &clock}}, {NumVal: &ten}}},
+		{Ne: ComparisonItems{{HexVal: &hex}, {HexCast: &Value{TimeVal: &clock}}}},
+	} {
+		if _, decision := expression.SimplifyForBackendFilterNoResolver(); decision == SimplifyTrue {
+			t.Errorf("casting a time to a number or hexBinary must not match: %#v", expression)
+		}
+	}
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Ne: ComparisonItems{{HexVal: &hex}, {HexCast: &Value{TimeVal: &clock}}}})
+	if !strings.Contains(sql, "NULL::text ||") {
+		t.Fatalf("$hexCast of a time must be NULL instead of session-dependent text:\n%s", sql)
+	}
+}
+
 func TestRegexUsesSafeDatabaseFunctionForFieldDerivedPattern(t *testing.T) {
 	t.Parallel()
 

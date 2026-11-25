@@ -53,10 +53,15 @@ session TimeZone:
 
 - `$dateTimeCast` and `$timeCast` accept only the `xs:dateTime` and `xs:time`
   lexical spaces. Dates, timestamps without `T` or seconds, and other PostgreSQL
-  input formats yield NULL, so the candidate does not match. Correlated
-  temporal conditions in ABAC rules keep this indeterminate result through
-  `$not`, so a failed cast alone cannot satisfy a negated rule. Caller
-  queries evaluate `$not` over visible matches. `$dateTimeVal` and
+  input formats yield NULL, so the candidate does not match. In ABAC rules,
+  every condition that can be indeterminate (a failed `$dateTimeCast`,
+  `$timeCast`, `$numCast`, or `$boolCast`, a date part, or a `$match` term
+  whose claim or attribute comparison cannot be evaluated) keeps that result
+  through `$not`, so a failed cast alone cannot satisfy a negated rule. Caller
+  queries instead evaluate `$not` over visible matches, so a candidate whose
+  cast fails satisfies a negated query condition. This deliberately keeps the
+  existing anti-existence semantics of queries and deviates from the rule in
+  IDTA-01002 that a failed cast excludes the candidate. `$dateTimeVal` and
   `$timeVal` accept every `<DateTimeLiteral>` and `<TimeLiteral>` form, including
   those without `T`, seconds, or timezone.
 - UTC is the implicit timezone of values without one.
@@ -75,6 +80,20 @@ session TimeZone:
   timestamp range yield no match.
 - TIMESTAMPTZ fields such as `$aasdesc#createdAt` are compared as instants
   directly, so their indexes stay usable, and read as `xs:dateTime` text in UTC.
+- A field compared with a date-time or time operand is always cast to that type,
+  as the query language requires, even when the simplifier's implicit casts are
+  disabled.
+- `$numCast` and `$hexCast` of a date-time or time are type errors in XPath and
+  yield no match.
+- Date parts accept a `dateTimeOperand` as the grammar and JSON schema define it:
+  a `$dateTimeVal`, a `$dateTimeCast`, or a time `GLOBAL`. A bare `$field` is
+  rejected with HTTP 400, although the informative conformance corpus item
+  QL.dt.001 expects it to be accepted; use `$year({"$dateTimeCast": {"$field": …}})`.
+- Values before year 1 use two conventions. `$dateTimeVal` follows the query
+  language's JSON schema, which allows year `0000` for 1 BC; such literals are
+  compared correctly. Cast input with a negative or zero year never matches,
+  and xs:dateTime values migrated from legacy BC timestamps are stored with a
+  negative year, so they never match temporal comparisons either.
 
 The generated SQL validates and normalizes the text with `regexp_replace` and
 `substring` before `basyx_validated_cast_input` and needs no further database

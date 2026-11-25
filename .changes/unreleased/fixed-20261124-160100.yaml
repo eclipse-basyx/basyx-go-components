@@ -1,5 +1,5 @@
 kind: fixed
-body: Replacing a Range Submodel Element with PUT and only one of min or max no longer aborts the connection; the omitted bound is cleared.
+body: Replacing a Range Submodel Element with PUT and only one of min or max no longer aborts the connection; the omitted bound is cleared. A PATCH that omits min or max keeps the stored bound instead of writing back the value read before the update, and returns HTTP 409 when another request changed the Range valueType while the omitted bound has a stored value.
 time: 2026-11-24T16:01:00.000000+01:00
 custom:
     Impact: Low

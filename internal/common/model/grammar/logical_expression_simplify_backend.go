@@ -1088,8 +1088,8 @@ func isDatePart(v Value) bool {
 	return v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil
 }
 
-// resolveDatePart evaluates $year, $month, $dayOfMonth, or $dayOfWeek in UTC,
-// matching the extraction PostgreSQL performs for field operands.
+// resolveDatePart evaluates $year, $month, $dayOfMonth, or $dayOfWeek in the value's own
+// timezone, as XSD defines them, matching the SQL generated for field operands.
 func resolveDatePart(v Value, resolve AttributeResolver) (float64, bool) {
 	operand, part, ok := datePartOperand(v)
 	if !ok {
@@ -1147,6 +1147,9 @@ func resolveCastValue(v Value, resolve AttributeResolver) any {
 		return value
 	case v.NumCast != nil:
 		x := resolveValue(*v.NumCast, resolve)
+		if isTemporalValue(x) {
+			return nil
+		}
 		if f, ok := toFloat(x); ok {
 			return f
 		}
@@ -1171,7 +1174,11 @@ func resolveCastValue(v Value, resolve AttributeResolver) any {
 		}
 		return nil
 	case v.HexCast != nil:
-		if hv, ok := normalizeHexAny(resolveValue(*v.HexCast, resolve)); ok {
+		x := resolveValue(*v.HexCast, resolve)
+		if isTemporalValue(x) {
+			return nil
+		}
+		if hv, ok := normalizeHexAny(x); ok {
 			return HexLiteralPattern(hv)
 		}
 		return nil
@@ -1193,6 +1200,17 @@ func resolveTimeCastOperand(v Value, resolve AttributeResolver) any {
 		return TimeLiteralPattern(text)
 	}
 	return nil
+}
+
+// isTemporalValue reports whether a resolved operand is an xs:dateTime or xs:time value, which
+// XPath cannot cast to a number or to xs:hexBinary.
+func isTemporalValue(value any) bool {
+	switch value.(type) {
+	case time.Time, DateTimeLiteralPattern, *DateTimeLiteralPattern, TimeLiteralPattern:
+		return true
+	default:
+		return false
+	}
 }
 
 func castOperand(value Value) (ComparisonKind, *Value, bool) {

@@ -19,20 +19,19 @@ SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = 0;
 LOCK TABLE property_element, range_element IN ACCESS EXCLUSIVE MODE;
 
--- Match the legacy API and AASQL rendering, independent of TimeZone and DateStyle.
-CREATE FUNCTION pg_temp.basyx_legacy_temporal_text(
-  legacy_time time, legacy_date date, legacy_datetime timestamptz
-)
-RETURNS text
-LANGUAGE sql
-STABLE
-AS $format$
-  SELECT COALESCE(
-    to_json(legacy_time) #>> '{}',
-    to_json(legacy_date) #>> '{}',
-    regexp_replace(to_json(timezone('UTC', legacy_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00'
-  );
-$format$;
+-- PostgreSQL 17 and later can also end the transaction through a role or database default.
+DO $timeouts$
+BEGIN
+  IF current_setting('server_version_num')::integer >= 170000 THEN
+    PERFORM set_config('transaction_timeout', '0', true);
+  END IF;
+END;
+$timeouts$;
+
+-- Each legacy value is rendered like the previous API and AASQL output, independent of
+-- TimeZone and DateStyle:
+--   COALESCE(time, date, UTC timestamp with "+00:00"), where BC timestamps start with "-".
+-- The expression is written inline so the patch needs no TEMPORARY privilege.
 
 DO $preflight$
 DECLARE
@@ -48,8 +47,9 @@ BEGIN
       OR value_num IS NOT NULL
       OR value_bool IS NOT NULL
       OR (value_text IS NOT NULL AND value_text COLLATE "C" <>
-          pg_temp.basyx_legacy_temporal_text(value_time, value_date, value_datetime))
+          COALESCE(to_json(value_time) #>> '{}', to_json(value_date) #>> '{}', regexp_replace(to_json(timezone('UTC', value_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00'))
     )
+  ORDER BY id
   LIMIT 1;
   IF FOUND THEN
     RAISE EXCEPTION 'BASYXCFG-TEMPORAL-CONFLICT: property_element.id % has conflicting temporal storage', conflict_id;
@@ -63,7 +63,7 @@ BEGIN
       num_nonnulls(min_time, min_date, min_datetime) > 1
       OR min_num IS NOT NULL
       OR (min_text IS NOT NULL AND min_text COLLATE "C" <>
-          pg_temp.basyx_legacy_temporal_text(min_time, min_date, min_datetime))
+          COALESCE(to_json(min_time) #>> '{}', to_json(min_date) #>> '{}', regexp_replace(to_json(timezone('UTC', min_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00'))
     )
   ) OR (
     num_nonnulls(max_time, max_date, max_datetime) > 0
@@ -71,9 +71,10 @@ BEGIN
       num_nonnulls(max_time, max_date, max_datetime) > 1
       OR max_num IS NOT NULL
       OR (max_text IS NOT NULL AND max_text COLLATE "C" <>
-          pg_temp.basyx_legacy_temporal_text(max_time, max_date, max_datetime))
+          COALESCE(to_json(max_time) #>> '{}', to_json(max_date) #>> '{}', regexp_replace(to_json(timezone('UTC', max_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00'))
     )
   )
+  ORDER BY id
   LIMIT 1;
   IF FOUND THEN
     RAISE EXCEPTION 'BASYXCFG-TEMPORAL-CONFLICT: range_element.id % has conflicting temporal storage for a bound', conflict_id;
@@ -82,17 +83,15 @@ END;
 $preflight$;
 
 UPDATE property_element
-SET value_text = pg_temp.basyx_legacy_temporal_text(value_time, value_date, value_datetime)
+SET value_text = COALESCE(to_json(value_time) #>> '{}', to_json(value_date) #>> '{}', regexp_replace(to_json(timezone('UTC', value_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00')
 WHERE value_text IS NULL
   AND num_nonnulls(value_time, value_date, value_datetime) > 0;
 
 UPDATE range_element
-SET min_text = COALESCE(min_text, pg_temp.basyx_legacy_temporal_text(min_time, min_date, min_datetime)),
-    max_text = COALESCE(max_text, pg_temp.basyx_legacy_temporal_text(max_time, max_date, max_datetime))
+SET min_text = COALESCE(min_text, COALESCE(to_json(min_time) #>> '{}', to_json(min_date) #>> '{}', regexp_replace(to_json(timezone('UTC', min_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00')),
+    max_text = COALESCE(max_text, COALESCE(to_json(max_time) #>> '{}', to_json(max_date) #>> '{}', regexp_replace(to_json(timezone('UTC', max_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00'))
 WHERE (min_text IS NULL AND num_nonnulls(min_time, min_date, min_datetime) > 0)
    OR (max_text IS NULL AND num_nonnulls(max_time, max_date, max_datetime) > 0);
-
-DROP FUNCTION pg_temp.basyx_legacy_temporal_text(time, date, timestamptz);
 
 ALTER TABLE property_element
   DROP COLUMN value_time RESTRICT,

@@ -51,15 +51,18 @@ const (
 	timeReferenceDateSQLText     = "1972-12-31T"
 )
 
-func containsTemporalOperand(value *Value) bool {
+// containsFallibleCast reports whether an operand can evaluate to SQL NULL because a cast,
+// a temporal operation, or a date part fails for some input. Under authorization-policy
+// negation such conditions keep their unknown result so that they fail closed.
+func containsFallibleCast(value *Value) bool {
 	if value == nil {
 		return false
 	}
-	if isTemporalOperand(*value) || isDatePart(*value) {
+	if isTemporalOperand(*value) || isDatePart(*value) || value.NumCast != nil || value.BoolCast != nil {
 		return true
 	}
 	for _, child := range valueChildren(*value) {
-		if containsTemporalOperand(child) {
+		if containsFallibleCast(child) {
 			return true
 		}
 	}
@@ -144,13 +147,14 @@ func truncatedFractionSQLText(text exp.Expression) exp.Expression {
 	return goqu.Func("regexp_replace", text, fractionBeyondMicrosecondsPattern, `\1`)
 }
 
-// dateTimeLiteralSQLValue binds a $dateTimeVal instant, truncated to microseconds. PostgreSQL
-// reads instants before year 1, such as "0000-01-01T00:00:00Z", only with its BC notation,
-// which the default time rendering of interpolated SQL lacks.
+// dateTimeLiteralSQLValue binds a $dateTimeVal instant, truncated to microseconds, as a
+// timestamptz so that it never compares as text. PostgreSQL reads instants before year 1,
+// such as "0000-01-01T00:00:00Z", only with its BC notation, which the default time
+// rendering of interpolated SQL lacks.
 func dateTimeLiteralSQLValue(t time.Time) exp.Expression {
 	instant := normalizeTime(t)
 	if instant.Year() >= 1 {
-		return goqu.V(instant)
+		return goqu.L("?::timestamptz", instant)
 	}
 	bcText := fmt.Sprintf("%04d-%s+00 BC", 1-instant.Year(), instant.Format("01-02 15:04:05.999999"))
 	return goqu.L("?::timestamptz", bcText)
