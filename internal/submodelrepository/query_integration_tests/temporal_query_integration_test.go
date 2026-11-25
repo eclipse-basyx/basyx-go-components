@@ -217,6 +217,42 @@ func TestNegatedTemporalPolicyRequiresACastableValue(t *testing.T) {
 	}
 }
 
+func TestNegatedMatchPolicyFailsClosedOnIndeterminateClaim(t *testing.T) {
+	const id = "urn:basyx:integration:negated-match-policy"
+	const payload = `{
+		"id": "urn:basyx:integration:negated-match-policy", "idShort": "NegatedMatchPolicy", "modelType": "Submodel",
+		"submodelElements": [
+			{"idShort": "Secret", "modelType": "Property", "valueType": "xs:string", "value": "foo"},
+			{"idShort": "Stamp", "modelType": "Property", "valueType": "xs:dateTime", "value": "2024-01-01T00:00:00Z"}
+		]
+	}`
+	provider := testenv.NewPasswordGrantTokenProvider(securityKeycloakTokenURL, "basyx-ui", 10*time.Second)
+	admin := temporalQueryHeaders(t, provider, "admin")
+	reader := temporalQueryHeaders(t, provider, "userb")
+	require.Equal(t, http.StatusCreated, testenv.DoHTTP(t, http.MethodPost, securityBaseURL+"/submodels", []byte(payload), admin).Status)
+	endpoint := securityBaseURL + "/submodels/" + common.EncodeString(id)
+	t.Cleanup(func() {
+		require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodDelete, endpoint, nil, admin).Status)
+	})
+
+	for _, test := range []struct {
+		secret     string
+		wantStatus int
+	}{
+		{secret: "foo", wantStatus: http.StatusNotFound},
+		{secret: "bar", wantStatus: http.StatusOK},
+	} {
+		t.Run(test.secret, func(t *testing.T) {
+			property := []byte(`{"idShort":"Secret","modelType":"Property","valueType":"xs:string","value":"` + test.secret + `"}`)
+			write := testenv.DoHTTP(t, http.MethodPut, endpoint+"/submodel-elements/Secret", property, admin)
+			require.Equal(t, http.StatusNoContent, write.Status, "%s", write.Body)
+
+			read := testenv.DoHTTP(t, http.MethodGet, endpoint, nil, reader)
+			assert.Equal(t, test.wantStatus, read.Status, "%s", read.Body)
+		})
+	}
+}
+
 func temporalQueryHeaders(t *testing.T, provider *testenv.PasswordGrantTokenProvider, user string) map[string]string {
 	t.Helper()
 	token, err := provider.GetAccessToken(&testenv.TokenCredentials{User: user, Password: "pwd"})

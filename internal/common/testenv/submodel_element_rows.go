@@ -48,7 +48,7 @@ import (
 // Example:
 //
 //	testenv.OverwriteSubmodelElementRow(t, dsn, "urn:example", "Timestamp", "property_element",
-//		goqu.Record{"value_text": nil, "value_datetime": "2024-01-01T10:00:00+02:00"})
+//		goqu.Record{"value_text": "2024-01-01T10:00:00+02:00", "value_num": nil})
 func OverwriteSubmodelElementRow(t *testing.T, dsn, submodelID, idShortPath, table string, record goqu.Record) {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
@@ -81,7 +81,7 @@ func OverwriteSubmodelElementRow(t *testing.T, dsn, submodelID, idShortPath, tab
 //
 // Example:
 //
-//	row := testenv.ReadSubmodelElementRow(t, dsn, "urn:example", "Timestamp", "property_element", "value_datetime")
+//	row := testenv.ReadSubmodelElementRow(t, dsn, "urn:example", "Timestamp", "property_element", "value_text")
 func ReadSubmodelElementRow(t *testing.T, dsn, submodelID, idShortPath, table string, columns ...string) map[string]any {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)

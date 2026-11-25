@@ -168,6 +168,54 @@ func TestTemporalLiteralsAreTruncatedToMicrosecondsForSQL(t *testing.T) {
 	}
 }
 
+func TestNegatedMatchKeepsIndeterminateTermsUnknownInPolicies(t *testing.T) {
+	t.Parallel()
+
+	var expression LogicalExpression
+	err := json.Unmarshal([]byte(`{"$not":{"$match":[
+		{"$eq":[{"$field":"$sme.secret#value"},{"$strVal":"foo"}]},
+		{"$gt":[{"$dateTimeCast":{"$attribute":{"CLAIM":"since"}}},{"$dateTimeVal":"2024-01-01T00:00:00Z"}]}]}}`), &expression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return ClaimValue{Value: "today"} }, DefaultSimplifyOptions())
+	if decision != SimplifyUndecided {
+		t.Fatalf("expected the field term to keep the rule undecided, got %v", decision)
+	}
+	where, _, err := simplified.EvaluateToExpression(mustCollectorForRoot(t, "$sm").ForAuthorizationPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql, _, err := goqu.Dialect("postgres").From("submodel").Where(where).ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "IS NULL") {
+		t.Fatalf("a negated $match with an indeterminate term must keep the unknown result:\n%s", sql)
+	}
+}
+
+func TestDateTimeLiteralsBeforeYearOneUsePostgreSQLNotation(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct{ literal, want string }{
+		{"0000-01-01T00:00:00Z", "'0001-01-01 00:00:00+00 BC'::timestamptz"},
+		{"0001-01-01T00:00:00.5+14:00", "'0001-12-31 10:00:00.5+00 BC'::timestamptz"},
+	} {
+		instant, ok := parseDateTimeLiteral(test.literal)
+		if !ok {
+			t.Fatalf("invalid literal %s", test.literal)
+		}
+		sql, _, err := goqu.Dialect("postgres").Select(dateTimeLiteralSQLValue(instant)).ToSQL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(sql, test.want) {
+			t.Errorf("literal %s rendered as %s, want %s", test.literal, sql, test.want)
+		}
+	}
+}
+
 func TestRegexUsesSafeDatabaseFunctionForFieldDerivedPattern(t *testing.T) {
 	t.Parallel()
 

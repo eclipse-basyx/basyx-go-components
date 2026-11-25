@@ -26,6 +26,9 @@
 package grammar
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 )
@@ -139,4 +142,16 @@ func xsdTrimmedSQLText(sqlValue interface{}) exp.Expression {
 
 func truncatedFractionSQLText(text exp.Expression) exp.Expression {
 	return goqu.Func("regexp_replace", text, fractionBeyondMicrosecondsPattern, `\1`)
+}
+
+// dateTimeLiteralSQLValue binds a $dateTimeVal instant, truncated to microseconds. PostgreSQL
+// reads instants before year 1, such as "0000-01-01T00:00:00Z", only with its BC notation,
+// which the default time rendering of interpolated SQL lacks.
+func dateTimeLiteralSQLValue(t time.Time) exp.Expression {
+	instant := normalizeTime(t)
+	if instant.Year() >= 1 {
+		return goqu.V(instant)
+	}
+	bcText := fmt.Sprintf("%04d-%s+00 BC", 1-instant.Year(), instant.Format("01-02 15:04:05.999999"))
+	return goqu.L("?::timestamptz", bcText)
 }

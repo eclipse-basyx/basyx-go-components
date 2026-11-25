@@ -15,6 +15,8 @@
 
 -- The configuration service runs this entire patch in one transaction.
 SET LOCAL lock_timeout = '5s';
+-- A role or database default must not abort the backfill partway.
+SET LOCAL statement_timeout = 0;
 LOCK TABLE property_element, range_element IN ACCESS EXCLUSIVE MODE;
 
 -- Match the legacy API and AASQL rendering, independent of TimeZone and DateStyle.

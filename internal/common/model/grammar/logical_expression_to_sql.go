@@ -1092,7 +1092,7 @@ type ResolvedFieldPathCollector struct {
 	smeRowAlias                  string
 	fieldValueDecorator          FieldValueDecorator
 	authorizationPolicy          bool
-	preserveUnknownTemporal      bool
+	preserveUnknownConditions    bool
 	root                         CollectorRoot
 	// ownerRoot is the semantic resource owning the rows of a nested
 	// collector without a root of its own, correlated by the non-MATCH key.
@@ -1168,7 +1168,7 @@ func (c *ResolvedFieldPathCollector) WithoutFieldValueDecorator() *ResolvedField
 }
 
 // ForAuthorizationPolicy marks a collector for evaluating trusted policy
-// conditions, where an indeterminate temporal comparison must fail closed.
+// conditions, where an indeterminate comparison must fail closed.
 func (c *ResolvedFieldPathCollector) ForAuthorizationPolicy() *ResolvedFieldPathCollector {
 	if c == nil || c.authorizationPolicy {
 		return c
@@ -1179,11 +1179,11 @@ func (c *ResolvedFieldPathCollector) ForAuthorizationPolicy() *ResolvedFieldPath
 }
 
 func (c *ResolvedFieldPathCollector) forNegation() *ResolvedFieldPathCollector {
-	if c == nil || !c.authorizationPolicy || c.preserveUnknownTemporal {
+	if c == nil || !c.authorizationPolicy || c.preserveUnknownConditions {
 		return c
 	}
 	clone := *c
-	clone.preserveUnknownTemporal = true
+	clone.preserveUnknownConditions = true
 	return &clone
 }
 
@@ -1762,6 +1762,8 @@ func toSQLResolvedFieldOrValue(
 		return datePartResolvedOperandToSQL(operand.DayOfWeek, position, "DOW", collector)
 	case operand.Field != nil:
 		return decoratedFieldToSQL(*operand.Field, collector)
+	case operand.DateTimeVal != nil:
+		return dateTimeLiteralSQLValue(time.Time(*operand.DateTimeVal)), nil, nil
 	case operand.TimeVal != nil:
 		t, ok := parseTimeLiteral(string(*operand.TimeVal))
 		if !ok {
@@ -2417,14 +2419,18 @@ func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFie
 
 type binaryOperationValidator func(leftOperand, rightOperand *Value) error
 
+// resolvedSQLPredicate is a rendered condition with the fields it reads.
+// mayBeUnknown marks a condition that can evaluate to SQL NULL, such as a failed
+// temporal cast or an indeterminate term; under authorization-policy negation it
+// keeps that unknown result instead of collapsing it to false inside EXISTS.
 type resolvedSQLPredicate struct {
-	expression exp.Expression
-	fields     []ResolvedFieldPath
-	temporal   bool
+	expression   exp.Expression
+	fields       []ResolvedFieldPath
+	mayBeUnknown bool
 }
 
 func (p resolvedSQLPredicate) apply(collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
-	preserveUnknown := p.temporal && collector != nil && collector.preserveUnknownTemporal
+	preserveUnknown := p.mayBeUnknown && collector != nil && collector.preserveUnknownConditions
 	return applyCollectorToResolvedExpression(p.expression, p.fields, collector, true, preserveUnknown)
 }
 
@@ -2470,9 +2476,9 @@ func handleBinaryOperationWithoutApply(
 	}
 
 	return resolvedSQLPredicate{
-		expression: opExpr,
-		fields:     collectResolvedFieldPaths(leftResolved, rightResolved),
-		temporal:   containsTemporalOperand(leftOperand) || containsTemporalOperand(rightOperand),
+		expression:   opExpr,
+		fields:       collectResolvedFieldPaths(leftResolved, rightResolved),
+		mayBeUnknown: containsTemporalOperand(leftOperand) || containsTemporalOperand(rightOperand),
 	}, nil
 }
 
@@ -2557,7 +2563,7 @@ func evaluateStandaloneBoolCast(
 		return nil, nil, err
 	}
 
-	predicate := resolvedSQLPredicate{expression: goqu.L("?", sqlValue), fields: resolved, temporal: containsTemporalOperand(operand)}
+	predicate := resolvedSQLPredicate{expression: goqu.L("?", sqlValue), fields: resolved, mayBeUnknown: containsTemporalOperand(operand)}
 	return predicate.apply(collector)
 }
 
@@ -2651,7 +2657,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Or) > 0 {
-		if collector != nil && collector.fieldValueDecorator == nil && !collector.preserveUnknownTemporal {
+		if collector != nil && collector.fieldValueDecorator == nil && !collector.preserveUnknownConditions {
 			var combined []exp.Expression
 			var sharedResolved []ResolvedFieldPath
 			canGroup := true
@@ -2794,7 +2800,7 @@ func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldP
 		}
 		expressions = append(expressions, child.expression)
 		predicate.fields = append(predicate.fields, child.fields...)
-		predicate.temporal = predicate.temporal || child.temporal
+		predicate.mayBeUnknown = predicate.mayBeUnknown || child.mayBeUnknown
 	}
 	predicate.expression = goqu.And(expressions...)
 	return predicate, nil
@@ -2802,7 +2808,7 @@ func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldP
 
 func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if me.Indeterminate {
-		return resolvedSQLPredicate{expression: goqu.L("NULL::boolean")}, nil
+		return resolvedSQLPredicate{expression: goqu.L("NULL::boolean"), mayBeUnknown: true}, nil
 	}
 	if me.Boolean != nil {
 		return resolvedSQLPredicate{expression: goqu.L("?::boolean", *me.Boolean)}, nil
