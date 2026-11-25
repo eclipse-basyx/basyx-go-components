@@ -3,5 +3,5 @@ body: $strCast of a number yields the XPath string of an xs:double, the same whe
 time: 2026-11-25T12:00:00.000000+01:00
 custom:
     Impact: Low
-    PullRequest: 1
+    PullRequest: 920
     SecurityImpact: Access rules that compare $strCast of a number with a string literal match the XPath form only; rules written for the former form, such as "1000000", need to be updated.

@@ -3,5 +3,5 @@ body: Queries and access rules no longer fail with a database error when a cast 
 time: 2026-11-25T12:01:00.000000+01:00
 custom:
     Impact: Low
-    PullRequest: 1
+    PullRequest: 920
     SecurityImpact: Access rules with these conditions are evaluated instead of failing the request, so rules that matched nothing because of the error can now grant access.
