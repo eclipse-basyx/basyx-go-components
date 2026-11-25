@@ -115,7 +115,7 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 	})
 }
 
-func TestNegatedTemporalComparisonRequiresACastableValue(t *testing.T) {
+func TestNegatedTemporalPolicyRequiresACastableValue(t *testing.T) {
 	const id = "urn:basyx:integration:negated-temporal-policy"
 	const payload = `{
 		"id": "urn:basyx:integration:negated-temporal-policy", "idShort": "NegatedTemporalPolicy", "modelType": "Submodel",
@@ -135,13 +135,13 @@ func TestNegatedTemporalComparisonRequiresACastableValue(t *testing.T) {
 	})
 
 	for _, test := range []struct {
-		name, valueType, value string
-		matches                bool
+		name, valueType, value      string
+		policyMatches, queryMatches bool
 	}{
-		{name: "date only", valueType: "xs:date", value: "2024-01-01"},
-		{name: "malformed dateTime", valueType: "xs:string", value: "not a dateTime"},
+		{name: "date only", valueType: "xs:date", value: "2024-01-01", queryMatches: true},
+		{name: "malformed dateTime", valueType: "xs:string", value: "not a dateTime", queryMatches: true},
 		{name: "equal dateTime", valueType: "xs:dateTime", value: "2024-01-01T05:00:00Z"},
-		{name: "different dateTime", valueType: "xs:dateTime", value: "2024-01-02T05:00:00Z", matches: true},
+		{name: "different dateTime", valueType: "xs:dateTime", value: "2024-01-02T05:00:00Z", policyMatches: true, queryMatches: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			property, err := json.Marshal(map[string]string{
@@ -153,10 +153,8 @@ func TestNegatedTemporalComparisonRequiresACastableValue(t *testing.T) {
 
 			read := testenv.DoHTTP(t, http.MethodGet, endpoint, nil, reader)
 			wantStatus := http.StatusNotFound
-			var wantIDs []string
-			if test.matches {
+			if test.policyMatches {
 				wantStatus = http.StatusOK
-				wantIDs = []string{id}
 			}
 			assert.Equal(t, wantStatus, read.Status, "%s", read.Body)
 
@@ -167,6 +165,10 @@ func TestNegatedTemporalComparisonRequiresACastableValue(t *testing.T) {
 			var ids []string
 			for _, submodel := range page.Result {
 				ids = append(ids, submodel.ID)
+			}
+			var wantIDs []string
+			if test.queryMatches {
+				wantIDs = []string{id}
 			}
 			assert.Equal(t, wantIDs, ids)
 		})

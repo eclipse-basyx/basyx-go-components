@@ -1091,6 +1091,7 @@ type ResolvedFieldPathCollector struct {
 	matchFragment                *FragmentStringPattern
 	smeRowAlias                  string
 	fieldValueDecorator          FieldValueDecorator
+	authorizationPolicy          bool
 	preserveUnknownTemporal      bool
 	root                         CollectorRoot
 	// ownerRoot is the semantic resource owning the rows of a nested
@@ -1166,8 +1167,19 @@ func (c *ResolvedFieldPathCollector) WithoutFieldValueDecorator() *ResolvedField
 	return &clone
 }
 
+// ForAuthorizationPolicy marks a collector for evaluating trusted policy
+// conditions, where an indeterminate temporal comparison must fail closed.
+func (c *ResolvedFieldPathCollector) ForAuthorizationPolicy() *ResolvedFieldPathCollector {
+	if c == nil || c.authorizationPolicy {
+		return c
+	}
+	clone := *c
+	clone.authorizationPolicy = true
+	return &clone
+}
+
 func (c *ResolvedFieldPathCollector) forNegation() *ResolvedFieldPathCollector {
-	if c == nil || c.preserveUnknownTemporal {
+	if c == nil || !c.authorizationPolicy || c.preserveUnknownTemporal {
 		return c
 	}
 	clone := *c

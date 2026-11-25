@@ -54,8 +54,9 @@ session TimeZone:
 - `$dateTimeCast` and `$timeCast` accept only the `xs:dateTime` and `xs:time`
   lexical spaces. Dates, timestamps without `T` or seconds, and other PostgreSQL
   input formats yield NULL, so the candidate does not match. Correlated
-  temporal conditions keep this indeterminate result through `$not`, so a
-  failed cast alone cannot satisfy a negated condition. `$dateTimeVal` and
+  temporal conditions in ABAC rules keep this indeterminate result through
+  `$not`, so a failed cast alone cannot satisfy a negated rule. Caller
+  queries evaluate `$not` over visible matches. `$dateTimeVal` and
   `$timeVal` accept every `<DateTimeLiteral>` and `<TimeLiteral>` form, including
   those without `T`, seconds, or timezone.
 - UTC is the implicit timezone of values without one.
