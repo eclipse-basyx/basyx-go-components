@@ -181,12 +181,20 @@ func buildLimitPtr(limit int32) *int {
 	return &parsedLimit
 }
 
-// mergeSubmodelElementPatch merges patch into base and keeps the value only
-// when the patch sets it, so that unpatched values and children stay unchanged.
+// mergeSubmodelElementPatch passes only patched values to persistence.
+// A Range valueType change also needs the retained bounds for re-encoding.
 func mergeSubmodelElementPatch(base map[string]any, patch map[string]any) map[string]any {
 	merged := mergeSubmodelElementMetadataPatch(base, patch)
-	if _, patched := patch["value"]; !patched {
-		delete(merged, "value")
+	valueFields := []string{"value"}
+	currentValueType, _ := base["valueType"].(string)
+	updatedValueType, _ := merged["valueType"].(string)
+	if merged["modelType"] == "Range" && currentValueType == updatedValueType {
+		valueFields = append(valueFields, "min", "max")
+	}
+	for _, field := range valueFields {
+		if _, patched := patch[field]; !patched {
+			delete(merged, field)
+		}
 	}
 	return merged
 }

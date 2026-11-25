@@ -1,0 +1,7 @@
+kind: fixed
+body: AASQL and ABAC conditions whose temporal operands are all literals or claims are decided like the same comparison in the database. Time comparisons keep fractional seconds, and inputs that PostgreSQL rejects, such as comma-separated fractions or offsets beyond 14 hours, no longer match.
+time: 2026-11-24T18:00:00.000000+01:00
+custom:
+    Impact: Low
+    PullRequest: 917
+    SecurityImpact: Access rules that compare literal or claim times differing only in fractional seconds, or that use the affected input forms, previously could grant or deny access differently from the equivalent condition on a stored field. Review rules that relied on whole-second time comparisons.

@@ -1085,7 +1085,7 @@ func TestUpdateSubmodelElementValueOnlyRollsBackWhenHistoryAppendFails(t *testin
 		WillReturnRows(sqlmock.NewRows([]string{"id", "parent_sme_id", "id_short", "model_type", "idshort_path", "position", "value_type"}).
 			AddRow(202, nil, "property", types.ModelTypeProperty, "property", 0, types.DataTypeDefXSDString))
 	mock.ExpectExec(`UPDATE "property_element"`).
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "updated", sqlmock.AnyArg(), int64(202)).
+		WithArgs(nil, nil, "updated", int64(202)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	expectSubmodelHistoryAppendWithReadFailure(mock, errors.New("history read failed"))
 	mock.ExpectRollback()

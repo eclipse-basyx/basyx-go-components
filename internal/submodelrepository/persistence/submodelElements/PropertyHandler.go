@@ -161,7 +161,7 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly stores a decoded ValueOnly Property value in the typed column of its valueType.
+// UpdateValueOnly stores a decoded ValueOnly Property value.
 // A nil value clears the stored value.
 func (p PostgreSQLPropertyHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.PropertyValue](update)
@@ -172,14 +172,7 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(ctx context.Context, tx *sql.
 	if err != nil {
 		return err
 	}
-	return execValueOnlyUpdate(ctx, tx, "property_element", goqu.Record{
-		"value_text":     typedValue.Text,
-		"value_num":      typedValue.Numeric,
-		"value_bool":     typedValue.Boolean,
-		"value_time":     typedValue.Time,
-		"value_date":     typedValue.Date,
-		"value_datetime": typedValue.DateTime,
-	}, update.ElementID, "SMREPO-UPDPROPVALONLY")
+	return execValueOnlyUpdate(ctx, tx, "property_element", propertyValueRecord(typedValue), update.ElementID, "SMREPO-UPDPROPVALONLY")
 }
 
 // Delete removes a Property submodel element from the database.
@@ -217,26 +210,14 @@ func (p PostgreSQLPropertyHandler) GetInsertQueryPart(_ *sql.Tx, id int, element
 		return nil, err
 	}
 
-	return &InsertQueryPart{
-		TableName: "property_element",
-		Record: goqu.Record{
-			"id":             id,
-			"value_type":     property.ValueType(),
-			"value_text":     typedValue.Text,
-			"value_num":      typedValue.Numeric,
-			"value_bool":     typedValue.Boolean,
-			"value_time":     typedValue.Time,
-			"value_date":     typedValue.Date,
-			"value_datetime": typedValue.DateTime,
-		},
-	}, nil
+	record := propertyValueRecord(typedValue)
+	record["id"] = id
+	record["value_type"] = property.ValueType()
+	return &InsertQueryPart{TableName: "property_element", Record: record}, nil
 }
 
 func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, localTx *sql.Tx) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
-
-	// Required field - always update
-	updateRecord["value_type"] = property.ValueType()
 
 	// Map value by type - always update based on isPut or if value is provided
 	if isPut || property.Value() != nil {
@@ -244,14 +225,18 @@ func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, local
 		if err != nil {
 			return nil, err
 		}
-		updateRecord["value_text"] = typedValue.Text
-		updateRecord["value_num"] = typedValue.Numeric
-		updateRecord["value_bool"] = typedValue.Boolean
-		updateRecord["value_time"] = typedValue.Time
-		updateRecord["value_date"] = typedValue.Date
-		updateRecord["value_datetime"] = typedValue.DateTime
+		updateRecord = propertyValueRecord(typedValue)
 	}
+	updateRecord["value_type"] = property.ValueType()
 
 	_ = localTx
 	return updateRecord, nil
+}
+
+func propertyValueRecord(value TypedValue) goqu.Record {
+	return goqu.Record{
+		"value_text": value.Text,
+		"value_num":  value.Numeric,
+		"value_bool": value.Boolean,
+	}
 }

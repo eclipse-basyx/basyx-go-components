@@ -99,11 +99,11 @@ func TestApplyValueOnlyUpdatesWritesByElementID(t *testing.T) {
 	}()
 
 	mock.ExpectBegin()
-	mock.ExpectExec(`UPDATE "property_element" SET .* WHERE \("id" = \$7\)`).
-		WithArgs(nil, nil, nil, "42", nil, nil, int64(11)).
+	mock.ExpectExec(`UPDATE "property_element" SET "value_bool"=\$1,"value_num"=\$2,"value_text"=\$3 WHERE \("id" = \$4\)`).
+		WithArgs(nil, "42", nil, int64(11)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`UPDATE "range_element" SET "min_date"=\$1,"min_datetime"=\$2,"min_num"=\$3,"min_text"=\$4,"min_time"=\$5 WHERE \("id" = \$6\)`).
-		WithArgs(nil, nil, nil, "INF", nil, int64(12)).
+	mock.ExpectExec(`UPDATE "range_element" SET "min_num"=\$1,"min_text"=\$2 WHERE \("id" = \$3\)`).
+		WithArgs(nil, "INF", int64(12)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`UPDATE "blob_element" SET "value"=\$1 WHERE \("id" = \$2\)`).
 		WithArgs(common.Encode([]byte{0x00, 0xff}), int64(13)).
@@ -129,6 +129,35 @@ func TestApplyValueOnlyUpdatesWritesByElementID(t *testing.T) {
 		{ElementID: 13, ModelType: types.ModelTypeBlob, Value: gen.BlobValuePatch{Value: &blob}},
 		{ElementID: 14, ModelType: types.ModelTypeMultiLanguageProperty, Value: gen.MultiLanguagePropertyValue{{"en": "Name"}, {"de": "Bezeichnung"}}},
 		{ElementID: 15, ModelType: types.ModelTypeEntity, Value: gen.EntityValuePatch{EntityType: &entityType}},
+	})
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyValueOnlyUpdatesStoresTemporalText(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	timestamp := "2024-01-01T10:00:00+02:00"
+	lowerBound := "2024-01-01T10:00:00"
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "property_element" SET "value_bool"=\$1,"value_num"=\$2,"value_text"=\$3 WHERE \("id" = \$4\)`).
+		WithArgs(nil, nil, timestamp, int64(21)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE "range_element" SET "min_num"=\$1,"min_text"=\$2 WHERE \("id" = \$3\)`).
+		WithArgs(nil, lowerBound, int64(22)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = ApplyValueOnlyUpdates(t.Context(), tx, db, []gen.ValueOnlyUpdate{
+		{ElementID: 21, ModelType: types.ModelTypeProperty, Value: gen.PropertyValue{Value: &timestamp, ValueType: types.DataTypeDefXSDDateTime}},
+		{ElementID: 22, ModelType: types.ModelTypeRange, Value: gen.RangeValuePatch{ValueType: types.DataTypeDefXSDDateTime, Min: gen.ScalarPatch{Set: true, Value: &lowerBound}}},
 	})
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
@@ -210,8 +239,8 @@ func TestApplyValueOnlyUpdatesStoresEmptyTextRangeBound(t *testing.T) {
 	}()
 
 	mock.ExpectBegin()
-	mock.ExpectExec(`UPDATE "range_element" SET "min_date"=\$1,"min_datetime"=\$2,"min_num"=\$3,"min_text"=\$4,"min_time"=\$5 WHERE \("id" = \$6\)`).
-		WithArgs(nil, nil, nil, "", nil, int64(21)).
+	mock.ExpectExec(`UPDATE "range_element" SET "min_num"=\$1,"min_text"=\$2 WHERE \("id" = \$3\)`).
+		WithArgs(nil, "", int64(21)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 

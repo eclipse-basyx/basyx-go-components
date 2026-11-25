@@ -28,7 +28,13 @@ package grammar
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
+	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
 
@@ -47,6 +53,42 @@ type terminalColumnMapping struct {
 	//   "externalSubjectId.keys[].value" vs "semanticId.keys[].value"
 	//   terminal="value", arrayName="keys", arrayParentSimple="externalSubjectId"|"semanticId".
 	ByArrayParentSimple map[string]map[string]map[resolveContext]string
+}
+
+var propertyValueTypeColumn = buildPropertyValueTypeColumn()
+
+// timestampColumns lists the TIMESTAMPTZ columns that field identifiers map to.
+var timestampColumns = map[string]struct{}{
+	"aas_descriptor.created_at":         {},
+	"submodel_descriptor.db_created_at": {},
+}
+
+// isTimestampField reports whether a field identifier resolves to a TIMESTAMPTZ column.
+func isTimestampField(v Value) bool {
+	if v.Field == nil {
+		return false
+	}
+	resolved, err := ResolveScalarFieldToSQL(v.Field)
+	if err != nil {
+		return false
+	}
+	_, ok := timestampColumns[resolved.Column]
+	return ok
+}
+
+// timestampFieldText renders a TIMESTAMPTZ field value as xs:dateTime text in UTC.
+func timestampFieldText(sqlValue interface{}) exp.Expression {
+	return goqu.L(common.PostgreSQLTimestampColumnTextSQL("?"), sqlValue)
+}
+
+const propertyValueColumn = "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, multilanguage_property_value.text)"
+
+func buildPropertyValueTypeColumn() string {
+	branches := make([]string, 0, len(types.LiteralsOfDataTypeDefXSD))
+	for _, valueType := range types.LiteralsOfDataTypeDefXSD {
+		branches = append(branches, fmt.Sprintf("WHEN %d THEN '%s'", valueType, stringification.MustDataTypeDefXSDToString(valueType)))
+	}
+	return "(CASE property_element.value_type " + strings.Join(branches, " ") + " END)"
 }
 
 // terminalColumnMappings defines how terminal path segments map to SQL column expressions.
@@ -117,7 +159,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 	"value": {
 		ByContext: map[resolveContext]string{
 			ctxSpecificAssetID: "specific_asset_id.value",
-			ctxSME:             "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, property_element.value_time::text, property_element.value_date::text, property_element.value_datetime::text, multilanguage_property_value.text)",
+			ctxSME:             propertyValueColumn,
 		},
 		ByParentSimple: map[string]map[resolveContext]string{
 			// submodelDescriptor semanticId mapping (used by $aasdesc#submodelDescriptors[].semanticId.* and $smdesc#semanticId.*).
@@ -198,7 +240,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 
 	"valueType": {
 		ByContext: map[resolveContext]string{
-			ctxSME: "(CASE WHEN property_element.id IS NULL THEN NULL WHEN property_element.value_bool IS NOT NULL THEN 'xs:boolean' WHEN property_element.value_time IS NOT NULL THEN 'xs:time' WHEN property_element.value_date IS NOT NULL THEN 'xs:date' WHEN property_element.value_datetime IS NOT NULL THEN 'xs:dateTime' WHEN property_element.value_num IS NOT NULL THEN 'xs:double' ELSE 'xs:string' END)",
+			ctxSME: propertyValueTypeColumn,
 		},
 	},
 

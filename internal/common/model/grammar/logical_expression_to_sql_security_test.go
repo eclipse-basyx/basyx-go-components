@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 )
@@ -74,10 +75,32 @@ func TestFallibleCastsUsePostgreSQLTotalInputValidation(t *testing.T) {
 			if !strings.Contains(sql, "basyx_validated_cast_input") {
 				t.Fatalf("fallible %s cast is not total:\n%s", test.name, sql)
 			}
-			if strings.Contains(sql, " ~ ") {
-				t.Fatalf("fallible %s cast rejects PostgreSQL-valid lexical forms:\n%s", test.name, sql)
-			}
 		})
+	}
+}
+
+func TestNestedDateTimeCastsRenderEachOperandOnce(t *testing.T) {
+	t.Parallel()
+
+	inner := Value{DateTimeCast: fieldValue("$aas#idShort")}
+	outer := Value{DateTimeCast: &Value{StrCast: &inner}}
+	instant := DateTimeLiteralPattern{}
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{outer, {DateTimeVal: &instant}}})
+	if strings.Count(sql, "basyx_validated_cast_input(") != 3 || strings.Count(sql, `"aas"."id_short"`) != 1 {
+		t.Fatalf("expected one validation per cast, one for the string cast, and one field reference:\n%s", sql)
+	}
+}
+
+func TestDatePartExtractsTheLocalCalendarPart(t *testing.T) {
+	t.Parallel()
+
+	one := float64(1)
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{
+		{DayOfMonth: fieldValue("$aas#idShort")},
+		{NumVal: &one},
+	}})
+	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', basyx_validated_cast_input(regexp_replace(basyx_validated_cast_input(") {
+		t.Fatalf("date parts must come from the local date and time, read as UTC:\n%s", sql)
 	}
 }
 
@@ -90,8 +113,203 @@ func TestDatePartUsesTotalDateTimeCast(t *testing.T) {
 		{NumVal: &one},
 	}}
 	sql := renderLogicalExpressionSQL(t, expression)
-	if !strings.Contains(sql, "basyx_validated_cast_input") || !strings.Contains(sql, "EXTRACT(YEAR") {
+	if !strings.Contains(sql, "basyx_validated_cast_input(") || !strings.Contains(sql, "EXTRACT(YEAR") {
 		t.Fatalf("date-part extraction can still throw on stored input:\n%s", sql)
+	}
+}
+
+func TestDatePartOfDateTimeLiteralIsComputedInGo(t *testing.T) {
+	t.Parallel()
+
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 1, 0, 30, 0, 0, time.FixedZone("+02:00", 2*60*60)))
+	year := float64(2024)
+	collector, err := NewResolvedFieldPathCollectorForRoot(CollectorRootAAS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expression := LogicalExpression{Eq: ComparisonItems{{Year: &Value{DateTimeVal: &instant}}, {NumVal: &year}}}
+	where, _, err := expression.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql, args, err := goqu.Dialect("postgres").From("aas").Where(where).Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(sql, "EXTRACT") || !argListContains(args, float64(2024)) {
+		t.Fatalf("the local year of a literal must be bound as a number:\n%s %v", sql, args)
+	}
+}
+
+func TestTemporalLiteralsAreTruncatedToMicrosecondsForSQL(t *testing.T) {
+	t.Parallel()
+
+	clock := TimeLiteralPattern("10:00:00.1234567Z")
+	instant := DateTimeLiteralPattern(time.Date(2024, 12, 31, 23, 59, 59, 999_999_900, time.UTC))
+	tests := []struct {
+		literal Value
+		want    time.Time
+	}{
+		{Value{TimeVal: &clock}, time.Date(1972, time.December, 31, 10, 0, 0, 123_456_000, time.UTC)},
+		{Value{DateTimeVal: &instant}, time.Date(2024, time.December, 31, 23, 59, 59, 999_999_000, time.UTC)},
+	}
+	for _, test := range tests {
+		sqlValue, _, err := toSQLResolvedFieldOrValue(&test.literal, "left", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, args, err := goqu.Dialect("postgres").Select(sqlValue).Prepared(true).ToSQL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bound, ok := args[0].(time.Time); !ok || !bound.Equal(test.want) {
+			t.Errorf("literal bound as %#v, want %s", args[0], test.want)
+		}
+	}
+}
+
+func TestNegatedMatchKeepsIndeterminateTermsUnknownInPolicies(t *testing.T) {
+	t.Parallel()
+
+	var expression LogicalExpression
+	err := json.Unmarshal([]byte(`{"$not":{"$match":[
+		{"$eq":[{"$field":"$sme.secret#value"},{"$strVal":"foo"}]},
+		{"$gt":[{"$dateTimeCast":{"$attribute":{"CLAIM":"since"}}},{"$dateTimeVal":"2024-01-01T00:00:00Z"}]}]}}`), &expression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return ClaimValue{Value: "today"} }, DefaultSimplifyOptions())
+	if decision != SimplifyUndecided {
+		t.Fatalf("expected the field term to keep the rule undecided, got %v", decision)
+	}
+	where, _, err := simplified.EvaluateToExpression(mustCollectorForRoot(t, "$sm").ForAuthorizationPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql, _, err := goqu.Dialect("postgres").From("submodel").Where(where).ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "IS NULL") {
+		t.Fatalf("a negated $match with an indeterminate term must keep the unknown result:\n%s", sql)
+	}
+}
+
+func TestDateTimeLiteralsBeforeYearOneUsePostgreSQLNotation(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct{ literal, want string }{
+		{"0000-01-01T00:00:00Z", "'0001-01-01 00:00:00+00 BC'::timestamptz"},
+		{"0001-01-01T00:00:00.5+14:00", "'0001-12-31 10:00:00.5+00 BC'::timestamptz"},
+	} {
+		instant, ok := parseDateTimeLiteral(test.literal)
+		if !ok {
+			t.Fatalf("invalid literal %s", test.literal)
+		}
+		sql, _, err := goqu.Dialect("postgres").Select(dateTimeLiteralSQLValue(instant)).ToSQL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(sql, test.want) {
+			t.Errorf("literal %s rendered as %s, want %s", test.literal, sql, test.want)
+		}
+	}
+}
+
+func TestTypedComparisonsCastFieldsWithoutImplicitCasts(t *testing.T) {
+	t.Parallel()
+
+	for raw, cast := range map[string]string{
+		`{"$eq":[{"$field":"$sm#idShort"},{"$timeVal":"10:00"}]}`:                              "substring(btrim(",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$dateTimeVal":"0000-01-01T00:00:00Z"}]}`:           "substring(btrim(",
+		`{"$lt":[{"$dateTimeVal":"2024-01-01T00:00:00Z"},{"$field":"$sm#idShort"}]}`:           "substring(btrim(",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$year":{"$dateTimeVal":"2024-01-01T00:00:00Z"}}]}`: "'double precision'",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$numCast":{"$strVal":"3"}}]}`:                      "'double precision'",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$numVal":3}]}`:                                     "'double precision'",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$boolean":true}]}`:                                 "'boolean'",
+	} {
+		var expression LogicalExpression
+		if err := json.Unmarshal([]byte(raw), &expression); err != nil {
+			t.Fatal(err)
+		}
+		simplified, _ := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, SimplifyOptions{})
+		where, _, err := simplified.EvaluateToExpression(mustCollectorForRoot(t, "$sm"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sql, _, err := goqu.Dialect("postgres").From("submodel").Where(where).ToSQL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(sql, cast) {
+			t.Errorf("a field compared with a typed operand must be cast (%s), got:\n%s", cast, sql)
+		}
+	}
+}
+
+func TestNegatedFallibleCastsStayUnknownInPolicies(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{
+		`{"$not":{"$gt":[{"$numCast":{"$field":"$sme.x#value"}},{"$numVal":5}]}}`,
+		`{"$not":{"$boolCast":{"$field":"$sme.x#value"}}}`,
+		`{"$not":{"$eq":[{"$field":"$sme.x#value"},{"$numVal":5}]}}`,
+		`{"$not":{"$eq":[{"$hexCast":{"$field":"$sme.x#value"}},{"$hexVal":"16#0A"}]}}`,
+		`{"$not":{"$regex":[{"$strVal":"abc"},{"$field":"$sme.x#value"}]}}`,
+	} {
+		var expression LogicalExpression
+		if err := json.Unmarshal([]byte(raw), &expression); err != nil {
+			t.Fatal(err)
+		}
+		simplified, _ := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+		where, _, err := simplified.EvaluateToExpression(mustCollectorForRoot(t, "$sm").ForAuthorizationPolicy())
+		if err != nil {
+			t.Fatal(err)
+		}
+		sql, _, err := goqu.Dialect("postgres").From("submodel").Where(where).ToSQL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(sql, "IS NULL") {
+			t.Errorf("a failed cast under policy negation must stay unknown, got:\n%s", sql)
+		}
+	}
+}
+
+func TestTemporalValuesAreNotNumbersOrHexBinary(t *testing.T) {
+	t.Parallel()
+
+	clock := TimeLiteralPattern("10:00Z")
+	ten := float64(10)
+	hex := HexLiteralPattern("16#0A")
+	clockText := StandardString("10:00:00Z")
+	for _, expression := range []LogicalExpression{
+		{Eq: ComparisonItems{{NumCast: &Value{TimeVal: &clock}}, {NumVal: &ten}}},
+		{Eq: ComparisonItems{{StrCast: &Value{NumCast: &Value{TimeVal: &clock}}}, {StrVal: &clockText}}},
+		{Ne: ComparisonItems{{HexVal: &hex}, {HexCast: &Value{TimeVal: &clock}}}},
+	} {
+		if _, decision := expression.SimplifyForBackendFilterNoResolver(); decision == SimplifyTrue {
+			t.Errorf("casting a time to a number or hexBinary must not match: %#v", expression)
+		}
+	}
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Ne: ComparisonItems{{HexVal: &hex}, {HexCast: &Value{TimeVal: &clock}}}})
+	if !strings.Contains(sql, "NULL::text ||") {
+		t.Fatalf("$hexCast of a time must be NULL instead of session-dependent text:\n%s", sql)
+	}
+}
+
+func TestNestedTemporalStringCastsBindTheirOperandOnce(t *testing.T) {
+	t.Parallel()
+
+	operand := Value{Field: new(ModelStringPattern("$aas#idShort"))}
+	for range 8 {
+		inner := operand
+		operand = Value{DateTimeCast: &Value{StrCast: &inner}}
+	}
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{operand, {DateTimeVal: &instant}}})
+	if strings.Count(sql, "AS value OFFSET 0") != 7 || strings.Count(sql, `"aas"."id_short"`) != 1 {
+		t.Fatalf("each canonical string cast must bind its operand once behind an inlining fence:\n%s", sql)
 	}
 }
 

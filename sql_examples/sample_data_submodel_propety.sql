@@ -25,8 +25,7 @@ SELECT
     sme.id, sme.id_short, sme.category, sme.model_type, sme.idshort_path, sme.position, sme.parent_sme_id,
     -- Property data
     prop.value_type as prop_value_type, 
-    COALESCE(prop.value_text, prop.value_num::text, prop.value_bool::text, 
-                prop.value_time::text, prop.value_datetime::text) as prop_value,
+    COALESCE(prop.value_text, prop.value_num::text, prop.value_bool::text) as prop_value,
     -- MultiLanguageProperty data
     mlpv.language as mlp_language,
     mlpv.text as mlp_text,
@@ -36,8 +35,8 @@ SELECT
     file.content_type as file_content_type, file.value as file_value,
     -- Range data
     range_elem.value_type as range_value_type,
-    COALESCE(range_elem.min_text, range_elem.min_num::text, range_elem.min_time::text, range_elem.min_datetime::text) as range_min,
-    COALESCE(range_elem.max_text, range_elem.max_num::text, range_elem.max_time::text, range_elem.max_datetime::text) as range_max,
+    COALESCE(range_elem.min_text, range_elem.min_num::text) as range_min,
+    COALESCE(range_elem.max_text, range_elem.max_num::text) as range_max,
     -- SubmodelElementList data
     sme_list.type_value_list_element, sme_list.value_type_list_element, sme_list.order_relevant
 FROM submodel_element sme

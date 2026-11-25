@@ -42,12 +42,12 @@ import (
 // Each field corresponds to a different column type in the database schema,
 // allowing for type-appropriate storage and retrieval of AAS values.
 type TypedValue struct {
-	Text     sql.NullString // For string-like types: xs:string, xs:anyURI, xs:base64Binary, xs:hexBinary
-	Numeric  sql.NullString // For numeric types: xs:int, xs:integer, xs:decimal, xs:double, xs:float, etc.
-	Boolean  sql.NullString // For xs:boolean type
-	Time     sql.NullString // For xs:time type
-	Date     sql.NullString // For xs:date type
-	DateTime sql.NullString // For date/time types: xs:dateTime, xs:duration, xs:gDay, etc.
+	// Text holds string-like, temporal, and non-numeric lexical values verbatim.
+	Text sql.NullString
+	// Numeric holds values of numeric XSD types that PostgreSQL can store as numeric.
+	Numeric sql.NullString
+	// Boolean holds xs:boolean values.
+	Boolean sql.NullString
 }
 
 // MapValueByType categorizes a value into the appropriate TypedValue field based on its XS datatype.
@@ -66,13 +66,11 @@ func MapValueByType(valueType types.DataTypeDefXSD, value *string) (TypedValue, 
 	valid := isStorableLexical(valueType, value)
 	actualValue := lexicalOrEmpty(value)
 	if valid {
-		if err := validateDatabaseTypedValue(valueType, actualValue); err != nil {
+		if err := validateStoredLexical(valueType, actualValue); err != nil {
 			return tv, err
 		}
 	}
 	switch {
-	case IsTextType(valueType):
-		tv.Text = sql.NullString{String: actualValue, Valid: valid}
 	case gen.IsNumericXSDType(valueType):
 		if valid && !isValidNumeric(actualValue) {
 			tv.Text = sql.NullString{String: actualValue, Valid: valid}
@@ -81,14 +79,7 @@ func MapValueByType(valueType types.DataTypeDefXSD, value *string) (TypedValue, 
 		}
 	case valueType == types.DataTypeDefXSDBoolean:
 		tv.Boolean = sql.NullString{String: actualValue, Valid: valid}
-	case valueType == types.DataTypeDefXSDTime:
-		tv.Time = sql.NullString{String: actualValue, Valid: valid}
-	case valueType == types.DataTypeDefXSDDate:
-		tv.Date = sql.NullString{String: actualValue, Valid: valid}
-	case IsDateTimeType(valueType):
-		tv.DateTime = sql.NullString{String: actualValue, Valid: valid}
 	default:
-		// Fallback to text for unknown types
 		tv.Text = sql.NullString{String: actualValue, Valid: valid}
 	}
 	return tv, nil
@@ -130,7 +121,7 @@ func isValidNumeric(value string) bool {
 	return err == nil && !math.IsInf(number, 0) && !math.IsNaN(number)
 }
 
-func validateDatabaseTypedValue(valueType types.DataTypeDefXSD, value string) error {
+func validateStoredLexical(valueType types.DataTypeDefXSD, value string) error {
 	switch valueType {
 	case types.DataTypeDefXSDBoolean,
 		types.DataTypeDefXSDTime,
@@ -147,35 +138,16 @@ func validateDatabaseTypedValue(valueType types.DataTypeDefXSD, value string) er
 	return nil
 }
 
-// IsDateTimeType checks if the given XS datatype should be stored in TIMESTAMPTZ columns.
-//
-// Parameters:
-//   - valueType: The XS datatype string to check
-//
-// Returns:
-//   - bool: true if the type is xs:dateTime (stored in TIMESTAMPTZ), false otherwise
-func IsDateTimeType(valueType types.DataTypeDefXSD) bool {
-	switch valueType {
-	case types.DataTypeDefXSDDateTime:
-		return true
-	default:
-		return false
-	}
-}
-
-// TypedRangeValue represents min/max values categorized by XS datatype for database storage.
-// Used for Range submodel elements that have both min and max values.
+// TypedRangeValue represents the values stored for the two bounds of a Range.
 type TypedRangeValue struct {
-	MinText     sql.NullString
-	MaxText     sql.NullString
-	MinNumeric  sql.NullString
-	MaxNumeric  sql.NullString
-	MinTime     sql.NullString
-	MaxTime     sql.NullString
-	MinDate     sql.NullString
-	MaxDate     sql.NullString
-	MinDateTime sql.NullString
-	MaxDateTime sql.NullString
+	// MinText holds the lower bound verbatim when it is not stored as numeric.
+	MinText sql.NullString
+	// MaxText holds the upper bound verbatim when it is not stored as numeric.
+	MaxText sql.NullString
+	// MinNumeric holds the lower bound of a numeric Range.
+	MinNumeric sql.NullString
+	// MaxNumeric holds the upper bound of a numeric Range.
+	MaxNumeric sql.NullString
 }
 
 // MapRangeValueByType categorizes min/max values into the appropriate TypedRangeValue fields based on XS datatype.
@@ -195,20 +167,17 @@ func MapRangeValueByType(valueType types.DataTypeDefXSD, minLexical *string, max
 	minValue := lexicalOrEmpty(minLexical)
 	maxValue := lexicalOrEmpty(maxLexical)
 	if minValid {
-		if err := validateDatabaseTypedValue(valueType, minValue); err != nil {
+		if err := validateStoredLexical(valueType, minValue); err != nil {
 			return tv, err
 		}
 	}
 	if maxValid {
-		if err := validateDatabaseTypedValue(valueType, maxValue); err != nil {
+		if err := validateStoredLexical(valueType, maxValue); err != nil {
 			return tv, err
 		}
 	}
 
 	switch {
-	case IsTextType(valueType):
-		tv.MinText = sql.NullString{String: minValue, Valid: minValid}
-		tv.MaxText = sql.NullString{String: maxValue, Valid: maxValid}
 	case gen.IsNumericXSDType(valueType):
 		minIsNumeric := !minValid || isValidNumeric(minValue)
 		maxIsNumeric := !maxValid || isValidNumeric(maxValue)
@@ -219,17 +188,7 @@ func MapRangeValueByType(valueType types.DataTypeDefXSD, minLexical *string, max
 			tv.MinText = sql.NullString{String: minValue, Valid: minValid}
 			tv.MaxText = sql.NullString{String: maxValue, Valid: maxValid}
 		}
-	case valueType == types.DataTypeDefXSDTime:
-		tv.MinTime = sql.NullString{String: minValue, Valid: minValid}
-		tv.MaxTime = sql.NullString{String: maxValue, Valid: maxValid}
-	case valueType == types.DataTypeDefXSDDate:
-		tv.MinDate = sql.NullString{String: minValue, Valid: minValid}
-		tv.MaxDate = sql.NullString{String: maxValue, Valid: maxValid}
-	case IsDateTimeType(valueType):
-		tv.MinDateTime = sql.NullString{String: minValue, Valid: minValid}
-		tv.MaxDateTime = sql.NullString{String: maxValue, Valid: maxValid}
 	default:
-		// Fallback to text for unknown types
 		tv.MinText = sql.NullString{String: minValue, Valid: minValid}
 		tv.MaxText = sql.NullString{String: maxValue, Valid: maxValid}
 	}
