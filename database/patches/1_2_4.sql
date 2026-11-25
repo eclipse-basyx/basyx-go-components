@@ -2,7 +2,7 @@
 -- Project        : Eclipse BaSyx
 -- Organization   : Fraunhofer IESE
 -- File Type      : SQL Patch Script
--- Patch Version  : 1.2.5
+-- Patch Version  : 1.2.4
 -- Metamodel Ver. : 3.2
 -- ----------------------------------------------------------------------------
 -- Description:
@@ -106,7 +106,7 @@ ALTER TABLE range_element
   DROP COLUMN max_datetime RESTRICT;
 
 UPDATE basyxsystem
-SET schema_version = 'v1.2.5',
+SET schema_version = 'v1.2.4',
     state = 'clean'
 WHERE identifier = (
   SELECT identifier

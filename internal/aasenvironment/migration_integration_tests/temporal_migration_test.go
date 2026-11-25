@@ -92,7 +92,7 @@ func seedLegacyTemporalMigrationFixture(t *testing.T) {
 
 func assertTemporalMigrationRejectsConflicts(t *testing.T) {
 	t.Helper()
-	patch, err := os.ReadFile("../../../database/patches/1_2_5.sql")
+	patch, err := os.ReadFile("../../../database/patches/1_2_4.sql")
 	require.NoError(t, err)
 	db := openMigrationDatabase(t)
 	defer func() { require.NoError(t, db.Close()) }()
