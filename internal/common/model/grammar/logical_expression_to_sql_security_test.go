@@ -256,12 +256,15 @@ func TestNegatedFallibleCastsStayUnknownInPolicies(t *testing.T) {
 		`{"$not":{"$eq":[{"$field":"$sme.x#value"},{"$numVal":5}]}}`,
 		`{"$not":{"$eq":[{"$hexCast":{"$field":"$sme.x#value"}},{"$hexVal":"16#0A"}]}}`,
 		`{"$not":{"$regex":[{"$strVal":"abc"},{"$field":"$sme.x#value"}]}}`,
+		`{"$not":{"$regex":[{"$field":"$sme.x#value"},{"$attribute":{"CLAIM":"pattern"}}]}}`,
+		`{"$not":{"$regex":[{"$field":"$sme.x#value"},{"$strVal":"\\z"}]}}`,
 	} {
 		var expression LogicalExpression
 		if err := json.Unmarshal([]byte(raw), &expression); err != nil {
 			t.Fatal(err)
 		}
-		simplified, _ := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+		claimPattern := func(AttributeValue) any { return ClaimValue{Value: "("} }
+		simplified, _ := expression.SimplifyForBackendFilterWithOptions(claimPattern, DefaultSimplifyOptions())
 		where, _, err := simplified.EvaluateToExpression(mustCollectorForRoot(t, "$sm").ForAuthorizationPolicy())
 		if err != nil {
 			t.Fatal(err)
@@ -271,7 +274,7 @@ func TestNegatedFallibleCastsStayUnknownInPolicies(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !strings.Contains(sql, "IS NULL") {
-			t.Errorf("a failed cast under policy negation must stay unknown, got:\n%s", sql)
+			t.Errorf("a failed cast or pattern under policy negation must stay unknown, got:\n%s", sql)
 		}
 	}
 }
@@ -310,6 +313,65 @@ func TestNestedTemporalStringCastsBindTheirOperandOnce(t *testing.T) {
 	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{operand, {DateTimeVal: &instant}}})
 	if strings.Count(sql, "AS value OFFSET 0") != 7 || strings.Count(sql, `"aas"."id_short"`) != 1 {
 		t.Fatalf("each canonical string cast must bind its operand once behind an inlining fence:\n%s", sql)
+	}
+}
+
+func TestHexCastsNormalizeLikeConstantFolding(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct{ input, want string }{
+		{" 16#0a\t", "16#0A"}, {"\v16#AB\f", "16#AB"}, {"16#0G", ""}, {"0A", ""}, {"16#0A\u00a0", ""},
+	} {
+		got, ok := normalizeHexString(test.input)
+		if ok != (test.want != "") || got != test.want {
+			t.Errorf("normalizeHexString(%q) = %q, %t; want %q", test.input, got, ok, test.want)
+		}
+	}
+	hex := HexLiteralPattern("16#0A")
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{{HexCast: fieldValue("$aas#idShort")}, {HexVal: &hex}}})
+	if !strings.Contains(sql, `substring(upper(btrim("aas"."id_short"::text, $1)) from $2)`) {
+		t.Fatalf("a hex cast must trim, upper-case, and validate the value:\n%s", sql)
+	}
+}
+
+func TestDateTimeLiteralsAreTypedForSQL(t *testing.T) {
+	t.Parallel()
+
+	first := DateTimeLiteralPattern(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	second := DateTimeLiteralPattern(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC))
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Lt: ComparisonItems{{DateTimeVal: &first}, {DateTimeVal: &second}}})
+	if strings.Count(sql, "::timestamptz") != 2 {
+		t.Fatalf("date-time literals must never compare as text:\n%s", sql)
+	}
+}
+
+func TestStringCastOfTimestampFieldIsCanonical(t *testing.T) {
+	t.Parallel()
+
+	created := ModelStringPattern("$aasdesc#createdAt")
+	text := StandardString("2024-01-01T08:00:00Z")
+	where, _, err := (&LogicalExpression{Eq: ComparisonItems{{StrCast: &Value{Field: &created}}, {StrVal: &text}}}).EvaluateToExpression(mustCollectorForRoot(t, "$aasdesc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql, _, err := goqu.Dialect("postgres").From("descriptor").Where(where).ToSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, `'\+00:00$', 'Z')`) {
+		t.Fatalf("$strCast of a TIMESTAMPTZ field must use the canonical Z form:\n%s", sql)
+	}
+}
+
+func TestFailedNumericCastsYieldNoValue(t *testing.T) {
+	t.Parallel()
+
+	abc := StandardString("abc")
+	yes := true
+	for _, operand := range []Value{{StrVal: &abc}, {Boolean: &yes}, {Attribute: map[string]string{"GLOBAL": "UTCNOW"}}} {
+		if value := resolveCastValue(Value{NumCast: &operand}, func(AttributeValue) any { return "2025-01-01T00:00:00Z" }); value != nil {
+			t.Errorf("$numCast of %#v resolved to %#v, want no value", operand, value)
+		}
 	}
 }
 

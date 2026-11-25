@@ -56,7 +56,7 @@ session TimeZone:
   input formats yield NULL, so the candidate does not match. In ABAC rules,
   every condition that can be indeterminate (a failed `$dateTimeCast`,
   `$timeCast`, `$numCast`, `$boolCast`, or `$hexCast`, a date part, a `$regex`
-  whose pattern comes from a field and is invalid, or a `$match` term whose
+  whose pattern PostgreSQL rejects, from a literal, a claim, or a field, or a `$match` term whose
   claim or attribute comparison cannot be evaluated) keeps that result
   through `$not`, so a failed cast alone cannot satisfy a negated rule. Caller
   queries instead evaluate `$not` over correlated fields, such as Submodel
@@ -83,12 +83,17 @@ session TimeZone:
   ignored. Date parts of values whose local date and time exceed PostgreSQL's
   timestamp range yield no match.
 - TIMESTAMPTZ fields such as `$aasdesc#createdAt` are compared as instants
-  directly, so their indexes stay usable, and read as `xs:dateTime` text in UTC.
-- A field compared with a date-time, time, number, or boolean operand is always
+  directly, so their indexes stay usable, and read as canonical `xs:dateTime`
+  text in UTC with `Z`.
+- A field compared with a date-time, time, number, boolean, or hex operand is always
   cast to that type, as the query language requires, even when the simplifier's
   implicit casts are disabled.
 - `$numCast` and `$hexCast` of a date-time or time are type errors in XPath and
-  yield no match.
+  yield no match. A `$numCast` of any other value that is not a number also
+  yields no match in constant folding, as it does in SQL.
+- `$hexCast` trims space, tab, line feed, vertical tab, form feed, and carriage
+  return, upper-cases the value, and yields no match unless it has the form
+  `16#<hex digits>`, in constant folding and in SQL alike.
 - Date parts accept a `dateTimeOperand` as the grammar and JSON schema define it:
   a `$dateTimeVal`, a `$dateTimeCast`, or a time `GLOBAL`. A bare `$field` is
   rejected with HTTP 400, although the informative conformance corpus item

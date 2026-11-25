@@ -1173,8 +1173,8 @@ func resolveStrCast(operand Value, resolve AttributeResolver) any {
 	return valueOrNil(canonicalDateTimeString(instant))
 }
 
-// resolveNumCast casts a resolved operand to a number. A date-time or time cannot be cast to a
-// number in XPath and yields nil.
+// resolveNumCast casts a resolved operand to a number. A date-time or time, and any value that
+// is not a number, yields nil, like the PostgreSQL cast in SQL generation.
 func resolveNumCast(raw any) any {
 	if isTemporalValue(raw) {
 		return nil
@@ -1182,12 +1182,7 @@ func resolveNumCast(raw any) any {
 	if f, ok := toFloat(raw); ok {
 		return f
 	}
-	if s, ok := raw.(string); ok {
-		if f, err := strconv.ParseFloat(s, 64); err == nil {
-			return f
-		}
-	}
-	return raw
+	return nil
 }
 
 // valueOrNil returns value when ok is true and nil otherwise.

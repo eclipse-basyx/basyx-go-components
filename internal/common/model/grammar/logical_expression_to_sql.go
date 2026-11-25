@@ -1820,12 +1820,17 @@ func castResolvedOperandToSQL(inner *Value, position, targetType string, collect
 }
 
 // timestampFieldCastSQLValue casts a TIMESTAMPTZ field, whose value is the xs:dateTime in UTC.
-// A date-time cast keeps the column itself, so its index stays usable.
+// A date-time cast keeps the column itself, so its index stays usable, and a string cast
+// yields the XPath canonical text with "Z".
 func timestampFieldCastSQLValue(sqlValue interface{}, targetType string) interface{} {
-	if targetType == "timestamptz" {
+	switch targetType {
+	case "timestamptz":
 		return sqlValue
+	case "text":
+		return goqu.Func("regexp_replace", timestampFieldText(sqlValue), `\+00:00$`, "Z")
+	default:
+		return safeCastSQLValue(timestampFieldText(sqlValue), targetType)
 	}
-	return safeCastSQLValue(timestampFieldText(sqlValue), targetType)
 }
 
 // timeOfDateTimeOperandToSQL casts an xs:dateTime operand to xs:time, keeping its local clock time and timezone.
@@ -2494,7 +2499,7 @@ func handleBinaryOperationWithoutApply(
 	return resolvedSQLPredicate{
 		expression:   opExpr,
 		fields:       collectResolvedFieldPaths(leftResolved, rightResolved),
-		mayBeUnknown: containsFallibleCast(leftOperand) || containsFallibleCast(rightOperand) || operation == "$regex" && rightOperand.StrVal == nil,
+		mayBeUnknown: containsFallibleCast(leftOperand) || containsFallibleCast(rightOperand) || operation == "$regex",
 	}, nil
 }
 
@@ -3101,13 +3106,13 @@ func isComparisonOperation(operation string) bool {
 	}
 }
 
-// castFieldToTypedOperand casts an uncast field compared with a date-time, time, number, or
-// boolean operand to that type, as the query language requires for FieldIdentifiers. SQL
+// castFieldToTypedOperand casts an uncast field compared with a date-time, time, number,
+// boolean, or hex operand to that type, as the query language requires for FieldIdentifiers. SQL
 // generation applies it even when the simplifier's implicit casts are disabled, because
 // PostgreSQL cannot compare text with those types.
 func castFieldToTypedOperand(field *Value, other *Value) {
 	switch kind := other.EffectiveTypeWithCast(); kind {
-	case KindDateTime, KindTime, KindNumber, KindBool:
+	case KindDateTime, KindTime, KindNumber, KindBool, KindHex:
 		*field = WrapCastAroundField(*field, kind)
 	}
 }

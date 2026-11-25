@@ -52,8 +52,8 @@ const (
 )
 
 // containsFallibleCast reports whether an operand can evaluate to SQL NULL because a cast,
-// a temporal operation, or a date part fails for some input. A $regex whose pattern is not a
-// literal can also be unknown; handleBinaryOperationWithoutApply checks that separately. Under authorization-policy
+// a temporal operation, or a date part fails for some input. A $regex can also be unknown
+// because PostgreSQL rejects its pattern; handleBinaryOperationWithoutApply checks that separately. Under authorization-policy
 // negation such conditions keep their unknown result so that they fail closed.
 func containsFallibleCast(value *Value) bool {
 	if value == nil {

@@ -80,17 +80,33 @@ The upgrade is not compatible with rolling updates. Previous binaries that are s
 
 The patch holds exclusive locks on `property_element` and `range_element` for the whole backfill and drops the columns in the same transaction. The five-second lock timeout bounds lock acquisition only, and the patch disables the statement timeout and, on PostgreSQL 17 and later, the transaction timeout for its transaction. It needs no TEMPORARY privilege. In a benchmark, the backfill cost about 8 µs and 0.8 KB of WAL per legacy temporal value plus two sequential scans of each table, for example about 15 seconds for 8 million Properties with 1.6 million legacy temporal values. Rehearse on a database copy to size the maintenance window, raise `max_wal_size` for large tables, and run `VACUUM (ANALYZE)` on both tables afterwards.
 
-A failed patch rolls back its data and schema changes, and the Configuration Service marks the schema state as dirty. Services of every version, including the previous one, refuse to start while the state is dirty. Resolve the reported conflict or dependency and rerun the Configuration Service until the patch succeeds, or restore the backup, before starting any service. The patch reports the conflicting row with the lowest ID; the following query lists all Property conflicts at once, and the same conditions on the `min_*` and `max_*` columns list Range conflicts:
+A failed patch rolls back its data and schema changes, and the Configuration Service marks the schema state as dirty. Services of every version, including the previous one, refuse to start while the state is dirty. Resolve the reported conflict or dependency and rerun the Configuration Service until the patch succeeds, or restore the backup, before starting any service. The patch reports the conflicting row with the lowest ID. The following queries list all conflicts at once, using the same conditions as the patch:
 
 ```sql
 SELECT id FROM property_element
 WHERE num_nonnulls(value_time, value_date, value_datetime) > 0
   AND (num_nonnulls(value_time, value_date, value_datetime) > 1
-       OR value_num IS NOT NULL OR value_bool IS NOT NULL OR value_text IS NOT NULL)
+       OR value_num IS NOT NULL OR value_bool IS NOT NULL
+       OR value_text COLLATE "C" <> COALESCE(to_json(value_time) #>> '{}', to_json(value_date) #>> '{}',
+                     regexp_replace(to_json(timezone('UTC', value_datetime)) #>> '{}', '^(.+) BC$', E'-\\1')
+                     || CASE WHEN isfinite(value_datetime) THEN '+00:00' ELSE '' END))
+ORDER BY id;
+
+SELECT id FROM range_element
+WHERE (num_nonnulls(min_time, min_date, min_datetime) > 0
+       AND (num_nonnulls(min_time, min_date, min_datetime) > 1 OR min_num IS NOT NULL
+            OR min_text COLLATE "C" <> COALESCE(to_json(min_time) #>> '{}', to_json(min_date) #>> '{}',
+                     regexp_replace(to_json(timezone('UTC', min_datetime)) #>> '{}', '^(.+) BC$', E'-\\1')
+                     || CASE WHEN isfinite(min_datetime) THEN '+00:00' ELSE '' END)))
+   OR (num_nonnulls(max_time, max_date, max_datetime) > 0
+       AND (num_nonnulls(max_time, max_date, max_datetime) > 1 OR max_num IS NOT NULL
+            OR max_text COLLATE "C" <> COALESCE(to_json(max_time) #>> '{}', to_json(max_date) #>> '{}',
+                     regexp_replace(to_json(timezone('UTC', max_datetime)) #>> '{}', '^(.+) BC$', E'-\\1')
+                     || CASE WHEN isfinite(max_datetime) THEN '+00:00' ELSE '' END)))
 ORDER BY id;
 ```
 
-Rows with `value_text` in this list are conflicts only if the text differs from the legacy rendering described above. After a successful upgrade, rollback requires restoring the pre-upgrade backup before restarting the previous binaries.
+After a successful upgrade, rollback requires restoring the pre-upgrade backup before restarting the previous binaries.
 
 ## Enums And Integer Codes
 
