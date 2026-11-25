@@ -1753,7 +1753,7 @@ func toSQLResolvedFieldOrValue(
 	case operand.HexCast != nil && isTemporalOperand(*operand.HexCast):
 		return temporalHexCastToSQL(operand.HexCast, position, collector)
 	case operand.HexCast != nil:
-		return castResolvedOperandToSQL(operand.HexCast, position, "text", collector)
+		return castResolvedOperandToSQL(operand.HexCast, position, "hex", collector)
 	case operand.Year != nil:
 		return datePartResolvedOperandToSQL(operand.Year, position, "YEAR", collector)
 	case operand.Month != nil:
@@ -2455,7 +2455,7 @@ func handleBinaryOperationWithoutApply(
 	validate binaryOperationValidator,
 ) (resolvedSQLPredicate, error) {
 	if leftOperand == nil || rightOperand == nil {
-		return resolvedSQLPredicate{}, fmt.Errorf("binary operation operands must not be nil")
+		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLBINARY-NILOPERAND: binary operation operands must not be nil")
 	}
 
 	leftOperand = cloneValueForSQL(leftOperand)
@@ -2467,8 +2467,8 @@ func handleBinaryOperationWithoutApply(
 		return resolvedSQLPredicate{}, fieldToFieldErr
 	}
 	if isComparisonOperation(operation) {
-		castFieldToTemporalOperand(leftOperand, rightOperand)
-		castFieldToTemporalOperand(rightOperand, leftOperand)
+		castFieldToTypedOperand(leftOperand, rightOperand)
+		castFieldToTypedOperand(rightOperand, leftOperand)
 	}
 
 	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, "left", collector)
@@ -2494,7 +2494,7 @@ func handleBinaryOperationWithoutApply(
 	return resolvedSQLPredicate{
 		expression:   opExpr,
 		fields:       collectResolvedFieldPaths(leftResolved, rightResolved),
-		mayBeUnknown: containsFallibleCast(leftOperand) || containsFallibleCast(rightOperand),
+		mayBeUnknown: containsFallibleCast(leftOperand) || containsFallibleCast(rightOperand) || operation == "$regex" && rightOperand.StrVal == nil,
 	}, nil
 }
 
@@ -2805,14 +2805,14 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 
 func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(match) == 0 {
-		return resolvedSQLPredicate{}, fmt.Errorf("match expression list is empty")
+		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-EMPTY: match expression list is empty")
 	}
 	var expressions []exp.Expression
 	var predicate resolvedSQLPredicate
 	for i, m := range match {
 		child, err := evaluateMatchExpressionSQL(m, collector)
 		if err != nil {
-			return resolvedSQLPredicate{}, fmt.Errorf("error evaluating match expression at index %d: %w", i, err)
+			return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-EVALTERM: error evaluating match expression at index %d: %w", i, err)
 		}
 		expressions = append(expressions, child.expression)
 		predicate.fields = append(predicate.fields, child.fields...)
@@ -2862,12 +2862,12 @@ func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPath
 	if len(me.Match) > 0 {
 		return evaluateMatchExpressions(me.Match, collector)
 	}
-	return resolvedSQLPredicate{}, fmt.Errorf("match expression has no valid operation")
+	return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-NOOPERATION: match expression has no valid operation")
 }
 
 func evaluateMatchComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(operands) != 2 {
-		return resolvedSQLPredicate{}, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
+		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-COMPAREARITY: comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
 	}
 	leftOperand := &operands[0]
 	rightOperand := &operands[1]
@@ -2888,7 +2888,7 @@ func evaluateMatchComparison(operands []Value, operation string, collector *Reso
 
 func evaluateMatchStringOperation(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(items) != 2 {
-		return resolvedSQLPredicate{}, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
+		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-STRINGARITY: string operation %s requires exactly 2 operands, got %d", operation, len(items))
 	}
 	leftOperand := stringValueToValue(items[0])
 	rightOperand := stringValueToValue(items[1])
@@ -3101,12 +3101,13 @@ func isComparisonOperation(operation string) bool {
 	}
 }
 
-// castFieldToTemporalOperand casts an uncast field compared with a date-time or time operand
-// to that type, as the query language requires for FieldIdentifiers. SQL generation applies it
-// even when the simplifier's implicit casts are disabled, because PostgreSQL cannot compare
-// text with a timestamp.
-func castFieldToTemporalOperand(field *Value, other *Value) {
-	if kind := other.EffectiveTypeWithCast(); kind == KindDateTime || kind == KindTime {
+// castFieldToTypedOperand casts an uncast field compared with a date-time, time, number, or
+// boolean operand to that type, as the query language requires for FieldIdentifiers. SQL
+// generation applies it even when the simplifier's implicit casts are disabled, because
+// PostgreSQL cannot compare text with those types.
+func castFieldToTypedOperand(field *Value, other *Value) {
+	switch kind := other.EffectiveTypeWithCast(); kind {
+	case KindDateTime, KindTime, KindNumber, KindBool:
 		*field = WrapCastAroundField(*field, kind)
 	}
 }
@@ -3146,10 +3147,19 @@ func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 		return totalCastSQLValue(sqlValue, targetType, "double precision")
 	case "boolean":
 		return totalCastSQLValue(sqlValue, targetType, "boolean")
+	case "hex":
+		return hexCastSQLValue(sqlValue)
 	default:
 		// text/hex casts are always safe
 		return goqu.L("?::"+targetType, sqlValue)
 	}
+}
+
+// hexCastSQLValue casts an SQL value to a hex literal the way normalizeHexString does: trimmed,
+// upper case, and of the form 16#<hex digits>, or NULL otherwise.
+func hexCastSQLValue(sqlValue interface{}) exp.Expression {
+	normalized := goqu.Func("upper", goqu.Func("btrim", goqu.L("?::text", sqlValue), hexWhitespace))
+	return goqu.L("substring(? from ?)", normalized, `^16#[0-9A-F]+$`)
 }
 
 func totalCastSQLValue(sqlValue interface{}, targetType string, validationType string) exp.Expression {

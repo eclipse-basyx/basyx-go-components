@@ -17,8 +17,6 @@
 SET LOCAL lock_timeout = '5s';
 -- A role or database default must not abort the backfill partway.
 SET LOCAL statement_timeout = 0;
-LOCK TABLE property_element, range_element IN ACCESS EXCLUSIVE MODE;
-
 -- PostgreSQL 17 and later can also end the transaction through a role or database default.
 DO $timeouts$
 BEGIN
@@ -28,9 +26,12 @@ BEGIN
 END;
 $timeouts$;
 
--- Each legacy value is rendered like the previous API and AASQL output, independent of
+LOCK TABLE property_element, range_element IN ACCESS EXCLUSIVE MODE;
+
+-- Each legacy value is rendered like the previous API output of a UTC session, independent of
 -- TimeZone and DateStyle:
---   COALESCE(time, date, UTC timestamp with "+00:00"), where BC timestamps start with "-".
+--   COALESCE(time, date, UTC timestamp with "+00:00"), where BC timestamps start with "-"
+--   and infinite timestamps keep the text "infinity" or "-infinity".
 -- The expression is written inline so the patch needs no TEMPORARY privilege.
 
 DO $preflight$
@@ -47,7 +48,7 @@ BEGIN
       OR value_num IS NOT NULL
       OR value_bool IS NOT NULL
       OR (value_text IS NOT NULL AND value_text COLLATE "C" <>
-          COALESCE(to_json(value_time) #>> '{}', to_json(value_date) #>> '{}', regexp_replace(to_json(timezone('UTC', value_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00'))
+          COALESCE(to_json(value_time) #>> '{}', to_json(value_date) #>> '{}', regexp_replace(to_json(timezone('UTC', value_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || CASE WHEN isfinite(value_datetime) THEN '+00:00' ELSE '' END))
     )
   ORDER BY id
   LIMIT 1;
@@ -63,7 +64,7 @@ BEGIN
       num_nonnulls(min_time, min_date, min_datetime) > 1
       OR min_num IS NOT NULL
       OR (min_text IS NOT NULL AND min_text COLLATE "C" <>
-          COALESCE(to_json(min_time) #>> '{}', to_json(min_date) #>> '{}', regexp_replace(to_json(timezone('UTC', min_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00'))
+          COALESCE(to_json(min_time) #>> '{}', to_json(min_date) #>> '{}', regexp_replace(to_json(timezone('UTC', min_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || CASE WHEN isfinite(min_datetime) THEN '+00:00' ELSE '' END))
     )
   ) OR (
     num_nonnulls(max_time, max_date, max_datetime) > 0
@@ -71,7 +72,7 @@ BEGIN
       num_nonnulls(max_time, max_date, max_datetime) > 1
       OR max_num IS NOT NULL
       OR (max_text IS NOT NULL AND max_text COLLATE "C" <>
-          COALESCE(to_json(max_time) #>> '{}', to_json(max_date) #>> '{}', regexp_replace(to_json(timezone('UTC', max_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00'))
+          COALESCE(to_json(max_time) #>> '{}', to_json(max_date) #>> '{}', regexp_replace(to_json(timezone('UTC', max_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || CASE WHEN isfinite(max_datetime) THEN '+00:00' ELSE '' END))
     )
   )
   ORDER BY id
@@ -83,13 +84,13 @@ END;
 $preflight$;
 
 UPDATE property_element
-SET value_text = COALESCE(to_json(value_time) #>> '{}', to_json(value_date) #>> '{}', regexp_replace(to_json(timezone('UTC', value_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00')
+SET value_text = COALESCE(to_json(value_time) #>> '{}', to_json(value_date) #>> '{}', regexp_replace(to_json(timezone('UTC', value_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || CASE WHEN isfinite(value_datetime) THEN '+00:00' ELSE '' END)
 WHERE value_text IS NULL
   AND num_nonnulls(value_time, value_date, value_datetime) > 0;
 
 UPDATE range_element
-SET min_text = COALESCE(min_text, COALESCE(to_json(min_time) #>> '{}', to_json(min_date) #>> '{}', regexp_replace(to_json(timezone('UTC', min_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00')),
-    max_text = COALESCE(max_text, COALESCE(to_json(max_time) #>> '{}', to_json(max_date) #>> '{}', regexp_replace(to_json(timezone('UTC', max_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || '+00:00'))
+SET min_text = COALESCE(min_text, COALESCE(to_json(min_time) #>> '{}', to_json(min_date) #>> '{}', regexp_replace(to_json(timezone('UTC', min_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || CASE WHEN isfinite(min_datetime) THEN '+00:00' ELSE '' END)),
+    max_text = COALESCE(max_text, COALESCE(to_json(max_time) #>> '{}', to_json(max_date) #>> '{}', regexp_replace(to_json(timezone('UTC', max_datetime)) #>> '{}', '^(.+) BC$', E'-\\1') || CASE WHEN isfinite(max_datetime) THEN '+00:00' ELSE '' END))
 WHERE (min_text IS NULL AND num_nonnulls(min_time, min_date, min_datetime) > 0)
    OR (max_text IS NULL AND num_nonnulls(max_time, max_date, max_datetime) > 0);
 

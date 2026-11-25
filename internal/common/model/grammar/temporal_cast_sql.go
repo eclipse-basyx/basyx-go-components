@@ -52,13 +52,14 @@ const (
 )
 
 // containsFallibleCast reports whether an operand can evaluate to SQL NULL because a cast,
-// a temporal operation, or a date part fails for some input. Under authorization-policy
+// a temporal operation, or a date part fails for some input. A $regex whose pattern is not a
+// literal can also be unknown; handleBinaryOperationWithoutApply checks that separately. Under authorization-policy
 // negation such conditions keep their unknown result so that they fail closed.
 func containsFallibleCast(value *Value) bool {
 	if value == nil {
 		return false
 	}
-	if isTemporalOperand(*value) || isDatePart(*value) || value.NumCast != nil || value.BoolCast != nil {
+	if isTemporalOperand(*value) || isDatePart(*value) || value.NumCast != nil || value.BoolCast != nil || value.HexCast != nil {
 		return true
 	}
 	for _, child := range valueChildren(*value) {
@@ -112,11 +113,14 @@ func timeInstantSQLValue(timeText exp.Expression) exp.Expression {
 }
 
 // canonicalDateTimeSQLText casts validated xs:dateTime text to xs:string the way XPath does,
-// matching canonicalDateTimeString.
+// matching canonicalDateTimeString. It reads the text twice, once for the local date and time
+// and once for the timezone, so the text is bound once in a subquery. OFFSET 0 keeps PostgreSQL
+// from inlining that subquery, which would copy the operand into both places and double the
+// planning work with every nested cast.
 func canonicalDateTimeSQLText(dateTimeText exp.Expression) exp.Expression {
 	value := goqu.L("value")
 	localText := goqu.L("to_json(?) #>> '{}'", localDateTimeSQLValue(value))
-	return goqu.L("(SELECT ? || ? FROM (SELECT ? AS value) AS xsd_date_time)", localText, canonicalTimezoneSQLText(value), dateTimeText)
+	return goqu.L("(SELECT ? || ? FROM (SELECT ? AS value OFFSET 0) AS xsd_date_time)", localText, canonicalTimezoneSQLText(value), dateTimeText)
 }
 
 // canonicalTimeSQLText casts validated xs:time text to xs:string the way XPath does,

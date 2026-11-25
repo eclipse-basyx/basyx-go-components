@@ -53,6 +53,7 @@ func temporalMigrationElements() []temporalMigrationElement {
 		{"Date", "property_element", "xs:date", goqu.Record{"value_date": "2024-02-29"}, map[string]any{"value_text": "2024-02-29"}},
 		{"Timestamp", "property_element", "xs:dateTime", goqu.Record{"value_datetime": "2024-01-01T10:00:00.123456+02:00"}, map[string]any{"value_text": "2024-01-01T08:00:00.123456+00:00"}},
 		{"BCE", "property_element", "xs:dateTime", goqu.Record{"value_datetime": "0001-01-01T00:30:00.123+02:00"}, map[string]any{"value_text": "-0001-12-31T22:30:00.123+00:00"}},
+		{"Forever", "property_element", "xs:dateTime", goqu.Record{"value_datetime": "infinity"}, map[string]any{"value_text": "infinity"}},
 		{"Exact", "property_element", "xs:dateTime", goqu.Record{"value_text": "2024-01-01T00:30:00.123456789+02:00"}, map[string]any{"value_text": "2024-01-01T00:30:00.123456789+02:00"}},
 		{"AlreadyBackfilled", "property_element", "xs:date", goqu.Record{"value_text": "2024-02-29", "value_date": "2024-02-29"}, map[string]any{"value_text": "2024-02-29"}},
 		{"EmptyText", "property_element", "xs:string", goqu.Record{"value_text": ""}, map[string]any{"value_text": ""}},

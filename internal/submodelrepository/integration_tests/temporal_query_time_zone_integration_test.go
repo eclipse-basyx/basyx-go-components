@@ -182,6 +182,23 @@ func TestRangePutAcceptsSingleBound(t *testing.T) {
 	requireTemporalElements(t, endpoint, elements)
 }
 
+func TestDeeplyNestedTemporalStringCastsStayCheap(t *testing.T) {
+	const id = "urn:basyx:integration:nested-temporal-casts"
+	elements := []temporalElement{{IDShort: "Stamp", ModelType: "Property", ValueType: "xs:dateTime", Value: new("2024-01-01T00:30:00+02:00")}}
+	postTemporalSubmodel(t, submodelRepositoryBaseURL, id, elements)
+
+	operand := `{"$field":"$sme.Stamp#value"}`
+	for range 24 {
+		operand = `{"$dateTimeCast":{"$strCast":` + operand + `}}`
+	}
+	nested := `{"$eq":[` + operand + `,{"$dateTimeVal":"2023-12-31T22:30:00Z"}]}`
+	for _, reader := range requireTemporalRepositoriesInBothTimeZones(t) {
+		t.Run(reader, func(t *testing.T) {
+			requireTemporalQueryCases(t, reader, id, []temporalQueryCase{{"24 nested string and date-time casts", nested, true}})
+		})
+	}
+}
+
 func requireTemporalQueryCases(t *testing.T, baseURL, submodelID string, cases []temporalQueryCase) {
 	t.Helper()
 	for _, test := range cases {

@@ -216,13 +216,17 @@ func TestDateTimeLiteralsBeforeYearOneUsePostgreSQLNotation(t *testing.T) {
 	}
 }
 
-func TestTemporalComparisonsCastFieldsWithoutImplicitCasts(t *testing.T) {
+func TestTypedComparisonsCastFieldsWithoutImplicitCasts(t *testing.T) {
 	t.Parallel()
 
-	for _, raw := range []string{
-		`{"$eq":[{"$field":"$sm#idShort"},{"$timeVal":"10:00"}]}`,
-		`{"$eq":[{"$field":"$sm#idShort"},{"$dateTimeVal":"0000-01-01T00:00:00Z"}]}`,
-		`{"$lt":[{"$dateTimeVal":"2024-01-01T00:00:00Z"},{"$field":"$sm#idShort"}]}`,
+	for raw, cast := range map[string]string{
+		`{"$eq":[{"$field":"$sm#idShort"},{"$timeVal":"10:00"}]}`:                              "substring(btrim(",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$dateTimeVal":"0000-01-01T00:00:00Z"}]}`:           "substring(btrim(",
+		`{"$lt":[{"$dateTimeVal":"2024-01-01T00:00:00Z"},{"$field":"$sm#idShort"}]}`:           "substring(btrim(",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$year":{"$dateTimeVal":"2024-01-01T00:00:00Z"}}]}`: "'double precision'",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$numCast":{"$strVal":"3"}}]}`:                      "'double precision'",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$numVal":3}]}`:                                     "'double precision'",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$boolean":true}]}`:                                 "'boolean'",
 	} {
 		var expression LogicalExpression
 		if err := json.Unmarshal([]byte(raw), &expression); err != nil {
@@ -237,8 +241,8 @@ func TestTemporalComparisonsCastFieldsWithoutImplicitCasts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(sql, `substring(btrim("submodel"."id_short"::text`) {
-			t.Errorf("a field compared with a temporal operand must be cast, got:\n%s", sql)
+		if !strings.Contains(sql, cast) {
+			t.Errorf("a field compared with a typed operand must be cast (%s), got:\n%s", cast, sql)
 		}
 	}
 }
@@ -250,6 +254,8 @@ func TestNegatedFallibleCastsStayUnknownInPolicies(t *testing.T) {
 		`{"$not":{"$gt":[{"$numCast":{"$field":"$sme.x#value"}},{"$numVal":5}]}}`,
 		`{"$not":{"$boolCast":{"$field":"$sme.x#value"}}}`,
 		`{"$not":{"$eq":[{"$field":"$sme.x#value"},{"$numVal":5}]}}`,
+		`{"$not":{"$eq":[{"$hexCast":{"$field":"$sme.x#value"}},{"$hexVal":"16#0A"}]}}`,
+		`{"$not":{"$regex":[{"$strVal":"abc"},{"$field":"$sme.x#value"}]}}`,
 	} {
 		var expression LogicalExpression
 		if err := json.Unmarshal([]byte(raw), &expression); err != nil {
@@ -276,8 +282,10 @@ func TestTemporalValuesAreNotNumbersOrHexBinary(t *testing.T) {
 	clock := TimeLiteralPattern("10:00Z")
 	ten := float64(10)
 	hex := HexLiteralPattern("16#0A")
+	clockText := StandardString("10:00:00Z")
 	for _, expression := range []LogicalExpression{
 		{Eq: ComparisonItems{{NumCast: &Value{TimeVal: &clock}}, {NumVal: &ten}}},
+		{Eq: ComparisonItems{{StrCast: &Value{NumCast: &Value{TimeVal: &clock}}}, {StrVal: &clockText}}},
 		{Ne: ComparisonItems{{HexVal: &hex}, {HexCast: &Value{TimeVal: &clock}}}},
 	} {
 		if _, decision := expression.SimplifyForBackendFilterNoResolver(); decision == SimplifyTrue {
@@ -287,6 +295,21 @@ func TestTemporalValuesAreNotNumbersOrHexBinary(t *testing.T) {
 	sql := renderLogicalExpressionSQL(t, LogicalExpression{Ne: ComparisonItems{{HexVal: &hex}, {HexCast: &Value{TimeVal: &clock}}}})
 	if !strings.Contains(sql, "NULL::text ||") {
 		t.Fatalf("$hexCast of a time must be NULL instead of session-dependent text:\n%s", sql)
+	}
+}
+
+func TestNestedTemporalStringCastsBindTheirOperandOnce(t *testing.T) {
+	t.Parallel()
+
+	operand := Value{Field: new(ModelStringPattern("$aas#idShort"))}
+	for range 8 {
+		inner := operand
+		operand = Value{DateTimeCast: &Value{StrCast: &inner}}
+	}
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Eq: ComparisonItems{operand, {DateTimeVal: &instant}}})
+	if strings.Count(sql, "AS value OFFSET 0") != 7 || strings.Count(sql, `"aas"."id_short"`) != 1 {
+		t.Fatalf("each canonical string cast must bind its operand once behind an inlining fence:\n%s", sql)
 	}
 }
 

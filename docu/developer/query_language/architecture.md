@@ -55,11 +55,15 @@ session TimeZone:
   lexical spaces. Dates, timestamps without `T` or seconds, and other PostgreSQL
   input formats yield NULL, so the candidate does not match. In ABAC rules,
   every condition that can be indeterminate (a failed `$dateTimeCast`,
-  `$timeCast`, `$numCast`, or `$boolCast`, a date part, or a `$match` term
-  whose claim or attribute comparison cannot be evaluated) keeps that result
+  `$timeCast`, `$numCast`, `$boolCast`, or `$hexCast`, a date part, a `$regex`
+  whose pattern comes from a field and is invalid, or a `$match` term whose
+  claim or attribute comparison cannot be evaluated) keeps that result
   through `$not`, so a failed cast alone cannot satisfy a negated rule. Caller
-  queries instead evaluate `$not` over visible matches, so a candidate whose
-  cast fails satisfies a negated query condition. This deliberately keeps the
+  queries instead evaluate `$not` over correlated fields, such as Submodel
+  Element values, as the absence of a visible match, so a candidate whose cast
+  fails satisfies a negated query condition. Fields of the queried row itself,
+  such as `$aasdesc#createdAt`, are evaluated row-locally and keep the failed
+  cast unknown, which excludes the candidate. This deliberately keeps the
   existing anti-existence semantics of queries and deviates from the rule in
   IDTA-01002 that a failed cast excludes the candidate. `$dateTimeVal` and
   `$timeVal` accept every `<DateTimeLiteral>` and `<TimeLiteral>` form, including
@@ -80,9 +84,9 @@ session TimeZone:
   timestamp range yield no match.
 - TIMESTAMPTZ fields such as `$aasdesc#createdAt` are compared as instants
   directly, so their indexes stay usable, and read as `xs:dateTime` text in UTC.
-- A field compared with a date-time or time operand is always cast to that type,
-  as the query language requires, even when the simplifier's implicit casts are
-  disabled.
+- A field compared with a date-time, time, number, or boolean operand is always
+  cast to that type, as the query language requires, even when the simplifier's
+  implicit casts are disabled.
 - `$numCast` and `$hexCast` of a date-time or time are type errors in XPath and
   yield no match.
 - Date parts accept a `dateTimeOperand` as the grammar and JSON schema define it:
@@ -93,14 +97,19 @@ session TimeZone:
   language's JSON schema, which allows year `0000` for 1 BC; such literals are
   compared correctly. Cast input with a negative or zero year never matches,
   and xs:dateTime values migrated from legacy BC timestamps are stored with a
-  negative year, so they never match temporal comparisons either.
+  negative year, so they never match temporal casts either. TIMESTAMPTZ fields
+  compare their stored instant directly, so a BC instant there matches such
+  literals; only its date parts, `$strCast`, and `$timeCast` yield no match.
 
 The generated SQL validates and normalizes the text with `regexp_replace` and
 `substring` before `basyx_validated_cast_input` and needs no further database
 function. Each cast references its operand once, which keeps the SQL linear in
-nesting depth. Keep these patterns free of nested optional groups: PostgreSQL
-evaluates those an order of magnitude slower. A cast costs about 1.7 µs per
-evaluated row on a one-million-row scan. Constant folding in Go accepts only
+nesting depth. The canonical `$strCast` of a date-time needs its text twice and
+binds it in a subquery with `OFFSET 0`, which stops PostgreSQL from inlining the
+subquery and copying the operand; without that fence, planning time doubles with
+every nesting level. Keep these patterns free of nested optional groups: PostgreSQL
+evaluates those an order of magnitude slower. A cast costs roughly 1 to 2 µs per evaluated
+row on a one-million-row scan, depending on how many values are temporal text. Constant folding in Go accepts only
 temporal input whose PostgreSQL result it reproduces exactly and leaves
 everything else to the database.
 

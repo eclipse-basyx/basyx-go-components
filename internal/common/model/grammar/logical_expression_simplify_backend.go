@@ -1119,72 +1119,83 @@ func datePartOperand(v Value) (*Value, string, bool) {
 }
 
 func resolveCastValue(v Value, resolve AttributeResolver) any {
-	if kind, operand, ok := castOperand(v); ok {
-		if claim, isClaim := resolveValue(*operand, resolve).(ClaimValue); isClaim {
-			literal, valid := literalClaimValueWithHint(claim.Value, kind)
-			if !valid {
-				return nil
-			}
-			return resolveValue(literal, resolve)
-		}
+	if literal, isClaim := resolveClaimCast(v, resolve); isClaim {
+		return literal
 	}
 	switch {
-	case v.StrCast != nil && isDateTimeAttributeOperand(*v.StrCast):
-		instant, ok := toDateTime(resolveValue(*v.StrCast, resolve))
-		if !ok {
-			return nil
-		}
-		value, ok := canonicalDateTimeString(instant)
-		if !ok {
-			return nil
-		}
-		return value
 	case v.StrCast != nil:
-		value, ok := stringOperandValue(resolveValue(*v.StrCast, resolve))
-		if !ok {
-			return nil
-		}
-		return value
+		return resolveStrCast(*v.StrCast, resolve)
 	case v.NumCast != nil:
-		x := resolveValue(*v.NumCast, resolve)
-		if isTemporalValue(x) {
-			return nil
-		}
-		if f, ok := toFloat(x); ok {
-			return f
-		}
-		if s, ok := x.(string); ok {
-			if f, err := strconv.ParseFloat(s, 64); err == nil {
-				return f
-			}
-		}
-		return x
+		return resolveNumCast(resolveValue(*v.NumCast, resolve))
 	case v.BoolCast != nil:
-		value, ok := boolOperandValue(resolveValue(*v.BoolCast, resolve))
-		if !ok {
-			return nil
-		}
-		return value
+		return valueOrNil(boolOperandValue(resolveValue(*v.BoolCast, resolve)))
 	case v.TimeCast != nil:
 		return resolveTimeCastOperand(*v.TimeCast, resolve)
 	case v.DateTimeCast != nil:
-		inner := resolveValue(*v.DateTimeCast, resolve)
-		if t, ok := toDateTime(inner); ok {
-			return t
-		}
-		return nil
+		return valueOrNil(toDateTime(resolveValue(*v.DateTimeCast, resolve)))
 	case v.HexCast != nil:
-		x := resolveValue(*v.HexCast, resolve)
-		if isTemporalValue(x) {
-			return nil
-		}
-		if hv, ok := normalizeHexAny(x); ok {
-			return HexLiteralPattern(hv)
-		}
-		return nil
+		hex, ok := normalizeHexAny(resolveValue(*v.HexCast, resolve))
+		return valueOrNil(HexLiteralPattern(hex), ok)
 	default:
 		return nil
 	}
+}
+
+// resolveClaimCast casts a claim operand with the strict claim typing; isClaim reports whether
+// the operand was a claim.
+func resolveClaimCast(v Value, resolve AttributeResolver) (literal any, isClaim bool) {
+	kind, operand, ok := castOperand(v)
+	if !ok {
+		return nil, false
+	}
+	claim, isClaim := resolveValue(*operand, resolve).(ClaimValue)
+	if !isClaim {
+		return nil, false
+	}
+	value, valid := literalClaimValueWithHint(claim.Value, kind)
+	if !valid {
+		return nil, true
+	}
+	return resolveValue(value, resolve), true
+}
+
+// resolveStrCast casts an operand to xs:string. Time globals such as LOCALNOW are xs:dateTime
+// values and take their XPath canonical form.
+func resolveStrCast(operand Value, resolve AttributeResolver) any {
+	raw := resolveValue(operand, resolve)
+	if !isDateTimeAttributeOperand(operand) {
+		return valueOrNil(stringOperandValue(raw))
+	}
+	instant, ok := toDateTime(raw)
+	if !ok {
+		return nil
+	}
+	return valueOrNil(canonicalDateTimeString(instant))
+}
+
+// resolveNumCast casts a resolved operand to a number. A date-time or time cannot be cast to a
+// number in XPath and yields nil.
+func resolveNumCast(raw any) any {
+	if isTemporalValue(raw) {
+		return nil
+	}
+	if f, ok := toFloat(raw); ok {
+		return f
+	}
+	if s, ok := raw.(string); ok {
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f
+		}
+	}
+	return raw
+}
+
+// valueOrNil returns value when ok is true and nil otherwise.
+func valueOrNil[T any](value T, ok bool) any {
+	if !ok {
+		return nil
+	}
+	return value
 }
 
 func resolveTimeCastOperand(v Value, resolve AttributeResolver) any {
@@ -1203,7 +1214,7 @@ func resolveTimeCastOperand(v Value, resolve AttributeResolver) any {
 }
 
 // isTemporalValue reports whether a resolved operand is an xs:dateTime or xs:time value, which
-// XPath cannot cast to a number or to xs:hexBinary.
+// XPath cannot cast to a number.
 func isTemporalValue(value any) bool {
 	switch value.(type) {
 	case time.Time, DateTimeLiteralPattern, *DateTimeLiteralPattern, TimeLiteralPattern:
@@ -1635,8 +1646,11 @@ func compareHex(a, b, op string) bool {
 
 var hexLiteralRegex = regexp.MustCompile(`(?i)^16#[0-9a-f]+$`)
 
+// hexWhitespace lists the characters trimmed around a value cast to hex, in Go and in SQL.
+const hexWhitespace = " \t\n\v\f\r"
+
 func normalizeHexString(raw string) (string, bool) {
-	s := strings.ToUpper(strings.TrimSpace(raw))
+	s := strings.ToUpper(strings.Trim(raw, hexWhitespace))
 	if s == "" || !hexLiteralRegex.MatchString(s) {
 		return "", false
 	}
