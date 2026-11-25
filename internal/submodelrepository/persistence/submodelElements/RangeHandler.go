@@ -219,6 +219,7 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) (goqu.Reco
 	return record, nil
 }
 
+// setRangeBound writes the text and numeric columns of one Range bound into an update record.
 func setRangeBound(record goqu.Record, bound string, text, numeric sql.NullString) {
 	record[bound+"_text"] = text
 	record[bound+"_num"] = numeric

@@ -227,6 +227,7 @@ func TestTypedComparisonsCastFieldsWithoutImplicitCasts(t *testing.T) {
 		`{"$eq":[{"$field":"$sm#idShort"},{"$numCast":{"$strVal":"3"}}]}`:                      "'double precision'",
 		`{"$eq":[{"$field":"$sm#idShort"},{"$numVal":3}]}`:                                     "'double precision'",
 		`{"$eq":[{"$field":"$sm#idShort"},{"$boolean":true}]}`:                                 "'boolean'",
+		`{"$eq":[{"$field":"$sm#idShort"},{"$hexVal":"16#0A"}]}`:                               "substring(upper(btrim(",
 	} {
 		var expression LogicalExpression
 		if err := json.Unmarshal([]byte(raw), &expression); err != nil {
@@ -371,6 +372,36 @@ func TestFailedNumericCastsYieldNoValue(t *testing.T) {
 	for _, operand := range []Value{{StrVal: &abc}, {Boolean: &yes}, {Attribute: map[string]string{"GLOBAL": "UTCNOW"}}} {
 		if value := resolveCastValue(Value{NumCast: &operand}, func(AttributeValue) any { return "2025-01-01T00:00:00Z" }); value != nil {
 			t.Errorf("$numCast of %#v resolved to %#v, want no value", operand, value)
+		}
+	}
+}
+
+func TestRegexTreatsMissingTextAndPatternAsNoMatch(t *testing.T) {
+	t.Parallel()
+
+	pattern := StandardString("^a")
+	sql := renderLogicalExpressionSQL(t, LogicalExpression{Regex: StringItems{strField("$aas#idShort"), {StrVal: &pattern}}})
+	if !strings.Contains(sql, `("aas"."id_short" IS NOT NULL AND`) || !strings.Contains(sql, "basyx_safe_regex_pattern(") {
+		t.Fatalf("a missing text or pattern must be a known non-match, not an unknown result:\n%s", sql)
+	}
+}
+
+func TestLiteralCastInputsAreBoundAsText(t *testing.T) {
+	t.Parallel()
+
+	negative := float64(-1)
+	yes := true
+	for _, operand := range []Value{{NumCast: &Value{Boolean: &yes}}, {HexCast: &Value{NumVal: &negative}}, {StrCast: &Value{NumVal: &negative}}} {
+		sqlValue, _, err := toSQLResolvedFieldOrValue(&operand, "left", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, args, err := goqu.Dialect("postgres").Select(sqlValue).Prepared(true).ToSQL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := args[0].(string); !ok {
+			t.Errorf("cast input of %#v bound as %#v, want text", operand, args[0])
 		}
 	}
 }

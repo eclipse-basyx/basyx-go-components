@@ -1084,6 +1084,7 @@ func resolveDateTimeLiteral(v Value, resolve AttributeResolver) any {
 	return nil
 }
 
+// isDatePart reports whether a value is a $year, $month, $dayOfMonth, or $dayOfWeek operator.
 func isDatePart(v Value) bool {
 	return v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil
 }
@@ -1193,6 +1194,8 @@ func valueOrNil[T any](value T, ok bool) any {
 	return value
 }
 
+// resolveTimeCastOperand casts an operand to xs:time: a date-time keeps its clock time and
+// timezone, and a string must be in the xs:time lexical space.
 func resolveTimeCastOperand(v Value, resolve AttributeResolver) any {
 	raw := resolveValue(v, resolve)
 	if isDateTimeOperand(v) {
@@ -1478,6 +1481,7 @@ func resolveDateTimeValue(v Value, resolve AttributeResolver) (time.Time, bool) 
 	return truncateToMicroseconds(t), ok
 }
 
+// resolveDateTimeInstant resolves a date-time operand without truncating it to microseconds.
 func resolveDateTimeInstant(v Value, resolve AttributeResolver) (time.Time, bool) {
 	switch {
 	case v.DateTimeVal != nil:

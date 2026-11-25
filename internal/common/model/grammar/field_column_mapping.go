@@ -83,6 +83,7 @@ func timestampFieldText(sqlValue interface{}) exp.Expression {
 
 const propertyValueColumn = "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, multilanguage_property_value.text)"
 
+// buildPropertyValueTypeColumn maps the stored valueType code of a Property to its xs: name in SQL.
 func buildPropertyValueTypeColumn() string {
 	branches := make([]string, 0, len(types.LiteralsOfDataTypeDefXSD))
 	for _, valueType := range types.LiteralsOfDataTypeDefXSD {

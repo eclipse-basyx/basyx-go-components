@@ -121,6 +121,7 @@ func isValidNumeric(value string) bool {
 	return err == nil && !math.IsInf(number, 0) && !math.IsNaN(number)
 }
 
+// validateStoredLexical checks that a value can be stored for its valueType.
 func validateStoredLexical(valueType types.DataTypeDefXSD, value string) error {
 	switch valueType {
 	case types.DataTypeDefXSDBoolean,

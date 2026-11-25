@@ -34,6 +34,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1809,6 +1810,9 @@ func castResolvedOperandToSQL(inner *Value, position, targetType string, collect
 	if targetType == "time" && isDateTimeOperand(*inner) {
 		return timeOfDateTimeOperandToSQL(inner, position, collector)
 	}
+	if text, ok := literalCastInputText(*inner); ok {
+		return safeCastSQLValue(goqu.V(text), targetType), nil, nil
+	}
 	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
 	if err != nil {
 		return nil, nil, err
@@ -1817,6 +1821,21 @@ func castResolvedOperandToSQL(inner *Value, position, targetType string, collect
 		return timestampFieldCastSQLValue(sqlValue, targetType), resolved, nil
 	}
 	return safeCastSQLValue(sqlValue, targetType), resolved, nil
+}
+
+// literalCastInputText returns the text a cast reads from a number or boolean literal. Binding
+// that text instead of the Go value lets prepared statements encode it as text and keeps a
+// negative number from rendering as "-1::text" in interpolated SQL. The number format matches
+// constant folding.
+func literalCastInputText(v Value) (string, bool) {
+	switch {
+	case v.NumVal != nil:
+		return strconv.FormatFloat(*v.NumVal, 'g', -1, 64), true
+	case v.Boolean != nil:
+		return strconv.FormatBool(*v.Boolean), true
+	default:
+		return "", false
+	}
 }
 
 // timestampFieldCastSQLValue casts a TIMESTAMPTZ field, whose value is the xs:dateTime in UTC.
@@ -1928,6 +1947,7 @@ func temporalHexCastToSQL(inner *Value, position string, collector *ResolvedFiel
 	return goqu.L("(NULL::text || (?)::text)", sqlValue), resolved, nil
 }
 
+// literalTemporalValue returns the value of a $dateTimeVal or $timeVal operand.
 func literalTemporalValue(v Value) any {
 	if v.DateTimeVal != nil {
 		return *v.DateTimeVal
@@ -1935,6 +1955,7 @@ func literalTemporalValue(v Value) any {
 	return *v.TimeVal
 }
 
+// isTemporalOperand reports whether a value is a date-time or time literal or cast.
 func isTemporalOperand(v Value) bool {
 	return v.DateTimeVal != nil || v.DateTimeCast != nil || v.TimeVal != nil || v.TimeCast != nil
 }
@@ -2808,6 +2829,7 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 	return goqu.Or(mainExpr, fragmentGuard), resolved, nil
 }
 
+// evaluateMatchExpressions renders the terms of a $match that must hold for the same element.
 func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(match) == 0 {
 		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-EMPTY: match expression list is empty")
@@ -2827,6 +2849,7 @@ func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldP
 	return predicate, nil
 }
 
+// evaluateMatchExpressionSQL renders one $match term as an SQL predicate.
 func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if me.Indeterminate {
 		return resolvedSQLPredicate{expression: goqu.L("NULL::boolean"), mayBeUnknown: true}, nil
@@ -2870,6 +2893,7 @@ func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPath
 	return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-NOOPERATION: match expression has no valid operation")
 }
 
+// evaluateMatchComparison renders a comparison inside a $match.
 func evaluateMatchComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(operands) != 2 {
 		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-COMPAREARITY: comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
@@ -2891,6 +2915,7 @@ func evaluateMatchComparison(operands []Value, operation string, collector *Reso
 	)
 }
 
+// evaluateMatchStringOperation renders a string operation inside a $match.
 func evaluateMatchStringOperation(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(items) != 2 {
 		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-STRINGARITY: string operation %s requires exactly 2 operands, got %d", operation, len(items))
@@ -3021,10 +3046,17 @@ func buildStringOperationExpression(left interface{}, right interface{}, operati
 	case "$ends-with":
 		return goqu.L("? LIKE '%' || ?", left, right), nil
 	case "$regex":
-		return goqu.L("? ~ basyx_safe_regex_pattern(?)", left, right), nil
+		return regexMatchSQLExpression(left, right), nil
 	default:
 		return nil, fmt.Errorf("unsupported string operation: %s", operation)
 	}
+}
+
+// regexMatchSQLExpression matches text against a regular expression. A missing text or pattern
+// is a known non-match, like the other string operations, so that only a pattern PostgreSQL
+// rejects leaves the result unknown, which fails closed under policy negation.
+func regexMatchSQLExpression(text interface{}, pattern interface{}) exp.Expression {
+	return goqu.L("(? IS NOT NULL AND ? IS NOT NULL AND ? ~ basyx_safe_regex_pattern(?))", text, pattern, text, pattern)
 }
 
 func cloneValueForSQL(value *Value) *Value {
@@ -3097,6 +3129,7 @@ func normalizeSemanticShorthand(operand *Value) {
 	}
 }
 
+// isComparisonOperation reports whether an operation is $eq, $ne, $gt, $ge, $lt, or $le.
 func isComparisonOperation(operation string) bool {
 	switch operation {
 	case "$eq", "$ne", "$gt", "$ge", "$lt", "$le":
@@ -3108,8 +3141,9 @@ func isComparisonOperation(operation string) bool {
 
 // castFieldToTypedOperand casts an uncast field compared with a date-time, time, number,
 // boolean, or hex operand to that type, as the query language requires for FieldIdentifiers. SQL
-// generation applies it even when the simplifier's implicit casts are disabled, because
-// PostgreSQL cannot compare text with those types.
+// generation applies it even when the simplifier's implicit casts are disabled: PostgreSQL
+// cannot compare text with the first four types, and hex values must be normalized like
+// constant folding does.
 func castFieldToTypedOperand(field *Value, other *Value) {
 	switch kind := other.EffectiveTypeWithCast(); kind {
 	case KindDateTime, KindTime, KindNumber, KindBool, KindHex:

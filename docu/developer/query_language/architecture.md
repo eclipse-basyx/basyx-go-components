@@ -56,7 +56,8 @@ session TimeZone:
   input formats yield NULL, so the candidate does not match. In ABAC rules,
   every condition that can be indeterminate (a failed `$dateTimeCast`,
   `$timeCast`, `$numCast`, `$boolCast`, or `$hexCast`, a date part, a `$regex`
-  whose pattern PostgreSQL rejects, from a literal, a claim, or a field, or a `$match` term whose
+  evaluated against a stored value whose pattern PostgreSQL rejects, from a literal,
+  a claim, or a field, or a `$match` term whose
   claim or attribute comparison cannot be evaluated) keeps that result
   through `$not`, so a failed cast alone cannot satisfy a negated rule. Caller
   queries instead evaluate `$not` over correlated fields, such as Submodel
@@ -91,6 +92,14 @@ session TimeZone:
 - `$numCast` and `$hexCast` of a date-time or time are type errors in XPath and
   yield no match. A `$numCast` of any other value that is not a number also
   yields no match in constant folding, as it does in SQL.
+- A cast of a missing value counts as indeterminate in ABAC rules, so a negated
+  rule over it denies. A `$regex` over a missing text or pattern is a non-match,
+  like the other string operations. A `$regex` whose operands are all literals or
+  claims is decided in Go with RE2, whose syntax differs slightly from
+  PostgreSQL's.
+- With implicit casts disabled, a TIMESTAMPTZ field compared with a string or used
+  in a string operation is not cast: PostgreSQL then parses the string in the
+  session TimeZone or rejects the operation.
 - `$hexCast` trims space, tab, line feed, vertical tab, form feed, and carriage
   return, upper-cases the value, and yields no match unless it has the form
   `16#<hex digits>`, in constant folding and in SQL alike.
@@ -104,7 +113,9 @@ session TimeZone:
   and xs:dateTime values migrated from legacy BC timestamps are stored with a
   negative year, so they never match temporal casts either. TIMESTAMPTZ fields
   compare their stored instant directly, so a BC instant there matches such
-  literals; only its date parts, `$strCast`, and `$timeCast` yield no match.
+  literals; its date parts yield no match and its `$strCast` has a negative year.
+  `$timeCast` of a TIMESTAMPTZ field yields no match, because the field reads as
+  xs:dateTime text; cast the field with `$dateTimeCast` first.
 
 The generated SQL validates and normalizes the text with `regexp_replace` and
 `substring` before `basyx_validated_cast_input` and needs no further database

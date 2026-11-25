@@ -233,6 +233,7 @@ func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, local
 	return updateRecord, nil
 }
 
+// propertyValueRecord builds the record that stores a Property value in its text, numeric, or boolean column.
 func propertyValueRecord(value TypedValue) goqu.Record {
 	return goqu.Record{
 		"value_text": value.Text,

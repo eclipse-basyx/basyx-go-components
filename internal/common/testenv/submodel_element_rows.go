@@ -112,6 +112,7 @@ func ReadSubmodelElementRow(t *testing.T, dsn, submodelID, idShortPath, table st
 	return row
 }
 
+// submodelElementIDQuery selects the ID of a submodel element by submodel identifier and idShort path.
 func submodelElementIDQuery(submodelID, idShortPath string) *goqu.SelectDataset {
 	return goqu.Dialect(common.Dialect).From("submodel_element").Select(goqu.I("submodel_element.id")).
 		Join(goqu.T("submodel"), goqu.On(goqu.I("submodel.id").Eq(goqu.I("submodel_element.submodel_id")))).

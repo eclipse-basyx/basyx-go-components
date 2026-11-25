@@ -101,6 +101,8 @@ func timeOfDateTime(t time.Time) time.Time {
 		hour, minute, second, t.Nanosecond(), t.Location())
 }
 
+// dateTimeFromParts builds an xs:dateTime from regular-expression parts and rejects invalid
+// calendar dates and instants beyond the PostgreSQL range.
 func dateTimeFromParts(parts []string) (time.Time, bool) {
 	if parts == nil {
 		return time.Time{}, false
@@ -219,6 +221,8 @@ func canonicalTimeString(t time.Time) string {
 	return truncateToMicroseconds(t).Format("15:04:05.999999") + canonicalTimezone(t.Location())
 }
 
+// canonicalTimezone renders a timezone as XPath does: nothing for the implicit timezone, "Z"
+// for a zero offset, and otherwise the signed hours and minutes.
 func canonicalTimezone(location *time.Location) string {
 	if location == implicitTimezone {
 		return ""

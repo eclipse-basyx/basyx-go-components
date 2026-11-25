@@ -133,6 +133,7 @@ func canonicalTimeSQLText(timeText exp.Expression) exp.Expression {
 	return canonicalTimezoneSQLSuffix(zeroFraction)
 }
 
+// canonicalTimezoneSQLText extracts the timezone of validated temporal text in canonical form.
 func canonicalTimezoneSQLText(temporalText exp.Expression) exp.Expression {
 	return canonicalTimezoneSQLSuffix(goqu.L("substring(? from ?)", temporalText, timezoneSQLPattern))
 }
@@ -143,10 +144,12 @@ func canonicalTimezoneSQLSuffix(text exp.Expression) exp.Expression {
 	return goqu.Func("regexp_replace", utc, `z$`, "")
 }
 
+// xsdTrimmedSQLText renders an SQL value as text without leading or trailing XSD whitespace.
 func xsdTrimmedSQLText(sqlValue interface{}) exp.Expression {
 	return goqu.Func("btrim", goqu.L("?::text", sqlValue), xsdWhitespace)
 }
 
+// truncatedFractionSQLText drops fractional-second digits beyond microseconds.
 func truncatedFractionSQLText(text exp.Expression) exp.Expression {
 	return goqu.Func("regexp_replace", text, fractionBeyondMicrosecondsPattern, `\1`)
 }
