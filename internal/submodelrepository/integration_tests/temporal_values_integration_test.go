@@ -26,12 +26,15 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
@@ -128,6 +131,134 @@ func TestLegacyTemporalRowsRemainReadableAndCanBeUpdated(t *testing.T) {
 	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/$value", json.RawMessage(`{"Timestamp":null,"Period":{"min":null,"max":null}}`), http.StatusNoContent)
 	elements[0].Value, elements[1].Min, elements[1].Max = nil, nil, nil
 	requireTemporalElements(t, primaryEndpoint, elements)
+}
+
+func TestRangePatchLeavesOmittedLegacyBoundsInTheirExistingColumns(t *testing.T) {
+	const id = "urn:basyx:integration:legacy-range-patch"
+	elements := []temporalElement{
+		{IDShort: "Period", ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T08:00:00+00:00"), Max: new("2024-01-02T08:00:00+00:00")},
+	}
+	baseURL := temporalSecondaryRepositoryURL()
+	postTemporalSubmodel(t, baseURL, id, elements)
+	seedLegacyTemporalRow(t, id, "Period", "range_element", goqu.Record{
+		"min_text": nil, "min_datetime": "2024-01-01T10:00:00+02:00",
+		"max_text": nil, "max_datetime": "2024-01-02T10:00:00+02:00",
+	})
+	before := testenv.ReadSubmodelElementRow(t, submodelRepositoryIntegrationTestDSN, id, "Period", "range_element", "min_text", "min_datetime", "max_text", "max_datetime")
+	require.NotNil(t, before["min_datetime"])
+	require.NotNil(t, before["max_datetime"])
+
+	endpoint := temporalSubmodelEndpoint(baseURL, id)
+	rangeURL := endpoint + "/submodel-elements/Period"
+	requireValueOnlyStatus(t, http.MethodPatch, rangeURL, map[string]any{
+		"modelType": "Range", "valueType": "xs:dateTime",
+		"description": []any{map[string]any{"language": "en", "text": "Updated description"}},
+	}, http.StatusNoContent)
+	requireStoredTemporalColumns(t, id, "Period", "range_element", before)
+	var updatedRange struct{ Description json.RawMessage }
+	require.NoError(t, json.Unmarshal(requireValueOnlyStatus(t, http.MethodGet, rangeURL, nil, http.StatusOK), &updatedRange))
+	require.JSONEq(t, `[{"language":"en","text":"Updated description"}]`, string(updatedRange.Description))
+	requireTemporalElements(t, endpoint, elements)
+
+	elements[0].Min = new("2024-01-01T10:30:00.123456789+02:00")
+	requireValueOnlyStatus(t, http.MethodPatch, rangeURL, map[string]any{
+		"modelType": "Range", "valueType": "xs:dateTime", "min": elements[0].Min,
+	}, http.StatusNoContent)
+	requireStoredTemporalColumns(t, id, "Period", "range_element", map[string]any{
+		"min_text": *elements[0].Min, "min_datetime": nil,
+		"max_text": nil, "max_datetime": before["max_datetime"],
+	})
+	requireTemporalElements(t, endpoint, elements)
+
+	elements[0].ValueType = "xs:string"
+	requireValueOnlyStatus(t, http.MethodPatch, rangeURL, map[string]any{
+		"modelType": "Range", "valueType": elements[0].ValueType,
+	}, http.StatusNoContent)
+	requireStoredTemporalColumns(t, id, "Period", "range_element", map[string]any{
+		"min_text": *elements[0].Min, "min_datetime": nil,
+		"max_text": *elements[0].Max, "max_datetime": nil,
+	})
+	requireTemporalElements(t, endpoint, elements)
+}
+
+func TestRangePatchConflictsWithConcurrentValueTypeChange(t *testing.T) {
+	const id = "urn:basyx:integration:concurrent-range-type-patch"
+	const idShort = "Period"
+	elements := []temporalElement{
+		{IDShort: idShort, ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T08:00:00Z"), Max: new("2024-01-02T08:00:00Z")},
+	}
+	postTemporalSubmodel(t, submodelRepositoryBaseURL, id, elements)
+	endpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
+
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	tx, err := db.BeginTx(t.Context(), nil)
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+	dialect := goqu.Dialect(common.Dialect)
+	target := dialect.From("submodel_element").Select(goqu.I("submodel_element.id")).
+		Join(goqu.T("submodel"), goqu.On(goqu.I("submodel.id").Eq(goqu.I("submodel_element.submodel_id")))).
+		Where(goqu.I("submodel.submodel_identifier").Eq(id), goqu.I("submodel_element.idshort_path").Eq(idShort))
+	update, updateArgs, err := dialect.Update("range_element").Set(goqu.Record{
+		"value_type": types.DataTypeDefXSDString, "min_text": "new lower bound", "max_text": "new upper bound",
+	}).Where(goqu.C("id").Eq(target)).Returning(goqu.Func("pg_backend_pid")).Prepared(true).ToSQL()
+	require.NoError(t, err)
+	var blockerPID int
+	require.NoError(t, tx.QueryRowContext(t.Context(), update, updateArgs...).Scan(&blockerPID))
+
+	type patchResult struct {
+		status int
+		body   []byte
+		err    error
+	}
+	patchDone := make(chan patchResult, 1)
+	patch := map[string]any{
+		"modelType": "Range", "valueType": "xs:dateTime", "min": "2024-01-01T09:00:00Z",
+	}
+	go func() {
+		status, body, err := requestJSON(http.MethodPatch, endpoint+"/submodel-elements/"+idShort, patch)
+		patchDone <- patchResult{status: status, body: body, err: err}
+	}()
+
+	waitingQuery, waitArgs, err := dialect.From("pg_stat_activity").Select(goqu.COUNT(goqu.Star())).
+		Where(goqu.L("? = ANY(pg_blocking_pids(?))", blockerPID, goqu.C("pid"))).Prepared(true).ToSQL()
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		var count int
+		return db.QueryRowContext(t.Context(), waitingQuery, waitArgs...).Scan(&count) == nil && count > 0
+	}, 5*time.Second, 20*time.Millisecond, "the PATCH must reach the Range update before the concurrent type change commits")
+	require.NoError(t, tx.Commit())
+
+	result := <-patchDone
+	require.NoError(t, result.err)
+	require.Equal(t, http.StatusConflict, result.status, string(result.body))
+	elements[0].ValueType = "xs:string"
+	elements[0].Min = new("new lower bound")
+	elements[0].Max = new("new upper bound")
+	requireTemporalElements(t, endpoint, elements)
+}
+
+func TestRangePatchCanChangeTypeWithAnAbsentBound(t *testing.T) {
+	const id = "urn:basyx:integration:open-range-type-patch"
+	elements := []temporalElement{
+		{IDShort: "Period", ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T08:00:00+00:00")},
+	}
+	postTemporalSubmodel(t, submodelRepositoryBaseURL, id, elements)
+	seedLegacyTemporalRow(t, id, "Period", "range_element", goqu.Record{
+		"min_text": nil, "min_datetime": "2024-01-01T10:00:00+02:00",
+	})
+
+	endpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
+	elements[0].ValueType = "xs:string"
+	requireValueOnlyStatus(t, http.MethodPatch, endpoint+"/submodel-elements/Period", map[string]any{
+		"modelType": "Range", "valueType": elements[0].ValueType,
+	}, http.StatusNoContent)
+	requireStoredTemporalColumns(t, id, "Period", "range_element", map[string]any{
+		"min_text": *elements[0].Min, "min_datetime": nil,
+		"max_text": nil, "max_datetime": nil,
+	})
+	requireTemporalElements(t, endpoint, elements)
 }
 
 func requireTemporalRepositoriesInBothTimeZones(t *testing.T) []string {

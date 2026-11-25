@@ -47,6 +47,21 @@ const (
 	timeReferenceDateSQLText   = "1972-12-31T"
 )
 
+func containsTemporalOperand(value *Value) bool {
+	if value == nil {
+		return false
+	}
+	if isTemporalOperand(*value) || isDatePart(*value) {
+		return true
+	}
+	for _, child := range valueChildren(*value) {
+		if containsTemporalOperand(child) {
+			return true
+		}
+	}
+	return false
+}
+
 // xsdDateTimeSQLText casts an SQL value to xs:dateTime and returns it as validated text, or NULL
 // when the value is not an xs:dateTime PostgreSQL can represent. Digits beyond microseconds are
 // truncated. The operand is referenced once, so nested casts keep the generated SQL linear in size.

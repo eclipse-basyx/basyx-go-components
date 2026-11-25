@@ -34,6 +34,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -112,6 +113,64 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 		require.NotContains(t, elementIDs, "TemporalGate")
 		require.Contains(t, elementIDs, "Local")
 	})
+}
+
+func TestNegatedTemporalComparisonRequiresACastableValue(t *testing.T) {
+	const id = "urn:basyx:integration:negated-temporal-policy"
+	const payload = `{
+		"id": "urn:basyx:integration:negated-temporal-policy", "idShort": "NegatedTemporalPolicy", "modelType": "Submodel",
+		"submodelElements": [{"idShort": "Day", "modelType": "Property", "valueType": "xs:date", "value": "2024-01-01"}]
+	}`
+	const query = `{"$condition":{"$and":[
+		{"$eq":[{"$field":"$sm#id"},{"$strVal":"urn:basyx:integration:negated-temporal-policy"}]},
+		{"$not":{"$eq":[{"$dateTimeCast":{"$field":"$sme.Day#value"}},{"$dateTimeVal":"2024-01-01T00:00:00-05:00"}]}}
+	]}}`
+	provider := testenv.NewPasswordGrantTokenProvider(securityKeycloakTokenURL, "basyx-ui", 10*time.Second)
+	admin := temporalQueryHeaders(t, provider, "admin")
+	reader := temporalQueryHeaders(t, provider, "userb")
+	require.Equal(t, http.StatusCreated, testenv.DoHTTP(t, http.MethodPost, securityBaseURL+"/submodels", []byte(payload), admin).Status)
+	endpoint := securityBaseURL + "/submodels/" + common.EncodeString(id)
+	t.Cleanup(func() {
+		require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodDelete, endpoint, nil, admin).Status)
+	})
+
+	for _, test := range []struct {
+		name, valueType, value string
+		matches                bool
+	}{
+		{name: "date only", valueType: "xs:date", value: "2024-01-01"},
+		{name: "malformed dateTime", valueType: "xs:string", value: "not a dateTime"},
+		{name: "equal dateTime", valueType: "xs:dateTime", value: "2024-01-01T05:00:00Z"},
+		{name: "different dateTime", valueType: "xs:dateTime", value: "2024-01-02T05:00:00Z", matches: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			property, err := json.Marshal(map[string]string{
+				"idShort": "Day", "modelType": "Property", "valueType": test.valueType, "value": test.value,
+			})
+			require.NoError(t, err)
+			write := testenv.DoHTTP(t, http.MethodPut, endpoint+"/submodel-elements/Day", property, admin)
+			require.Equal(t, http.StatusNoContent, write.Status, "%s", write.Body)
+
+			read := testenv.DoHTTP(t, http.MethodGet, endpoint, nil, reader)
+			wantStatus := http.StatusNotFound
+			var wantIDs []string
+			if test.matches {
+				wantStatus = http.StatusOK
+				wantIDs = []string{id}
+			}
+			assert.Equal(t, wantStatus, read.Status, "%s", read.Body)
+
+			response := testenv.DoHTTP(t, http.MethodPost, securityBaseURL+"/query/submodels", []byte(query), admin)
+			require.Equal(t, http.StatusOK, response.Status, "%s", response.Body)
+			var page struct{ Result []struct{ ID string } }
+			require.NoError(t, json.Unmarshal(response.Body, &page))
+			var ids []string
+			for _, submodel := range page.Result {
+				ids = append(ids, submodel.ID)
+			}
+			assert.Equal(t, wantIDs, ids)
+		})
+	}
 }
 
 func temporalQueryHeaders(t *testing.T, provider *testenv.PasswordGrantTokenProvider, user string) map[string]string {

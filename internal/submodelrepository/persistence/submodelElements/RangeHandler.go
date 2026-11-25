@@ -36,6 +36,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -104,18 +105,33 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 		return err
 	}
 
-	// Execute update
-	updateQuery, updateArgs, err := dialect.Update("range_element").
+	update := dialect.Update("range_element").
 		Set(updateRecord).
-		Where(goqu.C("id").Eq(elementID)).
-		ToSQL()
+		Where(goqu.C("id").Eq(elementID))
+	typeGuard := rangeUpdateTypeGuard(updateRecord)
+	if typeGuard != nil {
+		update = update.Where(typeGuard)
+	}
+	updateQuery, updateArgs, err := update.ToSQL()
 	if err != nil {
 		return err
 	}
 
-	_, err = localTx.Exec(updateQuery, updateArgs...)
+	result, err := localTx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
+	}
+	if typeGuard != nil {
+		var rows int64
+		rows, err = result.RowsAffected()
+		if err != nil {
+			err = common.NewInternalServerError("SMREPO-UPDRANGE-ROWS " + err.Error())
+			return err
+		}
+		if rows == 0 {
+			err = common.NewErrConflict("SMREPO-UPDRANGE-TYPECONFLICT Range valueType changed while an omitted bound has a stored value")
+			return err
+		}
 	}
 
 	return common.CommitTransactionIfNeeded(tx, localTx)
@@ -205,4 +221,22 @@ func setRangeBound(record goqu.Record, bound string, text, numeric sql.NullStrin
 	record[bound+"_time"] = nil
 	record[bound+"_date"] = nil
 	record[bound+"_datetime"] = nil
+}
+
+// Check the declaration and omitted bounds in the same UPDATE so a stale PATCH
+// cannot apply a different valueType to a concurrently written bound.
+func rangeUpdateTypeGuard(record goqu.Record) exp.Expression {
+	omittedBounds := goqu.Ex{}
+	for _, bound := range []string{"min", "max"} {
+		if _, written := record[bound+"_text"]; written {
+			continue
+		}
+		for _, column := range []string{"text", "num", "time", "date", "datetime"} {
+			omittedBounds[bound+"_"+column] = nil
+		}
+	}
+	if len(omittedBounds) == 0 {
+		return nil
+	}
+	return goqu.Or(goqu.C("value_type").Eq(record["value_type"]), omittedBounds)
 }

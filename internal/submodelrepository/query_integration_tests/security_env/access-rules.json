@@ -73,7 +73,12 @@
       },
       {
         "name": "is_usera",
-        "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] }
+        "formula": {
+          "$and": [
+            { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" }] },
+            { "$eq": [{ "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 0 }] }
+          ]
+        }
       },
       {
         "name": "is_usery",
@@ -95,6 +100,24 @@
         "USEACL": "admin_all",
         "OBJECTS": [{ "ROUTE": "*" }],
         "USEFORMULA": "is_admin"
+      },
+      {
+        "USEACL": "read_member",
+        "OBJECTS": [{ "ROUTE": "/submodels/dXJuOmJhc3l4OmludGVncmF0aW9uOm5lZ2F0ZWQtdGVtcG9yYWwtcG9saWN5" }],
+        "FORMULA": {
+          "$and": [
+            { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" }] },
+            { "$eq": [{ "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 2 }] },
+            {
+              "$not": {
+                "$or": [
+                  { "$eq": [{ "$dateTimeCast": { "$field": "$sme.Day#value" } }, { "$dateTimeVal": "2024-01-01T00:00:00-05:00" }] },
+                  { "$eq": [{ "$field": "$sm#idShort" }, { "$strVal": "NonMatching" }] }
+                ]
+              }
+            }
+          ]
+        }
       },
       {
         "USEACL": "read_role",
@@ -143,7 +166,7 @@
         ]
       },
       {
-        "USEACL": "read_role",
+        "USEACL": "read_member",
         "USEOBJECTS": ["submodels_routes", "query_routes"],
         "USEFORMULA": "is_usera",
         "FILTERLIST": [

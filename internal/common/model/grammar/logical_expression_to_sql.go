@@ -1091,6 +1091,7 @@ type ResolvedFieldPathCollector struct {
 	matchFragment                *FragmentStringPattern
 	smeRowAlias                  string
 	fieldValueDecorator          FieldValueDecorator
+	preserveUnknownTemporal      bool
 	root                         CollectorRoot
 	// ownerRoot is the semantic resource owning the rows of a nested
 	// collector without a root of its own, correlated by the non-MATCH key.
@@ -1162,6 +1163,15 @@ func (c *ResolvedFieldPathCollector) WithoutFieldValueDecorator() *ResolvedField
 	}
 	clone := *c
 	clone.fieldValueDecorator = nil
+	return &clone
+}
+
+func (c *ResolvedFieldPathCollector) forNegation() *ResolvedFieldPathCollector {
+	if c == nil || c.preserveUnknownTemporal {
+		return c
+	}
+	clone := *c
+	clone.preserveUnknownTemporal = true
 	return &clone
 }
 
@@ -2395,6 +2405,17 @@ func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFie
 
 type binaryOperationValidator func(leftOperand, rightOperand *Value) error
 
+type resolvedSQLPredicate struct {
+	expression exp.Expression
+	fields     []ResolvedFieldPath
+	temporal   bool
+}
+
+func (p resolvedSQLPredicate) apply(collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+	preserveUnknown := p.temporal && collector != nil && collector.preserveUnknownTemporal
+	return applyCollectorToResolvedExpression(p.expression, p.fields, collector, true, preserveUnknown)
+}
+
 func handleBinaryOperationWithoutApply(
 	leftOperand, rightOperand *Value,
 	operation string,
@@ -2402,9 +2423,9 @@ func handleBinaryOperationWithoutApply(
 	fieldToFieldErr error,
 	build func(left interface{}, right interface{}, operation string) (exp.Expression, error),
 	validate binaryOperationValidator,
-) (exp.Expression, []ResolvedFieldPath, error) {
+) (resolvedSQLPredicate, error) {
 	if leftOperand == nil || rightOperand == nil {
-		return nil, nil, fmt.Errorf("binary operation operands must not be nil")
+		return resolvedSQLPredicate{}, fmt.Errorf("binary operation operands must not be nil")
 	}
 
 	leftOperand = cloneValueForSQL(leftOperand)
@@ -2413,31 +2434,34 @@ func handleBinaryOperationWithoutApply(
 	normalizeSemanticShorthand(rightOperand)
 
 	if valueContainsField(*leftOperand) && valueContainsField(*rightOperand) {
-		return nil, nil, fieldToFieldErr
+		return resolvedSQLPredicate{}, fieldToFieldErr
 	}
 
 	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, "left", collector)
 	if err != nil {
-		return nil, nil, err
+		return resolvedSQLPredicate{}, err
 	}
 	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, "right", collector)
 	if err != nil {
-		return nil, nil, err
+		return resolvedSQLPredicate{}, err
 	}
 
 	if validate != nil {
 		if err := validate(leftOperand, rightOperand); err != nil {
-			return nil, nil, err
+			return resolvedSQLPredicate{}, err
 		}
 	}
 
 	opExpr, err := build(leftSQL, rightSQL, operation)
 	if err != nil {
-		return nil, nil, err
+		return resolvedSQLPredicate{}, err
 	}
 
-	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
-	return opExpr, resolved, nil
+	return resolvedSQLPredicate{
+		expression: opExpr,
+		fields:     collectResolvedFieldPaths(leftResolved, rightResolved),
+		temporal:   containsTemporalOperand(leftOperand) || containsTemporalOperand(rightOperand),
+	}, nil
 }
 
 func handleBinaryOperationWithCollector(
@@ -2448,26 +2472,19 @@ func handleBinaryOperationWithCollector(
 	build func(left interface{}, right interface{}, operation string) (exp.Expression, error),
 	validate binaryOperationValidator,
 ) (exp.Expression, []ResolvedFieldPath, error) {
-	expression, resolved, err := handleBinaryOperationWithoutApply(leftOperand, rightOperand, operation, collector, fieldToFieldErr, build, validate)
+	predicate, err := handleBinaryOperationWithoutApply(leftOperand, rightOperand, operation, collector, fieldToFieldErr, build, validate)
 	if err != nil {
 		return nil, nil, err
 	}
-	return applyCollectorToResolvedExpression(expression, resolved, collector)
+	return predicate.apply(collector)
 }
 
 func applyCollectorToResolvedExpression(
 	expression exp.Expression,
 	resolved []ResolvedFieldPath,
 	collector *ResolvedFieldPathCollector,
-) (exp.Expression, []ResolvedFieldPath, error) {
-	return applyCollectorToResolvedExpressionWithVisibility(expression, resolved, collector, true)
-}
-
-func applyCollectorToResolvedExpressionWithVisibility(
-	expression exp.Expression,
-	resolved []ResolvedFieldPath,
-	collector *ResolvedFieldPathCollector,
 	includeVisibility bool,
+	preserveUnknown bool,
 ) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(resolved) == 0 {
 		return expression, nil, nil
@@ -2481,7 +2498,7 @@ func applyCollectorToResolvedExpressionWithVisibility(
 		return andBindingsForResolvedFieldPaths(resolved, expression), resolved, nil
 	}
 	if collector != nil && resolvedNeedsCTE(resolved) {
-		existsExpr, err := buildInlineExistsExpression(resolved, expression, collector)
+		existsExpr, err := resolvedPredicateExists(resolved, expression, collector, preserveUnknown)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -2496,6 +2513,28 @@ func applyCollectorToResolvedExpressionWithVisibility(
 	return expression, resolved, nil
 }
 
+// EXISTS otherwise turns an indeterminate cast on a candidate into a known
+// false result that a negated authorization condition could turn into true.
+func resolvedPredicateExists(
+	resolved []ResolvedFieldPath,
+	expression exp.Expression,
+	collector *ResolvedFieldPathCollector,
+	preserveUnknown bool,
+) (exp.Expression, error) {
+	match, err := buildInlineExistsExpression(resolved, expression, collector)
+	if err != nil || !preserveUnknown {
+		return match, err
+	}
+	unknown, err := buildInlineExistsExpression(resolved, goqu.L("(?) IS NULL", expression), collector)
+	if err != nil {
+		return nil, err
+	}
+	return goqu.Case().
+		When(match, goqu.L("TRUE")).
+		When(unknown, goqu.L("NULL::boolean")).
+		Else(goqu.L("FALSE")), nil
+}
+
 func evaluateStandaloneBoolCast(
 	operand *Value,
 	collector *ResolvedFieldPathCollector,
@@ -2506,7 +2545,8 @@ func evaluateStandaloneBoolCast(
 		return nil, nil, err
 	}
 
-	return applyCollectorToResolvedExpression(goqu.L("?", sqlValue), resolved, collector)
+	predicate := resolvedSQLPredicate{expression: goqu.L("?", sqlValue), fields: resolved, temporal: containsTemporalOperand(operand)}
+	return predicate.apply(collector)
 }
 
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
@@ -2572,11 +2612,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Match) > 0 {
-		expr, resolved, err := evaluateMatchExpressions(le.Match, collector)
+		predicate, err := evaluateMatchExpressions(le.Match, collector)
 		if err != nil {
 			return nil, nil, err
 		}
-		return applyCollectorToResolvedExpression(expr, resolved, collector)
+		return predicate.apply(collector)
 	}
 
 	if le.BoolCast != nil {
@@ -2599,7 +2639,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Or) > 0 {
-		if collector != nil && collector.fieldValueDecorator == nil {
+		if collector != nil && collector.fieldValueDecorator == nil && !collector.preserveUnknownTemporal {
 			var combined []exp.Expression
 			var sharedResolved []ResolvedFieldPath
 			canGroup := true
@@ -2647,7 +2687,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if le.Not != nil {
-		expr, resolved, err := le.Not.EvaluateToExpression(collector)
+		expr, resolved, err := le.Not.EvaluateToExpression(collector.forNegation())
 		if err != nil {
 			return nil, nil, fmt.Errorf("error evaluating NOT condition: %w", err)
 		}
@@ -2656,10 +2696,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		if witness == nil {
 			return negated, resolved, nil
 		}
-		availability, _, err := applyCollectorToResolvedExpressionWithVisibility(
+		availability, _, err := applyCollectorToResolvedExpression(
 			witness,
 			resolved,
 			collector,
+			false,
 			false,
 		)
 		if err != nil {
@@ -2728,29 +2769,31 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 	return goqu.Or(mainExpr, fragmentGuard), resolved, nil
 }
 
-func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(match) == 0 {
-		return nil, nil, fmt.Errorf("match expression list is empty")
+		return resolvedSQLPredicate{}, fmt.Errorf("match expression list is empty")
 	}
 	var expressions []exp.Expression
-	var resolved []ResolvedFieldPath
+	var predicate resolvedSQLPredicate
 	for i, m := range match {
-		expr, childResolved, err := evaluateMatchExpressionSQL(m, collector)
+		child, err := evaluateMatchExpressionSQL(m, collector)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error evaluating match expression at index %d: %w", i, err)
+			return resolvedSQLPredicate{}, fmt.Errorf("error evaluating match expression at index %d: %w", i, err)
 		}
-		expressions = append(expressions, expr)
-		resolved = append(resolved, childResolved...)
+		expressions = append(expressions, child.expression)
+		predicate.fields = append(predicate.fields, child.fields...)
+		predicate.temporal = predicate.temporal || child.temporal
 	}
-	return goqu.And(expressions...), resolved, nil
+	predicate.expression = goqu.And(expressions...)
+	return predicate, nil
 }
 
-func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if me.Indeterminate {
-		return goqu.L("NULL::boolean"), nil, nil
+		return resolvedSQLPredicate{expression: goqu.L("NULL::boolean")}, nil
 	}
 	if me.Boolean != nil {
-		return goqu.L("?::boolean", *me.Boolean), nil, nil
+		return resolvedSQLPredicate{expression: goqu.L("?::boolean", *me.Boolean)}, nil
 	}
 	if len(me.Eq) > 0 {
 		return evaluateMatchComparison(me.Eq, "$eq", collector)
@@ -2785,12 +2828,12 @@ func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPath
 	if len(me.Match) > 0 {
 		return evaluateMatchExpressions(me.Match, collector)
 	}
-	return nil, nil, fmt.Errorf("match expression has no valid operation")
+	return resolvedSQLPredicate{}, fmt.Errorf("match expression has no valid operation")
 }
 
-func evaluateMatchComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(operands) != 2 {
-		return nil, nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
+		return resolvedSQLPredicate{}, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
 	}
 	leftOperand := &operands[0]
 	rightOperand := &operands[1]
@@ -2809,9 +2852,9 @@ func evaluateMatchComparison(operands []Value, operation string, collector *Reso
 	)
 }
 
-func evaluateMatchStringOperation(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchStringOperation(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(items) != 2 {
-		return nil, nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
+		return resolvedSQLPredicate{}, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
 	}
 	leftOperand := stringValueToValue(items[0])
 	rightOperand := stringValueToValue(items[1])
