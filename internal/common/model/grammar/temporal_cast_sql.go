@@ -37,14 +37,15 @@ import (
 // UTC, the implicit timezone, and the lexical patterns never accept it, so the marker cannot be
 // confused with a submitted "Z" when the value is cast back to a string.
 const (
-	xsdDateTimeSQLPattern      = `^(?:[1-9][0-9]{3,}|0[0-9]{3})-[0-9]{2}-[0-9]{2}T(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?$`
-	xsdTimeSQLPattern          = `^(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?$`
-	zonelessDateTimeSQLPattern = `^([0-9]+-[0-9]{2}-[0-9]{2}T[0-9:.]+)$`
-	zonelessTimeSQLPattern     = `^([0-9:.]+)$`
-	timezoneSQLPattern         = `(?:z|Z|[+-][0-9]{2}:[0-9]{2})$`
-	datePrefixSQLPattern       = `^[0-9]+-[0-9]{2}-[0-9]{2}T`
-	endOfDaySQLPattern         = `^24:00:00(?:\.0+)?`
-	timeReferenceDateSQLText   = "1972-12-31T"
+	xsdDateTimeSQLPattern        = `^(?:[1-9][0-9]{3,}|0[0-9]{3})-[0-9]{2}-[0-9]{2}T(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?$`
+	xsdTimeSQLPattern            = `^(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?|24:00:00(?:\.0+)?)(?:Z|[+-](?:0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?$`
+	zonelessDateTimeSQLPattern   = `^([0-9]+-[0-9]{2}-[0-9]{2}T[0-9:.]+)$`
+	zonelessTimeSQLPattern       = `^([0-9:.]+)$`
+	timezoneDesignatorSQLPattern = `z|Z|[+-][0-9]{2}:[0-9]{2}`
+	timezoneSQLPattern           = `(?:` + timezoneDesignatorSQLPattern + `)$`
+	datePrefixSQLPattern         = `^[0-9]+-[0-9]{2}-[0-9]{2}T`
+	endOfDaySQLPattern           = `^24:00:00(?:\.0+)?`
+	timeReferenceDateSQLText     = "1972-12-31T"
 )
 
 func containsTemporalOperand(value *Value) bool {
@@ -116,13 +117,14 @@ func canonicalDateTimeSQLText(dateTimeText exp.Expression) exp.Expression {
 // matching canonicalTimeString.
 func canonicalTimeSQLText(timeText exp.Expression) exp.Expression {
 	startOfDay := goqu.Func("regexp_replace", timeText, endOfDaySQLPattern, "00:00:00")
-	trailingZeros := goqu.Func("regexp_replace", startOfDay, `(\.[0-9]*[1-9])0+`, `\1`)
-	zeroFraction := goqu.Func("regexp_replace", trailingZeros, `\.0+(z|Z|[+-]|$)`, `\1`)
+	suffix := `(` + timezoneDesignatorSQLPattern + `)?$`
+	trailingZeros := goqu.Func("regexp_replace", startOfDay, `(\.[0-9]*[1-9])0+`+suffix, `\1\2`)
+	zeroFraction := goqu.Func("regexp_replace", trailingZeros, `\.0+`+suffix, `\1`)
 	return canonicalTimezoneSQLSuffix(zeroFraction)
 }
 
 func canonicalTimezoneSQLText(temporalText exp.Expression) exp.Expression {
-	return canonicalTimezoneSQLSuffix(goqu.L("substring(? from ?)", temporalText, `(?:z|Z|[+-][0-9]{2}:[0-9]{2})$`))
+	return canonicalTimezoneSQLSuffix(goqu.L("substring(? from ?)", temporalText, timezoneSQLPattern))
 }
 
 // canonicalTimezoneSQLSuffix writes a zero offset as "Z" and drops the zone-less marker.

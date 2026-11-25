@@ -28,6 +28,7 @@ package grammar
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -47,9 +48,16 @@ func (d *DateTimeLiteralPattern) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-// MarshalJSON renders the timestamp in RFC3339Nano format.
+// MarshalJSON renders the timestamp while preserving the optional timezone.
 func (d DateTimeLiteralPattern) MarshalJSON() ([]byte, error) {
 	t := time.Time(d)
-	// Format consistently even for zero values.
-	return []byte(fmt.Sprintf("%q", t.Format(time.RFC3339Nano))), nil
+	literal := t.Format(time.RFC3339Nano)
+	if t.Year() == 10000 && t.Equal(time.Date(10000, time.January, 1, 0, 0, 0, 0, t.Location())) {
+		// Use the equivalent end-of-day spelling to keep the year within four digits.
+		literal = "9999-12-31T24:00:00" + t.Format("Z07:00")
+	}
+	if t.Location() == implicitTimezone {
+		literal = strings.TrimSuffix(literal, "Z")
+	}
+	return []byte(fmt.Sprintf("%q", literal)), nil
 }

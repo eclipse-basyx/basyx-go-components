@@ -27,6 +27,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -171,6 +172,47 @@ func TestMaterializeABACPolicyBuildsCanonicalRowsAndReloadableModel(t *testing.T
 	}
 	if result.PolicyID != materialized.PolicyID {
 		t.Fatalf("expected policy id %q, got %q", materialized.PolicyID, result.PolicyID)
+	}
+}
+
+func TestMaterializedPolicyPreservesDateTimeLiteralSemantics(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name, literal, text string
+		allowed             bool
+	}{
+		{"zone-less", "2024-01-01T08:00:00", "2024-01-01T08:00:00", true},
+		{"zone-less compared to UTC", "2024-01-01T08:00:00", "2024-01-01T08:00:00Z", false},
+		{"explicit UTC", "2024-01-01T08:00:00Z", "2024-01-01T08:00:00Z", true},
+		{"year boundary in UTC", "9999-12-31T24:00:00Z", "10000-01-01T00:00:00Z", true},
+		{"year boundary with offset", "9999-12-31T24:00:00+02:00", "10000-01-01T00:00:00+02:00", true},
+		{"zone-less year boundary", "9999-12-31T24:00:00", "10000-01-01T00:00:00", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			raw := fmt.Sprintf(`{"AllAccessPermissionRules":{"rules":[{
+				"ACL":{"ATTRIBUTES":[{"GLOBAL":"ANONYMOUS"}],"RIGHTS":["READ"],"ACCESS":"ALLOW"},
+				"OBJECTS":[{"ROUTE":"/shell-descriptors"}],
+				"FORMULA":{"$eq":[{"$strCast":{"$dateTimeVal":%q}},{"$strVal":%q}]}
+			}]}}`, test.literal, test.text)
+			router := aasRegistryRouter()
+			policy, err := MaterializeABACPolicy([]byte(raw), router, "")
+			if err != nil {
+				t.Fatalf("materialize policy: %v", err)
+			}
+			input := EvalInput{Method: http.MethodGet, Path: "/shell-descriptors"}
+			opts := grammar.DefaultSimplifyOptions()
+			if before := policy.Model.AuthorizeWithFilterWithOptions(input, opts); before.Allowed != test.allowed {
+				t.Fatalf("initial policy allowed = %t, want %t", before.Allowed, test.allowed)
+			}
+			reloaded, err := AccessModelFromMaterializedRules(policy.PolicyID, policy.Rules, router, "")
+			if err != nil {
+				t.Fatalf("reload materialized policy: %v", err)
+			}
+			if after := reloaded.AuthorizeWithFilterWithOptions(input, opts); after.Allowed != test.allowed {
+				t.Errorf("reloaded policy allowed = %t, want %t", after.Allowed, test.allowed)
+			}
+		})
 	}
 }
 

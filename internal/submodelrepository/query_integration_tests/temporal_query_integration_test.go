@@ -27,6 +27,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -113,6 +114,50 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 		require.NotContains(t, elementIDs, "TemporalGate")
 		require.Contains(t, elementIDs, "Local")
 	})
+}
+
+func TestQueryTimeStringCastKeepsSignificantFractionalZeros(t *testing.T) {
+	const id = "urn:basyx:integration:time-string-fractions"
+	cases := []struct{ idShort, value, canonical string }{
+		{"UTC", "08:00:00.1001Z", "08:00:00.1001Z"},
+		{"Offset", "08:00:00.001002+02:00", "08:00:00.001002+02:00"},
+		{"ZoneLess", "08:00:00.100100", "08:00:00.1001"},
+		{"TrailingZeros", "08:00:00.1000-02:00", "08:00:00.1-02:00"},
+		{"ZeroFraction", "08:00:00.0000+00:00", "08:00:00Z"},
+	}
+	elements := make([]map[string]string, 0, len(cases))
+	for _, test := range cases {
+		elements = append(elements, map[string]string{
+			"idShort": test.idShort, "modelType": "Property", "valueType": "xs:time", "value": test.value,
+		})
+	}
+	payload, err := json.Marshal(map[string]any{
+		"id": id, "idShort": "TimeStringFractions", "modelType": "Submodel", "submodelElements": elements,
+	})
+	require.NoError(t, err)
+
+	provider := testenv.NewPasswordGrantTokenProvider(securityKeycloakTokenURL, "basyx-ui", 10*time.Second)
+	admin := temporalQueryHeaders(t, provider, "admin")
+	require.Equal(t, http.StatusCreated, testenv.DoHTTP(t, http.MethodPost, securityBaseURL+"/submodels", payload, admin).Status)
+	endpoint := securityBaseURL + "/submodels/" + common.EncodeString(id)
+	t.Cleanup(func() {
+		require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodDelete, endpoint, nil, admin).Status)
+	})
+
+	for _, test := range cases {
+		t.Run(test.idShort, func(t *testing.T) {
+			query := fmt.Sprintf(`{"$condition":{"$and":[
+				{"$eq":[{"$field":"$sm#id"},{"$strVal":%q}]},
+				{"$eq":[{"$strCast":{"$timeCast":{"$field":%q}}},{"$strVal":%q}]}
+			]}}`, id, "$sme."+test.idShort+"#value", test.canonical)
+			response := testenv.DoHTTP(t, http.MethodPost, securityBaseURL+"/query/submodels", []byte(query), admin)
+			require.Equal(t, http.StatusOK, response.Status, "%s", response.Body)
+			var page struct{ Result []struct{ ID string } }
+			require.NoError(t, json.Unmarshal(response.Body, &page))
+			require.Len(t, page.Result, 1, "%s", response.Body)
+			require.Equal(t, id, page.Result[0].ID)
+		})
+	}
 }
 
 func TestNegatedTemporalPolicyRequiresACastableValue(t *testing.T) {
