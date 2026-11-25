@@ -27,22 +27,6 @@ package common
 
 import "fmt"
 
-// PostgreSQLTemporalColumnTextSQL renders a PostgreSQL time, date, or timestamp column
-// as the ISO 8601 text produced by to_json, independent of the session DateStyle.
-//
-// Parameters:
-//   - column: SQL expression of the temporal column, or "?" for a Goqu placeholder
-//
-// Returns:
-//   - string: SQL fragment evaluating to the ISO 8601 text, or NULL for NULL input
-//
-// Example:
-//
-//	goqu.L(common.PostgreSQLTemporalColumnTextSQL("?"), goqu.I("pe.value_date"))
-func PostgreSQLTemporalColumnTextSQL(column string) string {
-	return fmt.Sprintf(`trim(both '"' from to_json(%s)::text)`, column)
-}
-
 // PostgreSQLTimestampColumnTextSQL renders a TIMESTAMPTZ column as an xs:dateTime
 // in UTC with an explicit "+00:00" offset, independent of the session TimeZone.
 //
@@ -54,8 +38,8 @@ func PostgreSQLTemporalColumnTextSQL(column string) string {
 //
 // Example:
 //
-//	goqu.L(common.PostgreSQLTimestampColumnTextSQL("?"), goqu.I("pe.value_datetime"))
+//	goqu.L(common.PostgreSQLTimestampColumnTextSQL("?"), goqu.I("aas_descriptor.created_at"))
 func PostgreSQLTimestampColumnTextSQL(column string) string {
-	utcText := PostgreSQLTemporalColumnTextSQL(fmt.Sprintf("timezone('UTC', %s)", column))
+	utcText := fmt.Sprintf(`trim(both '"' from to_json(timezone('UTC', %s))::text)`, column)
 	return fmt.Sprintf(`regexp_replace(%s, '^(.+) BC$', E'-\\1') || '+00:00'`, utcText)
 }

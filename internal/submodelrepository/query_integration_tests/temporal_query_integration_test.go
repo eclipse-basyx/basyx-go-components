@@ -32,7 +32,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/assert"
@@ -59,8 +58,6 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 	t.Cleanup(func() {
 		require.Equal(t, http.StatusNoContent, testenv.DoHTTP(t, http.MethodDelete, endpoint, nil, admin).Status)
 	})
-	testenv.OverwriteSubmodelElementRow(t, queryRepositoryDSN, id, "LegacyGate", "property_element",
-		goqu.Record{"value_text": nil, "value_datetime": "2024-01-01T10:00:00+02:00"})
 
 	for _, test := range []struct {
 		name, field, operand string
@@ -77,8 +74,8 @@ func TestQueryTemporalPropertyValues(t *testing.T) {
 		{"differentInstant", "$sme.TemporalGate#value", `{"$dateTimeVal":"2024-01-01T10:00:00Z"}`, false},
 		{"localDateTimeLexicalValue", "$sme.Local#value", `{"$strVal":"2024-01-01T08:00:00"}`, true},
 		{"localDateTimeIsUTC", "$sme.Local#value", `{"$dateTimeVal":"2024-01-01T08:00:00Z"}`, true},
-		{"legacyDateTimeText", "$sme.LegacyGate#value", `{"$strVal":"2024-01-01T08:00:00+00:00"}`, true},
-		{"legacyDateTimeInstant", "$sme.LegacyGate#value", `{"$dateTimeVal":"2024-01-01T08:00:00Z"}`, true},
+		{"backfilledDateTimeText", "$sme.LegacyGate#value", `{"$strVal":"2024-01-01T08:00:00+00:00"}`, true},
+		{"backfilledDateTimeInstant", "$sme.LegacyGate#value", `{"$dateTimeVal":"2024-01-01T08:00:00Z"}`, true},
 		{"timeInstant", "$sme.Time#value", `{"$timeVal":"08:00Z"}`, true},
 		{"timeOffsetIsNotDropped", "$sme.Time#value", `{"$timeVal":"10:00Z"}`, false},
 		{"dateIsNotADateTime", "$sme.Date#value", `{"$dateTimeVal":"2024-01-01T00:00:00Z"}`, false},

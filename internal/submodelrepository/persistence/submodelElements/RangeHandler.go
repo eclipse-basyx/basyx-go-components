@@ -218,9 +218,6 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) (goqu.Reco
 func setRangeBound(record goqu.Record, bound string, text, numeric sql.NullString) {
 	record[bound+"_text"] = text
 	record[bound+"_num"] = numeric
-	record[bound+"_time"] = nil
-	record[bound+"_date"] = nil
-	record[bound+"_datetime"] = nil
 }
 
 // Check the declaration and omitted bounds in the same UPDATE so a stale PATCH
@@ -231,9 +228,8 @@ func rangeUpdateTypeGuard(record goqu.Record) exp.Expression {
 		if _, written := record[bound+"_text"]; written {
 			continue
 		}
-		for _, column := range []string{"text", "num", "time", "date", "datetime"} {
-			omittedBounds[bound+"_"+column] = nil
-		}
+		omittedBounds[bound+"_text"] = nil
+		omittedBounds[bound+"_num"] = nil
 	}
 	if len(omittedBounds) == 0 {
 		return nil

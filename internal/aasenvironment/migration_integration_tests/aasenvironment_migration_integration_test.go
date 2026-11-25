@@ -141,6 +141,7 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 		postFixture(t, fixture)
 	}
 	postGeneratedSubmodel(t, longIdentifier)
+	seedLegacyTemporalMigrationFixture(t)
 	assertCollectionsContainFixtures(t, fixtures)
 
 	endpoints := binaryMigrationEndpoints()
@@ -160,11 +161,13 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 
 	require.NoError(t, runCompose("stop", "old_aas_environment"))
 	require.NoError(t, runCompose("rm", "-f", "old_aas_environment", "old_configuration"))
+	assertTemporalMigrationRejectsConflicts(t)
 	require.NoError(t, runCompose("up", "-d", "--build", "new_configuration", "new_aas_environment"))
 	require.NoError(t, testenv.WaitHealthyURL(migrationBaseURL+"/health", 5*time.Minute))
 
 	assertCollectionsContainFixtures(t, fixtures)
 	assertSchemaVersion(t, common.CURRENT_DATABASE_VERSION)
+	assertTemporalMigration(t)
 	require.True(t, databaseIndexExists(t, "ix_submodel_semantic_id_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_specasset_supp_sem_refpayload_refid"))
 	require.True(t, databaseIndexExists(t, "ix_smdesc_supp_sem_refpayload_refid"))

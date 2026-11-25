@@ -38,7 +38,6 @@ import (
 var (
 	securityBaseURL          = testenv.LocalhostURLFromEnv("BASYX_IT_API_PORT", 6004)
 	securityKeycloakTokenURL = testenv.LocalhostURLFromEnv("BASYX_IT_KEYCLOAK_PORT", 8080) + "/realms/basyx/protocol/openid-connect/token"
-	queryRepositoryDSN       = testenv.PostgresURLFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 )
 
 func TestIntegrationQuerySuite(t *testing.T) {
@@ -62,7 +61,6 @@ func TestMain(m *testing.M) {
 		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
 	})
 	securityBaseURL = runtime.LocalhostURL("api")
-	queryRepositoryDSN = runtime.PostgresURL("db", "basyxTestDB")
 	securityKeycloakTokenURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
 	securityEnv := testenv.PrepareSecurityEnvOrExit("security_env", map[string]string{
 		"http://localhost:8080": runtime.LocalhostURL("keycloak"),

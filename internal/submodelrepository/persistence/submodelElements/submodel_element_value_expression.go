@@ -33,14 +33,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-func temporalColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression {
-	return goqu.L(common.PostgreSQLTemporalColumnTextSQL("?"), column)
-}
-
-func legacyDateTimeColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression {
-	return goqu.L(common.PostgreSQLTimestampColumnTextSQL("?"), column)
-}
-
 func operationValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue bool) exp.Expression {
 	operation := goqu.T("operation_element").As("oe")
 	return dialect.From(operation).
@@ -264,9 +256,6 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 						goqu.I("pe.value_text"),
 						goqu.L("?::text", goqu.I("pe.value_num")),
 						goqu.L("?::text", goqu.I("pe.value_bool")),
-						temporalColumnAsText(goqu.I("pe.value_time")),
-						temporalColumnAsText(goqu.I("pe.value_date")),
-						legacyDateTimeColumnAsText(goqu.I("pe.value_datetime")),
 					),
 					common.PostgreSQLTextLiteral("value_type"), goqu.I("pe.value_type"),
 					common.PostgreSQLTextLiteral("value_id"), goqu.COALESCE(
@@ -289,16 +278,10 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 					common.PostgreSQLTextLiteral("min"), goqu.COALESCE(
 						goqu.I("re.min_text"),
 						goqu.L("?::text", goqu.I("re.min_num")),
-						temporalColumnAsText(goqu.I("re.min_time")),
-						temporalColumnAsText(goqu.I("re.min_date")),
-						legacyDateTimeColumnAsText(goqu.I("re.min_datetime")),
 					),
 					common.PostgreSQLTextLiteral("max"), goqu.COALESCE(
 						goqu.I("re.max_text"),
 						goqu.L("?::text", goqu.I("re.max_num")),
-						temporalColumnAsText(goqu.I("re.max_time")),
-						temporalColumnAsText(goqu.I("re.max_date")),
-						legacyDateTimeColumnAsText(goqu.I("re.max_datetime")),
 					),
 				)).
 				Where(goqu.I("re.id").Eq(goqu.I("sme.id"))).

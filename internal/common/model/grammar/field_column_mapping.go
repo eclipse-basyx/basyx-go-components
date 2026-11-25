@@ -81,12 +81,7 @@ func timestampFieldText(sqlValue interface{}) exp.Expression {
 	return goqu.L(common.PostgreSQLTimestampColumnTextSQL("?"), sqlValue)
 }
 
-var propertyValueColumn = fmt.Sprintf(
-	"COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, %s, %s, %s, multilanguage_property_value.text)",
-	common.PostgreSQLTemporalColumnTextSQL("property_element.value_time"),
-	common.PostgreSQLTemporalColumnTextSQL("property_element.value_date"),
-	common.PostgreSQLTimestampColumnTextSQL("property_element.value_datetime"),
-)
+const propertyValueColumn = "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, multilanguage_property_value.text)"
 
 func buildPropertyValueTypeColumn() string {
 	branches := make([]string, 0, len(types.LiteralsOfDataTypeDefXSD))

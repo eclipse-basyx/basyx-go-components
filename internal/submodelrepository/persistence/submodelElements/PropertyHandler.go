@@ -235,11 +235,8 @@ func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, local
 
 func propertyValueRecord(value TypedValue) goqu.Record {
 	return goqu.Record{
-		"value_text":     value.Text,
-		"value_num":      value.Numeric,
-		"value_bool":     value.Boolean,
-		"value_time":     nil,
-		"value_date":     nil,
-		"value_datetime": nil,
+		"value_text": value.Text,
+		"value_num":  value.Numeric,
+		"value_bool": value.Boolean,
 	}
 }

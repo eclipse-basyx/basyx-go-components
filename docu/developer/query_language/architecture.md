@@ -42,8 +42,8 @@ expression decoding. Query limits include all response filters together. Split
 larger requests or policies into smaller expressions when upgrading; query
 requests exceeding these limits return HTTP 400.
 
-Updated services require database schema `v1.1.19`. Run the configuration service
-to install `basyx_validated_cast_input` before starting the updated services.
+Temporal cast validation uses `basyx_validated_cast_input`, installed by schema
+patch `v1.1.19`.
 The helper validates each textual cast input once; nested casts generate SQL
 whose size grows linearly with nesting depth. Its PostgreSQL function-call cost
 still needs representative workload measurement.

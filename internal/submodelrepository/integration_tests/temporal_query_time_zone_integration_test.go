@@ -30,7 +30,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/doug-martin/goqu/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,14 +55,11 @@ func TestTemporalQueriesAreIndependentOfDatabaseTimeZone(t *testing.T) {
 		{IDShort: "OffsetTime", ModelType: "Property", ValueType: "xs:time", Value: new("10:00:00+02:00")},
 		{IDShort: "EarlyYear", ModelType: "Property", ValueType: "xs:dateTime", Value: new("-0001-01-01T00:00:00Z")},
 		{IDShort: "EndOfDay", ModelType: "Property", ValueType: "xs:time", Value: new("24:00:00")},
-		{IDShort: "LegacyDateTime", ModelType: "Property", ValueType: "xs:dateTime", Value: new("2024-01-01T08:00:00+00:00")},
-		{IDShort: "LegacyDate", ModelType: "Property", ValueType: "xs:date", Value: new("2024-01-01")},
-		{IDShort: "LegacyTime", ModelType: "Property", ValueType: "xs:time", Value: new("08:00:00.5")},
+		{IDShort: "BackfilledDateTime", ModelType: "Property", ValueType: "xs:dateTime", Value: new("2024-01-01T08:00:00+00:00")},
+		{IDShort: "BackfilledDate", ModelType: "Property", ValueType: "xs:date", Value: new("2024-01-01")},
+		{IDShort: "BackfilledTime", ModelType: "Property", ValueType: "xs:time", Value: new("08:00:00.5")},
 	}
 	postTemporalSubmodel(t, submodelRepositoryBaseURL, id, elements)
-	seedLegacyTemporalRow(t, id, "LegacyDateTime", "property_element", goqu.Record{"value_text": nil, "value_datetime": "2024-01-01T10:00:00+02:00"})
-	seedLegacyTemporalRow(t, id, "LegacyDate", "property_element", goqu.Record{"value_text": nil, "value_date": "2024-01-01"})
-	seedLegacyTemporalRow(t, id, "LegacyTime", "property_element", goqu.Record{"value_text": nil, "value_time": "08:00:00.5"})
 
 	cases := []temporalQueryCase{
 		{"zone-less dateTime is UTC", `{"$eq":[{"$dateTimeCast":{"$field":"$sme.Local#value"}},{"$dateTimeVal":"2024-01-01T08:00:00Z"}]}`, true},
@@ -99,13 +95,13 @@ func TestTemporalQueriesAreIndependentOfDatabaseTimeZone(t *testing.T) {
 		{"unsupported year never matches", `{"$lt":[{"$dateTimeCast":{"$field":"$sme.EarlyYear#value"}},{"$dateTimeVal":"2024-01-01T00:00:00Z"}]}`, false},
 		{"end of day text", `{"$eq":[{"$field":"$sme.EndOfDay#value"},{"$strVal":"24:00:00"}]}`, true},
 		{"24:00:00 is the start of the day", `{"$eq":[{"$timeCast":{"$field":"$sme.EndOfDay#value"}},{"$timeVal":"00:00"}]}`, true},
-		{"legacy dateTime text matches the read value", `{"$eq":[{"$field":"$sme.LegacyDateTime#value"},{"$strVal":"2024-01-01T08:00:00+00:00"}]}`, true},
-		{"legacy dateTime instant", `{"$eq":[{"$dateTimeCast":{"$field":"$sme.LegacyDateTime#value"}},{"$dateTimeVal":"2024-01-01T08:00:00Z"}]}`, true},
-		{"legacy date text", `{"$eq":[{"$field":"$sme.LegacyDate#value"},{"$strVal":"2024-01-01"}]}`, true},
-		{"legacy xs:date is not an xs:dateTime", `{"$eq":[{"$dateTimeCast":{"$field":"$sme.LegacyDate#value"}},{"$dateTimeVal":"2024-01-01T00:00:00Z"}]}`, false},
-		{"legacy time text", `{"$eq":[{"$field":"$sme.LegacyTime#value"},{"$strVal":"08:00:00.5"}]}`, true},
-		{"legacy time instant", `{"$eq":[{"$timeCast":{"$field":"$sme.LegacyTime#value"}},{"$timeVal":"08:00:00.5Z"}]}`, true},
-		{"legacy valueType is declared", `{"$eq":[{"$field":"$sme.LegacyTime#valueType"},{"$strVal":"xs:time"}]}`, true},
+		{"backfilled dateTime text matches the read value", `{"$eq":[{"$field":"$sme.BackfilledDateTime#value"},{"$strVal":"2024-01-01T08:00:00+00:00"}]}`, true},
+		{"backfilled dateTime instant", `{"$eq":[{"$dateTimeCast":{"$field":"$sme.BackfilledDateTime#value"}},{"$dateTimeVal":"2024-01-01T08:00:00Z"}]}`, true},
+		{"backfilled date text", `{"$eq":[{"$field":"$sme.BackfilledDate#value"},{"$strVal":"2024-01-01"}]}`, true},
+		{"backfilled xs:date is not an xs:dateTime", `{"$eq":[{"$dateTimeCast":{"$field":"$sme.BackfilledDate#value"}},{"$dateTimeVal":"2024-01-01T00:00:00Z"}]}`, false},
+		{"backfilled time text", `{"$eq":[{"$field":"$sme.BackfilledTime#value"},{"$strVal":"08:00:00.5"}]}`, true},
+		{"backfilled time instant", `{"$eq":[{"$timeCast":{"$field":"$sme.BackfilledTime#value"}},{"$timeVal":"08:00:00.5Z"}]}`, true},
+		{"backfilled valueType is declared", `{"$eq":[{"$field":"$sme.BackfilledTime#valueType"},{"$strVal":"xs:time"}]}`, true},
 	}
 	for _, reader := range requireTemporalRepositoriesInBothTimeZones(t) {
 		t.Run(reader, func(t *testing.T) {
@@ -131,19 +127,14 @@ func TestDeclaredValueTypeIsQueryable(t *testing.T) {
 	})
 }
 
-func TestLegacyTemporalRowsAreReplacedByWholeSubmodelPut(t *testing.T) {
-	const id = "urn:basyx:integration:legacy-temporal-put"
+func TestWholeSubmodelPutReplacesTemporalValues(t *testing.T) {
+	const id = "urn:basyx:integration:temporal-put"
 	elements := []temporalElement{
 		{IDShort: "Time", ModelType: "Property", ValueType: "xs:time", Value: new("10:00:00")},
 		{IDShort: "Date", ModelType: "Property", ValueType: "xs:date", Value: new("2024-01-01")},
 		{IDShort: "Dates", ModelType: "Range", ValueType: "xs:date", Min: new("2024-01-01"), Max: new("2024-01-02")},
 	}
 	postTemporalSubmodel(t, submodelRepositoryBaseURL, id, elements)
-	seedLegacyTemporalRow(t, id, "Time", "property_element", goqu.Record{"value_text": nil, "value_time": "10:00:00"})
-	seedLegacyTemporalRow(t, id, "Date", "property_element", goqu.Record{"value_text": nil, "value_date": "2024-01-01"})
-	seedLegacyTemporalRow(t, id, "Dates", "range_element", goqu.Record{
-		"min_text": nil, "min_date": "2024-01-01", "max_text": nil, "max_date": "2024-01-02",
-	})
 	endpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
 	requireTemporalElements(t, endpoint, elements)
 
@@ -158,13 +149,12 @@ func TestLegacyTemporalRowsAreReplacedByWholeSubmodelPut(t *testing.T) {
 	requireTemporalElements(t, endpoint, elements)
 }
 
-func TestLegacyTemporalRowFollowsMetadataValueTypeChange(t *testing.T) {
-	const id = "urn:basyx:integration:legacy-temporal-metadata"
+func TestTemporalValueFollowsMetadataValueTypeChange(t *testing.T) {
+	const id = "urn:basyx:integration:temporal-metadata"
 	elements := []temporalElement{
 		{IDShort: "Timestamp", ModelType: "Property", ValueType: "xs:dateTime", Value: new("2024-01-01T08:00:00+00:00")},
 	}
 	postTemporalSubmodel(t, submodelRepositoryBaseURL, id, elements)
-	seedLegacyTemporalRow(t, id, "Timestamp", "property_element", goqu.Record{"value_text": nil, "value_datetime": "2024-01-01T08:00:00Z"})
 	endpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
 
 	patchMetadata(t, endpoint+"/submodel-elements/Timestamp", map[string]any{"modelType": "Property", "valueType": "xs:string"}, http.StatusNoContent)

@@ -123,7 +123,7 @@ func TestMapTemporalValuesAcceptsXSDEdgeLexicalForms(t *testing.T) {
 	}
 }
 
-func TestTemporalRecordsClearLegacyTypedColumns(t *testing.T) {
+func TestTemporalRecordsUseTextColumns(t *testing.T) {
 	value := "2024-01-01T10:00:00+02:00"
 	property := types.NewProperty(types.DataTypeDefXSDDateTime)
 	property.SetValue(&value)
@@ -185,9 +185,8 @@ func requireTemporalBoundStoredAsText(t *testing.T, record goqu.Record, prefix, 
 		t.Fatalf("expected %s_text to hold %q, got %#v", prefix, value, record[prefix+"_text"])
 	}
 	for _, suffix := range []string{"_time", "_date", "_datetime"} {
-		column, ok := record[prefix+suffix]
-		if !ok || column != nil {
-			t.Fatalf("expected %s%s to be cleared, got %#v (present %t)", prefix, suffix, column, ok)
+		if _, ok := record[prefix+suffix]; ok {
+			t.Fatalf("expected %s%s to be absent", prefix, suffix)
 		}
 	}
 }

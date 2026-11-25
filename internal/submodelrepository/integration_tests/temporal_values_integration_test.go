@@ -98,55 +98,39 @@ func TestTemporalValuesSurviveReplacementAndValueOnlyUpdates(t *testing.T) {
 	requireTemporalElements(t, secondaryEndpoint, elements)
 }
 
-func TestLegacyTemporalRowsRemainReadableAndCanBeUpdated(t *testing.T) {
-	const id = "urn:basyx:integration:legacy-temporal-values"
+func TestCanonicalTemporalTextRemainsReadableAndCanBeUpdated(t *testing.T) {
+	const id = "urn:basyx:integration:canonical-temporal-values"
 	elements := []temporalElement{
 		{IDShort: "Timestamp", ModelType: "Property", ValueType: "xs:dateTime", Value: new("-0001-12-31T22:30:00.123+00:00")},
 		{IDShort: "Period", ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T08:00:00+00:00"), Max: new("2024-01-02T08:00:00+00:00")},
 	}
 	postTemporalSubmodel(t, submodelRepositoryBaseURL, id, elements)
-	seedLegacyTemporalRow(t, id, "Timestamp", "property_element", goqu.Record{
-		"value_text": nil, "value_datetime": "0001-01-01T00:30:00.123+02:00",
-	})
-	seedLegacyTemporalRow(t, id, "Period", "range_element", goqu.Record{
-		"min_text": nil, "min_datetime": "2024-01-01T10:00:00+02:00",
-		"max_text": nil, "max_datetime": "2024-01-02T10:00:00+02:00",
-	})
 	primaryEndpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
 	secondaryEndpoint := temporalSubmodelEndpoint(temporalSecondaryRepositoryURL(), id)
 	requireTemporalElements(t, primaryEndpoint, elements)
 	requireTemporalElements(t, secondaryEndpoint, elements)
-	requireValueOnlyStatus(t, http.MethodPut, secondaryEndpoint+"/submodel-elements/Timestamp", elements[0], http.StatusNoContent)
 
 	elements[0].Value = new("2024-01-01T10:00:00+02:00")
 	requireValueOnlyStatus(t, http.MethodPut, secondaryEndpoint+"/submodel-elements/Timestamp", elements[0], http.StatusNoContent)
 	elements[1].Min = new("2024-01-01T10:00:00")
 	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/submodel-elements/Period/$value", map[string]any{"min": elements[1].Min}, http.StatusNoContent)
 	requireTemporalElements(t, primaryEndpoint, elements)
-	requireStoredTemporalColumns(t, id, "Timestamp", "property_element", map[string]any{"value_text": *elements[0].Value, "value_datetime": nil})
-	requireStoredTemporalColumns(t, id, "Period", "range_element", map[string]any{"min_text": *elements[1].Min, "min_datetime": nil, "max_text": nil})
-	untouchedBound := testenv.ReadSubmodelElementRow(t, submodelRepositoryIntegrationTestDSN, id, "Period", "range_element", "max_datetime")
-	require.NotNil(t, untouchedBound["max_datetime"], "a value-only update of the minimum must keep the legacy maximum")
+	requireStoredTemporalColumns(t, id, "Timestamp", "property_element", map[string]any{"value_text": *elements[0].Value})
+	requireStoredTemporalColumns(t, id, "Period", "range_element", map[string]any{"min_text": *elements[1].Min, "max_text": *elements[1].Max})
 
 	requireValueOnlyStatus(t, http.MethodPatch, secondaryEndpoint+"/$value", json.RawMessage(`{"Timestamp":null,"Period":{"min":null,"max":null}}`), http.StatusNoContent)
 	elements[0].Value, elements[1].Min, elements[1].Max = nil, nil, nil
 	requireTemporalElements(t, primaryEndpoint, elements)
 }
 
-func TestRangePatchLeavesOmittedLegacyBoundsInTheirExistingColumns(t *testing.T) {
-	const id = "urn:basyx:integration:legacy-range-patch"
+func TestRangePatchPreservesOmittedTemporalBounds(t *testing.T) {
+	const id = "urn:basyx:integration:temporal-range-patch"
 	elements := []temporalElement{
 		{IDShort: "Period", ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T08:00:00+00:00"), Max: new("2024-01-02T08:00:00+00:00")},
 	}
 	baseURL := temporalSecondaryRepositoryURL()
 	postTemporalSubmodel(t, baseURL, id, elements)
-	seedLegacyTemporalRow(t, id, "Period", "range_element", goqu.Record{
-		"min_text": nil, "min_datetime": "2024-01-01T10:00:00+02:00",
-		"max_text": nil, "max_datetime": "2024-01-02T10:00:00+02:00",
-	})
-	before := testenv.ReadSubmodelElementRow(t, submodelRepositoryIntegrationTestDSN, id, "Period", "range_element", "min_text", "min_datetime", "max_text", "max_datetime")
-	require.NotNil(t, before["min_datetime"])
-	require.NotNil(t, before["max_datetime"])
+	before := testenv.ReadSubmodelElementRow(t, submodelRepositoryIntegrationTestDSN, id, "Period", "range_element", "min_text", "max_text")
 
 	endpoint := temporalSubmodelEndpoint(baseURL, id)
 	rangeURL := endpoint + "/submodel-elements/Period"
@@ -165,8 +149,8 @@ func TestRangePatchLeavesOmittedLegacyBoundsInTheirExistingColumns(t *testing.T)
 		"modelType": "Range", "valueType": "xs:dateTime", "min": elements[0].Min,
 	}, http.StatusNoContent)
 	requireStoredTemporalColumns(t, id, "Period", "range_element", map[string]any{
-		"min_text": *elements[0].Min, "min_datetime": nil,
-		"max_text": nil, "max_datetime": before["max_datetime"],
+		"min_text": *elements[0].Min,
+		"max_text": before["max_text"],
 	})
 	requireTemporalElements(t, endpoint, elements)
 
@@ -175,8 +159,8 @@ func TestRangePatchLeavesOmittedLegacyBoundsInTheirExistingColumns(t *testing.T)
 		"modelType": "Range", "valueType": elements[0].ValueType,
 	}, http.StatusNoContent)
 	requireStoredTemporalColumns(t, id, "Period", "range_element", map[string]any{
-		"min_text": *elements[0].Min, "min_datetime": nil,
-		"max_text": *elements[0].Max, "max_datetime": nil,
+		"min_text": *elements[0].Min,
+		"max_text": *elements[0].Max,
 	})
 	requireTemporalElements(t, endpoint, elements)
 }
@@ -245,9 +229,6 @@ func TestRangePatchCanChangeTypeWithAnAbsentBound(t *testing.T) {
 		{IDShort: "Period", ModelType: "Range", ValueType: "xs:dateTime", Min: new("2024-01-01T08:00:00+00:00")},
 	}
 	postTemporalSubmodel(t, submodelRepositoryBaseURL, id, elements)
-	seedLegacyTemporalRow(t, id, "Period", "range_element", goqu.Record{
-		"min_text": nil, "min_datetime": "2024-01-01T10:00:00+02:00",
-	})
 
 	endpoint := temporalSubmodelEndpoint(submodelRepositoryBaseURL, id)
 	elements[0].ValueType = "xs:string"
@@ -255,8 +236,8 @@ func TestRangePatchCanChangeTypeWithAnAbsentBound(t *testing.T) {
 		"modelType": "Range", "valueType": elements[0].ValueType,
 	}, http.StatusNoContent)
 	requireStoredTemporalColumns(t, id, "Period", "range_element", map[string]any{
-		"min_text": *elements[0].Min, "min_datetime": nil,
-		"max_text": nil, "max_datetime": nil,
+		"min_text": *elements[0].Min,
+		"max_text": nil,
 	})
 	requireTemporalElements(t, endpoint, elements)
 }
@@ -333,9 +314,4 @@ func requireStoredTemporalColumns(t *testing.T, submodelID, idShort, table strin
 	}
 	stored := testenv.ReadSubmodelElementRow(t, submodelRepositoryIntegrationTestDSN, submodelID, idShort, table, columns...)
 	require.Equal(t, want, stored)
-}
-
-func seedLegacyTemporalRow(t *testing.T, submodelID, idShort, table string, record goqu.Record) {
-	t.Helper()
-	testenv.OverwriteSubmodelElementRow(t, submodelRepositoryIntegrationTestDSN, submodelID, idShort, table, record)
 }
