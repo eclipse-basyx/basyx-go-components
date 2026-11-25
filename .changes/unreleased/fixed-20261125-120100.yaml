@@ -1,0 +1,7 @@
+kind: fixed
+body: Queries and access rules no longer fail with a database error when a cast has a number or Boolean literal operand, such as $hexCast of $boolean or $strCast of a negative $numVal, or when $aasdesc#createdAt or $smdesc#createdAt is compared with a string or hexadecimal literal or used with $contains, $starts-with, $ends-with, or $regex. These fields read as their xs:dateTime text in UTC, independent of the database session TimeZone.
+time: 2026-11-25T12:01:00.000000+01:00
+custom:
+    Impact: Low
+    PullRequest: 1
+    SecurityImpact: Access rules with these conditions are evaluated instead of failing the request, so rules that matched nothing because of the error can now grant access.

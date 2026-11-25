@@ -34,6 +34,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1763,7 +1764,7 @@ func toSQLResolvedFieldOrValue(
 	case operand.DayOfWeek != nil:
 		return datePartResolvedOperandToSQL(operand.DayOfWeek, position, "DOW", collector)
 	case operand.Field != nil:
-		return decoratedFieldToSQL(*operand.Field, collector)
+		return fieldOperandToSQL(*operand, collector)
 	case operand.DateTimeVal != nil:
 		return dateTimeLiteralSQLValue(time.Time(*operand.DateTimeVal)), nil, nil
 	case operand.TimeVal != nil:
@@ -1806,26 +1807,51 @@ func decoratedFieldToSQL(f ModelStringPattern, collector *ResolvedFieldPathColle
 }
 
 func castResolvedOperandToSQL(inner *Value, position, targetType string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
-	if targetType == "time" && isDateTimeOperand(*inner) {
+	switch {
+	case targetType == "time" && isDateTimeOperand(*inner):
 		return timeOfDateTimeOperandToSQL(inner, position, collector)
+	case targetType == "timestamptz" && isTimestampField(*inner):
+		return decoratedFieldToSQL(*inner.Field, collector)
 	}
-	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	sqlValue, resolved, err := castInputToSQL(inner, position, collector)
 	if err != nil {
 		return nil, nil, err
 	}
-	if isTimestampField(*inner) {
-		return timestampFieldCastSQLValue(sqlValue, targetType), resolved, nil
+	if targetType == "text" && isComputedNumber(*inner) {
+		return canonicalDoubleSQLText(sqlValue), resolved, nil
 	}
 	return safeCastSQLValue(sqlValue, targetType), resolved, nil
 }
 
-// timestampFieldCastSQLValue casts a TIMESTAMPTZ field, whose value is the xs:dateTime in UTC.
-// A date-time cast keeps the column itself, so its index stays usable.
-func timestampFieldCastSQLValue(sqlValue interface{}, targetType string) interface{} {
-	if targetType == "timestamptz" {
-		return sqlValue
+// fieldOperandToSQL renders a field as text. A TIMESTAMPTZ field reads as its xs:dateTime
+// text in UTC, so string comparisons and operators neither fail nor depend on the session
+// TimeZone; a date-time cast of such a field compares the column itself, see castResolvedOperandToSQL.
+func fieldOperandToSQL(operand Value, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	sqlValue, resolved, err := decoratedFieldToSQL(*operand.Field, collector)
+	if err != nil || !isTimestampField(operand) {
+		return sqlValue, resolved, err
 	}
-	return safeCastSQLValue(timestampFieldText(sqlValue), targetType)
+	return timestampFieldText(sqlValue), resolved, nil
+}
+
+// castInputToSQL renders the operand of a cast, whose input is text. A number or Boolean
+// literal is bound as its xs:string form, which every driver encodes as text and which keeps
+// a negative number from binding tighter than the cast.
+func castInputToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	switch {
+	case inner.NumVal != nil:
+		return goqu.L("?::text", canonicalDoubleString(*inner.NumVal)), nil, nil
+	case inner.Boolean != nil:
+		return goqu.L("?::text", strconv.FormatBool(*inner.Boolean)), nil, nil
+	default:
+		return toSQLResolvedFieldOrValue(inner, position, collector)
+	}
+}
+
+// isComputedNumber reports whether an operand is a number that SQL computes, a $numCast or a
+// date part, as opposed to a number literal.
+func isComputedNumber(v Value) bool {
+	return isNumericalOperand(v) && v.NumVal == nil
 }
 
 // timeOfDateTimeOperandToSQL casts an xs:dateTime operand to xs:time, keeping its local clock time and timezone.
@@ -1852,12 +1878,9 @@ func timeOperandTextToSQL(inner *Value, position string, collector *ResolvedFiel
 		}
 		return timeTextOfDateTimeSQLValue(dateTimeText), resolved, nil
 	}
-	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	sqlValue, resolved, err := castInputToSQL(inner, position, collector)
 	if err != nil {
 		return nil, nil, err
-	}
-	if isTimestampField(*inner) {
-		sqlValue = timestampFieldText(sqlValue)
 	}
 	return xsdTimeSQLText(sqlValue), resolved, nil
 }
@@ -1880,12 +1903,9 @@ func dateTimeOperandTextToSQL(inner *Value, position string, collector *Resolved
 	if inner.DateTimeCast != nil {
 		inner = inner.DateTimeCast
 	}
-	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	sqlValue, resolved, err := castInputToSQL(inner, position, collector)
 	if err != nil {
 		return nil, nil, err
-	}
-	if isTimestampField(*inner) {
-		sqlValue = timestampFieldText(sqlValue)
 	}
 	return xsdDateTimeSQLText(sqlValue), resolved, nil
 }

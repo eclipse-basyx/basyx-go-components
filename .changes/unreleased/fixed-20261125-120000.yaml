@@ -1,0 +1,7 @@
+kind: fixed
+body: $strCast of a number yields the XPath string of an xs:double, the same when the number is a literal or a stored value. Values from 0.000001 up to 1000000 keep decimal notation, such as "100" or "0.5"; other values use scientific notation, such as "1.0E6" instead of "1e+06" or "1000000". The shortest digits that identify the value are used.
+time: 2026-11-25T12:00:00.000000+01:00
+custom:
+    Impact: Low
+    PullRequest: 1
+    SecurityImpact: Access rules that compare $strCast of a number with a string literal match the XPath form only; rules written for the former form, such as "1000000", need to be updated.

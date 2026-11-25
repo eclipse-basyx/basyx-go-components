@@ -1589,6 +1589,9 @@ func stringOperandValue(value any) (string, bool) {
 	if value == nil || isStructuredValue(value) {
 		return "", false
 	}
+	if number, ok := value.(float64); ok {
+		return canonicalDoubleString(number), true
+	}
 	return fmt.Sprint(value), true
 }
 

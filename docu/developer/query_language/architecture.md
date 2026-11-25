@@ -83,7 +83,11 @@ session TimeZone:
   ignored. Date parts of values whose local date and time exceed PostgreSQL's
   timestamp range yield no match.
 - TIMESTAMPTZ fields such as `$aasdesc#createdAt` are compared as instants
-  directly, so their indexes stay usable, and read as `xs:dateTime` text in UTC.
+  directly, so their indexes stay usable, and read as `xs:dateTime` text in UTC,
+  for example `2024-01-01T08:00:00+00:00`. String comparisons, `$contains`,
+  `$starts-with`, `$ends-with`, `$regex`, `$strCast`, and `$hexCast` use that
+  text, so they neither fail nor depend on the session TimeZone when implicit
+  casts are disabled.
 - A field compared with a date-time, time, number, or boolean operand is always
   cast to that type, as the query language requires, even when the simplifier's
   implicit casts are disabled.
@@ -112,6 +116,21 @@ evaluates those an order of magnitude slower. A cast costs roughly 1 to 2 µs pe
 row on a one-million-row scan, depending on how many values are temporal text. Constant folding in Go accepts only
 temporal input whose PostgreSQL result it reproduces exactly and leaves
 everything else to the database.
+
+Numbers follow `fn:number`, which IDTA-01002 names as the definition of
+`$numCast`: they are `xs:double` values, although the casting table calls the
+target type `xs:integer`.
+
+- `$strCast` of a number yields the XPath string of an `xs:double`: decimal
+  notation for magnitudes from 0.000001 up to, but excluding, 1000000 (`100`,
+  `0.5`), and scientific notation otherwise (`1.0E6`, `-1.5E-7`). Both Go and
+  SQL use the fewest digits that read back as the same value. PostgreSQL prints
+  a few doubles with more digits, such as `9.999999999999999e+22` for `1e23`, so
+  the SQL tries the shorter neighbouring decimals of the printed value. This
+  needs `extra_float_digits` of at least 1, the PostgreSQL default.
+- A number or Boolean literal inside a cast is bound as its `xs:string`, so
+  drivers that bind arguments encode it as text and a negative number cannot bind
+  tighter than the cast.
 
 ## Quick mental model (no background required)
 
