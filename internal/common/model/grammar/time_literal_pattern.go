@@ -31,12 +31,11 @@ package grammar
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-// TimeLiteralPattern represents an RFC3339 full-time value.
+// TimeLiteralPattern represents a <TimeLiteral>: hh:mm with optional seconds, fraction, and timezone.
 type TimeLiteralPattern string
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -46,8 +45,8 @@ func (j *TimeLiteralPattern) UnmarshalJSON(value []byte) error {
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
-	if _, err := time.Parse("15:04:05.999999999Z07:00", string(plain)); err != nil {
-		return fmt.Errorf("parse $timeVal as RFC3339 full-time: %w", err)
+	if _, ok := parseTimeLiteral(string(plain)); !ok {
+		return fmt.Errorf("GRAMMAR-TIMEVAL-PARSE: %q is not a valid $timeVal", string(plain))
 	}
 	*j = TimeLiteralPattern(plain)
 	return nil

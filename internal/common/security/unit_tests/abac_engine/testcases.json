@@ -215,6 +215,11 @@
     "eval": "eval/get_shellDescriptors_time_match.json"
   },
   {
+    "input": "input/time_cast_utc_clock_mismatch.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
     "input": "input/time_parts.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_time_match.json"

@@ -42,11 +42,92 @@ expression decoding. Query limits include all response filters together. Split
 larger requests or policies into smaller expressions when upgrading; query
 requests exceeding these limits return HTTP 400.
 
-Updated services require database schema `v1.1.19`. Run the configuration service
-to install `basyx_validated_cast_input` before starting the updated services.
+Temporal cast validation uses `basyx_validated_cast_input`, installed by schema
+patch `v1.1.19`.
 The helper validates each textual cast input once; nested casts generate SQL
 whose size grows linearly with nesting depth. Its PostgreSQL function-call cost
 still needs representative workload measurement.
+
+Temporal operators follow XSD and XPath and do not depend on the PostgreSQL
+session TimeZone:
+
+- `$dateTimeCast` and `$timeCast` accept only the `xs:dateTime` and `xs:time`
+  lexical spaces. Dates, timestamps without `T` or seconds, and other PostgreSQL
+  input formats yield NULL, so the candidate does not match. In ABAC rules,
+  every condition that can be indeterminate (a failed `$dateTimeCast`,
+  `$timeCast`, `$numCast`, `$boolCast`, or `$hexCast`, a date part, a `$regex`
+  evaluated against a stored value whose pattern PostgreSQL rejects, from a literal,
+  a claim, or a field, or a `$match` term whose
+  claim or attribute comparison cannot be evaluated) keeps that result
+  through `$not`, so a failed cast alone cannot satisfy a negated rule. Caller
+  queries instead evaluate `$not` over correlated fields, such as Submodel
+  Element values, as the absence of a visible match, so a candidate whose cast
+  fails satisfies a negated query condition. Fields of the queried row itself,
+  such as `$aasdesc#createdAt`, are evaluated row-locally and keep the failed
+  cast unknown, which excludes the candidate. This deliberately keeps the
+  existing anti-existence semantics of queries and deviates from the rule in
+  IDTA-01002 that a failed cast excludes the candidate. `$dateTimeVal` and
+  `$timeVal` accept every `<DateTimeLiteral>` and `<TimeLiteral>` form, including
+  those without `T`, seconds, or timezone.
+- UTC is the implicit timezone of values without one.
+- `$year`, `$month`, `$dayOfMonth`, and `$dayOfWeek` use the value's own timezone.
+  Casting an `xs:dateTime` to `xs:time` keeps its clock time and timezone.
+- Times are compared as instants on the XPath reference date 1972-12-31, so
+  `10:00:00+02:00` equals `08:00:00Z` and `24:00:00` equals `00:00:00`. Access
+  rules that compare `time(LOCALNOW)` with a clock time must therefore give that
+  clock time the local offset.
+- Fractional seconds beyond microseconds are truncated, never rounded.
+- `$strCast` of a date-time or time yields its XPath canonical text: the local
+  value with redundant fractional zeros removed and its timezone kept, `Z` for a
+  zero offset, and nothing for a value without a timezone.
+- Leading and trailing XSD whitespace (space, tab, line feed, carriage return) is
+  ignored. Date parts of values whose local date and time exceed PostgreSQL's
+  timestamp range yield no match.
+- TIMESTAMPTZ fields such as `$aasdesc#createdAt` are compared as instants
+  directly, so their indexes stay usable, and read as canonical `xs:dateTime`
+  text in UTC with `Z`.
+- A field compared with a date-time, time, number, boolean, or hex operand is always
+  cast to that type, as the query language requires, even when the simplifier's
+  implicit casts are disabled.
+- `$numCast` and `$hexCast` of a date-time or time are type errors in XPath and
+  yield no match. A `$numCast` of any other value that is not a number also
+  yields no match in constant folding, as it does in SQL.
+- A cast of a missing value and a `$regex` over a missing text or pattern count as
+  indeterminate in ABAC rules, so a negated rule over them denies. The other
+  string operations treat a missing text as a non-match. A `$regex` whose operands are all literals or
+  claims is decided in Go with RE2, whose syntax differs slightly from
+  PostgreSQL's.
+- With implicit casts disabled, a TIMESTAMPTZ field compared with a string or used
+  in a string operation is not cast: PostgreSQL then parses the string in the
+  session TimeZone or rejects the operation.
+- `$hexCast` trims space, tab, line feed, vertical tab, form feed, and carriage
+  return, upper-cases the value, and yields no match unless it has the form
+  `16#<hex digits>`, in constant folding and in SQL alike.
+- Date parts accept a `dateTimeOperand` as the grammar and JSON schema define it:
+  a `$dateTimeVal`, a `$dateTimeCast`, or a time `GLOBAL`. A bare `$field` is
+  rejected with HTTP 400, although the informative conformance corpus item
+  QL.dt.001 expects it to be accepted; use `$year({"$dateTimeCast": {"$field": …}})`.
+- Values before year 1 use two conventions. `$dateTimeVal` follows the query
+  language's JSON schema, which allows year `0000` for 1 BC; such literals are
+  compared correctly. Cast input with a negative or zero year never matches,
+  and xs:dateTime values migrated from legacy BC timestamps are stored with a
+  negative year, so they never match temporal casts either. TIMESTAMPTZ fields
+  compare their stored instant directly, so a BC instant there matches such
+  literals; its date parts yield no match and its `$strCast` has a negative year.
+  `$timeCast` of a TIMESTAMPTZ field yields no match, because the field reads as
+  xs:dateTime text; cast the field with `$dateTimeCast` first.
+
+The generated SQL validates and normalizes the text with `regexp_replace` and
+`substring` before `basyx_validated_cast_input` and needs no further database
+function. Each cast references its operand once, which keeps the SQL linear in
+nesting depth. The canonical `$strCast` of a date-time needs its text twice and
+binds it in a subquery with `OFFSET 0`, which stops PostgreSQL from inlining the
+subquery and copying the operand; without that fence, planning time doubles with
+every nesting level. Keep these patterns free of nested optional groups: PostgreSQL
+evaluates those an order of magnitude slower. A cast costs roughly 1 to 2 µs per evaluated
+row on a one-million-row scan, depending on how many values are temporal text. Constant folding in Go accepts only
+temporal input whose PostgreSQL result it reproduces exactly and leaves
+everything else to the database.
 
 ## Quick mental model (no background required)
 

@@ -103,10 +103,7 @@ SELECT
   COALESCE(
     pe.value_text,
     pe.value_num::text,
-    pe.value_bool::text,
-    pe.value_time::text,
-    pe.value_date::text,
-    pe.value_datetime::text
+    pe.value_bool::text
   ) AS value
 FROM submodel_element se
 JOIN submodel s ON s.id = se.submodel_id

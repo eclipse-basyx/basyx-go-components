@@ -815,12 +815,12 @@ func reconciliationTypeSpecs() []reconciliationTypeSpec {
 		return func(alias string) exp.Expression { return jsonNestedCast(alias, "typeData", key, cast) }
 	}
 	return []reconciliationTypeSpec{
-		{table: "property_element", columns: []reconciliationTypeColumn{{"value_type", integer("value_type")}, {"value_text", text("value_text")}, {"value_num", typed("value_num", "numeric")}, {"value_bool", typed("value_bool", "boolean")}, {"value_time", typed("value_time", "time")}, {"value_date", typed("value_date", "date")}, {"value_datetime", typed("value_datetime", "timestamptz")}}},
+		{table: "property_element", columns: []reconciliationTypeColumn{{"value_type", integer("value_type")}, {"value_text", text("value_text")}, {"value_num", typed("value_num", "numeric")}, {"value_bool", typed("value_bool", "boolean")}}},
 		{table: "blob_element", columns: []reconciliationTypeColumn{{"content_type", text("content_type")}, {"value", func(alias string) exp.Expression {
 			return goqu.L("convert_to(COALESCE(?, ''), 'UTF8')", jsonNestedText(alias, "typeData", "value"))
 		}}}},
 		{table: "file_element", columns: []reconciliationTypeColumn{{"content_type", text("content_type")}, {"file_name", fileNameExpression}, {"value", text("value")}}},
-		{table: "range_element", columns: []reconciliationTypeColumn{{"value_type", integer("value_type")}, {"min_text", text("min_text")}, {"max_text", text("max_text")}, {"min_num", typed("min_num", "numeric")}, {"max_num", typed("max_num", "numeric")}, {"min_time", typed("min_time", "time")}, {"max_time", typed("max_time", "time")}, {"min_date", typed("min_date", "date")}, {"max_date", typed("max_date", "date")}, {"min_datetime", typed("min_datetime", "timestamptz")}, {"max_datetime", typed("max_datetime", "timestamptz")}}},
+		{table: "range_element", columns: []reconciliationTypeColumn{{"value_type", integer("value_type")}, {"min_text", text("min_text")}, {"max_text", text("max_text")}, {"min_num", typed("min_num", "numeric")}, {"max_num", typed("max_num", "numeric")}}},
 		{table: "reference_element", columns: []reconciliationTypeColumn{{"value", jsonValue("value")}}},
 		{table: "relationship_element", columns: []reconciliationTypeColumn{{"first", jsonValue("first")}, {"second", jsonValue("second")}}},
 		{table: "annotated_relationship_element", columns: []reconciliationTypeColumn{{"first", jsonValue("first")}, {"second", jsonValue("second")}}},

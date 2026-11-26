@@ -483,7 +483,7 @@ func evaluateFragmentFilterCondition(
 	collector *grammar.ResolvedFieldPathCollector,
 ) (exp.Expression, error) {
 	if predicate.global {
-		whereCondition, _, err := predicate.Condition.EvaluateToExpression(collector.WithoutInlineAliases())
+		whereCondition, _, err := predicate.Condition.EvaluateToExpression(collector.WithoutInlineAliases().ForAuthorizationPolicy())
 		return whereCondition, err
 	}
 	fragment = predicate.evaluationFragment(fragment)
@@ -496,6 +496,9 @@ func evaluateFragmentFilterCondition(
 		}
 	} else if predicate.caller {
 		evalCollector = conditionVisibleCollector(ctx, evalCollector)
+	}
+	if !predicate.caller {
+		evalCollector = evalCollector.ForAuthorizationPolicy()
 	}
 	whereCondition, _, err := predicate.Condition.EvaluateToExpressionWithNegatedFragments(
 		evalCollector,
@@ -680,6 +683,7 @@ func AddSMECollectionCoverageFromContext(ctx context.Context, ds *goqu.SelectDat
 		return nil, err
 	}
 	collector.SetRootJoinKey(alias, "submodel_id")
+	collector = collector.ForAuthorizationPolicy()
 	conditions := make([]exp.Expression, 0, len(alternatives))
 	for _, alternative := range alternatives {
 		formula, _, err := alternative.formula.EvaluateToExpression(collector)
@@ -729,7 +733,7 @@ func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, col
 
 	p := GetQueryFilter(ctx)
 	if p != nil && p.Formula != nil {
-		wc, _, err := p.Formula.EvaluateToExpression(collector)
+		wc, _, err := p.Formula.EvaluateToExpression(collector.ForAuthorizationPolicy())
 		if err != nil {
 			return nil, err
 		}
@@ -776,7 +780,7 @@ func authorizedSecurityCondition(
 	if outer.queryFilter == nil || outer.queryFilter.Formula == nil {
 		return nil, nil
 	}
-	wc, _, err := outer.queryFilter.Formula.EvaluateToExpression(collector.WithoutFieldValueDecorator())
+	wc, _, err := outer.queryFilter.Formula.EvaluateToExpression(collector.WithoutFieldValueDecorator().ForAuthorizationPolicy())
 	return wc, err
 }
 

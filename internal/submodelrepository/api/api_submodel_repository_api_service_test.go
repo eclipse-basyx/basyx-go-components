@@ -472,3 +472,42 @@ func TestMergeSubmodelElementPatchKeepsStoredOnlyFieldsOutOfUnrelatedPatches(t *
 		})
 	}
 }
+
+func TestMergeSubmodelElementPatchPreservesRangeBoundPresence(t *testing.T) {
+	t.Parallel()
+
+	base := map[string]any{
+		"modelType": "Range", "idShort": "Limits", "valueType": "xs:dateTime",
+		"min": "2024-01-01T00:00:00Z", "max": "2024-01-02T00:00:00Z",
+	}
+	metadataPatch := map[string]any{
+		"modelType": "Range", "valueType": "xs:dateTime",
+		"description": []any{map[string]any{"language": "en", "text": "Updated"}},
+	}
+
+	t.Run("description only", func(t *testing.T) {
+		merged := mergeSubmodelElementPatch(base, metadataPatch)
+		require.Equal(t, metadataPatch["description"], merged["description"])
+		require.NotContains(t, merged, "min")
+		require.NotContains(t, merged, "max")
+	})
+
+	t.Run("min only", func(t *testing.T) {
+		merged := mergeSubmodelElementPatch(base, map[string]any{"min": "2024-01-01T12:00:00+02:00"})
+		require.Equal(t, "2024-01-01T12:00:00+02:00", merged["min"])
+		require.NotContains(t, merged, "max")
+	})
+
+	t.Run("max only", func(t *testing.T) {
+		merged := mergeSubmodelElementPatch(base, map[string]any{"max": "2024-01-02T12:00:00+02:00"})
+		require.NotContains(t, merged, "min")
+		require.Equal(t, "2024-01-02T12:00:00+02:00", merged["max"])
+	})
+
+	t.Run("valueType change", func(t *testing.T) {
+		merged := mergeSubmodelElementPatch(base, map[string]any{"valueType": "xs:string"})
+		require.Equal(t, "xs:string", merged["valueType"])
+		require.Equal(t, base["min"], merged["min"])
+		require.Equal(t, base["max"], merged["max"])
+	})
+}

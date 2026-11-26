@@ -33,9 +33,11 @@ package submodelelements
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -104,24 +106,42 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 		return err
 	}
 
-	// Execute update
-	updateQuery, updateArgs, err := dialect.Update("range_element").
+	update := dialect.Update("range_element").
 		Set(updateRecord).
-		Where(goqu.C("id").Eq(elementID)).
-		ToSQL()
+		Where(goqu.C("id").Eq(elementID))
+	typeGuard := rangeUpdateTypeGuard(updateRecord)
+	if typeGuard != nil {
+		update = update.Where(typeGuard)
+	}
+	updateQuery, updateArgs, err := update.ToSQL()
 	if err != nil {
+		err = common.NewInternalServerError("SMREPO-UPDRANGE-BUILDQ " + err.Error())
 		return err
 	}
 
-	_, err = localTx.Exec(updateQuery, updateArgs...)
+	result, err := localTx.Exec(updateQuery, updateArgs...)
 	if err != nil {
+		slog.Error("range update failed", "error.code", "SMREPO-UPDRANGE-EXECQ", "error", err)
+		err = common.NewInternalServerError("SMREPO-UPDRANGE-EXECQ failed to update range_element")
 		return err
+	}
+	if typeGuard != nil {
+		var rows int64
+		rows, err = result.RowsAffected()
+		if err != nil {
+			err = common.NewInternalServerError("SMREPO-UPDRANGE-ROWS " + err.Error())
+			return err
+		}
+		if rows == 0 {
+			err = common.NewErrConflict("SMREPO-UPDRANGE-TYPECONFLICT Range valueType changed while an omitted bound has a stored value")
+			return err
+		}
 	}
 
 	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
-// UpdateValueOnly stores the decoded ValueOnly bounds of a Range in the typed columns of its valueType.
+// UpdateValueOnly stores the decoded ValueOnly bounds of a Range.
 // Absent bounds stay untouched and nil bounds are cleared.
 func (p PostgreSQLRangeHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx, update gen.ValueOnlyUpdate) error {
 	patch, err := valueOnlyPatchAs[gen.RangeValuePatch](update)
@@ -134,18 +154,10 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(ctx context.Context, tx *sql.Tx,
 	}
 	record := goqu.Record{}
 	if patch.Min.Set {
-		record["min_text"] = typedValue.MinText
-		record["min_num"] = typedValue.MinNumeric
-		record["min_time"] = typedValue.MinTime
-		record["min_date"] = typedValue.MinDate
-		record["min_datetime"] = typedValue.MinDateTime
+		setRangeBound(record, "min", typedValue.MinText, typedValue.MinNumeric)
 	}
 	if patch.Max.Set {
-		record["max_text"] = typedValue.MaxText
-		record["max_num"] = typedValue.MaxNumeric
-		record["max_time"] = typedValue.MaxTime
-		record["max_date"] = typedValue.MaxDate
-		record["max_datetime"] = typedValue.MaxDateTime
+		setRangeBound(record, "max", typedValue.MaxText, typedValue.MaxNumeric)
 	}
 	return execValueOnlyUpdate(ctx, tx, "range_element", record, update.ElementID, "SMREPO-UPDRANGEVALONLY")
 }
@@ -185,73 +197,49 @@ func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element ty
 		return nil, err
 	}
 
-	return &InsertQueryPart{
-		TableName: "range_element",
-		Record: goqu.Record{
-			"id":           id,
-			"value_type":   rangeElem.ValueType(),
-			"min_text":     typedValue.MinText,
-			"max_text":     typedValue.MaxText,
-			"min_num":      typedValue.MinNumeric,
-			"max_num":      typedValue.MaxNumeric,
-			"min_time":     typedValue.MinTime,
-			"max_time":     typedValue.MaxTime,
-			"min_date":     typedValue.MinDate,
-			"max_date":     typedValue.MaxDate,
-			"min_datetime": typedValue.MinDateTime,
-			"max_datetime": typedValue.MaxDateTime,
-		},
-	}, nil
+	record := goqu.Record{"id": id, "value_type": rangeElem.ValueType()}
+	setRangeBound(record, "min", typedValue.MinText, typedValue.MinNumeric)
+	setRangeBound(record, "max", typedValue.MaxText, typedValue.MaxNumeric)
+	return &InsertQueryPart{TableName: "range_element", Record: record}, nil
 }
 
 func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) (goqu.Record, error) {
-	updateRecord := goqu.Record{}
-
-	// ValueType is always updated (required field)
-	updateRecord["value_type"] = rangeElem.ValueType()
-
-	// Handle min and max based on isPut flag
-	if isPut {
-		// PUT: Always replace min/max values
-		if rangeElem.Min() == nil || rangeElem.Max() == nil {
-			// For PUT, both min and max must be provided
-			panic("Both 'Min' and 'Max' values must be provided for Range element in PUT operation")
-		}
-		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), rangeElem.Min(), rangeElem.Max())
-		if err != nil {
-			return nil, err
-		}
-		updateRecord["min_text"] = typedValue.MinText
-		updateRecord["max_text"] = typedValue.MaxText
-		updateRecord["min_num"] = typedValue.MinNumeric
-		updateRecord["max_num"] = typedValue.MaxNumeric
-		updateRecord["min_time"] = typedValue.MinTime
-		updateRecord["max_time"] = typedValue.MaxTime
-		updateRecord["min_date"] = typedValue.MinDate
-		updateRecord["max_date"] = typedValue.MaxDate
-		updateRecord["min_datetime"] = typedValue.MinDateTime
-		updateRecord["max_datetime"] = typedValue.MaxDateTime
-	} else { //nolint:all - elseif: can replace 'else {if cond {}}' with 'else if cond {}' -> this would make the code less readable and has differing semantics
-		// PATCH: Only update bounds that are provided with a storable value
-		typedValue, err := MapRangeValueByType(rangeElem.ValueType(), rangeElem.Min(), rangeElem.Max())
-		if err != nil {
-			return nil, err
-		}
-		if isStorableLexical(rangeElem.ValueType(), rangeElem.Min()) {
-			updateRecord["min_text"] = typedValue.MinText
-			updateRecord["min_num"] = typedValue.MinNumeric
-			updateRecord["min_time"] = typedValue.MinTime
-			updateRecord["min_date"] = typedValue.MinDate
-			updateRecord["min_datetime"] = typedValue.MinDateTime
-		}
-		if isStorableLexical(rangeElem.ValueType(), rangeElem.Max()) {
-			updateRecord["max_text"] = typedValue.MaxText
-			updateRecord["max_num"] = typedValue.MaxNumeric
-			updateRecord["max_time"] = typedValue.MaxTime
-			updateRecord["max_date"] = typedValue.MaxDate
-			updateRecord["max_datetime"] = typedValue.MaxDateTime
-		}
-
+	valueType := rangeElem.ValueType()
+	value, err := MapRangeValueByType(valueType, rangeElem.Min(), rangeElem.Max())
+	if err != nil {
+		return nil, err
 	}
-	return updateRecord, nil
+	record := goqu.Record{"value_type": valueType}
+	if isPut || isStorableLexical(valueType, rangeElem.Min()) {
+		setRangeBound(record, "min", value.MinText, value.MinNumeric)
+	}
+	if isPut || isStorableLexical(valueType, rangeElem.Max()) {
+		setRangeBound(record, "max", value.MaxText, value.MaxNumeric)
+	}
+	return record, nil
+}
+
+// setRangeBound writes the text and numeric columns of one Range bound into an update record.
+func setRangeBound(record goqu.Record, bound string, text, numeric sql.NullString) {
+	record[bound+"_text"] = text
+	record[bound+"_num"] = numeric
+}
+
+// rangeUpdateTypeGuard returns a WHERE condition that rejects an update which omits a bound
+// while the stored Range has a different valueType and a value for that bound. Checking it in
+// the same UPDATE prevents a stale PATCH from applying a new valueType to a concurrently
+// written bound. It returns nil when the record writes both bounds.
+func rangeUpdateTypeGuard(record goqu.Record) exp.Expression {
+	omittedBounds := goqu.Ex{}
+	for _, bound := range []string{"min", "max"} {
+		if _, written := record[bound+"_text"]; written {
+			continue
+		}
+		omittedBounds[bound+"_text"] = nil
+		omittedBounds[bound+"_num"] = nil
+	}
+	if len(omittedBounds) == 0 {
+		return nil
+	}
+	return goqu.Or(goqu.C("value_type").Eq(record["value_type"]), omittedBounds)
 }

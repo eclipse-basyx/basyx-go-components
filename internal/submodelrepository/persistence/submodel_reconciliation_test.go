@@ -361,12 +361,14 @@ func TestReconciliationPlanOnlyUpdatesChangedNestedElement(t *testing.T) {
 	require.Empty(t, plan.Deletes)
 }
 
-func TestReconciliationPlanCanonicalizesDateTimePropertyValues(t *testing.T) {
+func TestReconciliationPlanDetectsDateTimeLexicalChanges(t *testing.T) {
 	submitted := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"lastUpdate","modelType":"Property","valueType":"xs:dateTime","value":"2026-08-07T11:16:26.125183291Z"}]}`)
 	persisted := readReconciliationJSON(t, `{"id":"sm","modelType":"Submodel","submodelElements":[{"idShort":"lastUpdate","modelType":"Property","valueType":"xs:dateTime","value":"2026-08-07T11:16:26.125183+00:00"}]}`)
 
 	plan := buildReconciliationPlanForTest(t, persisted, submitted)
-	require.False(t, plan.hasLiveMutation())
+	require.Len(t, plan.Updates, 1)
+	require.True(t, plan.Updates[0].Changes.TypeData)
+	require.False(t, buildReconciliationPlanForTest(t, submitted, submitted).hasLiveMutation())
 }
 
 func TestReconciliationQueryParameterCountIsConstantAtScale(t *testing.T) {

@@ -170,14 +170,14 @@ func TestLogicalExpression_SM_WithCasts(t *testing.T) {
 	if !strings.Contains(sql, "::double precision") {
 		t.Fatalf("expected double precision cast in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "::time") {
+	if !strings.Contains(sql, "'time without time zone'") && !strings.Contains(sql, "'1972-12-31T' ||") {
 		t.Fatalf("expected time cast in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " 5") {
 		t.Fatalf("expected SQL to contain %q, got: %s", " 5", sql)
 	}
-	if !strings.Contains(sql, "'12:00:00Z'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'12:00:00Z'", sql)
+	if !strings.Contains(sql, "'1972-12-31T12:00:00Z'") {
+		t.Fatalf("expected the time literal as an instant on the XPath reference date, got: %s", sql)
 	}
 }
 

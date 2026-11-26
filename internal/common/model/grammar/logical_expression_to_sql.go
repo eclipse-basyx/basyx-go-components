@@ -34,6 +34,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1091,6 +1092,8 @@ type ResolvedFieldPathCollector struct {
 	matchFragment                *FragmentStringPattern
 	smeRowAlias                  string
 	fieldValueDecorator          FieldValueDecorator
+	authorizationPolicy          bool
+	preserveUnknownConditions    bool
 	root                         CollectorRoot
 	// ownerRoot is the semantic resource owning the rows of a nested
 	// collector without a root of its own, correlated by the non-MATCH key.
@@ -1162,6 +1165,26 @@ func (c *ResolvedFieldPathCollector) WithoutFieldValueDecorator() *ResolvedField
 	}
 	clone := *c
 	clone.fieldValueDecorator = nil
+	return &clone
+}
+
+// ForAuthorizationPolicy marks a collector for evaluating trusted policy
+// conditions, where an indeterminate comparison must fail closed.
+func (c *ResolvedFieldPathCollector) ForAuthorizationPolicy() *ResolvedFieldPathCollector {
+	if c == nil || c.authorizationPolicy {
+		return c
+	}
+	clone := *c
+	clone.authorizationPolicy = true
+	return &clone
+}
+
+func (c *ResolvedFieldPathCollector) forNegation() *ResolvedFieldPathCollector {
+	if c == nil || !c.authorizationPolicy || c.preserveUnknownConditions {
+		return c
+	}
+	clone := *c
+	clone.preserveUnknownConditions = true
 	return &clone
 }
 
@@ -1716,6 +1739,8 @@ func toSQLResolvedFieldOrValue(
 		return nil, nil, fmt.Errorf("GRAMMAR-SQLOPERAND-ATTRIBUTE: attribute operands are not supported in SQL evaluation")
 	}
 	switch {
+	case operand.StrCast != nil && isTemporalOperand(*operand.StrCast):
+		return temporalStringCastToSQL(operand.StrCast, position, collector)
 	case operand.StrCast != nil:
 		return castResolvedOperandToSQL(operand.StrCast, position, "text", collector)
 	case operand.NumCast != nil:
@@ -1726,8 +1751,10 @@ func toSQLResolvedFieldOrValue(
 		return castResolvedOperandToSQL(operand.TimeCast, position, "time", collector)
 	case operand.DateTimeCast != nil:
 		return castResolvedOperandToSQL(operand.DateTimeCast, position, "timestamptz", collector)
+	case operand.HexCast != nil && isTemporalOperand(*operand.HexCast):
+		return temporalHexCastToSQL(operand.HexCast, position, collector)
 	case operand.HexCast != nil:
-		return castResolvedOperandToSQL(operand.HexCast, position, "text", collector)
+		return castResolvedOperandToSQL(operand.HexCast, position, "hex", collector)
 	case operand.Year != nil:
 		return datePartResolvedOperandToSQL(operand.Year, position, "YEAR", collector)
 	case operand.Month != nil:
@@ -1738,6 +1765,14 @@ func toSQLResolvedFieldOrValue(
 		return datePartResolvedOperandToSQL(operand.DayOfWeek, position, "DOW", collector)
 	case operand.Field != nil:
 		return decoratedFieldToSQL(*operand.Field, collector)
+	case operand.DateTimeVal != nil:
+		return dateTimeLiteralSQLValue(time.Time(*operand.DateTimeVal)), nil, nil
+	case operand.TimeVal != nil:
+		t, ok := parseTimeLiteral(string(*operand.TimeVal))
+		if !ok {
+			return nil, nil, fmt.Errorf("GRAMMAR-SQLOPERAND-TIMEVAL: invalid $timeVal %q", string(*operand.TimeVal))
+		}
+		return goqu.L("?::timestamptz", normalizeTime(t)), nil, nil
 	default:
 		return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil, nil
 	}
@@ -1772,22 +1807,157 @@ func decoratedFieldToSQL(f ModelStringPattern, collector *ResolvedFieldPathColle
 }
 
 func castResolvedOperandToSQL(inner *Value, position, targetType string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	if targetType == "time" && isDateTimeOperand(*inner) {
+		return timeOfDateTimeOperandToSQL(inner, position, collector)
+	}
+	if text, ok := literalCastInputText(*inner); ok {
+		return safeCastSQLValue(goqu.V(text), targetType), nil, nil
+	}
 	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
 	if err != nil {
 		return nil, nil, err
+	}
+	if isTimestampField(*inner) {
+		return timestampFieldCastSQLValue(sqlValue, targetType), resolved, nil
 	}
 	return safeCastSQLValue(sqlValue, targetType), resolved, nil
 }
 
-func datePartResolvedOperandToSQL(inner *Value, position, part string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+// literalCastInputText returns the text a cast reads from a number or boolean literal. Binding
+// that text instead of the Go value lets prepared statements encode it as text and keeps a
+// negative number from rendering as "-1::text" in interpolated SQL. The number format matches
+// constant folding.
+func literalCastInputText(v Value) (string, bool) {
+	switch {
+	case v.NumVal != nil:
+		return strconv.FormatFloat(*v.NumVal, 'g', -1, 64), true
+	case v.Boolean != nil:
+		return strconv.FormatBool(*v.Boolean), true
+	default:
+		return "", false
+	}
+}
+
+// timestampFieldCastSQLValue casts a TIMESTAMPTZ field, whose value is the xs:dateTime in UTC.
+// A date-time cast keeps the column itself, so its index stays usable, and a string cast
+// yields the XPath canonical text with "Z".
+func timestampFieldCastSQLValue(sqlValue interface{}, targetType string) interface{} {
+	switch targetType {
+	case "timestamptz":
+		return sqlValue
+	case "text":
+		return goqu.Func("regexp_replace", timestampFieldText(sqlValue), `\+00:00$`, "Z")
+	default:
+		return safeCastSQLValue(timestampFieldText(sqlValue), targetType)
+	}
+}
+
+// timeOfDateTimeOperandToSQL casts an xs:dateTime operand to xs:time, keeping its local clock time and timezone.
+func timeOfDateTimeOperandToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	if inner.DateTimeVal != nil {
+		return goqu.L("?::timestamptz", normalizeTime(timeOfDateTime(time.Time(*inner.DateTimeVal)))), nil, nil
+	}
+	timeText, resolved, err := timeOperandTextToSQL(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	return timeInstantSQLValue(timeText), resolved, nil
+}
+
+// timeOperandTextToSQL returns validated xs:time text of the operand of a $timeCast.
+func timeOperandTextToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+	switch {
+	case inner.DateTimeVal != nil:
+		return goqu.L("?::text", canonicalTimeString(timeOfDateTime(time.Time(*inner.DateTimeVal)))), nil, nil
+	case isDateTimeOperand(*inner):
+		dateTimeText, resolved, err := dateTimeOperandTextToSQL(inner, position, collector)
+		if err != nil {
+			return nil, nil, err
+		}
+		return timeTextOfDateTimeSQLValue(dateTimeText), resolved, nil
+	}
 	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
 	if err != nil {
 		return nil, nil, err
 	}
-	if inner.DateTimeCast == nil {
-		sqlValue = safeCastSQLValue(sqlValue, "timestamptz")
+	if isTimestampField(*inner) {
+		sqlValue = timestampFieldText(sqlValue)
 	}
-	return goqu.L("EXTRACT("+part+" FROM ?)", sqlValue), resolved, nil
+	return xsdTimeSQLText(sqlValue), resolved, nil
+}
+
+// datePartResolvedOperandToSQL extracts a calendar part in the operand's own timezone, as XSD defines it.
+func datePartResolvedOperandToSQL(inner *Value, position, part string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	if inner.DateTimeVal != nil {
+		value, _ := extractDatePart(time.Time(*inner.DateTimeVal), part)
+		return goqu.L("?::numeric", value), nil, nil
+	}
+	dateTimeText, resolved, err := dateTimeOperandTextToSQL(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	return goqu.L("EXTRACT("+part+" FROM ?)", localDateTimeSQLValue(dateTimeText)), resolved, nil
+}
+
+// dateTimeOperandTextToSQL returns validated xs:dateTime text of a $dateTimeCast or of an operand cast implicitly.
+func dateTimeOperandTextToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+	if inner.DateTimeCast != nil {
+		inner = inner.DateTimeCast
+	}
+	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	if isTimestampField(*inner) {
+		sqlValue = timestampFieldText(sqlValue)
+	}
+	return xsdDateTimeSQLText(sqlValue), resolved, nil
+}
+
+// temporalStringCastToSQL casts a date-time or time operand to xs:string the way XPath does.
+func temporalStringCastToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	switch {
+	case inner.DateTimeVal != nil, inner.TimeVal != nil:
+		text, ok := stringOperandValue(literalTemporalValue(*inner))
+		if !ok {
+			return goqu.L("NULL::text"), nil, nil
+		}
+		return goqu.L("?::text", text), nil, nil
+	case inner.TimeCast != nil:
+		timeText, resolved, err := timeOperandTextToSQL(inner.TimeCast, position, collector)
+		if err != nil {
+			return nil, nil, err
+		}
+		return canonicalTimeSQLText(timeText), resolved, nil
+	}
+	dateTimeText, resolved, err := dateTimeOperandTextToSQL(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	return canonicalDateTimeSQLText(dateTimeText), resolved, nil
+}
+
+// temporalHexCastToSQL renders $hexCast of a date-time or time, a type error in XPath, as NULL.
+// It still renders the operand so that its fields keep their joins and visibility decoration.
+func temporalHexCastToSQL(inner *Value, position string, collector *ResolvedFieldPathCollector) (interface{}, []ResolvedFieldPath, error) {
+	sqlValue, resolved, err := toSQLResolvedFieldOrValue(inner, position, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	return goqu.L("(NULL::text || (?)::text)", sqlValue), resolved, nil
+}
+
+// literalTemporalValue returns the value of a $dateTimeVal or $timeVal operand.
+func literalTemporalValue(v Value) any {
+	if v.DateTimeVal != nil {
+		return *v.DateTimeVal
+	}
+	return *v.TimeVal
+}
+
+// isTemporalOperand reports whether a value is a date-time or time literal or cast.
+func isTemporalOperand(v Value) bool {
+	return v.DateTimeVal != nil || v.DateTimeCast != nil || v.TimeVal != nil || v.TimeCast != nil
 }
 
 func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
@@ -2287,6 +2457,21 @@ func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFie
 
 type binaryOperationValidator func(leftOperand, rightOperand *Value) error
 
+// resolvedSQLPredicate is a rendered condition with the fields it reads.
+// mayBeUnknown marks a condition that can evaluate to SQL NULL, such as a failed
+// temporal cast or an indeterminate term; under authorization-policy negation it
+// keeps that unknown result instead of collapsing it to false inside EXISTS.
+type resolvedSQLPredicate struct {
+	expression   exp.Expression
+	fields       []ResolvedFieldPath
+	mayBeUnknown bool
+}
+
+func (p resolvedSQLPredicate) apply(collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+	preserveUnknown := p.mayBeUnknown && collector != nil && collector.preserveUnknownConditions
+	return applyCollectorToResolvedExpression(p.expression, p.fields, collector, true, preserveUnknown)
+}
+
 func handleBinaryOperationWithoutApply(
 	leftOperand, rightOperand *Value,
 	operation string,
@@ -2294,9 +2479,9 @@ func handleBinaryOperationWithoutApply(
 	fieldToFieldErr error,
 	build func(left interface{}, right interface{}, operation string) (exp.Expression, error),
 	validate binaryOperationValidator,
-) (exp.Expression, []ResolvedFieldPath, error) {
+) (resolvedSQLPredicate, error) {
 	if leftOperand == nil || rightOperand == nil {
-		return nil, nil, fmt.Errorf("binary operation operands must not be nil")
+		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLBINARY-NILOPERAND: binary operation operands must not be nil")
 	}
 
 	leftOperand = cloneValueForSQL(leftOperand)
@@ -2305,31 +2490,38 @@ func handleBinaryOperationWithoutApply(
 	normalizeSemanticShorthand(rightOperand)
 
 	if valueContainsField(*leftOperand) && valueContainsField(*rightOperand) {
-		return nil, nil, fieldToFieldErr
+		return resolvedSQLPredicate{}, fieldToFieldErr
+	}
+	if isComparisonOperation(operation) {
+		castFieldToTypedOperand(leftOperand, rightOperand)
+		castFieldToTypedOperand(rightOperand, leftOperand)
 	}
 
 	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, "left", collector)
 	if err != nil {
-		return nil, nil, err
+		return resolvedSQLPredicate{}, err
 	}
 	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, "right", collector)
 	if err != nil {
-		return nil, nil, err
+		return resolvedSQLPredicate{}, err
 	}
 
 	if validate != nil {
 		if err := validate(leftOperand, rightOperand); err != nil {
-			return nil, nil, err
+			return resolvedSQLPredicate{}, err
 		}
 	}
 
 	opExpr, err := build(leftSQL, rightSQL, operation)
 	if err != nil {
-		return nil, nil, err
+		return resolvedSQLPredicate{}, err
 	}
 
-	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
-	return opExpr, resolved, nil
+	return resolvedSQLPredicate{
+		expression:   opExpr,
+		fields:       collectResolvedFieldPaths(leftResolved, rightResolved),
+		mayBeUnknown: containsFallibleCast(leftOperand) || containsFallibleCast(rightOperand) || operation == "$regex",
+	}, nil
 }
 
 func handleBinaryOperationWithCollector(
@@ -2340,26 +2532,19 @@ func handleBinaryOperationWithCollector(
 	build func(left interface{}, right interface{}, operation string) (exp.Expression, error),
 	validate binaryOperationValidator,
 ) (exp.Expression, []ResolvedFieldPath, error) {
-	expression, resolved, err := handleBinaryOperationWithoutApply(leftOperand, rightOperand, operation, collector, fieldToFieldErr, build, validate)
+	predicate, err := handleBinaryOperationWithoutApply(leftOperand, rightOperand, operation, collector, fieldToFieldErr, build, validate)
 	if err != nil {
 		return nil, nil, err
 	}
-	return applyCollectorToResolvedExpression(expression, resolved, collector)
+	return predicate.apply(collector)
 }
 
 func applyCollectorToResolvedExpression(
 	expression exp.Expression,
 	resolved []ResolvedFieldPath,
 	collector *ResolvedFieldPathCollector,
-) (exp.Expression, []ResolvedFieldPath, error) {
-	return applyCollectorToResolvedExpressionWithVisibility(expression, resolved, collector, true)
-}
-
-func applyCollectorToResolvedExpressionWithVisibility(
-	expression exp.Expression,
-	resolved []ResolvedFieldPath,
-	collector *ResolvedFieldPathCollector,
 	includeVisibility bool,
+	preserveUnknown bool,
 ) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(resolved) == 0 {
 		return expression, nil, nil
@@ -2373,7 +2558,7 @@ func applyCollectorToResolvedExpressionWithVisibility(
 		return andBindingsForResolvedFieldPaths(resolved, expression), resolved, nil
 	}
 	if collector != nil && resolvedNeedsCTE(resolved) {
-		existsExpr, err := buildInlineExistsExpression(resolved, expression, collector)
+		existsExpr, err := resolvedPredicateExists(resolved, expression, collector, preserveUnknown)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -2388,6 +2573,28 @@ func applyCollectorToResolvedExpressionWithVisibility(
 	return expression, resolved, nil
 }
 
+// EXISTS otherwise turns an indeterminate cast on a candidate into a known
+// false result that a negated authorization condition could turn into true.
+func resolvedPredicateExists(
+	resolved []ResolvedFieldPath,
+	expression exp.Expression,
+	collector *ResolvedFieldPathCollector,
+	preserveUnknown bool,
+) (exp.Expression, error) {
+	match, err := buildInlineExistsExpression(resolved, expression, collector)
+	if err != nil || !preserveUnknown {
+		return match, err
+	}
+	unknown, err := buildInlineExistsExpression(resolved, goqu.L("(?) IS NULL", expression), collector)
+	if err != nil {
+		return nil, err
+	}
+	return goqu.Case().
+		When(match, goqu.L("TRUE")).
+		When(unknown, goqu.L("NULL::boolean")).
+		Else(goqu.L("FALSE")), nil
+}
+
 func evaluateStandaloneBoolCast(
 	operand *Value,
 	collector *ResolvedFieldPathCollector,
@@ -2398,7 +2605,8 @@ func evaluateStandaloneBoolCast(
 		return nil, nil, err
 	}
 
-	return applyCollectorToResolvedExpression(goqu.L("?", sqlValue), resolved, collector)
+	predicate := resolvedSQLPredicate{expression: goqu.L("?", sqlValue), fields: resolved, mayBeUnknown: containsFallibleCast(&boolOperand)}
+	return predicate.apply(collector)
 }
 
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
@@ -2464,11 +2672,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Match) > 0 {
-		expr, resolved, err := evaluateMatchExpressions(le.Match, collector)
+		predicate, err := evaluateMatchExpressions(le.Match, collector)
 		if err != nil {
 			return nil, nil, err
 		}
-		return applyCollectorToResolvedExpression(expr, resolved, collector)
+		return predicate.apply(collector)
 	}
 
 	if le.BoolCast != nil {
@@ -2491,7 +2699,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Or) > 0 {
-		if collector != nil && collector.fieldValueDecorator == nil {
+		if collector != nil && collector.fieldValueDecorator == nil && !collector.preserveUnknownConditions {
 			var combined []exp.Expression
 			var sharedResolved []ResolvedFieldPath
 			canGroup := true
@@ -2539,7 +2747,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if le.Not != nil {
-		expr, resolved, err := le.Not.EvaluateToExpression(collector)
+		expr, resolved, err := le.Not.EvaluateToExpression(collector.forNegation())
 		if err != nil {
 			return nil, nil, fmt.Errorf("error evaluating NOT condition: %w", err)
 		}
@@ -2548,10 +2756,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		if witness == nil {
 			return negated, resolved, nil
 		}
-		availability, _, err := applyCollectorToResolvedExpressionWithVisibility(
+		availability, _, err := applyCollectorToResolvedExpression(
 			witness,
 			resolved,
 			collector,
+			false,
 			false,
 		)
 		if err != nil {
@@ -2620,29 +2829,33 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 	return goqu.Or(mainExpr, fragmentGuard), resolved, nil
 }
 
-func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+// evaluateMatchExpressions renders the terms of a $match that must hold for the same element.
+func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(match) == 0 {
-		return nil, nil, fmt.Errorf("match expression list is empty")
+		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-EMPTY: match expression list is empty")
 	}
 	var expressions []exp.Expression
-	var resolved []ResolvedFieldPath
+	var predicate resolvedSQLPredicate
 	for i, m := range match {
-		expr, childResolved, err := evaluateMatchExpressionSQL(m, collector)
+		child, err := evaluateMatchExpressionSQL(m, collector)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error evaluating match expression at index %d: %w", i, err)
+			return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-EVALTERM: error evaluating match expression at index %d: %w", i, err)
 		}
-		expressions = append(expressions, expr)
-		resolved = append(resolved, childResolved...)
+		expressions = append(expressions, child.expression)
+		predicate.fields = append(predicate.fields, child.fields...)
+		predicate.mayBeUnknown = predicate.mayBeUnknown || child.mayBeUnknown
 	}
-	return goqu.And(expressions...), resolved, nil
+	predicate.expression = goqu.And(expressions...)
+	return predicate, nil
 }
 
-func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+// evaluateMatchExpressionSQL renders one $match term as an SQL predicate.
+func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if me.Indeterminate {
-		return goqu.L("NULL::boolean"), nil, nil
+		return resolvedSQLPredicate{expression: goqu.L("NULL::boolean"), mayBeUnknown: true}, nil
 	}
 	if me.Boolean != nil {
-		return goqu.L("?::boolean", *me.Boolean), nil, nil
+		return resolvedSQLPredicate{expression: goqu.L("?::boolean", *me.Boolean)}, nil
 	}
 	if len(me.Eq) > 0 {
 		return evaluateMatchComparison(me.Eq, "$eq", collector)
@@ -2677,12 +2890,13 @@ func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPath
 	if len(me.Match) > 0 {
 		return evaluateMatchExpressions(me.Match, collector)
 	}
-	return nil, nil, fmt.Errorf("match expression has no valid operation")
+	return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-NOOPERATION: match expression has no valid operation")
 }
 
-func evaluateMatchComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+// evaluateMatchComparison renders a comparison inside a $match.
+func evaluateMatchComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(operands) != 2 {
-		return nil, nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
+		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-COMPAREARITY: comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
 	}
 	leftOperand := &operands[0]
 	rightOperand := &operands[1]
@@ -2701,9 +2915,10 @@ func evaluateMatchComparison(operands []Value, operation string, collector *Reso
 	)
 }
 
-func evaluateMatchStringOperation(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+// evaluateMatchStringOperation renders a string operation inside a $match.
+func evaluateMatchStringOperation(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (resolvedSQLPredicate, error) {
 	if len(items) != 2 {
-		return nil, nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
+		return resolvedSQLPredicate{}, fmt.Errorf("GRAMMAR-SQLMATCH-STRINGARITY: string operation %s requires exactly 2 operands, got %d", operation, len(items))
 	}
 	leftOperand := stringValueToValue(items[0])
 	rightOperand := stringValueToValue(items[1])
@@ -2907,6 +3122,28 @@ func normalizeSemanticShorthand(operand *Value) {
 	}
 }
 
+// isComparisonOperation reports whether an operation is $eq, $ne, $gt, $ge, $lt, or $le.
+func isComparisonOperation(operation string) bool {
+	switch operation {
+	case "$eq", "$ne", "$gt", "$ge", "$lt", "$le":
+		return true
+	default:
+		return false
+	}
+}
+
+// castFieldToTypedOperand casts an uncast field compared with a date-time, time, number,
+// boolean, or hex operand to that type, as the query language requires for FieldIdentifiers. SQL
+// generation applies it even when the simplifier's implicit casts are disabled: PostgreSQL
+// cannot compare text with the first four types, and hex values must be normalized like
+// constant folding does.
+func castFieldToTypedOperand(field *Value, other *Value) {
+	switch kind := other.EffectiveTypeWithCast(); kind {
+	case KindDateTime, KindTime, KindNumber, KindBool, KindHex:
+		*field = WrapCastAroundField(*field, kind)
+	}
+}
+
 // buildComparisonExpression is a helper function to build comparison expressions
 func buildComparisonExpression(left interface{}, right interface{}, operation string) (exp.Expression, error) {
 	switch operation {
@@ -2935,17 +3172,26 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 	switch targetType {
 	case "timestamptz":
-		return totalCastSQLValue(sqlValue, targetType, "timestamp with time zone")
+		return instantSQLValue(xsdDateTimeSQLText(sqlValue))
 	case "time":
-		return totalCastSQLValue(sqlValue, targetType, "time without time zone")
+		return timeInstantSQLValue(xsdTimeSQLText(sqlValue))
 	case "double precision":
 		return totalCastSQLValue(sqlValue, targetType, "double precision")
 	case "boolean":
 		return totalCastSQLValue(sqlValue, targetType, "boolean")
+	case "hex":
+		return hexCastSQLValue(sqlValue)
 	default:
 		// text/hex casts are always safe
 		return goqu.L("?::"+targetType, sqlValue)
 	}
+}
+
+// hexCastSQLValue casts an SQL value to a hex literal the way normalizeHexString does: trimmed,
+// upper case, and of the form 16#<hex digits>, or NULL otherwise.
+func hexCastSQLValue(sqlValue interface{}) exp.Expression {
+	normalized := goqu.Func("upper", goqu.Func("btrim", goqu.L("?::text", sqlValue), hexWhitespace))
+	return goqu.L("substring(? from ?)", normalized, `^16#[0-9A-F]+$`)
 }
 
 func totalCastSQLValue(sqlValue interface{}, targetType string, validationType string) exp.Expression {
@@ -2971,7 +3217,7 @@ func normalizeLiteralForSQL(v interface{}) interface{} {
 func normalizeTime(t time.Time) time.Time {
 	// Ensure location is set to avoid goqu encoding errors.
 	if t.Location() == nil {
-		return time.Unix(0, t.UnixNano()).UTC()
+		return truncateToMicroseconds(time.Unix(0, t.UnixNano()).UTC())
 	}
-	return t.UTC()
+	return truncateToMicroseconds(t.UTC())
 }

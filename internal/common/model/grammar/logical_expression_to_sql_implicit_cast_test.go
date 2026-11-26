@@ -110,6 +110,17 @@ func TestLogicalExpression_SimplifyForBackendFilter_EnumTypeString_ConvertsToNum
 	}
 }
 
+func TestLogicalExpression_SimplifyForBackendFilter_PropertyValueTypeRemainsText(t *testing.T) {
+	expression := LogicalExpression{Eq: ComparisonItems{field("$sme.Timestamp#valueType"), strVal("xs:dateTime")}}
+	simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+	if decision != SimplifyUndecided || len(simplified.Eq) != 2 {
+		t.Fatalf("expected an unresolved comparison, got %v (%v)", simplified, decision)
+	}
+	if value := simplified.Eq[1].StrVal; value == nil || string(*value) != "xs:dateTime" {
+		t.Fatalf("expected property valueType comparison against xs:dateTime as text, got %#v", simplified.Eq[1])
+	}
+}
+
 func TestLogicalExpression_SimplifyForBackendFilter_EnumTypeInvalidString_FallsBackToTextCast(t *testing.T) {
 	le := LogicalExpression{
 		Eq: ComparisonItems{
@@ -165,11 +176,56 @@ func TestLogicalExpression_SimplifyForBackendFilter_CreatedAfterUsesPostgresInpu
 		t.Fatalf("expected createdAt field to be wrapped in datetime cast, got %#v", simplified.Le[1])
 	}
 
-	sql, args := toPreparedSQLForDescriptor(t, simplified)
-	if !strings.Contains(sql, "::timestamptz") {
-		t.Fatalf("expected SQL to contain timestamptz cast, got: %s", sql)
+	sql, _ := toPreparedSQLForDescriptor(t, simplified)
+	if !strings.Contains(sql, `<= "aas_descriptor"."created_at"`) {
+		t.Fatalf("expected the TIMESTAMPTZ column to be compared directly, got SQL %s", sql)
 	}
-	if !strings.Contains(sql, "basyx_validated_cast_input") || !argListContains(args, "timestamp with time zone") {
-		t.Fatalf("expected PostgreSQL timestamp input validation, got SQL %s with args %#v", sql, args)
+}
+
+func TestLogicalExpression_SimplifyForBackendFilter_DatePartOfFieldReachesSQL(t *testing.T) {
+	day := float64(1)
+	expression := LogicalExpression{Eq: ComparisonItems{
+		{DayOfMonth: &Value{DateTimeCast: fieldValue("$sme.Timestamp#value")}},
+		{NumVal: &day},
+	}}
+	simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+	if decision != SimplifyUndecided || len(simplified.Eq) != 2 || simplified.Eq[0].DayOfMonth == nil {
+		t.Fatalf("expected the date part of a field to stay unresolved, got %#v (%v)", simplified, decision)
+	}
+	sql, _ := buildSMESQL(t, simplified)
+	if !strings.Contains(sql, "EXTRACT(DAY FROM timezone('UTC', basyx_validated_cast_input(regexp_replace(basyx_validated_cast_input(") {
+		t.Fatalf("expected the date part to be extracted in SQL, got: %s", sql)
+	}
+}
+
+func TestLogicalExpression_SimplifyForBackendFilter_DatePartOfLiteralIsEvaluated(t *testing.T) {
+	day := float64(2)
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 2, 23, 30, 0, 0, time.UTC))
+	expression := LogicalExpression{Eq: ComparisonItems{{DayOfMonth: &Value{DateTimeVal: &instant}}, {NumVal: &day}}}
+	simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+	if decision != SimplifyTrue || simplified.Boolean == nil || !*simplified.Boolean {
+		t.Fatalf("expected the date part of a literal to be evaluated, got %#v (%v)", simplified, decision)
+	}
+}
+
+func TestLogicalExpression_SimplifyForBackendFilter_DatePartsOfLiteralsUseTheirOwnTimezone(t *testing.T) {
+	instant := DateTimeLiteralPattern(time.Date(2024, 1, 1, 0, 30, 0, 0, time.FixedZone("+02:00", 2*60*60)))
+	for _, test := range []struct {
+		name string
+		part Value
+		want float64
+	}{
+		{"year", Value{Year: &Value{DateTimeVal: &instant}}, 2024},
+		{"month", Value{Month: &Value{DateTimeVal: &instant}}, 1},
+		{"dayOfMonth", Value{DayOfMonth: &Value{DateTimeVal: &instant}}, 1},
+		{"dayOfWeek", Value{DayOfWeek: &Value{DateTimeVal: &instant}}, float64(time.Monday)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			expression := LogicalExpression{Eq: ComparisonItems{test.part, {NumVal: &test.want}}}
+			simplified, decision := expression.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+			if decision != SimplifyTrue || simplified.Boolean == nil || !*simplified.Boolean {
+				t.Fatalf("expected the local %s %v, got %#v (%v)", test.name, test.want, simplified, decision)
+			}
+		})
 	}
 }

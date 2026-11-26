@@ -734,7 +734,7 @@ func convertEnumLiteralForField(field Value, lit Value) (Value, bool, bool) {
 func enumKindForResolvedColumn(column string) enumColumnKind {
 	col := strings.ToLower(strings.TrimSpace(column))
 	switch {
-	case strings.Contains(col, "value_type"):
+	case col == "value_type" || strings.HasSuffix(col, ".value_type"):
 		return enumColumnDataTypeDefXSD
 	case strings.HasSuffix(col, ".asset_kind"):
 		return enumColumnAssetKind
@@ -860,7 +860,7 @@ func valueChildren(v Value) []*Value {
 }
 
 func isLiteral(v Value) bool {
-	return v.IsValue() && !v.IsField() && v.Attribute == nil
+	return v.IsValue() && !valueContainsField(v) && v.Attribute == nil
 }
 
 func literalValueFromAny(x any) (Value, bool) {
@@ -920,12 +920,10 @@ func literalValueFromAnyWithHint(x any, hint ComparisonKind) (Value, bool) {
 			return Value{DateTimeVal: &pat}, true
 		}
 	case KindTime:
-		s := strings.TrimSpace(fmt.Sprint(x))
-		if s != "" {
-			if _, ok := toTimeOfDaySeconds(s); ok {
-				pat := TimeLiteralPattern(s)
-				return Value{TimeVal: &pat}, true
-			}
+		s := strings.Trim(fmt.Sprint(x), xsdWhitespace)
+		if _, ok := parseXSDTime(s); ok {
+			pat := TimeLiteralPattern(s)
+			return Value{TimeVal: &pat}, true
 		}
 	case KindHex:
 		if hv, ok := normalizeHexAny(x); ok {
@@ -979,8 +977,8 @@ func literalClaimValueWithHint(value any, hint ComparisonKind) (Value, bool) {
 		}
 	case KindTime:
 		if text, ok := value.(string); ok {
-			if _, valid := toTimeOfDaySeconds(text); valid {
-				pattern := TimeLiteralPattern(text)
+			if _, valid := parseXSDTime(text); valid {
+				pattern := TimeLiteralPattern(strings.Trim(text, xsdWhitespace))
 				return Value{TimeVal: &pattern}, true
 			}
 		}
@@ -1078,91 +1076,149 @@ func resolveDateTimeLiteral(v Value, resolve AttributeResolver) any {
 	case v.DateTimeVal != nil:
 		return time.Time(*v.DateTimeVal)
 	case v.TimeVal != nil:
-		tv := TimeLiteralPattern(*v.TimeVal)
-		return tv
+		return TimeLiteralPattern(*v.TimeVal)
+	}
+	if part, ok := resolveDatePart(v, resolve); ok {
+		return part
+	}
+	return nil
+}
+
+// isDatePart reports whether a value is a $year, $month, $dayOfMonth, or $dayOfWeek operator.
+func isDatePart(v Value) bool {
+	return v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil
+}
+
+// resolveDatePart evaluates $year, $month, $dayOfMonth, or $dayOfWeek in the value's own
+// timezone, as XSD defines them, matching the SQL generated for field operands.
+func resolveDatePart(v Value, resolve AttributeResolver) (float64, bool) {
+	operand, part, ok := datePartOperand(v)
+	if !ok {
+		return 0, false
+	}
+	t, ok := resolveDateTimeInstant(*operand, resolve)
+	if !ok {
+		return 0, false
+	}
+	return extractDatePart(t, part)
+}
+
+// datePartOperand returns the operand of a date-part operator and its PostgreSQL EXTRACT field.
+func datePartOperand(v Value) (*Value, string, bool) {
+	switch {
 	case v.Year != nil:
-		if t, ok := resolveDateTimeValue(*v.Year, resolve); ok {
-			return float64(t.Year())
-		}
-		return nil
+		return v.Year, "YEAR", true
 	case v.Month != nil:
-		if t, ok := resolveDateTimeValue(*v.Month, resolve); ok {
-			return float64(int(t.Month()))
-		}
-		return nil
+		return v.Month, "MONTH", true
 	case v.DayOfMonth != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfMonth, resolve); ok {
-			return float64(t.Day())
-		}
-		return nil
+		return v.DayOfMonth, "DAY", true
 	case v.DayOfWeek != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfWeek, resolve); ok {
-			return float64(int(t.Weekday()))
-		}
-		return nil
+		return v.DayOfWeek, "DOW", true
+	default:
+		return nil, "", false
+	}
+}
+
+func resolveCastValue(v Value, resolve AttributeResolver) any {
+	if literal, isClaim := resolveClaimCast(v, resolve); isClaim {
+		return literal
+	}
+	switch {
+	case v.StrCast != nil:
+		return resolveStrCast(*v.StrCast, resolve)
+	case v.NumCast != nil:
+		return resolveNumCast(resolveValue(*v.NumCast, resolve))
+	case v.BoolCast != nil:
+		return valueOrNil(boolOperandValue(resolveValue(*v.BoolCast, resolve)))
+	case v.TimeCast != nil:
+		return resolveTimeCastOperand(*v.TimeCast, resolve)
+	case v.DateTimeCast != nil:
+		return valueOrNil(toDateTime(resolveValue(*v.DateTimeCast, resolve)))
+	case v.HexCast != nil:
+		hex, ok := normalizeHexAny(resolveValue(*v.HexCast, resolve))
+		return valueOrNil(HexLiteralPattern(hex), ok)
 	default:
 		return nil
 	}
 }
 
-func resolveCastValue(v Value, resolve AttributeResolver) any {
-	if kind, operand, ok := castOperand(v); ok {
-		if claim, isClaim := resolveValue(*operand, resolve).(ClaimValue); isClaim {
-			literal, valid := literalClaimValueWithHint(claim.Value, kind)
-			if !valid {
-				return nil
-			}
-			return resolveValue(literal, resolve)
-		}
+// resolveClaimCast casts a claim operand with the strict claim typing; isClaim reports whether
+// the operand was a claim.
+func resolveClaimCast(v Value, resolve AttributeResolver) (literal any, isClaim bool) {
+	kind, operand, ok := castOperand(v)
+	if !ok {
+		return nil, false
 	}
-	switch {
-	case v.StrCast != nil:
-		value, ok := stringOperandValue(resolveValue(*v.StrCast, resolve))
-		if !ok {
-			return nil
-		}
-		return value
-	case v.NumCast != nil:
-		x := resolveValue(*v.NumCast, resolve)
-		if f, ok := toFloat(x); ok {
-			return f
-		}
-		if s, ok := x.(string); ok {
-			if f, err := strconv.ParseFloat(s, 64); err == nil {
-				return f
-			}
-		}
-		return x
-	case v.BoolCast != nil:
-		value, ok := boolOperandValue(resolveValue(*v.BoolCast, resolve))
-		if !ok {
-			return nil
-		}
-		return value
-	case v.TimeCast != nil:
-		inner := resolveValue(*v.TimeCast, resolve)
-		if t, ok := toDateTime(inner); ok {
-			return TimeLiteralPattern(t.Format("15:04:05.999999999Z07:00"))
-		}
-		if s := fmt.Sprint(inner); s != "" {
-			if _, ok := toTimeOfDaySeconds(s); ok {
-				return TimeLiteralPattern(s)
-			}
+	claim, isClaim := resolveValue(*operand, resolve).(ClaimValue)
+	if !isClaim {
+		return nil, false
+	}
+	value, valid := literalClaimValueWithHint(claim.Value, kind)
+	if !valid {
+		return nil, true
+	}
+	return resolveValue(value, resolve), true
+}
+
+// resolveStrCast casts an operand to xs:string. Time globals such as LOCALNOW are xs:dateTime
+// values and take their XPath canonical form.
+func resolveStrCast(operand Value, resolve AttributeResolver) any {
+	raw := resolveValue(operand, resolve)
+	if !isDateTimeAttributeOperand(operand) {
+		return valueOrNil(stringOperandValue(raw))
+	}
+	instant, ok := toDateTime(raw)
+	if !ok {
+		return nil
+	}
+	return valueOrNil(canonicalDateTimeString(instant))
+}
+
+// resolveNumCast casts a resolved operand to a number. A date-time or time, and any value that
+// is not a number, yields nil, like the PostgreSQL cast in SQL generation.
+func resolveNumCast(raw any) any {
+	if isTemporalValue(raw) {
+		return nil
+	}
+	if f, ok := toFloat(raw); ok {
+		return f
+	}
+	return nil
+}
+
+// valueOrNil returns value when ok is true and nil otherwise.
+func valueOrNil[T any](value T, ok bool) any {
+	if !ok {
+		return nil
+	}
+	return value
+}
+
+// resolveTimeCastOperand casts an operand to xs:time: a date-time keeps its clock time and
+// timezone, and a string must be in the xs:time lexical space.
+func resolveTimeCastOperand(v Value, resolve AttributeResolver) any {
+	raw := resolveValue(v, resolve)
+	if isDateTimeOperand(v) {
+		if t, ok := toDateTime(raw); ok {
+			return TimeLiteralPattern(canonicalTimeString(timeOfDateTime(t)))
 		}
 		return nil
-	case v.DateTimeCast != nil:
-		inner := resolveValue(*v.DateTimeCast, resolve)
-		if t, ok := toDateTime(inner); ok {
-			return t
-		}
-		return nil
-	case v.HexCast != nil:
-		if hv, ok := normalizeHexAny(resolveValue(*v.HexCast, resolve)); ok {
-			return HexLiteralPattern(hv)
-		}
-		return nil
+	}
+	text := strings.Trim(fmt.Sprint(raw), xsdWhitespace)
+	if _, ok := parseXSDTime(text); ok {
+		return TimeLiteralPattern(text)
+	}
+	return nil
+}
+
+// isTemporalValue reports whether a resolved operand is an xs:dateTime or xs:time value, which
+// XPath cannot cast to a number.
+func isTemporalValue(value any) bool {
+	switch value.(type) {
+	case time.Time, DateTimeLiteralPattern, *DateTimeLiteralPattern, TimeLiteralPattern:
+		return true
 	default:
-		return nil
+		return false
 	}
 }
 
@@ -1319,7 +1375,7 @@ func orderedCmp(left, right Value, resolve AttributeResolver, op string) (bool, 
 		if !lok || !rok {
 			return false, false
 		}
-		return compareInts(lv, rv, op), true
+		return compareTimes(lv, rv, op), true
 	case KindDateTime:
 		lv, lok := resolveDateTimeValue(left, resolve)
 		rv, rok := resolveDateTimeValue(right, resolve)
@@ -1365,7 +1421,7 @@ func eqCmp(left, right Value, resolve AttributeResolver, negate bool) (bool, boo
 		lv, lok := resolveTimeValue(left, resolve)
 		rv, rok := resolveTimeValue(right, resolve)
 		valid = lok && rok
-		equal = valid && lv == rv
+		equal = valid && lv.Equal(rv)
 	case KindHex:
 		lv, lok := resolveHexValue(left, resolve)
 		rv, rok := resolveHexValue(right, resolve)
@@ -1398,26 +1454,8 @@ func resolveNumberValue(v Value, resolve AttributeResolver) (float64, bool) {
 	switch {
 	case v.NumVal != nil:
 		return *v.NumVal, true
-	case v.Year != nil:
-		if t, ok := resolveDateTimeValue(*v.Year, resolve); ok {
-			return float64(t.Year()), true
-		}
-		return 0, false
-	case v.Month != nil:
-		if t, ok := resolveDateTimeValue(*v.Month, resolve); ok {
-			return float64(int(t.Month())), true
-		}
-		return 0, false
-	case v.DayOfMonth != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfMonth, resolve); ok {
-			return float64(t.Day()), true
-		}
-		return 0, false
-	case v.DayOfWeek != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfWeek, resolve); ok {
-			return float64(int(t.Weekday())), true
-		}
-		return 0, false
+	case isDatePart(v):
+		return resolveDatePart(v, resolve)
 	case v.NumCast != nil:
 		raw := resolveValue(*v.NumCast, resolve)
 		if f, ok := toFloat(raw); ok {
@@ -1439,6 +1477,12 @@ func resolveNumberValue(v Value, resolve AttributeResolver) (float64, bool) {
 }
 
 func resolveDateTimeValue(v Value, resolve AttributeResolver) (time.Time, bool) {
+	t, ok := resolveDateTimeInstant(v, resolve)
+	return truncateToMicroseconds(t), ok
+}
+
+// resolveDateTimeInstant resolves a date-time operand without truncating it to microseconds.
+func resolveDateTimeInstant(v Value, resolve AttributeResolver) (time.Time, bool) {
 	switch {
 	case v.DateTimeVal != nil:
 		return time.Time(*v.DateTimeVal), true
@@ -1449,19 +1493,17 @@ func resolveDateTimeValue(v Value, resolve AttributeResolver) (time.Time, bool) 
 	}
 }
 
-func resolveTimeValue(v Value, resolve AttributeResolver) (int, bool) {
-	switch {
-	case v.TimeVal != nil:
-		return toTimeOfDaySeconds(*v.TimeVal)
-	case v.TimeCast != nil:
-		raw := resolveValue(*v.TimeCast, resolve)
-		if dt, ok := toDateTime(raw); ok {
-			return dt.Hour()*3600 + dt.Minute()*60 + dt.Second(), true
-		}
-		return toTimeOfDaySeconds(raw)
+// resolveTimeValue returns an xs:time operand as an instant on the XPath reference date.
+func resolveTimeValue(v Value, resolve AttributeResolver) (time.Time, bool) {
+	var t time.Time
+	var ok bool
+	switch raw := resolveValue(v, resolve).(type) {
+	case TimeLiteralPattern:
+		t, ok = parseTimeLiteral(string(raw))
 	default:
-		return toTimeOfDaySeconds(resolveValue(v, resolve))
+		t, ok = parseXSDTime(fmt.Sprint(raw))
 	}
+	return truncateToMicroseconds(t), ok
 }
 
 func resolveHexValue(v Value, resolve AttributeResolver) (string, bool) {
@@ -1531,6 +1573,18 @@ func stringArrayOperand(value Value, resolve AttributeResolver) ([]string, bool,
 }
 
 func stringOperandValue(value any) (string, bool) {
+	switch temporal := value.(type) {
+	case time.Time:
+		return canonicalDateTimeString(temporal)
+	case DateTimeLiteralPattern:
+		return canonicalDateTimeString(time.Time(temporal))
+	case TimeLiteralPattern:
+		t, ok := parseTimeLiteral(string(temporal))
+		if !ok {
+			return "", false
+		}
+		return canonicalTimeString(t), true
+	}
 	if value == nil || isStructuredValue(value) {
 		return "", false
 	}
@@ -1538,21 +1592,6 @@ func stringOperandValue(value any) (string, bool) {
 }
 
 func compareFloats(a, b float64, op string) bool {
-	switch op {
-	case "gt":
-		return a > b
-	case "ge":
-		return a >= b
-	case "lt":
-		return a < b
-	case "le":
-		return a <= b
-	default:
-		return false
-	}
-}
-
-func compareInts(a, b int, op string) bool {
 	switch op {
 	case "gt":
 		return a > b
@@ -1606,8 +1645,11 @@ func compareHex(a, b, op string) bool {
 
 var hexLiteralRegex = regexp.MustCompile(`(?i)^16#[0-9a-f]+$`)
 
+// hexWhitespace lists the characters trimmed around a value cast to hex, in Go and in SQL.
+const hexWhitespace = " \t\n\v\f\r"
+
 func normalizeHexString(raw string) (string, bool) {
-	s := strings.ToUpper(strings.TrimSpace(raw))
+	s := strings.ToUpper(strings.Trim(raw, hexWhitespace))
 	if s == "" || !hexLiteralRegex.MatchString(s) {
 		return "", false
 	}
@@ -1649,29 +1691,11 @@ func stringValueFromDate(v Value) string {
 		return time.Time(*v.DateTimeVal).Format(time.RFC3339)
 	case v.TimeVal != nil:
 		return string(*v.TimeVal)
-	case v.Year != nil:
-		if t, ok := resolveDateTimeValue(*v.Year, func(AttributeValue) any { return nil }); ok {
-			return t.Format("2006")
-		}
-		return ""
-	case v.Month != nil:
-		if t, ok := resolveDateTimeValue(*v.Month, func(AttributeValue) any { return nil }); ok {
-			return t.Format("01")
-		}
-		return ""
-	case v.DayOfMonth != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfMonth, func(AttributeValue) any { return nil }); ok {
-			return t.Format("02")
-		}
-		return ""
-	case v.DayOfWeek != nil:
-		if t, ok := resolveDateTimeValue(*v.DayOfWeek, func(AttributeValue) any { return nil }); ok {
-			return t.Weekday().String()
-		}
-		return ""
-	default:
-		return ""
 	}
+	if part, ok := resolveDatePart(v, func(AttributeValue) any { return nil }); ok {
+		return strconv.FormatFloat(part, 'f', -1, 64)
+	}
+	return ""
 }
 
 func toFloat(value interface{}) (float64, bool) {
@@ -1694,18 +1718,6 @@ func toFloat(value interface{}) (float64, bool) {
 	}
 }
 
-func toTimeOfDaySeconds(value interface{}) (int, bool) {
-	s := strings.TrimSpace(fmt.Sprint(value))
-	if s == "" {
-		return 0, false
-	}
-	t, err := time.Parse("15:04:05.999999999Z07:00", s)
-	if err != nil {
-		return 0, false
-	}
-	return t.Hour()*3600 + t.Minute()*60 + t.Second(), true
-}
-
 func toDateTime(value interface{}) (time.Time, bool) {
 	switch v := value.(type) {
 	case time.Time:
@@ -1718,15 +1730,7 @@ func toDateTime(value interface{}) (time.Time, bool) {
 		}
 		return time.Time(*v), true
 	default:
-		s := strings.TrimSpace(fmt.Sprint(value))
-		if s == "" {
-			return time.Time{}, false
-		}
-		t, err := time.Parse(time.RFC3339, s)
-		if err != nil {
-			return time.Time{}, false
-		}
-		return t, true
+		return parseXSDDateTime(fmt.Sprint(value))
 	}
 }
 

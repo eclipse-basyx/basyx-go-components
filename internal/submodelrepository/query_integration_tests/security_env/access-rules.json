@@ -73,7 +73,12 @@
       },
       {
         "name": "is_usera",
-        "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] }
+        "formula": {
+          "$and": [
+            { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" }] },
+            { "$eq": [{ "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 0 }] }
+          ]
+        }
       },
       {
         "name": "is_usery",
@@ -97,6 +102,43 @@
         "USEFORMULA": "is_admin"
       },
       {
+        "USEACL": "read_member",
+        "OBJECTS": [{ "ROUTE": "/submodels/dXJuOmJhc3l4OmludGVncmF0aW9uOm5lZ2F0ZWQtbWF0Y2gtcG9saWN5" }],
+        "FORMULA": {
+          "$and": [
+            { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" }] },
+            { "$eq": [{ "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 2 }] },
+            { "$gt": [{ "$dateTimeCast": { "$field": "$sme.Stamp#value" } }, { "$dateTimeVal": "0001-01-01T00:00:00+14:00" }] },
+            {
+              "$not": {
+                "$match": [
+                  { "$eq": [{ "$field": "$sme.Secret#value" }, { "$strVal": "foo" }] },
+                  { "$gt": [{ "$dateTimeCast": { "$attribute": { "CLAIM": "role" } } }, { "$dateTimeVal": "2024-01-01T00:00:00Z" }] }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "USEACL": "read_member",
+        "OBJECTS": [{ "ROUTE": "/submodels/dXJuOmJhc3l4OmludGVncmF0aW9uOm5lZ2F0ZWQtdGVtcG9yYWwtcG9saWN5" }],
+        "FORMULA": {
+          "$and": [
+            { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" }] },
+            { "$eq": [{ "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 2 }] },
+            {
+              "$not": {
+                "$or": [
+                  { "$eq": [{ "$dateTimeCast": { "$field": "$sme.Day#value" } }, { "$dateTimeVal": "2024-01-01T00:00:00-05:00" }] },
+                  { "$eq": [{ "$field": "$sm#idShort" }, { "$strVal": "NonMatching" }] }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
         "USEACL": "read_role",
         "USEOBJECTS": ["submodels_routes", "query_routes"],
         "USEFORMULA": "is_userx",
@@ -118,11 +160,32 @@
             "FRAGMENT": "$sme.NewTestCollection",
             "CONDITION":
                 { "$boolean": false }
+          },
+          {
+            "FRAGMENT": "$sme.TemporalGate",
+            "CONDITION": {
+              "$and": [
+                { "$eq": [{ "$field": "$sme.TemporalGate#valueType" }, { "$strVal": "xs:dateTime" }] },
+                { "$eq": [{ "$dateTimeCast": { "$field": "$sme.TemporalGate#value" } }, { "$dateTimeVal": "2024-01-01T08:00:00Z" }] }
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$sme.LocalGate",
+            "CONDITION": {
+              "$eq": [{ "$dateTimeCast": { "$field": "$sme.LocalGate#value" } }, { "$dateTimeVal": "2024-01-01T08:00:00Z" }]
+            }
+          },
+          {
+            "FRAGMENT": "$sme.LegacyGate",
+            "CONDITION": {
+              "$eq": [{ "$field": "$sme.LegacyGate#value" }, { "$strVal": "2024-01-01T08:00:00+00:00" }]
+            }
           }
         ]
       },
       {
-        "USEACL": "read_role",
+        "USEACL": "read_member",
         "USEOBJECTS": ["submodels_routes", "query_routes"],
         "USEFORMULA": "is_usera",
         "FILTERLIST": [
