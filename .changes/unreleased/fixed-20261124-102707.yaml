@@ -1,0 +1,13 @@
+kind: fixed
+body: >-
+  A PUT that moves a File element to another idShortPath and carries the
+  managed file value unchanged now keeps the stored attachment: the content
+  follows the element to its new path, including renames of the File itself
+  and renames of a collection above it through a full Submodel PUT.
+  Previously the element lost its value and the attachment download
+  answered 404.
+time: 2026-11-24T10:27:07+01:00
+custom:
+    Impact: Low
+    PullRequest: 919
+    SecurityImpact: None.

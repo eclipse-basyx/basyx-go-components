@@ -103,8 +103,8 @@ func (b *reconciliationQueryBuilder) addInputs(planJSON []byte, submodelID strin
 			goqu.I("fr.path_token"),
 			goqu.I("fr.safe_file_name"),
 		))
-	b.add("update_rows", sanitizeManagedFileRows(b.dialect, "raw_update_rows"))
-	b.add("insert_rows", sanitizeManagedFileRows(b.dialect, "raw_insert_rows"))
+	b.add("update_rows", sanitizeManagedFileRows(b.dialect, "raw_update_rows", false))
+	b.add("insert_rows", sanitizeManagedFileRows(b.dialect, "raw_insert_rows", true))
 }
 
 func jsonRecordRows(dialect goqu.DialectWrapper, field string) *goqu.SelectDataset {
@@ -123,16 +123,26 @@ func jsonRecordSet(source string, field string, recordDefinition string) exp.Lit
 	)
 }
 
-func sanitizeManagedFileRows(dialect goqu.DialectWrapper, source string) *goqu.SelectDataset {
+func deletedOwnedPath(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("delete_paths").As("deleted")).
+		Select(goqu.L("1")).
+		Where(goqu.I("deleted.path").Eq(goqu.I("owned.path")))
+}
+
+func sanitizeManagedFileRows(dialect goqu.DialectWrapper, source string, inheritDeletedOwnerValue bool) *goqu.SelectDataset {
 	row := goqu.I("source.row")
 	value := goqu.L("? -> 'typeData' ->> 'value'", row)
 	path := goqu.L("? ->> 'path'", row)
+	conditions := []exp.Expression{
+		goqu.I("owned.value").Eq(value),
+		goqu.I("owned.path").Neq(path),
+	}
+	if inheritDeletedOwnerValue {
+		conditions = append(conditions, goqu.L("NOT ?", goqu.Exists(deletedOwnedPath(dialect))))
+	}
 	reassigned := dialect.From(goqu.T("owned_managed_files").As("owned")).
 		Select(goqu.L("1")).
-		Where(
-			goqu.I("owned.value").Eq(value),
-			goqu.I("owned.path").Neq(path),
-		)
+		Where(conditions...)
 	return dialect.From(goqu.T(source).As("source")).Select(
 		goqu.Case().
 			When(
@@ -244,15 +254,24 @@ func changedFileRows(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 }
 
 func managedFileTransfers(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	rowPath := jsonText("i.row", "path")
+	rowValue := jsonNestedText("i.row", "typeData", "value")
 	return dialect.From(goqu.T("resolved_insert_rows").As("i")).
 		Join(goqu.T("owned_managed_files").As("owned"), goqu.On(
-			goqu.I("owned.path").Eq(jsonText("i.row", "path")),
-			goqu.I("owned.value").Eq(jsonNestedText("i.row", "typeData", "value")),
+			goqu.I("owned.value").Eq(rowValue),
+			goqu.Or(
+				goqu.I("owned.path").Eq(rowPath),
+				goqu.L("?", goqu.Exists(deletedOwnedPath(dialect))),
+			),
 		)).
 		Select(
 			goqu.I("i.id"),
 			goqu.I("owned.binary_content_id"),
-			goqu.I("owned.path_token"),
+			goqu.Case().
+				When(goqu.I("owned.path").Eq(rowPath), goqu.I("owned.path_token")).
+				Else(goqu.L("replace(gen_random_uuid()::text, '-', '')")).
+				As("path_token"),
+			goqu.I("owned.path_token").As("source_path_token"),
 			goqu.I("owned.safe_file_name"),
 		)
 }
@@ -819,7 +838,7 @@ func reconciliationTypeSpecs() []reconciliationTypeSpec {
 		{table: "blob_element", columns: []reconciliationTypeColumn{{"content_type", text("content_type")}, {"value", func(alias string) exp.Expression {
 			return goqu.L("convert_to(COALESCE(?, ''), 'UTF8')", jsonNestedText(alias, "typeData", "value"))
 		}}}},
-		{table: "file_element", columns: []reconciliationTypeColumn{{"content_type", text("content_type")}, {"file_name", fileNameExpression}, {"value", text("value")}}},
+		{table: "file_element", columns: []reconciliationTypeColumn{{"content_type", text("content_type")}, {"file_name", fileNameExpression}, {"value", managedFileValueExpression}}},
 		{table: "range_element", columns: []reconciliationTypeColumn{{"value_type", integer("value_type")}, {"min_text", text("min_text")}, {"max_text", text("max_text")}, {"min_num", typed("min_num", "numeric")}, {"max_num", typed("max_num", "numeric")}}},
 		{table: "reference_element", columns: []reconciliationTypeColumn{{"value", jsonValue("value")}}},
 		{table: "relationship_element", columns: []reconciliationTypeColumn{{"first", jsonValue("first")}, {"second", jsonValue("second")}}},
@@ -937,6 +956,11 @@ func insertManagedFileTransfers(dialect goqu.DialectWrapper) *goqu.InsertDataset
 
 func fileNameExpression(alias string) exp.Expression {
 	return goqu.L("COALESCE((SELECT safe_file_name FROM managed_file_transfers WHERE id = ?), (SELECT CASE WHEN existing.value IS NOT DISTINCT FROM ? THEN existing.file_name END FROM file_element AS existing WHERE existing.id = ?))", goqu.I("a.id"), jsonNestedText(alias, "typeData", "value"), goqu.I("a.id"))
+}
+
+func managedFileValueExpression(alias string) exp.Expression {
+	rowValue := jsonNestedText(alias, "typeData", "value")
+	return goqu.L("COALESCE((SELECT replace(?, t.source_path_token, t.path_token) FROM managed_file_transfers AS t WHERE t.id = ?), ?)", rowValue, goqu.I("a.id"), rowValue)
 }
 
 func jsonText(alias string, key string) exp.LiteralExpression {
